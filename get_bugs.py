@@ -26,11 +26,13 @@ def get_bugs(bug_ids):
             with open('data/' + str(bug_id) + '.json', 'r') as f:
                 bugs[bug_id] = json.load(f)
         except IOError:
-            break
+            continue
 
     bug_ids = [bug_id for bug_id in bug_ids if bug_id not in bugs]
 
     print('Loaded ' + str(len(bugs)) + ' bugs.')
+
+    print('To download ' + str(len(bug_ids))+ ' bugs.')
 
     def bughandler(bug):
         bug_id = int(bug['id'])
