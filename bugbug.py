@@ -1,10 +1,18 @@
 import re
 
 
-# If the bug contains these keywords, it's very likely a feature.
+# If the bug contains these keywords, it's definitely a feature.
 def feature_check_keywords(bug):
     keywords = [
-        'feature', 'polish',
+        'feature',
+    ]
+    return sum(keyword in bug['keywords'] for keyword in keywords)
+
+
+# If the bug contains these keywords, it's very likely a feature.
+def feature_check_likely_keywords(bug):
+    keywords = [
+        'polish',
     ]
     return sum(keyword in bug['keywords'] for keyword in keywords)
 
@@ -44,8 +52,12 @@ def check_attachments(bug):
     return (len(bug['attachments']) == 0 or sum(1 for a in bug['attachments'] if a['is_patch']) == 0 or sum(1 for a in bug['attachments'] if a['content_type'] == 'text/x-review-board-request') == 0) and sum(1 for c in bug['comments'] if '://hg.mozilla.org/' in c['text']) == 0
 
 
-feature_rules = [
-    feature_check_keywords,
+certain_feature_rules = [
+    feature_check_keywords
+]
+
+feature_rules = certain_feature_rules + [
+    feature_check_likely_keywords,
     feature_check_title,
     feature_check_first_comment,
     check_severity_enhancement,
@@ -69,6 +81,15 @@ def has_regression_range(bug):
     return 'cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'
 
 
+# If the bug has a 'regression' or 'regressionwindow-wanted' keyword, it is definitely a bug.
+def bug_check_regression_keywords(bug):
+    keywords = [
+        'regression', 'regressionwindow-wanted',
+        'talos-regression'
+    ]
+    return sum(keyword in bug['keywords'] for keyword in keywords)
+
+
 # If the bug has a URL, it's very likely a bug that the reporter experienced
 # on the given URL.
 # If the bug contains the strings `github` and `w3c`, it's likely a feature implementing a w3c spec.
@@ -79,11 +100,10 @@ def has_url(bug):
 # If the bug contains these keywords, it's definitely a bug.
 def bug_check_keywords(bug):
     keywords = [
-        'crash', 'regression', 'regressionwindow-wanted', 'jsbugmon',
+        'crash', 'jsbugmon',
         'hang', 'topcrash', 'assertion', 'coverity', 'infra-failure',
         'intermittent-failure', 'reproducible', 'stack-wanted',
         'steps-wanted', 'testcase-wanted', 'testcase', 'crashreportid',
-        'talos-regression',
     ]
     if any(keyword in bug['keywords'] for keyword in keywords):
         return sum(keyword in bug['keywords'] for keyword in keywords)
@@ -147,10 +167,14 @@ def is_coverity_issue(bug):
     return re.search('[CID ?[0-9]+]', bug['summary']) is not None or re.search('[CID ?[0-9]+]', bug['whiteboard']) is not None
 
 
-bug_rules = [
+certain_bug_rules = [
+    bug_check_regression_keywords,
+    has_regression_range,
+]
+
+bug_rules = certain_bug_rules + [
     has_crash_signature,
     has_str,
-    has_regression_range,
     has_url,
     bug_check_keywords,
     bug_check_title,
@@ -163,4 +187,10 @@ bug_rules = [
 
 
 def is_bug(bug):
+    if any(rule(bug) for rule in certain_bug_rules):
+        return True
+
+    if any(rule(bug) for rule in certain_feature_rules):
+        return False
+
     return sum(rule(bug) for rule in bug_rules) > sum(rule(bug) for rule in feature_rules)
