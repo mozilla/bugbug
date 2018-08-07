@@ -1,35 +1,16 @@
-import csv
-from get_bugs import get_bugs
+from get_bugs import get_bugs, get_labels
 import bugbug
 
+classes = get_labels()
 
-with open('classes.csv', 'r') as f:
-    classes = dict([row for row in csv.reader(f)][1:])
-
-with open('classes_more.csv', 'r') as f:
-    classes_more = [row for row in csv.reader(f)][1:]
-
-for bug_id, category in classes_more:
-    if category == 'nobug':
-        is_bug = 'False'
-    else:
-        is_bug = 'True'
-
-    classes[bug_id] = is_bug
-
-bugs = get_bugs([int(bug_id) for bug_id in classes.keys()])
+bugs = get_bugs([bug_id for bug_id, _ in classes])
 
 true_positives = 0
 true_negatives = 0
 false_positives = 0
 false_negatives = 0
 
-for bug_id, is_bug in classes.items():
-    assert is_bug == 'True' or is_bug == 'False'
-    bug_id = int(bug_id)
-    is_bug = True if is_bug == 'True' else False
-
-    print(bug_id)
+for bug_id, is_bug in classes:
     if bug_id not in bugs:
         continue
     is_bug_pred = bugbug.is_bug(bugs[bug_id])
