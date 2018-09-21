@@ -1,10 +1,15 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import csv
-import os
 import json
+import os
+
+import requests
 from libmozdata import bugzilla
 from pymongo import MongoClient
-import requests
-
 
 ATTACHMENT_INCLUDE_FIELDS = [
     'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type',
