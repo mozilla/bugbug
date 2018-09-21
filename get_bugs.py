@@ -2,6 +2,7 @@ import csv
 import os
 import json
 from libmozdata import bugzilla
+from pymongo import MongoClient
 import requests
 
 
@@ -28,22 +29,19 @@ def get_bug_fields():
 
 
 def get_bugs(bug_ids):
-    os.makedirs('data', exist_ok=True)
+    client = MongoClient()
+    db = client['bugbug']
+    collection = db['bugs']
 
     bugs = {}
-
-    for bug_id in bug_ids:
-        try:
-            with open('data/' + str(bug_id) + '.json', 'r') as f:
-                bugs[bug_id] = json.load(f)
-        except IOError:
-            continue
+    for bug in collection.find():
+        bugs[bug['id']] = bug
 
     bug_ids = [bug_id for bug_id in bug_ids if bug_id not in bugs]
 
     print('Loaded ' + str(len(bugs)) + ' bugs.')
 
-    print('To download ' + str(len(bug_ids))+ ' bugs.')
+    print('To download ' + str(len(bug_ids)) + ' bugs.')
 
     new_bugs = {}
 
@@ -82,13 +80,12 @@ def get_bugs(bug_ids):
 
     bugzilla.Bugzilla(bug_ids, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
 
+    print('Total number of bugs: {}'.format(len(bugs) + len(new_bugs)))
+
+    if len(new_bugs):
+        collection.insert_many(list(new_bugs.values()))
+
     bugs.update(new_bugs)
-
-    print('Total number of bugs: ' + str(len(bugs)))
-
-    for bug_id, bug_data in new_bugs.items():
-        with open('data/' + str(bug_id) + '.json', 'w') as f:
-            json.dump(bug_data, f)
 
     return bugs
 
