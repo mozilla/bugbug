@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import re
 
 
@@ -141,7 +146,7 @@ def check_first_comment(bug):
     ]
 
     return sum(keyword in bug['comments'][0]['text'].lower() for keyword in keywords) +\
-           sum(keyword in bug['comments'][0]['text'] for keyword in casesensitive_keywords)
+        sum(keyword in bug['comments'][0]['text'] for keyword in casesensitive_keywords)
 
 
 # If any of the comments in the bug contains these substirngs, it's likely a bug.
