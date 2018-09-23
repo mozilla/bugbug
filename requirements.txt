@@ -4,3 +4,4 @@ scikit-learn==0.19.2
 xgboost==0.80
 requests==2.19.1
 numpy==1.15.2
+imbalanced-learn=0.3.3
