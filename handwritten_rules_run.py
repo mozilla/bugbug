@@ -9,14 +9,14 @@ from get_bugs import get_labels
 
 classes = get_labels()
 
-bugs = get_bugs([bug_id for bug_id, _ in classes])
+bugs = get_bugs([bug_id for bug_id in classes.keys()])
 
 true_positives = 0
 true_negatives = 0
 false_positives = 0
 false_negatives = 0
 
-for bug_id, is_bug in classes:
+for bug_id, is_bug in classes.items():
     if bug_id not in bugs:
         continue
 
