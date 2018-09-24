@@ -1403,6 +1403,7 @@ bug_id,category
 1488708,bug_unknown_regression
 1488769,bug_unknown_regression
 1488784,nobug
+1488788,nobug
 1488791,regression
 1488923,nobug
 1488927,regression
@@ -1529,6 +1530,7 @@ bug_id,category
 1493490,nobug
 1493546,regression
 1493554,regression
+1493590,bug_unknown_regression
 1493645,regression
 1493661,regression
 1493812,nobug
