@@ -113,4 +113,4 @@ def get_labels():
     for bug_id, is_bug in classes.items():
         assert is_bug == 'True' or is_bug == 'False'
 
-    return [(int(bug_id), True if is_bug == 'True' else False) for bug_id, is_bug in classes.items()]
+    return dict([(int(bug_id), True if is_bug == 'True' else False) for bug_id, is_bug in classes.items()])

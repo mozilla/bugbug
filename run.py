@@ -24,11 +24,9 @@ from utils import ItemSelector
 
 # Get labels.
 classes = get_labels()
-# TODO: Make get_labels directly return a dict.
-classes = dict([(bug_id, is_bug) for bug_id, is_bug in classes])
 
 # Retrieve bugs from the local db.
-bugs_map = get_bugs([bug_id for bug_id, is_bug in classes.items()])
+bugs_map = get_bugs([bug_id for bug_id in classes.keys()])
 
 # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
 for bug_id, bug in bugs_map.items():
