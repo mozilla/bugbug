@@ -109,7 +109,7 @@ extraction_pipeline = Pipeline([
 X = extraction_pipeline.fit_transform(bugs)
 
 # Under-sample the 'bug' class, as there are too many compared to 'feature'.
-X, y = RandomUnderSampler().fit_sample(X, y)
+X, y = RandomUnderSampler(random_state=0).fit_sample(X, y)
 
 # Split dataset in training and test.
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
