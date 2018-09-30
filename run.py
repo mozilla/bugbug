@@ -17,10 +17,10 @@ from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 import bug_features
-from get_bugs import get_bug_fields
 from get_bugs import get_bugs
 from get_bugs import get_labels
 from utils import ItemSelector
+
 
 def go():
     # Get labels.
@@ -134,6 +134,7 @@ def go():
     print('Precision: {}'.format(metrics.precision_score(y_test, y_pred)))
     print('Recall: {}'.format(metrics.recall_score(y_test, y_pred)))
     print(metrics.confusion_matrix(y_test, y_pred))
+
 
 if __name__ == '__main__':
     go()
