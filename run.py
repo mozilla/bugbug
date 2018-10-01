@@ -3,9 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import argparse
 from typing import Dict
 
 import numpy as np
+import spacy
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
@@ -21,8 +23,22 @@ from get_bugs import get_bugs
 from get_bugs import get_labels
 from utils import ItemSelector
 
+nlp = spacy.load('en')
 
-def go():
+
+def spacy_token_lemmatizer(text):
+    if len(text) > nlp.max_length:
+        text = text[:nlp.max_length - 1]
+    doc = nlp(text)
+    return [token.lemma_ for token in doc]
+
+
+class SpacyVectorizer(TfidfVectorizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
+
+
+def go(lemmatization=False):
     # Get labels.
     classes = get_labels()
 
@@ -81,7 +97,10 @@ def go():
         bugs['title'].append(bug['summary'])
         bugs['comments'].append(' '.join([c['text'] for c in bug['comments']]))
 
-    # TODO: Perform lemmatization and tokenization via Spacy instead of scikit-learn
+    if lemmatization:
+        text_vectorizer = SpacyVectorizer
+    else:
+        text_vectorizer = TfidfVectorizer
 
     # TODO: Try bag-of-words with word/char 1-gram, 2-gram, 3-grams, word2vec, 1d-cnn (both using pretrained word embeddings and not)
 
@@ -96,12 +115,12 @@ def go():
 
                 ('title', Pipeline([
                     ('selector', ItemSelector(key='title')),
-                    ('tfidf', TfidfVectorizer(stop_words='english')),
+                    ('tfidf', text_vectorizer(stop_words='english')),
                 ])),
 
                 ('comments', Pipeline([
                     ('selector', ItemSelector(key='comments')),
-                    ('tfidf', TfidfVectorizer(stop_words='english')),
+                    ('tfidf', text_vectorizer(stop_words='english')),
                 ])),
             ],
         )),
@@ -137,4 +156,8 @@ def go():
 
 
 if __name__ == '__main__':
-    go()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
+    args = parser.parse_args()
+
+    go(lemmatization=args.lemmatization)
