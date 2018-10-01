@@ -104,6 +104,8 @@ def go(lemmatization=False):
 
     # TODO: Try bag-of-words with word/char 1-gram, 2-gram, 3-grams, word2vec, 1d-cnn (both using pretrained word embeddings and not)
 
+    # TODO: Text cleanup (replace stack traces with "STACK_TRACE", replace file references with "FILE_REFERENCE", etc.)
+
     # Extract features from the bugs.
     extraction_pipeline = Pipeline([
         ('union', FeatureUnion(
