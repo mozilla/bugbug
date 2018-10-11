@@ -1,5 +1,4 @@
 libmozdata==0.1.40
-pymongo==3.7.1
 scikit-learn==0.19.2
 xgboost==0.80
 requests==2.19.1
