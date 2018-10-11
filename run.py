@@ -46,7 +46,7 @@ def go(lemmatization=False):
     bugs_map = get_bugs()
 
     # Turn the classes map into a numpy array for scikit-learn consumption.
-    y = np.array([1 if is_bug is True else 0 for bug_id, is_bug in classes.items()])
+    y = np.array([1 if is_bug is True else 0 for is_bug in classes.values()])
 
     bugs: Dict = {
         'data': [],
