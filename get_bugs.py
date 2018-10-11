@@ -56,15 +56,12 @@ def append_db(path, bugs):
 
 
 def get_bugs():
-    bugs = {}
-    for bug in read_db(BUGS_DB):
-        bugs[bug['id']] = bug
-    return bugs
+    return read_db(BUGS_DB)
 
 
 def download_bugs(bug_ids):
     old_bug_ids = set()
-    for bug in read_db(BUGS_DB):
+    for bug in get_bugs():
         old_bug_ids.add(bug['id'])
 
     bug_ids = [bug_id for bug_id in bug_ids if bug_id not in old_bug_ids]
@@ -139,7 +136,7 @@ def get_labels(augmentation=False):
 
     # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
     bug_ids = set()
-    for bug in read_db(BUGS_DB):
+    for bug in get_bugs():
         bug_id = int(bug['id'])
 
         bug_ids.add(bug_id)
