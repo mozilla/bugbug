@@ -17,9 +17,6 @@ false_positives = 0
 false_negatives = 0
 
 for bug_id, is_bug in classes.items():
-    if bug_id not in bugs:
-        continue
-
     is_bug_pred = bugbug.is_bug(bugs[bug_id])
 
     if is_bug_pred and is_bug:

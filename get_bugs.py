@@ -134,7 +134,14 @@ def get_labels():
     for bug_id, is_bug in classes.items():
         assert is_bug == 'True' or is_bug == 'False'
 
-    return dict([(int(bug_id), True if is_bug == 'True' else False) for bug_id, is_bug in classes.items()])
+    # Turn bug IDs into integers and labels into booleans.
+    classes = {int(bug_id): True if label == 'True' else False for bug_id, label in classes.items()}
+
+    # Remove labels which belong to bugs for which we have no data.
+    bug_ids = set([int(bug['id']) for bug in read_db(BUGS_DB)])
+    classes = {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
+
+    return classes
 
 
 if __name__ == '__main__':
