@@ -19,8 +19,8 @@ from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 import bug_features
-from get_bugs import get_bugs
-from get_bugs import get_labels
+import bugzilla
+from labels import get_labels
 from utils import ItemSelector
 
 nlp = spacy.load('en')
@@ -48,7 +48,7 @@ def go(lemmatization=False):
         'title': [],
         'comments': [],
     }
-    for bug in get_bugs():
+    for bug in bugzilla.get_bugs():
         bug_id = bug['id']
 
         if bug_id not in classes:

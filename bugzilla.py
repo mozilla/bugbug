@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import csv
 import json
 import os
 
 import requests
 from libmozdata import bugzilla
 
+import db
 
 BUGS_DB = 'data/bugs.json'
 
@@ -35,28 +35,8 @@ def get_bug_fields():
     return r.json()['fields']
 
 
-def read_db(path):
-    with open(path, 'r') as f:
-        for line in f:
-            yield json.loads(line)
-
-
-def write_db(path, bugs):
-    with open(path, 'w') as f:
-        for bug in bugs:
-            f.write(json.dumps(bug))
-            f.write('\n')
-
-
-def append_db(path, bugs):
-    with open(path, 'a') as f:
-        for bug in bugs:
-            f.write(json.dumps(bug))
-            f.write('\n')
-
-
 def get_bugs():
-    return read_db(BUGS_DB)
+    return db.read(BUGS_DB)
 
 
 def download_bugs(bug_ids):
@@ -110,51 +90,4 @@ def download_bugs(bug_ids):
     print('Total number of bugs: {}'.format(len(old_bug_ids) + len(new_bugs)))
 
     if len(new_bugs):
-        append_db(BUGS_DB, new_bugs.values())
-
-
-def get_labels(augmentation=False):
-    with open('classes.csv', 'r') as f:
-        classes = dict([row for row in csv.reader(f)][1:])
-
-    with open('classes_more.csv', 'r') as f:
-        classes_more = [row for row in csv.reader(f)][1:]
-
-    for bug_id, category in classes_more:
-        if category == 'nobug':
-            is_bug = 'False'
-        else:
-            is_bug = 'True'
-
-        classes[bug_id] = is_bug
-
-    for bug_id, is_bug in classes.items():
-        assert is_bug == 'True' or is_bug == 'False'
-
-    # Turn bug IDs into integers and labels into booleans.
-    classes = {int(bug_id): True if label == 'True' else False for bug_id, label in classes.items()}
-
-    # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
-    bug_ids = set()
-    for bug in get_bugs():
-        bug_id = int(bug['id'])
-
-        bug_ids.add(bug_id)
-
-        if bug_id in classes:
-            continue
-
-        if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-            classes[bug_id] = True
-        elif any(keyword in bug['keywords'] for keyword in ['feature']):
-            classes[bug_id] = False
-
-    # Remove labels which belong to bugs for which we have no data.
-    classes = {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
-
-    return classes
-
-
-if __name__ == '__main__':
-    classes = get_labels()
-    download_bugs([bug_id for bug_id in classes.keys()])
+        db.append(BUGS_DB, new_bugs.values())

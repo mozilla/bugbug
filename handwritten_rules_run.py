@@ -4,19 +4,17 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import bugbug
-from get_bugs import get_bugs
-from get_bugs import get_labels
+import bugzilla
+from labels import get_labels
 
 classes = get_labels()
-
-bugs = get_bugs()
 
 true_positives = 0
 true_negatives = 0
 false_positives = 0
 false_negatives = 0
 
-for bug in get_bugs():
+for bug in bugzilla.get_bugs():
     bug_id = bug['id']
 
     if bug_id not in classes:
