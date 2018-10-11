@@ -56,7 +56,7 @@ def go(lemmatization=False):
             classes[bug_id] = False
 
     # Turn the classes map into a numpy array for scikit-learn consumption.
-    y = np.array([1 if is_bug is True else 0 for bug_id, is_bug in classes.items() if bug_id in bugs_map])
+    y = np.array([1 if is_bug is True else 0 for bug_id, is_bug in classes.items()])
 
     bugs: Dict = {
         'data': [],
@@ -64,9 +64,6 @@ def go(lemmatization=False):
         'comments': [],
     }
     for bug_id, _ in classes.items():
-        if bug_id not in bugs_map:
-            continue
-
         data = {}
 
         bug = bugs_map[bug_id]
