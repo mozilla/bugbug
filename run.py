@@ -43,7 +43,7 @@ def go(lemmatization=False):
     classes = get_labels()
 
     # Retrieve bugs from the local db.
-    bugs_map = get_bugs([bug_id for bug_id in classes.keys()])
+    bugs_map = get_bugs()
 
     # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
     for bug_id, bug in bugs_map.items():

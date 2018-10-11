@@ -55,14 +55,21 @@ def append_db(path, bugs):
             f.write('\n')
 
 
-def get_bugs(bug_ids):
+def get_bugs():
     bugs = {}
     for bug in read_db(BUGS_DB):
         bugs[bug['id']] = bug
+    return bugs
 
-    bug_ids = [bug_id for bug_id in bug_ids if bug_id not in bugs]
 
-    print('Loaded ' + str(len(bugs)) + ' bugs.')
+def download_bugs(bug_ids):
+    old_bug_ids = set()
+    for bug in read_db(BUGS_DB):
+        old_bug_ids.add(bug['id'])
+
+    bug_ids = [bug_id for bug_id in bug_ids if bug_id not in old_bug_ids]
+
+    print('Loaded ' + str(len(old_bug_ids)) + ' bugs.')
 
     print('To download ' + str(len(bug_ids)) + ' bugs.')
 
@@ -103,14 +110,10 @@ def get_bugs(bug_ids):
 
     bugzilla.Bugzilla(bug_ids, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
 
-    print('Total number of bugs: {}'.format(len(bugs) + len(new_bugs)))
+    print('Total number of bugs: {}'.format(len(old_bug_ids) + len(new_bugs)))
 
     if len(new_bugs):
         append_db(BUGS_DB, new_bugs.values())
-
-    bugs.update(new_bugs)
-
-    return bugs
 
 
 def get_labels():
@@ -132,3 +135,8 @@ def get_labels():
         assert is_bug == 'True' or is_bug == 'False'
 
     return dict([(int(bug_id), True if is_bug == 'True' else False) for bug_id, is_bug in classes.items()])
+
+
+if __name__ == '__main__':
+    classes = get_labels()
+    download_bugs([bug_id for bug_id in classes.keys()])
