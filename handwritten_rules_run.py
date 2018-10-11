@@ -9,7 +9,7 @@ from get_bugs import get_labels
 
 classes = get_labels()
 
-bugs = get_bugs([bug_id for bug_id in classes.keys()])
+bugs = get_bugs()
 
 true_positives = 0
 true_negatives = 0
