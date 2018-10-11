@@ -40,20 +40,10 @@ class SpacyVectorizer(TfidfVectorizer):
 
 def go(lemmatization=False):
     # Get labels.
-    classes = get_labels()
+    classes = get_labels(augmentation=True)
 
     # Retrieve bugs from the local db.
     bugs_map = get_bugs()
-
-    # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
-    for bug_id, bug in bugs_map.items():
-        if bug_id in classes:
-            continue
-
-        if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-            classes[bug_id] = True
-        elif any(keyword in bug['keywords'] for keyword in ['feature']):
-            classes[bug_id] = False
 
     # Turn the classes map into a numpy array for scikit-learn consumption.
     y = np.array([1 if is_bug is True else 0 for bug_id, is_bug in classes.items()])

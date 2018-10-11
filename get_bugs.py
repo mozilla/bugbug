@@ -116,7 +116,7 @@ def download_bugs(bug_ids):
         append_db(BUGS_DB, new_bugs.values())
 
 
-def get_labels():
+def get_labels(augmentation=False):
     with open('classes.csv', 'r') as f:
         classes = dict([row for row in csv.reader(f)][1:])
 
@@ -137,8 +137,22 @@ def get_labels():
     # Turn bug IDs into integers and labels into booleans.
     classes = {int(bug_id): True if label == 'True' else False for bug_id, label in classes.items()}
 
+    # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
+    bug_ids = set()
+    for bug in read_db(BUGS_DB):
+        bug_id = int(bug['id'])
+
+        bug_ids.add(bug_id)
+
+        if bug_id in classes:
+            continue
+
+        if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
+            classes[bug_id] = True
+        elif any(keyword in bug['keywords'] for keyword in ['feature']):
+            classes[bug_id] = False
+
     # Remove labels which belong to bugs for which we have no data.
-    bug_ids = set([int(bug['id']) for bug in read_db(BUGS_DB)])
     classes = {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
     return classes
