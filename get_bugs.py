@@ -9,7 +9,9 @@ import os
 
 import requests
 from libmozdata import bugzilla
-from pymongo import MongoClient
+
+
+BUGS_DB = 'data/bugs.json'
 
 ATTACHMENT_INCLUDE_FIELDS = [
     'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type',
@@ -33,13 +35,29 @@ def get_bug_fields():
     return r.json()['fields']
 
 
-def get_bugs(bug_ids):
-    client = MongoClient()
-    db = client['bugbug']
-    collection = db['bugs']
+def read_db(path):
+    with open(path, 'r') as f:
+        for line in f:
+            yield json.loads(line)
 
+
+def write_db(path, bugs):
+    with open(path, 'w') as f:
+        for bug in bugs:
+            f.write(json.dumps(bug))
+            f.write('\n')
+
+
+def append_db(path, bugs):
+    with open(path, 'a') as f:
+        for bug in bugs:
+            f.write(json.dumps(bug))
+            f.write('\n')
+
+
+def get_bugs(bug_ids):
     bugs = {}
-    for bug in collection.find():
+    for bug in read_db(BUGS_DB):
         bugs[bug['id']] = bug
 
     bug_ids = [bug_id for bug_id in bug_ids if bug_id not in bugs]
@@ -88,7 +106,7 @@ def get_bugs(bug_ids):
     print('Total number of bugs: {}'.format(len(bugs) + len(new_bugs)))
 
     if len(new_bugs):
-        collection.insert_many(list(new_bugs.values()))
+        append_db(BUGS_DB, new_bugs.values())
 
     bugs.update(new_bugs)
 
