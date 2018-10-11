@@ -42,21 +42,21 @@ def go(lemmatization=False):
     # Get labels.
     classes = get_labels(augmentation=True)
 
-    # Retrieve bugs from the local db.
-    bugs_map = get_bugs()
-
-    # Turn the classes map into a numpy array for scikit-learn consumption.
-    y = np.array([1 if is_bug is True else 0 for is_bug in classes.values()])
-
+    labels = []
     bugs: Dict = {
         'data': [],
         'title': [],
         'comments': [],
     }
-    for bug_id, _ in classes.items():
-        data = {}
+    for bug in get_bugs():
+        bug_id = bug['id']
 
-        bug = bugs_map[bug_id]
+        if bug_id not in classes:
+            continue
+
+        labels.append(1 if classes[bug_id] else 0)
+
+        data = {}
 
         for f in bug_features.feature_extractors:
             res = f(bug)
@@ -83,6 +83,9 @@ def go(lemmatization=False):
         bugs['data'].append(data)
         bugs['title'].append(bug['summary'])
         bugs['comments'].append(' '.join([c['text'] for c in bug['comments']]))
+
+    # Turn the labels array into a numpy array for scikit-learn consumption.
+    y = np.array(labels)
 
     if lemmatization:
         text_vectorizer = SpacyVectorizer
