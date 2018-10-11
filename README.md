@@ -9,4 +9,4 @@ The dataset currently contains 1913 bugs, the accuracy of the current classifier
 1. Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 2. Run `cat data/bugs.json.xz.part* | unxz > data/bugs.json`
 
-If you update the bugs database, run `cat data/bugs.json | xz -v3 - | split -d -b 20MB - data/bugs.json.xz.part`.
+If you update the bugs database, run `cat data/bugs.json | xz -v9 - | split -d -b 20MB - data/bugs.json.xz.part`.
