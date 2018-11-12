@@ -20,6 +20,7 @@ from sklearn.pipeline import Pipeline
 
 import bug_features
 import bugzilla
+import repository
 from labels import get_labels
 from utils import ItemSelector
 
@@ -47,7 +48,21 @@ def go(lemmatization=False):
         'data': [],
         'title': [],
         'comments': [],
+        'commits': [],
     }
+
+    bug_id_to_commit_messages = {}
+    for commit in repository.get_commits():
+        bug_id = commit['bug_id']
+
+        if not bug_id:
+            continue
+
+        if bug_id not in bug_id_to_commit_messages:
+            bug_id_to_commit_messages[bug_id] = ' '
+
+        bug_id_to_commit_messages[bug_id] += commit['desc']
+
     for bug in bugzilla.get_bugs():
         bug_id = bug['id']
 
@@ -83,6 +98,7 @@ def go(lemmatization=False):
         bugs['data'].append(data)
         bugs['title'].append(bug['summary'])
         bugs['comments'].append(' '.join([c['text'] for c in bug['comments']]))
+        bugs['commits'].append(bug_id_to_commit_messages[bug_id] if bug_id in bug_id_to_commit_messages else '')
 
     # Turn the labels array into a numpy array for scikit-learn consumption.
     y = np.array(labels)
@@ -114,6 +130,11 @@ def go(lemmatization=False):
                     ('selector', ItemSelector(key='comments')),
                     ('tfidf', text_vectorizer(stop_words='english')),
                 ])),
+
+                # ('commits', Pipeline([
+                #     ('selector', ItemSelector(key='commits')),
+                #     ('tfidf', text_vectorizer(stop_words='english')),
+                # ])),
             ],
         )),
     ])
