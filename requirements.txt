@@ -5,3 +5,4 @@ requests==2.19.1
 numpy==1.15.2
 imbalanced-learn=0.3.3
 spacy==2.0.12
+python-hglib==2.6.1
