@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import re
 
 import hglib
 
@@ -21,15 +22,25 @@ def download_commits(repo_dir):
 
     commits = hg.log()
 
+    bug_pattern = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
+
     def transform(commit):
+        desc = commit[5].decode('utf-8')
+
+        bug_id = None
+        bug_id_match = re.search(bug_pattern, desc)
+        if bug_id_match:
+            bug_id = int(bug_id_match.group(1))
+
         return {
             'rev': commit[0].decode('utf-8'),
             'node': commit[1].decode('utf-8'),
             'tags': commit[2].decode('utf-8'),
             'branch': commit[3].decode('utf-8'),
             'author': commit[4].decode('utf-8'),
-            'desc': commit[5].decode('utf-8'),
+            'desc': desc,
             'date': str(commit[6]),
+            'bug_id': bug_id,
         }
 
     commits = [transform(commit) for commit in commits]
