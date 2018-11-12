@@ -43,7 +43,7 @@ def download_commits(repo_dir):
             'bug_id': bug_id,
         }
 
-    commits = [transform(commit) for commit in commits]
+    commits = [transform(commit) for commit in reversed(commits)]
 
     db.write(COMMITS_DB, commits)
 
