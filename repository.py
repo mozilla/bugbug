@@ -33,13 +33,13 @@ def download_commits(repo_dir):
             bug_id = int(bug_id_match.group(1))
 
         return {
-            'rev': commit[0].decode('utf-8'),
-            'node': commit[1].decode('utf-8'),
-            'tags': commit[2].decode('utf-8'),
-            'branch': commit[3].decode('utf-8'),
-            'author': commit[4].decode('utf-8'),
+            # 'rev': commit[0].decode('utf-8'),
+            # 'node': commit[1].decode('utf-8'),
+            # 'tags': commit[2].decode('utf-8'),
+            # 'branch': commit[3].decode('utf-8'),
+            # 'author': commit[4].decode('utf-8'),
             'desc': desc,
-            'date': str(commit[6]),
+            # 'date': str(commit[6]),
             'bug_id': bug_id,
         }
 
