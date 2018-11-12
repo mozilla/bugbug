@@ -1,1 +1,4 @@
 *.pyc
+
+data/bugs.json
+data/commits.json
