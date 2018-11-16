@@ -8,6 +8,26 @@ import csv
 import bugzilla
 
 
+def get_tracking_labels():
+    classes = {}
+
+    for bug_data in bugzilla.get_bugs():
+        bug_id = int(bug_data['id'])
+
+        for entry in bug_data['history']:
+            for change in entry['changes']:
+                if change['field_name'].startswith('cf_tracking_firefox'):
+                    if change['added'] in ['blocking', '+']:
+                        classes[bug_id] = True
+                    elif change['added'] == '-':
+                        classes[bug_id] = False
+
+        if bug_id not in classes:
+            classes[bug_id] = False
+
+    return classes
+
+
 def get_labels(augmentation=False):
     with open('classes.csv', 'r') as f:
         classes = dict([row for row in csv.reader(f)][1:])
