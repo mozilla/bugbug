@@ -9,7 +9,7 @@ import os
 import requests
 from libmozdata import bugzilla
 
-import db
+from bugbug import db
 
 BUGS_DB = 'data/bugs.json'
 

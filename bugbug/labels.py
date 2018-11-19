@@ -5,7 +5,7 @@
 
 import csv
 
-import bugzilla
+from bugbug import bugzilla
 
 
 def get_tracking_labels():

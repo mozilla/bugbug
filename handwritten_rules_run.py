@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import bugbug
-import bugzilla
-from labels import get_labels
+from bugbug import bug_rules
+from bugbug import bugzilla
+from bugbug import labels
 
-classes = get_labels()
+classes = labels.get_labels()
 
 true_positives = 0
 true_negatives = 0
@@ -22,7 +22,7 @@ for bug in bugzilla.get_bugs():
 
     is_bug = classes[bug_id]
 
-    is_bug_pred = bugbug.is_bug(bug)
+    is_bug_pred = bug_rules.is_bug(bug)
 
     if is_bug_pred and is_bug:
         true_positives += 1

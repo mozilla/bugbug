@@ -18,11 +18,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
-import bug_features
-import bugzilla
-import repository
-from labels import get_labels
-from utils import ItemSelector
+from bugbug import bug_features
+from bugbug import bugzilla
+from bugbug import repository
+from bugbug.labels import get_labels
+from bugbug.utils import ItemSelector
 
 nlp = spacy.load('en')
 
