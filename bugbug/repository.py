@@ -8,7 +8,7 @@ import re
 
 import hglib
 
-import db
+from bugbug import db
 
 COMMITS_DB = 'data/commits.json'
 
