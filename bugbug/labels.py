@@ -29,10 +29,10 @@ def get_tracking_labels():
 
 
 def get_labels(augmentation=False):
-    with open('classes.csv', 'r') as f:
+    with open('labels/bug_nobug.csv', 'r') as f:
         classes = dict([row for row in csv.reader(f)][1:])
 
-    with open('classes_more.csv', 'r') as f:
+    with open('labels/regression_bug_nobug.csv', 'r') as f:
         classes_more = [row for row in csv.reader(f)][1:]
 
     for bug_id, category in classes_more:
