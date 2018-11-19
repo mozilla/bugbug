@@ -7,7 +7,7 @@ from bugbug import bug_rules
 from bugbug import bugzilla
 from bugbug import labels
 
-classes = labels.get_labels()
+classes = labels.get_bugbug_labels()
 
 true_positives = 0
 true_negatives = 0

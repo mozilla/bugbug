@@ -21,7 +21,7 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug import repository
-from bugbug.labels import get_labels
+from bugbug.labels import get_bugbug_labels
 from bugbug.utils import ItemSelector
 
 nlp = spacy.load('en')
@@ -41,7 +41,7 @@ class SpacyVectorizer(TfidfVectorizer):
 
 def go(lemmatization=False):
     # Get labels.
-    classes = get_labels(augmentation=True)
+    classes = get_bugbug_labels(augmentation=True)
 
     labels = []
     bugs: Dict = {

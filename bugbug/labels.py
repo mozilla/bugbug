@@ -28,7 +28,7 @@ def get_tracking_labels():
     return classes
 
 
-def get_labels(augmentation=False):
+def get_bugbug_labels(augmentation=False):
     with open('labels/bug_nobug.csv', 'r') as f:
         classes = dict([row for row in csv.reader(f)][1:])
 
@@ -71,5 +71,5 @@ def get_labels(augmentation=False):
 
 
 if __name__ == '__main__':
-    classes = get_labels()
+    classes = get_bugbug_labels()
     bugzilla.download_bugs([bug_id for bug_id in classes.keys()])
