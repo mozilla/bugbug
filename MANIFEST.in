@@ -1,0 +1,7 @@
+include VERSION
+include requirements.txt
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude tests *
+recursive-exclude data *
