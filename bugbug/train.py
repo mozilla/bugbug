@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import argparse
 from typing import Dict
 
 import numpy as np
@@ -11,6 +10,7 @@ import spacy
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
+from sklearn.externals import joblib
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import cross_val_score
@@ -39,7 +39,7 @@ class SpacyVectorizer(TfidfVectorizer):
         super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
 
 
-def go(lemmatization=False):
+def train(model=None, lemmatization=False):
     # Get labels.
     classes = get_bugbug_labels(augmentation=True)
 
@@ -167,10 +167,5 @@ def go(lemmatization=False):
     print('Recall: {}'.format(metrics.recall_score(y_test, y_pred)))
     print(metrics.confusion_matrix(y_test, y_pred))
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
-    args = parser.parse_args()
-
-    go(lemmatization=args.lemmatization)
+    if model is not None:
+        joblib.dump(clf, model)
