@@ -4,6 +4,7 @@ python:
 install:
   - pip install -r requirements.txt
   - pip install -r test-requirements.txt
+  - mkdir data
   - wget https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=0 -O data/commits.json.xz
   - wget https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=0 -O data/bugs.json.xz
 script:
