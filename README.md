@@ -7,8 +7,8 @@ The dataset currently contains 2110 bugs, the accuracy of the current classifier
 ## Setup
 
 1. Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
-2. Run `cat data/bugs.json.xz.part* | unxz > data/bugs.json`
-3. Run `cat data/commits.json.xz.part* | unxz > data/commits.json`
+2. Run `wget https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=0 -O data/commits.json.xz && unxz data/commits.json.xz`
+3. Run `wget https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=0 -O data/bugs.json.xz && unxz data/bugs.json.xz`
 
-If you update the bugs database, run `cat data/bugs.json | xz -v9 - | split -d -b 20MB - data/bugs.json.xz.part`.
-If you update the commits database, run `cat data/commits.json | xz -v9 - | split -d -b 20MB - data/commits.json.xz.part`.
+If you update the bugs database, run `xz -v9 -k data/bugs.json`.
+If you update the commits database, run `xz -v9 -k data/commits.json`.
