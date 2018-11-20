@@ -11,6 +11,7 @@ import hglib
 from bugbug import db
 
 COMMITS_DB = 'data/commits.json'
+db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
 
 
 def get_commits():

@@ -12,6 +12,7 @@ from libmozdata import bugzilla
 from bugbug import db
 
 BUGS_DB = 'data/bugs.json'
+db.register(BUGS_DB, 'https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=1')
 
 ATTACHMENT_INCLUDE_FIELDS = [
     'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type',

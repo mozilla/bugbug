@@ -6,13 +6,28 @@
 import json
 import lzma
 import os
+from urllib.request import urlretrieve
+
+DATABASES = {}
+
+
+def register(path, url):
+    DATABASES[path] = url
 
 
 def read(path):
-    if not os.path.exists(path) and os.path.exists('{}.xz'.format(path)):
-        # A compressed database exists, extract it.
+    assert path in DATABASES
+
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        xz_path = '{}.xz'.format(path)
+
+        # Download and extract database.
+        urlretrieve(DATABASES[path], xz_path)
+
         with open(path, 'wb') as output_f:
-            with lzma.open('{}.xz'.format(path)) as input_f:
+            with lzma.open(xz_path) as input_f:
                 output_f.write(input_f.read())
 
     if not os.path.exists(path):
@@ -24,6 +39,8 @@ def read(path):
 
 
 def write(path, bugs):
+    assert path in DATABASES
+
     with open(path, 'w') as f:
         for bug in bugs:
             f.write(json.dumps(bug))
@@ -31,6 +48,8 @@ def write(path, bugs):
 
 
 def append(path, bugs):
+    assert path in DATABASES
+
     with open(path, 'a') as f:
         for bug in bugs:
             f.write(json.dumps(bug))
