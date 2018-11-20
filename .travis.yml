@@ -4,7 +4,7 @@ python:
 install:
   - pip install -r requirements.txt
   - pip install -r test-requirements.txt
-  - python setup.py sdist
-  - pip install dist/bugbug-$(cat VERSION).tar.gz
 script:
   - flake8
+  - python setup.py sdist
+  - pip install dist/bugbug-$(cat VERSION).tar.gz
