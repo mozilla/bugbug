@@ -18,15 +18,11 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug import repository
-from bugbug.labels import get_bugbug_labels
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import DictSelector
 
 
-def train(model=None, lemmatization=False):
-    # Get labels.
-    classes = get_bugbug_labels(augmentation=True)
-
+def train(classes, model=None, lemmatization=False):
     commit_messages_map = {}
     for commit in repository.get_commits():
         bug_id = commit['bug_id']

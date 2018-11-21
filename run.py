@@ -7,25 +7,35 @@ import argparse
 
 from bugbug import bugzilla
 from bugbug import classify
+from bugbug import labels
 from bugbug import train
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
-    parser.add_argument('--model', nargs='?', help='Path where to store the model file')
     parser.add_argument('--train', help='Perform training', action='store_true')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking'], default='bug')
     args = parser.parse_args()
 
-    if args.train:
-        train.train(model=args.model, lemmatization=args.lemmatization)
+    model = '{}.model'.format(args.goal)
 
-    classify.init(args.model)
+    if args.train:
+        if args.goal == 'bug':
+            classes = labels.get_bugbug_labels(kind='bug', augmentation=True)
+        elif args.goal == 'regression':
+            classes = labels.get_bugbug_labels(kind='regression', augmentation=True)
+        elif args.goal == 'tracking':
+            classes = labels.get_tracking_labels()
+
+        train.train(classes, model=model, lemmatization=args.lemmatization)
+
+    classify.init(model)
 
     for bug in bugzilla.get_bugs():
         print('https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}'.format(bug['id'], bug['summary']))
         c = classify.classify(bug)
         if c == 1:
-            print('It\'s a bug!')
+            print('Positive!')
         else:
-            print('It\'s not a bug!')
+            print('Negative!')
         input()
