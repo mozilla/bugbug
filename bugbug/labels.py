@@ -57,26 +57,27 @@ def get_bugbug_labels(kind='bug', augmentation=False):
 
                 classes[int(bug_id)] = True if category == 'regression' else False
 
-    if augmentation:
-        # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
-        bug_ids = set()
-        for bug in bugzilla.get_bugs():
-            bug_id = int(bug['id'])
+    bug_ids = set()
+    for bug in bugzilla.get_bugs():
+        bug_id = int(bug['id'])
 
-            bug_ids.add(bug_id)
+        bug_ids.add(bug_id)
 
-            if bug_id in classes:
-                continue
+        if bug_id in classes:
+            continue
+
+        # If augmentation is enabled, use bugs marked as 'regression' or 'feature',
+        # as they are basically labelled.
+        if not augmentation:
+            continue
 
             if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
                 classes[bug_id] = True
             elif any(keyword in bug['keywords'] for keyword in ['feature']):
                 classes[bug_id] = False
 
-        # Remove labels which belong to bugs for which we have no data.
-        classes = {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
-
-    return classes
+    # Remove labels which belong to bugs for which we have no data.
+    return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
 
 if __name__ == '__main__':
