@@ -73,4 +73,4 @@ def get_bugbug_labels(augmentation=False):
 
 if __name__ == '__main__':
     classes = get_bugbug_labels(augmentation=False)
-    bugzilla.download_bugs([bug_id for bug_id in classes.keys()])
+    bugzilla.download_and_store_bugs([bug_id for bug_id in classes.keys()])

@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 import json
 import os
 
@@ -41,15 +42,18 @@ def get_bugs():
 
 
 def download_bugs(bug_ids):
-    old_bug_ids = set()
+    old_bug_count = 0
+    old_bugs = []
+    new_bug_ids = set(bug_ids)
     for bug in get_bugs():
-        old_bug_ids.add(bug['id'])
+        old_bug_count += 1
+        if bug['id'] in new_bug_ids:
+            old_bugs.append(bug)
+            new_bug_ids.remove(bug['id'])
 
-    bug_ids = [bug_id for bug_id in bug_ids if bug_id not in old_bug_ids]
+    print('Loaded {} bugs.'.format(old_bug_count))
 
-    print('Loaded ' + str(len(old_bug_ids)) + ' bugs.')
-
-    print('To download ' + str(len(bug_ids)) + ' bugs.')
+    print('To download {} bugs.'.format(len(new_bug_ids)))
 
     new_bugs = {}
 
@@ -86,9 +90,11 @@ def download_bugs(bug_ids):
 
         new_bugs[bug_id]['history'] = bug['history']
 
-    bugzilla.Bugzilla(bug_ids, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
+    bugzilla.Bugzilla(new_bug_ids, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
 
-    print('Total number of bugs: {}'.format(len(old_bug_ids) + len(new_bugs)))
+    print('Total number of bugs: {}'.format(old_bug_count + len(new_bugs)))
 
     if len(new_bugs):
         db.append(BUGS_DB, new_bugs.values())
+
+    return itertools.chain(old_bugs, new_bugs.items())

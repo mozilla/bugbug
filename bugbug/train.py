@@ -3,10 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Dict
-
 import numpy as np
-import spacy
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
@@ -22,86 +19,34 @@ from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug import repository
 from bugbug.labels import get_bugbug_labels
-from bugbug.utils import ItemSelector
-
-nlp = spacy.load('en')
-
-
-def spacy_token_lemmatizer(text):
-    if len(text) > nlp.max_length:
-        text = text[:nlp.max_length - 1]
-    doc = nlp(text)
-    return [token.lemma_ for token in doc]
-
-
-class SpacyVectorizer(TfidfVectorizer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
+from bugbug.nlp import SpacyVectorizer
+from bugbug.utils import DictSelector
 
 
 def train(model=None, lemmatization=False):
     # Get labels.
     classes = get_bugbug_labels(augmentation=True)
 
-    labels = []
-    bugs: Dict = {
-        'data': [],
-        'title': [],
-        'comments': [],
-        'commits': [],
-    }
-
-    bug_id_to_commit_messages = {}
+    commit_messages_map = {}
     for commit in repository.get_commits():
         bug_id = commit['bug_id']
 
         if not bug_id:
             continue
 
-        if bug_id not in bug_id_to_commit_messages:
-            bug_id_to_commit_messages[bug_id] = ' '
+        if bug_id not in commit_messages_map:
+            commit_messages_map[bug_id] = ' '
 
-        bug_id_to_commit_messages[bug_id] += commit['desc']
+        commit_messages_map[bug_id] += commit['desc']
 
-    for bug in bugzilla.get_bugs():
-        bug_id = bug['id']
+    # Get bugs.
+    bugs = bugzilla.get_bugs()
 
-        if bug_id not in classes:
-            continue
+    # Filter out bugs for which we have no labels.
+    bugs = [bug for bug in bugs if bug['id'] in classes]
 
-        labels.append(1 if classes[bug_id] else 0)
-
-        data = {}
-
-        for f in bug_features.feature_extractors:
-            res = f(bug)
-
-            if res is None:
-                continue
-
-            if isinstance(res, list):
-                for item in res:
-                    data[f.__name__ + '-' + item] = 'True'
-                continue
-
-            if isinstance(res, bool):
-                res = str(res)
-
-            data[f.__name__] = res
-
-        # TODO: Alternative features, to integreate in bug_features.py
-        # for f in bugbug.feature_rules + bugbug.bug_rules:
-        #     data[f.__name__] = f(bug)
-
-        # TODO: Try simply using all possible fields instead of extracting features manually.
-
-        bugs['data'].append(data)
-        bugs['title'].append(bug['summary'])
-        bugs['comments'].append(' '.join([c['text'] for c in bug['comments']]))
-        bugs['commits'].append(bug_id_to_commit_messages[bug_id] if bug_id in bug_id_to_commit_messages else '')
-
-    # Turn the labels array into a numpy array for scikit-learn consumption.
-    y = np.array(labels)
+    # Calculate labels.
+    y = np.array([1 if classes[bug['id']] else 0 for bug in bugs])
 
     if lemmatization:
         text_vectorizer = SpacyVectorizer
@@ -114,25 +59,26 @@ def train(model=None, lemmatization=False):
 
     # Extract features from the bugs.
     extraction_pipeline = Pipeline([
+        ('bug_extractor', bug_features.BugExtractor(commit_messages_map)),
         ('union', FeatureUnion(
             transformer_list=[
                 ('data', Pipeline([
-                    ('selector', ItemSelector(key='data')),
+                    ('selector', DictSelector(key='data')),
                     ('vect', DictVectorizer()),
                 ])),
 
                 ('title', Pipeline([
-                    ('selector', ItemSelector(key='title')),
+                    ('selector', DictSelector(key='title')),
                     ('tfidf', text_vectorizer(stop_words='english')),
                 ])),
 
                 ('comments', Pipeline([
-                    ('selector', ItemSelector(key='comments')),
+                    ('selector', DictSelector(key='comments')),
                     ('tfidf', text_vectorizer(stop_words='english')),
                 ])),
 
                 # ('commits', Pipeline([
-                #     ('selector', ItemSelector(key='commits')),
+                #     ('selector', DictSelector(key='commits')),
                 #     ('tfidf', text_vectorizer(stop_words='english')),
                 # ])),
             ],
@@ -168,4 +114,4 @@ def train(model=None, lemmatization=False):
     print(metrics.confusion_matrix(y_test, y_pred))
 
     if model is not None:
-        joblib.dump(clf, model)
+        joblib.dump((extraction_pipeline, clf), model)

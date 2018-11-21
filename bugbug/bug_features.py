@@ -5,6 +5,9 @@
 
 import re
 
+from sklearn.base import BaseEstimator
+from sklearn.base import TransformerMixin
+
 
 def field(bug, field):
     if field in bug and bug[field] != '---':
@@ -169,3 +172,54 @@ feature_extractors = [
     title,
     comments,
 ]
+
+
+class BugExtractor(BaseEstimator, TransformerMixin):
+    def __init__(self, commit_messages_map=None):
+        self.commit_messages_map = commit_messages_map
+
+    def fit(self, x, y=None):
+        return self
+
+    def transform(self, bugs):
+        results = []
+
+        for bug in bugs:
+            bug_id = bug['id']
+
+            data = {}
+
+            for f in feature_extractors:
+                res = f(bug)
+
+                if res is None:
+                    continue
+
+                if isinstance(res, list):
+                    for item in res:
+                        data[f.__name__ + '-' + item] = 'True'
+                    continue
+
+                if isinstance(res, bool):
+                    res = str(res)
+
+                data[f.__name__] = res
+
+            # TODO: Alternative features, to integreate in bug_features.py
+            # for f in bugbug.feature_rules + bugbug.bug_rules:
+            #     data[f.__name__] = f(bug)
+
+            # TODO: Try simply using all possible fields instead of extracting features manually.
+
+            result = {
+                'data': data,
+                'title': bug['summary'],
+                'comments': ' '.join([c['text'] for c in bug['comments']]),
+            }
+
+            if self.commit_messages_map is not None:
+                result['commits'] = self.commit_messages_map[bug_id] if bug_id in self.commit_messages_map else ''
+
+            results.append(result)
+
+        return results
