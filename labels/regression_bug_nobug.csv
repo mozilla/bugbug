@@ -66,6 +66,8 @@ bug_id,category
 990804,nobug
 1023761,regression
 1037762,bug_no_regression
+1042041,bug_unknown_regression
+1042204,nobug
 1048455,regression
 1054972,regression
 1062876,regression
@@ -87,6 +89,7 @@ bug_id,category
 1098400,regression
 1101478,nobug
 1103188,nobug
+1107242,nobug
 1118235,regression
 1123938,nobug
 1128240,nobug
@@ -157,6 +160,7 @@ bug_id,category
 1288692,bug_unknown_regression
 1289662,nobug
 1294490,nobug
+1297122,nobug
 1297485,regression
 1297630,nobug
 1298240,nobug
@@ -170,8 +174,10 @@ bug_id,category
 1305142,nobug
 1306425,bug_no_regression
 1307108,nobug
+1308039,nobug
 1308940,nobug
 1311541,nobug
+1311731,nobug
 1312587,nobug
 1312588,nobug
 1313148,bug_unknown_regression
@@ -453,6 +459,7 @@ bug_id,category
 1435125,bug_unknown_regression
 1435290,bug_unknown_regression
 1435589,regression
+1435683,nobug
 1435798,nobug
 1435803,regression
 1436117,regression
@@ -478,7 +485,7 @@ bug_id,category
 1439236,regression
 1439292,nobug
 1439624,regression
-1439880,null
+1439880,bug_unknown_regression
 1440338,regression
 1440652,nobug
 1440886,nobug
@@ -1149,7 +1156,7 @@ bug_id,category
 1473289,regression
 1473495,bug_unknown_regression
 1473582,nobug
-1473626,null
+1473626,nobug
 1473718,bug_unknown_regression
 1473808,regression
 1473828,bug_unknown_regression
@@ -1195,6 +1202,7 @@ bug_id,category
 1475242,nobug
 1475261,bug_no_regression
 1475304,nobug
+1475386,nobug
 1475431,regression
 1475501,regression
 1475556,nobug
@@ -1420,7 +1428,7 @@ bug_id,category
 1483935,regression
 1484053,regression
 1484059,bug_unknown_regression
-1484073,null
+1484073,bug_unknown_regression
 1484109,nobug
 1484118,nobug
 1484128,nobug
@@ -1674,6 +1682,7 @@ bug_id,category
 1492584,nobug
 1492598,bug_unknown_regression
 1492764,bug_unknown_regression
+1492766,nobug
 1492772,bug_unknown_regression
 1492818,bug_unknown_regression
 1492859,bug_unknown_regression
@@ -1870,9 +1879,11 @@ bug_id,category
 1502096,regression
 1502179,regression
 1502233,regression
+1502284,nobug
 1502519,regression
 1502747,nobug
 1502950,regression
+1502977,regression
 1503232,bug_unknown_regression
 1503293,regression
 1503323,regression
@@ -1881,6 +1892,16 @@ bug_id,category
 1503757,regression
 1503817,regression
 1504188,regression
+1504756,nobug
 1505119,nobug
 1505522,nobug
+1505690,nobug
 1505898,nobug
+1506050,regression
+1506100,regression
+1506608,nobug
+1506763,nobug
+1507434,nobug
+1507448,nobug
+1508296,nobug
+1508873,nobug
