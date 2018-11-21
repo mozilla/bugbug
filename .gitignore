@@ -1,4 +1,5 @@
 *.pyc
+*.model
 
 data/bugs.json
 data/commits.json
