@@ -28,26 +28,34 @@ def get_tracking_labels():
     return classes
 
 
-def get_bugbug_labels(augmentation=False):
+def get_bugbug_labels(kind='bug', augmentation=False):
+    assert kind in ['bug', 'regression']
+
+    classes = {}
+
     with open('labels/bug_nobug.csv', 'r') as f:
-        classes = dict([row for row in csv.reader(f)][1:])
+        reader = csv.reader(f)
+        next(reader)
+        for bug_id, category in reader:
+            assert category in ['True', 'False'], 'unexpected category {}'.format(category)
+            if kind == 'bug':
+                classes[int(bug_id)] = True if category == 'True' else False
+            elif kind == 'regression':
+                if category == 'False':
+                    classes[int(bug_id)] = False
 
     with open('labels/regression_bug_nobug.csv', 'r') as f:
-        classes_more = [row for row in csv.reader(f)][1:]
+        reader = csv.reader(f)
+        next(reader)
+        for bug_id, category in reader:
+            assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], 'unexpected category {}'.format(category)
+            if kind == 'bug':
+                classes[int(bug_id)] = True if category != 'nobug' else False
+            elif kind == 'regression':
+                if category == 'bug_unknown_regression':
+                    continue
 
-    for bug_id, category in classes_more:
-        if category == 'nobug':
-            is_bug = 'False'
-        else:
-            is_bug = 'True'
-
-        classes[bug_id] = is_bug
-
-    for bug_id, is_bug in classes.items():
-        assert is_bug == 'True' or is_bug == 'False'
-
-    # Turn bug IDs into integers and labels into booleans.
-    classes = {int(bug_id): True if label == 'True' else False for bug_id, label in classes.items()}
+                classes[int(bug_id)] = True if category == 'regression' else False
 
     if augmentation:
         # Use bugs marked as 'regression' or 'feature', as they are basically labelled.
