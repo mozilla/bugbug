@@ -83,6 +83,7 @@ def get_bugbug_labels(kind='bug', augmentation=False):
 
 def get_all_bug_ids():
     bug_ids = set()
+
     for csv_file in os.listdir('labels'):
         with open(os.path.join('labels', csv_file)) as f:
             reader = csv.reader(f)
@@ -90,3 +91,5 @@ def get_all_bug_ids():
             next(reader)
             # Assume the first column is the bug ID.
             bug_ids.update([row[0] for row in reader])
+
+    return list(bug_ids)
