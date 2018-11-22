@@ -41,6 +41,10 @@ def get_bugs():
     return db.read(BUGS_DB)
 
 
+def set_token(token):
+    bugzilla.Bugzilla.TOKEN = token
+
+
 def _download(ids_or_query):
     new_bugs = {}
 
