@@ -81,7 +81,7 @@ def get_bugbug_labels(kind='bug', augmentation=False):
     return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
 
-if __name__ == '__main__':
+def get_all_bug_ids():
     bug_ids = set()
     for csv_file in os.listdir('labels'):
         with open(os.path.join('labels', csv_file)) as f:
@@ -90,5 +90,3 @@ if __name__ == '__main__':
             next(reader)
             # Assume the first column is the bug ID.
             bug_ids.update([row[0] for row in reader])
-
-    bugzilla.download_bugs(bug_ids)
