@@ -44,10 +44,10 @@ def get_bugs():
 def download_bugs(bug_ids):
     old_bug_count = 0
     old_bugs = []
-    new_bug_ids = set(bug_ids)
+    new_bug_ids = set([int(bug_id) for bug_id in bug_ids])
     for bug in get_bugs():
         old_bug_count += 1
-        if bug['id'] in new_bug_ids:
+        if int(bug['id']) in new_bug_ids:
             old_bugs.append(bug)
             new_bug_ids.remove(bug['id'])
 
