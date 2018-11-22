@@ -41,20 +41,7 @@ def get_bugs():
     return db.read(BUGS_DB)
 
 
-def download_bugs(bug_ids):
-    old_bug_count = 0
-    old_bugs = []
-    new_bug_ids = set([int(bug_id) for bug_id in bug_ids])
-    for bug in get_bugs():
-        old_bug_count += 1
-        if int(bug['id']) in new_bug_ids:
-            old_bugs.append(bug)
-            new_bug_ids.remove(bug['id'])
-
-    print('Loaded {} bugs.'.format(old_bug_count))
-
-    print('To download {} bugs.'.format(len(new_bug_ids)))
-
+def _download(ids_or_query):
     new_bugs = {}
 
     def bughandler(bug):
@@ -90,7 +77,55 @@ def download_bugs(bug_ids):
 
         new_bugs[bug_id]['history'] = bug['history']
 
-    bugzilla.Bugzilla(new_bug_ids, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
+    bugzilla.Bugzilla(ids_or_query, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
+
+    return new_bugs
+
+
+def download_bugs_between(date_from, date_to):
+    products = [
+        'Add-on SDK',
+        'Android Background Services',
+        'Core',
+        'External Software Affecting Firefox',
+        'Firefox',
+        'Firefox for Android',
+        # 'Firefox for iOS',
+        'Firefox Graveyard',
+        'Firefox Health Report',
+        # 'Focus',
+        # 'Hello (Loop)',
+        'NSPR',
+        'NSS',
+        'Toolkit',
+    ]
+
+    query = '&'.join(['product=' + p for p in products]) + '&' +\
+            'bug_status=RESOLVED&bug_status=VERIFIED&resolution=FIXED&' +\
+            'f2=creation_ts&o2=greaterthan&v2={f}&f3=creation_ts&o3=lessthan&v3={t}&' +\
+            'f4=cf_last_resolved&o4=lessthan&v4={t}'
+    query = query.format(f=date_from.strftime('%Y-%m-%d'), t=date_to.strftime('%Y-%m-%d'))
+
+    bugs = _download(query)
+
+    db.write(BUGS_DB, bugs.values())
+
+
+def download_bugs(bug_ids):
+    old_bug_count = 0
+    old_bugs = []
+    new_bug_ids = set([int(bug_id) for bug_id in bug_ids])
+    for bug in get_bugs():
+        old_bug_count += 1
+        if int(bug['id']) in new_bug_ids:
+            old_bugs.append(bug)
+            new_bug_ids.remove(bug['id'])
+
+    print('Loaded {} bugs.'.format(old_bug_count))
+
+    print('To download {} bugs.'.format(len(new_bug_ids)))
+
+    new_bugs = _download(new_bug_ids)
 
     print('Total number of bugs: {}'.format(old_bug_count + len(new_bugs)))
 
