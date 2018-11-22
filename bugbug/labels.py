@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import csv
+import os
 
 from bugbug import bugzilla
 
@@ -81,5 +82,13 @@ def get_bugbug_labels(kind='bug', augmentation=False):
 
 
 if __name__ == '__main__':
-    classes = get_bugbug_labels(augmentation=False)
-    bugzilla.download_and_store_bugs([bug_id for bug_id in classes.keys()])
+    bug_ids = set()
+    for csv_file in os.listdir('labels'):
+        with open(os.path.join('labels', csv_file)) as f:
+            reader = csv.reader(f)
+            # Assume the first row is the header.
+            next(reader)
+            # Assume the first column is the bug ID.
+            bug_ids.update([row[0] for row in reader])
+
+    bugzilla.download_bugs(bug_ids)
