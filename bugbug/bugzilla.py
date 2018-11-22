@@ -82,7 +82,7 @@ def _download(ids_or_query):
     return new_bugs
 
 
-def download_bugs_between(date_from, date_to):
+def download_bugs_between(date_from, date_to, security=False):
     products = [
         'Add-on SDK',
         'Android Background Services',
@@ -102,8 +102,10 @@ def download_bugs_between(date_from, date_to):
 
     query = '&'.join(['product=' + p for p in products]) + '&' +\
             'bug_status=RESOLVED&bug_status=VERIFIED&resolution=FIXED&' +\
-            'f2=creation_ts&o2=greaterthan&v2={f}&f3=creation_ts&o3=lessthan&v3={t}&' +\
-            'f4=cf_last_resolved&o4=lessthan&v4={t}'
+            'f1=creation_ts&o1=greaterthan&v1={f}&f2=creation_ts&o2=lessthan&v2={t}&' +\
+            'f3=cf_last_resolved&o3=lessthan&v3={t}'
+    if not security:
+        query += '&f4=bug_group&o4=isempty'
     query = query.format(f=date_from.strftime('%Y-%m-%d'), t=date_to.strftime('%Y-%m-%d'))
 
     bugs = _download(query)
@@ -111,7 +113,7 @@ def download_bugs_between(date_from, date_to):
     db.write(BUGS_DB, bugs.values())
 
 
-def download_bugs(bug_ids):
+def download_bugs(bug_ids, security=False):
     old_bug_count = 0
     old_bugs = []
     new_bug_ids = set([int(bug_id) for bug_id in bug_ids])
@@ -126,6 +128,9 @@ def download_bugs(bug_ids):
     print('To download {} bugs.'.format(len(new_bug_ids)))
 
     new_bugs = _download(new_bug_ids)
+
+    if not security:
+        new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
 
     print('Total number of bugs: {}'.format(old_bug_count + len(new_bugs)))
 
