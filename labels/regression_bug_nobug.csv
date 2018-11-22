@@ -66,6 +66,8 @@ bug_id,category
 990804,nobug
 1023761,regression
 1037762,bug_no_regression
+1041886,nobug
+1042003,bug_unknown_regression
 1042041,bug_unknown_regression
 1042204,nobug
 1048455,regression
