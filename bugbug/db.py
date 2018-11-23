@@ -14,13 +14,16 @@ DATABASES = {}
 def register(path, url):
     DATABASES[path] = url
 
+    # Create DB parent directory.
+    parent_dir = os.path.dirname(path)
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir, exist_ok=True)
+
 
 def read(path):
     assert path in DATABASES
 
     if not os.path.exists(path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
         xz_path = '{}.xz'.format(path)
 
         # Download and extract database.
