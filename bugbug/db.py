@@ -25,10 +25,13 @@ def read(path):
     assert path in DATABASES
 
     if not os.path.exists(path):
+        # Download and extract database.
+
         xz_path = '{}.xz'.format(path)
 
-        # Download and extract database.
-        urlretrieve(DATABASES[path], xz_path)
+        # Only download if the xz file is not there yet.
+        if not os.path.exists(xz_path):
+            urlretrieve(DATABASES[path], xz_path)
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
