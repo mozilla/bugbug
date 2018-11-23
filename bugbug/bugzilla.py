@@ -104,17 +104,31 @@ def download_bugs_between(date_from, date_to, security=False):
         'Toolkit',
     ]
 
-    query = '&'.join(['product=' + p for p in products]) + '&' +\
-            'bug_status=RESOLVED&bug_status=VERIFIED&resolution=FIXED&' +\
-            'f1=creation_ts&o1=greaterthan&v1={f}&f2=creation_ts&o2=lessthan&v2={t}&' +\
-            'f3=cf_last_resolved&o3=lessthan&v3={t}'
+    query = {
+        'limit': 500,
+        'order': 'bug_id',
+        'product': products,
+        'f1': 'bug_id', 'o1': 'greaterthan', 'v1': '',
+        'f2': 'creation_ts', 'o2': 'greaterthan', 'v2': date_from.strftime('%Y-%m-%d'),
+        'f3': 'creation_ts', 'o3': 'lessthan', 'v3': date_to.strftime('%Y-%m-%d'),
+        'f4': 'cf_last_resolved', 'o4': 'lessthan', 'v4': date_to.strftime('%Y-%m-%d'),
+    }
+
     if not security:
-        query += '&f4=bug_group&o4=isempty'
-    query = query.format(f=date_from.strftime('%Y-%m-%d'), t=date_to.strftime('%Y-%m-%d'))
+        query['f5'] = 'bug_group'
+        query['o5'] = 'isempty'
 
-    bugs = _download(query)
+    last_id = 0
+    while True:
+        query['v1'] = last_id
+        bugs = _download(query)
 
-    db.write(BUGS_DB, bugs.values())
+        last_id = max([last_id] + [bug for bug in bugs.keys()])
+
+        db.append(BUGS_DB, bugs.values())
+
+        if len(bugs) < 500:
+            break
 
 
 def download_bugs(bug_ids, security=False):
