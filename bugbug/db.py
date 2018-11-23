@@ -6,6 +6,7 @@
 import json
 import lzma
 import os
+import shutil
 from urllib.request import urlretrieve
 
 DATABASES = {}
@@ -31,7 +32,7 @@ def read(path):
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
-                output_f.write(input_f.read())
+                shutil.copyfileobj(input_f, output_f)
 
     if not os.path.exists(path):
         raise Exception('Database {} does not exist.'.format(path))
