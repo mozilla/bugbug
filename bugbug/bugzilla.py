@@ -119,11 +119,16 @@ def download_bugs_between(date_from, date_to, security=False):
         query['o5'] = 'isempty'
 
     last_id = 0
+    total_downloaded = 0
     while True:
         query['v1'] = last_id
         bugs = _download(query)
 
         last_id = max([last_id] + [bug for bug in bugs.keys()])
+
+        total_downloaded += len(bugs)
+
+        print('Downloaded {} bugs, up to ID {}'.format(total_downloaded, last_id))
 
         db.append(BUGS_DB, bugs.values())
 
