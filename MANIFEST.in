@@ -1,5 +1,6 @@
 include VERSION
 include requirements.txt
+recursive-include bugbug/labels *
 
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]

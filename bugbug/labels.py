@@ -5,8 +5,13 @@
 
 import csv
 import os
+import sys
 
 from bugbug import bugzilla
+
+
+def get_labels_dir():
+    return os.path.join(os.path.dirname(sys.modules[__package__].__file__), 'labels')
 
 
 def get_tracking_labels():
@@ -34,7 +39,7 @@ def get_bugbug_labels(kind='bug', augmentation=False):
 
     classes = {}
 
-    with open('labels/bug_nobug.csv', 'r') as f:
+    with open(os.path.join(get_labels_dir(), 'bug_nobug.csv'), 'r') as f:
         reader = csv.reader(f)
         next(reader)
         for bug_id, category in reader:
@@ -45,7 +50,7 @@ def get_bugbug_labels(kind='bug', augmentation=False):
                 if category == 'False':
                     classes[int(bug_id)] = False
 
-    with open('labels/regression_bug_nobug.csv', 'r') as f:
+    with open(os.path.join(get_labels_dir(), 'regression_bug_nobug.csv'), 'r') as f:
         reader = csv.reader(f)
         next(reader)
         for bug_id, category in reader:
@@ -84,8 +89,9 @@ def get_bugbug_labels(kind='bug', augmentation=False):
 def get_all_bug_ids():
     bug_ids = set()
 
-    for csv_file in os.listdir('labels'):
-        with open(os.path.join('labels', csv_file)) as f:
+    labels_dir = get_labels_dir()
+    for csv_file in os.listdir(labels_dir):
+        with open(os.path.join(labels_dir, csv_file)) as f:
             reader = csv.reader(f)
             # Assume the first row is the header.
             next(reader)
