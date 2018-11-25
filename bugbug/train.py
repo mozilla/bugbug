@@ -36,13 +36,15 @@ def train(classes, model=None, lemmatization=False):
         commit_messages_map[bug_id] += commit['desc']
 
     # Get bugs.
-    bugs = bugzilla.get_bugs()
+    def bugs_all():
+        return bugzilla.get_bugs()
 
     # Filter out bugs for which we have no labels.
-    bugs = [bug for bug in bugs if bug['id'] in classes]
+    def bugs():
+        return (bug for bug in bugs_all() if bug['id'] in classes)
 
     # Calculate labels.
-    y = np.array([1 if classes[bug['id']] else 0 for bug in bugs])
+    y = np.array([1 if classes[bug['id']] else 0 for bug in bugs()])
 
     if lemmatization:
         text_vectorizer = SpacyVectorizer
@@ -79,7 +81,7 @@ def train(classes, model=None, lemmatization=False):
         )),
     ])
 
-    X = extraction_pipeline.fit_transform(bugs)
+    X = extraction_pipeline.fit_transform(bugs())
 
     # Under-sample the 'bug' class, as there are too many compared to 'feature'.
     X, y = RandomUnderSampler(random_state=0).fit_sample(X, y)
