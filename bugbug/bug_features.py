@@ -205,10 +205,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
                 data[f.__name__] = res
 
-            # TODO: Alternative features, to integreate in bug_features.py
-            # for f in bugbug.feature_rules + bugbug.bug_rules:
-            #     data[f.__name__] = f(bug)
-
             # TODO: Try simply using all possible fields instead of extracting features manually.
 
             result = {
