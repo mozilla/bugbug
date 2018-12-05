@@ -51,8 +51,6 @@ def train(classes, model=None, lemmatization=False):
     else:
         text_vectorizer = TfidfVectorizer
 
-    # TODO: Try bag-of-words with word/char 1-gram, 2-gram, 3-grams, word2vec, doc2vec, 1d-cnn (both using pretrained word embeddings and not)
-
     # Extract features from the bugs.
     extraction_pipeline = Pipeline([
         ('bug_extractor', bug_features.BugExtractor(commit_messages_map)),
