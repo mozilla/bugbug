@@ -34,6 +34,27 @@ def get_tracking_labels():
     return classes
 
 
+def get_qa_needed_labels():
+    classes = {}
+
+    for bug_data in bugzilla.get_bugs():
+        bug_id = int(bug_data['id'])
+
+        for entry in bug_data['history']:
+            for change in entry['changes']:
+                if change['added'].startswith('qawanted'):
+                    classes[bug_id] = True
+                elif 'flags' in entry:
+                    for flag in entry['flags']:
+                        if flag['name'].startswith('qe-verify'):
+                            classes[bug_id] = True
+
+        if bug_id not in classes:
+            classes[bug_id] = False
+
+    return classes
+
+
 def get_bugbug_labels(kind='bug', augmentation=False):
     assert kind in ['bug', 'regression']
 
