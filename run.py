@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
     parser.add_argument('--download', help='Download data required for training', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking'], default='bug')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded'], default='bug')
     args = parser.parse_args()
 
     if args.download:
@@ -31,6 +31,8 @@ if __name__ == '__main__':
             classes = labels.get_bugbug_labels(kind='regression', augmentation=True)
         elif args.goal == 'tracking':
             classes = labels.get_tracking_labels()
+        elif args.goal == 'qaneeded':
+            classes = labels.get_qa_needed_labels()
 
         train.train(classes, model=model, lemmatization=args.lemmatization)
 
