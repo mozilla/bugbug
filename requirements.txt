@@ -3,7 +3,7 @@ numpy==1.15.4
 scipy==1.1.0
 scikit-learn==0.20.1
 xgboost==0.81
-requests==2.20.1
+requests==2.21.0
 imbalanced-learn==0.4.3
 spacy==2.0.18
 python-hglib==2.6.1
