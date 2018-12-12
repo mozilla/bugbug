@@ -22,6 +22,7 @@ class QANeededModel(Model):
 
         feature_extractors = [
             bug_features.has_str,
+            bug_features.has_regression_range,
             bug_features.severity,
             bug_features.keywords,
             bug_features.is_coverity_issue,
