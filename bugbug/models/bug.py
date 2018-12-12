@@ -23,7 +23,9 @@ class BugModel(Model):
         feature_extractors = [
             bug_features.has_str(),
             bug_features.severity(),
-            bug_features.keywords(),
+            # Ignore keywords that would make the ML completely skewed
+            # (we are going to use them as 100% rules in the evaluation phase).
+            bug_features.keywords(set(['regression', 'talos-regression', 'feature'])),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),

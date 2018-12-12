@@ -32,12 +32,14 @@ class has_crash_signature(object):
 
 
 class keywords(object):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
     def __call__(self, bug):
         keywords = []
         subkeywords = []
         for keyword in bug['keywords']:
-            # Ignore keywords that would make the ML completely skewed (we are going to use them as 100% rules in the evaluation phase).
-            if keyword in ['regression', 'talos-regression', 'feature']:
+            if keyword in self.to_ignore:
                 continue
 
             keywords.append(keyword)
