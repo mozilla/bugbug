@@ -20,7 +20,7 @@ if __name__ == '__main__':
         bug_ids = labels.get_all_bug_ids()
         bugzilla.download_bugs(bug_ids)
 
-    model_file_name = '{}.model'.format(args.goal)
+    model_file_name = '{}model.model'.format(args.goal)
 
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
