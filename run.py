@@ -6,9 +6,7 @@
 import argparse
 
 from bugbug import bugzilla
-from bugbug import classify
 from bugbug import labels
-from bugbug import train
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -22,25 +20,30 @@ if __name__ == '__main__':
         bug_ids = labels.get_all_bug_ids()
         bugzilla.download_bugs(bug_ids)
 
-    model = '{}.model'.format(args.goal)
+    model_file_name = '{}.model'.format(args.goal)
+
+    if args.goal == 'bug':
+        from bugbug.models.bug import BugModel
+        model_class = BugModel
+    elif args.goal == 'regression':
+        from bugbug.models.regression import RegressionModel
+        model_class = RegressionModel
+    elif args.goal == 'tracking':
+        from bugbug.models.tracking import TrackingModel
+        model_class = TrackingModel
+    elif args.goal == 'qaneeded':
+        from bugbug.models.qaneeded import QANeededModel
+        model_class = QANeededModel
 
     if args.train:
-        if args.goal == 'bug':
-            classes = labels.get_bugbug_labels(kind='bug', augmentation=True)
-        elif args.goal == 'regression':
-            classes = labels.get_bugbug_labels(kind='regression', augmentation=True)
-        elif args.goal == 'tracking':
-            classes = labels.get_tracking_labels()
-        elif args.goal == 'qaneeded':
-            classes = labels.get_qa_needed_labels()
-
-        train.train(classes, model=model, lemmatization=args.lemmatization)
-
-    classify.init(model)
+        model = model_class(args.lemmatization)
+        model.train()
+    else:
+        model = model_class.load(model_file_name)
 
     for bug in bugzilla.get_bugs():
         print('https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}'.format(bug['id'], bug['summary']))
-        c = classify.classify(bug)
+        c = model.classify(bug)
         if c == 1:
             print('Positive!')
         else:

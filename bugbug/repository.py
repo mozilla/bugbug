@@ -49,6 +49,23 @@ def download_commits(repo_dir):
     db.write(COMMITS_DB, commits)
 
 
+def get_commit_messages_map():
+    commit_messages_map = {}
+
+    for commit in get_commits():
+        bug_id = commit['bug_id']
+
+        if not bug_id:
+            continue
+
+        if bug_id not in commit_messages_map:
+            commit_messages_map[bug_id] = ''
+
+        commit_messages_map[bug_id] += commit['desc']
+
+    return commit_messages_map
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('repository_dir', help='Path to the repository', action='store')

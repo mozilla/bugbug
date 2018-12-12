@@ -155,27 +155,9 @@ def comments(bug):
     return list(ret)
 
 
-feature_extractors = [
-    has_str,
-    # Ignore features that would make the ML completely skewed (we are going to use them as 100% rules in the evaluation phase).
-    # has_regression_range,
-    severity,
-    keywords,
-    is_coverity_issue,
-    has_crash_signature,
-    has_url,
-    has_w3c_url,
-    has_github_url,
-    whiteboard,
-    patches,
-    landings,
-    title,
-    comments,
-]
-
-
 class BugExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self, commit_messages_map=None):
+    def __init__(self, feature_extractors, commit_messages_map=None):
+        self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
 
     def fit(self, x, y=None):
@@ -189,7 +171,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
             data = {}
 
-            for f in feature_extractors:
+            for f in self.feature_extractors:
                 res = f(bug)
 
                 if res is None:
