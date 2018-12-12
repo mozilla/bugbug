@@ -21,20 +21,20 @@ class QANeededModel(Model):
         self.classes = labels.get_qa_needed_labels()
 
         feature_extractors = [
-            bug_features.has_str,
-            bug_features.has_regression_range,
-            bug_features.severity,
-            bug_features.keywords,
-            bug_features.is_coverity_issue,
-            bug_features.has_crash_signature,
-            bug_features.has_url,
-            bug_features.has_w3c_url,
-            bug_features.has_github_url,
-            bug_features.whiteboard,
-            bug_features.patches,
-            bug_features.landings,
-            bug_features.title,
-            bug_features.comments,
+            bug_features.has_str(),
+            bug_features.has_regression_range(),
+            bug_features.severity(),
+            bug_features.keywords(),
+            bug_features.is_coverity_issue(),
+            bug_features.has_crash_signature(),
+            bug_features.has_url(),
+            bug_features.has_w3c_url(),
+            bug_features.has_github_url(),
+            bug_features.whiteboard(),
+            bug_features.patches(),
+            bug_features.landings(),
+            bug_features.title(),
+            bug_features.comments(),
         ]
 
         self.extraction_pipeline = Pipeline([
