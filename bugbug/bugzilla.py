@@ -54,8 +54,7 @@ def _download(ids_or_query):
         if bug_id not in new_bugs:
             new_bugs[bug_id] = dict()
 
-        for k, v in bug.items():
-            new_bugs[bug_id][k] = v
+        new_bugs[bug_id].update(bug)
 
     def commenthandler(bug, bug_id):
         bug_id = int(bug_id)
