@@ -179,6 +179,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
     def fit(self, x, y=None):
         return self
 
+    def cleanup(self, text):
+        return re.sub(r"http\S+", "URL", text)
+
     def transform(self, bugs):
         results = []
 
@@ -208,7 +211,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             result = {
                 'data': data,
                 'title': bug['summary'],
-                'comments': ' '.join([c['text'] for c in bug['comments']]),
+                'comments': ' '.join([self.cleanup(c['text']) for c in bug['comments']]),
             }
 
             if self.commit_messages_map is not None:
