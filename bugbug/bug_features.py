@@ -180,7 +180,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         return self
 
     def cleanup(self, text):
-        return re.sub(r"http\S+", "URL", text)
+        return re.sub(r'http\S+', 'URL', text)
 
     def transform(self, bugs):
         results = []

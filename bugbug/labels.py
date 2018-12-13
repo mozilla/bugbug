@@ -107,6 +107,25 @@ def get_bugbug_labels(kind='bug', augmentation=False):
     return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
 
+def get_uplift_labels():
+    classes = {}
+
+    for bug_data in bugzilla.get_bugs():
+        bug_id = int(bug_data['id'])
+
+        for attachment in bug_data['attachments']:
+            for flag in attachment['flags']:
+                if not flag['name'].startswith('approval-mozilla-') or flag['status'] not in ['+', '-']:
+                    continue
+
+                if flag['status'] == '+':
+                    classes[bug_id] = True
+                elif flag['status'] == '-':
+                    classes[bug_id] = False
+
+    return classes
+
+
 def get_all_bug_ids():
     bug_ids = set()
 
