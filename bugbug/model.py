@@ -57,7 +57,7 @@ class Model():
         print('Recall: {}'.format(metrics.recall_score(y_test, y_pred)))
         print(metrics.confusion_matrix(y_test, y_pred))
 
-        joblib.dump(self, '{}.model'.format(self.__class__.__name__.lower()))
+        joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
 
     @staticmethod
     def load(model_file_name):
