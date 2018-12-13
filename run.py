@@ -6,7 +6,9 @@
 import argparse
 
 from bugbug import bugzilla
+from bugbug import db
 from bugbug import labels
+from bugbug import repository  # noqa
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -17,6 +19,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.download:
+        db.download()
         bug_ids = labels.get_all_bug_ids()
         bugzilla.download_bugs(bug_ids)
 

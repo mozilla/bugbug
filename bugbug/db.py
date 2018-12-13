@@ -21,10 +21,11 @@ def register(path, url):
         os.makedirs(parent_dir, exist_ok=True)
 
 
-def read(path):
-    assert path in DATABASES
+def download():
+    for path, url in DATABASES.items():
+        if os.path.exists(path):
+            continue
 
-    if not os.path.exists(path):
         # Download and extract database.
 
         xz_path = '{}.xz'.format(path)
@@ -37,8 +38,12 @@ def read(path):
             with lzma.open(xz_path) as input_f:
                 shutil.copyfileobj(input_f, output_f)
 
+
+def read(path):
+    assert path in DATABASES
+
     if not os.path.exists(path):
-        raise Exception('Database {} does not exist.'.format(path))
+        return ()
 
     with open(path, 'r') as f:
         for line in f:

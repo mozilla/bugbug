@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import itertools
 import json
 import os
 
@@ -86,7 +85,7 @@ def _download(ids_or_query):
 
 
 def download_bugs_between(date_from, date_to, security=False):
-    products = [
+    products = set([
         'Add-on SDK',
         'Android Background Services',
         'Core',
@@ -101,41 +100,22 @@ def download_bugs_between(date_from, date_to, security=False):
         'NSPR',
         'NSS',
         'Toolkit',
-    ]
+    ])
 
-    query = {
-        'limit': 500,
-        'order': 'bug_id',
-        'product': products,
-        'f1': 'bug_id', 'o1': 'greaterthan', 'v1': '',
-        'f2': 'creation_ts', 'o2': 'greaterthan', 'v2': date_from.strftime('%Y-%m-%d'),
-        'f3': 'creation_ts', 'o3': 'lessthan', 'v3': date_to.strftime('%Y-%m-%d'),
-        'f4': 'cf_last_resolved', 'o4': 'lessthan', 'v4': date_to.strftime('%Y-%m-%d'),
-    }
+    r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={}&limit=1&order=bug_id'.format(date_from.strftime('%Y-%m-%d')))
+    first_id = r.json()['bugs'][0]['id']
 
-    if not security:
-        query['f5'] = 'bug_group'
-        query['o5'] = 'isempty'
+    r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=lessthan&v1={}&limit=1&order=bug_id%20desc'.format(date_to.strftime('%Y-%m-%d')))
+    last_id = r.json()['bugs'][0]['id']
 
-    last_id = 0
-    total_downloaded = 0
-    while True:
-        query['v1'] = last_id
-        bugs = _download(query)
+    assert first_id < last_id
 
-        last_id = max([last_id] + [bug for bug in bugs.keys()])
+    all_ids = range(first_id, last_id + 1)
 
-        total_downloaded += len(bugs)
-
-        print('Downloaded {} bugs, up to ID {}'.format(total_downloaded, last_id))
-
-        db.append(BUGS_DB, bugs.values())
-
-        if len(bugs) < 500:
-            break
+    download_bugs(all_ids, security=security, products=products)
 
 
-def download_bugs(bug_ids, security=False):
+def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
     old_bugs = []
     new_bug_ids = set([int(bug_id) for bug_id in bug_ids])
@@ -147,16 +127,27 @@ def download_bugs(bug_ids, security=False):
 
     print('Loaded {} bugs.'.format(old_bug_count))
 
+    yield from old_bugs
+
     print('To download {} bugs.'.format(len(new_bug_ids)))
 
-    new_bugs = _download(new_bug_ids)
+    new_bug_ids = sorted(list(new_bug_ids))
 
-    if not security:
-        new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
+    total_downloaded = 0
+    chunks = (new_bug_ids[i:(i + 500)] for i in range(0, len(new_bug_ids), 500))
+    for chunk in chunks:
+        new_bugs = _download(chunk)
 
-    print('Total number of bugs: {}'.format(old_bug_count + len(new_bugs)))
+        total_downloaded += len(new_bugs)
 
-    if len(new_bugs):
+        print('Downloaded {} bugs'.format(total_downloaded))
+
+        if not security:
+            new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
+
+        if products is not None:
+            new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if bug['product'] in products}
+
         db.append(BUGS_DB, new_bugs.values())
 
-    return itertools.chain(old_bugs, new_bugs.items())
+        yield from new_bugs.items()
