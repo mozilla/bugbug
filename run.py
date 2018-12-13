@@ -13,7 +13,7 @@ if __name__ == '__main__':
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
     parser.add_argument('--download', help='Download data required for training', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded'], default='bug')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift'], default='bug')
     args = parser.parse_args()
 
     if args.download:
@@ -34,6 +34,9 @@ if __name__ == '__main__':
     elif args.goal == 'qaneeded':
         from bugbug.models.qaneeded import QANeededModel
         model_class = QANeededModel
+    elif args.goal == 'uplift':
+        from bugbug.models.uplift import UpliftModel
+        model_class = UpliftModel
 
     if args.train:
         model = model_class(args.lemmatization)
