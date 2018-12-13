@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--download', help='Download data required for training', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift'], default='bug')
+    parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     args = parser.parse_args()
 
     if args.download:
@@ -47,11 +48,12 @@ if __name__ == '__main__':
     else:
         model = model_class.load(model_file_name)
 
-    for bug in bugzilla.get_bugs():
-        print('https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}'.format(bug['id'], bug['summary']))
-        c = model.classify(bug)
-        if c == 1:
-            print('Positive!')
-        else:
-            print('Negative!')
-        input()
+    if args.classify:
+        for bug in bugzilla.get_bugs():
+            print('https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}'.format(bug['id'], bug['summary']))
+            c = model.classify(bug)
+            if c == 1:
+                print('Positive!')
+            else:
+                print('Negative!')
+            input()
