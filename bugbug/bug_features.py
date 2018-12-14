@@ -211,11 +211,15 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             # TODO: Try simply using all possible fields instead of extracting features manually.
 
             for cleanup_function in self.cleanup_functions:
-                result = {
-                    'data': data,
-                    'title': bug['summary'],
-                    'comments': ' '.join([cleanup_function(c['text']) for c in bug['comments']]),
-                }
+                bug['summary'] = cleanup_function(bug['summary'])
+                for c in bug['comments']:
+                    c['text'] = cleanup_function(c['text'])
+
+            result = {
+                'data': data,
+                'title': bug['summary'],
+                'comments': ' '.join([c['text'] for c in bug['comments']]),
+            }
 
             if self.commit_messages_map is not None:
                 result['commits'] = self.commit_messages_map[bug_id] if bug_id in self.commit_messages_map else ''
