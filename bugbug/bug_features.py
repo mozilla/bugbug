@@ -171,18 +171,15 @@ class comments(object):
         return list(ret)
 
 
-class cleanup_url(object):
-    def __call__(self, bug):
-        cleaned_text = []
-        for text in bug['comments']:
-            cleaned_text.append(re.sub(r'http\S+', 'URL', text['text']))
-        return cleaned_text
+def cleanup_url(text):
+    return re.sub(r'http\S+', 'URL', text)
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
+        self.cleanup_functions = [cleanup_url]
 
     def fit(self, x, y=None):
         return self
@@ -213,11 +210,12 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
 
-            result = {
-                'data': data,
-                'title': bug['summary'],
-                'comments': ' '.join([c['text'] for c in bug['comments']]),
-            }
+            for cleanup_function in self.cleanup_functions:
+                result = {
+                    'data': data,
+                    'title': bug['summary'],
+                    'comments': ' '.join([cleanup_function(c['text']) for c in bug['comments']]),
+                }
 
             if self.commit_messages_map is not None:
                 result['commits'] = self.commit_messages_map[bug_id] if bug_id in self.commit_messages_map else ''

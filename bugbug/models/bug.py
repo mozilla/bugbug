@@ -36,7 +36,6 @@ class BugModel(Model):
             bug_features.landings(),
             bug_features.title(),
             bug_features.comments(),
-            bug_features.cleanup_url(),
         ]
 
         self.extraction_pipeline = Pipeline([
