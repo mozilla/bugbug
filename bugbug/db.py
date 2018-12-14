@@ -21,12 +21,11 @@ def register(path, url):
         os.makedirs(parent_dir, exist_ok=True)
 
 
+# Download and extract databases.
 def download():
     for path, url in DATABASES.items():
         if os.path.exists(path):
             continue
-
-        # Download and extract database.
 
         xz_path = '{}.xz'.format(path)
 
