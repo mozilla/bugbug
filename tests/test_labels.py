@@ -8,7 +8,7 @@ from bugbug import labels
 
 def test_get_tracking_labels():
     classes = labels.get_tracking_labels()
-    assert not classes[1042138]
+    assert not classes[1101825]
     assert classes[1042096]
 
 
