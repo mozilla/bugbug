@@ -185,11 +185,15 @@ def cleanup_url(text):
     return re.sub(r'http\S+', 'URL', text)
 
 
+def cleanup_fileref(text):
+    return re.sub(r'\w+\.py\s?|\w+\.json\s?', 'FILE_REFERENCE', text)
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
-        self.cleanup_functions = [cleanup_url]
+        self.cleanup_functions = [cleanup_url, cleanup_fileref]
 
     def fit(self, x, y=None):
         return self
