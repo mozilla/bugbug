@@ -171,6 +171,16 @@ class comments(object):
         return list(ret)
 
 
+class product(object):
+    def __call__(self, bug):
+        return bug['product']
+
+
+class component(object):
+    def __call__(self, bug):
+        return bug['component']
+
+
 def cleanup_url(text):
     return re.sub(r'http\S+', 'URL', text)
 
