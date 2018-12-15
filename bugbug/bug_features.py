@@ -171,10 +171,15 @@ class comments(object):
         return list(ret)
 
 
+def cleanup_url(text):
+    return re.sub(r'http\S+', 'URL', text)
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
+        self.cleanup_functions = [cleanup_url]
 
     def fit(self, x, y=None):
         return self
@@ -204,6 +209,11 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 data[f.__class__.__name__] = res
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
+
+            for cleanup_function in self.cleanup_functions:
+                bug['summary'] = cleanup_function(bug['summary'])
+                for c in bug['comments']:
+                    c['text'] = cleanup_function(c['text'])
 
             result = {
                 'data': data,
