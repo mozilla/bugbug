@@ -91,7 +91,7 @@ class whiteboard(object):
 
 class patches(object):
     def __call__(self, bug):
-        return sum(1 for a in bug['attachments'] if a['is_patch'] or a['content_type'] == 'text/x-review-board-request')
+        return sum(1 for a in bug['attachments'] if a['is_patch'] or a['content_type'] in ['text/x-review-board-request', 'text/x-phabricator-request'])
 
 
 class landings(object):
