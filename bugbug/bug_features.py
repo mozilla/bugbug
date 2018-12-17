@@ -186,7 +186,7 @@ def cleanup_url(text):
 
 
 def cleanup_fileref(text):
-    return re.sub(r'\w+\.py\s?|\w+\.json\s?|\w+\.js\s?|\w+\.jsm\s?|\w+\.html\s?|\w+\.css\s?|\w+\.c\s?|\w+\.cpp\s?|\w+\.h\s?', 'FILE_REFERENCE ', text)
+    return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', 'FILE_REFERENCE', text)
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
