@@ -34,6 +34,7 @@ def get_bug_fields():
         pass
 
     r = requests.get('https://bugzilla.mozilla.org/rest/field/bug')
+    r.raise_for_status()
     return r.json()['fields']
 
 
@@ -104,9 +105,11 @@ def download_bugs_between(date_from, date_to, security=False):
     ])
 
     r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={}&limit=1&order=bug_id'.format(date_from.strftime('%Y-%m-%d')))
+    r.raise_for_status()
     first_id = r.json()['bugs'][0]['id']
 
     r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=lessthan&v1={}&limit=1&order=bug_id%20desc'.format(date_to.strftime('%Y-%m-%d')))
+    r.raise_for_status()
     last_id = r.json()['bugs'][0]['id']
 
     assert first_id < last_id
@@ -114,6 +117,7 @@ def download_bugs_between(date_from, date_to, security=False):
     all_ids = range(first_id, last_id + 1)
 
     utils.consume(download_bugs(all_ids, security=security, products=products))
+
 
 def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
