@@ -182,6 +182,11 @@ class component(object):
 
 
 def cleanup_url(text):
+    mozilla_text = ['mozilla', 'fox', 'bugzilla']
+    for mozilla_keyword in mozilla_text:
+        if mozilla_keyword in text:
+            return re.sub(r'http\S+', 'CODE_REFERENCE_URL', text)
+
     return re.sub(r'http\S+', 'URL', text)
 
 
