@@ -63,7 +63,7 @@ class Model():
     def load(model_file_name):
         return joblib.load(model_file_name)
 
-    def classify(self, bugs):
+    def classify(self, bugs, probabilities=False):
         assert bugs is not None
         assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
 
@@ -74,4 +74,7 @@ class Model():
             bugs = list(bugzilla.download_bugs([int(i) for i in bugs]))
 
         X = self.extraction_pipeline.transform(bugs)
-        return self.clf.predict(X)
+        if probabilities:
+            return self.clf.predict_proba(X)
+        else:
+            return self.clf.predict(X)
