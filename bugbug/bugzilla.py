@@ -154,4 +154,4 @@ def download_bugs(bug_ids, products=None, security=False):
 
         db.append(BUGS_DB, new_bugs.values())
 
-        yield from new_bugs.items()
+        yield from new_bugs.values()
