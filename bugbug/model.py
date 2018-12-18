@@ -63,6 +63,9 @@ class Model():
     def load(model_file_name):
         return joblib.load(model_file_name)
 
+    def overwrite_classes(self, bugs, classes, probabilities):
+        return classes
+
     def classify(self, bugs, probabilities=False):
         assert bugs is not None
         assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
@@ -75,6 +78,8 @@ class Model():
 
         X = self.extraction_pipeline.transform(bugs)
         if probabilities:
-            return self.clf.predict_proba(X)
+            classes = self.clf.predict_proba(X)
         else:
-            return self.clf.predict(X)
+            classes = self.clf.predict(X)
+
+        return self.overwrite_classes(bugs, classes, probabilities)
