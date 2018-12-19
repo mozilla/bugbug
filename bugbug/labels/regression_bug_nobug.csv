@@ -1930,6 +1930,9 @@ bug_id,category
 1511224,nobug
 1512674,nobug
 1512990,nobug
+1514404,nobug
+1514413,bug_unknown_regression
+1514581,regression
 1514791,regression
 1514869,nobug
 1515003,nobug
