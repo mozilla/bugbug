@@ -182,6 +182,7 @@ class component(object):
 
 
 def cleanup_url(text):
+    text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', 'CODE_REFERENCE_URL', text)
     return re.sub(r'http\S+', 'URL', text)
 
 
