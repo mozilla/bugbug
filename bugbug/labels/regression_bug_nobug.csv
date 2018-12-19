@@ -158,6 +158,7 @@ bug_id,category
 1271553,nobug
 1272160,regression
 1274461,regression
+1278719,nobug
 1279218,nobug
 1281664,regression
 1282982,nobug
@@ -1167,6 +1168,7 @@ bug_id,category
 1473195,nobug
 1473200,nobug
 1473201,bug_unknown_regression
+1473229,nobug
 1473289,regression
 1473495,bug_unknown_regression
 1473582,nobug
@@ -1399,6 +1401,7 @@ bug_id,category
 1480972,regression
 1480995,regression
 1481139,regression
+1481142,nobug
 1481157,regression
 1481270,nobug
 1481296,nobug
@@ -1882,6 +1885,7 @@ bug_id,category
 1500114,bug_unknown_regression
 1500133,bug_unknown_regression
 1500185,regression
+1500274,regression
 1500289,nobug
 1500326,regression
 1500423,regression
@@ -1900,6 +1904,7 @@ bug_id,category
 1502284,nobug
 1502519,regression
 1502747,nobug
+1502792,nobug
 1502950,regression
 1502977,regression
 1503232,bug_unknown_regression
@@ -1911,6 +1916,7 @@ bug_id,category
 1503757,regression
 1503817,regression
 1504188,regression
+1504334,nobug
 1504756,nobug
 1505119,nobug
 1505522,nobug
@@ -1931,10 +1937,14 @@ bug_id,category
 1509906,nobug
 1510687,nobug
 1511224,nobug
+1511341,nobug
 1511576,nobug
+1512153,nobug
 1512171,nobug
+1512456,nobug
 1512487,nobug
 1512674,nobug
+1512730,nobug
 1512990,nobug
 1513528,nobug
 1514099,nobug
@@ -1946,6 +1956,7 @@ bug_id,category
 1514791,regression
 1514806,nobug
 1514869,nobug
+1514965,nobug
 1514987,nobug
 1515003,nobug
 1515082,nobug
