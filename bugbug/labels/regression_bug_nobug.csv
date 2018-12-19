@@ -67,6 +67,7 @@ bug_id,category
 1023761,regression
 1037762,bug_no_regression
 1041886,nobug
+1041969,regression
 1042003,bug_unknown_regression
 1042041,bug_unknown_regression
 1042096,regression
@@ -92,13 +93,16 @@ bug_id,category
 1098400,regression
 1101478,nobug
 1103188,nobug
+1105066,bug_unknown_regression
 1107242,nobug
 1118235,regression
 1123938,nobug
 1128240,nobug
 1128765,nobug
+1131052,regression
 1135271,regression
 1135640,nobug
+1142814,nobug
 1147497,regression
 1147820,nobug
 1153123,regression
@@ -111,6 +115,7 @@ bug_id,category
 1181896,nobug
 1185489,regression
 1191936,nobug
+1197866,nobug
 1198168,regression
 1200341,nobug
 1201115,regression
@@ -348,6 +353,7 @@ bug_id,category
 1410214,nobug
 1410511,regression
 1410716,bug_unknown_regression
+1410734,nobug
 1410921,regression
 1411008,regression
 1411193,nobug
@@ -379,12 +385,14 @@ bug_id,category
 1418778,bug_unknown_regression
 1418874,nobug
 1418971,regression
+1419091,nobug
 1419176,regression
 1419264,bug_no_regression
 1419376,regression
 1419704,nobug
 1419857,nobug
 1419884,nobug
+1420163,nobug
 1420514,nobug
 1420990,nobug
 1420996,nobug
@@ -1167,6 +1175,7 @@ bug_id,category
 1473928,nobug
 1473978,nobug
 1473996,nobug
+1473997,nobug
 1474084,nobug
 1474124,nobug
 1474130,nobug
@@ -1178,6 +1187,7 @@ bug_id,category
 1474155,nobug
 1474159,regression
 1474163,regression
+1474238,nobug
 1474284,regression
 1474294,bug_unknown_regression
 1474340,nobug
@@ -1705,6 +1715,7 @@ bug_id,category
 1493352,bug_unknown_regression
 1493385,regression
 1493395,regression
+1493397,nobug
 1493398,regression
 1493428,regression
 1493439,nobug
@@ -1821,6 +1832,7 @@ bug_id,category
 1497886,bug_no_regression
 1497897,bug_unknown_regression
 1497950,regression
+1497996,nobug
 1498112,bug_unknown_regression
 1498219,bug_unknown_regression
 1498230,bug_no_regression
@@ -1891,6 +1903,7 @@ bug_id,category
 1503293,regression
 1503323,regression
 1503339,nobug
+1503481,nobug
 1503696,regression
 1503757,regression
 1503817,regression
@@ -1906,5 +1919,18 @@ bug_id,category
 1506763,nobug
 1507434,nobug
 1507448,nobug
+1508002,nobug
 1508296,nobug
 1508873,nobug
+1509158,nobug
+1509453,nobug
+1509754,nobug
+1509906,nobug
+1510687,nobug
+1511224,nobug
+1512674,nobug
+1512990,nobug
+1514791,regression
+1514869,nobug
+1515003,nobug
+1515223,nobug
