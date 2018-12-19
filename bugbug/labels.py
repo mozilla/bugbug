@@ -98,10 +98,10 @@ def get_bugbug_labels(kind='bug', augmentation=False):
         if not augmentation:
             continue
 
-            if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-                classes[bug_id] = True
-            elif any(keyword in bug['keywords'] for keyword in ['feature']):
-                classes[bug_id] = False
+        if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
+            classes[bug_id] = True
+        elif any(keyword in bug['keywords'] for keyword in ['feature']):
+            classes[bug_id] = False
 
     # Remove labels which belong to bugs for which we have no data.
     return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
