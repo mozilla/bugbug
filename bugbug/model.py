@@ -57,6 +57,26 @@ class Model():
         print('Recall: {}'.format(metrics.recall_score(y_test, y_pred)))
         print(metrics.confusion_matrix(y_test, y_pred))
 
+        # Evaluate results on the test set for some confidence thresholds.
+        for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
+            y_pred_probas = self.clf.predict_proba(X_test)
+
+            y_test_filter = []
+            y_pred_filter = []
+            for i in range(0, len(y_test)):
+                argmax = np.argmax(y_pred_probas[i])
+                if y_pred_probas[i][argmax] < confidence_threshold:
+                    continue
+
+                y_test_filter.append(y_test[i])
+                y_pred_filter.append(argmax)
+
+            print('\nConfidence threshold > {} - {} classified'.format(confidence_threshold, len(y_test_filter)))
+            print('Accuracy: {}'.format(metrics.accuracy_score(y_test_filter, y_pred_filter)))
+            print('Precision: {}'.format(metrics.precision_score(y_test_filter, y_pred_filter)))
+            print('Recall: {}'.format(metrics.recall_score(y_test_filter, y_pred_filter)))
+            print(metrics.confusion_matrix(y_test_filter, y_pred_filter))
+
         joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
 
     @staticmethod
