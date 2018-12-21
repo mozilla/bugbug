@@ -93,8 +93,7 @@ class Model():
         if not isinstance(bugs, list):
             bugs = [bugs]
 
-        if isinstance(bugs[0], int) or isinstance(bugs[0], str):
-            bugs = list(bugzilla.download_bugs([int(i) for i in bugs]))
+        assert isinstance(bugs[0], dict)
 
         X = self.extraction_pipeline.transform(bugs)
         if probabilities:

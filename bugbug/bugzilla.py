@@ -10,7 +10,6 @@ import requests
 from libmozdata import bugzilla
 
 from bugbug import db
-from bugbug import utils
 
 BUGS_DB = 'data/bugs.json'
 db.register(BUGS_DB, 'https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=1')
@@ -118,7 +117,7 @@ def download_bugs_between(date_from, date_to, security=False):
 
     all_ids = range(first_id, last_id + 1)
 
-    utils.consume(download_bugs(all_ids, security=security, products=products))
+    download_bugs(all_ids, security=security, products=products)
 
 
 def download_bugs(bug_ids, products=None, security=False):
@@ -132,9 +131,6 @@ def download_bugs(bug_ids, products=None, security=False):
             new_bug_ids.remove(bug['id'])
 
     print('Loaded {} bugs.'.format(old_bug_count))
-
-    yield from old_bugs
-
     print('To download {} bugs.'.format(len(new_bug_ids)))
 
     new_bug_ids = sorted(list(new_bug_ids))
@@ -155,5 +151,3 @@ def download_bugs(bug_ids, products=None, security=False):
             new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if bug['product'] in products}
 
         db.append(BUGS_DB, new_bugs.values())
-
-        yield from new_bugs.values()
