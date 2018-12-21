@@ -7,6 +7,8 @@
 
 - **tracking** - The aim of this classifier is to detect bugs to track.
 
+- **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
+
 
 ## Setup
 
