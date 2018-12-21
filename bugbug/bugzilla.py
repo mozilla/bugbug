@@ -91,6 +91,7 @@ def download_bugs_between(date_from, date_to, security=False):
         'Add-on SDK',
         'Android Background Services',
         'Core',
+        'DevTools',
         'External Software Affecting Firefox',
         'Firefox',
         'Firefox for Android',
@@ -102,6 +103,7 @@ def download_bugs_between(date_from, date_to, security=False):
         'NSPR',
         'NSS',
         'Toolkit',
+        'WebExtensions',
     ])
 
     r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={}&limit=1&order=bug_id'.format(date_from.strftime('%Y-%m-%d')))
