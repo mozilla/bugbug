@@ -61,6 +61,7 @@ class RegressionModel(Model):
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf.set_params(tree_method='exact', predictor='cpu_predictor')
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
