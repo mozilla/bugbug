@@ -16,3 +16,8 @@ Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 
 If you update the bugs database, run `xz -v9 -k data/bugs.json`.
 If you update the commits database, run `xz -v9 -k data/commits.json`.
+
+
+## Usage
+
+Run the `run.py` script to perform training / classification. The first time `run.py` is executed, the `--download` argument should be used to download databases containing bugs and commits data.
