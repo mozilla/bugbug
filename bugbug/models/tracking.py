@@ -37,26 +37,35 @@ class TrackingModel(Model):
             bug_features.comments(),
         ]
 
+        self.data_vectorizer = DictVectorizer()
+        self.title_vectorizer = self.text_vectorizer(stop_words='english')
+        self.comments_vectorizer = self.text_vectorizer(stop_words='english')
+
         self.extraction_pipeline = Pipeline([
             ('bug_extractor', bug_features.BugExtractor(feature_extractors)),
             ('union', FeatureUnion(
                 transformer_list=[
                     ('data', Pipeline([
                         ('selector', DictSelector(key='data')),
-                        ('vect', DictVectorizer()),
+                        ('vect', self.data_vectorizer),
                     ])),
 
                     ('title', Pipeline([
                         ('selector', DictSelector(key='title')),
-                        ('tfidf', self.text_vectorizer(stop_words='english')),
+                        ('tfidf', self.title_vectorizer),
                     ])),
 
                     ('comments', Pipeline([
                         ('selector', DictSelector(key='comments')),
-                        ('tfidf', self.text_vectorizer(stop_words='english')),
+                        ('tfidf', self.comments_vectorizer),
                     ])),
                 ],
             )),
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
+
+    def get_feature_names(self):
+        return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\
+               ['title_' + name for name in self.title_vectorizer.get_feature_names()] +\
+               ['comments_' + name for name in self.comments_vectorizer.get_feature_names()]

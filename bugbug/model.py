@@ -22,6 +22,9 @@ class Model():
         else:
             self.text_vectorizer = TfidfVectorizer
 
+    def get_feature_names(self):
+        return []
+
     def train(self):
         # Get bugs.
         def bugs_all():
@@ -51,6 +54,14 @@ class Model():
 
         # Evaluate results on the test set.
         self.clf.fit(X_train, y_train)
+
+        feature_names = self.get_feature_names()
+        if len(feature_names):
+            print('Feature ranking (top 20 features):')
+            indices = np.argsort(self.clf.feature_importances_)[::-1][:20]
+            for i in range(len(indices)):
+                print('{}. \'{}\' ({})'.format(i + 1, feature_names[indices[i]], self.clf.feature_importances_[indices[i]]))
+
         y_pred = self.clf.predict(X_test)
         print('Accuracy: {}'.format(metrics.accuracy_score(y_test, y_pred)))
         print('Precision: {}'.format(metrics.precision_score(y_test, y_pred)))
