@@ -15,11 +15,11 @@ BUGS_DB = 'data/bugs.json'
 db.register(BUGS_DB, 'https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=1')
 
 ATTACHMENT_INCLUDE_FIELDS = [
-    'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type',
+    'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type', 'creation_time',
 ]
 
 COMMENT_INCLUDE_FIELDS = [
-    'id', 'text', 'author', 'time',
+    'id', 'text', 'author', 'creation_time',
 ]
 
 
