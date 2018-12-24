@@ -102,6 +102,11 @@ def get_bugbug_labels(kind='bug', augmentation=False):
             classes[bug_id] = True
         elif any(keyword in bug['keywords'] for keyword in ['feature']):
             classes[bug_id] = False
+        elif kind == 'regression':
+            for history in bug['history']:
+                for change in history['changes']:
+                    if change['field_name'] == 'keywords' and change['removed'] == 'regression':
+                        classes[bug_id] = False
 
     # Remove labels which belong to bugs for which we have no data.
     return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
