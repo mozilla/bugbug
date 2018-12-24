@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import numpy as np
+from imblearn.metrics import classification_report_imbalanced
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
 from sklearn.externals import joblib
@@ -40,11 +41,14 @@ class Model():
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
 
-        # Under-sample the 'bug' class, as there are too many compared to 'feature'.
-        X, y = RandomUnderSampler(random_state=0).fit_sample(X, y)
+        print(X.shape, y.shape)
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
+
+        # Under-sample the majority classes, as the datasets are imbalanced.
+        X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
+
         print(X_train.shape, y_train.shape)
         print(X_test.shape, y_test.shape)
 
@@ -63,10 +67,9 @@ class Model():
                 print('{}. \'{}\' ({})'.format(i + 1, feature_names[indices[i]], self.clf.feature_importances_[indices[i]]))
 
         y_pred = self.clf.predict(X_test)
-        print('Accuracy: {}'.format(metrics.accuracy_score(y_test, y_pred)))
-        print('Precision: {}'.format(metrics.precision_score(y_test, y_pred)))
-        print('Recall: {}'.format(metrics.recall_score(y_test, y_pred)))
-        print(metrics.confusion_matrix(y_test, y_pred))
+
+        print(metrics.confusion_matrix(y_test, y_pred, labels=[1, 0]))
+        print(classification_report_imbalanced(y_test, y_pred, labels=[1, 0]))
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -83,10 +86,8 @@ class Model():
                 y_pred_filter.append(argmax)
 
             print('\nConfidence threshold > {} - {} classified'.format(confidence_threshold, len(y_test_filter)))
-            print('Accuracy: {}'.format(metrics.accuracy_score(y_test_filter, y_pred_filter)))
-            print('Precision: {}'.format(metrics.precision_score(y_test_filter, y_pred_filter)))
-            print('Recall: {}'.format(metrics.recall_score(y_test_filter, y_pred_filter)))
-            print(metrics.confusion_matrix(y_test_filter, y_pred_filter))
+            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=[1, 0]))
+            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=[1, 0]))
 
         joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
 
