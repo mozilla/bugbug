@@ -2,3 +2,5 @@
 *model
 
 data/
+
+.pytest_cache/
