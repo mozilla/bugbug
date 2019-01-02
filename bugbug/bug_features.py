@@ -138,6 +138,7 @@ def cleanup_synonyms(text):
         ('str', ['str', 'steps to reproduce', 'repro steps']),
         ('uaf', ['uaf', 'use after free', 'use-after-free']),
         ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
+        ('permafailure', ['permafailure', 'permafailing', 'permafail', 'perma failure', 'perma failing', 'perma fail', 'perma-failure', 'perma-failing', 'perma-fail']),
     ]
 
     for synonym_group, synonym_list in synonyms:
