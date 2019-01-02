@@ -23,6 +23,8 @@ class Model():
         else:
             self.text_vectorizer = TfidfVectorizer
 
+        self.cross_validation_enabled = True
+
     def get_feature_names(self):
         return []
 
@@ -55,8 +57,9 @@ class Model():
         print(X_test.shape, y_test.shape)
 
         # Use k-fold cross validation to evaluate results.
-        scores = cross_val_score(self.clf, X_train, y_train, cv=5)
-        print('CV Accuracy: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std() * 2))
+        if self.cross_validation_enabled:
+            scores = cross_val_score(self.clf, X_train, y_train, cv=5)
+            print('CV Accuracy: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std() * 2))
 
         # Evaluate results on the test set.
         self.clf.fit(X_train, y_train)
