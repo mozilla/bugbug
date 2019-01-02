@@ -23,6 +23,7 @@ class Model():
         else:
             self.text_vectorizer = TfidfVectorizer
 
+        self.undersampling_enabled = True
         self.cross_validation_enabled = True
 
     def get_feature_names(self):
@@ -50,8 +51,9 @@ class Model():
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
 
-        # Under-sample the majority classes, as the datasets are imbalanced.
-        X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
+        if self.undersampling_enabled:
+            # Under-sample the majority classes, as the datasets are imbalanced.
+            X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
 
         print(X_train.shape, y_train.shape)
         print(X_test.shape, y_test.shape)
