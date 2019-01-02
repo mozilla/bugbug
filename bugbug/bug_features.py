@@ -150,7 +150,7 @@ def cleanup_synonyms(text):
         ('safemode', ['safemode', 'safe mode']),
         ('str', ['str', 'steps to reproduce', 'repro steps']),
         ('uaf', ['uaf', 'use after free', 'use-after-free']),
-        ('asan', ['asan', 'address sanitizer']),
+        ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
     ]
 
     for synonym_group, synonym_list in synonyms:
