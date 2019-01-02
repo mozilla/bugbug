@@ -39,6 +39,7 @@ class BugModel(Model):
 
         self.data_vectorizer = DictVectorizer()
         self.title_vectorizer = self.text_vectorizer(stop_words='english')
+        self.first_comment_vectorizer = self.text_vectorizer(stop_words='english')
         self.comments_vectorizer = self.text_vectorizer(stop_words='english')
 
         self.extraction_pipeline = Pipeline([
@@ -53,6 +54,11 @@ class BugModel(Model):
                     ('title', Pipeline([
                         ('selector', DictSelector(key='title')),
                         ('tfidf', self.title_vectorizer),
+                    ])),
+
+                    ('first_comment', Pipeline([
+                        ('selector', DictSelector(key='first_comment')),
+                        ('tfidf', self.first_comment_vectorizer),
                     ])),
 
                     ('comments', Pipeline([
@@ -118,6 +124,7 @@ class BugModel(Model):
     def get_feature_names(self):
         return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\
                ['title_' + name for name in self.title_vectorizer.get_feature_names()] +\
+               ['first_comment_' + name for name in self.first_comment_vectorizer.get_feature_names()] +\
                ['comments_' + name for name in self.comments_vectorizer.get_feature_names()]
 
     def overwrite_classes(self, bugs, classes, probabilities):

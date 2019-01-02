@@ -233,6 +233,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             result = {
                 'data': data,
                 'title': bug['summary'],
+                'first_comment': bug['comments'][0]['text'],
                 'comments': ' '.join([c['text'] for c in bug['comments']]),
             }
 
