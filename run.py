@@ -7,7 +7,6 @@ import argparse
 
 from bugbug import bugzilla
 from bugbug import db
-from bugbug import labels
 from bugbug import repository  # noqa
 
 if __name__ == '__main__':
@@ -38,7 +37,6 @@ if __name__ == '__main__':
 
     if args.train:
         db.download()
-        bugzilla.download_bugs(labels.get_all_bug_ids())
 
         model = model_class(args.lemmatization)
         model.train()
