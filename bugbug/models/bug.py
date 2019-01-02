@@ -34,7 +34,6 @@ class BugModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
-            bug_features.comments(),
         ]
 
         self.data_vectorizer = DictVectorizer()

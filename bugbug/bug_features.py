@@ -126,42 +126,6 @@ class title(object):
         return ret
 
 
-class comments(object):
-    def __call__(self, bug):
-        ret = set()
-
-        keywords = [
-            'refactor',
-            'steps to reproduce', 'crash', 'assertion', 'failure', 'leak', 'stack trace', 'regression',
-            'test fix', ' hang', 'hang ', 'heap overflow', 'str:', 'use-after-free', 'asan',
-            'address sanitizer', 'permafail', 'intermittent', 'race condition', 'unexpected fail',
-            'unexpected-fail', 'unexpected pass', 'unexpected-pass', 'repro steps:', 'to reproduce:',
-        ]
-
-        casesensitive_keywords = [
-            'FAIL', 'UAF',
-        ]
-
-        for keyword in keywords:
-            if keyword in bug['comments'][0]['text'].lower():
-                ret.add('first^' + keyword)
-
-        for keyword in casesensitive_keywords:
-            if keyword in bug['comments'][0]['text']:
-                ret.add('first^' + keyword)
-
-        mozregression_patterns = [
-            'mozregression', 'Looks like the following bug has the changes which introduced the regression', 'First bad revision',
-        ]
-
-        for keyword in mozregression_patterns:
-            for comment in bug['comments']:
-                if keyword in comment['text'].lower():
-                    ret.add('mozregression')
-
-        return list(ret)
-
-
 class product(object):
     def __call__(self, bug):
         return bug['product']
