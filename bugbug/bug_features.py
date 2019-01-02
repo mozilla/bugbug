@@ -104,24 +104,11 @@ class title(object):
         ret = []
 
         keywords = [
-            'implement', 'refactor', 'meta', 'tracker', 'dexpcom',
-            'indent', 'ui review', 'support', '[ux]',
-            'fail', 'npe', 'except', 'broken', 'crash', 'bug', 'differential testing', 'error',
-            'addresssanitizer', 'hang ', ' hang', 'jsbugmon', 'leak', 'permaorange', 'random orange',
-            'intermittent', 'regression', 'test fix', 'heap overflow', 'uaf', 'use-after-free',
-            'asan', 'address sanitizer', 'rooting hazard', 'race condition', 'xss', '[static analysis]',
-            'warning c',
+            'fail',
         ]
         for keyword in keywords:
             if keyword in bug['summary'].lower():
                 ret.append(keyword)
-
-        keyword_couples = [
-            ('add', 'test')
-        ]
-        for keyword1, keyword2 in keyword_couples:
-            if keyword1 in bug['summary'].lower() and keyword2 in bug['summary'].lower():
-                ret.append(keyword1 + '^' + keyword2)
 
         return ret
 
