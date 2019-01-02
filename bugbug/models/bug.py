@@ -64,7 +64,7 @@ class BugModel(Model):
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(tree_method='exact', predictor='cpu_predictor')
+        self.clf.set_params(predictor='cpu_predictor')
 
     def get_bugbug_labels(self, kind='bug'):
         assert kind in ['bug', 'regression']
