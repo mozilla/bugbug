@@ -182,10 +182,15 @@ def cleanup_fileref(text):
 
 
 def cleanup_synonyms(text):
-    synonyms = [('safemode', ['safe mode', 'safemode'])]
+    synonyms = [
+        ('safemode', ['safemode', 'safe mode']),
+        ('str', ['str', 'steps to reproduce', 'repro steps']),
+        ('uaf', ['uaf', 'use after free', 'use-after-free']),
+        ('asan', ['asan', 'address sanitizer']),
+    ]
 
     for synonym_group, synonym_list in synonyms:
-        text = re.sub('|'.join(synonym_list), synonym_group, text)
+        text = re.sub('|'.join(synonym_list), synonym_group, text, flags=re.IGNORECASE)
 
     return text
 

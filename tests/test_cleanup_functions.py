@@ -28,6 +28,10 @@ def test_cleanup_fileref():
 def test_cleanup_synonyms():
     tests = [
         ('I was in safemode, but the problem occurred in safe mode too', 'I was in safemode, but the problem occurred in safemode too'),
+        ('SAFE MODE or SAFEMODE?', 'safemode or safemode?'),
+        ('are there str? steps to reproduce? repro steps?', 'are there str? str? str?'),
+        ('this is a use-after-free, also called uaf, also called use after free', 'this is a uaf, also called uaf, also called uaf'),
+        ('found via address sanitizer or asan', 'found via asan or asan'),
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_synonyms(orig_text) == cleaned_text
