@@ -62,6 +62,7 @@ class UpliftModel(Model):
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf.set_params(predictor='cpu_predictor')
 
     def get_labels(self):
         classes = {}
