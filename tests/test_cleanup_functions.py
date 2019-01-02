@@ -23,3 +23,11 @@ def test_cleanup_fileref():
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_fileref(orig_text) == cleaned_text
+
+
+def test_cleanup_synonyms():
+    tests = [
+        ('I was in safemode, but the problem occurred in safe mode too', 'I was in safemode, but the problem occurred in safemode too'),
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_synonyms(orig_text) == cleaned_text

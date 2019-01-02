@@ -190,11 +190,20 @@ def cleanup_fileref(text):
     return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', 'FILE_REFERENCE', text)
 
 
+def cleanup_synonyms(text):
+    synonyms = [('safemode', ['safe mode', 'safemode'])]
+
+    for synonym_group, synonym_list in synonyms:
+        text = re.sub('|'.join(synonym_list), synonym_group, text)
+
+    return text
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
-        self.cleanup_functions = [cleanup_url, cleanup_fileref]
+        self.cleanup_functions = [cleanup_url, cleanup_fileref, cleanup_synonyms]
 
     def fit(self, x, y=None):
         return self
