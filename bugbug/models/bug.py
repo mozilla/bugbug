@@ -9,6 +9,7 @@ from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
+from bugbug import bugzilla
 from bugbug import labels
 from bugbug.model import Model
 from bugbug.utils import DictSelector
@@ -17,8 +18,6 @@ from bugbug.utils import DictSelector
 class BugModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
-
-        self.classes = labels.get_bugbug_labels(kind='bug', augmentation=True)
 
         feature_extractors = [
             bug_features.has_str(),
@@ -65,6 +64,56 @@ class BugModel(Model):
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf.set_params(tree_method='exact', predictor='cpu_predictor')
+
+    def get_bugbug_labels(self, kind='bug'):
+        assert kind in ['bug', 'regression']
+
+        classes = {}
+
+        for bug_id, category in labels.get_labels('bug_nobug'):
+            assert category in ['True', 'False'], 'unexpected category {}'.format(category)
+            if kind == 'bug':
+                classes[int(bug_id)] = True if category == 'True' else False
+            elif kind == 'regression':
+                if category == 'False':
+                    classes[int(bug_id)] = False
+
+        for bug_id, category in labels.get_labels('regression_bug_nobug'):
+            assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], 'unexpected category {}'.format(category)
+            if kind == 'bug':
+                classes[int(bug_id)] = True if category != 'nobug' else False
+            elif kind == 'regression':
+                if category == 'bug_unknown_regression':
+                    continue
+
+                classes[int(bug_id)] = True if category == 'regression' else False
+
+        # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
+        bug_ids = set()
+        for bug in bugzilla.get_bugs():
+            bug_id = int(bug['id'])
+
+            bug_ids.add(bug_id)
+
+            if bug_id in classes:
+                continue
+
+            if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
+                classes[bug_id] = True
+            elif any(keyword in bug['keywords'] for keyword in ['feature']):
+                classes[bug_id] = False
+            elif kind == 'regression':
+                for history in bug['history']:
+                    for change in history['changes']:
+                        if change['field_name'] == 'keywords' and change['removed'] == 'regression':
+                            classes[bug_id] = False
+
+        # Remove labels which belong to bugs for which we have no data.
+        return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
+
+    def get_labels(self):
+        return self.get_bugbug_labels('bug')
 
     def get_feature_names(self):
         return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\

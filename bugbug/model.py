@@ -27,16 +27,18 @@ class Model():
         return []
 
     def train(self):
+        classes = self.get_labels()
+
         # Get bugs.
         def bugs_all():
             return bugzilla.get_bugs()
 
         # Filter out bugs for which we have no labels.
         def bugs():
-            return (bug for bug in bugs_all() if bug['id'] in self.classes)
+            return (bug for bug in bugs_all() if bug['id'] in classes)
 
         # Calculate labels.
-        y = np.array([1 if self.classes[bug['id']] else 0 for bug in bugs()])
+        y = np.array([1 if classes[bug['id']] else 0 for bug in bugs()])
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
