@@ -159,15 +159,6 @@ class comments(object):
                 if keyword in comment['text'].lower():
                     ret.add('mozregression')
 
-        safemode_patterns = [
-            'safemode', 'safe mode'
-        ]
-
-        for keyword in safemode_patterns:
-            for comment in bug['comments']:
-                if keyword in comment['text'].lower():
-                    ret.add('safemode')
-
         return list(ret)
 
 
