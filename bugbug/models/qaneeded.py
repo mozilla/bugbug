@@ -72,14 +72,14 @@ class QANeededModel(Model):
             for entry in bug_data['history']:
                 for change in entry['changes']:
                     if change['added'].startswith('qawanted'):
-                        classes[bug_id] = True
+                        classes[bug_id] = 1
                     elif 'flags' in entry:
                         for flag in entry['flags']:
                             if flag['name'].startswith('qe-verify'):
-                                classes[bug_id] = True
+                                classes[bug_id] = 1
 
             if bug_id not in classes:
-                classes[bug_id] = False
+                classes[bug_id] = 0
 
         return classes
 

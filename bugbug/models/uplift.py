@@ -75,9 +75,9 @@ class UpliftModel(Model):
                         continue
 
                     if flag['status'] == '+':
-                        classes[bug_id] = True
+                        classes[bug_id] = 1
                     elif flag['status'] == '-':
-                        classes[bug_id] = False
+                        classes[bug_id] = 0
 
         return classes
 

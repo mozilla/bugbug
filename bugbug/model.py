@@ -31,6 +31,7 @@ class Model():
 
     def train(self):
         classes = self.get_labels()
+        class_names = sorted(list(set(classes.values())), reverse=True)
 
         # Get bugs.
         def bugs_all():
@@ -41,7 +42,7 @@ class Model():
             return (bug for bug in bugs_all() if bug['id'] in classes)
 
         # Calculate labels.
-        y = np.array([1 if classes[bug['id']] else 0 for bug in bugs()])
+        y = np.array([classes[bug['id']] for bug in bugs()])
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
@@ -75,8 +76,9 @@ class Model():
 
         y_pred = self.clf.predict(X_test)
 
-        print(metrics.confusion_matrix(y_test, y_pred, labels=[1, 0]))
-        print(classification_report_imbalanced(y_test, y_pred, labels=[1, 0]))
+        print('No confidence threshold - {} classified'.format(len(y_test)))
+        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -92,9 +94,11 @@ class Model():
                 y_test_filter.append(y_test[i])
                 y_pred_filter.append(argmax)
 
+            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+
             print('\nConfidence threshold > {} - {} classified'.format(confidence_threshold, len(y_test_filter)))
-            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=[1, 0]))
-            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=[1, 0]))
+            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
+            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
         joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
 

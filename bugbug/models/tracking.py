@@ -73,12 +73,12 @@ class TrackingModel(Model):
                 for change in entry['changes']:
                     if change['field_name'].startswith('cf_tracking_firefox'):
                         if change['added'] in ['blocking', '+']:
-                            classes[bug_id] = True
+                            classes[bug_id] = 1
                         elif change['added'] == '-':
-                            classes[bug_id] = False
+                            classes[bug_id] = 0
 
             if bug_id not in classes:
-                classes[bug_id] = False
+                classes[bug_id] = 0
 
         return classes
 

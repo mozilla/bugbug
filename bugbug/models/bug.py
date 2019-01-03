@@ -79,20 +79,20 @@ class BugModel(Model):
         for bug_id, category in labels.get_labels('bug_nobug'):
             assert category in ['True', 'False'], 'unexpected category {}'.format(category)
             if kind == 'bug':
-                classes[int(bug_id)] = True if category == 'True' else False
+                classes[int(bug_id)] = 1 if category == 'True' else 0
             elif kind == 'regression':
                 if category == 'False':
-                    classes[int(bug_id)] = False
+                    classes[int(bug_id)] = 0
 
         for bug_id, category in labels.get_labels('regression_bug_nobug'):
             assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], 'unexpected category {}'.format(category)
             if kind == 'bug':
-                classes[int(bug_id)] = True if category != 'nobug' else False
+                classes[int(bug_id)] = 1 if category != 'nobug' else 0
             elif kind == 'regression':
                 if category == 'bug_unknown_regression':
                     continue
 
-                classes[int(bug_id)] = True if category == 'regression' else False
+                classes[int(bug_id)] = 1 if category == 'regression' else 0
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         bug_ids = set()
@@ -105,14 +105,14 @@ class BugModel(Model):
                 continue
 
             if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-                classes[bug_id] = True
+                classes[bug_id] = 1
             elif any(keyword in bug['keywords'] for keyword in ['feature']):
-                classes[bug_id] = False
+                classes[bug_id] = 0
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
                         if change['field_name'] == 'keywords' and change['removed'] == 'regression':
-                            classes[bug_id] = False
+                            classes[bug_id] = 0
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
