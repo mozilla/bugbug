@@ -124,12 +124,12 @@ class component(object):
 
 
 def cleanup_url(text):
-    text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', 'CODE_REFERENCE_URL', text)
-    return re.sub(r'http\S+', 'URL', text)
+    text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
+    return re.sub(r'http\S+', '__URL__', text)
 
 
 def cleanup_fileref(text):
-    return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', 'FILE_REFERENCE', text)
+    return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', '__FILE_REFERENCE__', text)
 
 
 def cleanup_synonyms(text):
