@@ -25,6 +25,16 @@ def test_cleanup_fileref():
         assert bug_features.cleanup_fileref(orig_text) == cleaned_text
 
 
+def test_cleanup_responses():
+    tests = [
+        ('A response can be of the form>This is the comment\n', 'A response can be of the form '),
+        ('Multiline responces can be>This is line 1\n>This is line2\n end of response', 'Multiline responces can be   end of response'),
+        ('Code snippet example is > + import bugbug\n', 'Code snippet example is  ')
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_responses(orig_text) == cleaned_text
+
+
 def test_cleanup_synonyms():
     tests = [
         ('I was in safemode, but the problem occurred in safe mode too', 'I was in safemode, but the problem occurred in safemode too'),
