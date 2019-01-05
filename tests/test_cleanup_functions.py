@@ -25,10 +25,13 @@ def test_cleanup_fileref():
         assert bug_features.cleanup_fileref(orig_text) == cleaned_text
 
 
-def test_cleanup_comments():
+def test_cleanup_synonyms():
     tests = [
-        ('Some text > This is the comment \nend of line', 'Some text  end of line'),
-        ('Multiline comments > This is the first line\n>This is the second line\nEnd of comments', 'Multiline comments   End of comments')
+        ('I was in safemode, but the problem occurred in safe mode too', 'I was in safemode, but the problem occurred in safemode too'),
+        ('SAFE MODE or SAFEMODE?', 'safemode or safemode?'),
+        ('are there str? steps to reproduce? repro steps?', 'are there str? str? str?'),
+        ('this is a use-after-free, also called uaf, also called use after free', 'this is a uaf, also called uaf, also called uaf'),
+        ('found via address sanitizer or asan', 'found via asan or asan'),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_comments(orig_text) == cleaned_text
+        assert bug_features.cleanup_synonyms(orig_text) == cleaned_text

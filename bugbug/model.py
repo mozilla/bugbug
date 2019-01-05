@@ -23,20 +23,26 @@ class Model():
         else:
             self.text_vectorizer = TfidfVectorizer
 
+        self.undersampling_enabled = True
+        self.cross_validation_enabled = True
+
     def get_feature_names(self):
         return []
 
     def train(self):
+        classes = self.get_labels()
+        class_names = sorted(list(set(classes.values())), reverse=True)
+
         # Get bugs.
         def bugs_all():
             return bugzilla.get_bugs()
 
         # Filter out bugs for which we have no labels.
         def bugs():
-            return (bug for bug in bugs_all() if bug['id'] in self.classes)
+            return (bug for bug in bugs_all() if bug['id'] in classes)
 
         # Calculate labels.
-        y = np.array([1 if self.classes[bug['id']] else 0 for bug in bugs()])
+        y = np.array([classes[bug['id']] for bug in bugs()])
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
@@ -46,15 +52,17 @@ class Model():
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
 
-        # Under-sample the majority classes, as the datasets are imbalanced.
-        X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
+        if self.undersampling_enabled:
+            # Under-sample the majority classes, as the datasets are imbalanced.
+            X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
 
         print(X_train.shape, y_train.shape)
         print(X_test.shape, y_test.shape)
 
         # Use k-fold cross validation to evaluate results.
-        scores = cross_val_score(self.clf, X_train, y_train, cv=5)
-        print('CV Accuracy: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std() * 2))
+        if self.cross_validation_enabled:
+            scores = cross_val_score(self.clf, X_train, y_train, cv=5)
+            print('CV Accuracy: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std() * 2))
 
         # Evaluate results on the test set.
         self.clf.fit(X_train, y_train)
@@ -68,8 +76,9 @@ class Model():
 
         y_pred = self.clf.predict(X_test)
 
-        print(metrics.confusion_matrix(y_test, y_pred, labels=[1, 0]))
-        print(classification_report_imbalanced(y_test, y_pred, labels=[1, 0]))
+        print('No confidence threshold - {} classified'.format(len(y_test)))
+        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -85,9 +94,11 @@ class Model():
                 y_test_filter.append(y_test[i])
                 y_pred_filter.append(argmax)
 
+            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+
             print('\nConfidence threshold > {} - {} classified'.format(confidence_threshold, len(y_test_filter)))
-            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=[1, 0]))
-            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=[1, 0]))
+            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
+            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
         joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
 

@@ -7,22 +7,15 @@ import argparse
 
 from bugbug import bugzilla
 from bugbug import db
-from bugbug import labels
 from bugbug import repository  # noqa
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
-    parser.add_argument('--download', help='Download data required for training', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift'], default='bug')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component'], default='bug')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     args = parser.parse_args()
-
-    if args.download:
-        db.download()
-        bug_ids = labels.get_all_bug_ids()
-        bugzilla.download_bugs(bug_ids)
 
     model_file_name = '{}model'.format(args.goal)
 
@@ -41,8 +34,13 @@ if __name__ == '__main__':
     elif args.goal == 'uplift':
         from bugbug.models.uplift import UpliftModel
         model_class = UpliftModel
+    elif args.goal == 'component':
+        from bugbug.models.component import ComponentModel
+        model_class = ComponentModel
 
     if args.train:
+        db.download()
+
         model = model_class(args.lemmatization)
         model.train()
     else:

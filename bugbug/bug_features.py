@@ -104,71 +104,13 @@ class title(object):
         ret = []
 
         keywords = [
-            'implement', 'refactor', 'meta', 'tracker', 'dexpcom',
-            'indent', 'ui review', 'support', '[ux]',
-            'fail', 'npe', 'except', 'broken', 'crash', 'bug', 'differential testing', 'error',
-            'addresssanitizer', 'hang ', ' hang', 'jsbugmon', 'leak', 'permaorange', 'random orange',
-            'intermittent', 'regression', 'test fix', 'heap overflow', 'uaf', 'use-after-free',
-            'asan', 'address sanitizer', 'rooting hazard', 'race condition', 'xss', '[static analysis]',
-            'warning c',
+            'fail',
         ]
         for keyword in keywords:
             if keyword in bug['summary'].lower():
                 ret.append(keyword)
 
-        keyword_couples = [
-            ('add', 'test')
-        ]
-        for keyword1, keyword2 in keyword_couples:
-            if keyword1 in bug['summary'].lower() and keyword2 in bug['summary'].lower():
-                ret.append(keyword1 + '^' + keyword2)
-
         return ret
-
-
-class comments(object):
-    def __call__(self, bug):
-        ret = set()
-
-        keywords = [
-            'refactor',
-            'steps to reproduce', 'crash', 'assertion', 'failure', 'leak', 'stack trace', 'regression',
-            'test fix', ' hang', 'hang ', 'heap overflow', 'str:', 'use-after-free', 'asan',
-            'address sanitizer', 'permafail', 'intermittent', 'race condition', 'unexpected fail',
-            'unexpected-fail', 'unexpected pass', 'unexpected-pass', 'repro steps:', 'to reproduce:',
-        ]
-
-        casesensitive_keywords = [
-            'FAIL', 'UAF',
-        ]
-
-        for keyword in keywords:
-            if keyword in bug['comments'][0]['text'].lower():
-                ret.add('first^' + keyword)
-
-        for keyword in casesensitive_keywords:
-            if keyword in bug['comments'][0]['text']:
-                ret.add('first^' + keyword)
-
-        mozregression_patterns = [
-            'mozregression', 'Looks like the following bug has the changes which introduced the regression', 'First bad revision',
-        ]
-
-        for keyword in mozregression_patterns:
-            for comment in bug['comments']:
-                if keyword in comment['text'].lower():
-                    ret.add('mozregression')
-
-        safemode_patterns = [
-            'safemode', 'safe mode'
-        ]
-
-        for keyword in safemode_patterns:
-            for comment in bug['comments']:
-                if keyword in comment['text'].lower():
-                    ret.add('safemode')
-
-        return list(ret)
 
 
 class product(object):
@@ -194,11 +136,30 @@ def cleanup_comments(text):
     return re.sub('>.*?\\n', ' ', text)
 
 
+def cleanup_synonyms(text):
+    synonyms = [
+        ('safemode', ['safemode', 'safe mode']),
+        ('str', ['str', 'steps to reproduce', 'repro steps']),
+        ('uaf', ['uaf', 'use after free', 'use-after-free']),
+        ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
+        ('permafailure', ['permafailure', 'permafailing', 'permafail', 'perma failure', 'perma failing', 'perma fail', 'perma-failure', 'perma-failing', 'perma-fail']),
+    ]
+
+    for synonym_group, synonym_list in synonyms:
+        text = re.sub('|'.join(synonym_list), synonym_group, text, flags=re.IGNORECASE)
+
+    return text
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
+<<<<<<< HEAD
         self.cleanup_functions = [cleanup_url, cleanup_fileref, cleanup_comments]
+=======
+        self.cleanup_functions = [cleanup_url, cleanup_fileref, cleanup_synonyms]
+>>>>>>> 37ceb892665f8643a2ce19d64569cabc8cc2b86d
 
     def fit(self, x, y=None):
         return self
@@ -237,6 +198,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             result = {
                 'data': data,
                 'title': bug['summary'],
+                'first_comment': bug['comments'][0]['text'],
                 'comments': ' '.join([c['text'] for c in bug['comments']]),
             }
 

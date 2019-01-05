@@ -3,16 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import os
-
-from bugbug import labels
+from bugbug.models.tracking import TrackingModel
 
 
-def test_get_labels_dir():
-    path = labels.get_labels_dir()
-    assert os.path.isabs(path)
-    assert path.endswith('labels')
-
-
-def test_get_all_bug_ids():
-    labels.get_all_bug_ids()
+def test_get_tracking_labels():
+    model = TrackingModel()
+    classes = model.get_labels()
+    assert not classes[1101825]
+    assert classes[1042096]

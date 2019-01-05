@@ -9,7 +9,7 @@ from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
-from bugbug import labels
+from bugbug import bugzilla
 from bugbug.model import Model
 from bugbug.utils import DictSelector
 
@@ -17,8 +17,6 @@ from bugbug.utils import DictSelector
 class UpliftModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
-
-        self.classes = labels.get_uplift_labels()
 
         feature_extractors = [
             bug_features.has_str(),
@@ -34,7 +32,6 @@ class UpliftModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
-            bug_features.comments(),
         ]
 
         self.data_vectorizer = DictVectorizer()
@@ -64,6 +61,25 @@ class UpliftModel(Model):
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf.set_params(predictor='cpu_predictor')
+
+    def get_labels(self):
+        classes = {}
+
+        for bug_data in bugzilla.get_bugs():
+            bug_id = int(bug_data['id'])
+
+            for attachment in bug_data['attachments']:
+                for flag in attachment['flags']:
+                    if not flag['name'].startswith('approval-mozilla-') or flag['status'] not in ['+', '-']:
+                        continue
+
+                    if flag['status'] == '+':
+                        classes[bug_id] = 1
+                    elif flag['status'] == '-':
+                        classes[bug_id] = 0
+
+        return classes
 
     def get_feature_names(self):
         return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\
