@@ -36,13 +36,20 @@ class BugModel(Model):
             bug_features.title(),
         ]
 
+        cleanup_functions = [
+            bug_features.cleanup_url,
+            bug_features.cleanup_fileref,
+            bug_features.cleanup_synonyms,
+            bug_features.cleanup_hex,
+        ]
+
         self.data_vectorizer = DictVectorizer()
         self.title_vectorizer = self.text_vectorizer(stop_words='english')
         self.first_comment_vectorizer = self.text_vectorizer(stop_words='english')
         self.comments_vectorizer = self.text_vectorizer(stop_words='english')
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
             ('union', FeatureUnion(
                 transformer_list=[
                     ('data', Pipeline([
