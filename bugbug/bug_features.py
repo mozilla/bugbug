@@ -148,10 +148,10 @@ def cleanup_synonyms(text):
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self, feature_extractors, commit_messages_map=None):
+    def __init__(self, feature_extractors, cleanup_functions, commit_messages_map=None):
         self.feature_extractors = feature_extractors
         self.commit_messages_map = commit_messages_map
-        self.cleanup_functions = [cleanup_url, cleanup_fileref, cleanup_synonyms]
+        self.cleanup_functions = cleanup_functions
 
     def fit(self, x, y=None):
         return self
