@@ -117,7 +117,7 @@ class Model():
     def overwrite_classes(self, bugs, classes, probabilities):
         return classes
 
-    def classify(self, bugs, probabilities=False):
+    def classify(self, bugs, probabilities=False, importances=False):
         assert bugs is not None
         assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
 
@@ -132,4 +132,18 @@ class Model():
         else:
             classes = self.clf.predict(X)
 
-        return self.overwrite_classes(bugs, classes, probabilities)
+        classes = self.overwrite_classes(bugs, classes, probabilities)
+
+        if importances:
+            explainer = shap.TreeExplainer(self.clf)
+            shap_values = explainer.shap_values(X)
+
+            shap_sums = shap_values.sum(0)
+            abs_shap_sums = np.abs(shap_sums)
+            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+            indices = np.argsort(abs_shap_sums)[::-1]
+            importances = [(index, shap_sums[index] > 0, rel_shap_sums[index]) for index in indices]
+
+            return classes, importances
+
+        return classes
