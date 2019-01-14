@@ -25,6 +25,14 @@ def test_cleanup_fileref():
         assert bug_features.cleanup_fileref(orig_text) == cleaned_text
 
 
+def test_cleanup_dll():
+    tests = [
+        ('Crashing thread: 0 scdetour.dll scdetour@0x2dd77', 'Crashing thread: 0 __DLL_NAME__ scdetour@0x2dd77'),
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_dll(orig_text) == cleaned_text
+
+
 def test_cleanup_synonyms():
     tests = [
         ('I was in safemode, but the problem occurred in safe mode too', 'I was in safemode, but the problem occurred in safemode too'),

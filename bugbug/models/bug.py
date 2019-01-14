@@ -40,6 +40,7 @@ class BugModel(Model):
             bug_features.cleanup_url,
             bug_features.cleanup_fileref,
             bug_features.cleanup_synonyms,
+            bug_features.cleanup_dll
         ]
 
         self.data_vectorizer = DictVectorizer()

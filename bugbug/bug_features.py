@@ -134,6 +134,10 @@ def cleanup_fileref(text):
     return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', '__FILE_REFERENCE__', text)
 
 
+def cleanup_dll(text):
+    return re.sub(r'\w+\.dll', '__DLL_NAME__', text)
+
+
 def cleanup_synonyms(text):
     synonyms = [
         ('safemode', ['safemode', 'safe mode']),
