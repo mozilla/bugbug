@@ -6,13 +6,12 @@
 from collections import Counter
 
 import xgboost
-from sklearn.pipeline import FeatureUnion
+from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug.model import Model
-from bugbug.utils import DictSelector
 
 
 class ComponentModel(Model):
@@ -43,36 +42,19 @@ class ComponentModel(Model):
             bug_features.cleanup_synonyms,
         ]
 
-        self.title_vectorizer = self.text_vectorizer(stop_words='english')
-        self.first_comment_vectorizer = self.text_vectorizer(stop_words='english')
-
         self.extraction_pipeline = Pipeline([
             ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
-            ('union', FeatureUnion(
-                transformer_list=[
-                    # TODO: Re-enable when we'll support bug snapshotting (#5).
-                    # ('data', Pipeline([
-                    #     ('selector', DictSelector(key='data')),
-                    #     ('vect', self.data_vectorizer),
-                    # ])),
+            ('union', ColumnTransformer([
+                # TODO: Re-enable when we'll support bug snapshotting (#5).
+                # ('data', DictVectorizer(), 'data'),
 
-                    ('title', Pipeline([
-                        ('selector', DictSelector(key='title')),
-                        ('tfidf', self.title_vectorizer),
-                    ])),
+                ('title', self.text_vectorizer(stop_words='english'), 'title'),
 
-                    # TODO: Re-enable when we'll support bug snapshotting (#5).
-                    # ('comments', Pipeline([
-                    #     ('selector', DictSelector(key='comments')),
-                    #     ('tfidf', self.comments_vectorizer),
-                    # ])),
+                # TODO: Re-enable when we'll support bug snapshotting (#5).
+                # ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
 
-                    ('first_comment', Pipeline([
-                        ('selector', DictSelector(key='first_comment')),
-                        ('tfidf', self.first_comment_vectorizer),
-                    ])),
-                ],
-            )),
+                ('first_comment', self.text_vectorizer(stop_words='english'), 'first_comment'),
+            ])),
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
@@ -169,5 +151,4 @@ class ComponentModel(Model):
         return {bug_id: component for bug_id, component in classes.items() if component in top_components}
 
     def get_feature_names(self):
-        return ['title_' + name for name in self.title_vectorizer.get_feature_names()] +\
-               ['first_comment_' + name for name in self.first_comment_vectorizer.get_feature_names()]
+        return self.extraction_pipeline.named_steps['union'].get_feature_names()

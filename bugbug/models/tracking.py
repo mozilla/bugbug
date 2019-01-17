@@ -4,14 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug.model import Model
-from bugbug.utils import DictSelector
 
 
 class TrackingModel(Model):
@@ -40,30 +39,15 @@ class TrackingModel(Model):
             bug_features.cleanup_synonyms,
         ]
 
-        self.data_vectorizer = DictVectorizer()
-        self.title_vectorizer = self.text_vectorizer(stop_words='english')
-        self.comments_vectorizer = self.text_vectorizer(stop_words='english')
-
         self.extraction_pipeline = Pipeline([
             ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
-            ('union', FeatureUnion(
-                transformer_list=[
-                    ('data', Pipeline([
-                        ('selector', DictSelector(key='data')),
-                        ('vect', self.data_vectorizer),
-                    ])),
+            ('union', ColumnTransformer([
+                ('data', DictVectorizer(), 'data'),
 
-                    ('title', Pipeline([
-                        ('selector', DictSelector(key='title')),
-                        ('tfidf', self.title_vectorizer),
-                    ])),
+                ('title', self.text_vectorizer(stop_words='english'), 'title'),
 
-                    ('comments', Pipeline([
-                        ('selector', DictSelector(key='comments')),
-                        ('tfidf', self.comments_vectorizer),
-                    ])),
-                ],
-            )),
+                ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+            ])),
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
@@ -92,6 +76,4 @@ class TrackingModel(Model):
         return classes
 
     def get_feature_names(self):
-        return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\
-               ['title_' + name for name in self.title_vectorizer.get_feature_names()] +\
-               ['comments_' + name for name in self.comments_vectorizer.get_feature_names()]
+        return self.extraction_pipeline.named_steps['union'].get_feature_names()
