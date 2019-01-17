@@ -5,6 +5,8 @@
 
 import argparse
 
+import numpy as np
+
 from bugbug import bugzilla
 from bugbug import db
 from bugbug import repository  # noqa
@@ -49,9 +51,14 @@ if __name__ == '__main__':
     if args.classify:
         for bug in bugzilla.get_bugs():
             print('https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}'.format(bug['id'], bug['summary']))
-            c = model.classify(bug)
-            if c == 1:
-                print('Positive!')
+            probas, importances = model.classify(bug, probabilities=True, importances=True)
+
+            feature_names = model.get_feature_names()
+            for i, (index, is_positive, contrib) in enumerate(importances[:20]):
+                print('{}. \'{}\' ({}{})'.format(i + 1, feature_names[index], '+' if is_positive else '-', contrib))
+
+            if np.argmax(probas) == 1:
+                print('Positive! {}'.format(probas))
             else:
-                print('Negative!')
+                print('Negative! {}'.format(probas))
             input()

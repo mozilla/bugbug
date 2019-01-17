@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import numpy as np
+import shap
 from imblearn.metrics import classification_report_imbalanced
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
@@ -69,10 +70,17 @@ class Model():
 
         feature_names = self.get_feature_names()
         if len(feature_names):
+            explainer = shap.TreeExplainer(self.clf)
+            shap_values = explainer.shap_values(X_train)
+
             print('Feature ranking (top 20 features):')
-            indices = np.argsort(self.clf.feature_importances_)[::-1][:20]
-            for i in range(len(indices)):
-                print('{}. \'{}\' ({})'.format(i + 1, feature_names[indices[i]], self.clf.feature_importances_[indices[i]]))
+            # Calculate the values that represent the fraction of the model output variability attributable
+            # to each feature across the whole dataset.
+            shap_sums = np.abs(shap_values).sum(0)
+            rel_shap_sums = shap_sums / shap_sums.sum()
+            indices = np.argsort(rel_shap_sums)[::-1][:20]
+            for i, index in enumerate(indices):
+                print('{}. \'{}\' ({})'.format(i + 1, feature_names[index], rel_shap_sums[index]))
 
         y_pred = self.clf.predict(X_test)
 
@@ -109,7 +117,7 @@ class Model():
     def overwrite_classes(self, bugs, classes, probabilities):
         return classes
 
-    def classify(self, bugs, probabilities=False):
+    def classify(self, bugs, probabilities=False, importances=False):
         assert bugs is not None
         assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
 
@@ -124,4 +132,18 @@ class Model():
         else:
             classes = self.clf.predict(X)
 
-        return self.overwrite_classes(bugs, classes, probabilities)
+        classes = self.overwrite_classes(bugs, classes, probabilities)
+
+        if importances:
+            explainer = shap.TreeExplainer(self.clf)
+            shap_values = explainer.shap_values(X)
+
+            shap_sums = shap_values.sum(0)
+            abs_shap_sums = np.abs(shap_sums)
+            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+            indices = np.argsort(abs_shap_sums)[::-1]
+            importances = [(index, shap_sums[index] > 0, rel_shap_sums[index]) for index in indices]
+
+            return classes, importances
+
+        return classes
