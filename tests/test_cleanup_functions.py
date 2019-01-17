@@ -27,7 +27,7 @@ def test_cleanup_fileref():
 
 def test_cleanup_hex():
     tests = [
-        ('0 scdetour.dll scdetour.dll@0x2dd77', '0 scdetour.dll scdetour.dll@__HEX_NUMBER__'),
+        ('0 scdetour.dll scdetour.dll@0x2dd77', '0 scdetour.dll __HEX_NUMBER__'),
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_hex(orig_text) == cleaned_text
