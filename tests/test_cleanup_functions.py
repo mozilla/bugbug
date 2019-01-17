@@ -25,6 +25,17 @@ def test_cleanup_fileref():
         assert bug_features.cleanup_fileref(orig_text) == cleaned_text
 
 
+def test_cleanup_responses():
+    tests = [
+        ('A response can be of the form>This is the comment\n', 'A response can be of the form \n'),
+        ('Multiline responses can be>This is line 1\n>This is line2\n end of response', 'Multiline responses can be \n \n end of response'),
+        ('Code snippet example is > + import bugbug\n', 'Code snippet example is  \n'),
+        ('Random responses >this is line1\n>this is line2\n>this is the final line', 'Random responses  \n \n ')
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_responses(orig_text) == cleaned_text
+
+
 def test_cleanup_hex():
     tests = [
         ('0 scdetour.dll scdetour.dll@0x2dd77', '0 scdetour.dll scdetour.dll@__HEX_NUMBER__'),

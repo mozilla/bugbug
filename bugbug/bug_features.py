@@ -134,6 +134,10 @@ def cleanup_fileref(text):
     return re.sub(r'\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b', '__FILE_REFERENCE__', text)
 
 
+def cleanup_responses(text):
+    return re.sub('>[^\n]+', ' ', text)
+
+
 def cleanup_hex(text):
     return re.sub(r'\b0[xX][0-9a-fA-F]+\b', '__HEX_NUMBER__', text)
 
