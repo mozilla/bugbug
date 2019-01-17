@@ -135,7 +135,7 @@ def cleanup_fileref(text):
 
 
 def cleanup_responses(text):
-    return re.sub('>.*?\\n', ' ', text)
+    return re.sub('>[^\n]+', ' ', text)
 
 
 def cleanup_hex(text):
