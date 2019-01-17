@@ -4,15 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.pipeline import FeatureUnion
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug import labels
 from bugbug.model import Model
-from bugbug.utils import DictSelector
 
 
 class BugModel(Model):
@@ -42,36 +41,17 @@ class BugModel(Model):
             bug_features.cleanup_synonyms,
         ]
 
-        self.data_vectorizer = DictVectorizer()
-        self.title_vectorizer = self.text_vectorizer(stop_words='english')
-        self.first_comment_vectorizer = self.text_vectorizer(stop_words='english')
-        self.comments_vectorizer = self.text_vectorizer(stop_words='english')
-
         self.extraction_pipeline = Pipeline([
             ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
-            ('union', FeatureUnion(
-                transformer_list=[
-                    ('data', Pipeline([
-                        ('selector', DictSelector(key='data')),
-                        ('vect', self.data_vectorizer),
-                    ])),
+            ('union', ColumnTransformer([
+                ('data', DictVectorizer(), 'data'),
 
-                    ('title', Pipeline([
-                        ('selector', DictSelector(key='title')),
-                        ('tfidf', self.title_vectorizer),
-                    ])),
+                ('title', self.text_vectorizer(stop_words='english'), 'title'),
 
-                    ('first_comment', Pipeline([
-                        ('selector', DictSelector(key='first_comment')),
-                        ('tfidf', self.first_comment_vectorizer),
-                    ])),
+                ('first_comment', self.text_vectorizer(stop_words='english'), 'first_comment'),
 
-                    ('comments', Pipeline([
-                        ('selector', DictSelector(key='comments')),
-                        ('tfidf', self.comments_vectorizer),
-                    ])),
-                ],
-            )),
+                ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+            ])),
         ])
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
@@ -127,10 +107,7 @@ class BugModel(Model):
         return self.get_bugbug_labels('bug')
 
     def get_feature_names(self):
-        return ['data_' + name for name in self.data_vectorizer.get_feature_names()] +\
-               ['title_' + name for name in self.title_vectorizer.get_feature_names()] +\
-               ['first_comment_' + name for name in self.first_comment_vectorizer.get_feature_names()] +\
-               ['comments_' + name for name in self.comments_vectorizer.get_feature_names()]
+        return self.extraction_pipeline.named_steps['union'].get_feature_names()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
