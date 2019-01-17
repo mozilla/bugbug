@@ -36,13 +36,19 @@ class BugModel(Model):
             bug_features.title(),
         ]
 
+        cleanup_functions = [
+            bug_features.cleanup_url,
+            bug_features.cleanup_fileref,
+            bug_features.cleanup_synonyms,
+        ]
+
         self.data_vectorizer = DictVectorizer()
         self.title_vectorizer = self.text_vectorizer(stop_words='english')
         self.first_comment_vectorizer = self.text_vectorizer(stop_words='english')
         self.comments_vectorizer = self.text_vectorizer(stop_words='english')
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
             ('union', FeatureUnion(
                 transformer_list=[
                     ('data', Pipeline([
@@ -129,8 +135,8 @@ class BugModel(Model):
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
             if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-                classes[i] = 1 if not probabilities else [1., 0.]
+                classes[i] = 1 if not probabilities else [0., 1.]
             elif 'feature' in bug['keywords']:
-                classes[i] = 0 if not probabilities else [0., 1.]
+                classes[i] = 0 if not probabilities else [1., 0.]
 
         return classes

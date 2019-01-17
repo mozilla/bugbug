@@ -8,6 +8,8 @@ import re
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
+from bugbug import bug_snapshot
+
 
 def field(bug, field):
     if field in bug and bug[field] != '---':
@@ -136,6 +138,14 @@ def cleanup_responses(text):
     return re.sub('>.*?\\n', ' ', text)
 
 
+def cleanup_hex(text):
+    return re.sub(r'\b0[xX][0-9a-fA-F]+\b', '__HEX_NUMBER__', text)
+
+
+def cleanup_dll(text):
+    return re.sub(r'\w+\.dll\b', '__DLL_NAME__', text)
+
+
 def cleanup_synonyms(text):
     synonyms = [
         ('safemode', ['safemode', 'safe mode']),
@@ -152,10 +162,12 @@ def cleanup_synonyms(text):
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self, feature_extractors, commit_messages_map=None):
+    def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_messages_map=None):
         self.feature_extractors = feature_extractors
+        self.cleanup_functions = cleanup_functions
+        self.rollback = rollback
+        self.rollback_when = rollback_when
         self.commit_messages_map = commit_messages_map
-        self.cleanup_functions = [cleanup_url, cleanup_fileref, cleanup_responses, cleanup_synonyms]
 
     def fit(self, x, y=None):
         return self
@@ -165,6 +177,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
         for bug in bugs:
             bug_id = bug['id']
+
+            if self.rollback:
+                bug = bug_snapshot.rollback(bug, self.rollback_when)
 
             data = {}
 
