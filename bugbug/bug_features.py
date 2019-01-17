@@ -135,7 +135,7 @@ def cleanup_fileref(text):
 
 
 def cleanup_hex(text):
-    return re.sub(r'[^\s]*0[xX][0-9a-fA-F]+', '__HEX_NUMBER__', text)
+    return re.sub(r'\b0[xX][0-9a-fA-F]+\b', '__HEX_NUMBER__', text)
 
 
 def cleanup_synonyms(text):
