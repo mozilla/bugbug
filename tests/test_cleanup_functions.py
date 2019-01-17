@@ -27,7 +27,7 @@ def test_cleanup_fileref():
 
 def test_cleanup_dll():
     tests = [
-        ('Crashing thread: 0 scdetour.dll scdetour@0x2dd77', 'Crashing thread: 0 __DLL_NAME__ scdetour@0x2dd77'),
+        ('Crashing thread: 0 scdetour.dll scdetour.dll@0x2dd77', 'Crashing thread: 0 __DLL_NAME__ __DLL_NAME__@0x2dd77'),
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_dll(orig_text) == cleaned_text

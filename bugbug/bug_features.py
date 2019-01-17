@@ -135,7 +135,7 @@ def cleanup_fileref(text):
 
 
 def cleanup_dll(text):
-    return re.sub(r'\w+\.dll', '__DLL_NAME__', text)
+    return re.sub(r'\w+\.dll\b', '__DLL_NAME__', text)
 
 
 def cleanup_synonyms(text):
