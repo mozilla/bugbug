@@ -9,3 +9,4 @@ spacy==2.0.18
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.0.0/en_core_web_sm-2.0.0.tar.gz#egg=en-core-web-sm
 python-hglib==2.6.1
 shap==0.27.0
+pandas==0.23.4

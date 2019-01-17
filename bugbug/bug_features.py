@@ -5,6 +5,7 @@
 
 import re
 
+import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
@@ -218,4 +219,4 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
             results.append(result)
 
-        return results
+        return pd.DataFrame(results)
