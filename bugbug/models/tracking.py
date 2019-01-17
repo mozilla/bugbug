@@ -45,7 +45,7 @@ class TrackingModel(Model):
         self.comments_vectorizer = self.text_vectorizer(stop_words='english')
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
             ('union', FeatureUnion(
                 transformer_list=[
                     ('data', Pipeline([
@@ -68,6 +68,9 @@ class TrackingModel(Model):
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
+
+    def rollback(self, change):
+        return change['field_name'].startswith('cf_tracking_firefox')
 
     def get_labels(self):
         classes = {}

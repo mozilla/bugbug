@@ -9,5 +9,6 @@ script:
   - python run.py --train --goal bug
   - python run.py --goal bug
   - python -m pytest tests/test_*.py
+  - python -m bugbug.bug_snapshot
   - python setup.py sdist
   - pip install dist/bugbug-$(cat VERSION).tar.gz

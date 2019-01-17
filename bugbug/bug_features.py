@@ -8,6 +8,8 @@ import re
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
+from bugbug import bug_snapshot
+
 
 def field(bug, field):
     if field in bug and bug[field] != '---':
@@ -152,10 +154,12 @@ def cleanup_synonyms(text):
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self, feature_extractors, cleanup_functions, commit_messages_map=None):
+    def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_messages_map=None):
         self.feature_extractors = feature_extractors
-        self.commit_messages_map = commit_messages_map
         self.cleanup_functions = cleanup_functions
+        self.rollback = rollback
+        self.rollback_when = rollback_when
+        self.commit_messages_map = commit_messages_map
 
     def fit(self, x, y=None):
         return self
@@ -165,6 +169,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
         for bug in bugs:
             bug_id = bug['id']
+
+            if self.rollback:
+                bug = bug_snapshot.rollback(bug, self.rollback_when)
 
             data = {}
 
