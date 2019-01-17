@@ -138,6 +138,10 @@ def cleanup_hex(text):
     return re.sub(r'\b0[xX][0-9a-fA-F]+\b', '__HEX_NUMBER__', text)
 
 
+def cleanup_dll(text):
+    return re.sub(r'\w+\.dll\b', '__DLL_NAME__', text)
+
+
 def cleanup_synonyms(text):
     synonyms = [
         ('safemode', ['safemode', 'safe mode']),

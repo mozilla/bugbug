@@ -27,10 +27,19 @@ def test_cleanup_fileref():
 
 def test_cleanup_hex():
     tests = [
-        ('0 scdetour.dll scdetour.dll@0x2dd77', '0 scdetour.dll __HEX_NUMBER__'),
+        ('0 scdetour.dll scdetour.dll@0x2dd77', '0 scdetour.dll scdetour.dll@__HEX_NUMBER__'),
+        ('Some examples of hex numbers are 0x227c2 or 0x3fA2', 'Some examples of hex numbers are __HEX_NUMBER__ or __HEX_NUMBER__')
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_hex(orig_text) == cleaned_text
+
+
+def test_cleanup_dll():
+    tests = [
+        ('Crashing thread: 0 scdetour.dll scdetour.dll@0x2dd77', 'Crashing thread: 0 __DLL_NAME__ __DLL_NAME__@0x2dd77'),
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_dll(orig_text) == cleaned_text
 
 
 def test_cleanup_synonyms():
