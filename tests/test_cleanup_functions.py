@@ -63,3 +63,12 @@ def test_cleanup_synonyms():
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_synonyms(orig_text) == cleaned_text
+
+
+def test_cleanup_crash():
+    tests = [
+        ('This bug was filed from the Socorro interface and is report bp-ba7ff893-687f-4381-b430-ba66b0170628.', 'This bug was filed from the Socorro interface and is report __CRASH_STATS_LINK__.'),
+        ('Random reports can be bp-ba7ff893-687f-4381-b430-ba66b0170628, bp-ab78f852-312c-4534-b576-ab5ba4341256.', 'Random reports can be __CRASH_STATS_LINK__, __CRASH_STATS_LINK__.'),
+    ]
+    for orig_text, cleaned_text in tests:
+        assert bug_features.cleanup_crash(orig_text) == cleaned_text

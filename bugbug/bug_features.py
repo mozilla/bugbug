@@ -162,6 +162,10 @@ def cleanup_synonyms(text):
     return text
 
 
+def cleanup_crash(text):
+    return re.sub(r'bp-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{6}[0-9]{6}\b', '__CRASH_STATS_LINK__', text)
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_messages_map=None):
         self.feature_extractors = feature_extractors
