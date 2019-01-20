@@ -48,7 +48,7 @@ class Model():
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
 
-        print(X.shape, y.shape)
+        print(f'X: {X.shape}, y: {y.shape}')
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -57,8 +57,8 @@ class Model():
             # Under-sample the majority classes, as the datasets are imbalanced.
             X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
 
-        print(X_train.shape, y_train.shape)
-        print(X_test.shape, y_test.shape)
+        print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
+        print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
