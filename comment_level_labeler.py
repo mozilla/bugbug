@@ -21,7 +21,7 @@ elif args.goal == 'regressionrange':
     from bugbug.models.regression import RegressionModel
     model = RegressionModel.load('regressionmodel')
 
-file_path = os.path.join('bugbug', 'labels', '{}.csv'.format(args.goal))
+file_path = os.path.join('bugbug', 'labels', f'{args.goal}.csv')
 
 with open(file_path, 'r') as f:
     reader = csv.reader(f)
@@ -61,8 +61,8 @@ for bug in bugs:
             continue
 
         os.system('clear')
-        print('Bug {} - {}'.format(bug['id'], bug['summary']))
-        print('Comment {}'.format(i))
+        print(f'Bug {bug["id"]} - {bug["summary"]}')
+        print(f'Comment {i}')
         print(comment['text'])
 
         if args.goal == 'str':
@@ -80,7 +80,7 @@ for bug in bugs:
     if v not in ['e', 'k']:
         with open(file_path, 'w') as f:
             writer = csv.writer(f)
-            writer.writerow(['bug_id', 'comment_num', 'has_{}'.format(args.goal)])
+            writer.writerow(['bug_id', 'comment_num', f'has_{args.goal}'])
             writer.writerows(sorted(labeled_comments))
 
         print('\nE to exit, anything else to continue')

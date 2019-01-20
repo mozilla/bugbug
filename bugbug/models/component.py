@@ -123,7 +123,7 @@ class ComponentModel(Model):
                 continue
 
             bug_id = int(bug_data['id'])
-            full_comp = '{}::{}'.format(bug_data['product'], bug_data['component'])
+            full_comp = f'{bug_data["product"]}::{bug_data["component"]}'
 
             for conflated_component in conflated_components:
                 if full_comp.startswith(conflated_component):
@@ -144,9 +144,9 @@ class ComponentModel(Model):
         component_counts = Counter(classes.values()).most_common()
         top_components = set(component for component, count in component_counts)
 
-        print('{} components'.format(len(top_components)))
+        print(f'{len(top_components)} components')
         for component, count in component_counts:
-            print('{}: {}'.format(component, count))
+            print(f'{component}: {count}')
 
         return {bug_id: component for bug_id, component in classes.items() if component in top_components}
 

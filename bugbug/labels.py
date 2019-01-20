@@ -13,7 +13,7 @@ def get_labels_dir():
 
 
 def get_labels(file_name):
-    with open(os.path.join(get_labels_dir(), '{}.csv'.format(file_name)), 'r') as f:
+    with open(os.path.join(get_labels_dir(), f'{file_name}.csv'), 'r') as f:
         reader = csv.reader(f)
         next(reader)
         yield from reader

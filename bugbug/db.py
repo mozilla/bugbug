@@ -27,7 +27,7 @@ def download():
         if os.path.exists(path):
             continue
 
-        xz_path = '{}.xz'.format(path)
+        xz_path = f'{path}.xz'
 
         # Only download if the xz file is not there yet.
         if not os.path.exists(xz_path):

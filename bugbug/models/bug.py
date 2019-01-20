@@ -63,7 +63,7 @@ class BugModel(Model):
         classes = {}
 
         for bug_id, category in labels.get_labels('bug_nobug'):
-            assert category in ['True', 'False'], 'unexpected category {}'.format(category)
+            assert category in ['True', 'False'], f'unexpected category {category}'
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category == 'True' else 0
             elif kind == 'regression':
@@ -71,7 +71,7 @@ class BugModel(Model):
                     classes[int(bug_id)] = 0
 
         for bug_id, category in labels.get_labels('regression_bug_nobug'):
-            assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], 'unexpected category {}'.format(category)
+            assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], f'unexpected category {category}'
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category != 'nobug' else 0
             elif kind == 'regression':
