@@ -86,7 +86,7 @@ def _download(ids_or_query):
 
 
 def download_bugs_between(date_from, date_to, security=False):
-    products = set([
+    products = {
         'Add-on SDK',
         'Android Background Services',
         'Core',
@@ -103,7 +103,7 @@ def download_bugs_between(date_from, date_to, security=False):
         'NSS',
         'Toolkit',
         'WebExtensions',
-    ])
+    }
 
     r = requests.get(f'https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={date_from.strftime("%Y-%m-%d")}&limit=1&order=bug_id')
     r.raise_for_status()
