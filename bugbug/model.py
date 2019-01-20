@@ -80,11 +80,11 @@ class Model():
             rel_shap_sums = shap_sums / shap_sums.sum()
             indices = np.argsort(rel_shap_sums)[::-1][:20]
             for i, index in enumerate(indices):
-                print('{}. \'{}\' ({})'.format(i + 1, feature_names[index], rel_shap_sums[index]))
+                print(f'{i + 1}. \'{feature_names[index]}\' ({rel_shap_sums[index]})')
 
         y_pred = self.clf.predict(X_test)
 
-        print('No confidence threshold - {} classified'.format(len(y_test)))
+        print(f'No confidence threshold - {len(y_test)} classified')
         print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
@@ -104,11 +104,11 @@ class Model():
 
             y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
 
-            print('\nConfidence threshold > {} - {} classified'.format(confidence_threshold, len(y_test_filter)))
+            print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
             print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
             print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
-        joblib.dump(self, '{}'.format(self.__class__.__name__.lower()))
+        joblib.dump(self, f'{self.__class__.__name__.lower()}')
 
     @staticmethod
     def load(model_file_name):

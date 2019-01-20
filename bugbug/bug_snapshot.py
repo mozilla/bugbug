@@ -42,7 +42,7 @@ def cf_rank(val):
 # E.g. https://bugzilla.mozilla.org/rest/bug/1162372.
 def version_to_branch(version):
     if version.startswith('Firefox '):
-        return '{} Branch'.format(version[len('Firefox '):])
+        return f'{version[len("Firefox "):]} Branch'
 
     return version
 
@@ -65,11 +65,11 @@ def is_email(val):
 
 def parse_flag_change(change):
     parts = change.split('(')
-    assert len(parts) == 1 or len(parts) == 2, 'Too many parts for {}'.format(change)
+    assert len(parts) == 1 or len(parts) == 2, f'Too many parts for {change}'
     name_and_status = parts[0]
     name = name_and_status[:-1]
     status = name_and_status[-1]
-    assert status in ['?', '+', '-'], 'unexpected status: {}'.format(status)
+    assert status in ['?', '+', '-'], f'unexpected status: {status}'
     requestee = None if len(parts) != 2 else parts[1][:-1]
     return name, status, requestee
 
@@ -199,12 +199,12 @@ def rollback(bug, when):
                         found_flag = None
                         for f in obj['flags']:
                             if f['name'] == name and f['status'] == status and (requestee is None or f['requestee'] == requestee):
-                                assert found_flag is None, '{}{}{} found twice!'.format(f['name'], f['status'], f['requestee'])
+                                assert found_flag is None, f'{f["name"]}{f["status"]}{f["requestee"]} found twice!'
                                 found_flag = f
 
                         # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
                         if obj['id'] not in [1052536, 1201115, 1213517]:
-                            assert found_flag is not None, 'flag {} not found'.format(to_remove)
+                            assert found_flag is not None, f'flag {to_remove} not found'
                         if found_flag is not None:
                             obj['flags'].remove(found_flag)
 
@@ -227,9 +227,9 @@ def rollback(bug, when):
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
                     if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
-                        print('{} is not in bug'.format(field))
+                        print(f'{field} is not in bug')
                     else:
-                        assert False, '{} is not in bug'.format(field)
+                        assert False, f'{field} is not in bug'
 
             if field in bug and isinstance(bug[field], list):
                 if change['added']:
@@ -250,7 +250,7 @@ def rollback(bug, when):
                                 bug[field].remove(to_remove)
                             continue
 
-                        assert to_remove in bug[field], '{} is not in {}, for field {}'.format(to_remove, bug[field], field)
+                        assert to_remove in bug[field], f'{to_remove} is not in {bug[field]}, for field {field}'
                         bug[field].remove(to_remove)
 
                 if change['removed']:
@@ -271,9 +271,9 @@ def rollback(bug, when):
                     if bug[field] != new_value:
                         # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
                         if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
-                            print('Current value for field {}:\n{}\nis different from previous value:\n{}'.format(field, bug[field], new_value))
+                            print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
-                            assert False, 'Current value for field {}:\n{}\nis different from previous value:\n{}'.format(field, bug[field], new_value)
+                            assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
 
                 bug[field] = old_value
 

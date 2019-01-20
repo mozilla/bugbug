@@ -105,11 +105,11 @@ def download_bugs_between(date_from, date_to, security=False):
         'WebExtensions',
     ])
 
-    r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={}&limit=1&order=bug_id'.format(date_from.strftime('%Y-%m-%d')))
+    r = requests.get(f'https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={date_from.strftime("%Y-%m-%d")}&limit=1&order=bug_id')
     r.raise_for_status()
     first_id = r.json()['bugs'][0]['id']
 
-    r = requests.get('https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=lessthan&v1={}&limit=1&order=bug_id%20desc'.format(date_to.strftime('%Y-%m-%d')))
+    r = requests.get(f'https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=lessthan&v1={date_to.strftime("%Y-%m-%d")}&limit=1&order=bug_id%20desc')
     r.raise_for_status()
     last_id = r.json()['bugs'][0]['id']
 
@@ -130,8 +130,8 @@ def download_bugs(bug_ids, products=None, security=False):
             old_bugs.append(bug)
             new_bug_ids.remove(bug['id'])
 
-    print('Loaded {} bugs.'.format(old_bug_count))
-    print('To download {} bugs.'.format(len(new_bug_ids)))
+    print(f'Loaded {old_bug_count} bugs.')
+    print(f'To download {len(new_bug_ids)} bugs.')
 
     new_bug_ids = sorted(list(new_bug_ids))
 
@@ -142,7 +142,7 @@ def download_bugs(bug_ids, products=None, security=False):
 
         total_downloaded += len(new_bugs)
 
-        print('Downloaded {} bugs'.format(total_downloaded))
+        print(f'Downloaded {total_downloaded} bugs')
 
         if not security:
             new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
