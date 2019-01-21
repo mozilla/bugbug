@@ -126,6 +126,12 @@ class component(object):
         return bug['component']
 
 
+# return True if bug reporter email contains '@mozilla.com' or '@mozilla.org'
+class is_mozillian(object):
+    def __call__(self, bug):
+        return ('@mozilla.com' in bug['creator_detail']['email']) or ('@mozilla.org' in bug['creator_detail']['email'])
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
