@@ -47,6 +47,13 @@ def version_to_branch(version):
     return version
 
 
+def op_sys(op_sys):
+    if op_sys == 'Mac OS X':
+        return 'macOS'
+
+    return op_sys
+
+
 FIELD_TYPES = {
     'blocks': int,
     'depends_on': int,
@@ -56,6 +63,7 @@ FIELD_TYPES = {
     'cf_rank': cf_rank,
     'keywords': keyword_mapping,
     'groups': group_mapping,
+    'op_sys': op_sys,
 }
 
 
