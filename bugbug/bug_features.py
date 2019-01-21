@@ -126,6 +126,11 @@ class component(object):
         return bug['component']
 
 
+class is_mozillian(object):
+    def __call__(self, bug):
+        return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
