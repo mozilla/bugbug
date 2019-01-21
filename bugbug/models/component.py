@@ -61,10 +61,10 @@ class ComponentModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def get_labels(self):
-        products = set([
+        products = {
             'Core', 'External Software Affecting Firefox', 'DevTools', 'Firefox for Android', 'Firefox', 'Toolkit',
             'WebExtensions'
-        ])
+        }
 
         classes = {}
 
@@ -142,7 +142,7 @@ class ComponentModel(Model):
             classes[bug_id] = bug_data['product']
 
         component_counts = Counter(classes.values()).most_common()
-        top_components = set(component for component, count in component_counts)
+        top_components = {component for component, count in component_counts}
 
         print('{} components'.format(len(top_components)))
         for component, count in component_counts:
