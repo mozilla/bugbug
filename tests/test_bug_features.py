@@ -14,6 +14,7 @@ from bugbug.bug_features import has_str
 from bugbug.bug_features import has_url
 from bugbug.bug_features import has_w3c_url
 from bugbug.bug_features import is_coverity_issue
+from bugbug.bug_features import is_mozillian
 from bugbug.bug_features import keywords
 from bugbug.bug_features import landings
 from bugbug.bug_features import patches
@@ -92,3 +93,7 @@ def test_product():
 
 def test_component():
     read('component.json', component, ['Graphics', 'CSS Parsing and Computation'])
+
+
+def test_is_mozillian():
+    read('is_mozillian.json', is_mozillian, [False, True, True])
