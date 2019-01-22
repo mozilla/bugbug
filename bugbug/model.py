@@ -34,13 +34,9 @@ class Model():
         classes = self.get_labels()
         class_names = sorted(list(set(classes.values())), reverse=True)
 
-        # Get bugs.
-        def bugs_all():
-            return bugzilla.get_bugs()
-
-        # Filter out bugs for which we have no labels.
+        # Get bugs, filtering out those for which we have no labels.
         def bugs():
-            return (bug for bug in bugs_all() if bug['id'] in classes)
+            return (bug for bug in bugzilla.get_bugs() if bug['id'] in classes)
 
         # Calculate labels.
         y = np.array([classes[bug['id']] for bug in bugs()])
