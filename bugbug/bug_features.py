@@ -149,7 +149,7 @@ def cleanup_hex(text):
 
 
 def cleanup_dll(text):
-    return re.sub(r'\w+\.dll\b', '__DLL_NAME__', text)
+    return re.sub(r'\w+(\.dll|\.so|\.dylib)\b', '__DLL_NAME__', text)
 
 
 def cleanup_synonyms(text):
