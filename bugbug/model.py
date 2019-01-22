@@ -59,7 +59,7 @@ class Model():
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scores = cross_val_score(self.clf, X_train, y_train, cv=5)
-            print('CV Accuracy: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std() * 2))
+            print(f'CV Accuracy: f{scores.mean()} (+/- {scores.std() * 2})')
 
         # Evaluate results on the test set.
         self.clf.fit(X_train, y_train)
