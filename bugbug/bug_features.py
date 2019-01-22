@@ -4,8 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import re
+from datetime import datetime
+from datetime import timezone
 
 import pandas as pd
+from libmozdata import versions
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
@@ -129,6 +132,17 @@ class component(object):
 class is_mozillian(object):
     def __call__(self, bug):
         return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
+
+
+class delta_request_merge(object):
+    def __call__(self, bug):
+        for change in bug['history']:
+            for ind_change in change['changes']:
+                if ind_change['added'].startswith('approval-mozilla'):
+                    uplift_request_datetime = datetime.strptime(change['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                    return versions.getCloserRelease(uplift_request_datetime)[1] - uplift_request_datetime
+
+        return None
 
 
 def cleanup_url(text):
