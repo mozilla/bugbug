@@ -21,7 +21,7 @@ class DevDocNeededModel(Model):
             bug_features.has_str(),
             bug_features.has_regression_range(),
             bug_features.severity(),
-            bug_features.keywords({'dev-doc-needed'}),
+            bug_features.keywords({'dev-doc-needed', 'dev-doc-complete'}),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),
@@ -58,7 +58,7 @@ class DevDocNeededModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def rollback(self, change):
-        return change['field_name'] == 'keywords' and 'dev-doc-needed' in change['added']
+        return change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete'])
 
     def get_labels(self):
         classes = {}
@@ -68,7 +68,7 @@ class DevDocNeededModel(Model):
 
             for entry in bug_data['history']:
                 for change in entry['changes']:
-                    if change['field_name'] == 'keywords' and 'dev-doc-needed' in change['added']:
+                    if change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete']):
                         classes[bug_id] = 1
 
             if bug_id not in classes:
