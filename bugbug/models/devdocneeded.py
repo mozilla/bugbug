@@ -31,6 +31,10 @@ class DevDocNeededModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
+
+            bug_features.commit_added(),
+            bug_features.commit_deleted(),
+            bug_features.commit_types(),
         ]
 
         cleanup_functions = [
@@ -40,7 +44,7 @@ class DevDocNeededModel(Model):
         ]
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback, commit_data=True)),
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
