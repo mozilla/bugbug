@@ -93,8 +93,8 @@ def download_commits(repo_dir):
         db.write(COMMITS_DB, commits)
 
 
-def get_commit_messages_map():
-    commit_messages_map = {}
+def get_commit_map():
+    commit_map = {}
 
     for commit in get_commits():
         bug_id = commit['bug_id']
@@ -102,12 +102,12 @@ def get_commit_messages_map():
         if not bug_id:
             continue
 
-        if bug_id not in commit_messages_map:
-            commit_messages_map[bug_id] = ''
+        if bug_id not in commit_map:
+            commit_map[bug_id] = []
 
-        commit_messages_map[bug_id] += commit['desc']
+        commit_map[bug_id].append(commit)
 
-    return commit_messages_map
+    return commit_map
 
 
 if __name__ == '__main__':
