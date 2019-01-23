@@ -10,3 +10,4 @@ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.0.0
 python-hglib==2.6.1
 shap==0.28.0
 pandas==0.23.4
+parsepatch==0.1.3
