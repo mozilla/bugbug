@@ -132,6 +132,21 @@ class is_mozillian(object):
         return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
 
 
+class commit_added(object):
+    def __call__(self, bug):
+        return sum(commit['added'] for commit in bug['commits'])
+
+
+class commit_removed(object):
+    def __call__(self, bug):
+        return sum(commit['deleted'] for commit in bug['commits'])
+
+
+class commit_types(object):
+    def __call__(self, bug):
+        return sum((commit['types'] for commit in bug['commits']), [])
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
