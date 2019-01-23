@@ -36,16 +36,47 @@ def _transform(commit):
     if bug_id_match:
         bug_id = int(bug_id_match.group(1))
 
-    return {
+    obj = {
         # 'rev': commit[0].decode('utf-8'),
         # 'node': commit[1].decode('utf-8'),
         # 'tags': commit[2].decode('utf-8'),
         # 'branch': commit[3].decode('utf-8'),
-        # 'author': commit[4].decode('utf-8'),
+        'author': commit[4].decode('utf-8'),
         'desc': desc,
         # 'date': str(commit[6]),
         'bug_id': bug_id,
+        'added': 0,
+        'deleted': 0,
+        'types': set(),
     }
+
+    patch = HG.export(revs=[commit[1]], git=True)
+    patch_data = Patch.parse_patch(patch.decode('utf-8', 'ignore'), skip_comments=False, add_lines_for_new=True)
+    for path, stats in patch_data.items():
+        if 'added' not in stats:
+            # Must be a binary file
+            obj['types'].add('binary')
+            continue
+
+        obj['added'] += len(stats['added']) + len(stats['touched'])
+        obj['deleted'] += len(stats['deleted']) + len(stats['touched'])
+        ext = os.path.splitext(path)[1]
+        if ext in ['.js', '.jsm']:
+            type_ = 'JavaScript'
+        elif ext in ['.c', '.cpp', '.h']:
+            type_ = 'C/C++'
+        elif ext in ['.java']:
+            type_ = 'Java'
+        elif ext in ['.py']:
+            type_ = 'Python'
+        else:
+            type_ = ext
+        obj['types'].add(type_)
+
+    # Covert to a list, as a set is not JSON-serializable.
+    obj['types'] = list(obj['types'])
+
+    return obj
 
 
 def download_commits(repo_dir):
