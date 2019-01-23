@@ -137,7 +137,7 @@ class commit_added(object):
         return sum(commit['added'] for commit in bug['commits'])
 
 
-class commit_removed(object):
+class commit_deleted(object):
     def __call__(self, bug):
         return sum(commit['deleted'] for commit in bug['commits'])
 
