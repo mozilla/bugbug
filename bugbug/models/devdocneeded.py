@@ -31,6 +31,8 @@ class DevDocNeededModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
+            bug_features.product(),
+            bug_features.component(),
 
             bug_features.commit_added(),
             bug_features.commit_deleted(),
