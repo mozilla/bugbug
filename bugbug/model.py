@@ -104,7 +104,7 @@ class Model():
             print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
             print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
-        joblib.dump(self, f'{self.__class__.__name__.lower()}')
+        joblib.dump(self, self.__class__.__name__.lower())
 
     @staticmethod
     def load(model_file_name):
