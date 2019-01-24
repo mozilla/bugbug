@@ -140,7 +140,8 @@ class delta_request_merge(object):
             for ind_change in change['changes']:
                 if ind_change['added'].startswith('approval-mozilla'):
                     uplift_request_datetime = datetime.strptime(change['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                    return versions.getCloserRelease(uplift_request_datetime)[1] - uplift_request_datetime
+                    timedelta = versions.getCloserRelease(uplift_request_datetime)[1] - uplift_request_datetime
+                    return timedelta.days + timedelta.seconds / (24 * 60 * 60)
 
         return None
 
