@@ -13,6 +13,7 @@ from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
 from bugbug import bug_snapshot
+from bugbug import repository
 
 
 def field(bug, field):
@@ -136,14 +137,29 @@ class is_mozillian(object):
 
 class delta_request_merge(object):
     def __call__(self, bug):
-        for change in bug['history']:
-            for ind_change in change['changes']:
-                if ind_change['added'].startswith('approval-mozilla'):
-                    uplift_request_datetime = datetime.strptime(change['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        for history in bug['history']:
+            for change in history['changes']:
+                if change['added'].startswith('approval-mozilla'):
+                    uplift_request_datetime = datetime.strptime(history['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
                     timedelta = versions.getCloserRelease(uplift_request_datetime)[1] - uplift_request_datetime
                     return timedelta.days + timedelta.seconds / (24 * 60 * 60)
 
         return None
+
+
+class commit_added(object):
+    def __call__(self, bug):
+        return sum(commit['added'] for commit in bug['commits'])
+
+
+class commit_deleted(object):
+    def __call__(self, bug):
+        return sum(commit['deleted'] for commit in bug['commits'])
+
+
+class commit_types(object):
+    def __call__(self, bug):
+        return sum((commit['types'] for commit in bug['commits']), [])
 
 
 def cleanup_url(text):
@@ -164,7 +180,7 @@ def cleanup_hex(text):
 
 
 def cleanup_dll(text):
-    return re.sub(r'\w+\.dll\b', '__DLL_NAME__', text)
+    return re.sub(r'\w+(\.dll|\.so|\.dylib)\b', '__DLL_NAME__', text)
 
 
 def cleanup_synonyms(text):
@@ -174,10 +190,11 @@ def cleanup_synonyms(text):
         ('uaf', ['uaf', 'use after free', 'use-after-free']),
         ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
         ('permafailure', ['permafailure', 'permafailing', 'permafail', 'perma failure', 'perma failing', 'perma fail', 'perma-failure', 'perma-failing', 'perma-fail']),
+        ('spec', ['spec', 'specification']),
     ]
 
     for synonym_group, synonym_list in synonyms:
-        text = re.sub('|'.join(synonym_list), synonym_group, text, flags=re.IGNORECASE)
+        text = re.sub('|'.join(f'\b{synonym}\b' for synonym in synonym_list), synonym_group, text, flags=re.IGNORECASE)
 
     return text
 
@@ -187,12 +204,12 @@ def cleanup_crash(text):
 
 
 class BugExtractor(BaseEstimator, TransformerMixin):
-    def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_messages_map=None):
+    def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_data=False):
         self.feature_extractors = feature_extractors
         self.cleanup_functions = cleanup_functions
         self.rollback = rollback
         self.rollback_when = rollback_when
-        self.commit_messages_map = commit_messages_map
+        self.commit_map = repository.get_commit_map() if commit_data else None
 
     def fit(self, x, y=None):
         return self
@@ -207,6 +224,12 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 bug = bug_snapshot.rollback(bug, self.rollback_when)
 
             data = {}
+
+            if self.commit_map is not None:
+                if bug_id in self.commit_map:
+                    bug['commits'] = self.commit_map[bug_id]
+                else:
+                    bug['commits'] = []
 
             for f in self.feature_extractors:
                 res = f(bug)
@@ -237,9 +260,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 'first_comment': bug['comments'][0]['text'],
                 'comments': ' '.join([c['text'] for c in bug['comments']]),
             }
-
-            if self.commit_messages_map is not None:
-                result['commits'] = self.commit_messages_map[bug_id] if bug_id in self.commit_messages_map else ''
 
             results.append(result)
 

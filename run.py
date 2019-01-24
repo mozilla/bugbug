@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component'], default='bug')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded'], default='bug')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     args = parser.parse_args()
 
@@ -39,6 +39,9 @@ if __name__ == '__main__':
     elif args.goal == 'component':
         from bugbug.models.component import ComponentModel
         model_class = ComponentModel
+    elif args.goal == 'devdocneeded':
+        from bugbug.models.devdocneeded import DevDocNeededModel
+        model_class = DevDocNeededModel
 
     if args.train:
         db.download()
