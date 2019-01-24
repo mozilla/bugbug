@@ -8,6 +8,6 @@ imbalanced-learn==0.4.3
 spacy==2.0.18
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.0.0/en_core_web_sm-2.0.0.tar.gz#egg=en-core-web-sm
 python-hglib==2.6.1
-shap==0.28.1
+shap==0.28.2
 pandas==0.23.4
 parsepatch==0.1.3
