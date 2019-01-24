@@ -194,7 +194,7 @@ def cleanup_synonyms(text):
     ]
 
     for synonym_group, synonym_list in synonyms:
-        text = re.sub('|'.join(f'\b{synonym}\b' for synonym in synonym_list), synonym_group, text, flags=re.IGNORECASE)
+        text = re.sub('|'.join(fr'\b{synonym}\b' for synonym in synonym_list), synonym_group, text, flags=re.IGNORECASE)
 
     return text
 
