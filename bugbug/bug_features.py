@@ -175,6 +175,7 @@ def cleanup_synonyms(text):
         ('uaf', ['uaf', 'use after free', 'use-after-free']),
         ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
         ('permafailure', ['permafailure', 'permafailing', 'permafail', 'perma failure', 'perma failing', 'perma fail', 'perma-failure', 'perma-failing', 'perma-fail']),
+        ('spec', ['spec', 'specification']),
     ]
 
     for synonym_group, synonym_list in synonyms:
