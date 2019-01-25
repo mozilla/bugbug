@@ -119,6 +119,8 @@ def download_bugs_between(date_from, date_to, security=False):
 
     download_bugs(all_ids, security=security, products=products)
 
+    return all_ids
+
 
 def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
