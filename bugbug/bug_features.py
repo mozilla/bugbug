@@ -85,15 +85,26 @@ class has_github_url(object):
 
 class whiteboard(object):
     def __call__(self, bug):
-        ret = []
 
-        # TODO: Add any [XXX:YYY] that appears in the whiteboard as [XXX: only
+        # Split by '['
+        paren_splits = bug['whiteboard'].lower().split('[')
 
-        for elem in ['memshrink', '[ux]']:
-            if elem in bug['whiteboard'].lower():
-                ret.append(elem)
+        # Split splits by space if they weren't in [ and ].
+        splits = []
+        for paren_split in paren_splits:
+            if ']' in paren_split:
+                paren_split = paren_split.split(']')
+                splits += paren_split
+            else:
+                splits += paren_split.split(' ')
 
-        return ret
+        # Remove empty splits and strip
+        splits = [split.strip() for split in splits if split.strip() != '']
+
+        # For splits which contain ':', return both the whole string and the string before ':'.
+        splits += [split.split(':', 1)[0] for split in splits if ':' in split]
+
+        return splits
 
 
 class patches(object):
