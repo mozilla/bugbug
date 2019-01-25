@@ -4,6 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import csv
+import os
+from datetime import datetime
+from datetime import timedelta
 
 import numpy as np
 
@@ -17,6 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded'], default='bug')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
+    parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
     args = parser.parse_args()
 
     model_file_name = f'{args.goal}model'
@@ -65,3 +70,26 @@ if __name__ == '__main__':
             else:
                 print(f'Negative! {probas}')
             input()
+
+    if args.generate_sheet:
+        today = datetime.utcnow()
+        a_week_ago = today - timedelta(7)
+        bug_ids = bugzilla.download_bugs_between(a_week_ago, today)
+
+        print(f'Classifying {len(bug_ids)} bugs...')
+
+        rows = [
+            ['Bug', f'{args.goal}(model)', args.goal, 'Title']
+        ]
+
+        for bug in bugzilla.get_bugs():
+            if bug['id'] not in bug_ids:
+                continue
+
+            p = model.classify(bug, probabilities=True)
+            rows.append([f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}', 'y' if p[0][1] >= 0.7 else 'n', '', bug['summary']])
+
+        os.makedirs('sheets', exist_ok=True)
+        with open(os.path.join('sheets', f'{args.goal}-{datetime.utcnow().strftime("%Y-%m-%d")}-labels.csv'), 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
