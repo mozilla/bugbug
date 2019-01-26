@@ -161,9 +161,11 @@ class commit_types(object):
     def __call__(self, bug):
         return sum((commit['types'] for commit in bug['commits']), [])
 
+
 class priority(object):
     def __call__(self, bug):
         return bug['priority']
+
 
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
