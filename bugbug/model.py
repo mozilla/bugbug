@@ -79,6 +79,7 @@ class Model():
             shap_sums = np.abs(shap_values).sum(0)
             rel_shap_sums = shap_sums / shap_sums.sum()
             indices = np.argsort(rel_shap_sums)[::-1][:20]
+            
             for i, index in enumerate(indices):
                 print(f'{i + 1}. \'{feature_names[index]}\' ({rel_shap_sums[index]})')
 
