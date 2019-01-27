@@ -187,9 +187,9 @@ class bug_reporter(object):
                 name = re.search(r'[^\:]+$',reporter_name)
             elif len(name[0])==1:
                 name = re.search(r'(?<=\[:)(.*?)(?=\])',reporter_name)
-            #name = str(name[0]).strip()   
             
-        return None if name is None else name[0]
+            
+        return None if name is None else name[0].strip()
 
 
 class blocked_bugs_number(object):
