@@ -7,6 +7,7 @@ import json
 import os
 
 from bugbug.bug_features import blocked_bugs_number
+from bugbug.bug_features import bug_reporter
 from bugbug.bug_features import component
 from bugbug.bug_features import has_crash_signature
 from bugbug.bug_features import has_github_url
@@ -23,7 +24,6 @@ from bugbug.bug_features import product
 from bugbug.bug_features import severity
 from bugbug.bug_features import title
 from bugbug.bug_features import whiteboard
-from bugbug.bug_features import bug_reporter
 
 
 def read(filename, feature_extractor_class, expected_results):
