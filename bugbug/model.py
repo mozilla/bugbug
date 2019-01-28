@@ -10,7 +10,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_validate
 from sklearn.model_selection import train_test_split
 
 from bugbug import bugzilla
@@ -58,8 +58,12 @@ class Model():
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
-            scores = cross_val_score(self.clf, X_train, y_train, cv=5)
-            print(f'CV Accuracy: f{scores.mean()} (+/- {scores.std() * 2})')
+            scorings = ['accuracy', 'precision', 'recall']
+            scores = cross_validate(self.clf, X_train, y_train, scoring=scorings, cv=5)
+            print('Cross Validation scores:')
+            for scoring in scorings:
+                score = scores[f'test_{scoring}']
+                print(f'{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})')
 
         # Evaluate results on the test set.
         self.clf.fit(X_train, y_train)
