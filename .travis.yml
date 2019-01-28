@@ -1,6 +1,8 @@
 language: python
 python:
   - 3.6
+before_install:
+  - export BOTO_CONFIG=/dev/null
 install:
   - pip install -r requirements.txt
   - pip install -r test-requirements.txt
