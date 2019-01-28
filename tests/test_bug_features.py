@@ -72,7 +72,7 @@ def test_has_github_url():
 
 
 def test_whiteboard():
-    read('whiteboard.json', whiteboard, [['memshrink'], []])
+    read('whiteboard.json', whiteboard, [['memshrink', 'platform-rel-facebook'], [], ['inj+', 'av:quick heal', 'av'], ['av:quick heal', 'regressed sept 6th', 'dll version is 3.0.1.*', 'av'], ['av:quick heal', 'inj+', 'av'], ['av:quick heal', 'inj+', 'av'], ['inj+', 'av:quick heal', 'av'], ['inj+', 'av:quick heal', 'av'], ['inj+', 'ux', 'av:quick heal', 'qf', 'av']])
 
 
 def test_patches():
