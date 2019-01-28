@@ -31,6 +31,7 @@ class TrackingModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
+            bug_features.priority(),
         ]
 
         cleanup_functions = [
