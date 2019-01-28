@@ -146,6 +146,11 @@ class is_mozillian(object):
         return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
 
 
+class bug_reporter(object):
+    def __call__(self, bug):
+        return bug['creator_detail']['email']
+
+
 class delta_request_merge(object):
     def __call__(self, bug):
         for history in bug['history']:
@@ -283,5 +288,5 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             }
 
             results.append(result)
-        
+
         return pd.DataFrame(results)

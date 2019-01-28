@@ -103,3 +103,7 @@ def test_is_mozillian():
 
 def test_blocked_bugs_number():
     read('blocked_bugs_number.json', blocked_bugs_number, [2, 0])
+
+
+def test_bug_reporter():
+    read('bug_reporter.json', bug_reporter, ['bill.mccloskey@gmail.com', 'rhelmer@mozilla.com', 'intermittent-bug-filer@mozilla.bugs'])
