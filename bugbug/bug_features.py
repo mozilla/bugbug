@@ -176,20 +176,7 @@ class commit_deleted(object):
 class commit_types(object):
     def __call__(self, bug):
         return sum((commit['types'] for commit in bug['commits']), [])
-class bug_reporter(object):
-    def __call__(self, bug):
-        reporter_name = bug['creator_detail']['real_name']
-        if reporter_name is None:
-            name = ''
-        else:
-            name = re.match(r'.+?(?=\[|\(|\:)',reporter_name)
-            if not name:
-                name = re.search(r'[^\:]+$',reporter_name)
-            elif len(name[0])==1:
-                name = re.search(r'(?<=\[:)(.*?)(?=\])',reporter_name)
-            
-            
-        return None if name is None else name[0].strip()
+
 
 
 class blocked_bugs_number(object):
