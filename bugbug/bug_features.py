@@ -182,6 +182,21 @@ class priority(object):
     def __call__(self, bug):
         return bug['priority']
 
+class comment_count(object):
+    def __call__(self, bug):
+        return field(bug, 'comment_count')
+
+
+class comment_length(object):
+    def __call__(self, bug):
+        comments = bug['comments']
+        ret = 0
+
+        for comment in comments:
+            ret += len(comment['text'])
+
+        return ret
+
 
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
