@@ -6,6 +6,7 @@
 import json
 import os
 
+from bugbug.bug_features import blocked_bugs_number
 from bugbug.bug_features import component
 from bugbug.bug_features import has_crash_signature
 from bugbug.bug_features import has_github_url
@@ -97,3 +98,7 @@ def test_component():
 
 def test_is_mozillian():
     read('is_mozillian.json', is_mozillian, [False, True, True])
+
+
+def test_blocked_bugs_number():
+    read('blocked_bugs_number.json', blocked_bugs_number, [2, 0])
