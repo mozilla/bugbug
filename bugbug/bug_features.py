@@ -183,11 +183,10 @@ class priority(object):
         return bug['priority']
 
 
-class bug_has_alias(object):
+class bug_has_cve_in_alias(object):
     def __call__(self, bug):
         if bug['alias']:
-            if 'CVE' in bug['alias']:
-                return True
+            return 'CVE' in bug['alias']
         return False
 
 
