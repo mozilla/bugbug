@@ -24,3 +24,24 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def transform(self, data):
         sequences = self.tokenizer.texts_to_sequences(data)
         return pad_sequences(sequences, maxlen=self.maxlen)
+
+
+class KerasModel(BaseEstimator, ClassifierMixin):
+    def __init__(self, epochs, batch_size):
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def fit(self, X, y):
+        X_dict = numpy_to_dict(X)
+
+        self.model = self.model_creator(X_dict, y)
+
+        self.model.fit(X_dict, y, epochs=self.epochs, batch_size=self.batch_size, verbose=1)
+
+        return self
+
+    def predict_proba(self, X):
+        return self.model.predict(numpy_to_dict(X))
+
+    def predict(self, X):
+        return self.predict_proba(X).argmax(axis=-1)
