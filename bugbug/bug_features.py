@@ -288,5 +288,5 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             }
 
             results.append(result)
- 
+
         return pd.DataFrame(results)
