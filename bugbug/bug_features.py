@@ -183,6 +183,14 @@ class priority(object):
         return bug['priority']
 
 
+class bug_has_alias(object):
+    def __call__(self, bug):
+        if bug['alias']:
+            if 'CVE' in bug['alias']:
+                return True
+        return False
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
