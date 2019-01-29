@@ -4,8 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import re
+from datetime import datetime
+from datetime import timezone
 
 import pandas as pd
+from libmozdata import versions
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
@@ -82,15 +85,26 @@ class has_github_url(object):
 
 class whiteboard(object):
     def __call__(self, bug):
-        ret = []
 
-        # TODO: Add any [XXX:YYY] that appears in the whiteboard as [XXX: only
+        # Split by '['
+        paren_splits = bug['whiteboard'].lower().split('[')
 
-        for elem in ['memshrink', '[ux]']:
-            if elem in bug['whiteboard'].lower():
-                ret.append(elem)
+        # Split splits by space if they weren't in [ and ].
+        splits = []
+        for paren_split in paren_splits:
+            if ']' in paren_split:
+                paren_split = paren_split.split(']')
+                splits += paren_split
+            else:
+                splits += paren_split.split(' ')
 
-        return ret
+        # Remove empty splits and strip
+        splits = [split.strip() for split in splits if split.strip() != '']
+
+        # For splits which contain ':', return both the whole string and the string before ':'.
+        splits += [split.split(':', 1)[0] for split in splits if ':' in split]
+
+        return splits
 
 
 class patches(object):
@@ -132,6 +146,18 @@ class is_mozillian(object):
         return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
 
 
+class delta_request_merge(object):
+    def __call__(self, bug):
+        for history in bug['history']:
+            for change in history['changes']:
+                if change['added'].startswith('approval-mozilla'):
+                    uplift_request_datetime = datetime.strptime(history['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                    timedelta = versions.getCloserRelease(uplift_request_datetime)[1] - uplift_request_datetime
+                    return timedelta.days + timedelta.seconds / (24 * 60 * 60)
+
+        return None
+
+
 class commit_added(object):
     def __call__(self, bug):
         return sum(commit['added'] for commit in bug['commits'])
@@ -150,6 +176,11 @@ class commit_types(object):
 class blocked_bugs_number(object):
     def __call__(self, bug):
         return len(bug['blocks'])
+
+
+class priority(object):
+    def __call__(self, bug):
+        return bug['priority']
 
 
 def cleanup_url(text):
@@ -180,10 +211,11 @@ def cleanup_synonyms(text):
         ('uaf', ['uaf', 'use after free', 'use-after-free']),
         ('asan', ['asan', 'address sanitizer', 'addresssanitizer']),
         ('permafailure', ['permafailure', 'permafailing', 'permafail', 'perma failure', 'perma failing', 'perma fail', 'perma-failure', 'perma-failing', 'perma-fail']),
+        ('spec', ['spec', 'specification']),
     ]
 
     for synonym_group, synonym_list in synonyms:
-        text = re.sub('|'.join(synonym_list), synonym_group, text, flags=re.IGNORECASE)
+        text = re.sub('|'.join(fr'\b{synonym}\b' for synonym in synonym_list), synonym_group, text, flags=re.IGNORECASE)
 
     return text
 
