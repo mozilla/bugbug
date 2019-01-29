@@ -48,6 +48,7 @@ def _transform(commit):
         'added': 0,
         'deleted': 0,
         'types': set(),
+        'touched_files': 0,
     }
 
     patch = HG.export(revs=[commit[1]], git=True)
@@ -75,7 +76,7 @@ def _transform(commit):
 
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
-
+    obj['touched_files'] = len(patch_data.keys())
     return obj
 
 
