@@ -2,5 +2,6 @@
 *model
 
 data/
+sheets/
 
 .pytest_cache/
