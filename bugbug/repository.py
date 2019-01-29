@@ -47,6 +47,7 @@ def _transform(commit):
         'bug_id': bug_id,
         'added': 0,
         'deleted': 0,
+        'files_modified_num': 0,
         'types': set(),
     }
 
@@ -72,6 +73,8 @@ def _transform(commit):
         else:
             type_ = ext
         obj['types'].add(type_)
+
+    obj['files_modified_num'] = len(patch_data)
 
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
