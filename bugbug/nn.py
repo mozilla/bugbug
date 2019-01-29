@@ -26,7 +26,7 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
         return pad_sequences(sequences, maxlen=self.maxlen)
 
 
-class KerasModel(BaseEstimator, ClassifierMixin):
+class KerasClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, epochs, batch_size):
         self.epochs = epochs
         self.batch_size = batch_size
