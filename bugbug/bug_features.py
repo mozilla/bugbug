@@ -178,7 +178,6 @@ class commit_types(object):
         return sum((commit['types'] for commit in bug['commits']), [])
 
 
-
 class blocked_bugs_number(object):
     def __call__(self, bug):
         return len(bug['blocks'])
@@ -289,5 +288,5 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             }
 
             results.append(result)
-        
+ 
         return pd.DataFrame(results)
