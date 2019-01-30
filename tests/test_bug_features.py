@@ -8,6 +8,7 @@ import os
 
 from bugbug.bug_features import blocked_bugs_number
 from bugbug.bug_features import bug_has_cve_in_alias
+from bugbug.bug_features import bug_reporter
 from bugbug.bug_features import comment_count
 from bugbug.bug_features import comment_length
 from bugbug.bug_features import component
@@ -105,6 +106,10 @@ def test_is_mozillian():
 
 def test_blocked_bugs_number():
     read('blocked_bugs_number.json', blocked_bugs_number, [2, 0])
+
+
+def test_bug_reporter():
+    read('bug_reporter.json', bug_reporter, ['bill.mccloskey@gmail.com', 'rhelmer@mozilla.com', 'intermittent-bug-filer@mozilla.bugs'])
 
 
 def test_bug_has_cve_in_alias():
