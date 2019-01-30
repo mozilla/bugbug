@@ -29,3 +29,12 @@ If you update the commits database, run `xz -v9 -k data/commits.json`.
 ## Usage
 
 Run the `run.py` script to perform training / classification. The first time `run.py` is executed, the `--train` argument should be used to automatically download databases containing bugs and commits data.
+
+
+### Running the repository mining script
+
+1. Clone https://hg.mozilla.org/mozilla-central/.
+2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
+3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
+
+Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to `hg.log`.
