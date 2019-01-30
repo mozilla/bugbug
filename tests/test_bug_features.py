@@ -7,6 +7,7 @@ import json
 import os
 
 from bugbug.bug_features import blocked_bugs_number
+from bugbug.bug_features import bug_has_cve_in_alias
 from bugbug.bug_features import comment_count
 from bugbug.bug_features import comment_length
 from bugbug.bug_features import component
@@ -25,7 +26,6 @@ from bugbug.bug_features import product
 from bugbug.bug_features import severity
 from bugbug.bug_features import title
 from bugbug.bug_features import whiteboard
-from bugbug.bug_features import bug_has_cve_in_alias
 
 
 def read(filename, feature_extractor_class, expected_results):
@@ -117,4 +117,3 @@ def test_comment_count():
 
 def test_comment_length():
     read('comment_length.json', comment_length, [566, 5291])
-
