@@ -8,6 +8,7 @@ import os
 
 import requests
 from libmozdata import bugzilla
+from tqdm import tqdm
 
 from bugbug import db
 
@@ -136,19 +137,17 @@ def download_bugs(bug_ids, products=None, security=False):
 
     new_bug_ids = sorted(list(new_bug_ids))
 
-    total_downloaded = 0
     chunks = (new_bug_ids[i:(i + 500)] for i in range(0, len(new_bug_ids), 500))
-    for chunk in chunks:
-        new_bugs = _download(chunk)
+    with tqdm(total=len(new_bug_ids)) as progress_bar:
+        for chunk in chunks:
+            new_bugs = _download(chunk)
 
-        total_downloaded += len(new_bugs)
+            progress_bar.update(len(chunk))
 
-        print(f'Downloaded {total_downloaded} out of {len(new_bug_ids)} bugs')
+            if not security:
+                new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
 
-        if not security:
-            new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
+            if products is not None:
+                new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if bug['product'] in products}
 
-        if products is not None:
-            new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if bug['product'] in products}
-
-        db.append(BUGS_DB, new_bugs.values())
+            db.append(BUGS_DB, new_bugs.values())
