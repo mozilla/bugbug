@@ -8,6 +8,7 @@ import os
 
 import requests
 from libmozdata import bugzilla
+from tqdm import tqdm
 
 from bugbug import db
 
@@ -125,6 +126,7 @@ def download_bugs_between(date_from, date_to, security=False):
 def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
     old_bugs = []
+   # tot = len(BUGS_DB)
     new_bug_ids = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs():
         old_bug_count += 1
@@ -144,6 +146,7 @@ def download_bugs(bug_ids, products=None, security=False):
         total_downloaded += len(new_bugs)
 
         print(f'Downloaded {total_downloaded} out of {len(new_bug_ids)} bugs')
+        total_downloaded = tqdm(total_downloaded,total=len(new_bug_ids))
 
         if not security:
             new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
