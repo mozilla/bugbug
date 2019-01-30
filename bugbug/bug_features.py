@@ -183,6 +183,11 @@ class priority(object):
         return bug['priority']
 
 
+class bug_has_cve_in_alias(object):
+    def __call__(self, bug):
+        return bug['alias'] is not None and 'CVE' in bug['alias']
+
+
 class commit_files_modified_num(object):
     def __call__(self, bug):
         return sum(commit['files_modified_num'] for commit in bug['commits'])
