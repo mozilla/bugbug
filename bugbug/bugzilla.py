@@ -5,6 +5,7 @@
 
 import json
 import os
+
 import requests
 from libmozdata import bugzilla
 
