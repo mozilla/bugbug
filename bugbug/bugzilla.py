@@ -8,9 +8,9 @@ import os
 
 import requests
 from libmozdata import bugzilla
+from tqdm import tqdm
 
 from bugbug import db
-from tqdm import tqdm
 
 BUGS_DB = 'data/bugs.json'
 db.register(BUGS_DB, 'https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=1')
