@@ -23,6 +23,7 @@ from bugbug.bug_features import product
 from bugbug.bug_features import severity
 from bugbug.bug_features import title
 from bugbug.bug_features import whiteboard
+from bugbug.bug_features import bug_has_cve_in_alias
 
 
 def read(filename, feature_extractor_class, expected_results):
@@ -102,3 +103,7 @@ def test_is_mozillian():
 
 def test_blocked_bugs_number():
     read('blocked_bugs_number.json', blocked_bugs_number, [2, 0])
+
+
+def test_bug_has_cve_in_alias():
+    read('bug_has_cve_in_alias.json', bug_has_cve_in_alias, [True, False])
