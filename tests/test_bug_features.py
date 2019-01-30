@@ -110,7 +110,7 @@ def test_blocked_bugs_number():
 def test_bug_has_cve_in_alias():
     read('bug_has_cve_in_alias.json', bug_has_cve_in_alias, [True, False])
 
-    
+
 def test_comment_count():
     read('comment_count.json', comment_count, [4, 28])
 
