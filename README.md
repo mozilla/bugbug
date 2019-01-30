@@ -38,3 +38,18 @@ Run the `run.py` script to perform training / classification. The first time `ru
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
 
 Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to `hg.log`.
+
+
+## Structure of the project
+- `bugbug/labels` contains manually collected labels;
+- `bugbug/db.py` is an implementation of a really simple JSON database;
+- `bugbug/bugzilla.py` contains the functions to retrieve bugs from the Bugzilla tracking system;
+- `bugbug/repository.py` contains the functions to mine data from the mozilla-central (Firefox) repository;
+- `bugbug/bug_features.py` contains functions to extract features from bug/commit data;
+- `bugbug/model.py` contains the base class that all models derive from;
+- `bugbug/models` contains implementations of specific models;
+- `bugbug/nn.py` contains utility functions to include Keras models into a scikit-learn pipeline;
+- `bugbug/utils.py` contains misc utility functions;
+- `bugbug/nlp` contains utility functions for NLP;
+- `bugbug/labels.py` contains utility functions for handling labels;
+- `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
