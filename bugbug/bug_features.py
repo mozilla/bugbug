@@ -185,9 +185,7 @@ class priority(object):
 
 class bug_has_cve_in_alias(object):
     def __call__(self, bug):
-        if bug['alias']:
-            return 'CVE' in bug['alias']
-        return False
+        return bug['alias'] is not None and 'CVE' in bug['alias']
 
 
 class commit_files_modified_num(object):
