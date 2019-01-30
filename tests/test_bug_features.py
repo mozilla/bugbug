@@ -8,6 +8,9 @@ import os
 
 from bugbug.bug_features import blocked_bugs_number
 from bugbug.bug_features import bug_reporter
+from bugbug.bug_features import bug_has_cve_in_alias
+from bugbug.bug_features import comment_count
+from bugbug.bug_features import comment_length
 from bugbug.bug_features import component
 from bugbug.bug_features import has_crash_signature
 from bugbug.bug_features import has_github_url
@@ -107,3 +110,17 @@ def test_blocked_bugs_number():
 
 def test_bug_reporter():
     read('bug_reporter.json', bug_reporter, ['bill.mccloskey@gmail.com', 'rhelmer@mozilla.com', 'intermittent-bug-filer@mozilla.bugs'])
+
+    
+def test_bug_has_cve_in_alias():
+    read('bug_has_cve_in_alias.json', bug_has_cve_in_alias, [True, False])
+
+
+def test_comment_count():
+    read('comment_count.json', comment_count, [4, 28])
+
+
+def test_comment_length():
+    read('comment_length.json', comment_length, [566, 5291])
+
+

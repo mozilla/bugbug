@@ -188,6 +188,26 @@ class priority(object):
         return bug['priority']
 
 
+class bug_has_cve_in_alias(object):
+    def __call__(self, bug):
+        return bug['alias'] is not None and 'CVE' in bug['alias']
+
+
+class commit_files_modified_num(object):
+    def __call__(self, bug):
+        return sum(commit['files_modified_num'] for commit in bug['commits'])
+
+
+class comment_count(object):
+    def __call__(self, bug):
+        return field(bug, 'comment_count')
+
+
+class comment_length(object):
+    def __call__(self, bug):
+        return sum(len(x['text']) for x in bug['comments'])
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)

@@ -10,6 +10,7 @@ import re
 
 import hglib
 from parsepatch.patch import Patch
+from tqdm import tqdm
 
 from bugbug import db
 
@@ -47,6 +48,7 @@ def _transform(commit):
         'bug_id': bug_id,
         'added': 0,
         'deleted': 0,
+        'files_modified_num': 0,
         'types': set(),
     }
 
@@ -73,6 +75,8 @@ def _transform(commit):
             type_ = ext
         obj['types'].add(type_)
 
+    obj['files_modified_num'] = len(patch_data)
+
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
 
@@ -83,6 +87,7 @@ def download_commits(repo_dir):
     hg = hglib.open(repo_dir)
 
     commits = hg.log()
+    commits_num = len(commits)
 
     hg.close()
 
@@ -90,6 +95,7 @@ def download_commits(repo_dir):
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
         commits = executor.map(_transform, commits, chunksize=256)
+        commits = tqdm(commits, total=commits_num)
         db.write(COMMITS_DB, commits)
 
 
