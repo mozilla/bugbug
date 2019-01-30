@@ -182,6 +182,7 @@ class priority(object):
     def __call__(self, bug):
         return bug['priority']
 
+    
 class comment_count(object):
     def __call__(self, bug):
         return field(bug, 'comment_count')
