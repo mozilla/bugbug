@@ -10,6 +10,7 @@ import re
 
 import hglib
 from parsepatch.patch import Patch
+from tqdm import tqdm
 
 from bugbug import db
 
@@ -83,6 +84,7 @@ def download_commits(repo_dir):
     hg = hglib.open(repo_dir)
 
     commits = hg.log()
+    commits_num = len(commits)
 
     hg.close()
 
@@ -90,6 +92,7 @@ def download_commits(repo_dir):
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
         commits = executor.map(_transform, commits, chunksize=256)
+        commits = tqdm(commits, total=commits_num)
         db.write(COMMITS_DB, commits)
 
 
