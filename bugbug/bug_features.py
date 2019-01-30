@@ -190,6 +190,12 @@ class bug_has_cve_in_alias(object):
         return False
 
 
+class commit_files_modified_num(object):
+    def __call__(self, bug):
+        return sum(commit['files_modified_num'] for commit in bug['commits'])
+
+
+
 class comment_count(object):
     def __call__(self, bug):
         return field(bug, 'comment_count')
