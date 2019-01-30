@@ -5,12 +5,12 @@
 
 import json
 import os
-import time
 import requests
 from libmozdata import bugzilla
 
 from bugbug import db
 from tqdm import tqdm
+
 BUGS_DB = 'data/bugs.json'
 db.register(BUGS_DB, 'https://www.dropbox.com/s/xm6wzac9jl81irz/bugs.json.xz?dl=1')
 
@@ -135,17 +135,13 @@ def download_bugs(bug_ids, products=None, security=False):
     print(f'Loaded {old_bug_count} bugs.')
 
     new_bug_ids = sorted(list(new_bug_ids))
-    total_downloaded = 0
 
     chunks = (new_bug_ids[i:(i + 500)] for i in range(0, len(new_bug_ids), 500))
-    with tqdm(total=len(new_bug_ids)) as pbar:
+    with tqdm(total=len(new_bug_ids)) as progress_bar:
         for chunk in chunks:
             new_bugs = _download(chunk)
 
-            total_downloaded += len(new_bugs)
-            time.sleep(0.1)
-            pbar.update(len(chunk))
-            # print(f'Downloaded {total_downloaded} out of {len(new_bug_ids)} bugs')
+            progress_bar.update(len(chunk))
 
             if not security:
                 new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}
