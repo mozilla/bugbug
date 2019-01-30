@@ -115,7 +115,7 @@ def download_bugs_between(date_from, date_to, security=False):
 
     assert first_id < last_id
 
-    all_ids = range(522, 12783 + 1)
+    all_ids = range(first_id, last_id + 1)
 
     download_bugs(all_ids, security=security, products=products)
 
