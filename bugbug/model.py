@@ -99,7 +99,7 @@ class Model():
 
             print(f'\nTop {len(important_features)} Features :')
             for i, [importance, index, is_positive] in enumerate(important_features):
-                    print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+                print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 
         y_pred = self.clf.predict(X_test)
 
