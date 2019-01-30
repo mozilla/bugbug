@@ -33,7 +33,6 @@ class BugModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
-            bug_features.bug_has_cve_in_alias(),
             bug_features.blocked_bugs_number(),
         ]
 
