@@ -190,7 +190,7 @@ class comment_count(object):
 
 class comment_length(object):
     def __call__(self, bug):
-        return sum([len(x['text']) for x in bug['comments']])
+        return sum(len(x['text']) for x in bug['comments'])
 
 
 def cleanup_url(text):
