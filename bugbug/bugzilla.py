@@ -133,7 +133,6 @@ def download_bugs(bug_ids, products=None, security=False):
             new_bug_ids.remove(bug['id'])
 
     print(f'Loaded {old_bug_count} bugs.')
-    print(f'To download {len(new_bug_ids)} bugs.')
 
     new_bug_ids = sorted(list(new_bug_ids))
 
@@ -144,7 +143,7 @@ def download_bugs(bug_ids, products=None, security=False):
 
         total_downloaded += len(new_bugs)
 
-        print(f'Downloaded {total_downloaded} bugs')
+        print(f'Downloaded {total_downloaded} out of {len(new_bug_ids)} bugs')
 
         if not security:
             new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if len(bug['groups']) == 0}

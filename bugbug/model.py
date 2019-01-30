@@ -30,7 +30,29 @@ class Model():
     def get_feature_names(self):
         return []
 
-    def train(self):
+    def get_important_features(self, cutoff, shap_values):
+        # Calculate the values that represent the fraction of the model output variability attributable
+        # to each feature across the whole dataset.
+        shap_sums = shap_values.sum(0)
+        abs_shap_sums = np.abs(shap_values).sum(0)
+        rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+
+        cut_off_value = cutoff * np.amax(rel_shap_sums)
+
+        # Get indices of features that pass the cut off value
+        top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
+        # Get the importance values of the top features from their indices
+        top_features = np.take(rel_shap_sums, top_feature_indices)
+        # Gets the sign of the importance from shap_sums as boolean
+        is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
+        # Stack the importance, indices and shap_sums in a 2D array
+        top_features = np.column_stack((top_features, top_feature_indices, is_positive))
+        # Sort the array (in decreasing order of importance values)
+        top_features = top_features[top_features[:, 0].argsort()][::-1]
+
+        return top_features
+
+    def train(self, importance_cutoff=0.15):
         classes = self.get_labels()
         class_names = sorted(list(set(classes.values())), reverse=True)
 
@@ -73,14 +95,11 @@ class Model():
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
-            print('Feature ranking (top 20 features):')
-            # Calculate the values that represent the fraction of the model output variability attributable
-            # to each feature across the whole dataset.
-            shap_sums = np.abs(shap_values).sum(0)
-            rel_shap_sums = shap_sums / shap_sums.sum()
-            indices = np.argsort(rel_shap_sums)[::-1][:20]
-            for i, index in enumerate(indices):
-                print(f'{i + 1}. \'{feature_names[index]}\' ({rel_shap_sums[index]})')
+            important_features = self.get_important_features(importance_cutoff, shap_values)
+
+            print(f'\nTop {len(important_features)} Features :')
+            for i, [importance, index, is_positive] in enumerate(important_features):
+                    print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 
         y_pred = self.clf.predict(X_test)
 
@@ -117,7 +136,7 @@ class Model():
     def overwrite_classes(self, bugs, classes, probabilities):
         return classes
 
-    def classify(self, bugs, probabilities=False, importances=False):
+    def classify(self, bugs, probabilities=False, importances=False, importance_cutoff=0.15):
         assert bugs is not None
         assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
 
@@ -138,11 +157,7 @@ class Model():
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
-            shap_sums = shap_values.sum(0)
-            abs_shap_sums = np.abs(shap_sums)
-            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
-            indices = np.argsort(abs_shap_sums)[::-1]
-            importances = [(index, shap_sums[index] > 0, rel_shap_sums[index]) for index in indices]
+            importances = self.get_important_features(importance_cutoff, shap_values)
 
             return classes, importances
 
