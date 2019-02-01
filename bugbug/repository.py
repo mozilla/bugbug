@@ -6,7 +6,6 @@
 import argparse
 import concurrent.futures
 import os
-import re
 
 import hglib
 from parsepatch.patch import Patch
@@ -16,8 +15,6 @@ from bugbug import db
 
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
-
-BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
 
 def get_commits():
@@ -32,10 +29,7 @@ def _init(repo_dir):
 def _transform(commit):
     desc = commit[5].decode('utf-8')
 
-    bug_id = None
-    bug_id_match = re.search(BUG_PATTERN, desc)
-    if bug_id_match:
-        bug_id = int(bug_id_match.group(1))
+    bug_id = desc.split(' ')[1]
 
     obj = {
         # 'rev': commit[0].decode('utf-8'),
@@ -86,7 +80,7 @@ def _transform(commit):
 def download_commits(repo_dir):
     hg = hglib.open(repo_dir)
 
-    commits = hg.log()
+    commits = hg.log(keyword='Bug')
     commits_num = len(commits)
 
     hg.close()
