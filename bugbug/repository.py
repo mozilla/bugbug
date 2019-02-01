@@ -9,6 +9,9 @@ import os
 import re
 
 import hglib
+from hglib import templates
+from hglib.client import hgclient
+from hglib.util import cmdbuilder
 from parsepatch.patch import Patch
 from tqdm import tqdm
 
@@ -18,6 +21,16 @@ COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
 
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
+
+
+class hgclient_template(hgclient):
+    def __init__(self, path):
+        super(hgclient_template, self).__init__(path, None, None)
+
+    def log(self, template=templates.changeset):
+        args = cmdbuilder(b'log', template=template)
+        out = self.rawcommand(args)
+        return out
 
 
 def get_commits():
@@ -84,7 +97,7 @@ def _transform(commit):
 
 
 def download_commits(repo_dir):
-    hg = hglib.open(repo_dir)
+    hg = hgclient_template(repo_dir)
 
     commits = hg.log()
     commits_num = len(commits)
