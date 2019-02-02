@@ -7,11 +7,9 @@ import argparse
 import concurrent.futures
 import os
 import re
+from datetime import datetime
 
 import hglib
-from hglib import templates
-from hglib.client import hgclient
-from hglib.util import cmdbuilder
 from parsepatch.patch import Patch
 from tqdm import tqdm
 
@@ -23,14 +21,18 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
 
-class hgclient_template(hgclient):
-    def __init__(self, path):
-        super(hgclient_template, self).__init__(path, None, None)
-
-    def log(self, template=templates.changeset):
-        args = cmdbuilder(b'log', template=template)
-        out = self.rawcommand(args)
-        return out
+def hg_log(repo_dir):
+    hg = hglib.open(repo_dir)
+    args = hglib.util.cmdbuilder(b'log', template='{rev}\\0{node}\\0{tags}\\0{branch}\\0{author}\\0{desc}\\0{date}\\0')
+    x = hg.rawcommand(args)
+    out = x.split(b'\x00')[:-1]
+    revs = []
+    for rev in hglib.util.grouper(7, out):
+        posixtime = float(rev[6].split(b'.', 1)[0])
+        dt = datetime.fromtimestamp(posixtime)
+        revs.append((rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
+    hg.close()
+    return revs
 
 
 def get_commits():
@@ -97,14 +99,8 @@ def _transform(commit):
 
 
 def download_commits(repo_dir):
-    hg = hgclient_template(repo_dir)
-
-    commits = hg.log()
+    commits = hg_log(repo_dir)
     commits_num = len(commits)
-
-    hg.close()
-
-    commits = (tuple(commit) for commit in commits)
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
         commits = executor.map(_transform, commits, chunksize=256)
