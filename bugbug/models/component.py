@@ -142,7 +142,7 @@ class ComponentModel(Model):
             classes[bug_id] = bug_data['product']
 
         component_counts = Counter(classes.values()).most_common()
-        top_components = {component for component, count in component_counts}
+        top_components = set(component for component, count in component_counts)
 
         print(f'{len(top_components)} components')
         for component, count in component_counts:

@@ -28,7 +28,7 @@ with open(file_path, 'r') as f:
     next(reader)
     labeled_comments = [(int(r[0]), int(r[1]), r[2]) for r in reader]
 
-already_done = {(c[0], c[1]) for c in labeled_comments}
+already_done = set((c[0], c[1]) for c in labeled_comments)
 
 bugs = []
 for bug in bugzilla.get_bugs():
