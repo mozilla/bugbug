@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import os
 import re
+from collections import namedtuple
 from datetime import datetime
 
 import hglib
@@ -20,6 +21,8 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
+Commit = namedtuple('Commit', ['rev', 'node', 'tags', 'branch', 'author', 'desc', 'date'])
+
 
 def get_commits():
     return db.read(COMMITS_DB)
@@ -31,7 +34,7 @@ def _init(repo_dir):
 
 
 def _transform(commit):
-    desc = commit[5].decode('utf-8')
+    desc = commit.desc.decode('utf-8')
 
     bug_id = None
     bug_id_match = re.search(BUG_PATTERN, desc)
@@ -39,13 +42,13 @@ def _transform(commit):
         bug_id = int(bug_id_match.group(1))
 
     obj = {
-        # 'rev': commit[0].decode('utf-8'),
-        # 'node': commit[1].decode('utf-8'),
-        # 'tags': commit[2].decode('utf-8'),
-        # 'branch': commit[3].decode('utf-8'),
-        'author': commit[4].decode('utf-8'),
+        # 'rev': commit.rev.decode('utf-8'),
+        # 'node': commit.node.decode('utf-8'),
+        # 'tags': commit.tags.decode('utf-8'),
+        # 'branch': commit.branch.decode('utf-8'),
+        'author': commit.author.decode('utf-8'),
         'desc': desc,
-        # 'date': str(commit[6]),
+        # 'date': str(commit.date),
         'bug_id': bug_id,
         'added': 0,
         'deleted': 0,
@@ -53,7 +56,7 @@ def _transform(commit):
         'types': set(),
     }
 
-    patch = HG.export(revs=[commit[1]], git=True)
+    patch = HG.export(revs=[commit.node], git=True)
     patch_data = Patch.parse_patch(patch.decode('utf-8', 'ignore'), skip_comments=False, add_lines_for_new=True)
     for path, stats in patch_data.items():
         if 'added' not in stats:
@@ -96,7 +99,7 @@ def hg_log(repo_dir):
         posixtime = float(rev[6].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
 
-        revs.append((rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
+        revs.append(Commit(rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
 
     hg.close()
 
