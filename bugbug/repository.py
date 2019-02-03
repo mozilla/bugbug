@@ -48,7 +48,7 @@ def _transform(commit):
         # 'branch': commit.branch.decode('utf-8'),
         'author': commit.author.decode('utf-8'),
         'desc': desc,
-        # 'date': str(commit.date),
+        'date': str(commit.date),
         'bug_id': bug_id,
         'added': 0,
         'deleted': 0,
