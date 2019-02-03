@@ -21,7 +21,7 @@ class QANeededModel(Model):
             bug_features.has_str(),
             bug_features.has_regression_range(),
             bug_features.severity(),
-            bug_features.keywords(set(['qawanted'])),
+            bug_features.keywords({'qawanted'}),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),

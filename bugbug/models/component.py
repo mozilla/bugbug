@@ -61,10 +61,10 @@ class ComponentModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def get_labels(self):
-        products = set([
+        products = {
             'Core', 'External Software Affecting Firefox', 'DevTools', 'Firefox for Android', 'Firefox', 'Toolkit',
             'WebExtensions'
-        ])
+        }
 
         classes = {}
 
