@@ -21,7 +21,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
-Commit = namedtuple('Commit', ['rev', 'node', 'tags', 'branch', 'author', 'desc', 'date'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date'])
 
 
 def get_commits():
@@ -42,10 +42,6 @@ def _transform(commit):
         bug_id = int(bug_id_match.group(1))
 
     obj = {
-        # 'rev': commit.rev.decode('utf-8'),
-        # 'node': commit.node.decode('utf-8'),
-        # 'tags': commit.tags.decode('utf-8'),
-        # 'branch': commit.branch.decode('utf-8'),
         'author': commit.author.decode('utf-8'),
         'desc': desc,
         'date': str(commit.date),
@@ -90,16 +86,23 @@ def _transform(commit):
 def hg_log(repo_dir):
     hg = hglib.open(repo_dir)
 
-    args = hglib.util.cmdbuilder(b'log', template='{rev}\\0{node}\\0{tags}\\0{branch}\\0{author}\\0{desc}\\0{date}\\0')
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0'
+
+    args = hglib.util.cmdbuilder(b'log', template=template)
     x = hg.rawcommand(args)
     out = x.split(b'\x00')[:-1]
 
     revs = []
-    for rev in hglib.util.grouper(7, out):
-        posixtime = float(rev[6].split(b'.', 1)[0])
+    for rev in hglib.util.grouper(template.count('\\0'), out):
+        posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
 
-        revs.append(Commit(rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
+        revs.append(Commit(
+            node=rev[0],
+            author=rev[1],
+            desc=rev[2],
+            date=dt,
+        ))
 
     hg.close()
 
