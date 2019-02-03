@@ -21,20 +21,6 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
 
-def hg_log(repo_dir):
-    hg = hglib.open(repo_dir)
-    args = hglib.util.cmdbuilder(b'log', template='{rev}\\0{node}\\0{tags}\\0{branch}\\0{author}\\0{desc}\\0{date}\\0')
-    x = hg.rawcommand(args)
-    out = x.split(b'\x00')[:-1]
-    revs = []
-    for rev in hglib.util.grouper(7, out):
-        posixtime = float(rev[6].split(b'.', 1)[0])
-        dt = datetime.fromtimestamp(posixtime)
-        revs.append((rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
-    hg.close()
-    return revs
-
-
 def get_commits():
     return db.read(COMMITS_DB)
 
@@ -96,6 +82,25 @@ def _transform(commit):
     obj['types'] = list(obj['types'])
 
     return obj
+
+
+def hg_log(repo_dir):
+    hg = hglib.open(repo_dir)
+
+    args = hglib.util.cmdbuilder(b'log', template='{rev}\\0{node}\\0{tags}\\0{branch}\\0{author}\\0{desc}\\0{date}\\0')
+    x = hg.rawcommand(args)
+    out = x.split(b'\x00')[:-1]
+
+    revs = []
+    for rev in hglib.util.grouper(7, out):
+        posixtime = float(rev[6].split(b'.', 1)[0])
+        dt = datetime.fromtimestamp(posixtime)
+
+        revs.append((rev[0], rev[1], rev[2], rev[3], rev[4], rev[5], dt))
+
+    hg.close()
+
+    return revs
 
 
 def download_commits(repo_dir):
