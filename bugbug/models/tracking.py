@@ -10,6 +10,7 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
 from bugbug import bugzilla
+from bugbug import labels
 from bugbug.model import Model
 
 
@@ -60,6 +61,10 @@ class TrackingModel(Model):
 
     def get_labels(self):
         classes = {}
+
+        for bug_id, category in labels.get_labels('tracking'):
+            assert category in ['True', 'False'], f'unexpected category {category}'
+            classes[int(bug_id)] = 1 if category == 'True' else 0
 
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data['id'])
