@@ -72,6 +72,9 @@ class TrackingModel(Model):
                         elif change['added'] == '-':
                             classes[bug_id] = 0
 
+            if bug_data['resolution'] in ['INVALID', 'DUPLICATE']:
+                continue
+
             if bug_id not in classes:
                 classes[bug_id] = 0
 
@@ -79,3 +82,10 @@ class TrackingModel(Model):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps['union'].get_feature_names()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            if bug['resolution'] in ['INVALID', 'DUPLICATE']:
+                classes[i] = 0 if not probabilities else [1., 0.]
+
+        return classes
