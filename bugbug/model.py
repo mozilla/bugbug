@@ -27,6 +27,9 @@ class Model():
         self.cross_validation_enabled = True
         self.sampler = None
 
+        self.calculate_importance = True
+        self.calculate_classification_metrics = True
+
     def get_feature_names(self):
         return []
 
@@ -52,6 +55,9 @@ class Model():
 
         return top_features
 
+    def calculate_labels(self, classes, bugs):
+        return np.array([classes[bug['id']] for bug in bugs()])
+
     def train(self, importance_cutoff=0.15):
         classes = self.get_labels()
         class_names = sorted(list(set(classes.values())), reverse=True)
@@ -61,7 +67,7 @@ class Model():
             return (bug for bug in bugzilla.get_bugs() if bug['id'] in classes)
 
         # Calculate labels.
-        y = np.array([classes[bug['id']] for bug in bugs()])
+        y = self.calculate_labels(classes, bugs)
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
@@ -99,7 +105,7 @@ class Model():
 
         # Evaluate results on the test set.
         feature_names = self.get_feature_names()
-        if len(feature_names):
+        if len(feature_names) and self.calculate_importance:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
@@ -113,31 +119,38 @@ class Model():
             for i, [importance, index, is_positive] in enumerate(important_features):
                 print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 
-        y_pred = self.clf.predict(X_test)
+        if self.calculate_classification_metrics:
+            y_pred = self.clf.predict(X_test)
 
-        print(f'No confidence threshold - {len(y_test)} classified')
-        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
-        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+            if y_test.ndim == 2:
+                y_test = np.argmax(y_test, axis=1)
 
-        # Evaluate results on the test set for some confidence thresholds.
-        for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
-            y_pred_probas = self.clf.predict_proba(X_test)
+            print(f'No confidence threshold - {len(y_test)} classified')
+            print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+            print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
-            y_test_filter = []
-            y_pred_filter = []
-            for i in range(0, len(y_test)):
-                argmax = np.argmax(y_pred_probas[i])
-                if y_pred_probas[i][argmax] < confidence_threshold:
-                    continue
+            # Evaluate results on the test set for some confidence thresholds.
+            for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
+                y_pred_probas = self.clf.predict_proba(X_test)
 
-                y_test_filter.append(y_test[i])
-                y_pred_filter.append(argmax)
+                y_test_filter = []
+                y_pred_filter = []
+                for i in range(0, len(y_test)):
+                    argmax = np.argmax(y_pred_probas[i])
+                    if y_pred_probas[i][argmax] < confidence_threshold:
+                        continue
 
-            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+                    y_test_filter.append(y_test[i])
+                    y_pred_filter.append(argmax)
 
-            print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
-            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
-            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
+                try:
+                    y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+                except AttributeError:
+                    pass
+
+                print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
+                print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
+                print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
         joblib.dump(self, self.__class__.__name__.lower())
 
@@ -173,4 +186,4 @@ class Model():
 
             return classes, importances
 
-        return classes
+        return classes, None
