@@ -32,14 +32,24 @@ class TrackingModel(Model):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.title(),
+            bug_features.product(),
+            bug_features.component(),
+            bug_features.is_mozillian(),
+            bug_features.bug_reporter(),
+            bug_features.blocked_bugs_number(),
             bug_features.priority(),
-            bug_features.bug_reporter()
+            bug_features.has_cve_in_alias(),
+            bug_features.comment_count(),
+            bug_features.comment_length(),
         ]
 
         cleanup_functions = [
-            bug_features.cleanup_fileref,
             bug_features.cleanup_url,
+            bug_features.cleanup_fileref,
+            bug_features.cleanup_hex,
+            bug_features.cleanup_dll,
             bug_features.cleanup_synonyms,
+            bug_features.cleanup_crash,
         ]
 
         self.extraction_pipeline = Pipeline([
