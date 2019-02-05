@@ -114,7 +114,7 @@ def download_commits(repo_dir):
     commits_num = len(commits)
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
-        commits = executor.map(_transform, commits, chunksize=256)
+        commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
         db.write(COMMITS_DB, commits)
 
