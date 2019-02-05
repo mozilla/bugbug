@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import multiprocessing
 import os
 import re
 from collections import namedtuple
@@ -112,6 +113,8 @@ def hg_log(repo_dir):
 def download_commits(repo_dir):
     commits = hg_log(repo_dir)
     commits_num = len(commits)
+
+    print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
