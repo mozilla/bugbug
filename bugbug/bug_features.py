@@ -164,21 +164,6 @@ class delta_request_merge(object):
         return None
 
 
-class commit_added(object):
-    def __call__(self, bug, **kwargs):
-        return sum(commit['added'] for commit in bug['commits'])
-
-
-class commit_deleted(object):
-    def __call__(self, bug, **kwargs):
-        return sum(commit['deleted'] for commit in bug['commits'])
-
-
-class commit_types(object):
-    def __call__(self, bug, **kwargs):
-        return sum((commit['types'] for commit in bug['commits']), [])
-
-
 class blocked_bugs_number(object):
     def __call__(self, bug, **kwargs):
         return len(bug['blocks'])
@@ -194,11 +179,6 @@ class has_cve_in_alias(object):
         return bug['alias'] is not None and 'CVE' in bug['alias']
 
 
-class commit_files_modified_num(object):
-    def __call__(self, bug, **kwargs):
-        return sum(commit['files_modified_num'] for commit in bug['commits'])
-
-
 class comment_count(object):
     def __call__(self, bug, **kwargs):
         return field(bug, 'comment_count')
@@ -212,6 +192,26 @@ class comment_length(object):
 class reporter_experience(object):
     def __call__(self, bug, reporter_experience, **kwargs):
         return reporter_experience
+
+
+class commit_added(object):
+    def __call__(self, bug, **kwargs):
+        return sum(commit['added'] for commit in bug['commits'])
+
+
+class commit_deleted(object):
+    def __call__(self, bug, **kwargs):
+        return sum(commit['deleted'] for commit in bug['commits'])
+
+
+class commit_types(object):
+    def __call__(self, bug, **kwargs):
+        return sum((commit['types'] for commit in bug['commits']), [])
+
+
+class commit_files_modified_num(object):
+    def __call__(self, bug, **kwargs):
+        return sum(commit['files_modified_num'] for commit in bug['commits'])
 
 
 def cleanup_url(text):
