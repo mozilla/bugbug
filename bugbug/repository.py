@@ -21,7 +21,9 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'experience'])
+
+number_of_commits = {}
 
 
 def get_commits():
@@ -50,6 +52,7 @@ def _transform(commit):
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
+        'num_previous_commits': number_of_commits[commit]
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -102,6 +105,7 @@ def hg_log(repo_dir):
             author=rev[1],
             desc=rev[2],
             date=dt,
+            experience=0,
         ))
 
     hg.close()
@@ -112,6 +116,10 @@ def hg_log(repo_dir):
 def download_commits(repo_dir):
     commits = hg_log(repo_dir)
     commits_num = len(commits)
+
+    global number_of_commits
+    for i in range(commits_num):
+        number_of_commits[commits[i]] = sum(commit.author == commits[i].author for commit in commits[:i])
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
         commits = executor.map(_transform, commits, chunksize=256)
