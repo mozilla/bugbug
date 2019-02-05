@@ -188,7 +188,7 @@ class priority(object):
         return bug['priority']
 
 
-class bug_has_cve_in_alias(object):
+class has_cve_in_alias(object):
     def __call__(self, bug):
         return bug['alias'] is not None and 'CVE' in bug['alias']
 
