@@ -194,6 +194,16 @@ class reporter_experience(object):
         return reporter_experience
 
 
+class ever_affected(object):
+    def __call__(self, bug, **kwargs):
+        for history in bug['history']:
+            for change in history['changes']:
+                if change['field_name'].startswith('cf_status_firefox') and change['added'] == 'affected':
+                    return True
+
+        return False
+
+
 class commit_added(object):
     def __call__(self, bug, **kwargs):
         return sum(commit['added'] for commit in bug['commits'])
