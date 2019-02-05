@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import re
+from collections import defaultdict
 from datetime import datetime
 from datetime import timezone
 
@@ -24,17 +25,17 @@ def field(bug, field):
 
 
 class has_str(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return field(bug, 'cf_has_str')
 
 
 class has_regression_range(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return field(bug, 'cf_has_regression_range')
 
 
 class has_crash_signature(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return 'cf_crash_signature' in bug and bug['cf_crash_signature'] != ''
 
 
@@ -42,7 +43,7 @@ class keywords(object):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         keywords = []
         subkeywords = []
         for keyword in bug['keywords']:
@@ -59,32 +60,32 @@ class keywords(object):
 
 
 class severity(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return field(bug, 'severity')
 
 
 class is_coverity_issue(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return re.search('[CID ?[0-9]+]', bug['summary']) is not None or re.search('[CID ?[0-9]+]', bug['whiteboard']) is not None
 
 
 class has_url(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['url'] != ''
 
 
 class has_w3c_url(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return 'w3c' in bug['url']
 
 
 class has_github_url(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return 'github' in bug['url']
 
 
 class whiteboard(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
 
         # Split by '['
         paren_splits = bug['whiteboard'].lower().split('[')
@@ -108,17 +109,17 @@ class whiteboard(object):
 
 
 class patches(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(1 for a in bug['attachments'] if a['is_patch'] or a['content_type'] in ['text/x-review-board-request', 'text/x-phabricator-request'])
 
 
 class landings(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(1 for c in bug['comments'] if '://hg.mozilla.org/' in c['text'])
 
 
 class title(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         ret = []
 
         keywords = [
@@ -132,27 +133,27 @@ class title(object):
 
 
 class product(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['product']
 
 
 class component(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['component']
 
 
 class is_mozillian(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return any(bug['creator_detail']['email'].endswith(domain) for domain in ['@mozilla.com', '@mozilla.org'])
 
 
 class bug_reporter(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['creator_detail']['email']
 
 
 class delta_request_merge(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         for history in bug['history']:
             for change in history['changes']:
                 if change['added'].startswith('approval-mozilla'):
@@ -164,48 +165,53 @@ class delta_request_merge(object):
 
 
 class commit_added(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(commit['added'] for commit in bug['commits'])
 
 
 class commit_deleted(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(commit['deleted'] for commit in bug['commits'])
 
 
 class commit_types(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum((commit['types'] for commit in bug['commits']), [])
 
 
 class blocked_bugs_number(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return len(bug['blocks'])
 
 
 class priority(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['priority']
 
 
 class has_cve_in_alias(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return bug['alias'] is not None and 'CVE' in bug['alias']
 
 
 class commit_files_modified_num(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(commit['files_modified_num'] for commit in bug['commits'])
 
 
 class comment_count(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return field(bug, 'comment_count')
 
 
 class comment_length(object):
-    def __call__(self, bug):
+    def __call__(self, bug, **kwargs):
         return sum(len(x['text']) for x in bug['comments'])
+
+
+class reporter_experience(object):
+    def __call__(self, bug, reporter_experience, **kwargs):
+        return reporter_experience
 
 
 def cleanup_url(text):
@@ -263,6 +269,8 @@ class BugExtractor(BaseEstimator, TransformerMixin):
     def transform(self, bugs):
         results = []
 
+        reporter_experience_map = defaultdict(int)
+
         for bug in bugs:
             bug_id = bug['id']
 
@@ -278,7 +286,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     bug['commits'] = []
 
             for f in self.feature_extractors:
-                res = f(bug)
+                res = f(bug, reporter_experience=reporter_experience_map[bug['creator']])
 
                 if res is None:
                     continue
@@ -292,6 +300,8 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     res = str(res)
 
                 data[f.__class__.__name__] = res
+
+            reporter_experience_map[bug['creator']] += 1
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
 

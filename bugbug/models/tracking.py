@@ -41,6 +41,7 @@ class TrackingModel(Model):
             bug_features.has_cve_in_alias(),
             bug_features.comment_count(),
             bug_features.comment_length(),
+            bug_features.reporter_experience(),
         ]
 
         cleanup_functions = [
