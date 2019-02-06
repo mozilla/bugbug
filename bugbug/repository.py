@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import multiprocessing
 import os
 import re
 from collections import namedtuple
@@ -21,9 +22,9 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'experience'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date'])
 
-number_of_commits = {}
+author_experience = {}
 
 
 def get_commits():
@@ -52,7 +53,7 @@ def _transform(commit):
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
-        'num_previous_commits': number_of_commits[commit]
+        'author_experience': author_experience[commit]
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -105,7 +106,6 @@ def hg_log(repo_dir):
             author=rev[1],
             desc=rev[2],
             date=dt,
-            experience=0,
         ))
 
     hg.close()
@@ -117,12 +117,21 @@ def download_commits(repo_dir):
     commits = hg_log(repo_dir)
     commits_num = len(commits)
 
-    global number_of_commits
-    for i in range(commits_num):
-        number_of_commits[commits[i]] = sum(commit.author == commits[i].author for commit in commits[:i])
+    commits_by_author = {}
+
+    global author_experience
+    for commit in commits:
+        if commit.author not in commits_by_author:
+            commits_by_author[commit.author] = 0
+        else:
+            commits_by_author[commit.author] += 1
+
+        author_experience[commit] = commits_by_author[commit.author]
+
+    print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
     with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
-        commits = executor.map(_transform, commits, chunksize=256)
+        commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
         db.write(COMMITS_DB, commits)
 
