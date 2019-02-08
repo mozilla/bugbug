@@ -20,7 +20,7 @@ ATTACHMENT_INCLUDE_FIELDS = [
 ]
 
 COMMENT_INCLUDE_FIELDS = [
-    'id', 'text', 'author', 'creation_time',
+    'id', 'count', 'text', 'author', 'creation_time',
 ]
 
 
