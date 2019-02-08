@@ -48,12 +48,12 @@ class ComponentModel(Model):
                 # TODO: Re-enable when we'll support bug snapshotting (#5).
                 # ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(stop_words='english'), 'title'),
+                ('title', self.text_vectorizer(), 'title'),
 
                 # TODO: Re-enable when we'll support bug snapshotting (#5).
-                # ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+                # ('comments', self.text_vectorizer(), 'comments'),
 
-                ('first_comment', self.text_vectorizer(stop_words='english'), 'first_comment'),
+                ('first_comment', self.text_vectorizer(), 'first_comment'),
             ])),
         ])
 
