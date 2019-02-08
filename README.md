@@ -37,7 +37,7 @@ Run the `run.py` script to perform training / classification. The first time `ru
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
 
-Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to `log` command.
+Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to the `log` command.
 
 
 ## Structure of the project
