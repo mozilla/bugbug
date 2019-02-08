@@ -24,6 +24,8 @@ BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
 
 Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date'])
 
+author_experience = {}
+
 
 def get_commits():
     return db.read(COMMITS_DB)
@@ -51,6 +53,7 @@ def _transform(commit):
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
+        'author_experience': author_experience[commit]
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -113,6 +116,17 @@ def hg_log(repo_dir):
 def download_commits(repo_dir):
     commits = hg_log(repo_dir)
     commits_num = len(commits)
+
+    commits_by_author = {}
+
+    global author_experience
+    for commit in commits:
+        if commit.author not in commits_by_author:
+            commits_by_author[commit.author] = 0
+        else:
+            commits_by_author[commit.author] += 1
+
+        author_experience[commit] = commits_by_author[commit.author]
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
