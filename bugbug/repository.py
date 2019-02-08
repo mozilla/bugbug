@@ -89,7 +89,7 @@ def hg_log(repo_dir):
 
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0'
 
-    args = hglib.util.cmdbuilder(b'log', template=template)
+    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True)
     x = hg.rawcommand(args)
     out = x.split(b'\x00')[:-1]
 
