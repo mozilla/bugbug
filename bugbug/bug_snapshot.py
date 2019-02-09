@@ -235,9 +235,9 @@ def rollback(bug, when):
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
                     if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
-                        print(f'{field} is not in bug')
+                        print(f'{field} is not in bug {bug["id"]}')
                     else:
-                        assert False, f'{field} is not in bug'
+                        assert False, f'{field} is not in bug {bug["id"]}'
 
             if field in bug and isinstance(bug[field], list):
                 if change['added']:
