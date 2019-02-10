@@ -19,7 +19,7 @@ from bugbug import db
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'no_of_backouts'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
 
 author_experience = {}
 
@@ -41,7 +41,7 @@ def _transform(commit):
         'desc': desc,
         'date': str(commit.date),
         'bug_id': commit.bug.decode('utf-8'),
-        'no_of_backouts': commit.no_of_backouts,
+        'ever_backedout': commit.ever_backedout,
         'added': 0,
         'deleted': 0,
         'files_modified_num': 0,
@@ -93,16 +93,16 @@ def hg_log(repo_dir):
     for rev in hglib.util.grouper(template.count('\\0'), out):
         posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
-        backout_count = 0
+        backed_out = False
         if rev[5] != b'':
-            backout_count = 1
+            backed_out = True
         revs.append(Commit(
             node=rev[0],
             author=rev[1],
             desc=rev[2],
             date=dt,
             bug=rev[4],
-            no_of_backouts=backout_count,
+            ever_backedout=backed_out,
         ))
 
     hg.close()
