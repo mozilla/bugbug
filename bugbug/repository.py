@@ -48,6 +48,7 @@ def _transform(commit):
         'types': set(),
         'author_experience': author_experience[commit]
     }
+
     patch = HG.export(revs=[commit.node], git=True)
     patch_data = Patch.parse_patch(patch.decode('utf-8', 'ignore'), skip_comments=False, add_lines_for_new=True)
     for path, stats in patch_data.items():
