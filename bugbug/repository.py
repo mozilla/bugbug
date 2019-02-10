@@ -22,6 +22,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug'])
 
 author_experience = {}
+author_experience_90_days = {}
 
 
 def get_commits():
@@ -45,7 +46,8 @@ def _transform(commit):
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
-        'author_experience': author_experience[commit]
+        'author_experience': author_experience[commit],
+        'author_experience_90_days': author_experience_90_days[commit],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -111,15 +113,31 @@ def download_commits(repo_dir):
     commits_num = len(commits)
 
     commits_by_author = {}
+    commits_by_author_90_days = {}
 
     global author_experience
-    for commit in commits:
+    global author_experience_90_days
+
+    for ind, commit in enumerate(commits):
         if commit.author not in commits_by_author:
             commits_by_author[commit.author] = 0
         else:
             commits_by_author[commit.author] += 1
 
         author_experience[commit] = commits_by_author[commit.author]
+
+        commits_by_author_90_days[commit.author] = 0
+        for prev_commit in commits[ind + 1:]:
+            if commit.author == prev_commit.author:
+                res = commit.date - prev_commit.date
+                if hasattr(res, 'months') and res.months <= 3:
+                    commits_by_author_90_days[commit.author] += 1
+                elif hasattr(res, 'days') and res.days <= 90:
+                    commits_by_author_90_days[commit.author] += 1
+                else:
+                    break
+
+        author_experience_90_days[commit] = commits_by_author_90_days[commit.author]
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
