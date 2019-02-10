@@ -82,7 +82,7 @@ def parse_flag_change(change):
     return name, status, requestee
 
 
-def rollback(bug, when):
+def rollback(bug, when, verbose=True):
     newest_product = bug['product']
 
     change_to_return = None
@@ -235,7 +235,8 @@ def rollback(bug, when):
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
                     if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
-                        print(f'{field} is not in bug {bug["id"]}')
+                        if verbose:
+                            print(f'{field} is not in bug {bug["id"]}')
                     else:
                         assert False, f'{field} is not in bug {bug["id"]}'
 
@@ -308,4 +309,4 @@ if __name__ == '__main__':
     for i, bug in enumerate(bugzilla.get_bugs()):
         print(bug['id'])
         print(i)
-        rollback(bug, None)
+        rollback(bug, None, False)
