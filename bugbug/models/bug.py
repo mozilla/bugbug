@@ -55,10 +55,6 @@ class BugModel(Model):
 
                 ('comments', self.text_vectorizer(stop_words='english', min_df=0.001), 'comments'),
 
-                ('first_comment', self.text_vectorizer(), 'first_comment'),
-
-                ('comments', self.text_vectorizer(), 'comments'),
-
             ])),
         ])
 
