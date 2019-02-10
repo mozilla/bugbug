@@ -287,7 +287,7 @@ def rollback(bug, when, verbose=True):
                 bug[field] = old_value
 
     # If the first comment is hidden.
-    if dateutil.parser.parse(bug['comments'][0]['creation_time']) > rollback_date:
+    if bug['comments'][0]['count'] != 0:
         bug['comments'].insert(0, {
             'id': 0,
             'text': '',
