@@ -6,10 +6,7 @@
 import numpy as np
 import shap
 from imblearn.metrics import classification_report_imbalanced
-from imblearn.over_sampling import BorderlineSMOTE
-from imblearn.over_sampling import RandomOverSampler
 from imblearn.pipeline import make_pipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -27,9 +24,6 @@ class Model():
         else:
             self.text_vectorizer = TfidfVectorizer
 
-        self.undersampling_enabled = False
-        self.oversampling_smote_enabled = True
-        self.oversampling_random_enabled = False
         self.cross_validation_enabled = True
 
     def get_feature_names(self):
@@ -75,39 +69,25 @@ class Model():
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
-        pipeline = None
-
-        if self.undersampling_enabled:
-            # Under-sample the majority classes, as the datasets are imbalanced.
-            X_train, y_train = RandomUnderSampler(random_state=0).fit_sample(X_train, y_train)
-        elif self.oversampling_smote_enabled:
-            smote_sampler = BorderlineSMOTE(random_state=0)
-            pipeline = make_pipeline(smote_sampler, self.clf)
-        elif self.oversampling_random_enabled:
-            random_sampler = RandomOverSampler(random_state=0)
-            pipeline = make_pipeline(random_sampler, self.clf)
-
-        print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
-        print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
+        pipeline = make_pipeline(self.sampler, self.clf)
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ['accuracy', 'precision', 'recall']
-            if self.undersampling_enabled:
-                scores = cross_validate(self.clf, X_train, y_train, scoring=scorings, cv=5)
-            elif self.oversampling_smote_enabled:
-                scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
-            elif self.oversampling_random_enabled:
-                scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
+            scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
             print('Cross Validation scores:')
             for scoring in scorings:
                 score = scores[f'test_{scoring}']
                 print(f'{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})')
 
-        # Evaluate results on the test set.
+        # Training on the resampled dataset
+        X_train, y_train = self.sampler.fit_resample(X_train, y_train)
+        print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
+        print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
         self.clf.fit(X_train, y_train)
 
+        # Evaluate results on the test set.
         feature_names = self.get_feature_names()
         if len(feature_names):
             explainer = shap.TreeExplainer(self.clf)

@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.under_sampling import InstanceHardnessThreshold
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -58,12 +59,13 @@ class TrackingModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(stop_words='english'), 'title'),
+                ('title', self.text_vectorizer(stop_words='english', min_df=0.01), 'title'),
 
-                ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+                ('comments', self.text_vectorizer(stop_words='english', min_df=0.01), 'comments'),
             ])),
         ])
 
+        self.sampler = InstanceHardnessThreshold(random_state=0)
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 

@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -50,12 +51,13 @@ class BugModel(Model):
 
                 ('title', self.text_vectorizer(stop_words='english'), 'title'),
 
-                ('first_comment', self.text_vectorizer(stop_words='english'), 'first_comment'),
+                ('first_comment', self.text_vectorizer(stop_words='english', min_df=0.001), 'first_comment'),
 
-                ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+                ('comments', self.text_vectorizer(stop_words='english', min_df=0.001), 'comments'),
             ])),
         ])
 
+        self.sampler = BorderlineSMOTE(random_state=0)
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 
