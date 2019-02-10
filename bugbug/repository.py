@@ -19,7 +19,7 @@ from bugbug import db
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'no_of_backouts'])
 
 author_experience = {}
 
@@ -41,13 +41,13 @@ def _transform(commit):
         'desc': desc,
         'date': str(commit.date),
         'bug_id': commit.bug.decode('utf-8'),
+        'no_of_backouts': commit.no_of_backouts,
         'added': 0,
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
         'author_experience': author_experience[commit]
     }
-
     patch = HG.export(revs=[commit.node], git=True)
     patch_data = Patch.parse_patch(patch.decode('utf-8', 'ignore'), skip_comments=False, add_lines_for_new=True)
     for path, stats in patch_data.items():
@@ -82,7 +82,7 @@ def _transform(commit):
 def hg_log(repo_dir):
     hg = hglib.open(repo_dir)
 
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True)
     x = hg.rawcommand(args)
@@ -92,13 +92,16 @@ def hg_log(repo_dir):
     for rev in hglib.util.grouper(template.count('\\0'), out):
         posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
-
+        backout_count = 0
+        if rev[5] != b'':
+            backout_count = 1
         revs.append(Commit(
             node=rev[0],
             author=rev[1],
             desc=rev[2],
             date=dt,
             bug=rev[4],
+            no_of_backouts=backout_count,
         ))
 
     hg.close()
