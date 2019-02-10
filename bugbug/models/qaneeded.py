@@ -44,9 +44,9 @@ class QANeededModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(stop_words='english'), 'title'),
+                ('title', self.text_vectorizer(), 'title'),
 
-                ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
+                ('comments', self.text_vectorizer(), 'comments'),
             ])),
         ])
 

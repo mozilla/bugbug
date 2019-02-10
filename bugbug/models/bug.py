@@ -49,11 +49,16 @@ class BugModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(stop_words='english'), 'title'),
+                ('title', self.text_vectorizer(), 'title'),
 
                 ('first_comment', self.text_vectorizer(stop_words='english', min_df=0.001), 'first_comment'),
 
                 ('comments', self.text_vectorizer(stop_words='english', min_df=0.001), 'comments'),
+
+                ('first_comment', self.text_vectorizer(), 'first_comment'),
+
+                ('comments', self.text_vectorizer(), 'comments'),
+
             ])),
         ])
 

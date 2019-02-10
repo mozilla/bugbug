@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import multiprocessing
 import os
-import re
 from collections import namedtuple
 from datetime import datetime
 
@@ -20,9 +19,9 @@ from bugbug import db
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
 
-BUG_PATTERN = re.compile('[\t ]*[Bb][Uu][Gg][\t ]*([0-9]+)')
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug'])
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date'])
+author_experience = {}
 
 
 def get_commits():
@@ -37,20 +36,16 @@ def _init(repo_dir):
 def _transform(commit):
     desc = commit.desc.decode('utf-8')
 
-    bug_id = None
-    bug_id_match = re.search(BUG_PATTERN, desc)
-    if bug_id_match:
-        bug_id = int(bug_id_match.group(1))
-
     obj = {
         'author': commit.author.decode('utf-8'),
         'desc': desc,
         'date': str(commit.date),
-        'bug_id': bug_id,
+        'bug_id': commit.bug.decode('utf-8'),
         'added': 0,
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
+        'author_experience': author_experience[commit]
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -87,9 +82,9 @@ def _transform(commit):
 def hg_log(repo_dir):
     hg = hglib.open(repo_dir)
 
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0'
 
-    args = hglib.util.cmdbuilder(b'log', template=template)
+    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True)
     x = hg.rawcommand(args)
     out = x.split(b'\x00')[:-1]
 
@@ -103,6 +98,7 @@ def hg_log(repo_dir):
             author=rev[1],
             desc=rev[2],
             date=dt,
+            bug=rev[4],
         ))
 
     hg.close()
@@ -113,6 +109,17 @@ def hg_log(repo_dir):
 def download_commits(repo_dir):
     commits = hg_log(repo_dir)
     commits_num = len(commits)
+
+    commits_by_author = {}
+
+    global author_experience
+    for commit in commits:
+        if commit.author not in commits_by_author:
+            commits_by_author[commit.author] = 0
+        else:
+            commits_by_author[commit.author] += 1
+
+        author_experience[commit] = commits_by_author[commit.author]
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 

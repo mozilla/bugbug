@@ -82,7 +82,7 @@ def parse_flag_change(change):
     return name, status, requestee
 
 
-def rollback(bug, when):
+def rollback(bug, when, verbose=True):
     newest_product = bug['product']
 
     change_to_return = None
@@ -234,10 +234,11 @@ def rollback(bug, when):
             if change['added'] != '---':
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                    if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
-                        print(f'{field} is not in bug')
+                    if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
+                        if verbose:
+                            print(f'{field} is not in bug {bug["id"]}')
                     else:
-                        assert False, f'{field} is not in bug'
+                        assert False, f'{field} is not in bug {bug["id"]}'
 
             if field in bug and isinstance(bug[field], list):
                 if change['added']:
@@ -285,8 +286,19 @@ def rollback(bug, when):
 
                 bug[field] = old_value
 
+    # If the first comment is hidden.
+    if bug['comments'][0]['count'] != 0:
+        bug['comments'].insert(0, {
+            'id': 0,
+            'text': '',
+            'author': bug['creator'],
+            'creation_time': bug['creation_time'],
+        })
+
     bug['comments'] = [c for c in bug['comments'] if dateutil.parser.parse(c['creation_time']) <= rollback_date]
     bug['attachments'] = [a for a in bug['attachments'] if dateutil.parser.parse(a['creation_time']) <= rollback_date]
+
+    assert len(bug['comments']) >= 1
 
     return bug
 
@@ -297,4 +309,4 @@ if __name__ == '__main__':
     for i, bug in enumerate(bugzilla.get_bugs()):
         print(bug['id'])
         print(i)
-        rollback(bug, None)
+        rollback(bug, None, False)

@@ -7,6 +7,7 @@ from collections import Counter
 
 import xgboost
 from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features
@@ -43,17 +44,13 @@ class ComponentModel(Model):
         ]
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True)),
             ('union', ColumnTransformer([
-                # TODO: Re-enable when we'll support bug snapshotting (#5).
-                # ('data', DictVectorizer(), 'data'),
+                ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(stop_words='english'), 'title'),
+                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
 
-                # TODO: Re-enable when we'll support bug snapshotting (#5).
-                # ('comments', self.text_vectorizer(stop_words='english'), 'comments'),
-
-                ('first_comment', self.text_vectorizer(stop_words='english'), 'first_comment'),
+                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
             ])),
         ])
 

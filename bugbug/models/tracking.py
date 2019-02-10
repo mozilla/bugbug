@@ -62,6 +62,11 @@ class TrackingModel(Model):
                 ('title', self.text_vectorizer(stop_words='english', min_df=0.01), 'title'),
 
                 ('comments', self.text_vectorizer(stop_words='english', min_df=0.01), 'comments'),
+
+                ('title', self.text_vectorizer(), 'title'),
+
+                ('comments', self.text_vectorizer(), 'comments'),
+
             ])),
         ])
 
