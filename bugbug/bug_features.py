@@ -230,6 +230,11 @@ class commit_author_experience(object):
         return sum(res) / len(res)
 
 
+class commit_no_of_backouts(object):
+    def __call__(self, bug, **kwargs):
+        return sum(1 for commit in bug['commits'] if commit['ever_backedout'])
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
