@@ -92,6 +92,7 @@ def hg_log(repo_dir):
     revs = []
     for rev in hglib.util.grouper(template.count('\\0'), out):
         posixtime = float(rev[3].split(b'.', 1)[0])
+        
         dt = datetime.fromtimestamp(posixtime)
         revs.append(Commit(
             node=rev[0],
