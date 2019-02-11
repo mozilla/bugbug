@@ -93,16 +93,13 @@ def hg_log(repo_dir):
     for rev in hglib.util.grouper(template.count('\\0'), out):
         posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
-        backed_out = False
-        if rev[5] != b'':
-            backed_out = True
         revs.append(Commit(
             node=rev[0],
             author=rev[1],
             desc=rev[2],
             date=dt,
             bug=rev[4],
-            ever_backedout=backed_out,
+            ever_backedout=(rev[5] != b''),
         ))
 
     hg.close()
