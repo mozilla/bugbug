@@ -13,4 +13,4 @@ pandas==0.24.1
 parsepatch==0.1.3
 gensim==3.7.1
 keras==2.2.4
-tqdm==4.31.0
+tqdm==4.31.1
