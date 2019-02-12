@@ -120,24 +120,23 @@ def download_commits(repo_dir):
 
     for ind, commit in enumerate(commits):
         if commit.author not in commits_by_author:
-            commits_by_author[commit.author] = 0
+            commits_by_author[commit.author] = [commit]
         else:
-            commits_by_author[commit.author] += 1
+            commits_by_author[commit.author].append(commit)
 
-        author_experience[commit] = commits_by_author[commit.author]
+        author_experience[commit] = len(commits_by_author[commit.author]) - 1
+        
+    for commit in commits:
+        cut = 0
+        for prev_commit in commits_by_author[commit.author]:
+            if (commit.date - prev_commit.date).days <= 90 :
+                cut += 1
+            else:
+                break
+        
+        commits_by_author[commit.author] = commits_by_author[commit.author][1:]
 
-        commits_by_author_90_days[commit.author] = 0
-        for prev_commit in commits[ind + 1:]:
-            if commit.author == prev_commit.author:
-                res = commit.date - prev_commit.date
-                if hasattr(res, 'months') and res.months <= 3:
-                    commits_by_author_90_days[commit.author] += 1
-                elif hasattr(res, 'days') and res.days <= 90:
-                    commits_by_author_90_days[commit.author] += 1
-                else:
-                    break
-
-        author_experience_90_days[commit] = commits_by_author_90_days[commit.author]
+        author_experience_90_days[commit] = cut
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
