@@ -25,6 +25,7 @@ class Model():
             self.text_vectorizer = TfidfVectorizer
 
         self.cross_validation_enabled = True
+        self.sampler = None
 
     def get_feature_names(self):
         return []
@@ -69,7 +70,10 @@ class Model():
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
-        pipeline = make_pipeline(self.sampler, self.clf)
+        if self.sampler is not None:
+            pipeline = make_pipeline(self.sampler, self.clf)
+        else:
+            pipeline = make_pipeline(self.clf)
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
@@ -81,8 +85,9 @@ class Model():
                 score = scores[f'test_{scoring}']
                 print(f'{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})')
 
-        # Training on the resampled dataset
-        X_train, y_train = self.sampler.fit_resample(X_train, y_train)
+        # Training on the resampled dataset if sampler is provided.
+        if self.sampler is not None:
+            X_train, y_train = self.sampler.fit_resample(X_train, y_train)
         print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
         print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
         self.clf.fit(X_train, y_train)
