@@ -5,8 +5,10 @@
 
 import argparse
 import concurrent.futures
+import json
 import multiprocessing
 import os
+import subprocess
 from collections import namedtuple
 from datetime import datetime
 
@@ -18,6 +20,8 @@ from bugbug import db
 
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
+
+COMPONENTS = {}
 
 Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
 
@@ -46,6 +50,7 @@ def _transform(commit):
         'deleted': 0,
         'files_modified_num': 0,
         'types': set(),
+        'components': list(),
         'author_experience': author_experience[commit]
     }
 
@@ -76,6 +81,8 @@ def _transform(commit):
 
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
+
+    obj['components'] = list(set('::'.join(COMPONENTS[fl]) for fl in patch_data.keys() if COMPONENTS.get(fl)))
 
     return obj
 
@@ -122,6 +129,12 @@ def download_commits(repo_dir):
             commits_by_author[commit.author] += 1
 
         author_experience[commit] = commits_by_author[commit.author]
+
+    subprocess.run([os.path.join(repo_dir, 'mach'), 'file-info', 'bugzilla-automation', 'component_data'], cwd=repo_dir, check=True)
+
+    global COMPONENTS
+    with open(os.path.join(repo_dir, 'component_data', 'components.json')) as cf:
+        COMPONENTS = json.load(cf)
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
