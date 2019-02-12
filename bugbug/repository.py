@@ -82,8 +82,7 @@ def _transform(commit):
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
 
-    components_touched = ['::'.join(COMPONENTS[fl]) for fl in patch_data.keys() if COMPONENTS.get(fl)]
-    obj['components'] = list(set(components_touched))
+    obj['components'] = list(set('::'.join(COMPONENTS[fl]) for fl in patch_data.keys() if COMPONENTS.get(fl)))
 
     return obj
 
