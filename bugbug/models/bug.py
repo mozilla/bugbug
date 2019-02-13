@@ -54,7 +54,6 @@ class BugModel(Model):
                 ('first_comment', self.text_vectorizer(), 'first_comment'),
 
                 ('comments', self.text_vectorizer(), 'comments'),
-
             ])),
         ])
 

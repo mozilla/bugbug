@@ -62,7 +62,6 @@ class TrackingModel(Model):
                 ('title', self.text_vectorizer(), 'title'),
 
                 ('comments', self.text_vectorizer(), 'comments'),
-
             ])),
         ])
 
