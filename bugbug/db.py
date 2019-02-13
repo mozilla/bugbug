@@ -7,6 +7,7 @@ import json
 import lzma
 import os
 import shutil
+from datetime import datetime
 from urllib.request import urlretrieve
 
 DATABASES = {}
@@ -32,6 +33,10 @@ def download():
         # Only download if the xz file is not there yet.
         if not os.path.exists(xz_path):
             urlretrieve(DATABASES[path], xz_path)
+
+            ver_path = f'{path}_version.txt'
+            with open(ver_path, 'w') as vf:
+                vf.write(str(datetime.now()))
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
