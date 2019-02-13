@@ -7,7 +7,6 @@ import numpy as np
 import shap
 from imblearn.metrics import classification_report_imbalanced
 from imblearn.pipeline import make_pipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -26,7 +25,7 @@ class Model():
             self.text_vectorizer = TfidfVectorizer
 
         self.cross_validation_enabled = True
-        self.sampler = RandomUnderSampler(random_state=0) if self.undersampling_enabled else self.sampler
+        self.sampler = None
 
     def get_feature_names(self):
         return []
@@ -71,8 +70,10 @@ class Model():
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
-
-        pipeline = make_pipeline(self.sampler, self.clf)
+        if self.sampler is not None:
+            pipeline = make_pipeline(self.sampler, self.clf)
+        else:
+            pipeline = self.clf
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:

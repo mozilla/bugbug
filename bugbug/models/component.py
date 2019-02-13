@@ -17,8 +17,9 @@ from bugbug.model import Model
 
 class ComponentModel(Model):
     def __init__(self, lemmatization=False):
-        self.undersampling_enabled = True
         Model.__init__(self, lemmatization)
+
+        self.cross_validation_enabled = False
 
         feature_extractors = [
             bug_features.has_str(),
@@ -52,7 +53,6 @@ class ComponentModel(Model):
             ])),
         ])
 
-        self.cross_validation_enabled = False
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 

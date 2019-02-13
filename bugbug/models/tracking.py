@@ -17,9 +17,9 @@ from bugbug.model import Model
 
 class TrackingModel(Model):
     def __init__(self, lemmatization=False):
-        self.undersampling_enabled = False
-        self.sampler = InstanceHardnessThreshold(random_state=0)
         Model.__init__(self, lemmatization)
+
+        self.sampler = InstanceHardnessThreshold(random_state=0)
 
         feature_extractors = [
             bug_features.has_str(),
