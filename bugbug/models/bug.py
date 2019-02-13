@@ -86,6 +86,14 @@ class BugModel(Model):
 
                 classes[int(bug_id)] = 1 if category == 'regression' else 0
 
+        for bug_id, category in labels.get_labels('defect_feature_task'):
+            assert category in ['d', 'f', 't']
+            if kind == 'bug':
+                classes[int(bug_id)] = 1 if category == 'd' else 0
+            elif kind == 'regression':
+                if category in ['f', 't']:
+                    classes[int(bug_id)] = 0
+
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         bug_ids = set()
         for bug in bugzilla.get_bugs():
