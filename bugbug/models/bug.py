@@ -17,6 +17,8 @@ from bugbug.model import Model
 
 class BugModel(Model):
     def __init__(self, lemmatization=False):
+        self.undersampling_enabled = False
+        self.sampler = BorderlineSMOTE(random_state=0)
         Model.__init__(self, lemmatization)
 
         feature_extractors = [
@@ -57,7 +59,6 @@ class BugModel(Model):
             ])),
         ])
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 

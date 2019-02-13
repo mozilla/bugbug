@@ -15,6 +15,7 @@ from bugbug.model import Model
 
 class DevDocNeededModel(Model):
     def __init__(self, lemmatization=False):
+        self.undersampling_enabled = True
         Model.__init__(self, lemmatization)
 
         feature_extractors = [
