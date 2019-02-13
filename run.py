@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded'], default='bug')
+    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task'], default='bug')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
     args = parser.parse_args()
@@ -29,6 +29,9 @@ if __name__ == '__main__':
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
         model_class = BugModel
+    elif args.goal == 'defect_feature_task':
+        from bugbug.models.defect_feature_task import DefectFeatureTaskModel
+        model_class = DefectFeatureTaskModel
     elif args.goal == 'regression':
         from bugbug.models.regression import RegressionModel
         model_class = RegressionModel
