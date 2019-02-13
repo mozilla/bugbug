@@ -19,7 +19,6 @@ class ComponentModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
 
-        self.undersampling_enabled = False
         self.cross_validation_enabled = False
 
         feature_extractors = [

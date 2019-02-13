@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -17,6 +18,8 @@ from bugbug.model import Model
 class BugModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
+
+        self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
             bug_features.has_str(),
