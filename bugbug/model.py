@@ -86,7 +86,8 @@ class Model():
                 print(f'{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})')
 
         # Training on the resampled dataset if sampler is provided.
-        X_train, y_train = self.sampler.fit_resample(X_train, y_train)
+        if self.sampler is not None:
+            X_train, y_train = self.sampler.fit_resample(X_train, y_train)
         print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
         print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
         self.clf.fit(X_train, y_train)
