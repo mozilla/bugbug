@@ -61,9 +61,9 @@ class TrackingModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(), 'title'),
+                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
 
-                ('comments', self.text_vectorizer(), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
             ])),
         ])
 
