@@ -73,7 +73,7 @@ class Model():
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
-            pipeline = make_pipeline(self.clf)
+            pipeline = self.clf
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:

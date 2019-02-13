@@ -51,9 +51,9 @@ class BugModel(Model):
 
                 ('title', self.text_vectorizer(), 'title'),
 
-                ('first_comment', self.text_vectorizer(min_df=0.001), 'first_comment'),
+                ('first_comment', self.text_vectorizer(), 'first_comment'),
 
-                ('comments', self.text_vectorizer(min_df=0.001), 'comments'),
+                ('comments', self.text_vectorizer(), 'comments'),
 
             ])),
         ])
