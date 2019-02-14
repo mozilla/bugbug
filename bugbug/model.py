@@ -77,7 +77,10 @@ class Model():
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
-            scorings = ['accuracy', 'precision', 'recall']
+            scorings = ['accuracy']
+            if len(class_names) == 2:
+                scorings += ['precision', 'recall']
+
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
             print('Cross Validation scores:')
