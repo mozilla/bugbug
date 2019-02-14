@@ -107,7 +107,7 @@ class Model():
 
             important_features = self.get_important_features(importance_cutoff, shap_values)
 
-            print(f'\nTop {len(important_features)} Features :')
+            print(f'\nTop {len(important_features)} Features:')
             for i, [importance, index, is_positive] in enumerate(important_features):
                 print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 
