@@ -11,9 +11,9 @@ import os
 import subprocess
 from collections import namedtuple
 from datetime import datetime
-from datetime import timedelta
 
 import hglib
+from dateutil import relativedelta
 from parsepatch.patch import Patch
 from tqdm import tqdm
 
@@ -173,6 +173,6 @@ if __name__ == '__main__':
     parser.add_argument('repository_dir', help='Path to the repository', action='store')
     args = parser.parse_args()
 
-    two_years_and_six_months_ago = datetime.utcnow() - timedelta(547)
+    two_years_and_six_months_ago = datetime.utcnow() - relativedelta(years=2, months=6)
 
     download_commits(args.repository_dir, two_years_and_six_months_ago)
