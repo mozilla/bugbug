@@ -9,6 +9,7 @@ import json
 import multiprocessing
 import os
 import subprocess
+from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
 
@@ -27,6 +28,7 @@ COMPONENTS = {}
 Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
 
 author_experience = {}
+author_experience_90_days = {}
 
 
 def get_commits():
@@ -52,7 +54,8 @@ def _transform(commit):
         'files_modified_num': 0,
         'types': set(),
         'components': list(),
-        'author_experience': author_experience[commit]
+        'author_experience': author_experience[commit],
+        'author_experience_90_days': author_experience_90_days[commit],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -126,16 +129,32 @@ def download_commits(repo_dir, date_from):
 
     hg.close()
 
-    commits_by_author = {}
+    # Total previous number of commits by the author.
+    total_commits_by_author = defaultdict(int)
+    # Previous commits by the author, in a 90 days window.
+    commits_by_author = defaultdict(list)
 
     global author_experience
+    global author_experience_90_days
     for commit in commits:
-        if commit.author not in commits_by_author:
-            commits_by_author[commit.author] = 0
-        else:
-            commits_by_author[commit.author] += 1
+        author_experience[commit] = total_commits_by_author[commit.author]
+        total_commits_by_author[commit.author] += 1
 
-        author_experience[commit] = commits_by_author[commit.author]
+        # Keep only the previous commits from a window of 90 days in the commits_by_author map.
+        cut = None
+
+        for i, prev_commit in enumerate(commits_by_author[commit.author]):
+            if (commit.date - prev_commit.date).days <= 90:
+                break
+
+            cut = i
+
+        if cut is not None:
+            commits_by_author[commit.author] = commits_by_author[commit.author][cut + 1:]
+
+        author_experience_90_days[commit] = len(commits_by_author[commit.author])
+
+        commits_by_author[commit.author].append(commit)
 
     subprocess.run([os.path.join(repo_dir, 'mach'), 'file-info', 'bugzilla-automation', 'component_data'], cwd=repo_dir, check=True)
 
