@@ -11,8 +11,6 @@ class DefectFeatureTaskModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.cross_validation_enabled = False
-
     def get_labels(self):
         classes = self.get_bugbug_labels('bug')
 
