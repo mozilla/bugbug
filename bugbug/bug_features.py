@@ -206,27 +206,27 @@ class ever_affected(object):
 
 class commit_added(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['added'] for commit in bug['commits'])
+        return sum(commit['added'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_deleted(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['deleted'] for commit in bug['commits'])
+        return sum(commit['deleted'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_types(object):
     def __call__(self, bug, **kwargs):
-        return sum((commit['types'] for commit in bug['commits']), [])
+        return sum((commit['types'] for commit in bug['commits'] if not commit['ever_backedout']), [])
 
 
 class commit_files_modified_num(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['files_modified_num'] for commit in bug['commits'])
+        return sum(commit['files_modified_num'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_author_experience(object):
     def __call__(self, bug, **kwargs):
-        res = [commit['author_experience'] for commit in bug['commits']]
+        res = [commit['author_experience'] for commit in bug['commits'] if not commit['ever_backedout']]
         return sum(res) / len(res)
 
 
