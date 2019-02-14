@@ -228,27 +228,27 @@ class affected_then_unaffected(object):
 
 class commit_added(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['added'] for commit in bug['commits'])
+        return sum(commit['added'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_deleted(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['deleted'] for commit in bug['commits'])
+        return sum(commit['deleted'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_types(object):
     def __call__(self, bug, **kwargs):
-        return sum((commit['types'] for commit in bug['commits']), [])
+        return sum((commit['types'] for commit in bug['commits'] if not commit['ever_backedout']), [])
 
 
 class commit_files_modified_num(object):
     def __call__(self, bug, **kwargs):
-        return sum(commit['files_modified_num'] for commit in bug['commits'])
+        return sum(commit['files_modified_num'] for commit in bug['commits'] if not commit['ever_backedout'])
 
 
 class commit_author_experience(object):
     def __call__(self, bug, **kwargs):
-        res = [commit['author_experience'] for commit in bug['commits']]
+        res = [commit['author_experience'] for commit in bug['commits'] if not commit['ever_backedout']]
         return sum(res) / len(res)
 
 
@@ -259,12 +259,12 @@ class commit_no_of_backouts(object):
 
 class components_touched(object):
     def __call__(self, bug, **kwargs):
-        return list(set(component for commit in bug['commits'] for component in commit['components']))
+        return list(set(component for commit in bug['commits'] for component in commit['components'] if not commit['ever_backedout']))
 
 
 class components_touched_num(object):
     def __call__(self, bug, **kwargs):
-        return len(set(component for commit in bug['commits'] for component in commit['components']))
+        return len(set(component for commit in bug['commits'] for component in commit['components'] if not commit['ever_backedout']))
 
 
 def cleanup_url(text):
