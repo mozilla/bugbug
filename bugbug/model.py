@@ -91,8 +91,10 @@ class Model():
         # Training on the resampled dataset if sampler is provided.
         if self.sampler is not None:
             X_train, y_train = self.sampler.fit_resample(X_train, y_train)
+
         print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
         print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
+
         self.clf.fit(X_train, y_train)
 
         # Evaluate results on the test set.
