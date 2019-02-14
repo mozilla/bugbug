@@ -101,6 +101,10 @@ class Model():
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
+            # TODO: Actually implement feature importance visualization for multiclass problems.
+            if isinstance(shap_values, list):
+                shap_values = np.sum(np.abs(shap_values), axis=0)
+
             important_features = self.get_important_features(importance_cutoff, shap_values)
 
             print(f'\nTop {len(important_features)} Features :')
