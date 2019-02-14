@@ -5,15 +5,14 @@
 
 import argparse
 import concurrent.futures
-import json
 import multiprocessing
 import os
-import subprocess
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
 
 import hglib
+import requests
 from dateutil.relativedelta import relativedelta
 from parsepatch.patch import Patch
 from tqdm import tqdm
@@ -156,11 +155,10 @@ def download_commits(repo_dir, date_from):
 
         commits_by_author[commit.author].append(commit)
 
-    subprocess.run([os.path.join(repo_dir, 'mach'), 'file-info', 'bugzilla-automation', 'component_data'], cwd=repo_dir, check=True)
-
     global COMPONENTS
-    with open(os.path.join(repo_dir, 'component_data', 'components.json')) as cf:
-        COMPONENTS = json.load(cf)
+    r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
+    r.raise_for_status()
+    COMPONENTS = r.json()
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
