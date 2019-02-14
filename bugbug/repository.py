@@ -13,7 +13,7 @@ from collections import namedtuple
 from datetime import datetime
 
 import hglib
-from dateutil import relativedelta
+from dateutil.relativedelta import relativedelta
 from parsepatch.patch import Patch
 from tqdm import tqdm
 
