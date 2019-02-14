@@ -259,12 +259,12 @@ class commit_no_of_backouts(object):
 
 class components_touched(object):
     def __call__(self, bug, **kwargs):
-        return list(set(component for commit in bug['commits'] for component in commit['components']))
+        return list(set(component for commit in bug['commits'] for component in commit['components'] if not commit['ever_backedout']))
 
 
 class components_touched_num(object):
     def __call__(self, bug, **kwargs):
-        return len(set(component for commit in bug['commits'] for component in commit['components']))
+        return len(set(component for commit in bug['commits'] for component in commit['components'] if not commit['ever_backedout']))
 
 
 def cleanup_url(text):
