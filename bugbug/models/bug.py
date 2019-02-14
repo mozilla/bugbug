@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -17,6 +18,8 @@ from bugbug.model import Model
 class BugModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
+
+        self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
             bug_features.has_str(),
@@ -35,6 +38,7 @@ class BugModel(Model):
             bug_features.title(),
             bug_features.blocked_bugs_number(),
             bug_features.ever_affected(),
+            bug_features.affected_then_unaffected(),
         ]
 
         cleanup_functions = [
@@ -48,11 +52,11 @@ class BugModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(), 'title'),
+                ('title', self.text_vectorizer(min_df=0.001), 'title'),
 
-                ('first_comment', self.text_vectorizer(), 'first_comment'),
+                ('first_comment', self.text_vectorizer(min_df=0.001), 'first_comment'),
 
-                ('comments', self.text_vectorizer(), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.001), 'comments'),
             ])),
         ])
 
@@ -81,6 +85,14 @@ class BugModel(Model):
                     continue
 
                 classes[int(bug_id)] = 1 if category == 'regression' else 0
+
+        for bug_id, category in labels.get_labels('defect_feature_task'):
+            assert category in ['d', 'f', 't']
+            if kind == 'bug':
+                classes[int(bug_id)] = 1 if category == 'd' else 0
+            elif kind == 'regression':
+                if category in ['f', 't']:
+                    classes[int(bug_id)] = 0
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         bug_ids = set()

@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.under_sampling import InstanceHardnessThreshold
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -17,6 +18,8 @@ from bugbug.model import Model
 class TrackingModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
+
+        self.sampler = InstanceHardnessThreshold(random_state=0)
 
         feature_extractors = [
             bug_features.has_str(),
@@ -58,9 +61,9 @@ class TrackingModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(), 'title'),
+                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
 
-                ('comments', self.text_vectorizer(), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
             ])),
         ])
 

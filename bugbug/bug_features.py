@@ -204,6 +204,28 @@ class ever_affected(object):
         return False
 
 
+class affected_then_unaffected(object):
+    def __call__(self, bug, **kwargs):
+        unaffected = []
+        affected = []
+        for key, value in bug.items():
+            version = None
+            if key.startswith('cf_status_firefox_esr'):
+                version = key[len('cf_status_firefox_esr'):]
+            elif key.startswith('cf_status_firefox'):
+                version = key[len('cf_status_firefox'):]
+
+            if version is None:
+                continue
+
+            if value == 'unaffected':
+                unaffected.append(version)
+            elif value in ['affected', 'fixed', 'wontfix', 'fix-optional', 'verified', 'disabled', 'verified disabled']:
+                affected.append(version)
+
+        return any(unaffected_ver < affected_ver for unaffected_ver in unaffected for affected_ver in affected)
+
+
 class commit_added(object):
     def __call__(self, bug, **kwargs):
         return sum(commit['added'] for commit in bug['commits'] if not commit['ever_backedout'])
@@ -233,6 +255,16 @@ class commit_author_experience(object):
 class commit_no_of_backouts(object):
     def __call__(self, bug, **kwargs):
         return sum(1 for commit in bug['commits'] if commit['ever_backedout'])
+
+
+class components_touched(object):
+    def __call__(self, bug, **kwargs):
+        return list(set(component for commit in bug['commits'] for component in commit['components']))
+
+
+class components_touched_num(object):
+    def __call__(self, bug, **kwargs):
+        return len(set(component for commit in bug['commits'] for component in commit['components']))
 
 
 def cleanup_url(text):
