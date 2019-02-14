@@ -11,6 +11,7 @@ import os
 import subprocess
 from collections import namedtuple
 from datetime import datetime
+from datetime import timedelta
 
 import hglib
 from parsepatch.patch import Patch
@@ -87,12 +88,10 @@ def _transform(commit):
     return obj
 
 
-def hg_log(repo_dir):
-    hg = hglib.open(repo_dir)
-
+def hg_log(hg, first_rev):
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0'
 
-    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True)
+    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
     x = hg.rawcommand(args)
     out = x.split(b'\x00')[:-1]
 
@@ -110,14 +109,22 @@ def hg_log(repo_dir):
             ever_backedout=(rev[5] != b''),
         ))
 
-    hg.close()
-
     return revs
 
 
-def download_commits(repo_dir):
-    commits = hg_log(repo_dir)
+def get_rev(hg, date):
+    return hg.log(date=date.strftime('%Y-%m-%d'), limit=1)[0].node.decode('utf-8')
+
+
+def download_commits(repo_dir, date_from):
+    hg = hglib.open(repo_dir)
+
+    first_rev = get_rev(hg, date_from)
+
+    commits = hg_log(hg, first_rev)
     commits_num = len(commits)
+
+    hg.close()
 
     commits_by_author = {}
 
@@ -166,4 +173,6 @@ if __name__ == '__main__':
     parser.add_argument('repository_dir', help='Path to the repository', action='store')
     args = parser.parse_args()
 
-    download_commits(args.repository_dir)
+    two_years_and_six_months_ago = datetime.utcnow() - timedelta(547)
+
+    download_commits(args.repository_dir, two_years_and_six_months_ago)
