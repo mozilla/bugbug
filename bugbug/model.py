@@ -28,7 +28,6 @@ class Model():
         self.sampler = None
 
         self.calculate_importance = True
-        self.calculate_classification_metrics = True
 
     def get_feature_names(self):
         return []
@@ -119,38 +118,38 @@ class Model():
             for i, [importance, index, is_positive] in enumerate(important_features):
                 print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 
-        if self.calculate_classification_metrics:
-            y_pred = self.clf.predict(X_test)
+        y_pred = self.clf.predict(X_test)
 
-            if y_test.ndim == 2:
-                y_test = np.argmax(y_test, axis=1)
+        if y_test.ndim == 2:
+            y_test = np.argmax(y_test, axis=1)
 
-            print(f'No confidence threshold - {len(y_test)} classified')
-            print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
-            print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+        print(f'No confidence threshold - {len(y_test)} classified')
+        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
-            # Evaluate results on the test set for some confidence thresholds.
-            for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
-                y_pred_probas = self.clf.predict_proba(X_test)
+        # Evaluate results on the test set for some confidence thresholds.
+        for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
+            y_pred_probas = self.clf.predict_proba(X_test)
 
-                y_test_filter = []
-                y_pred_filter = []
-                for i in range(0, len(y_test)):
-                    argmax = np.argmax(y_pred_probas[i])
-                    if y_pred_probas[i][argmax] < confidence_threshold:
-                        continue
+            y_test_filter = []
+            y_pred_filter = []
+            for i in range(0, len(y_test)):
+                argmax = np.argmax(y_pred_probas[i])
+                if y_pred_probas[i][argmax] < confidence_threshold:
+                    continue
 
-                    y_test_filter.append(y_test[i])
-                    y_pred_filter.append(argmax)
+                y_test_filter.append(y_test[i])
+                y_pred_filter.append(argmax)
 
-                try:
-                    y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
-                except AttributeError:
-                    pass
+            # TODO: Clean this up, each model should know how to encode/decode its labels.
+            try:
+                y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+            except AttributeError:
+                pass
 
-                print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
-                print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
-                print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
+            print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
+            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
+            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
 
         joblib.dump(self, self.__class__.__name__.lower())
 
