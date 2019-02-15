@@ -25,9 +25,10 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 COMPONENTS = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout', 'reviewers'])
 
 author_experience = {}
+reviewer_experience = {}
 author_experience_90_days = {}
 
 
@@ -56,6 +57,7 @@ def _transform(commit):
         'components': list(),
         'author_experience': author_experience[commit],
         'author_experience_90_days': author_experience_90_days[commit],
+        'reviewer_experience': reviewer_experience[commit],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -92,7 +94,7 @@ def _transform(commit):
 
 
 def hg_log(hg, first_rev):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{reviewers}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
     x = hg.rawcommand(args)
@@ -110,6 +112,7 @@ def hg_log(hg, first_rev):
             date=dt,
             bug=rev[4],
             ever_backedout=(rev[5] != b''),
+            reviewers=rev[6],
         ))
 
     return revs
@@ -131,14 +134,19 @@ def download_commits(repo_dir, date_from):
 
     # Total previous number of commits by the author.
     total_commits_by_author = defaultdict(int)
+    total_reviews_by_reviewer = defaultdict(int)
     # Previous commits by the author, in a 90 days window.
     commits_by_author = defaultdict(list)
 
     global author_experience
+    global reviewer_experience
     global author_experience_90_days
+
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
+        reviewer_experience[commit] = total_reviews_by_reviewer[commit.author]
         total_commits_by_author[commit.author] += 1
+        total_reviews_by_reviewer[commit.author] += 1
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
         cut = None
