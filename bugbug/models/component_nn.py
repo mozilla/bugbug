@@ -53,89 +53,9 @@ class PassthroughTransformer(BaseEstimator, TransformerMixin):
         return np.array([X.tolist()]).T
 
 
-class TriageModel(ComponentModel):
-    def __init__(self, *args, **kwargs):
-        super(TriageModel, self).__init__(*args, **kwargs)
-
-        self.short_desc_maxlen = 20
-        self.short_desc_vocab_size = 25000
-        self.short_desc_emb_sz = 300
-        self.long_desc_maxlen = 100
-        self.long_desc_vocab_size = 25000
-        self.long_desc_emb_sz = 300
-        self.cross_validation_enabled = False
-        self.calculate_importance = False
-        self.calculate_classification_metrics = True
-
-        feature_extractors = [
-            bug_features.bug_reporter(),
-            bug_features.platform(),
-            bug_features.op_sys()
-        ]
-
-        cleanup_functions = []
-
-        self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
-            ('categorical_extractor', CategoricalExtractor()),
-            ('union', StructuredColumnTransformer([
-                ('platform', PassthroughTransformer(), 'platform'),
-                ('op_sys', PassthroughTransformer(), 'op_sys'),
-                ('bug_reporter', PassthroughTransformer(), 'bug_reporter'),
-                ('title_sequence', KerasTextToSequences(
-                    self.short_desc_maxlen, self.short_desc_vocab_size), 'title'),
-                ('first_comment_sequence', KerasTextToSequences(
-                    self.long_desc_maxlen, self.long_desc_vocab_size), 'first_comment'),
-                ('title_char_tfidf', TfidfVectorizer(
-                    strip_accents='unicode',
-                    analyzer='char',
-                    stop_words='english',
-                    ngram_range=(2, 4),
-                    max_features=25000,
-                    sublinear_tf=True
-                ), 'title'),
-                ('title_word_tfidf', TfidfVectorizer(
-                    strip_accents='unicode',
-                    min_df=0.0001,
-                    max_df=0.1,
-                    analyzer='word',
-                    token_pattern=r'\w{1,}',
-                    stop_words='english',
-                    ngram_range=(2, 4),
-                    max_features=30000,
-                    sublinear_tf=True
-                ), 'title')
-            ])),
-        ])
-
-        kwargs = {
-            'short_desc_maxlen': self.short_desc_maxlen,
-            'short_desc_vocab_size': self.short_desc_vocab_size,
-            'short_desc_emb_sz': self.short_desc_emb_sz,
-            'long_desc_maxlen': self.long_desc_maxlen,
-            'long_desc_vocab_size': self.long_desc_vocab_size,
-            'long_desc_emb_sz': self.long_desc_emb_sz
-        }
-        self.clf = TriageClassifier(**kwargs)
-
-    def get_labels(self, *args, **kwargs):
-        labels = super(TriageModel, self).get_labels(*args, **kwargs)
-        labels = [{'bug_id': k, 'component': v} for k, v in labels.items()]
-        df = pd.DataFrame(labels)
-        df['component'] = df['component'].astype('category').cat.codes
-        return {row['bug_id']: row['component'] for _, row in df.iterrows()}
-
-    def get_feature_names(self):
-        return self.extraction_pipeline.named_steps['union'].named_transformers_.keys()
-
-    def calculate_labels(self, classes, bugs):
-        labels = super(TriageModel, self).calculate_labels(classes, bugs)
-        return to_categorical(labels)
-
-
-class TriageClassifier(KerasClassifier):
+class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
-        super(TriageClassifier, self).__init__(epochs=2, batch_size=256)
+        super().__init__(epochs=2, batch_size=256)
         self.short_desc_maxlen = kwargs.pop('short_desc_maxlen')
         self.short_desc_vocab_size = kwargs.pop('short_desc_vocab_size')
         self.short_desc_emb_sz = kwargs.pop('short_desc_emb_sz')
@@ -222,3 +142,83 @@ class TriageClassifier(KerasClassifier):
         model.compile(optimizer='adam', loss=['categorical_crossentropy'], metrics=['acc'])
 
         return model
+
+
+class ComponentNNModel(ComponentModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.short_desc_maxlen = 20
+        self.short_desc_vocab_size = 25000
+        self.short_desc_emb_sz = 300
+        self.long_desc_maxlen = 100
+        self.long_desc_vocab_size = 25000
+        self.long_desc_emb_sz = 300
+        self.cross_validation_enabled = False
+        self.calculate_importance = False
+        self.calculate_classification_metrics = True
+
+        feature_extractors = [
+            bug_features.bug_reporter(),
+            bug_features.platform(),
+            bug_features.op_sys()
+        ]
+
+        cleanup_functions = []
+
+        self.extraction_pipeline = Pipeline([
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
+            ('categorical_extractor', CategoricalExtractor()),
+            ('union', StructuredColumnTransformer([
+                ('platform', PassthroughTransformer(), 'platform'),
+                ('op_sys', PassthroughTransformer(), 'op_sys'),
+                ('bug_reporter', PassthroughTransformer(), 'bug_reporter'),
+                ('title_sequence', KerasTextToSequences(
+                    self.short_desc_maxlen, self.short_desc_vocab_size), 'title'),
+                ('first_comment_sequence', KerasTextToSequences(
+                    self.long_desc_maxlen, self.long_desc_vocab_size), 'first_comment'),
+                ('title_char_tfidf', TfidfVectorizer(
+                    strip_accents='unicode',
+                    analyzer='char',
+                    stop_words='english',
+                    ngram_range=(2, 4),
+                    max_features=25000,
+                    sublinear_tf=True
+                ), 'title'),
+                ('title_word_tfidf', TfidfVectorizer(
+                    strip_accents='unicode',
+                    min_df=0.0001,
+                    max_df=0.1,
+                    analyzer='word',
+                    token_pattern=r'\w{1,}',
+                    stop_words='english',
+                    ngram_range=(2, 4),
+                    max_features=30000,
+                    sublinear_tf=True
+                ), 'title')
+            ])),
+        ])
+
+        kwargs = {
+            'short_desc_maxlen': self.short_desc_maxlen,
+            'short_desc_vocab_size': self.short_desc_vocab_size,
+            'short_desc_emb_sz': self.short_desc_emb_sz,
+            'long_desc_maxlen': self.long_desc_maxlen,
+            'long_desc_vocab_size': self.long_desc_vocab_size,
+            'long_desc_emb_sz': self.long_desc_emb_sz
+        }
+        self.clf = ComponentNNClassifier(**kwargs)
+
+    def get_labels(self, *args, **kwargs):
+        labels = super().get_labels(*args, **kwargs)
+        labels = [{'bug_id': k, 'component': v} for k, v in labels.items()]
+        df = pd.DataFrame(labels)
+        df['component'] = df['component'].astype('category').cat.codes
+        return {row['bug_id']: row['component'] for _, row in df.iterrows()}
+
+    def get_feature_names(self):
+        return self.extraction_pipeline.named_steps['union'].named_transformers_.keys()
+
+    def calculate_labels(self, classes, bugs):
+        labels = super().calculate_labels(classes, bugs)
+        return to_categorical(labels)

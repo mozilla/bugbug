@@ -21,8 +21,9 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal',
                         help='Goal of the classifier',
-                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task', 'triage'],
+                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task'],
                         default='bug')
+    parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
     args = parser.parse_args()
@@ -51,15 +52,16 @@ if __name__ == '__main__':
         from bugbug.models.uplift import UpliftModel
         model_class = UpliftModel
     elif args.goal == 'component':
-        from bugbug.models.component import ComponentModel
-        model_class = ComponentModel
+        if args.classifier == 'default':
+            from bugbug.models.component import ComponentModel
+            model_class = ComponentModel
+        elif args.classifier == 'nn':
+            from bugbug.models.component_nn import ComponentNNModel
+            model_class = ComponentNNModel
+        importances_enabled = False
     elif args.goal == 'devdocneeded':
         from bugbug.models.devdocneeded import DevDocNeededModel
         model_class = DevDocNeededModel
-    elif args.goal == 'triage':
-        from bugbug.models.component_nn import TriageModel
-        model_class = TriageModel
-        importances_enabled = False
 
     if args.train:
         db.download()
