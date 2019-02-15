@@ -7,7 +7,6 @@ import json
 import lzma
 import os
 import shutil
-from datetime import datetime
 from urllib.request import urlretrieve
 
 DATABASES = {}
@@ -25,18 +24,24 @@ def register(path, url):
 # Download and extract databases.
 def download():
     for path, url in DATABASES.items():
-        if os.path.exists(path):
+        if os.path.exists(path) and not is_updated_ver():
             continue
 
         xz_path = f'{path}.xz'
 
         # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path):
+        if not os.path.exists(xz_path) or is_updated_ver():
             urlretrieve(DATABASES[path], xz_path)
 
-            ver_path = f'{path}_version.txt'
-            with open(ver_path, 'w') as vf:
-                vf.write(str(datetime.now()))
+            loc_ver_path = os.path.join(os.path.dirname(path), 'loc_DB_VERSION.json')
+            db_ver_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'DB_VERSION.json')
+
+            if not os.path.exists(loc_ver_path):
+                with open(db_ver_path) as db_ver:
+                    with open(loc_ver_path, 'w') as loc_db_ver:
+                        json.dump(json.load(db_ver), loc_db_ver)
+            else:
+                update_ver_file(db_ver_path, loc_ver_path, os.path.basename(path))
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
@@ -85,3 +90,31 @@ def delete(path, match):
 
     os.unlink(path)
     os.rename(f'{path}_new', path)
+
+
+def is_updated_ver():
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    loc_ver_path = os.path.join(repo_dir, 'data', 'loc_DB_VERSION.json')
+    db_ver_path = os.path.join(repo_dir, 'DB_VERSION.json')
+
+    if not os.path.exists(loc_ver_path):
+        return True
+    else:
+        with open(db_ver_path) as db_ver:
+            ver = json.load(db_ver)
+
+        with open(loc_ver_path) as loc_db_ver:
+            loc_ver = json.load(loc_db_ver)
+        return not ver == loc_ver
+
+
+def update_ver_file(db_ver_path, loc_ver_path, db):
+    with open(db_ver_path) as db_ver:
+        ver = json.load(db_ver)
+
+    with open(loc_ver_path) as loc_db_ver:
+        loc_ver = json.load(loc_db_ver)
+
+    loc_ver[db] = ver[db]
+    with open(loc_ver_path, 'w') as loc_db_ver:
+        json.dump(loc_ver, loc_db_ver)
