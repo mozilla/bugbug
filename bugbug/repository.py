@@ -5,15 +5,14 @@
 
 import argparse
 import concurrent.futures
-import json
 import multiprocessing
 import os
-import subprocess
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
 
 import hglib
+import requests
 from dateutil.relativedelta import relativedelta
 from parsepatch.patch import Patch
 from tqdm import tqdm
@@ -94,7 +93,7 @@ def _transform(commit):
 
 
 def hg_log(hg, first_rev):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{reviewers}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{join(reviewers,",")}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
     x = hg.rawcommand(args)
@@ -112,7 +111,7 @@ def hg_log(hg, first_rev):
             date=dt,
             bug=rev[4],
             ever_backedout=(rev[5] != b''),
-            reviewers=rev[6],
+            reviewers=tuple(rev[6].decode('utf-8').split(',')) if rev[6] != b'' else None
         ))
 
     return revs
@@ -144,9 +143,15 @@ def download_commits(repo_dir, date_from):
 
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
-        reviewer_experience[commit] = total_reviews_by_reviewer[commit.author]
+
         total_commits_by_author[commit.author] += 1
-        total_reviews_by_reviewer[commit.author] += 1
+
+        if commit.reviewers is not None:
+            reviewer_experience[commit] = sum(total_reviews_by_reviewer[reviewer] for reviewer in commit.reviewers)
+            for reviewer in commit.reviewers:
+                total_reviews_by_reviewer[reviewer] += 1
+        else:
+            reviewer_experience[commit] = 0
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
         cut = None
@@ -164,11 +169,10 @@ def download_commits(repo_dir, date_from):
 
         commits_by_author[commit.author].append(commit)
 
-    subprocess.run([os.path.join(repo_dir, 'mach'), 'file-info', 'bugzilla-automation', 'component_data'], cwd=repo_dir, check=True)
-
     global COMPONENTS
-    with open(os.path.join(repo_dir, 'component_data', 'components.json')) as cf:
-        COMPONENTS = json.load(cf)
+    r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
+    r.raise_for_status()
+    COMPONENTS = r.json()
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
