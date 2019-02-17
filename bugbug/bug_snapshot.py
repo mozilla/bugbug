@@ -5,6 +5,8 @@
 
 import dateutil.parser
 
+from bugbug import bugzilla
+
 
 def bool_str(val):
     assert val in ['0', '1']
@@ -82,7 +84,7 @@ def parse_flag_change(change):
     return name, status, requestee
 
 
-def rollback(bug, when, verbose=True):
+def rollback(bug, when, verbose=True, all_inconsistencies=False):
     change_to_return = None
     if when is not None:
         for history in bug['history']:
@@ -228,7 +230,7 @@ def rollback(bug, when, verbose=True):
             if change['added'] != '---':
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                    if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
+                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
                         if verbose:
                             print(f'{field} is not in bug {bug["id"]}')
                     else:
@@ -273,7 +275,7 @@ def rollback(bug, when, verbose=True):
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
                         # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                        if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
+                        if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
                             print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
@@ -297,9 +299,19 @@ def rollback(bug, when, verbose=True):
     return bug
 
 
-if __name__ == '__main__':
-    from bugbug import bugzilla
+def get_inconsistencies():
+    inconsistencies = []
 
+    for bug in bugzilla.get_bugs():
+        try:
+            rollback(bug, None, False, True)
+        except:  # noqa
+            inconsistencies.append(bug['id'])
+
+    return inconsistencies
+
+
+if __name__ == '__main__':
     for i, bug in enumerate(bugzilla.get_bugs()):
         print(bug['id'])
         print(i)
