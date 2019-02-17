@@ -27,6 +27,8 @@ class Model():
         self.cross_validation_enabled = True
         self.sampler = None
 
+        self.calculate_importance = True
+
     def get_feature_names(self):
         return []
 
@@ -99,7 +101,7 @@ class Model():
 
         # Evaluate results on the test set.
         feature_names = self.get_feature_names()
-        if len(feature_names):
+        if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
