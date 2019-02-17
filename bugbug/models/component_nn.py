@@ -14,11 +14,9 @@ from keras.layers import Flatten
 from keras.layers import GlobalMaxPooling1D
 from keras.layers import SpatialDropout1D
 from keras.models import Model as KerasModel
-from keras.utils import to_categorical
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OrdinalEncoder
 
 from bugbug import bug_features
