@@ -182,14 +182,5 @@ class ComponentNNModel(ComponentModel):
         }
         self.clf = ComponentNNClassifier(**kwargs)
 
-    def get_labels(self, *args, **kwargs):
-        labels = super().get_labels(*args, **kwargs)
-        encoded_values = LabelEncoder().fit_transform(list(labels.values()))
-        return {k: encoded_v for k, encoded_v in zip(labels.keys(), encoded_values)}
-
-    def calculate_labels(self, classes, bugs):
-        labels = super().calculate_labels(classes, bugs)
-        return to_categorical(labels)
-
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps['union'].named_transformers_.keys()

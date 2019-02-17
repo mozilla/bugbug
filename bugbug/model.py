@@ -54,9 +54,6 @@ class Model():
 
         return top_features
 
-    def calculate_labels(self, classes, bugs):
-        return np.array([classes[bug['id']] for bug in bugs()])
-
     def train(self, importance_cutoff=0.15):
         classes = self.get_labels()
         class_names = sorted(list(set(classes.values())), reverse=True)
@@ -66,7 +63,7 @@ class Model():
             return (bug for bug in bugzilla.get_bugs() if bug['id'] in classes)
 
         # Calculate labels.
-        y = self.calculate_labels(classes, bugs)
+        y = np.array([classes[bug['id']] for bug in bugs()])
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
@@ -120,9 +117,6 @@ class Model():
 
         y_pred = self.clf.predict(X_test)
 
-        if y_test.ndim == 2:
-            y_test = np.argmax(y_test, axis=1)
-
         print(f'No confidence threshold - {len(y_test)} classified')
         print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
@@ -141,11 +135,7 @@ class Model():
                 y_test_filter.append(y_test[i])
                 y_pred_filter.append(argmax)
 
-            # TODO: Clean this up, each model should know how to encode/decode its labels.
-            try:
-                y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
-            except AttributeError:
-                pass
+            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
 
             print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
             print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
