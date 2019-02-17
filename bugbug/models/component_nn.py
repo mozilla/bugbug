@@ -131,7 +131,6 @@ class ComponentNNModel(ComponentModel):
         self.long_desc_vocab_size = 25000
         self.long_desc_emb_sz = 300
         self.cross_validation_enabled = False
-        self.calculate_importance = False
 
         feature_extractors = [
             bug_features.bug_reporter(),
