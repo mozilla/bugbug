@@ -30,8 +30,6 @@ if __name__ == '__main__':
 
     model_file_name = f'{args.goal}model'
 
-    importances_enabled = True
-
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
         model_class = BugModel
@@ -57,7 +55,6 @@ if __name__ == '__main__':
         elif args.classifier == 'nn':
             from bugbug.models.component_nn import ComponentNNModel
             model_class = ComponentNNModel
-        importances_enabled = False
     elif args.goal == 'devdocneeded':
         from bugbug.models.devdocneeded import DevDocNeededModel
         model_class = DevDocNeededModel
@@ -74,7 +71,7 @@ if __name__ == '__main__':
         for bug in bugzilla.get_bugs():
             print(f'https://bugzilla.mozilla.org/show_bug.cgi?id={ bug["id"] } - { bug["summary"]} ')
 
-            if importances_enabled:
+            if model.calculate_importance:
                 probas, importances = model.classify(bug, probabilities=True, importances=True)
 
                 feature_names = model.get_feature_names()
