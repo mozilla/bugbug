@@ -30,7 +30,6 @@ if __name__ == '__main__':
 
     model_file_name = f'{args.goal}model'
 
-    probabilities_enabled = True
     importances_enabled = True
 
     if args.goal == 'bug':
@@ -74,7 +73,7 @@ if __name__ == '__main__':
     if args.classify:
         for bug in bugzilla.get_bugs():
             print(f'https://bugzilla.mozilla.org/show_bug.cgi?id={ bug["id"] } - { bug["summary"]} ')
-            probas, importances = model.classify(bug, probabilities=probabilities_enabled, importances=importances_enabled)
+            probas, importances = model.classify(bug, probabilities=True, importances=importances_enabled)
 
             if importances:
                 feature_names = model.get_feature_names()
