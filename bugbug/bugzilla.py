@@ -137,7 +137,9 @@ def download_bugs(bug_ids, products=None, security=False):
 
     new_bug_ids = sorted(list(new_bug_ids))
 
-    chunks = (new_bug_ids[i:(i + 500)] for i in range(0, len(new_bug_ids), 500))
+    CHUNK_SIZE = 100
+
+    chunks = (new_bug_ids[i:(i + CHUNK_SIZE)] for i in range(0, len(new_bug_ids), CHUNK_SIZE))
     with tqdm(total=len(new_bug_ids)) as progress_bar:
         for chunk in chunks:
             new_bugs = _download(chunk)
