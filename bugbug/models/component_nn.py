@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import pandas as pd
 from keras import Input
 from keras import layers
 from keras.layers import GRU
@@ -19,6 +18,7 @@ from keras.utils import to_categorical
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OrdinalEncoder
 
 from bugbug import bug_features
@@ -184,14 +184,12 @@ class ComponentNNModel(ComponentModel):
 
     def get_labels(self, *args, **kwargs):
         labels = super().get_labels(*args, **kwargs)
-        labels = [{'bug_id': k, 'component': v} for k, v in labels.items()]
-        df = pd.DataFrame(labels)
-        df['component'] = df['component'].astype('category').cat.codes
-        return {row['bug_id']: row['component'] for _, row in df.iterrows()}
-
-    def get_feature_names(self):
-        return self.extraction_pipeline.named_steps['union'].named_transformers_.keys()
+        encoded_values = LabelEncoder().fit_transform(list(labels.values()))
+        return {k: encoded_v for k, encoded_v in zip(labels.keys(), encoded_values)}
 
     def calculate_labels(self, classes, bugs):
         labels = super().calculate_labels(classes, bugs)
         return to_categorical(labels)
+
+    def get_feature_names(self):
+        return self.extraction_pipeline.named_steps['union'].named_transformers_.keys()
