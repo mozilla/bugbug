@@ -132,7 +132,6 @@ class ComponentNNModel(ComponentModel):
         self.long_desc_emb_sz = 300
         self.cross_validation_enabled = False
         self.calculate_importance = False
-        self.calculate_classification_metrics = True
 
         feature_extractors = [
             bug_features.bug_reporter(),
