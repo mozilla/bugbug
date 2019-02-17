@@ -153,3 +153,7 @@ def download_bugs(bug_ids, products=None, security=False):
                 new_bugs = {bug_id: bug for bug_id, bug in new_bugs.items() if bug['product'] in products}
 
             db.append(BUGS_DB, new_bugs.values())
+
+
+def delete_bugs(bug_ids):
+    db.delete(BUGS_DB, lambda bug: bug['id'] in set(bug_ids))
