@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import numpy as np
 import pandas as pd
 from keras import Input
 from keras import layers
@@ -17,40 +16,17 @@ from keras.layers import GlobalMaxPooling1D
 from keras.layers import SpatialDropout1D
 from keras.models import Model as KerasModel
 from keras.utils import to_categorical
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OrdinalEncoder
 
 from bugbug import bug_features
 from bugbug.models.component import ComponentModel
 from bugbug.nn import KerasClassifier
 from bugbug.nn import KerasTextToSequences
+from bugbug.utils import DictExtractor
 from bugbug.utils import StructuredColumnTransformer
-
-
-class CategoricalExtractor(TransformerMixin):
-    def transform(self, bugs):
-        features = ['bug_reporter', 'platform', 'op_sys']
-
-        for feature in features:
-            bugs[feature] = bugs['data'].map(lambda data: data[feature]).astype('category').cat.codes
-
-        bugs = bugs.drop(columns=['data'])
-        bugs['data'] = bugs[features].to_dict('records')
-        return bugs
-
-    def fit(self, *args, **kwargs):
-        return self
-
-
-class PassthroughTransformer(BaseEstimator, TransformerMixin):
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        self.X = X
-        return np.array([X.tolist()]).T
 
 
 class ComponentNNClassifier(KerasClassifier):
@@ -168,11 +144,10 @@ class ComponentNNModel(ComponentModel):
 
         self.extraction_pipeline = Pipeline([
             ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
-            ('categorical_extractor', CategoricalExtractor()),
             ('union', StructuredColumnTransformer([
-                ('platform', PassthroughTransformer(), 'platform'),
-                ('op_sys', PassthroughTransformer(), 'op_sys'),
-                ('bug_reporter', PassthroughTransformer(), 'bug_reporter'),
+                ('platform', make_pipeline(DictExtractor('platform'), OrdinalEncoder()), 'data'),
+                ('op_sys', make_pipeline(DictExtractor('op_sys'), OrdinalEncoder()), 'data'),
+                ('bug_reporter', make_pipeline(DictExtractor('bug_reporter'), OrdinalEncoder()), 'data'),
                 ('title_sequence', KerasTextToSequences(
                     self.short_desc_maxlen, self.short_desc_vocab_size), 'title'),
                 ('first_comment_sequence', KerasTextToSequences(
