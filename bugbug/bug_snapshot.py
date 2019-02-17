@@ -83,8 +83,6 @@ def parse_flag_change(change):
 
 
 def rollback(bug, when, verbose=True):
-    newest_product = bug['product']
-
     change_to_return = None
     if when is not None:
         for history in bug['history']:
@@ -118,10 +116,6 @@ def rollback(bug, when, verbose=True):
                 break
 
             field = change['field_name']
-
-            # TODO: These products no longer have the cf_has_str and cf_has_regression_range field (https://bugzilla.mozilla.org/show_bug.cgi?id=1513981)
-            if newest_product in ['DevTools', 'DevTools Graveyard', 'NSS', 'Tech Evangelism', 'Firefox Build System', 'WebExtensions', 'Firefox Graveyard'] and field in ['cf_has_regression_range', 'cf_has_str']:
-                continue
 
             if field in 'component':
                 # TODO: Ignore this for now, not so easy to make it work https://bugzilla.mozilla.org/show_bug.cgi?id=1513952.
