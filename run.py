@@ -73,12 +73,15 @@ if __name__ == '__main__':
     if args.classify:
         for bug in bugzilla.get_bugs():
             print(f'https://bugzilla.mozilla.org/show_bug.cgi?id={ bug["id"] } - { bug["summary"]} ')
-            probas, importances = model.classify(bug, probabilities=True, importances=importances_enabled)
 
-            if importances:
+            if importances_enabled:
+                probas, importances = model.classify(bug, probabilities=True, importances=True)
+
                 feature_names = model.get_feature_names()
                 for i, (importance, index, is_positive) in enumerate(importances):
                     print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+            else:
+                probas = model.classify(bug, probabilities=True, importances=False)
 
             if np.argmax(probas) == 1:
                 print(f'Positive! {probas}')

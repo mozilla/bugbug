@@ -175,4 +175,4 @@ class Model():
 
             return classes, importances
 
-        return classes, None
+        return classes
