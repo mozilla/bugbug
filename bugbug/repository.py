@@ -24,7 +24,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 COMPONENTS = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout', 'author_email'])
 
 author_experience = {}
 author_experience_90_days = {}
@@ -55,6 +55,7 @@ def _transform(commit):
         'components': list(),
         'author_experience': author_experience[commit],
         'author_experience_90_days': author_experience_90_days[commit],
+        'author_email': commit.author_email.decode('utf-8'),
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -91,7 +92,7 @@ def _transform(commit):
 
 
 def hg_log(hg, first_rev):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
     x = hg.rawcommand(args)
@@ -109,6 +110,7 @@ def hg_log(hg, first_rev):
             date=dt,
             bug=rev[4],
             ever_backedout=(rev[5] != b''),
+            author_email=rev[6],
         ))
 
     return revs
