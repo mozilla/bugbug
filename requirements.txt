@@ -1,4 +1,4 @@
-libmozdata==0.1.49
+libmozdata==0.1.50
 numpy==1.16.1
 scipy==1.2.1
 scikit-learn==0.20.2
