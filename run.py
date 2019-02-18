@@ -28,7 +28,10 @@ if __name__ == '__main__':
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
     args = parser.parse_args()
 
-    model_file_name = f'{args.goal}model'
+    model_file_name = '{}{}model'.format(
+        args.goal,
+        '' if args.classifier == 'default' else args.classifier
+    )
 
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
