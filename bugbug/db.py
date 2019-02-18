@@ -12,8 +12,8 @@ from urllib.request import urlretrieve
 DATABASES = {}
 
 
-def register(path, url):
-    DATABASES[path] = url
+def register(path, url, version):
+    DATABASES[path] = {'url': url, 'version': version}
 
     # Create DB parent directory.
     parent_dir = os.path.dirname(path)
@@ -23,7 +23,7 @@ def register(path, url):
 
 # Download and extract databases.
 def download():
-    for path, url in DATABASES.items():
+    for path, info in DATABASES.items():
         if os.path.exists(path) and not is_updated_ver():
             continue
 
@@ -31,17 +31,18 @@ def download():
 
         # Only download if the xz file is not there yet.
         if not os.path.exists(xz_path) or is_updated_ver():
-            urlretrieve(DATABASES[path], xz_path)
+            urlretrieve(DATABASES[path]['url'], xz_path)
 
-            loc_ver_path = os.path.join(os.path.dirname(path), 'loc_DB_VERSION.json')
-            db_ver_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'DB_VERSION.json')
+            ver_path = os.path.join(os.path.dirname(path), 'DB_VERSION.json')
 
-            if not os.path.exists(loc_ver_path):
-                with open(db_ver_path) as db_ver:
-                    with open(loc_ver_path, 'w') as loc_db_ver:
-                        json.dump(json.load(db_ver), loc_db_ver)
+            if not os.path.exists(ver_path):
+                ver_dict = {}
+                with open(ver_path, 'w') as db:
+                    for path, info in DATABASES.items():
+                        ver_dict[path] = info['version']
+                    json.dump(ver_dict, db)
             else:
-                update_ver_file(db_ver_path, loc_ver_path, os.path.basename(path))
+                update_ver_file(ver_path, path)
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
@@ -93,28 +94,21 @@ def delete(path, match):
 
 
 def is_updated_ver():
-    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    loc_ver_path = os.path.join(repo_dir, 'data', 'loc_DB_VERSION.json')
-    db_ver_path = os.path.join(repo_dir, 'DB_VERSION.json')
+    path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ver_path = os.path.join(path, 'data', 'DB_VERSION.json')
 
-    if not os.path.exists(loc_ver_path):
+    if not os.path.exists(ver_path):
         return True
     else:
-        with open(db_ver_path) as db_ver:
-            ver = json.load(db_ver)
-
-        with open(loc_ver_path) as loc_db_ver:
-            loc_ver = json.load(loc_db_ver)
-        return not ver == loc_ver
+        with open(ver_path) as db:
+            ver = json.load(db)
+        return not all(info['version'] == ver[path] for path, info in DATABASES.items())
 
 
-def update_ver_file(db_ver_path, loc_ver_path, db):
-    with open(db_ver_path) as db_ver:
-        ver = json.load(db_ver)
+def update_ver_file(ver_path, db_path):
+    with open(ver_path) as db:
+        ver_dict = json.load(db)
 
-    with open(loc_ver_path) as loc_db_ver:
-        loc_ver = json.load(loc_db_ver)
-
-    loc_ver[db] = ver[db]
-    with open(loc_ver_path, 'w') as loc_db_ver:
-        json.dump(loc_ver, loc_db_ver)
+    ver_dict[db_path] = DATABASES[db_path]['version']
+    with open(ver_path, 'w') as db:
+        json.dump(ver_dict, db)

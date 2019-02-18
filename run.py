@@ -64,6 +64,7 @@ if __name__ == '__main__':
 
     if args.train:
         db.download()
+
         model = model_class(args.lemmatization)
         model.train()
     else:

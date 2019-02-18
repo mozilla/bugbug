@@ -13,7 +13,7 @@ from tqdm import tqdm
 from bugbug import db
 
 BUGS_DB = 'data/bugs.json'
-db.register(BUGS_DB, 'https://www.dropbox.com/s/vekjzqu4v0pu1v8/bugs.json.xz?dl=1')
+db.register(BUGS_DB, 'https://www.dropbox.com/s/vekjzqu4v0pu1v8/bugs.json.xz?dl=1', 'v1')
 
 ATTACHMENT_INCLUDE_FIELDS = [
     'id', 'is_obsolete', 'flags', 'is_patch', 'creator', 'content_type', 'creation_time',
