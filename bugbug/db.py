@@ -76,7 +76,6 @@ def delete(path, match):
                 elem = json.loads(line)
                 if not match(elem):
                     fw.write(line)
-                    fw.write('\n')
 
     os.unlink(path)
     os.rename(f'{path}_new', path)
