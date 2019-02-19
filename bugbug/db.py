@@ -24,29 +24,28 @@ def register(path, url, version):
 # Download and extract databases.
 def download():
     for path, info in DATABASES.items():
-        if os.path.exists(path) and not is_updated_ver():
+        if os.path.exists(path) and not is_updated_ver(path):
             continue
 
         xz_path = f'{path}.xz'
 
+        ver_path = os.path.join(os.path.dirname(path), 'DB_VERSION.json')
+
         # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path) or is_updated_ver():
+        if not os.path.exists(xz_path) or is_updated_ver(path):
             urlretrieve(DATABASES[path]['url'], xz_path)
-
-            ver_path = os.path.join(os.path.dirname(path), 'DB_VERSION.json')
-
-            if not os.path.exists(ver_path):
-                ver_dict = {}
-                with open(ver_path, 'w') as db:
-                    for path, info in DATABASES.items():
-                        ver_dict[path] = info['version']
-                    json.dump(ver_dict, db)
-            else:
-                update_ver_file(ver_path, path)
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
                 shutil.copyfileobj(input_f, output_f)
+
+        if not os.path.exists(ver_path):
+            ver_dict = {}
+            with open(ver_path, 'w') as db:
+                ver_dict[path] = info['version']
+                json.dump(ver_dict, db)
+        else:
+            update_ver_file(ver_path, path)
 
 
 def read(path):
@@ -93,7 +92,7 @@ def delete(path, match):
     os.rename(f'{path}_new', path)
 
 
-def is_updated_ver():
+def is_updated_ver(db_path):
     path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ver_path = os.path.join(path, 'data', 'DB_VERSION.json')
 
@@ -102,7 +101,10 @@ def is_updated_ver():
     else:
         with open(ver_path) as db:
             ver = json.load(db)
-        return not all(info['version'] == ver[path] for path, info in DATABASES.items())
+        if ver.get(db_path):
+            return not DATABASES[db_path]['version'] == ver[db_path]
+        else:
+            return True
 
 
 def update_ver_file(ver_path, db_path):

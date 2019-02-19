@@ -59,9 +59,6 @@ if __name__ == '__main__':
         from bugbug.models.devdocneeded import DevDocNeededModel
         model_class = DevDocNeededModel
 
-    if db.is_updated_ver():
-        args.train = True
-
     if args.train:
         db.download()
 
