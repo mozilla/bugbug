@@ -305,7 +305,9 @@ def get_inconsistencies():
     for bug in bugzilla.get_bugs():
         try:
             rollback(bug, None, False, True)
-        except:  # noqa
+        except Exception as e:
+            print(bug['id'])
+            print(e)
             inconsistencies.append(bug['id'])
 
     return inconsistencies
