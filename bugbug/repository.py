@@ -139,8 +139,9 @@ def download_commits(repo_dir, date_from):
     global author_experience_90_days
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
-        if not commit.ever_backedout:
-            total_commits_by_author[commit.author] += 1
+        if commit.ever_backedout:
+            continue
+        total_commits_by_author[commit.author] += 1
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
         cut = None
