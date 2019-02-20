@@ -106,19 +106,40 @@ def download_bugs_between(date_from, date_to, security=False):
         'WebExtensions',
     }
 
-    r = requests.get(f'https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=greaterthan&v1={date_from.strftime("%Y-%m-%d")}&limit=1&order=bug_id')
+    params = {
+        'f1': 'creation_ts', 'o1': 'greaterthan', 'v1': date_from.strftime('%Y-%m-%d'),
+        'f2': 'creation_ts', 'o2': 'lessthan', 'v2': date_to.strftime('%Y-%m-%d'),
+        'product': products,
+    }
+
+    if not security:
+        params['f3'] = 'bug_group'
+        params['o3'] = 'isempty'
+
+    params['count_only'] = 1
+    r = requests.get('https://bugzilla.mozilla.org/rest/bug', params=params)
     r.raise_for_status()
-    first_id = r.json()['bugs'][0]['id']
+    count = r.json()['bug_count']
+    del params['count_only']
 
-    r = requests.get(f'https://bugzilla.mozilla.org/rest/bug?include_fields=id&f1=creation_ts&o1=lessthan&v1={date_to.strftime("%Y-%m-%d")}&limit=1&order=bug_id%20desc')
-    r.raise_for_status()
-    last_id = r.json()['bugs'][0]['id']
+    params['limit'] = 100
+    params['order'] = 'bug_id'
 
-    assert first_id < last_id
+    old_bug_ids = set(bug['id'] for bug in get_bugs())
 
-    all_ids = range(first_id, last_id + 1)
+    all_ids = []
 
-    download_bugs(all_ids, security=security, products=products)
+    with tqdm(total=count) as progress_bar:
+        for offset in range(0, count, bugzilla.Bugzilla.BUGZILLA_CHUNK_SIZE):
+            params['offset'] = offset
+
+            new_bugs = _download(params)
+
+            progress_bar.update(bugzilla.Bugzilla.BUGZILLA_CHUNK_SIZE)
+
+            all_ids += [bug for bug in new_bugs.values()]
+
+            db.append(BUGS_DB, (bug for bug_id, bug in new_bugs.items() if bug_id not in old_bug_ids))
 
     return all_ids
 
