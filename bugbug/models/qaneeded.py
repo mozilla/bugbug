@@ -43,7 +43,7 @@ class QANeededModel(Model):
         ]
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
@@ -56,6 +56,9 @@ class QANeededModel(Model):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 
+    def rollback(self, change):
+        return change['added'] in ['qawanted', 'qe-verify']
+
     def get_labels(self):
         classes = {}
 
@@ -64,7 +67,7 @@ class QANeededModel(Model):
 
             for entry in bug_data['history']:
                 for change in entry['changes']:
-                    if change['added'].startswith('qawanted'):
+                    if change['added'].startswith('qawanted') or change['added'].startswith('qe-verify'):
                         classes[bug_id] = 1
                     elif 'flags' in entry:
                         for flag in entry['flags']:
