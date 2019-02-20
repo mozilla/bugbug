@@ -24,28 +24,22 @@ def register(path, url, version):
 # Download and extract databases.
 def download():
     for path, info in DATABASES.items():
-        if os.path.exists(path) and not is_updated_ver(path):
+        if os.path.exists(path) and not is_outdated(path):
             continue
 
         xz_path = f'{path}.xz'
 
-        ver_path = os.path.join(os.path.dirname(path), 'DB_VERSION.json')
+        ver_path = 'data/DB_VERSION.json'
 
         # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path) or is_updated_ver(path):
+        if not os.path.exists(xz_path) or is_outdated(path):
             urlretrieve(DATABASES[path]['url'], xz_path)
 
         with open(path, 'wb') as output_f:
             with lzma.open(xz_path) as input_f:
                 shutil.copyfileobj(input_f, output_f)
 
-        if not os.path.exists(ver_path):
-            ver_dict = {}
-            with open(ver_path, 'w') as db:
-                ver_dict[path] = info['version']
-                json.dump(ver_dict, db)
-        else:
-            update_ver_file(ver_path, path)
+        update_ver_file(ver_path, path)
 
 
 def read(path):
@@ -92,22 +86,27 @@ def delete(path, match):
     os.rename(f'{path}_new', path)
 
 
-def is_updated_ver(db_path):
-    path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ver_path = os.path.join(path, 'data', 'DB_VERSION.json')
+def is_outdated(path):
+    ver_path = 'data/DB_VERSION.json'
 
     if not os.path.exists(ver_path):
         return True
     else:
         with open(ver_path) as db:
             ver = json.load(db)
-        if ver.get(db_path):
-            return not DATABASES[db_path]['version'] == ver[db_path]
+        if ver.get(path):
+            return not DATABASES[path]['version'] == ver[path]
         else:
             return True
 
 
 def update_ver_file(ver_path, db_path):
+    if not os.path.exists(ver_path):
+        ver_dict = {}
+        ver_dict[db_path] = DATABASES[db_path]['version']
+        with open(ver_path, 'w') as db:
+            json.dump(ver_dict, db)
+
     with open(ver_path) as db:
         ver_dict = json.load(db)
 
