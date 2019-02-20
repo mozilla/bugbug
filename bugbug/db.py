@@ -65,3 +65,17 @@ def append(path, bugs):
         for bug in bugs:
             f.write(json.dumps(bug))
             f.write('\n')
+
+
+def delete(path, match):
+    assert path in DATABASES
+
+    with open(f'{path}_new', 'w') as fw:
+        with open(path, 'r') as fr:
+            for line in fr:
+                elem = json.loads(line)
+                if not match(elem):
+                    fw.write(line)
+
+    os.unlink(path)
+    os.rename(f'{path}_new', path)

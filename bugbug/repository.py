@@ -5,15 +5,14 @@
 
 import argparse
 import concurrent.futures
-import json
 import multiprocessing
 import os
-import subprocess
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
 
 import hglib
+import requests
 from dateutil.relativedelta import relativedelta
 from parsepatch.patch import Patch
 from tqdm import tqdm
@@ -25,7 +24,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 COMPONENTS = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout', 'author_email'])
 
 author_experience = {}
 author_experience_90_days = {}
@@ -56,6 +55,7 @@ def _transform(commit):
         'components': list(),
         'author_experience': author_experience[commit],
         'author_experience_90_days': author_experience_90_days[commit],
+        'author_email': commit.author_email.decode('utf-8'),
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -92,7 +92,7 @@ def _transform(commit):
 
 
 def hg_log(hg, first_rev):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
     x = hg.rawcommand(args)
@@ -110,6 +110,7 @@ def hg_log(hg, first_rev):
             date=dt,
             bug=rev[4],
             ever_backedout=(rev[5] != b''),
+            author_email=rev[6],
         ))
 
     return revs
@@ -156,11 +157,10 @@ def download_commits(repo_dir, date_from):
 
         commits_by_author[commit.author].append(commit)
 
-    subprocess.run([os.path.join(repo_dir, 'mach'), 'file-info', 'bugzilla-automation', 'component_data'], cwd=repo_dir, check=True)
-
     global COMPONENTS
-    with open(os.path.join(repo_dir, 'component_data', 'components.json')) as cf:
-        COMPONENTS = json.load(cf)
+    r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
+    r.raise_for_status()
+    COMPONENTS = r.json()
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 

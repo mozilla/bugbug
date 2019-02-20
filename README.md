@@ -11,11 +11,19 @@ Discussions happen in #bugbug on irc.mozilla.org.
 ## Classifiers
 - **bug vs feature** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
 
+- **defect vs feature vs task** - Extension of the previous classifier to detect differences also between feature requests and development tasks.
+
+- **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
+
 - **regression vs non-regression** - Bugzilla has a `regression` keyword to identify bugs that are regressions. Unfortunately it isn't used consistently. The aim of this classifier is to detect bugs that are regressions.
 
 - **tracking** - The aim of this classifier is to detect bugs to track.
 
 - **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
+
+- **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
+
+- **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
 
 
 ## Setup

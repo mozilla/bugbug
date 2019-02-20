@@ -19,12 +19,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--lemmatization', help='Perform lemmatization (using spaCy)', action='store_true')
     parser.add_argument('--train', help='Perform training', action='store_true')
-    parser.add_argument('--goal', help='Goal of the classifier', choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task'], default='bug')
+    parser.add_argument('--goal',
+                        help='Goal of the classifier',
+                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task'],
+                        default='bug')
+    parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
     args = parser.parse_args()
 
-    model_file_name = f'{args.goal}model'
+    model_file_name = '{}{}model'.format(
+        args.goal,
+        '' if args.classifier == 'default' else args.classifier
+    )
 
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
@@ -45,8 +52,12 @@ if __name__ == '__main__':
         from bugbug.models.uplift import UpliftModel
         model_class = UpliftModel
     elif args.goal == 'component':
-        from bugbug.models.component import ComponentModel
-        model_class = ComponentModel
+        if args.classifier == 'default':
+            from bugbug.models.component import ComponentModel
+            model_class = ComponentModel
+        elif args.classifier == 'nn':
+            from bugbug.models.component_nn import ComponentNNModel
+            model_class = ComponentNNModel
     elif args.goal == 'devdocneeded':
         from bugbug.models.devdocneeded import DevDocNeededModel
         model_class = DevDocNeededModel
@@ -62,11 +73,15 @@ if __name__ == '__main__':
     if args.classify:
         for bug in bugzilla.get_bugs():
             print(f'https://bugzilla.mozilla.org/show_bug.cgi?id={ bug["id"] } - { bug["summary"]} ')
-            probas, importances = model.classify(bug, probabilities=True, importances=True)
 
-            feature_names = model.get_feature_names()
-            for i, (importance, index, is_positive) in enumerate(importances):
-                print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+            if model.calculate_importance:
+                probas, importances = model.classify(bug, probabilities=True, importances=True)
+
+                feature_names = model.get_feature_names()
+                for i, (importance, index, is_positive) in enumerate(importances):
+                    print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+            else:
+                probas = model.classify(bug, probabilities=True, importances=False)
 
             if np.argmax(probas) == 1:
                 print(f'Positive! {probas}')

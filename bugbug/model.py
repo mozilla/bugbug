@@ -27,6 +27,8 @@ class Model():
         self.cross_validation_enabled = True
         self.sampler = None
 
+        self.calculate_importance = True
+
     def get_feature_names(self):
         return []
 
@@ -77,7 +79,10 @@ class Model():
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
-            scorings = ['accuracy', 'precision', 'recall']
+            scorings = ['accuracy']
+            if len(class_names) == 2:
+                scorings += ['precision', 'recall']
+
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
             print('Cross Validation scores:')
@@ -88,19 +93,25 @@ class Model():
         # Training on the resampled dataset if sampler is provided.
         if self.sampler is not None:
             X_train, y_train = self.sampler.fit_resample(X_train, y_train)
+
         print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
         print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
+
         self.clf.fit(X_train, y_train)
 
         # Evaluate results on the test set.
         feature_names = self.get_feature_names()
-        if len(feature_names):
+        if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
+            # TODO: Actually implement feature importance visualization for multiclass problems.
+            if isinstance(shap_values, list):
+                shap_values = np.sum(np.abs(shap_values), axis=0)
+
             important_features = self.get_important_features(importance_cutoff, shap_values)
 
-            print(f'\nTop {len(important_features)} Features :')
+            print(f'\nTop {len(important_features)} Features:')
             for i, [importance, index, is_positive] in enumerate(important_features):
                 print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
 

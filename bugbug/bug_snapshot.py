@@ -5,6 +5,8 @@
 
 import dateutil.parser
 
+from bugbug import bugzilla
+
 
 def bool_str(val):
     assert val in ['0', '1']
@@ -82,9 +84,7 @@ def parse_flag_change(change):
     return name, status, requestee
 
 
-def rollback(bug, when, verbose=True):
-    newest_product = bug['product']
-
+def rollback(bug, when, verbose=True, all_inconsistencies=False):
     change_to_return = None
     if when is not None:
         for history in bug['history']:
@@ -118,10 +118,6 @@ def rollback(bug, when, verbose=True):
                 break
 
             field = change['field_name']
-
-            # TODO: These products no longer have the cf_has_str and cf_has_regression_range field (https://bugzilla.mozilla.org/show_bug.cgi?id=1513981)
-            if newest_product in ['DevTools', 'DevTools Graveyard', 'NSS', 'Tech Evangelism', 'Firefox Build System', 'WebExtensions', 'Firefox Graveyard'] and field in ['cf_has_regression_range', 'cf_has_str']:
-                continue
 
             if field in 'component':
                 # TODO: Ignore this for now, not so easy to make it work https://bugzilla.mozilla.org/show_bug.cgi?id=1513952.
@@ -234,7 +230,7 @@ def rollback(bug, when, verbose=True):
             if change['added'] != '---':
                 if field not in bug:
                     # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                    if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
+                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
                         if verbose:
                             print(f'{field} is not in bug {bug["id"]}')
                     else:
@@ -279,7 +275,7 @@ def rollback(bug, when, verbose=True):
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
                         # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                        if any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
+                        if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
                             print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
@@ -303,9 +299,21 @@ def rollback(bug, when, verbose=True):
     return bug
 
 
-if __name__ == '__main__':
-    from bugbug import bugzilla
+def get_inconsistencies():
+    inconsistencies = []
 
+    for bug in bugzilla.get_bugs():
+        try:
+            rollback(bug, None, False, True)
+        except Exception as e:
+            print(bug['id'])
+            print(e)
+            inconsistencies.append(bug['id'])
+
+    return inconsistencies
+
+
+if __name__ == '__main__':
     for i, bug in enumerate(bugzilla.get_bugs()):
         print(bug['id'])
         print(i)

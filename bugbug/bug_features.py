@@ -267,6 +267,21 @@ class components_touched_num(object):
         return len(set(component for commit in bug['commits'] for component in commit['components'] if not commit['ever_backedout']))
 
 
+class platform(object):
+    def __call__(self, bug, **kwargs):
+        return bug['platform']
+
+
+class op_sys(object):
+    def __call__(self, bug, **kwargs):
+        return bug['op_sys']
+
+
+class is_reporter_a_developer(object):
+    def __call__(self, bug, author_ids, **kwargs):
+        return bug_reporter()(bug).strip() in author_ids
+
+
 def cleanup_url(text):
     text = re.sub(r'http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+', '__CODE_REFERENCE_URL__', text)
     return re.sub(r'http\S+', '__URL__', text)
@@ -308,6 +323,13 @@ def cleanup_crash(text):
     return re.sub(r'bp-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{6}[0-9]{6}\b', '__CRASH_STATS_LINK__', text)
 
 
+def get_author_ids():
+    author_ids = set()
+    for commit in repository.get_commits():
+        author_ids.add(commit['author_email'])
+    return author_ids
+
+
 class BugExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions, rollback=False, rollback_when=None, commit_data=False):
         self.feature_extractors = feature_extractors
@@ -315,6 +337,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         self.rollback = rollback
         self.rollback_when = rollback_when
         self.commit_map = repository.get_commit_map() if commit_data else None
+        assert self.commit_map is None or len(self.commit_map) > 0
 
     def fit(self, x, y=None):
         return self
@@ -323,6 +346,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         results = []
 
         reporter_experience_map = defaultdict(int)
+        author_ids = get_author_ids() if self.commit_map else None
 
         for bug in bugs:
             bug_id = bug['id']
@@ -339,7 +363,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     bug['commits'] = []
 
             for f in self.feature_extractors:
-                res = f(bug, reporter_experience=reporter_experience_map[bug['creator']])
+                res = f(bug, reporter_experience=reporter_experience_map[bug['creator']], author_ids=author_ids)
 
                 if res is None:
                     continue

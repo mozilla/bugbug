@@ -64,7 +64,7 @@ class BugModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def get_bugbug_labels(self, kind='bug'):
-        assert kind in ['bug', 'regression']
+        assert kind in ['bug', 'regression', 'defect_feature_task']
 
         classes = {}
 
@@ -75,6 +75,9 @@ class BugModel(Model):
             elif kind == 'regression':
                 if category == 'False':
                     classes[int(bug_id)] = 0
+            elif kind == 'defect_feature_task':
+                if category == 'True':
+                    classes[int(bug_id)] = 'd'
 
         for bug_id, category in labels.get_labels('regression_bug_nobug'):
             assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], f'unexpected category {category}'
@@ -85,6 +88,9 @@ class BugModel(Model):
                     continue
 
                 classes[int(bug_id)] = 1 if category == 'regression' else 0
+            elif kind == 'defect_feature_task':
+                if category != 'nobug':
+                    classes[int(bug_id)] = 'd'
 
         for bug_id, category in labels.get_labels('defect_feature_task'):
             assert category in ['d', 'f', 't']
@@ -93,6 +99,8 @@ class BugModel(Model):
             elif kind == 'regression':
                 if category in ['f', 't']:
                     classes[int(bug_id)] = 0
+            elif kind == 'defect_feature_task':
+                classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         bug_ids = set()
@@ -105,9 +113,15 @@ class BugModel(Model):
                 continue
 
             if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-                classes[bug_id] = 1
+                if kind in ['bug', 'regression']:
+                    classes[bug_id] = 1
+                else:
+                    classes[bug_id] = 'd'
             elif any(keyword in bug['keywords'] for keyword in ['feature']):
-                classes[bug_id] = 0
+                if kind in ['bug', 'regression']:
+                    classes[bug_id] = 0
+                else:
+                    classes[bug_id] = 'f'
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
