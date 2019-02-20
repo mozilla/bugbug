@@ -139,9 +139,9 @@ def download_commits(repo_dir, date_from):
     global author_experience_90_days
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
-        if commit.ever_backedout:
-            continue
-        total_commits_by_author[commit.author] += 1
+        # We don't want to consider backed out commits when calculating author/reviewer experience.
+        if not commit.ever_backedout:
+            total_commits_by_author[commit.author] += 1
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
         cut = None
@@ -157,7 +157,8 @@ def download_commits(repo_dir, date_from):
 
         author_experience_90_days[commit] = len(commits_by_author[commit.author])
 
-        commits_by_author[commit.author].append(commit)
+        if not commit.ever_backedout:
+            commits_by_author[commit.author].append(commit)
 
     global COMPONENTS
     r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
