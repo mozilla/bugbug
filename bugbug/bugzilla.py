@@ -7,7 +7,7 @@ import json
 import os
 
 import requests
-from libmozdata import bugzilla
+from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
 from bugbug import db
@@ -43,7 +43,7 @@ def get_bugs():
 
 
 def set_token(token):
-    bugzilla.Bugzilla.TOKEN = token
+    Bugzilla.TOKEN = token
 
 
 def _download(ids_or_query):
@@ -81,7 +81,7 @@ def _download(ids_or_query):
 
         new_bugs[bug_id]['history'] = bug['history']
 
-    bugzilla.Bugzilla(ids_or_query, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
+    Bugzilla(ids_or_query, bughandler=bughandler, commenthandler=commenthandler, comment_include_fields=COMMENT_INCLUDE_FIELDS, attachmenthandler=attachmenthandler, attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS, historyhandler=historyhandler).get_data().wait()
 
     return new_bugs
 
@@ -130,12 +130,12 @@ def download_bugs_between(date_from, date_to, security=False):
     all_ids = []
 
     with tqdm(total=count) as progress_bar:
-        for offset in range(0, count, bugzilla.Bugzilla.BUGZILLA_CHUNK_SIZE):
+        for offset in range(0, count, Bugzilla.BUGZILLA_CHUNK_SIZE):
             params['offset'] = offset
 
             new_bugs = _download(params)
 
-            progress_bar.update(bugzilla.Bugzilla.BUGZILLA_CHUNK_SIZE)
+            progress_bar.update(Bugzilla.BUGZILLA_CHUNK_SIZE)
 
             all_ids += [bug for bug in new_bugs.values()]
 
