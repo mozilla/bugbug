@@ -337,6 +337,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         self.rollback = rollback
         self.rollback_when = rollback_when
         self.commit_map = repository.get_commit_map() if commit_data else None
+        assert self.commit_map is None or len(self.commit_map) > 0
 
     def fit(self, x, y=None):
         return self
