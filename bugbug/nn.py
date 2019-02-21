@@ -9,7 +9,6 @@ from keras.utils import to_categorical
 from sklearn.base import BaseEstimator
 from sklearn.base import ClassifierMixin
 from sklearn.base import TransformerMixin
-from sklearn.preprocessing import LabelEncoder
 
 from bugbug.utils import numpy_to_dict
 
@@ -36,8 +35,7 @@ class KerasClassifier(BaseEstimator, ClassifierMixin):
     def fit(self, X, y):
         X_dict = numpy_to_dict(X)
 
-        self._le = LabelEncoder().fit(y)
-        y = to_categorical(self._le.transform(y))
+        y = to_categorical(y)
 
         self.model = self.model_creator(X_dict, y)
 
@@ -49,5 +47,4 @@ class KerasClassifier(BaseEstimator, ClassifierMixin):
         return self.model.predict(numpy_to_dict(X))
 
     def predict(self, X):
-        y = self.predict_proba(X).argmax(axis=-1)
-        return self._le.inverse_transform(y)
+        return self.predict_proba(X).argmax(axis=-1)
