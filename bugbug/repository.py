@@ -77,6 +77,8 @@ def _transform(commit):
             type_ = 'Java'
         elif ext == '.py':
             type_ = 'Python'
+        elif ext == '.rs':
+            type_ = 'Rust'
         else:
             type_ = ext
         obj['types'].add(type_)
