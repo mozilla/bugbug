@@ -117,7 +117,7 @@ def hg_log(hg, first_rev):
 
 
 def get_rev(hg, date):
-    return hg.log(date=date.strftime('%Y-%m-%d'), limit=1)[0].node.decode('utf-8')
+    return hg.log(revrange='pushdate("{}")'.format(date.strftime('%Y-%m-%d')), limit=1)[0].node.decode('utf-8')
 
 
 def download_commits(repo_dir, date_from):
