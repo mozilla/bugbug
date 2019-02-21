@@ -96,17 +96,13 @@ def is_outdated(path):
 
 
 def update_ver_file(db_path):
-    if not os.path.exists(VER_PATH):
-        ver_dict = {
-            db_path: DATABASES[db_path]['version']
-        }
-        with open(VER_PATH, 'w') as db:
-            json.dump(ver_dict, db)
-        return
-
-    with open(VER_PATH) as db:
-        ver_dict = json.load(db)
+    if os.path.exists(VER_PATH):
+        with open(VER_PATH) as db:
+            ver_dict = json.load(db)
+    else:
+        ver_dict = {}
 
     ver_dict[db_path] = DATABASES[db_path]['version']
+
     with open(VER_PATH, 'w') as db:
         json.dump(ver_dict, db)
