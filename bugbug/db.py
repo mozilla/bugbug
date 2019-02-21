@@ -11,6 +11,8 @@ from urllib.request import urlretrieve
 
 DATABASES = {}
 
+VER_PATH = 'data/DB_VERSION.json'
+
 
 def register(path, url, version):
     DATABASES[path] = {'url': url, 'version': version}
@@ -29,8 +31,6 @@ def download():
 
         xz_path = f'{path}.xz'
 
-        ver_path = 'data/DB_VERSION.json'
-
         # Only download if the xz file is not there yet.
         if not os.path.exists(xz_path) or is_outdated(path):
             urlretrieve(DATABASES[path]['url'], xz_path)
@@ -39,7 +39,7 @@ def download():
             with lzma.open(xz_path) as input_f:
                 shutil.copyfileobj(input_f, output_f)
 
-        update_ver_file(ver_path, path)
+        update_ver_file(path)
 
 
 def read(path):
@@ -87,29 +87,26 @@ def delete(path, match):
 
 
 def is_outdated(path):
-    ver_path = 'data/DB_VERSION.json'
-
-    if not os.path.exists(ver_path):
+    if not os.path.exists(VER_PATH):
         return True
-    else:
-        with open(ver_path) as db:
-            ver = json.load(db)
-        if ver.get(path):
-            return not DATABASES[path]['version'] == ver[path]
-        else:
-            return True
+
+    with open(VER_PATH) as db:
+        ver = json.load(db)
+    return DATABASES[path]['version'] != ver[path] if path in ver else True
 
 
-def update_ver_file(ver_path, db_path):
-    if not os.path.exists(ver_path):
-        ver_dict = {}
-        ver_dict[db_path] = DATABASES[db_path]['version']
-        with open(ver_path, 'w') as db:
+def update_ver_file(db_path):
+    if not os.path.exists(VER_PATH):
+        ver_dict = {
+            db_path: DATABASES[db_path]['version']
+        }
+        with open(VER_PATH, 'w') as db:
             json.dump(ver_dict, db)
+        return
 
-    with open(ver_path) as db:
+    with open(VER_PATH) as db:
         ver_dict = json.load(db)
 
     ver_dict[db_path] = DATABASES[db_path]['version']
-    with open(ver_path, 'w') as db:
+    with open(VER_PATH, 'w') as db:
         json.dump(ver_dict, db)
