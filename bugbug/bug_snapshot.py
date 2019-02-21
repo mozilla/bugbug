@@ -229,8 +229,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
 
             if change['added'] != '---':
                 if field not in bug:
-                    # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
+                    # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
+                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_']):
                         if verbose:
                             print(f'{field} is not in bug {bug["id"]}')
                     else:
@@ -274,8 +274,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 # TODO: Users can change their email, try with all emails from a mapping file.
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
-                        # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                        if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
+                        # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
+                        if not all_inconsistencies and any(field.startswith(k) for k in ['cf_']):
                             print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
@@ -299,12 +299,12 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     return bug
 
 
-def get_inconsistencies():
+def get_inconsistencies(find_all=False):
     inconsistencies = []
 
     for bug in bugzilla.get_bugs():
         try:
-            rollback(bug, None, False, True)
+            rollback(bug, None, False, find_all)
         except Exception as e:
             print(bug['id'])
             print(e)
