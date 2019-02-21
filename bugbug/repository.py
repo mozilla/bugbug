@@ -73,9 +73,9 @@ def _transform(commit):
             type_ = 'JavaScript'
         elif ext in ['.c', '.cpp', '.cc', '.cxx', '.m', '.mm', '.h', '.hh', '.hpp', '.hxx']:
             type_ = 'C/C++'
-        elif ext in ['.java']:
+        elif ext == '.java':
             type_ = 'Java'
-        elif ext in ['.py']:
+        elif ext == '.py':
             type_ = 'Python'
         else:
             type_ = ext
