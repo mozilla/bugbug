@@ -71,7 +71,7 @@ def _transform(commit):
         ext = os.path.splitext(path)[1]
         if ext in ['.js', '.jsm']:
             type_ = 'JavaScript'
-        elif ext in ['.c', '.cpp', '.h']:
+        elif ext in ['.c', '.cpp', '.cc', '.cxx', '.m', '.mm', '.h', '.hh', '.hpp', '.hxx']:
             type_ = 'C/C++'
         elif ext in ['.java']:
             type_ = 'Java'
