@@ -25,6 +25,7 @@ from bugbug.models.component import ComponentModel
 from bugbug.nn import KerasClassifier
 from bugbug.nn import KerasTextToSequences
 from bugbug.utils import DictExtractor
+from bugbug.utils import MissingOrdinalEncoder
 from bugbug.utils import StructuredColumnTransformer
 
 
@@ -260,7 +261,7 @@ class ComponentNNModel(ComponentModel):
             ('union', StructuredColumnTransformer([
                 ('platform', make_pipeline(DictExtractor('platform'), OrdinalEncoder()), 'data'),
                 ('op_sys', make_pipeline(DictExtractor('op_sys'), OrdinalEncoder()), 'data'),
-                ('bug_reporter', make_pipeline(DictExtractor('bug_reporter'), OrdinalEncoder()), 'data'),
+                ('bug_reporter', make_pipeline(DictExtractor('bug_reporter'), MissingOrdinalEncoder()), 'data'),
                 ('title_sequence', KerasTextToSequences(
                     self.short_desc_maxlen, self.short_desc_vocab_size), 'title'),
                 ('first_comment_sequence', KerasTextToSequences(
