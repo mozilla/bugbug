@@ -31,7 +31,10 @@ from bugbug.utils import StructuredColumnTransformer
 
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
-        super().__init__(epochs=2, batch_size=256)
+
+        # (epochs, batch_size) combinations
+        fit_params = [(2, 256), (2, 512), (1, 1024)]
+        super().__init__(fit_params=fit_params)
 
         self.set_params(**kwargs)
 
