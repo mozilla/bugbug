@@ -28,9 +28,8 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
 
 
 class KerasClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(self, epochs, batch_size):
-        self.epochs = epochs
-        self.batch_size = batch_size
+    def __init__(self, fit_params):
+        self.fit_params = fit_params
 
     def fit(self, X, y):
         X_dict = numpy_to_dict(X)
@@ -39,7 +38,8 @@ class KerasClassifier(BaseEstimator, ClassifierMixin):
 
         self.model = self.model_creator(X_dict, y)
 
-        self.model.fit(X_dict, y, epochs=self.epochs, batch_size=self.batch_size, verbose=1)
+        for (epochs, batch_size) in self.fit_params:
+            self.model.fit(X_dict, y, epochs=epochs, batch_size=batch_size, verbose=1)
 
         return self
 
