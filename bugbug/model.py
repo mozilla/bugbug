@@ -29,6 +29,14 @@ class Model():
 
         self.calculate_importance = True
 
+    @property
+    def le(self):
+        """Classifier agnostic getter for the label encoder property"""
+        try:
+            return self.clf._le
+        except AttributeError:
+            return self.clf.le_
+
     def get_feature_names(self):
         return []
 
@@ -135,7 +143,7 @@ class Model():
                 y_test_filter.append(y_test[i])
                 y_pred_filter.append(argmax)
 
-            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+            y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
             print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
             print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))

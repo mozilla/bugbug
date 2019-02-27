@@ -21,6 +21,7 @@ def keyword_mapping(keyword):
         'pp': 'platform-parity',
         'footprint': 'memory-footprint',
         'ateam-marionette-firefox-puppeteer': 'pi-marionette-firefox-puppeteer',
+        'ateam-marionette-big': 'pi-marionette-big',
     }
 
     return mapping[keyword] if keyword in mapping else keyword
@@ -56,6 +57,13 @@ def op_sys(op_sys):
     return op_sys
 
 
+def product(product):
+    if product == 'Web Compatibility Tools':
+        return 'Web Compatibility'
+
+    return product
+
+
 FIELD_TYPES = {
     'blocks': int,
     'depends_on': int,
@@ -66,6 +74,7 @@ FIELD_TYPES = {
     'keywords': keyword_mapping,
     'groups': group_mapping,
     'op_sys': op_sys,
+    'product': product,
 }
 
 
@@ -213,6 +222,10 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             obj['flags'].remove(found_flag)
 
                 if change['removed']:
+                    # Inconsistent review flag.
+                    if bug['id'] == 1342178:
+                        continue
+
                     for to_add in change['removed'].split(', '):
                         name, status, requestee = parse_flag_change(to_add)
 
@@ -229,8 +242,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
 
             if change['added'] != '---':
                 if field not in bug:
-                    # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_', 'cf_blocking_', 'cf_platform_rel']):
+                    # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
+                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_']):
                         if verbose:
                             print(f'{field} is not in bug {bug["id"]}')
                     else:
@@ -274,8 +287,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 # TODO: Users can change their email, try with all emails from a mapping file.
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
-                        # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1514002 is fixed.
-                        if not all_inconsistencies and any(field.startswith(k) for k in ['cf_status_', 'cf_tracking_']):
+                        # TODO: try to remove the cf_ part when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
+                        if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]):
                             print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
@@ -299,12 +312,12 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     return bug
 
 
-def get_inconsistencies():
+def get_inconsistencies(find_all=False):
     inconsistencies = []
 
     for bug in bugzilla.get_bugs():
         try:
-            rollback(bug, None, False, True)
+            rollback(bug, None, False, find_all)
         except Exception as e:
             print(bug['id'])
             print(e)

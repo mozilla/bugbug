@@ -20,7 +20,7 @@ from tqdm import tqdm
 from bugbug import db
 
 COMMITS_DB = 'data/commits.json'
-db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1')
+db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1', 'v1')
 
 COMPONENTS = {}
 
@@ -46,7 +46,7 @@ def _transform(commit):
         'author': commit.author.decode('utf-8'),
         'desc': desc,
         'date': str(commit.date),
-        'bug_id': commit.bug.decode('utf-8'),
+        'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
         'ever_backedout': commit.ever_backedout,
         'added': 0,
         'deleted': 0,
@@ -71,12 +71,14 @@ def _transform(commit):
         ext = os.path.splitext(path)[1]
         if ext in ['.js', '.jsm']:
             type_ = 'JavaScript'
-        elif ext in ['.c', '.cpp', '.h']:
+        elif ext in ['.c', '.cpp', '.cc', '.cxx', '.m', '.mm', '.h', '.hh', '.hpp', '.hxx']:
             type_ = 'C/C++'
-        elif ext in ['.java']:
+        elif ext == '.java':
             type_ = 'Java'
-        elif ext in ['.py']:
+        elif ext == '.py':
             type_ = 'Python'
+        elif ext == '.rs':
+            type_ = 'Rust'
         else:
             type_ = ext
         obj['types'].add(type_)
@@ -117,7 +119,7 @@ def hg_log(hg, first_rev):
 
 
 def get_rev(hg, date):
-    return hg.log(date=date.strftime('%Y-%m-%d'), limit=1)[0].node.decode('utf-8')
+    return hg.log(revrange='pushdate("{}")'.format(date.strftime('%Y-%m-%d')), limit=1)[0].node.decode('utf-8')
 
 
 def download_commits(repo_dir, date_from):
