@@ -46,7 +46,7 @@ def _transform(commit):
         'author': commit.author.decode('utf-8'),
         'desc': desc,
         'date': str(commit.date),
-        'bug_id': commit.bug.decode('utf-8'),
+        'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
         'ever_backedout': commit.ever_backedout,
         'added': 0,
         'deleted': 0,
