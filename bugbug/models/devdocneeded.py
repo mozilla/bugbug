@@ -73,6 +73,9 @@ class DevDocNeededModel(Model):
 
             for entry in bug_data['history']:
                 for change in entry['changes']:
+                    if change['field_name'] == 'keywords' and 'dev-doc-needed' in change['removed'] and 'dev-doc-complete' not in change['added']:
+                        classes[bug_id] = 0
+                        continue
                     if change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete']):
                         classes[bug_id] = 1
 
