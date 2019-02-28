@@ -48,8 +48,9 @@ def test_cleanup_hex():
 def test_cleanup_dll():
     tests = [
         ('Crashing thread: 0 scdetour.dll scdetour.dll@0x2dd77', 'Crashing thread: 0 __DLL_NAME__ __DLL_NAME__@0x2dd77'),
-        ('Crash in libxul.so@0x287ad36 | libxul.so@0x270c062', 'Crash in __DLL_NAME__@0x287ad36 | __DLL_NAME__@0x270c062'),
-        ('Crash in libsystem_pthread.dylib@0x14fc', 'Crash in __DLL_NAME__@0x14fc')
+        ('Crash in libxul.so@0x287ad36 | libxul.so@0x270c062', 'Crash in libxul.so@0x287ad36 | libxul.so@0x270c062'),
+        ('Crash in libsystem_pthread.dylib@0x14fc', 'Crash in __DLL_NAME__@0x14fc'),
+        ('Crash in liblgpllibs.so@0x14fc exmpl.so@0xask ', 'Crash in liblgpllibs.so@0x14fc __DLL_NAME__@0xask ')
     ]
     for orig_text, cleaned_text in tests:
         assert bug_features.cleanup_dll(orig_text) == cleaned_text
