@@ -92,18 +92,15 @@ if __name__ == '__main__':
     if args.generate_sheet:
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
-        bug_ids = bugzilla.download_bugs_between(a_week_ago, today)
+        bugs = bugzilla.download_bugs_between(a_week_ago, today)
 
-        print(f'Classifying {len(bug_ids)} bugs...')
+        print(f'Classifying {len(bugs)} bugs...')
 
         rows = [
             ['Bug', f'{args.goal}(model)', args.goal, 'Title']
         ]
 
-        for bug in bugzilla.get_bugs():
-            if bug['id'] not in bug_ids:
-                continue
-
+        for bug in bugs:
             p = model.classify(bug, probabilities=True)
             rows.append([f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}', 'y' if p[0][1] >= 0.7 else 'n', '', bug['summary']])
 

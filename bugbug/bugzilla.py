@@ -131,7 +131,7 @@ def download_bugs_between(date_from, date_to, security=False):
 
     old_bug_ids = set(bug['id'] for bug in get_bugs())
 
-    all_ids = []
+    all_bugs = []
 
     with tqdm(total=count) as progress_bar:
         for offset in range(0, count, Bugzilla.BUGZILLA_CHUNK_SIZE):
@@ -141,11 +141,11 @@ def download_bugs_between(date_from, date_to, security=False):
 
             progress_bar.update(Bugzilla.BUGZILLA_CHUNK_SIZE)
 
-            all_ids += [bug for bug in new_bugs.values()]
+            all_bugs += [bug for bug in new_bugs.values()]
 
             db.append(BUGS_DB, (bug for bug_id, bug in new_bugs.items() if bug_id not in old_bug_ids))
 
-    return all_ids
+    return all_bugs
 
 
 def download_bugs(bug_ids, products=None, security=False):
