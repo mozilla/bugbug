@@ -39,6 +39,8 @@ class BugModel(Model):
             bug_features.blocked_bugs_number(),
             bug_features.ever_affected(),
             bug_features.affected_then_unaffected(),
+			bug_features.product(),
+			bug_features.component(),
         ]
 
         cleanup_functions = [
