@@ -322,7 +322,7 @@ FIREFOX_DLLS_MATCH = '|'.join([
 
 
 def cleanup_dll(text):
-    regex = r'\b(?!' + FIREFOX_DLLS_MATCH + r')\w+(\.dll|\.so|\.dylib)\b'
+    regex = fr'\b(?!{FIREFOX_DLLS_MATCH})\w+(\.dll|\.so|\.dylib)\b'
     return re.sub(regex, '__DLL_NAME__', text)
 
 
