@@ -78,7 +78,8 @@ class DevDocNeededModel(Model):
                         classes[bug_id] = 0
                     # Bugs that go from dev-doc-needed to dev-doc-complete are guaranteed to be good
                     # Bugs that go from not having dev-doc-needed to having dev-doc-complete are bugs
-                    #   that were missed by previous scans through content but someone realized it should have been flagged and updated the docs, found the docs already updated.
+                    # that were missed by previous scans through content but someone realized it 
+                    # should have been flagged and updated the docs, found the docs already updated.
                     elif change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete']):
                         classes[bug_id] = 1
 
