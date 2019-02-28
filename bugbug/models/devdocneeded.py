@@ -73,10 +73,13 @@ class DevDocNeededModel(Model):
 
             for entry in bug_data['history']:
                 for change in entry['changes']:
+                    # Bugs that get dev-doc-needed removed from them at some point after it's been added (this suggests a false positive among human-analyzed bugs)
                     if change['field_name'] == 'keywords' and 'dev-doc-needed' in change['removed'] and 'dev-doc-complete' not in change['added']:
                         classes[bug_id] = 0
-                        continue
-                    if change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete']):
+                    # Bugs that go from dev-doc-needed to dev-doc-complete are guaranteed to be good
+                    # Bugs that go from not having dev-doc-needed to having dev-doc-complete are bugs
+                    #   that were missed by previous scans through content but someone realized it should have been flagged and updated the docs, found the docs already updated.
+                    elif change['field_name'] == 'keywords' and any(keyword in change['added'] for keyword in ['dev-doc-needed', 'dev-doc-complete']):
                         classes[bug_id] = 1
 
             if bug_id not in classes:
