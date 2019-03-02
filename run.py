@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal',
                         help='Goal of the classifier',
-                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defect_feature_task'],
+                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectfeaturetask'],
                         default='bug')
     parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
         model_class = BugModel
-    elif args.goal == 'defect_feature_task':
+    elif args.goal == 'defectfeaturetask':
         from bugbug.models.defect_feature_task import DefectFeatureTaskModel
         model_class = DefectFeatureTaskModel
     elif args.goal == 'regression':
@@ -92,18 +92,15 @@ if __name__ == '__main__':
     if args.generate_sheet:
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
-        bug_ids = bugzilla.download_bugs_between(a_week_ago, today)
+        bugs = bugzilla.download_bugs_between(a_week_ago, today)
 
-        print(f'Classifying {len(bug_ids)} bugs...')
+        print(f'Classifying {len(bugs)} bugs...')
 
         rows = [
             ['Bug', f'{args.goal}(model)', args.goal, 'Title']
         ]
 
-        for bug in bugzilla.get_bugs():
-            if bug['id'] not in bug_ids:
-                continue
-
+        for bug in bugs:
             p = model.classify(bug, probabilities=True)
             rows.append([f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}', 'y' if p[0][1] >= 0.7 else 'n', '', bug['summary']])
 
