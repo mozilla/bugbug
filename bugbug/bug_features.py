@@ -62,6 +62,7 @@ class keywords(object):
 class severity(object):
     def __call__(self, bug, **kwargs):
         return field(bug, 'severity')
+    
 
 class number_of_bug_dependencies(object):
     def __call__(self,bug, **kwargs):
