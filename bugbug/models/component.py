@@ -25,6 +25,7 @@ class ComponentModel(Model):
     CONFLATED_COMPONENTS = [
         'Core::Audio/Video', 'Core::Graphics', 'Core::IPC', 'Core::JavaScript', 'Core::Layout', 'Core::Networking',
         'Core::Print', 'Core::WebRTC', 'Firefox::Activity Streams', 'Toolkit::Password Manager',
+        'DevTools', 'External Software Affecting Firefox', 'WebExtensions',
     ]
 
     MEANINGFUL_COMPONENTS = [
@@ -114,22 +115,18 @@ class ComponentModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def filter_component(self, bug_data):
-        if bug_data['product'] not in self.PRODUCTS:
-            return None
-
         full_comp = f'{bug_data["product"]}::{bug_data["component"]}'
+
+        if full_comp in self.MEANINGFUL_COMPONENTS:
+            return full_comp
 
         for conflated_component in self.CONFLATED_COMPONENTS:
             if full_comp.startswith(conflated_component):
                 return conflated_component
 
-        if full_comp in self.MEANINGFUL_COMPONENTS:
-            return full_comp
-
-        return bug_data['product']
+        return None
 
     def get_labels(self):
-
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
