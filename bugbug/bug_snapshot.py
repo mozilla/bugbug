@@ -327,7 +327,13 @@ def get_inconsistencies(find_all=False):
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--verbose', help='Verbose mode', action='store_true')
+    args = parser.parse_args()
+
     for i, bug in enumerate(bugzilla.get_bugs()):
-        print(bug['id'])
-        print(i)
+        if args.verbose:
+            print(bug['id'])
+            print(i)
         rollback(bug, None, False)
