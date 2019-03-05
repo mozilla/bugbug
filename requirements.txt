@@ -2,7 +2,7 @@ libmozdata==0.1.50
 numpy==1.16.2
 scipy==1.2.1
 scikit-learn==0.20.3
-xgboost==0.81
+xgboost==0.82
 requests==2.21.0
 imbalanced-learn==0.4.3
 spacy==2.0.18
