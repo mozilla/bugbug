@@ -28,6 +28,15 @@ class ComponentModel(Model):
         'DevTools', 'External Software Affecting Firefox', 'WebExtensions',
     ]
 
+    CONFLATED_COMPONENTS_MAPPING = {
+        'Core::JavaScript': 'Core::JavaScript Engine',
+        'Core::Print': 'Core::Printing: Output',
+        'Firefox::Activity Streams': 'Firefox::Activity Streams: Newtab',
+        'DevTools': 'DevTools::General',
+        'External Software Affecting Firefox': 'External Software Affecting Firefox: Other',
+        'WebExtensions': 'WebExtensions::Untriaged',
+    }
+
     MEANINGFUL_COMPONENTS = [
         'Core::CSS Parsing and Computation', 'Core::Canvas: 2D', 'Core::Canvas: WebGL', 'Core::DOM',
         'Core::DOM: Animation', 'Core::DOM: CSS Object Model', 'Core::DOM: Content Processes',
@@ -48,7 +57,6 @@ class ComponentModel(Model):
         'DevTools::Performance Tools (Profiler/Timeline)', 'DevTools::Responsive Design Mode',
         'DevTools::Shared Components', 'DevTools::Storage Inspector', 'DevTools::Style Editor', 'DevTools::WebIDE',
         'DevTools::about:debugging',
-        'External Software Affecting Firefox::Other',
         'Firefox for Android::Activity Stream', 'Firefox for Android::Android Sync',
         'Firefox for Android::Audio/Video', 'Firefox for Android::Awesomescreen',
         'Firefox for Android::Firefox Accounts', 'Firefox for Android::GeckoView',
