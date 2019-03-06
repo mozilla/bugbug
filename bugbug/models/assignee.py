@@ -57,10 +57,9 @@ class AssigneeModel(Model):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 
+
     def get_labels(self):
-
         classes = {}
-
         for bug_data in bugzilla.get_bugs():
             if bug_data['assigned_to_detail']['email'] == 'nobody@mozilla.org':
                 continue
