@@ -60,8 +60,17 @@ class AssigneeModel(Model):
 
     def get_labels(self):
         classes = {}
+        addresses_to_exclude = [
+            'nobody@bugzilla.org',
+            'nobody@example.com',
+            'nobody@fedoraproject.org',
+            'nobody@mozilla.org',
+            'nobody@msg1.fake',
+            'nobody@nss.bugs',
+            'nobody@t4b.me'
+        ]
         for bug_data in bugzilla.get_bugs():
-            if bug_data['assigned_to_detail']['email'] == 'nobody@mozilla.org':
+            if bug_data['assigned_to_detail']['email'] in addresses_to_exclude:
                 continue
 
             bug_id = int(bug_data['id'])
