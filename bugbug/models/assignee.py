@@ -75,14 +75,15 @@ class AssigneeModel(Model):
             bug_id = int(bug_data['id'])
             classes[bug_id] = bug_data['assigned_to_detail']['email']
 
-        component_counts = Counter(classes.values()).most_common()
-        top_components = set(component for component, count in component_counts)
+        assignee_counts = Counter(classes.values()).most_common()
+        top_assignees = set(assignee if count > 5 else None for assignee, count in assignee_counts)
+        top_assignees.remove(None)
 
-        print(f'{len(top_components)} components')
-        for component, count in component_counts:
-            print(f'{component}: {count}')
+        print(f'{len(top_assignees)} assignees')
+        for assignee, count in assignee_counts:
+            print(f'{assignee}: {count}')
 
-        return {bug_id: component for bug_id, component in classes.items() if component in top_components}
+        return {bug_id: assignee for bug_id, assignee in classes.items() if assignee in top_assignees}
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps['union'].get_feature_names()
