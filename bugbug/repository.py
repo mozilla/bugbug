@@ -25,7 +25,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 COMPONENTS = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout', 'author_email'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email'])
 
 author_experience = {}
 author_experience_90_days = {}
@@ -48,7 +48,7 @@ def _transform(commit):
         'desc': desc,
         'date': str(commit.date),
         'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
-        'ever_backedout': commit.ever_backedout,
+        'ever_backedout': commit.backedoutby != b'',
         'added': 0,
         'deleted': 0,
         'files_modified_num': 0,
@@ -112,7 +112,7 @@ def _hg_log(revs):
             desc=rev[2],
             date=dt,
             bug=rev[4],
-            ever_backedout=(rev[5] != b''),
+            backedoutby=rev[5],
             author_email=rev[6],
         ))
 
@@ -147,6 +147,10 @@ def download_commits(repo_dir, date_from):
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
+    # Don't analyze backouts.
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != b'')
+    commits = [commit for commit in commits if commit.node not in backouts]
+
     commits_num = len(commits)
 
     print(f'Analyzing {commits_num} patches...')
@@ -161,7 +165,7 @@ def download_commits(repo_dir, date_from):
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
-        if not commit.ever_backedout:
+        if not commit.backedoutby:
             total_commits_by_author[commit.author] += 1
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
@@ -178,7 +182,7 @@ def download_commits(repo_dir, date_from):
 
         author_experience_90_days[commit] = len(commits_by_author[commit.author])
 
-        if not commit.ever_backedout:
+        if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)
 
     global COMPONENTS
