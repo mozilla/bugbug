@@ -3,10 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
 import json
 import lzma
 import os
 import shutil
+from contextlib import contextmanager
 from urllib.request import urlretrieve
 
 DATABASES = {}
@@ -42,47 +44,63 @@ def download():
         update_ver_file(path)
 
 
+@contextmanager
+def _db_open(path, mode):
+    _, ext = os.path.splitext(path)
+
+    if ext == '.gz':
+        with gzip.GzipFile(path, mode) as f:
+            yield f
+    else:
+        with open(path, mode) as f:
+            yield f
+
+
 def read(path):
     assert path in DATABASES
 
     if not os.path.exists(path):
         return ()
 
-    with open(path, 'r') as f:
+    with _db_open(path, 'r') as f:
         for line in f:
             yield json.loads(line)
 
 
-def write(path, bugs):
+def _fwrite(f, elems):
+    for elem in elems:
+        f.write((json.dumps(elem) + '\n').encode('utf-8'))
+
+
+def write(path, elems):
     assert path in DATABASES
 
-    with open(path, 'w') as f:
-        for bug in bugs:
-            f.write(json.dumps(bug))
-            f.write('\n')
+    with _db_open(path, 'wb') as f:
+        _fwrite(f, elems)
 
 
-def append(path, bugs):
+def append(path, elems):
     assert path in DATABASES
 
-    with open(path, 'a') as f:
-        for bug in bugs:
-            f.write(json.dumps(bug))
-            f.write('\n')
+    with _db_open(path, 'ab') as f:
+        _fwrite(f, elems)
 
 
 def delete(path, match):
     assert path in DATABASES
 
-    with open(f'{path}_new', 'w') as fw:
-        with open(path, 'r') as fr:
+    dirname, basename = os.path.split(path)
+    new_path = os.path.join(dirname, f'new_{basename}')
+
+    with _db_open(new_path, 'w') as fw:
+        with _db_open(path, 'r') as fr:
             for line in fr:
                 elem = json.loads(line)
                 if not match(elem):
                     fw.write(line)
 
     os.unlink(path)
-    os.rename(f'{path}_new', path)
+    os.rename(new_path, path)
 
 
 def is_outdated(path):
