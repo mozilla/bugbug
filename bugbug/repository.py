@@ -151,6 +151,9 @@ def download_commits(repo_dir, date_from):
     backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != b'')
     commits = [commit for commit in commits if commit.node not in backouts]
 
+    # Don't analyze commits that are not linked to a bug.
+    commits = [commit for commit in commits if commit.bug != b'']
+
     commits_num = len(commits)
 
     print(f'Analyzing {commits_num} patches...')
