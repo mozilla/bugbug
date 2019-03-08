@@ -55,7 +55,7 @@ class AssigneeModel(Model):
         ]
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
@@ -89,3 +89,6 @@ class AssigneeModel(Model):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps['union'].get_feature_names()
+
+    def rollback(self, change):
+        return change['field_name'].startswith('assigned_to')
