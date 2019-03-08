@@ -57,7 +57,7 @@ class QANeededModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def rollback(self, change):
-        return any(change['added'].startswith(prefix) for prefix in ['qawanted', 'qe-verify'])
+        return any(change['added'].startswith(prefix) for prefix in ['qawanted', 'qe-verify', 'qaurgent'])
 
     def get_labels(self):
         classes = {}
@@ -67,7 +67,7 @@ class QANeededModel(Model):
 
             for entry in bug_data['history']:
                 for change in entry['changes']:
-                    if change['added'].startswith('qawanted') or change['added'].startswith('qe-verify'):
+                    if any(change['added'].startswith(label) for label in ['qawanted', 'qe-verify', 'qaurgent']):
                         classes[bug_id] = 1
             if bug_id not in classes:
                 classes[bug_id] = 0
