@@ -64,6 +64,11 @@ class severity(object):
         return field(bug, 'severity')
 
 
+class number_of_bug_dependencies(object):
+    def __call__(self, bug, **kwargs):
+        return len(bug['depends_on'])
+
+
 class is_coverity_issue(object):
     def __call__(self, bug, **kwargs):
         return re.search('[CID ?[0-9]+]', bug['summary']) is not None or re.search('[CID ?[0-9]+]', bug['whiteboard']) is not None

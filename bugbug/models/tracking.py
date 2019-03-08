@@ -45,6 +45,7 @@ class TrackingModel(Model):
             bug_features.comment_count(),
             bug_features.comment_length(),
             bug_features.reporter_experience(),
+            bug_features.number_of_bug_dependencies()
         ]
 
         cleanup_functions = [
