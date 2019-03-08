@@ -133,6 +133,8 @@ def download_commits(repo_dir, date_from):
 
     commits_num = len(revs)
 
+    assert commits_num > 0, 'There should definitely be more than 0 commits, something is wrong'
+
     hg.close()
 
     processes = multiprocessing.cpu_count()
