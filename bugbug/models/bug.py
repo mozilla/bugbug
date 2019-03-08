@@ -41,7 +41,6 @@ class BugModel(Model):
             bug_features.affected_then_unaffected(),
             bug_features.product(),
             bug_features.component(),
-            bug_features.number_of_bug_dependencies(),
         ]
 
         cleanup_functions = [
