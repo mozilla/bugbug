@@ -154,6 +154,13 @@ def download_commits(repo_dir, date_from):
     # Don't analyze commits that are not linked to a bug.
     commits = [commit for commit in commits if commit.bug != b'']
 
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, '.hg-annotate-ignore-revs'), 'r') as f:
+        ignore_revs = set(l[:40].encode('utf-8') for l in f)
+
+    commits = [commit for commit in commits if commit.node not in ignore_revs]
+
     commits_num = len(commits)
 
     print(f'Analyzing {commits_num} patches...')
