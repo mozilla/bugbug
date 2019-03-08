@@ -14,6 +14,17 @@ from bugbug import bug_features
 from bugbug import bugzilla
 from bugbug.model import Model
 
+MINIMUM_ASSIGNMENTS = 5
+ADDRESSES_TO_EXCLUDE = [
+    'nobody@bugzilla.org',
+    'nobody@example.com',
+    'nobody@fedoraproject.org',
+    'nobody@mozilla.org',
+    'nobody@msg1.fake',
+    'nobody@nss.bugs',
+    'nobody@t4b.me'
+]
+
 
 class AssigneeModel(Model):
     def __init__(self, lemmatization=False):
@@ -59,25 +70,16 @@ class AssigneeModel(Model):
 
     def get_labels(self):
         classes = {}
-        addresses_to_exclude = [
-            'nobody@bugzilla.org',
-            'nobody@example.com',
-            'nobody@fedoraproject.org',
-            'nobody@mozilla.org',
-            'nobody@msg1.fake',
-            'nobody@nss.bugs',
-            'nobody@t4b.me'
-        ]
+
         for bug_data in bugzilla.get_bugs():
-            if bug_data['assigned_to_detail']['email'] in addresses_to_exclude:
+            if bug_data['assigned_to_detail']['email'] in ADDRESSES_TO_EXCLUDE:
                 continue
 
             bug_id = int(bug_data['id'])
             classes[bug_id] = bug_data['assigned_to_detail']['email']
 
         assignee_counts = Counter(classes.values()).most_common()
-        top_assignees = set(assignee if count > 5 else None for assignee, count in assignee_counts)
-        top_assignees.remove(None)
+        top_assignees = set(assignee for assignee, count in assignee_counts if count > MINIMUM_ASSIGNMENTS)
 
         print(f'{len(top_assignees)} assignees')
         for assignee, count in assignee_counts:
