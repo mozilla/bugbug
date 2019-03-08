@@ -127,8 +127,11 @@ class BugModel(Model):
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
-                        if change['field_name'] == 'keywords' and 'regression' in change['removed'].split(','):
-                            classes[bug_id] = 0
+                        if change['field_name'] == 'keywords':
+                            if 'regression' in change['removed'].split(','):
+                                classes[bug_id] = 0
+                            elif 'regression' in change['added'].split(','):
+                                classes[bug_id] = 1
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
