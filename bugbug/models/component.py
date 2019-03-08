@@ -16,7 +16,6 @@ from bugbug.model import Model
 
 
 class ComponentModel(Model):
-
     PRODUCTS = {
         'Core', 'External Software Affecting Firefox', 'DevTools', 'Firefox for Android', 'Firefox', 'Toolkit',
         'WebExtensions'
