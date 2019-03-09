@@ -56,8 +56,8 @@ class UpliftModel(Model):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 
-    def rollback(self,change):
-    	return (change['added'].startswith('approval-mozilla-') and (change['added'].endswith('+') or change['added'].endswith('-'))) or (change['removed'].startswith('approval-mozilla-') and (change['removed'].endswith('+') or change['removed'].endswith('-')))
+    def rollback(self, change):
+        return (change['added'].startswith('approval-mozilla-') and (change['added'].endswith('+') or change['added'].endswith('-'))) or (change['removed'].startswith('approval-mozilla-') and (change['removed'].endswith('+') or change['removed'].endswith('-')))
 
     def get_labels(self):
         classes = {}
