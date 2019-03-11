@@ -18,32 +18,26 @@ def mock_db(tmp_path):
     return register_db
 
 
-def test_write_read(mock_db):
-    db_path = mock_db('prova.json')
+@pytest.mark.parametrize('db_name', [
+    'prova.json',
+    'prova.json.gz',
+    'prova.json.zstd',
+])
+def test_write_read(mock_db, db_name):
+    db_path = mock_db(db_name)
 
     db.write(db_path, range(1, 8))
 
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-def test_write_read_gzip(mock_db):
-    db_path = mock_db('prova.json.gz')
-
-    db.write(db_path, range(1, 8))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
-
-
-def test_write_read_zstd(mock_db):
-    db_path = mock_db('prova.json.zstd')
-
-    db.write(db_path, range(1, 8))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
-
-
-def test_append(mock_db):
-    db_path = mock_db('prova.json')
+@pytest.mark.parametrize('db_name', [
+    'prova.json',
+    'prova.json.gz',
+    'prova.json.zstd',
+])
+def test_append(mock_db, db_name):
+    db_path = mock_db(db_name)
 
     db.write(db_path, range(1, 4))
 
@@ -54,60 +48,13 @@ def test_append(mock_db):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-def test_append_gzip(mock_db):
-    db_path = mock_db('prova.json.gz')
-
-    db.register(db_path, 'https://alink', 1)
-
-    db.write(db_path, range(1, 4))
-
-    assert list(db.read(db_path)) == [1, 2, 3]
-
-    db.append(db_path, range(4, 8))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
-
-
-def test_append_zstd(mock_db):
-    db_path = mock_db('prova.json.zstd')
-
-    db.write(db_path, range(1, 4))
-
-    assert list(db.read(db_path)) == [1, 2, 3]
-
-    db.append(db_path, range(4, 8))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
-
-
-def test_delete(mock_db):
-    db_path = mock_db('prova.json')
-
-    db.write(db_path, range(1, 9))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7, 8]
-
-    db.delete(db_path, lambda x: x == 4)
-
-    assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
-
-
-def test_delete_gzip(mock_db):
-    db_path = mock_db('prova.json.gz')
-
-    db.write(db_path, range(1, 9))
-
-    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7, 8]
-
-    db.delete(db_path, lambda x: x == 4)
-
-    assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
-
-
-def test_delete_zstd(mock_db):
-    db_path = mock_db('prova.json.zstd')
-
-    db.register(db_path, 'https://alink', 1)
+@pytest.mark.parametrize('db_name', [
+    'prova.json',
+    'prova.json.gz',
+    'prova.json.zstd',
+])
+def test_delete(mock_db, db_name):
+    db_path = mock_db(db_name)
 
     db.write(db_path, range(1, 9))
 
