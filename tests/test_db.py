@@ -60,3 +60,34 @@ def test_delete(mock_db, db_format, db_compression):
     db.delete(db_path, lambda x: x == 4)
 
     assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
+
+
+def test_unregistered_db(tmp_path):
+    db_path = tmp_path / 'prova.json'
+
+    with pytest.raises(AssertionError):
+        list(db.read(db_path))
+
+    with pytest.raises(AssertionError):
+        db.write(db_path, range(7))
+
+    with pytest.raises(AssertionError):
+        db.append(db_path, range(7))
+
+
+@pytest.mark.parametrize('db_name', [
+    'prova',
+    'prova.',
+    'prova.gz',
+    'prova.unknown.gz',
+    'prova.json.unknown',
+])
+def test_bad_format_compression(tmp_path, db_name):
+    db_path = tmp_path / db_name
+    db.register(db_path, 'https://alink', 1)
+
+    with pytest.raises(AssertionError):
+        db.write(db_path, range(7))
+
+    with pytest.raises(AssertionError):
+        db.append(db_path, range(7))
