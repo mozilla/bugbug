@@ -27,8 +27,6 @@ def mock_db(tmp_path):
 def test_write_read(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
-    print(db_path)
-
     db.write(db_path, range(1, 8))
 
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
