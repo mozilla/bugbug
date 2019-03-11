@@ -4,12 +4,15 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import gzip
+import io
 import json
 import lzma
 import os
 import shutil
 from contextlib import contextmanager
 from urllib.request import urlretrieve
+
+import zstandard
 
 DATABASES = {}
 
@@ -51,6 +54,17 @@ def _db_open(path, mode):
     if ext == '.gz':
         with gzip.GzipFile(path, mode) as f:
             yield f
+    elif ext == '.zstd':
+        if 'w' in mode or 'a' in mode:
+            cctx = zstandard.ZstdCompressor()
+            with open(path, mode) as f:
+                with cctx.stream_writer(f) as writer:
+                    yield writer
+        else:
+            dctx = zstandard.ZstdDecompressor()
+            with open(path, mode) as f:
+                with dctx.stream_reader(f) as reader:
+                    yield io.TextIOWrapper(reader, encoding='utf-8')
     else:
         with open(path, mode) as f:
             yield f
@@ -62,7 +76,7 @@ def read(path):
     if not os.path.exists(path):
         return ()
 
-    with _db_open(path, 'r') as f:
+    with _db_open(path, 'rb') as f:
         for line in f:
             yield json.loads(line)
 
@@ -92,12 +106,15 @@ def delete(path, match):
     dirname, basename = os.path.split(path)
     new_path = os.path.join(dirname, f'new_{basename}')
 
-    with _db_open(new_path, 'w') as fw:
-        with _db_open(path, 'r') as fr:
-            for line in fr:
-                elem = json.loads(line)
-                if not match(elem):
-                    fw.write(line)
+    def matching_elems(f):
+        for line in f:
+            elem = json.loads(line)
+            if not match(elem):
+                yield elem
+
+    with _db_open(new_path, 'wb') as fw:
+        with _db_open(path, 'rb') as fr:
+            _fwrite(fw, matching_elems(fr))
 
     os.unlink(path)
     os.rename(new_path, path)

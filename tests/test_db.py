@@ -16,8 +16,18 @@ def test_write_read(tmp_path):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-def test_write_read_compressed(tmp_path):
+def test_write_read_gzip(tmp_path):
     db_path = tmp_path / 'prova.json.gz'
+
+    db.register(db_path, 'https://alink', 1)
+
+    db.write(db_path, range(1, 8))
+
+    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
+
+
+def test_write_read_zstd(tmp_path):
+    db_path = tmp_path / 'prova.json.zstd'
 
     db.register(db_path, 'https://alink', 1)
 
@@ -40,8 +50,22 @@ def test_append(tmp_path):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-def test_append_compressed(tmp_path):
+def test_append_gzip(tmp_path):
     db_path = tmp_path / 'prova.json.gz'
+
+    db.register(db_path, 'https://alink', 1)
+
+    db.write(db_path, range(1, 4))
+
+    assert list(db.read(db_path)) == [1, 2, 3]
+
+    db.append(db_path, range(4, 8))
+
+    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
+
+
+def test_append_zstd(tmp_path):
+    db_path = tmp_path / 'prova.json.zstd'
 
     db.register(db_path, 'https://alink', 1)
 
@@ -70,8 +94,24 @@ def test_delete(tmp_path):
     assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
 
 
-def test_delete_compressed(tmp_path):
+def test_delete_gzip(tmp_path):
     db_path = tmp_path / 'prova.json.gz'
+
+    print(db_path)
+
+    db.register(db_path, 'https://alink', 1)
+
+    db.write(db_path, range(1, 9))
+
+    assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7, 8]
+
+    db.delete(db_path, lambda x: x == 4)
+
+    assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
+
+
+def test_delete_zstd(tmp_path):
+    db_path = tmp_path / 'prova.json.zstd'
 
     print(db_path)
 
