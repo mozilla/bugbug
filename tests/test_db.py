@@ -10,34 +10,34 @@ from bugbug import db
 
 @pytest.fixture
 def mock_db(tmp_path):
-    def register_db(name):
-        db_path = tmp_path / name
+    def register_db(db_format, db_compression):
+        db_name = f'prova.{db_format}'
+        if db_compression is not None:
+            db_name += f'.{db_compression}'
+
+        db_path = tmp_path / db_name
         db.register(db_path, 'https://alink', 1)
         return db_path
 
     return register_db
 
 
-@pytest.mark.parametrize('db_name', [
-    'prova.json',
-    'prova.json.gz',
-    'prova.json.zstd',
-])
-def test_write_read(mock_db, db_name):
-    db_path = mock_db(db_name)
+@pytest.mark.parametrize('db_format', ['json', 'pickle'])
+@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+def test_write_read(mock_db, db_format, db_compression):
+    db_path = mock_db(db_format, db_compression)
+
+    print(db_path)
 
     db.write(db_path, range(1, 8))
 
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-@pytest.mark.parametrize('db_name', [
-    'prova.json',
-    'prova.json.gz',
-    'prova.json.zstd',
-])
-def test_append(mock_db, db_name):
-    db_path = mock_db(db_name)
+@pytest.mark.parametrize('db_format', ['json', 'pickle'])
+@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+def test_append(mock_db, db_format, db_compression):
+    db_path = mock_db(db_format, db_compression)
 
     db.write(db_path, range(1, 4))
 
@@ -48,13 +48,10 @@ def test_append(mock_db, db_name):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-@pytest.mark.parametrize('db_name', [
-    'prova.json',
-    'prova.json.gz',
-    'prova.json.zstd',
-])
-def test_delete(mock_db, db_name):
-    db_path = mock_db(db_name)
+@pytest.mark.parametrize('db_format', ['json', 'pickle'])
+@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+def test_delete(mock_db, db_format, db_compression):
+    db_path = mock_db(db_format, db_compression)
 
     db.write(db_path, range(1, 9))
 
