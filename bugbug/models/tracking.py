@@ -16,8 +16,8 @@ from bugbug.model import Model
 
 
 class TrackingModel(Model):
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, ngrams=1):
+        Model.__init__(self, lemmatization, ngrams)
 
         self.sampler = InstanceHardnessThreshold(random_state=0)
 
@@ -62,9 +62,9 @@ class TrackingModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
+                ('title', self.text_vectorizer(min_df=0.0001, ngram_range=(1, self.ngrams)), 'title'),
 
-                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.0001, ngram_range=(1, self.ngrams)), 'comments'),
             ])),
         ])
 

@@ -23,6 +23,7 @@ if __name__ == '__main__':
                         help='Goal of the classifier',
                         choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectfeaturetask'],
                         default='bug')
+    parser.add_argument('--ngrams', default='1')
     parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
@@ -65,7 +66,7 @@ if __name__ == '__main__':
     if args.train:
         db.download()
 
-        model = model_class(args.lemmatization)
+        model = model_class(args.lemmatization, int(args.ngrams))
         model.train()
     else:
         model = model_class.load(model_file_name)

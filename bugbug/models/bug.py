@@ -16,8 +16,8 @@ from bugbug.model import Model
 
 
 class BugModel(Model):
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, ngrams=1):
+        Model.__init__(self, lemmatization, ngrams)
 
         self.sampler = BorderlineSMOTE(random_state=0)
 
@@ -54,11 +54,11 @@ class BugModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(min_df=0.001), 'title'),
+                ('title', self.text_vectorizer(min_df=0.001, ngram_range=(1, self.ngrams)), 'title'),
 
-                ('first_comment', self.text_vectorizer(min_df=0.001), 'first_comment'),
+                ('first_comment', self.text_vectorizer(min_df=0.001, ngram_range=(1, self.ngrams)), 'first_comment'),
 
-                ('comments', self.text_vectorizer(min_df=0.001), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.001, ngram_range=(1, self.ngrams)), 'comments'),
             ])),
         ])
 

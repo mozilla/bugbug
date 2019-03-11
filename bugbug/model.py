@@ -18,7 +18,7 @@ from bugbug.nlp import SpacyVectorizer
 
 
 class Model():
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, ngrams=1):
         if lemmatization:
             self.text_vectorizer = SpacyVectorizer
         else:
@@ -26,7 +26,7 @@ class Model():
 
         self.cross_validation_enabled = True
         self.sampler = None
-
+        self.ngrams = ngrams
         self.calculate_importance = True
 
     @property
