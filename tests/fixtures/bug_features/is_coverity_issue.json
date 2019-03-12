@@ -1,2 +1,328 @@
-{"blocks": [], "cf_tracking_geckoview64": "---", "is_cc_accessible": true, "cf_status_thunderbird_esr52": "---", "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-07-04T02:36:27Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cc_detail": [{"email": "dvander@alliedmods.net", "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency", "name": "dvander@alliedmods.net", "nick": "dvander", "id": 309316}, {"email": "Virtual@teknik.io", "real_name": "Virtual_ManPL [:Virtual] - (please needinfo? me - so I will see your comment/reply/question/etc.)", "name": "Virtual@teknik.io", "nick": "Virtual", "id": 342842}, {"email": "yfdyh000@gmail.com", "real_name": "YF (Yang)", "name": "yfdyh000@gmail.com", "nick": "yfdyh000", "id": 398515}], "summary": "Firefox Nightly 56 shows no buttons and no page content.", "cf_has_str": "---", "cf_user_story": "", "platform": "x86", "cf_status_firefox_esr60": "---", "votes": 0, "version": "56 Branch", "mentors_detail": [], "cf_tracking_thunderbird_esr52": "---", "is_creator_accessible": true, "is_confirmed": false, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "nobody@mozilla.org", "real_name": "Nobody; OK to take it and work on it", "name": "nobody@mozilla.org", "nick": "nobody", "id": 1}, "creator": "johngraciliano@gmail.com", "last_change_time": "2017-07-17T21:46:57Z", "creator_detail": {"email": "johngraciliano@gmail.com", "real_name": "", "name": "johngraciliano@gmail.com", "nick": "johngraciliano", "id": 532161}, "comment_count": 3, "cc": ["dvander@alliedmods.net", "Virtual@teknik.io", "yfdyh000@gmail.com"], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "nobody@mozilla.org", "groups": [], "see_also": [], "id": 1378004, "whiteboard": "", "creation_time": "2017-07-04T00:08:07Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": 1377866, "cf_status_firefox66": "---", "resolution": "DUPLICATE", "classification": "Components", "alias": null, "cf_has_regression_range": "---", "op_sys": "Windows 8", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "major", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "component": "Graphics", "cf_status_geckoview64": "---", "target_milestone": "---", "product": "Core", "cf_platform_rel": "---", "history": [{"when": "2017-07-04T02:36:27Z", "who": "yfdyh000@gmail.com", "changes": [{"removed": "UNCONFIRMED", "added": "RESOLVED", "field_name": "status"}, {"removed": "Unspecified", "added": "x86", "field_name": "platform"}, {"removed": "Untriaged", "added": "Graphics", "field_name": "component"}, {"removed": "", "added": "yfdyh000@gmail.com", "field_name": "cc"}, {"removed": "", "added": "DUPLICATE", "field_name": "resolution"}, {"removed": "Firefox", "added": "Core", "field_name": "product"}, {"removed": "normal", "added": "major", "field_name": "severity"}, {"removed": "Unspecified", "added": "Windows 8", "field_name": "op_sys"}, {"removed": "", "added": "2017-07-04T02:36:27Z", "field_name": "cf_last_resolved"}]}, {"when": "2017-07-04T05:00:38Z", "who": "dvander@alliedmods.net", "changes": [{"removed": "", "added": "dvander@alliedmods.net", "field_name": "cc"}, {"removed": "", "added": "needinfo?(johngraciliano@gmail.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-04T07:53:38Z", "who": "Virtual@teknik.io", "changes": [{"removed": "", "added": "Virtual@MsgSafe.io", "field_name": "cc"}]}, {"when": "2017-07-17T21:46:57Z", "who": "dvander@alliedmods.net", "changes": [{"removed": "needinfo?(johngraciliano@gmail.com)", "added": "", "field_name": "flagtypes.name"}]}], "comments": [{"text": "User Agent: Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0\nBuild ID: 20170701030203\n\nSteps to reproduce:\n\nUpdated Nightly. (Either via interface or running firefox-56.0a1.en-US.win64.installer.exe [2017.07.02 mozilla central]).  This is in a Windows 8 machine!\n\n\nActual results:\n\nAfter restarting, nothing showed the bars were empty, the content was empty.  However (some?) buttons areas in the navigation bar were useful (tool tips show up).  A click above on the area below the close button made the options panel to show and I was able to restart in safe mode.  Firefox works in Safe Mode.  However, Firefox will not work with a new profile, even after refreshing Firefox.  I reverted to 2017.07.01. The 2017.07.03 does not fix anything for me.\n\n\nExpected results:\n\nFirefox Nightly should work mostly after an update.", "id": 12445163, "creation_time": "2017-07-04T00:08:07Z", "author": "johngraciliano@gmail.com"}, {"text": "\n\n*** This bug has been marked as a duplicate of bug 1377866 ***", "id": 12445279, "creation_time": "2017-07-04T02:36:27Z", "author": "yfdyh000@gmail.com"}, {"text": "John, if you get a chance could you attach your about:support? I will make sure the configuration is included in the fix for bug 1377866.", "id": 12445393, "creation_time": "2017-07-04T05:00:38Z", "author": "dvander@alliedmods.net"}], "attachments": []}
-{"priority": "--", "assigned_to_detail": {"email": "martin.thomson@gmail.com", "real_name": "Martin Thomson [:mt:]", "name": "martin.thomson@gmail.com", "nick": "mt", "id": 438654}, "blocks": [], "creator": "martin.thomson@gmail.com", "cf_tracking_geckoview64": "---", "last_change_time": "2017-10-11T23:05:45Z", "is_cc_accessible": true, "keywords": [], "creator_detail": {"email": "martin.thomson@gmail.com", "real_name": "Martin Thomson [:mt:]", "name": "martin.thomson@gmail.com", "nick": "mt", "id": 438654}, "cf_qa_whiteboard": "", "comment_count": 3, "cc": ["ttaubert@mozilla.com"], "duplicates": [], "url": "", "assigned_to": "martin.thomson@gmail.com", "groups": [], "see_also": [], "id": 1407560, "whiteboard": "", "creation_time": "2017-10-11T09:32:11Z", "qa_contact": "", "depends_on": [], "cf_tracking_geckoview65": "---", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "cf_fx_iteration": "---", "cf_status_firefox65": "---", "cf_tracking_firefox_relnote": "---", "resolution": "FIXED", "classification": "Components", "alias": null, "op_sys": "All", "cf_last_resolved": "2017-10-11T23:05:45Z", "cf_tracking_firefox65": "---", "cf_fx_points": "---", "cf_tracking_firefox66": "---", "status": "RESOLVED", "cc_detail": [{"email": "ttaubert@mozilla.com", "real_name": "Tim Taubert [:ttaubert] (inactive)", "name": "ttaubert@mozilla.com", "nick": "ttaubert", "id": 402526}], "cf_crash_signature": "", "summary": "[CID 1419486] signed/unsigned conversion error in pk11 signature test", "cf_user_story": "", "is_open": false, "platform": "All", "severity": "normal", "cf_tracking_firefox_esr60": "---", "cf_status_firefox_esr60": "---", "votes": 0, "flags": [], "version": "trunk", "mentors_detail": [], "cf_status_firefox64": "---", "component": "Test", "cf_status_geckoview64": "---", "is_creator_accessible": true, "product": "NSS", "is_confirmed": true, "target_milestone": "3.34", "history": [{"when": "2017-10-11T09:36:09Z", "who": "phab-bot@bmo.tld", "changes": [{"attachment_id": 8917292, "removed": "", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-10-11T23:05:45Z", "who": "martin.thomson@gmail.com", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "---", "added": "3.34", "field_name": "target_milestone"}, {"removed": "", "added": "2017-10-11T23:05:45Z", "field_name": "cf_last_resolved"}]}], "comments": [{"text": "*** CID 1419486:  Integer handling issues  (NEGATIVE_RETURNS)\n/gtests/pk11_gtest/pk11_signature_test.h: 77 in nss_test::Pk11SignatureTest::SignHashedData(std::unique_ptr<SECKEYPrivateKeyStr, ScopedMaybeDelete<SECKEYPrivateKeyStr>> &, const nss_test::DataBuffer &, nss_test::DataBuffer *)()\n>>>     CID 1419486:  Integer handling issues  (NEGATIVE_RETURNS)\n>>>     \"static_cast<size_t>(PK11_SignatureLen(privKey->get()))\" is passed to a parameter that cannot be negative.\n77         sig->Allocate(static_cast<size_t>(PK11_SignatureLen(privKey.get())));", "id": 12747729, "creation_time": "2017-10-11T09:32:11Z", "author": "martin.thomson@gmail.com"}, {"text": "Comment on attachment 8917292\nBug 1407560 - Tweak integer handling for CID 1419486, r=ttaubert\n\nTim Taubert [:ttaubert] has approved the revision.\n\nhttps://phabricator.services.mozilla.com/D110#2495", "id": 12747739, "creation_time": "2017-10-11T09:36:09Z", "author": "phab-bot@bmo.tld"}, {"text": "https://hg.mozilla.org/projects/nss/rev/0b6c9cf9486f32842dce2c3cdf4e1d8981335619", "id": 12750919, "creation_time": "2017-10-11T23:05:45Z", "author": "martin.thomson@gmail.com"}], "attachments": [{"content_type": "text/x-phabricator-request", "creator": "phab-bot@bmo.tld", "flags": [{"modification_date": "2017-10-11T09:36:09Z", "creation_date": "2017-10-11T09:36:09Z", "type_id": 4, "status": "+", "name": "review", "id": 1662956, "setter": "ttaubert@mozilla.com"}], "is_patch": 0, "creation_time": "2017-10-11T09:33:13Z", "id": 8917292, "is_obsolete": 0}]}
+{
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "is_cc_accessible": true,
+    "cf_status_thunderbird_esr52": "---",
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-07-04T02:36:27Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cc_detail": [{
+        "email": "dvander@alliedmods.net",
+        "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency",
+        "name": "dvander@alliedmods.net",
+        "nick": "dvander",
+        "id": 309316
+    }, {
+        "email": "Virtual@teknik.io",
+        "real_name": "Virtual_ManPL [:Virtual] - (please needinfo? me - so I will see your comment/reply/question/etc.)",
+        "name": "Virtual@teknik.io",
+        "nick": "Virtual",
+        "id": 342842
+    }, {
+        "email": "yfdyh000@gmail.com",
+        "real_name": "YF (Yang)",
+        "name": "yfdyh000@gmail.com",
+        "nick": "yfdyh000",
+        "id": 398515
+    }],
+    "summary": "Firefox Nightly 56 shows no buttons and no page content.",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "x86",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "56 Branch",
+    "mentors_detail": [],
+    "cf_tracking_thunderbird_esr52": "---",
+    "is_creator_accessible": true,
+    "is_confirmed": false,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "nobody@mozilla.org",
+        "real_name": "Nobody; OK to take it and work on it",
+        "name": "nobody@mozilla.org",
+        "nick": "nobody",
+        "id": 1
+    },
+    "creator": "johngraciliano@gmail.com",
+    "last_change_time": "2017-07-17T21:46:57Z",
+    "creator_detail": {
+        "email": "johngraciliano@gmail.com",
+        "real_name": "",
+        "name": "johngraciliano@gmail.com",
+        "nick": "johngraciliano",
+        "id": 532161
+    },
+    "comment_count": 3,
+    "cc": ["dvander@alliedmods.net", "Virtual@teknik.io", "yfdyh000@gmail.com"],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "nobody@mozilla.org",
+    "groups": [],
+    "see_also": [],
+    "id": 1378004,
+    "whiteboard": "",
+    "creation_time": "2017-07-04T00:08:07Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": 1377866,
+    "cf_status_firefox66": "---",
+    "resolution": "DUPLICATE",
+    "classification": "Components",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Windows 8",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "major",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "component": "Graphics",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "---",
+    "product": "Core",
+    "cf_platform_rel": "---",
+    "history": [{
+        "when": "2017-07-04T02:36:27Z",
+        "who": "yfdyh000@gmail.com",
+        "changes": [{
+            "removed": "UNCONFIRMED",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "Unspecified",
+            "added": "x86",
+            "field_name": "platform"
+        }, {
+            "removed": "Untriaged",
+            "added": "Graphics",
+            "field_name": "component"
+        }, {
+            "removed": "",
+            "added": "yfdyh000@gmail.com",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "DUPLICATE",
+            "field_name": "resolution"
+        }, {
+            "removed": "Firefox",
+            "added": "Core",
+            "field_name": "product"
+        }, {
+            "removed": "normal",
+            "added": "major",
+            "field_name": "severity"
+        }, {
+            "removed": "Unspecified",
+            "added": "Windows 8",
+            "field_name": "op_sys"
+        }, {
+            "removed": "",
+            "added": "2017-07-04T02:36:27Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }, {
+        "when": "2017-07-04T05:00:38Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "removed": "",
+            "added": "dvander@alliedmods.net",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "needinfo?(johngraciliano@gmail.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-04T07:53:38Z",
+        "who": "Virtual@teknik.io",
+        "changes": [{
+            "removed": "",
+            "added": "Virtual@MsgSafe.io",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-17T21:46:57Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "removed": "needinfo?(johngraciliano@gmail.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }],
+    "comments": [{
+        "text": "User Agent: Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0\nBuild ID: 20170701030203\n\nSteps to reproduce:\n\nUpdated Nightly. (Either via interface or running firefox-56.0a1.en-US.win64.installer.exe [2017.07.02 mozilla central]).  This is in a Windows 8 machine!\n\n\nActual results:\n\nAfter restarting, nothing showed the bars were empty, the content was empty.  However (some?) buttons areas in the navigation bar were useful (tool tips show up).  A click above on the area below the close button made the options panel to show and I was able to restart in safe mode.  Firefox works in Safe Mode.  However, Firefox will not work with a new profile, even after refreshing Firefox.  I reverted to 2017.07.01. The 2017.07.03 does not fix anything for me.\n\n\nExpected results:\n\nFirefox Nightly should work mostly after an update.",
+        "id": 12445163,
+        "creation_time": "2017-07-04T00:08:07Z",
+        "author": "johngraciliano@gmail.com"
+    }, {
+        "text": "\n\n*** This bug has been marked as a duplicate of bug 1377866 ***",
+        "id": 12445279,
+        "creation_time": "2017-07-04T02:36:27Z",
+        "author": "yfdyh000@gmail.com"
+    }, {
+        "text": "John, if you get a chance could you attach your about:support? I will make sure the configuration is included in the fix for bug 1377866.",
+        "id": 12445393,
+        "creation_time": "2017-07-04T05:00:38Z",
+        "author": "dvander@alliedmods.net"
+    }],
+    "attachments": []
+} {
+    "priority": "--",
+    "assigned_to_detail": {
+        "email": "martin.thomson@gmail.com",
+        "real_name": "Martin Thomson [:mt:]",
+        "name": "martin.thomson@gmail.com",
+        "nick": "mt",
+        "id": 438654
+    },
+    "blocks": [],
+    "creator": "martin.thomson@gmail.com",
+    "cf_tracking_geckoview64": "---",
+    "last_change_time": "2017-10-11T23:05:45Z",
+    "is_cc_accessible": true,
+    "keywords": [],
+    "creator_detail": {
+        "email": "martin.thomson@gmail.com",
+        "real_name": "Martin Thomson [:mt:]",
+        "name": "martin.thomson@gmail.com",
+        "nick": "mt",
+        "id": 438654
+    },
+    "cf_qa_whiteboard": "",
+    "comment_count": 3,
+    "cc": ["ttaubert@mozilla.com"],
+    "duplicates": [],
+    "url": "",
+    "assigned_to": "martin.thomson@gmail.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1407560,
+    "whiteboard": "",
+    "creation_time": "2017-10-11T09:32:11Z",
+    "qa_contact": "",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "cf_fx_iteration": "---",
+    "cf_status_firefox65": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "resolution": "FIXED",
+    "classification": "Components",
+    "alias": null,
+    "op_sys": "All",
+    "cf_last_resolved": "2017-10-11T23:05:45Z",
+    "cf_tracking_firefox65": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_firefox66": "---",
+    "status": "RESOLVED",
+    "cc_detail": [{
+        "email": "ttaubert@mozilla.com",
+        "real_name": "Tim Taubert [:ttaubert] (inactive)",
+        "name": "ttaubert@mozilla.com",
+        "nick": "ttaubert",
+        "id": 402526
+    }],
+    "cf_crash_signature": "",
+    "summary": "[CID 1419486] signed/unsigned conversion error in pk11 signature test",
+    "cf_user_story": "",
+    "is_open": false,
+    "platform": "All",
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "flags": [],
+    "version": "trunk",
+    "mentors_detail": [],
+    "cf_status_firefox64": "---",
+    "component": "Test",
+    "cf_status_geckoview64": "---",
+    "is_creator_accessible": true,
+    "product": "NSS",
+    "is_confirmed": true,
+    "target_milestone": "3.34",
+    "history": [{
+        "when": "2017-10-11T09:36:09Z",
+        "who": "phab-bot@bmo.tld",
+        "changes": [{
+            "attachment_id": 8917292,
+            "removed": "",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-10-11T23:05:45Z",
+        "who": "martin.thomson@gmail.com",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "---",
+            "added": "3.34",
+            "field_name": "target_milestone"
+        }, {
+            "removed": "",
+            "added": "2017-10-11T23:05:45Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }],
+    "comments": [{
+        "text": "*** CID 1419486:  Integer handling issues  (NEGATIVE_RETURNS)\n/gtests/pk11_gtest/pk11_signature_test.h: 77 in nss_test::Pk11SignatureTest::SignHashedData(std::unique_ptr<SECKEYPrivateKeyStr, ScopedMaybeDelete<SECKEYPrivateKeyStr>> &, const nss_test::DataBuffer &, nss_test::DataBuffer *)()\n>>>     CID 1419486:  Integer handling issues  (NEGATIVE_RETURNS)\n>>>     \"static_cast<size_t>(PK11_SignatureLen(privKey->get()))\" is passed to a parameter that cannot be negative.\n77         sig->Allocate(static_cast<size_t>(PK11_SignatureLen(privKey.get())));",
+        "id": 12747729,
+        "creation_time": "2017-10-11T09:32:11Z",
+        "author": "martin.thomson@gmail.com"
+    }, {
+        "text": "Comment on attachment 8917292\nBug 1407560 - Tweak integer handling for CID 1419486, r=ttaubert\n\nTim Taubert [:ttaubert] has approved the revision.\n\nhttps://phabricator.services.mozilla.com/D110#2495",
+        "id": 12747739,
+        "creation_time": "2017-10-11T09:36:09Z",
+        "author": "phab-bot@bmo.tld"
+    }, {
+        "text": "https://hg.mozilla.org/projects/nss/rev/0b6c9cf9486f32842dce2c3cdf4e1d8981335619",
+        "id": 12750919,
+        "creation_time": "2017-10-11T23:05:45Z",
+        "author": "martin.thomson@gmail.com"
+    }],
+    "attachments": [{
+        "content_type": "text/x-phabricator-request",
+        "creator": "phab-bot@bmo.tld",
+        "flags": [{
+            "modification_date": "2017-10-11T09:36:09Z",
+            "creation_date": "2017-10-11T09:36:09Z",
+            "type_id": 4,
+            "status": "+",
+            "name": "review",
+            "id": 1662956,
+            "setter": "ttaubert@mozilla.com"
+        }],
+        "is_patch": 0,
+        "creation_time": "2017-10-11T09:33:13Z",
+        "id": 8917292,
+        "is_obsolete": 0
+    }]
+}

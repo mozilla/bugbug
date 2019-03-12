@@ -1,2 +1,699 @@
-{"blocks": [1326454], "cf_tracking_geckoview64": "---", "cf_status_geckoview66": "---", "is_cc_accessible": true, "keywords": ["csectype-intoverflow", "regression", "sec-moderate"], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-08-09T14:54:14Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cf_tracking_geckoview66": "---", "cc_detail": [{"email": "abillings@mozilla.com", "real_name": "Al Billings [:abillings]", "name": "abillings@mozilla.com", "nick": "abillings", "id": 280903}, {"email": "arai.unmht@gmail.com", "real_name": "Tooru Fujisawa [:arai]", "name": "arai.unmht@gmail.com", "nick": "arai", "id": 310076}, {"email": "choller@mozilla.com", "real_name": "Christian Holler (:decoder)", "name": "choller@mozilla.com", "nick": "decoder", "id": 395101}, {"email": "continuation@gmail.com", "real_name": "Andrew McCreight [:mccr8]", "name": "continuation@gmail.com", "nick": "mccr8", "id": 406194}, {"email": "mark@wolfbeast.com", "real_name": "Mark Straver", "name": "mark@wolfbeast.com", "nick": "mark", "id": 364942}, {"email": "miket@mozilla.com", "real_name": "Mike Taylor [:miketaylr]", "name": "miket@mozilla.com", "nick": "miketaylr", "id": 389500}, {"email": "nfroyd@mozilla.com", "real_name": "Nathan Froyd [:froydnj]", "name": "nfroyd@mozilla.com", "nick": "froydnj", "id": 417288}, {"email": "nth10sd@gmail.com", "real_name": "Gary Kwong [:gkw] [:nth10sd]", "name": "nth10sd@gmail.com", "nick": "gkw", "id": 132034}, {"email": "past@mozilla.com", "real_name": "Panos Astithas (he/him) [:past] (please ni?)", "name": "past@mozilla.com", "nick": "past", "id": 363318}, {"email": "ryanvm@gmail.com", "real_name": "Ryan VanderMeulen [:RyanVM]", "name": "ryanvm@gmail.com", "nick": "RyanVM", "id": 75935}, {"email": "shu@rfrn.org", "real_name": "Shu-yu Guo [:shu]", "name": "shu@rfrn.org", "nick": "shu", "id": 381259}], "summary": "Out-of-bounds access in js::frontend::TokenStream::TokenBuf::getRawChar", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "cf_status_firefox55": "wontfix", "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "arai.unmht@gmail.com", "real_name": "Tooru Fujisawa [:arai]", "name": "arai.unmht@gmail.com", "nick": "arai", "id": 310076}, "creator": "inferno@chromium.org", "last_change_time": "2018-02-02T01:25:21Z", "comment_count": 7, "creator_detail": {"email": "inferno@chromium.org", "real_name": "Abhishek Arya", "name": "inferno@chromium.org", "nick": "inferno", "id": 397541}, "cc": ["abillings@mozilla.com", "arai.unmht@gmail.com", "choller@mozilla.com", "continuation@gmail.com", "mark@wolfbeast.com", "miket@mozilla.com", "nfroyd@mozilla.com", "nth10sd@gmail.com", "past@mozilla.com", "ryanvm@gmail.com", "shu@rfrn.org"], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "arai.unmht@gmail.com", "groups": [], "see_also": [], "id": 1383951, "whiteboard": "[adv-main56+][post-critsmash-triage]", "creation_time": "2017-07-25T00:29:14Z", "depends_on": [1385112], "cf_tracking_geckoview65": "---", "cf_status_firefox56": "fixed", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "FIXED", "classification": "Components", "alias": "CVE-2017-7813", "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "cf_status_firefox_esr52": "unaffected", "flags": [{"modification_date": "2017-08-29T18:28:39Z", "creation_date": "2017-08-28T17:56:13Z", "type_id": 803, "status": "+", "name": "sec-bounty", "id": 1636923, "setter": "dveditz@mozilla.com"}, {"modification_date": "2017-09-18T23:41:45Z", "creation_date": "2017-09-18T23:41:45Z", "type_id": 864, "status": "-", "name": "qe-verify", "id": 1649784, "setter": "mwobensmith@mozilla.com"}], "cf_status_firefox64": "---", "cf_status_firefox57": "fixed", "component": "JavaScript Engine", "cf_status_geckoview64": "---", "target_milestone": "mozilla57", "product": "Core", "history": [{"when": "2017-07-25T00:29:25Z", "who": "inferno@chromium.org", "changes": [{"removed": "Out-of-bounds access in", "added": "Out-of-bounds access in js::frontend::TokenStream::TokenBuf::getRawChar", "field_name": "summary"}]}, {"when": "2017-07-27T02:24:11Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "core-security", "added": "javascript-core-security", "field_name": "groups"}, {"removed": "", "added": "arai.unmht@gmail.com, miket@mozilla.com, nfroyd@mozilla.com, past@mozilla.com, ryanvm@gmail.com, shu@mozilla.com", "field_name": "cc"}]}, {"when": "2017-07-27T17:11:14Z", "who": "continuation@gmail.com", "changes": [{"attachment_id": 8889686, "removed": "application/javascript", "added": "application/plain-text", "field_name": "attachments.mimetype"}]}, {"when": "2017-07-27T17:11:39Z", "who": "continuation@gmail.com", "changes": [{"attachment_id": 8889686, "removed": "application/plain-text", "added": "application/text", "field_name": "attachments.mimetype"}]}, {"when": "2017-07-27T17:12:16Z", "who": "continuation@gmail.com", "changes": [{"attachment_id": 8889686, "removed": "application/text", "added": "text/plain", "field_name": "attachments.mimetype"}]}, {"when": "2017-07-27T17:13:20Z", "who": "continuation@gmail.com", "changes": [{"removed": "", "added": "continuation@gmail.com", "field_name": "cc"}, {"removed": "", "added": "needinfo?(arai.unmht@gmail.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T03:12:23Z", "who": "arai.unmht@gmail.com", "changes": [{"removed": "needinfo?(arai.unmht@gmail.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-08-03T17:43:58Z", "who": "continuation@gmail.com", "changes": [{"removed": "", "added": "gary@rumblingedge.com", "field_name": "cc"}, {"removed": "", "added": "needinfo?(gary@rumblingedge.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-03T17:44:22Z", "who": "continuation@gmail.com", "changes": [{"removed": "", "added": "choller@mozilla.com", "field_name": "cc"}]}, {"when": "2017-08-09T14:54:14Z", "who": "continuation@gmail.com", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "1385112", "field_name": "depends_on"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "nobody@mozilla.org", "added": "arai.unmht@gmail.com", "field_name": "assigned_to"}, {"removed": "", "added": "2017-08-09T14:54:14Z", "field_name": "cf_last_resolved"}]}, {"when": "2017-08-09T14:54:22Z", "who": "continuation@gmail.com", "changes": [{"removed": "needinfo?(gary@rumblingedge.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-08-11T02:30:16Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "---", "added": "mozilla57", "field_name": "target_milestone"}, {"removed": "---", "added": "unaffected", "field_name": "cf_status_firefox_esr52"}, {"removed": "---", "added": "wontfix", "field_name": "cf_status_firefox55"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox56"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox57"}]}, {"when": "2017-08-14T22:18:36Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "javascript-core-security", "added": "core-security-release", "field_name": "groups"}]}, {"when": "2017-08-28T17:56:13Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "", "added": "sec-bounty?", "field_name": "flagtypes.name"}]}, {"when": "2017-08-29T18:28:39Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "", "added": "csectype-intoverflow, sec-moderate", "field_name": "keywords"}, {"removed": "sec-bounty?", "added": "sec-bounty+", "field_name": "flagtypes.name"}]}, {"when": "2017-09-15T01:09:05Z", "who": "abillings@mozilla.com", "changes": [{"removed": "", "added": "abillings@mozilla.com", "field_name": "cc"}, {"removed": "", "added": "[adv-main56+]", "field_name": "whiteboard"}, {"removed": "", "added": "CVE-2017-7813", "field_name": "alias"}]}, {"when": "2017-09-18T23:41:45Z", "who": "mwobensmith@mozilla.com", "changes": [{"removed": "[adv-main56+]", "added": "[adv-main56+][post-critsmash-triage]", "field_name": "whiteboard"}, {"removed": "", "added": "qe-verify-", "field_name": "flagtypes.name"}]}, {"when": "2017-09-21T19:00:49Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "", "added": "regression", "field_name": "keywords"}, {"removed": "", "added": "1314037", "field_name": "blocks"}]}, {"when": "2017-09-21T19:06:57Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "1314037", "added": "1326454", "field_name": "blocks"}]}, {"when": "2017-10-03T23:59:36Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "", "added": "mark@wolfbeast.com", "field_name": "cc"}]}, {"when": "2018-02-02T01:25:21Z", "who": "dveditz@mozilla.com", "changes": [{"removed": "core-security-release", "added": "", "field_name": "groups"}]}], "comments": [{"text": "Created attachment 8889686\ntest.js\n\nBuild ASAN JS Shell using funfuzz\nhttps://github.com/MozillaSecurity/funfuzz/tree/master/js\n\nfunfuzz/js/compileShell.py -b \"--enable-debug --build-with-asan --build-with-clang --enable-more-deterministic -R /build/firefox/src\"\n\nASAN:DEADLYSIGNAL\n=================================================================\n==145434==ERROR: AddressSanitizer: SEGV on unknown address 0x7ff600448408 (pc 0x0000022e7f6e bp 0x7fffd1a87d70 sp 0x7fffd1a87c20 T0)\n    #0 0x22e7f6d in js::frontend::TokenStream::TokenBuf::getRawChar() build/firefox/src/js/src/frontend/TokenStream.h:971:20\n    #1 0x22e7f6d in js::frontend::TokenStream::getCharIgnoreEOL() build/firefox/src/js/src/frontend/TokenStream.cpp:532\n    #2 0x22e7f6d in js::frontend::TokenStream::putIdentInTokenbuf(char16_t const*) build/firefox/src/js/src/frontend/TokenStream.cpp:1189\n    #3 0x22ea1d2 in js::frontend::TokenStream::getTokenInternal(js::frontend::TokenKind*, js::frontend::Token::Modifier) build/firefox/src/js/src/frontend/TokenStream.cpp:1447:18\n    #4 0x676aef in js::frontend::TokenStream::peekToken(js::frontend::TokenKind*, js::frontend::Token::Modifier) build/firefox/src/js/src/frontend/TokenStream.h:781:14\n    #5 0x674b71 in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::statementListItem(js::frontend::YieldHandling, bool) build/firefox/src/js/src/frontend/Parser.cpp:7804:14\n    #6 0x66eb6e in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::statementList(js::frontend::YieldHandling) build/firefox/src/js/src/frontend/Parser.cpp:4199:21\n    #7 0x664475 in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::evalBody(js::frontend::EvalSharedContext*) build/firefox/src/js/src/frontend/Parser.cpp:2176:49\n    #8 0x19e214a in BytecodeCompiler::compileScript(JS::Handle<JSObject*>, js::frontend::SharedContext*) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:346:18\n    #9 0x19e5347 in BytecodeCompiler::compileEvalScript(JS::Handle<JSObject*>, JS::Handle<js::Scope*>) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:402:12\n    #10 0x19e84b6 in js::frontend::CompileEvalScript(JSContext*, js::LifoAlloc&, JS::Handle<JSObject*>, JS::Handle<js::Scope*>, JS::ReadOnlyCompileOptions const&, JS::SourceBufferHolder&, js::ScriptSourceObject**) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:601:12\n    #11 0x89e330 in EvalKernel(JSContext*, JS::Handle<JS::Value>, EvalType, js::AbstractFramePtr, JS::Handle<JSObject*>, unsigned char*, JS::MutableHandle<JS::Value>) build/firefox/src/js/src/builtin/Eval.cpp:316:30\n    #12 0x89f9a7 in js::DirectEval(JSContext*, JS::Handle<JS::Value>, JS::MutableHandle<JS::Value>) build/firefox/src/js/src/builtin/Eval.cpp:438:12\n    #13 0x7f0f60 in Interpret(JSContext*, js::RunState&) build/firefox/src/js/src/vm/Interpreter.cpp:2979:14\n    #14 0x7df993 in js::RunScript(JSContext*, js::RunState&) build/firefox/src/js/src/vm/Interpreter.cpp:410:12\n    #15 0x8187bb in js::ExecuteKernel(JSContext*, JS::Handle<JSScript*>, JSObject&, JS::Value const&, js::AbstractFramePtr, JS::Value*) build/firefox/src/js/src/vm/Interpreter.cpp:699:15\n    #16 0x8193b0 in js::Execute(JSContext*, JS::Handle<JSScript*>, JSObject&, JS::Value*) build/firefox/src/js/src/vm/Interpreter.cpp:731:12\n    #17 0x159a796 in ExecuteScript(JSContext*, JS::Handle<JSObject*>, JS::Handle<JSScript*>, JS::Value*) build/firefox/src/js/src/jsapi.cpp:4637:12\n    #18 0x159ac60 in JS_ExecuteScript(JSContext*, JS::Handle<JSScript*>) build/firefox/src/js/src/jsapi.cpp:4670:12\n    #19 0x5b12f7 in RunFile(JSContext*, char const*, _IO_FILE*, bool) build/firefox/src/js/src/shell/js.cpp:608:14\n    #20 0x5b12f7 in Process(JSContext*, char const*, bool, FileKind) build/firefox/src/js/src/shell/js.cpp:958\n    #21 0x557ad7 in ProcessArgs(JSContext*, js::cli::OptionParser*) build/firefox/src/js/src/shell/js.cpp:7753:14\n    #22 0x557ad7 in Shell(JSContext*, js::cli::OptionParser*, char**) build/firefox/src/js/src/shell/js.cpp:8118\n    #23 0x557ad7 in main build/firefox/src/js/src/shell/js.cpp:8515\n    #24 0x7ff60b236f44 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x21f44)\n    #25 0x47ae8c in _start (shell-cache/js-dbg-64-dm-clang-asan-linux-899590a34d56/js-dbg-64-dm-clang-asan-linux-899590a34d56+0x47ae8c)\n\nAddressSanitizer can not provide additional info.\nSUMMARY: AddressSanitizer: SEGV build/firefox/src/js/src/frontend/TokenStream.h:971:20 in js::frontend::TokenStream::TokenBuf::getRawChar()\n==145434==ABORTING", "id": 12502465, "creation_time": "2017-07-25T00:29:14Z", "author": "inferno@chromium.org"}, {"text": "Arai, do you have time to look at this? Thanks.", "id": 12512729, "creation_time": "2017-07-27T17:13:20Z", "author": "continuation@gmail.com"}, {"text": "if this is not urgent, I can look into this next week.", "id": 12513526, "creation_time": "2017-07-27T20:57:16Z", "author": "arai.unmht@gmail.com"}, {"text": "for now, I cannot reproduce the exact same crash.\nI'm fixing somewhat related bug in bug 1385112, but not sure if they're same issue.\nMight be nice to test again if it gets fixed.", "id": 12514293, "creation_time": "2017-07-28T03:12:23Z", "author": "arai.unmht@gmail.com"}, {"text": "Gary, can you try to reproduce this? Thanks.", "id": 12533862, "creation_time": "2017-08-03T17:43:58Z", "author": "continuation@gmail.com"}, {"text": "It is now fixed and does not reproduce anymore. Just a fyi, this bug 1383951 was filed before bug 1385112 (which i cannot access).", "id": 12549192, "creation_time": "2017-08-09T04:30:46Z", "author": "inferno@chromium.org"}, {"text": "I'll mark this fixed by bug 1385112. (rather than a dupe because it was filed earlier)", "id": 12550584, "creation_time": "2017-08-09T14:54:14Z", "author": "continuation@gmail.com"}], "attachments": [{"content_type": "text/plain", "creator": "inferno@chromium.org", "flags": [], "is_patch": 0, "creation_time": "2017-07-25T00:29:14Z", "id": 8889686, "is_obsolete": 0}]}
-{"blocks": [1333962, 1350432], "cf_tracking_geckoview64": "---", "cf_status_geckoview66": "---", "is_cc_accessible": true, "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-08-25T23:27:33Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cf_tracking_geckoview66": "---", "cc_detail": [{"email": "dvander@alliedmods.net", "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency", "name": "dvander@alliedmods.net", "nick": "dvander", "id": 309316}, {"email": "jryans@gmail.com", "real_name": "J. Ryan Stinnett [:jryans]", "name": "jryans@gmail.com", "nick": "jryans", "id": 282978}, {"email": "kanru@kanru.info", "real_name": "Kan-Ru Chen [:kanru] (UTC+8)", "name": "kanru@kanru.info", "nick": "kanru", "id": 428625}], "summary": "Provide easy access to the currently selected tab", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "bill.mccloskey@gmail.com", "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)", "name": "bill.mccloskey@gmail.com", "nick": "billm", "id": 389993}, "creator": "bill.mccloskey@gmail.com", "last_change_time": "2017-08-25T23:27:33Z", "creator_detail": {"email": "bill.mccloskey@gmail.com", "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)", "name": "bill.mccloskey@gmail.com", "nick": "billm", "id": 389993}, "comment_count": 4, "cc": ["dvander@alliedmods.net", "jryans@gmail.com", "kanru@kanru.info"], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "bill.mccloskey@gmail.com", "groups": [], "see_also": [], "id": 1383333, "whiteboard": "", "creation_time": "2017-07-22T00:00:48Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "FIXED", "classification": "Components", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "cf_status_firefox57": "fixed", "component": "DOM: Content Processes", "cf_status_geckoview64": "---", "target_milestone": "mozilla57", "product": "Core", "history": [{"when": "2017-07-22T00:00:48Z", "who": "bill.mccloskey@gmail.com", "changes": [{"attachment_id": 8888993, "removed": "", "added": "review?(dvander@alliedmods.net)", "field_name": "flagtypes.name"}, {"removed": "", "added": "dvander@alliedmods.net", "field_name": "cc"}]}, {"when": "2017-07-25T04:11:23Z", "who": "dvander@alliedmods.net", "changes": [{"attachment_id": 8888993, "removed": "review?(dvander@alliedmods.net)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-08-02T03:39:00Z", "who": "jryans@gmail.com", "changes": [{"removed": "", "added": "jryans@gmail.com", "field_name": "cc"}]}, {"when": "2017-08-18T22:53:33Z", "who": "bill.mccloskey@gmail.com", "changes": [{"removed": "Provide easy access to the currently selected tab (when there is only one)", "added": "Provide easy access to the currently selected tab", "field_name": "summary"}]}, {"when": "2017-08-18T22:55:32Z", "who": "bill.mccloskey@gmail.com", "changes": [{"attachment_id": 8888993, "removed": "0", "added": "1", "field_name": "attachments.isobsolete"}, {"removed": "", "added": "kchen@mozilla.com", "field_name": "cc"}, {"attachment_id": 8899011, "removed": "", "added": "review?(kchen@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-18T23:00:52Z", "who": "bill.mccloskey@gmail.com", "changes": [{"removed": "", "added": "1333962", "field_name": "blocks"}]}, {"when": "2017-08-22T12:45:50Z", "who": "kanru@kanru.info", "changes": [{"attachment_id": 8899011, "removed": "review?(kchen@mozilla.com)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-08-25T23:27:33Z", "who": "wkocher@mozilla.com", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "---", "added": "mozilla57", "field_name": "target_milestone"}, {"removed": "", "added": "2017-08-25T23:27:33Z", "field_name": "cf_last_resolved"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox57"}]}], "comments": [{"text": "Created attachment 8888993\npatch\n\nI've decided to make a simplifying assumption for the initial Quantum DOM patches: if only one tab is in the foreground, then we'll label vsyncs correctly for that tab and also prioritize runnables for that tab. If multiple tabs (from multiple windows) are in the foreground, then you won't get any benefit from Quantum DOM. This shouldn't be too hard to fix in the future, but it's a pain to deal with right now.\n\nThis patch provides an easy accessor for the foreground TabChild (if there is only one). I imagine other people might find this useful as well for various performance optimizations.", "id": 12495651, "creation_time": "2017-07-22T00:00:48Z", "author": "bill.mccloskey@gmail.com"}, {"text": "Created attachment 8899011\npatch v2\n\nI realized that we do need to keep track of multiple active tabs. When tab switching, for example, two tabs can be active at once. And that's specifically a case where I would like the Quantum DOM scheduler to be effective.\n\nDavid is on PTO, so asking Kan-Ru for review.", "id": 12580228, "creation_time": "2017-08-18T22:55:32Z", "author": "bill.mccloskey@gmail.com"}, {"text": "Pushed by wmccloskey@mozilla.com:\nhttps://hg.mozilla.org/integration/mozilla-inbound/rev/7f426b4432ff\nKeep track of foreground TabChildren (r=kanru)", "id": 12600436, "creation_time": "2017-08-25T17:29:27Z", "author": "pulsebot@bots.tld"}, {"text": "https://hg.mozilla.org/mozilla-central/rev/7f426b4432ff", "id": 12601469, "creation_time": "2017-08-25T23:27:33Z", "author": "wkocher@mozilla.com"}], "attachments": [{"content_type": "text/plain", "creator": "bill.mccloskey@gmail.com", "flags": [{"modification_date": "2017-07-25T04:11:23Z", "creation_date": "2017-07-22T00:00:48Z", "type_id": 4, "status": "+", "name": "review", "id": 1616063, "setter": "dvander@alliedmods.net"}], "is_patch": 1, "creation_time": "2017-07-22T00:00:48Z", "id": 8888993, "is_obsolete": 1}, {"content_type": "text/plain", "creator": "bill.mccloskey@gmail.com", "flags": [{"modification_date": "2017-08-22T12:45:50Z", "creation_date": "2017-08-18T22:55:32Z", "type_id": 4, "status": "+", "name": "review", "id": 1632198, "setter": "kanru@kanru.info"}], "is_patch": 1, "creation_time": "2017-08-18T22:55:32Z", "id": 8899011, "is_obsolete": 0}]}
+{
+    "blocks": [1326454],
+    "cf_tracking_geckoview64": "---",
+    "cf_status_geckoview66": "---",
+    "is_cc_accessible": true,
+    "keywords": ["csectype-intoverflow", "regression", "sec-moderate"],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-08-09T14:54:14Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_geckoview66": "---",
+    "cc_detail": [{
+        "email": "abillings@mozilla.com",
+        "real_name": "Al Billings [:abillings]",
+        "name": "abillings@mozilla.com",
+        "nick": "abillings",
+        "id": 280903
+    }, {
+        "email": "arai.unmht@gmail.com",
+        "real_name": "Tooru Fujisawa [:arai]",
+        "name": "arai.unmht@gmail.com",
+        "nick": "arai",
+        "id": 310076
+    }, {
+        "email": "choller@mozilla.com",
+        "real_name": "Christian Holler (:decoder)",
+        "name": "choller@mozilla.com",
+        "nick": "decoder",
+        "id": 395101
+    }, {
+        "email": "continuation@gmail.com",
+        "real_name": "Andrew McCreight [:mccr8]",
+        "name": "continuation@gmail.com",
+        "nick": "mccr8",
+        "id": 406194
+    }, {
+        "email": "mark@wolfbeast.com",
+        "real_name": "Mark Straver",
+        "name": "mark@wolfbeast.com",
+        "nick": "mark",
+        "id": 364942
+    }, {
+        "email": "miket@mozilla.com",
+        "real_name": "Mike Taylor [:miketaylr]",
+        "name": "miket@mozilla.com",
+        "nick": "miketaylr",
+        "id": 389500
+    }, {
+        "email": "nfroyd@mozilla.com",
+        "real_name": "Nathan Froyd [:froydnj]",
+        "name": "nfroyd@mozilla.com",
+        "nick": "froydnj",
+        "id": 417288
+    }, {
+        "email": "nth10sd@gmail.com",
+        "real_name": "Gary Kwong [:gkw] [:nth10sd]",
+        "name": "nth10sd@gmail.com",
+        "nick": "gkw",
+        "id": 132034
+    }, {
+        "email": "past@mozilla.com",
+        "real_name": "Panos Astithas (he/him) [:past] (please ni?)",
+        "name": "past@mozilla.com",
+        "nick": "past",
+        "id": 363318
+    }, {
+        "email": "ryanvm@gmail.com",
+        "real_name": "Ryan VanderMeulen [:RyanVM]",
+        "name": "ryanvm@gmail.com",
+        "nick": "RyanVM",
+        "id": 75935
+    }, {
+        "email": "shu@rfrn.org",
+        "real_name": "Shu-yu Guo [:shu]",
+        "name": "shu@rfrn.org",
+        "nick": "shu",
+        "id": 381259
+    }],
+    "summary": "Out-of-bounds access in js::frontend::TokenStream::TokenBuf::getRawChar",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "cf_status_firefox55": "wontfix",
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "arai.unmht@gmail.com",
+        "real_name": "Tooru Fujisawa [:arai]",
+        "name": "arai.unmht@gmail.com",
+        "nick": "arai",
+        "id": 310076
+    },
+    "creator": "inferno@chromium.org",
+    "last_change_time": "2018-02-02T01:25:21Z",
+    "comment_count": 7,
+    "creator_detail": {
+        "email": "inferno@chromium.org",
+        "real_name": "Abhishek Arya",
+        "name": "inferno@chromium.org",
+        "nick": "inferno",
+        "id": 397541
+    },
+    "cc": ["abillings@mozilla.com", "arai.unmht@gmail.com", "choller@mozilla.com", "continuation@gmail.com", "mark@wolfbeast.com", "miket@mozilla.com", "nfroyd@mozilla.com", "nth10sd@gmail.com", "past@mozilla.com", "ryanvm@gmail.com", "shu@rfrn.org"],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "arai.unmht@gmail.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1383951,
+    "whiteboard": "[adv-main56+][post-critsmash-triage]",
+    "creation_time": "2017-07-25T00:29:14Z",
+    "depends_on": [1385112],
+    "cf_tracking_geckoview65": "---",
+    "cf_status_firefox56": "fixed",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "FIXED",
+    "classification": "Components",
+    "alias": "CVE-2017-7813",
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "cf_status_firefox_esr52": "unaffected",
+    "flags": [{
+        "modification_date": "2017-08-29T18:28:39Z",
+        "creation_date": "2017-08-28T17:56:13Z",
+        "type_id": 803,
+        "status": "+",
+        "name": "sec-bounty",
+        "id": 1636923,
+        "setter": "dveditz@mozilla.com"
+    }, {
+        "modification_date": "2017-09-18T23:41:45Z",
+        "creation_date": "2017-09-18T23:41:45Z",
+        "type_id": 864,
+        "status": "-",
+        "name": "qe-verify",
+        "id": 1649784,
+        "setter": "mwobensmith@mozilla.com"
+    }],
+    "cf_status_firefox64": "---",
+    "cf_status_firefox57": "fixed",
+    "component": "JavaScript Engine",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "mozilla57",
+    "product": "Core",
+    "history": [{
+        "when": "2017-07-25T00:29:25Z",
+        "who": "inferno@chromium.org",
+        "changes": [{
+            "removed": "Out-of-bounds access in",
+            "added": "Out-of-bounds access in js::frontend::TokenStream::TokenBuf::getRawChar",
+            "field_name": "summary"
+        }]
+    }, {
+        "when": "2017-07-27T02:24:11Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "core-security",
+            "added": "javascript-core-security",
+            "field_name": "groups"
+        }, {
+            "removed": "",
+            "added": "arai.unmht@gmail.com, miket@mozilla.com, nfroyd@mozilla.com, past@mozilla.com, ryanvm@gmail.com, shu@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-27T17:11:14Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "attachment_id": 8889686,
+            "removed": "application/javascript",
+            "added": "application/plain-text",
+            "field_name": "attachments.mimetype"
+        }]
+    }, {
+        "when": "2017-07-27T17:11:39Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "attachment_id": 8889686,
+            "removed": "application/plain-text",
+            "added": "application/text",
+            "field_name": "attachments.mimetype"
+        }]
+    }, {
+        "when": "2017-07-27T17:12:16Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "attachment_id": 8889686,
+            "removed": "application/text",
+            "added": "text/plain",
+            "field_name": "attachments.mimetype"
+        }]
+    }, {
+        "when": "2017-07-27T17:13:20Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "continuation@gmail.com",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "needinfo?(arai.unmht@gmail.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T03:12:23Z",
+        "who": "arai.unmht@gmail.com",
+        "changes": [{
+            "removed": "needinfo?(arai.unmht@gmail.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-03T17:43:58Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "gary@rumblingedge.com",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "needinfo?(gary@rumblingedge.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-03T17:44:22Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "choller@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-09T14:54:14Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "1385112",
+            "field_name": "depends_on"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "nobody@mozilla.org",
+            "added": "arai.unmht@gmail.com",
+            "field_name": "assigned_to"
+        }, {
+            "removed": "",
+            "added": "2017-08-09T14:54:14Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }, {
+        "when": "2017-08-09T14:54:22Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "needinfo?(gary@rumblingedge.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-11T02:30:16Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "---",
+            "added": "mozilla57",
+            "field_name": "target_milestone"
+        }, {
+            "removed": "---",
+            "added": "unaffected",
+            "field_name": "cf_status_firefox_esr52"
+        }, {
+            "removed": "---",
+            "added": "wontfix",
+            "field_name": "cf_status_firefox55"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox56"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox57"
+        }]
+    }, {
+        "when": "2017-08-14T22:18:36Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "javascript-core-security",
+            "added": "core-security-release",
+            "field_name": "groups"
+        }]
+    }, {
+        "when": "2017-08-28T17:56:13Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "sec-bounty?",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-29T18:28:39Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "csectype-intoverflow, sec-moderate",
+            "field_name": "keywords"
+        }, {
+            "removed": "sec-bounty?",
+            "added": "sec-bounty+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-15T01:09:05Z",
+        "who": "abillings@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "abillings@mozilla.com",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "[adv-main56+]",
+            "field_name": "whiteboard"
+        }, {
+            "removed": "",
+            "added": "CVE-2017-7813",
+            "field_name": "alias"
+        }]
+    }, {
+        "when": "2017-09-18T23:41:45Z",
+        "who": "mwobensmith@mozilla.com",
+        "changes": [{
+            "removed": "[adv-main56+]",
+            "added": "[adv-main56+][post-critsmash-triage]",
+            "field_name": "whiteboard"
+        }, {
+            "removed": "",
+            "added": "qe-verify-",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-21T19:00:49Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "regression",
+            "field_name": "keywords"
+        }, {
+            "removed": "",
+            "added": "1314037",
+            "field_name": "blocks"
+        }]
+    }, {
+        "when": "2017-09-21T19:06:57Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "1314037",
+            "added": "1326454",
+            "field_name": "blocks"
+        }]
+    }, {
+        "when": "2017-10-03T23:59:36Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "mark@wolfbeast.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2018-02-02T01:25:21Z",
+        "who": "dveditz@mozilla.com",
+        "changes": [{
+            "removed": "core-security-release",
+            "added": "",
+            "field_name": "groups"
+        }]
+    }],
+    "comments": [{
+        "text": "Created attachment 8889686\ntest.js\n\nBuild ASAN JS Shell using funfuzz\nhttps://github.com/MozillaSecurity/funfuzz/tree/master/js\n\nfunfuzz/js/compileShell.py -b \"--enable-debug --build-with-asan --build-with-clang --enable-more-deterministic -R /build/firefox/src\"\n\nASAN:DEADLYSIGNAL\n=================================================================\n==145434==ERROR: AddressSanitizer: SEGV on unknown address 0x7ff600448408 (pc 0x0000022e7f6e bp 0x7fffd1a87d70 sp 0x7fffd1a87c20 T0)\n    #0 0x22e7f6d in js::frontend::TokenStream::TokenBuf::getRawChar() build/firefox/src/js/src/frontend/TokenStream.h:971:20\n    #1 0x22e7f6d in js::frontend::TokenStream::getCharIgnoreEOL() build/firefox/src/js/src/frontend/TokenStream.cpp:532\n    #2 0x22e7f6d in js::frontend::TokenStream::putIdentInTokenbuf(char16_t const*) build/firefox/src/js/src/frontend/TokenStream.cpp:1189\n    #3 0x22ea1d2 in js::frontend::TokenStream::getTokenInternal(js::frontend::TokenKind*, js::frontend::Token::Modifier) build/firefox/src/js/src/frontend/TokenStream.cpp:1447:18\n    #4 0x676aef in js::frontend::TokenStream::peekToken(js::frontend::TokenKind*, js::frontend::Token::Modifier) build/firefox/src/js/src/frontend/TokenStream.h:781:14\n    #5 0x674b71 in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::statementListItem(js::frontend::YieldHandling, bool) build/firefox/src/js/src/frontend/Parser.cpp:7804:14\n    #6 0x66eb6e in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::statementList(js::frontend::YieldHandling) build/firefox/src/js/src/frontend/Parser.cpp:4199:21\n    #7 0x664475 in js::frontend::Parser<js::frontend::FullParseHandler, char16_t>::evalBody(js::frontend::EvalSharedContext*) build/firefox/src/js/src/frontend/Parser.cpp:2176:49\n    #8 0x19e214a in BytecodeCompiler::compileScript(JS::Handle<JSObject*>, js::frontend::SharedContext*) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:346:18\n    #9 0x19e5347 in BytecodeCompiler::compileEvalScript(JS::Handle<JSObject*>, JS::Handle<js::Scope*>) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:402:12\n    #10 0x19e84b6 in js::frontend::CompileEvalScript(JSContext*, js::LifoAlloc&, JS::Handle<JSObject*>, JS::Handle<js::Scope*>, JS::ReadOnlyCompileOptions const&, JS::SourceBufferHolder&, js::ScriptSourceObject**) build/firefox/src/js/src/frontend/BytecodeCompiler.cpp:601:12\n    #11 0x89e330 in EvalKernel(JSContext*, JS::Handle<JS::Value>, EvalType, js::AbstractFramePtr, JS::Handle<JSObject*>, unsigned char*, JS::MutableHandle<JS::Value>) build/firefox/src/js/src/builtin/Eval.cpp:316:30\n    #12 0x89f9a7 in js::DirectEval(JSContext*, JS::Handle<JS::Value>, JS::MutableHandle<JS::Value>) build/firefox/src/js/src/builtin/Eval.cpp:438:12\n    #13 0x7f0f60 in Interpret(JSContext*, js::RunState&) build/firefox/src/js/src/vm/Interpreter.cpp:2979:14\n    #14 0x7df993 in js::RunScript(JSContext*, js::RunState&) build/firefox/src/js/src/vm/Interpreter.cpp:410:12\n    #15 0x8187bb in js::ExecuteKernel(JSContext*, JS::Handle<JSScript*>, JSObject&, JS::Value const&, js::AbstractFramePtr, JS::Value*) build/firefox/src/js/src/vm/Interpreter.cpp:699:15\n    #16 0x8193b0 in js::Execute(JSContext*, JS::Handle<JSScript*>, JSObject&, JS::Value*) build/firefox/src/js/src/vm/Interpreter.cpp:731:12\n    #17 0x159a796 in ExecuteScript(JSContext*, JS::Handle<JSObject*>, JS::Handle<JSScript*>, JS::Value*) build/firefox/src/js/src/jsapi.cpp:4637:12\n    #18 0x159ac60 in JS_ExecuteScript(JSContext*, JS::Handle<JSScript*>) build/firefox/src/js/src/jsapi.cpp:4670:12\n    #19 0x5b12f7 in RunFile(JSContext*, char const*, _IO_FILE*, bool) build/firefox/src/js/src/shell/js.cpp:608:14\n    #20 0x5b12f7 in Process(JSContext*, char const*, bool, FileKind) build/firefox/src/js/src/shell/js.cpp:958\n    #21 0x557ad7 in ProcessArgs(JSContext*, js::cli::OptionParser*) build/firefox/src/js/src/shell/js.cpp:7753:14\n    #22 0x557ad7 in Shell(JSContext*, js::cli::OptionParser*, char**) build/firefox/src/js/src/shell/js.cpp:8118\n    #23 0x557ad7 in main build/firefox/src/js/src/shell/js.cpp:8515\n    #24 0x7ff60b236f44 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x21f44)\n    #25 0x47ae8c in _start (shell-cache/js-dbg-64-dm-clang-asan-linux-899590a34d56/js-dbg-64-dm-clang-asan-linux-899590a34d56+0x47ae8c)\n\nAddressSanitizer can not provide additional info.\nSUMMARY: AddressSanitizer: SEGV build/firefox/src/js/src/frontend/TokenStream.h:971:20 in js::frontend::TokenStream::TokenBuf::getRawChar()\n==145434==ABORTING",
+        "id": 12502465,
+        "creation_time": "2017-07-25T00:29:14Z",
+        "author": "inferno@chromium.org"
+    }, {
+        "text": "Arai, do you have time to look at this? Thanks.",
+        "id": 12512729,
+        "creation_time": "2017-07-27T17:13:20Z",
+        "author": "continuation@gmail.com"
+    }, {
+        "text": "if this is not urgent, I can look into this next week.",
+        "id": 12513526,
+        "creation_time": "2017-07-27T20:57:16Z",
+        "author": "arai.unmht@gmail.com"
+    }, {
+        "text": "for now, I cannot reproduce the exact same crash.\nI'm fixing somewhat related bug in bug 1385112, but not sure if they're same issue.\nMight be nice to test again if it gets fixed.",
+        "id": 12514293,
+        "creation_time": "2017-07-28T03:12:23Z",
+        "author": "arai.unmht@gmail.com"
+    }, {
+        "text": "Gary, can you try to reproduce this? Thanks.",
+        "id": 12533862,
+        "creation_time": "2017-08-03T17:43:58Z",
+        "author": "continuation@gmail.com"
+    }, {
+        "text": "It is now fixed and does not reproduce anymore. Just a fyi, this bug 1383951 was filed before bug 1385112 (which i cannot access).",
+        "id": 12549192,
+        "creation_time": "2017-08-09T04:30:46Z",
+        "author": "inferno@chromium.org"
+    }, {
+        "text": "I'll mark this fixed by bug 1385112. (rather than a dupe because it was filed earlier)",
+        "id": 12550584,
+        "creation_time": "2017-08-09T14:54:14Z",
+        "author": "continuation@gmail.com"
+    }],
+    "attachments": [{
+        "content_type": "text/plain",
+        "creator": "inferno@chromium.org",
+        "flags": [],
+        "is_patch": 0,
+        "creation_time": "2017-07-25T00:29:14Z",
+        "id": 8889686,
+        "is_obsolete": 0
+    }]
+} {
+    "blocks": [1333962, 1350432],
+    "cf_tracking_geckoview64": "---",
+    "cf_status_geckoview66": "---",
+    "is_cc_accessible": true,
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-08-25T23:27:33Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_geckoview66": "---",
+    "cc_detail": [{
+        "email": "dvander@alliedmods.net",
+        "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency",
+        "name": "dvander@alliedmods.net",
+        "nick": "dvander",
+        "id": 309316
+    }, {
+        "email": "jryans@gmail.com",
+        "real_name": "J. Ryan Stinnett [:jryans]",
+        "name": "jryans@gmail.com",
+        "nick": "jryans",
+        "id": 282978
+    }, {
+        "email": "kanru@kanru.info",
+        "real_name": "Kan-Ru Chen [:kanru] (UTC+8)",
+        "name": "kanru@kanru.info",
+        "nick": "kanru",
+        "id": 428625
+    }],
+    "summary": "Provide easy access to the currently selected tab",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "bill.mccloskey@gmail.com",
+        "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)",
+        "name": "bill.mccloskey@gmail.com",
+        "nick": "billm",
+        "id": 389993
+    },
+    "creator": "bill.mccloskey@gmail.com",
+    "last_change_time": "2017-08-25T23:27:33Z",
+    "creator_detail": {
+        "email": "bill.mccloskey@gmail.com",
+        "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)",
+        "name": "bill.mccloskey@gmail.com",
+        "nick": "billm",
+        "id": 389993
+    },
+    "comment_count": 4,
+    "cc": ["dvander@alliedmods.net", "jryans@gmail.com", "kanru@kanru.info"],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "bill.mccloskey@gmail.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1383333,
+    "whiteboard": "",
+    "creation_time": "2017-07-22T00:00:48Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "FIXED",
+    "classification": "Components",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "cf_status_firefox57": "fixed",
+    "component": "DOM: Content Processes",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "mozilla57",
+    "product": "Core",
+    "history": [{
+        "when": "2017-07-22T00:00:48Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "",
+            "added": "review?(dvander@alliedmods.net)",
+            "field_name": "flagtypes.name"
+        }, {
+            "removed": "",
+            "added": "dvander@alliedmods.net",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-25T04:11:23Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "review?(dvander@alliedmods.net)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-02T03:39:00Z",
+        "who": "jryans@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "jryans@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-18T22:53:33Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "removed": "Provide easy access to the currently selected tab (when there is only one)",
+            "added": "Provide easy access to the currently selected tab",
+            "field_name": "summary"
+        }]
+    }, {
+        "when": "2017-08-18T22:55:32Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "0",
+            "added": "1",
+            "field_name": "attachments.isobsolete"
+        }, {
+            "removed": "",
+            "added": "kchen@mozilla.com",
+            "field_name": "cc"
+        }, {
+            "attachment_id": 8899011,
+            "removed": "",
+            "added": "review?(kchen@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-18T23:00:52Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "1333962",
+            "field_name": "blocks"
+        }]
+    }, {
+        "when": "2017-08-22T12:45:50Z",
+        "who": "kanru@kanru.info",
+        "changes": [{
+            "attachment_id": 8899011,
+            "removed": "review?(kchen@mozilla.com)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-25T23:27:33Z",
+        "who": "wkocher@mozilla.com",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "---",
+            "added": "mozilla57",
+            "field_name": "target_milestone"
+        }, {
+            "removed": "",
+            "added": "2017-08-25T23:27:33Z",
+            "field_name": "cf_last_resolved"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox57"
+        }]
+    }],
+    "comments": [{
+        "text": "Created attachment 8888993\npatch\n\nI've decided to make a simplifying assumption for the initial Quantum DOM patches: if only one tab is in the foreground, then we'll label vsyncs correctly for that tab and also prioritize runnables for that tab. If multiple tabs (from multiple windows) are in the foreground, then you won't get any benefit from Quantum DOM. This shouldn't be too hard to fix in the future, but it's a pain to deal with right now.\n\nThis patch provides an easy accessor for the foreground TabChild (if there is only one). I imagine other people might find this useful as well for various performance optimizations.",
+        "id": 12495651,
+        "creation_time": "2017-07-22T00:00:48Z",
+        "author": "bill.mccloskey@gmail.com"
+    }, {
+        "text": "Created attachment 8899011\npatch v2\n\nI realized that we do need to keep track of multiple active tabs. When tab switching, for example, two tabs can be active at once. And that's specifically a case where I would like the Quantum DOM scheduler to be effective.\n\nDavid is on PTO, so asking Kan-Ru for review.",
+        "id": 12580228,
+        "creation_time": "2017-08-18T22:55:32Z",
+        "author": "bill.mccloskey@gmail.com"
+    }, {
+        "text": "Pushed by wmccloskey@mozilla.com:\nhttps://hg.mozilla.org/integration/mozilla-inbound/rev/7f426b4432ff\nKeep track of foreground TabChildren (r=kanru)",
+        "id": 12600436,
+        "creation_time": "2017-08-25T17:29:27Z",
+        "author": "pulsebot@bots.tld"
+    }, {
+        "text": "https://hg.mozilla.org/mozilla-central/rev/7f426b4432ff",
+        "id": 12601469,
+        "creation_time": "2017-08-25T23:27:33Z",
+        "author": "wkocher@mozilla.com"
+    }],
+    "attachments": [{
+        "content_type": "text/plain",
+        "creator": "bill.mccloskey@gmail.com",
+        "flags": [{
+            "modification_date": "2017-07-25T04:11:23Z",
+            "creation_date": "2017-07-22T00:00:48Z",
+            "type_id": 4,
+            "status": "+",
+            "name": "review",
+            "id": 1616063,
+            "setter": "dvander@alliedmods.net"
+        }],
+        "is_patch": 1,
+        "creation_time": "2017-07-22T00:00:48Z",
+        "id": 8888993,
+        "is_obsolete": 1
+    }, {
+        "content_type": "text/plain",
+        "creator": "bill.mccloskey@gmail.com",
+        "flags": [{
+            "modification_date": "2017-08-22T12:45:50Z",
+            "creation_date": "2017-08-18T22:55:32Z",
+            "type_id": 4,
+            "status": "+",
+            "name": "review",
+            "id": 1632198,
+            "setter": "kanru@kanru.info"
+        }],
+        "is_patch": 1,
+        "creation_time": "2017-08-18T22:55:32Z",
+        "id": 8899011,
+        "is_obsolete": 0
+    }]
+}

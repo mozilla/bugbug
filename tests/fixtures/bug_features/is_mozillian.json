@@ -1,3 +1,1044 @@
-{"blocks": [], "cf_tracking_geckoview64": "---", "is_cc_accessible": true, "cf_status_thunderbird_esr52": "---", "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-07-04T02:36:27Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cc_detail": [{"email": "dvander@alliedmods.net", "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency", "name": "dvander@alliedmods.net", "nick": "dvander", "id": 309316}, {"email": "Virtual@teknik.io", "real_name": "Virtual_ManPL [:Virtual] - (please needinfo? me - so I will see your comment/reply/question/etc.)", "name": "Virtual@teknik.io", "nick": "Virtual", "id": 342842}, {"email": "yfdyh000@gmail.com", "real_name": "YF (Yang)", "name": "yfdyh000@gmail.com", "nick": "yfdyh000", "id": 398515}], "summary": "Firefox Nightly 56 shows no buttons and no page content.", "cf_has_str": "---", "cf_user_story": "", "platform": "x86", "cf_status_firefox_esr60": "---", "votes": 0, "version": "56 Branch", "mentors_detail": [], "cf_tracking_thunderbird_esr52": "---", "is_creator_accessible": true, "is_confirmed": false, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "nobody@mozilla.org", "real_name": "Nobody; OK to take it and work on it", "name": "nobody@mozilla.org", "nick": "nobody", "id": 1}, "creator": "johngraciliano@gmail.com", "last_change_time": "2017-07-17T21:46:57Z", "creator_detail": {"email": "johngraciliano@gmail.com", "real_name": "", "name": "johngraciliano@gmail.com", "nick": "johngraciliano", "id": 532161}, "comment_count": 3, "cc": ["dvander@alliedmods.net", "Virtual@teknik.io", "yfdyh000@gmail.com"], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "nobody@mozilla.org", "groups": [], "see_also": [], "id": 1378004, "whiteboard": "", "creation_time": "2017-07-04T00:08:07Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": 1377866, "cf_status_firefox66": "---", "resolution": "DUPLICATE", "classification": "Components", "alias": null, "cf_has_regression_range": "---", "op_sys": "Windows 8", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "major", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "component": "Graphics", "cf_status_geckoview64": "---", "target_milestone": "---", "product": "Core", "cf_platform_rel": "---", "history": [{"when": "2017-07-04T02:36:27Z", "who": "yfdyh000@gmail.com", "changes": [{"removed": "UNCONFIRMED", "added": "RESOLVED", "field_name": "status"}, {"removed": "Unspecified", "added": "x86", "field_name": "platform"}, {"removed": "Untriaged", "added": "Graphics", "field_name": "component"}, {"removed": "", "added": "yfdyh000@gmail.com", "field_name": "cc"}, {"removed": "", "added": "DUPLICATE", "field_name": "resolution"}, {"removed": "Firefox", "added": "Core", "field_name": "product"}, {"removed": "normal", "added": "major", "field_name": "severity"}, {"removed": "Unspecified", "added": "Windows 8", "field_name": "op_sys"}, {"removed": "", "added": "2017-07-04T02:36:27Z", "field_name": "cf_last_resolved"}]}, {"when": "2017-07-04T05:00:38Z", "who": "dvander@alliedmods.net", "changes": [{"removed": "", "added": "dvander@alliedmods.net", "field_name": "cc"}, {"removed": "", "added": "needinfo?(johngraciliano@gmail.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-04T07:53:38Z", "who": "Virtual@teknik.io", "changes": [{"removed": "", "added": "Virtual@MsgSafe.io", "field_name": "cc"}]}, {"when": "2017-07-17T21:46:57Z", "who": "dvander@alliedmods.net", "changes": [{"removed": "needinfo?(johngraciliano@gmail.com)", "added": "", "field_name": "flagtypes.name"}]}], "comments": [{"text": "User Agent: Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0\nBuild ID: 20170701030203\n\nSteps to reproduce:\n\nUpdated Nightly. (Either via interface or running firefox-56.0a1.en-US.win64.installer.exe [2017.07.02 mozilla central]).  This is in a Windows 8 machine!\n\n\nActual results:\n\nAfter restarting, nothing showed the bars were empty, the content was empty.  However (some?) buttons areas in the navigation bar were useful (tool tips show up).  A click above on the area below the close button made the options panel to show and I was able to restart in safe mode.  Firefox works in Safe Mode.  However, Firefox will not work with a new profile, even after refreshing Firefox.  I reverted to 2017.07.01. The 2017.07.03 does not fix anything for me.\n\n\nExpected results:\n\nFirefox Nightly should work mostly after an update.", "id": 12445163, "creation_time": "2017-07-04T00:08:07Z", "author": "johngraciliano@gmail.com"}, {"text": "\n\n*** This bug has been marked as a duplicate of bug 1377866 ***", "id": 12445279, "creation_time": "2017-07-04T02:36:27Z", "author": "yfdyh000@gmail.com"}, {"text": "John, if you get a chance could you attach your about:support? I will make sure the configuration is included in the fix for bug 1377866.", "id": 12445393, "creation_time": "2017-07-04T05:00:38Z", "author": "dvander@alliedmods.net"}], "attachments": []}
-{"blocks": [], "cf_tracking_geckoview64": "---", "is_cc_accessible": true, "keywords": ["dev-doc-complete"], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "57+", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-09-14T06:25:15Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cc_detail": [{"email": "bgrinstead@mozilla.com", "real_name": "Brian Grinstead [:bgrins]", "name": "bgrinstead@mozilla.com", "nick": "bgrins", "id": 476442}, {"email": "cmills@mozilla.com", "real_name": "Chris Mills (Mozilla, MDN editor) [:cmills]", "name": "cmills@mozilla.com", "nick": "cmills", "id": 475085}, {"email": "continuation@gmail.com", "real_name": "Andrew McCreight [:mccr8]", "name": "continuation@gmail.com", "nick": "mccr8", "id": 406194}, {"email": "dtownsend@mozilla.com", "real_name": "Dave Townsend [:mossop] (he/him)", "name": "dtownsend@mozilla.com", "nick": "mossop", "id": 91159}, {"email": "gilles.lepretre@lim.eu", "real_name": "Gilles Lepretre", "name": "gilles.lepretre@lim.eu", "nick": "gilles.lepretre", "id": 528158}, {"email": "hskupin@gmail.com", "real_name": "Henrik Skupin (:whimboo)", "name": "hskupin@gmail.com", "nick": "whimboo", "id": 76551}, {"email": "john@netpurgatory.com", "real_name": "John C. Vernaleo", "name": "john@netpurgatory.com", "nick": "john", "id": 450704}, {"email": "jryans@gmail.com", "real_name": "J. Ryan Stinnett [:jryans]", "name": "jryans@gmail.com", "nick": "jryans", "id": 282978}, {"email": "marsjaninzmarsa@gmail.com", "real_name": "Kuba Niewiarowski", "name": "marsjaninzmarsa@gmail.com", "nick": "marsjaninzmarsa", "id": 470481}, {"email": "myk@mykzilla.org", "real_name": "Myk Melez [:myk] [@mykmelez]", "name": "myk@mykzilla.org", "nick": "myk", "id": 27300}, {"email": "percyley@qq.com", "real_name": "yisibl", "name": "percyley@qq.com", "nick": "percyley", "id": 543470}, {"email": "ronoueb@gmail.com", "real_name": "B. Dahse", "name": "ronoueb@gmail.com", "nick": "ronoueb", "id": 564735}, {"email": "sledru@mozilla.com", "real_name": "Sylvestre Ledru [:sylvestre]", "name": "sledru@mozilla.com", "nick": "sylvestre", "id": 495955}, {"email": "teamleader@sitelease.ca", "real_name": "sitelease", "name": "teamleader@sitelease.ca", "nick": "teamleader", "id": 602370}], "summary": "Take a screenshot from the command line with headless", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "assigned_to_detail": {"email": "ronoueb@gmail.com", "real_name": "B. Dahse", "name": "ronoueb@gmail.com", "nick": "ronoueb", "id": 564735}, "creator": "bdahl@mozilla.com", "last_change_time": "2018-11-15T00:59:49Z", "creator_detail": {"email": "bdahl@mozilla.com", "real_name": "Brendan Dahl [:bdahl]", "name": "bdahl@mozilla.com", "nick": "bdahl", "id": 425126}, "comment_count": 45, "cc": ["bgrinstead@mozilla.com", "cmills@mozilla.com", "continuation@gmail.com", "dtownsend@mozilla.com", "gilles.lepretre@lim.eu", "hskupin@gmail.com", "john@netpurgatory.com", "jryans@gmail.com", "marsjaninzmarsa@gmail.com", "myk@mykzilla.org", "percyley@qq.com", "ronoueb@gmail.com", "sledru@mozilla.com", "teamleader@sitelease.ca"], "duplicates": [], "assigned_to": "ronoueb@gmail.com", "groups": [], "see_also": [], "id": 1378010, "whiteboard": "", "creation_time": "2017-07-04T00:21:49Z", "depends_on": [1331152, 1507352], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "FIXED", "classification": "Client Software", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [{"modification_date": "2017-10-24T16:17:19Z", "requestee": "bdahl@mozilla.com", "creation_date": "2017-10-24T16:17:19Z", "type_id": 800, "status": "?", "name": "needinfo", "id": 1670173, "setter": "ronoueb@gmail.com"}], "cf_status_firefox64": "---", "cf_status_firefox57": "fixed", "component": "Headless", "cf_status_geckoview64": "---", "product": "Firefox", "target_milestone": "Firefox 57", "cf_platform_rel": "---", "history": [{"when": "2017-07-05T23:29:28Z", "who": "jryans@gmail.com", "changes": [{"removed": "", "added": "jryans@gmail.com", "field_name": "cc"}]}, {"when": "2017-07-06T18:24:06Z", "who": "bgrinstead@mozilla.com", "changes": [{"removed": "", "added": "bgrinstead@mozilla.com", "field_name": "cc"}]}, {"when": "2017-07-07T16:10:52Z", "who": "myk@mykzilla.org", "changes": [{"removed": "", "added": "myk@mykzilla.org", "field_name": "cc"}]}, {"when": "2017-07-10T23:07:05Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "ronoueb@gmail.com", "field_name": "cc"}]}, {"when": "2017-07-17T19:41:47Z", "who": "ronoueb@gmail.com", "changes": [{"attachment_id": 8887182, "removed": "", "added": "review?(bdahl@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-18T20:56:48Z", "who": "bdahl@mozilla.com", "changes": [{"removed": "nobody@mozilla.org", "added": "ronoueb@gmail.com", "field_name": "assigned_to"}]}, {"when": "2017-08-03T00:56:05Z", "who": "bdahl@mozilla.com", "changes": [{"attachment_id": 8887182, "removed": "review?(bdahl@mozilla.com)", "added": "review-", "field_name": "flagtypes.name"}]}, {"when": "2017-08-15T17:54:18Z", "who": "ronoueb@gmail.com", "changes": [{"attachment_id": 8887182, "removed": "review-", "added": "review?(bdahl@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-23T17:51:48Z", "who": "bdahl@mozilla.com", "changes": [{"removed": "", "added": "dtownsend@mozilla.com", "field_name": "cc"}, {"attachment_id": 8887182, "removed": "review?(bdahl@mozilla.com)", "added": "review?(dtownsend@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-23T21:57:35Z", "who": "dtownsend@mozilla.com", "changes": [{"attachment_id": 8887182, "removed": "review?(dtownsend@mozilla.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-08-25T20:28:06Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "needinfo?(bdahl@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-29T21:34:51Z", "who": "ronoueb@gmail.com", "changes": [{"attachment_id": 8887182, "removed": "", "added": "review?(dtownsend@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-29T22:45:57Z", "who": "dtownsend@mozilla.com", "changes": [{"attachment_id": 8887182, "removed": "review?(dtownsend@mozilla.com)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-08-30T11:29:34Z", "who": "cmills@mozilla.com", "changes": [{"removed": "", "added": "cmills@mozilla.com", "field_name": "cc"}]}, {"when": "2017-08-30T14:34:19Z", "who": "john@netpurgatory.com", "changes": [{"removed": "", "added": "john@netpurgatory.com", "field_name": "cc"}]}, {"when": "2017-08-30T18:36:01Z", "who": "marsjaninzmarsa@gmail.com", "changes": [{"removed": "", "added": "marsjaninzmarsa@gmail.com", "field_name": "cc"}]}, {"when": "2017-08-31T02:43:08Z", "who": "percyley@qq.com", "changes": [{"removed": "", "added": "percyley@qq.com", "field_name": "cc"}]}, {"when": "2017-09-01T14:42:13Z", "who": "gilles.lepretre@lim.eu", "changes": [{"removed": "", "added": "gilles.lepretre@lim.eu", "field_name": "cc"}]}, {"when": "2017-09-06T16:56:48Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "needinfo?(jryans@gmail.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-09-06T17:10:15Z", "who": "jryans@gmail.com", "changes": [{"removed": "needinfo?(jryans@gmail.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-09-13T18:13:11Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "checkin-needed", "field_name": "keywords"}]}, {"when": "2017-09-13T18:28:26Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "checkin-needed", "added": "", "field_name": "keywords"}, {"removed": "", "added": "needinfo?(ronoueb@gmail.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-09-13T18:40:37Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "needinfo?(ronoueb@gmail.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-09-13T18:40:51Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "checkin-needed", "field_name": "keywords"}]}, {"when": "2017-09-13T18:44:53Z", "who": "pulsebot@bots.tld", "changes": [{"removed": "checkin-needed", "added": "", "field_name": "keywords"}]}, {"when": "2017-09-14T06:25:15Z", "who": "wkocher@mozilla.com", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "---", "added": "Firefox 57", "field_name": "target_milestone"}, {"removed": "", "added": "2017-09-14T06:25:15Z", "field_name": "cf_last_resolved"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox57"}]}, {"when": "2017-09-14T19:59:40Z", "who": "cmills@mozilla.com", "changes": [{"removed": "", "added": "dev-doc-needed", "field_name": "keywords"}]}, {"when": "2017-09-15T17:08:12Z", "who": "sledru@mozilla.com", "changes": [{"removed": "", "added": "sledru@mozilla.com", "field_name": "cc"}, {"removed": "---", "added": "57+", "field_name": "cf_tracking_firefox_relnote"}]}, {"when": "2017-09-16T20:13:24Z", "who": "teamleader@sitelease.ca", "changes": [{"removed": "", "added": "teamleader@sitelease.ca", "field_name": "cc"}]}, {"when": "2017-09-18T21:55:56Z", "who": "bdahl@mozilla.com", "changes": [{"removed": "needinfo?(bdahl@mozilla.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-09-26T08:34:02Z", "who": "cmills@mozilla.com", "changes": [{"removed": "dev-doc-needed", "added": "dev-doc-complete", "field_name": "keywords"}]}, {"when": "2017-10-18T16:29:18Z", "who": "continuation@gmail.com", "changes": [{"removed": "", "added": "1331152", "field_name": "depends_on"}]}, {"when": "2017-10-24T16:17:19Z", "who": "ronoueb@gmail.com", "changes": [{"removed": "", "added": "needinfo?(bdahl@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-10-27T21:29:51Z", "who": "continuation@gmail.com", "changes": [{"removed": "", "added": "continuation@gmail.com", "field_name": "cc"}]}, {"when": "2017-11-21T19:34:09Z", "who": "hskupin@gmail.com", "changes": [{"removed": "", "added": "hskupin@gmail.com", "field_name": "cc"}]}, {"when": "2018-11-15T00:59:49Z", "who": "ehsan@mozilla.com", "changes": [{"removed": "", "added": "1507352", "field_name": "depends_on"}]}], "comments": [{"text": "It'd be nice to easily take a screen shot of a web page from the command line using headless Firefox similar to what Chrome supports[1].\n\nFor example: `firefox --headless --screenshot http://google.com` would produce screenshot.png\n\nA rough outline of what needs to be done:\n - check for the arg somewhere in nsAppRunner.cpp and set a flag (maybe in HeadlessWidget?) that we can later retrieve\n - then once the page is loaded (after first paint or some amount delay?) use drawWindow to save the png [3]\n - exit firefox\n\nFor finding spots where we could listen to the page loading I would follow firefox's handling of the URL command line argument and attach a listener somewhere along the way to the window.\n\n\n[1] https://chromium.googlesource.com/chromium/src/+/lkgr/headless/app/headless_shell.cc#37\n\n[2] http://searchfox.org/mozilla-central/rev/a3a739de04ee6134c11546568a33dbb6a6a29907/toolkit/xre/nsAppRunner.cpp\n\n[3] http://searchfox.org/mozilla-central/rev/a3a739de04ee6134c11546568a33dbb6a6a29907/testing/marionette/capture.js#131", "id": 12445185, "creation_time": "2017-07-04T00:21:49Z", "author": "bdahl@mozilla.com"}, {"text": "Not sure if it's of interest for headless, but you might get some ideas from DevTools' screenshot code[1] (triggered via inspector context menus, screenshot buttons, and GCLI commands).\n\nProbably you can't use the code directly, but some features might be nice to borrow, such as:\n\n1. Screenshot only specific elements using a CSS selector\n2. Save to clipboard instead of file\n3. Full page screenshot (entire height / width of the document, not just what is within the viewport)\n4. Allows specifying a custom devicePixelRatio value to check the result for different monitor pixel densities\n5. Allows specifying an arbitrary delay\n\n[1]: http://searchfox.org/mozilla-central/source/devtools/shared/gcli/commands/screenshot.js", "id": 12449891, "creation_time": "2017-07-05T23:29:28Z", "author": "jryans@gmail.com"}, {"text": "Some Chrome defaults:\n- window size 800x600\n- screenshot.png goes into working directory\n- captures with scroll bars\nThere doesn't seem to be a way to make Chrome capture the whole page.\n\nOur devtools will capture the whole page if you use the screenshot button from the toolbox and the screenshots will go in the download manager.", "id": 12461719, "creation_time": "2017-07-10T23:07:05Z", "author": "ronoueb@gmail.com"}, {"text": "Created attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nAdd a `--screenshot` argument that can be used with `--headless` and `--url` to take a screenshot of the page.\nDefault is a full page screenshot, but `--window-size=width,height` can change this.\nA path for the screenshot can be supplied with `--screenshot=/path/to/file.png`.\nAlso adds a chrome-test that tests the above.\n\nReview commit: https://reviewboard.mozilla.org/r/157930/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/157930/", "id": 12480418, "creation_time": "2017-07-17T19:41:47Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review163700\n\nLooks really good overall. Just a few little things below (mainly making takeScreenshot more like synchronous js). Feel free to grab me if any of it's unclear! I also have a few slight feature changes after talking with Myk, but I'll leave that comment in the bug.\n\n::: browser/components/nsBrowserContentHandler.js:454\n(Diff revision 1)\n>      let info =\n>                \"  --browser          Open a browser window.\\n\" +\n>                \"  --new-window <url> Open <url> in a new window.\\n\" +\n>                \"  --new-tab <url>    Open <url> in a new tab.\\n\" +\n>                \"  --private-window <url> Open <url> in a new private window.\\n\";\n>      if (AppConstants.platform == \"win\") {\n\nLet's add documentation for the new flags up here. We'll also need to wrap it an if and only show on linux/windows. We don't need to do this now, but we should expose a flag for if headless is supported (I'll file a bug).\n\n::: browser/components/shell/HeadlessShell.jsm:49\n(Diff revision 1)\n> +    webProgress.addProgressListener(progressListener,\n> +                                    Ci.nsIWebProgress.NOTIFY_LOCATION);\n> +  });\n> +}\n> +\n> +async function takeScreenshot(fullpage, contentWidth, contentHeight, path, url) {\n\nWe don't really use the result of this function below, but it is a bit odd that it resolves before the screenshot may actually be saved.\n\n::: browser/components/shell/HeadlessShell.jsm:52\n(Diff revision 1)\n> +}\n> +\n> +async function takeScreenshot(fullpage, contentWidth, contentHeight, path, url) {\n> +  // Don't quit even though we don't create a window.\n> +  Services.startup.enterLastWindowClosingSurvivalArea();\n> +\n\nStart regular a try/catch/finally here.\n\n::: browser/components/shell/HeadlessShell.jsm:68\n(Diff revision 1)\n> +                        : contentWindow.innerHeight;\n> +  canvas.width = width;\n> +  canvas.height = height;\n> +  context.drawWindow(contentWindow, 0, 0, width, height, 'rgb(255, 255, 255)');\n> +\n> +  canvas.toBlob((b) => {\n\nDo an await new Promise(...) here that resolves when the file is done writing.\n\n::: browser/components/shell/HeadlessShell.jsm:75\n(Diff revision 1)\n> +    reader.onloadend = function() {\n> +      OS.File.writeAtomic(path, new Uint8Array(reader.result), {flush:true})\n> +      .then(() => dump('Screenshot saved to: ' + path + '\\n'))\n> +      .catch((reason) => dump('Failure saving screenshot: ' + reason + '\\n'))\n> +      .then(() => { // \"finally\"\n> +        webNavigation.close();\n\nMove .close into the finally and exitLastWindowClosingSurvivalArea after the finally.\n\n::: browser/components/shell/HeadlessShell.jsm:113\n(Diff revision 1)\n> +        if (dimensions[0] > 0 && dimensions[1] > 0) {\n> +          fullpage = false;\n> +          contentWidth = dimensions[0];\n> +          contentHeight = dimensions[1];\n> +        } else {\n> +          throw 0; // Ill-formed `window-size`\n\nI recommend always using throw new Error(....) so a stack gets attached to it.\n\n::: browser/components/shell/test/test_headless_screenshot.html:86\n(Diff revision 1)\n> +    let proc = await Subprocess.call({\n> +      command: firefoxExe,\n> +      arguments: firefoxArgs.concat([\"--window-size=hello\"]),\n> +    });\n> +    let str;\n> +    let foundErr;\n\nI originally had said let's test for the error message, but after thinking about it some more, we should really just check the behavior and make sure a screenshot doesn't exist. That way we don't have to hardcode string error messages in two places.", "id": 12484285, "creation_time": "2017-07-18T20:34:20Z", "author": "bdahl@mozilla.com"}, {"text": "A few slight modifications after talking with Myk:\n\n`firefox --screenshot` should imply headless, so let's check for it in nsAppRunner[1] and enable headless if present.\n\n`firefox --screenshot --window-size=800` should set the width but do a fullpage screenshot\n\n[1] http://searchfox.org/mozilla-central/rev/88180977d79654af025158d8ebeb8c2aa11940eb/toolkit/xre/nsAppRunner.cpp#3170", "id": 12484355, "creation_time": "2017-07-18T20:55:53Z", "author": "bdahl@mozilla.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/1-2/", "id": 12488329, "creation_time": "2017-07-19T23:24:29Z", "author": "ronoueb@gmail.com"}, {"text": "Addressed review comments and added some more tests. Try is closed right now, so I don't know if changing about:mozilla to about:blank helps.", "id": 12488349, "creation_time": "2017-07-19T23:31:53Z", "author": "ronoueb@gmail.com"}, {"text": "Here's a try submission with the most recent changes https://treeherder.mozilla.org/#/jobs?repo=try&revision=ce5c76344bf8abbda29fcb6f08b3aa0124f343b9", "id": 12490573, "creation_time": "2017-07-20T15:49:37Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/2-3/", "id": 12517369, "creation_time": "2017-07-29T00:43:03Z", "author": "ronoueb@gmail.com"}, {"text": "Try run to go with the code in the review request: https://treeherder.mozilla.org/#/jobs?repo=try&revision=28380a2a9dbd6b76dec05ca6cbf2cdd25888dcc2&group_state=expanded", "id": 12517384, "creation_time": "2017-07-29T00:44:38Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n::: browser/components/nsBrowserContentHandler.js:462\n(Diff revision 3)\n> +      info += \"  --screenshot[=<path>]        Save screenshot of page to <path> or in working directory.\\n\";\n> +      info += \"  --window-size=width[,height] Width of full page screenshot or width and height of region to screenshot.\\n\";\n\nTo be consistent with above, let's show these options in the generic form e.g. --screenshot [<path>]\n\n::: browser/components/nsBrowserContentHandler.js\n(Diff revision 3)\n>        if (URLlist.length) {\n>          openWindow(null, gBrowserContentHandler.chromeURL, \"_blank\",\n>                     \"chrome,dialog=no,all\" + gBrowserContentHandler.getFeatures(cmdLine),\n>                     URLlist);\n>        }\n> -\n\nRevert unchanged line\n\n::: browser/components/shell/HeadlessShell.jsm:57\n(Diff revision 3)\n> +\n> +  try {\n> +    let windowlessBrowser = Services.appShell.createWindowlessBrowser(false);\n> +    var webNavigation = windowlessBrowser.QueryInterface(Ci.nsIWebNavigation);\n> +    let contentWindow = await loadContentWindow(webNavigation, url);\n> +    contentWindow.resizeTo(contentWidth, contentHeight);\n\nWe don't need to fix this now, but can you file a follow up bug to add parameters to set the initial size of the browserless window so we don't have to resize?\n\n::: browser/components/shell/test/chrome.ini:2\n(Diff revision 3)\n> +[test_headless_screenshot.html]\n> +skip-if = (os != 'win' && os != 'linux')\n\nPlease file a follow up bug to enable this for macos.\n\n::: browser/components/shell/test/test_headless_screenshot.html:26\n(Diff revision 3)\n> +  const mochiPrefsPath = mochiPrefsFile.path;\n> +  const mochiPrefsName = mochiPrefsFile.leafName;\n> +  const profilePath = OS.Path.join(OS.Constants.Path.tmpDir, \"headless_test_screenshot_profile\");\n> +  const prefsPath = OS.Path.join(profilePath, mochiPrefsName);\n> +  const screenshotPath = OS.Path.join(OS.Constants.Path.tmpDir, \"headless_test_screenshot.png\");\n> +  const firefoxArgs = [\"-profile\", profilePath, \"-no-remote\", \"-url\", \"about:blank\", \"-screenshot\", screenshotPath];\n\nLet's add a few more simple tests for those tricky edge cases we discussed.\n\ne.g.\n--screenshot about:blank (no --url and no path)\n--screenshot (no --url and no optional url)", "id": 12531420, "creation_time": "2017-08-03T00:56:05Z", "author": "bdahl@mozilla.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n> We don't need to fix this now, but can you file a follow up bug to add parameters to set the initial size of the browserless window so we don't have to resize?\n\nhttps://bugzilla.mozilla.org/show_bug.cgi?id=1387585", "id": 12538200, "creation_time": "2017-08-04T20:25:28Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n> Please file a follow up bug to enable this for macos.\n\nhttps://bugzilla.mozilla.org/show_bug.cgi?id=1387587", "id": 12538209, "creation_time": "2017-08-04T20:27:23Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/3-4/", "id": 12568652, "creation_time": "2017-08-15T17:54:18Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\nA few questions and comments here.\n\nDoes this (or should this) support taking screenshots with a currently running instance of Firefox?\n\n::: browser/components/nsBrowserContentHandler.js:8\n(Diff revision 4)\n>   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */\n>  \n>  Components.utils.import(\"resource://gre/modules/XPCOMUtils.jsm\");\n>  Components.utils.import(\"resource://gre/modules/Services.jsm\");\n>  Components.utils.import(\"resource://gre/modules/AppConstants.jsm\");\n> +Components.utils.import(\"resource:///modules/HeadlessShell.jsm\");\n\nPlease import this lazily\n\n::: browser/components/nsBrowserContentHandler.js:462\n(Diff revision 4)\n> +      info += \"  --screenshot [<path>]        Save screenshot of page to <path> or in working directory.\\n\";\n> +      info += \"  --window-size width[,height] Width of full page screenshot or width and height of region to screenshot.\\n\";\n\nMake these output lines less than 78 characters.\n\n::: browser/components/nsBrowserGlue.js:75\n(Diff revision 4)\n>    [\"DirectoryLinksProvider\", \"resource:///modules/DirectoryLinksProvider.jsm\"],\n>    [\"ExtensionsUI\", \"resource:///modules/ExtensionsUI.jsm\"],\n>    [\"Feeds\", \"resource:///modules/Feeds.jsm\"],\n>    [\"FileUtils\", \"resource://gre/modules/FileUtils.jsm\"],\n>    [\"FormValidationHandler\", \"resource:///modules/FormValidationHandler.jsm\"],\n> +  [\"HeadlessShell\", \"resource:///modules/HeadlessShell.jsm\"],\n\nWhy did you need to add this here?\n\n::: browser/components/shell/HeadlessShell.jsm:32\n(Diff revision 4)\n> +        docShell = webNavigation.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                   .getInterface(Ci.nsIDocShell);\n\nI don't think the docshell will have changed\n\n::: browser/components/shell/HeadlessShell.jsm:35\n(Diff revision 4)\n> +          return;\n> +        }\n> +        docShell = webNavigation.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                   .getInterface(Ci.nsIDocShell);\n> +        let contentWindow = docShell.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                            .getInterface(Ci.nsIDOMWindow);\n\nLine up the periods please.\n\n::: browser/components/shell/HeadlessShell.jsm:69\n(Diff revision 4)\n> +    await new Promise((resolve, reject) => {\n> +      canvas.toBlob((blob) => {\n> +        let reader = new FileReader();\n> +        reader.onloadend = function() {\n> +          OS.File.writeAtomic(path, new Uint8Array(reader.result), {flush: true})\n> +          .then(() => dump(\"Screenshot saved to: \" + path + \"\\n\"))\n> +          .catch((reason) => dump(\"Failure saving screenshot: \" + reason + \"\\n\"))\n> +          .then(() => resolve()); // \"finally\"\n> +        };\n> +        reader.readAsArrayBuffer(blob);\n> +      });\n> +    });\n\nWe're in an async function so it would be nicer to make a few small functions that wrap the toBlob and reader in ways that return promises that you can just await on.\n\nSomething like:\n\n    function promiseCanvasBlob(canvas) {\n        return new Promise(resolve => canvas.toBlob(resolve);\n    }\n    \n    function readBlob(blob) {\n      return new Promise(resolve => {\n        let reader = new FileReader();\n        reader.onloadend = () => resolve(reader);\n        reader.readAsArrayBuffer(blob);\n      });\n    }\n\n::: browser/components/shell/HeadlessShell.jsm:97\n(Diff revision 4)\n> +    let contentWidth = 1366;\n> +    let contentHeight = 768;\n\nWhere do these numbers come from?\n\n::: browser/components/shell/HeadlessShell.jsm:105\n(Diff revision 4)\n> +    // Parse `window-size`\n> +    try {\n> +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> +    } catch (e) {\n> +      dump(\"expected format: --window-size width[,height]\\n\");\n> +      return;\n\nDoes this cause the process to exit? I'm not seeing how\n\n::: browser/components/shell/HeadlessShell.jsm:138\n(Diff revision 4)\n> +    // Only command line argument left should be `screenshot`\n> +    // There could still be URLs however\n> +    try {\n> +      var path = cmdLine.handleFlagWithParam(\"screenshot\", true);\n> +      if (!cmdLine.length && !URLlist.length) {\n> +        URLlist.push(path); // Assume the user wanted to specify a URL\n\nThis is a bit weird and I wouldn't want to box us into a corner of supporting this in the future. In this case just log a message saying there was nothing to screenshot and exit.\n\n::: toolkit/xre/nsAppRunner.cpp:574\n(Diff revision 4)\n>  \n>    return ar;\n>  }\n>  \n> +/**\n> + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n\nIt doesn't seem to ignore these parameters. Rather it still matches even if there is a delimeter there regardless of the data past it.\n\n::: toolkit/xre/nsAppRunner.cpp:3214\n(Diff revision 4)\n>  \n>    if (ChaosMode::isActive(ChaosFeature::Any)) {\n>      printf_stderr(\"*** You are running in chaos test mode. See ChaosMode.h. ***\\n\");\n>    }\n>  \n> -  if (CheckArg(\"headless\")) {\n> +  if (CheckArg(\"headless\") || CheckArgExists(\"screenshot\")) {\n\nDo we actually need to test this here? Should screenshot always imply headless? We could just require users to also pass the headless argument if they don't want to see the UI when taking a screenshot.", "id": 12593320, "creation_time": "2017-08-23T21:57:35Z", "author": "dtownsend@mozilla.com"}, {"text": "(In reply to Dave Townsend [:mossop] from comment #15)\n> This is a bit weird and I wouldn't want to box us into a corner of\n> supporting this in the future. In this case just log a message saying there\n> was nothing to screenshot and exit.\n\nIf I understand it correctly, this code enables us to support both the optional path parameter to the --screenshot flag and the implicit URL parameter (i.e. the `[URL]` in `firefox [ options ... ] [URL]`).\n\nFrom a product perspective, I'd like to continue supporting the implicit URL parameter, which is consistent with both existing Firefox and with the Chrome implementation of the --screenshot flag <https://developers.google.com/web/updates/2017/04/headless-chrome#screenshots>.\n\nI also think the optional path parameter is a useful addition to the feature (and a nice differentiator vis-a-vis Chrome).  So I would prefer to support both, if that's possible.\n\nIf the heuristic differentiation between a URL and a path is too complex/brittle from an implementation standpoint, however, and we need to make the specification of the URL and/or path more explicit, then my preference would be to require explicit specification of the path, while continuing to allow implicit URLs.\n\nExplicit specification of the path could be:\n\n  --screenshot-path <path>\n\nOr:\n\n  --screenshot=path\n\nOr another such format that makes it possible (but optional) to specify a path for the screenshot file.  I don't have a strong preference.", "id": 12600449, "creation_time": "2017-08-25T17:31:58Z", "author": "myk@mykzilla.org"}, {"text": "(In reply to Myk Melez [:myk] [@mykmelez] from comment #16)\n> (In reply to Dave Townsend [:mossop] from comment #15)\n> > This is a bit weird and I wouldn't want to box us into a corner of\n> > supporting this in the future. In this case just log a message saying there\n> > was nothing to screenshot and exit.\n> \n> If I understand it correctly, this code enables us to support both the\n> optional path parameter to the --screenshot flag and the implicit URL\n> parameter (i.e. the `[URL]` in `firefox [ options ... ] [URL]`).\n\nThat matches my understanding so:\n\n    firefox --screenshot foo\n\nwill take a screenshot of site foo\n\n    firefox --screenshot foo bar\n\nwill take a screenshot of site bar called foo.\n\nMy opinion is that the first case should be consistent with the second and gave an error about no url being given.\n\n> From a product perspective, I'd like to continue supporting the implicit URL\n> parameter, which is consistent with both existing Firefox and with the\n> Chrome implementation of the --screenshot flag\n> <https://developers.google.com/web/updates/2017/04/headless-\n> chrome#screenshots>.\n\nAh, I didn't realise we're trying to clone a Chrome behaviour here.\n\n> I also think the optional path parameter is a useful addition to the feature\n> (and a nice differentiator vis-a-vis Chrome).  So I would prefer to support\n> both, if that's possible.\n> \n> If the heuristic differentiation between a URL and a path is too\n> complex/brittle from an implementation standpoint, however, and we need to\n> make the specification of the URL and/or path more explicit, then my\n> preference would be to require explicit specification of the path, while\n> continuing to allow implicit URLs.\n> \n> Explicit specification of the path could be:\n> \n>   --screenshot-path <path>\n> \n> Or:\n> \n>   --screenshot=path\n> \n> Or another such format that makes it possible (but optional) to specify a\n> path for the screenshot file.  I don't have a strong preference.\n\nI defer to your judgement as this is really a product call.", "id": 12600520, "creation_time": "2017-08-25T17:52:07Z", "author": "dtownsend@mozilla.com"}, {"text": "Thanks for your input here, Myk.\n(In reply to Dave Townsend [:mossop] from comment #15)\n> Comment on attachment 8887182\n> Bug 1378010 - screenshot from command line with headless;\n> \n> https://reviewboard.mozilla.org/r/157930/#review177002\n> \n> A few questions and comments here.\n> \n> Does this (or should this) support taking screenshots with a currently\n> running instance of Firefox?\n> \nIt doesn't. We always designed this feature to be like Chrome's (which also takes the screenshot and exits). As for if it should, maybe that's for Brendan or Myk to answer.\n> ::: browser/components/shell/HeadlessShell.jsm:97\n> (Diff revision 4)\n> > +    let contentWidth = 1366;\n> > +    let contentHeight = 768;\n> \n> Where do these numbers come from?\n> \nIt's the most common resolution of Firefox users IIRC. I'll add a code comment.\n> ::: browser/components/shell/HeadlessShell.jsm:105\n> (Diff revision 4)\n> > +    // Parse `window-size`\n> > +    try {\n> > +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> > +    } catch (e) {\n> > +      dump(\"expected format: --window-size width[,height]\\n\");\n> > +      return;\n> \n> Does this cause the process to exit? I'm not seeing how\n> \nYes, but it's a little tricky. When handleCmdLineArgs returns, there is an early return in nsBrowserContentHandler.js:732. Since no browser windows exist and the early return in nsBrowserContentHandler prevents one from being created, the process exits.\n> ::: toolkit/xre/nsAppRunner.cpp:574\n> (Diff revision 4)\n> >  \n> >    return ar;\n> >  }\n> >  \n> > +/**\n> > + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n> \n> It doesn't seem to ignore these parameters. Rather it still matches even if\n> there is a delimeter there regardless of the data past it.\n> \nThis is possibly bad wording on my behalf. CheckArg and the other ways to check command line arguments in nsAppRunner, will say that --screenshot is not present if you do --screenshot=<data>, since they consider all of that as one command line argument. Instead of changing the behavior of those functions, CheckArgExists was introduced. That comment considers just the delimiter and the data that follows as parameters (and --screenshot as a flag). Maybe it should be reworded as \"Ignore data that's passed in with the flag\"?\n> ::: toolkit/xre/nsAppRunner.cpp:3214\n> (Diff revision 4)\n> >  \n> >    if (ChaosMode::isActive(ChaosFeature::Any)) {\n> >      printf_stderr(\"*** You are running in chaos test mode. See ChaosMode.h. ***\\n\");\n> >    }\n> >  \n> > -  if (CheckArg(\"headless\")) {\n> > +  if (CheckArg(\"headless\") || CheckArgExists(\"screenshot\")) {\n> \n> Do we actually need to test this here? Should screenshot always imply\n> headless? We could just require users to also pass the headless argument if\n> they don't want to see the UI when taking a screenshot.\n\nIt doesn't actually work if not in headless mode. Again, I don't know if it should, but I think Brendan and Myk decided that screenshot should imply headless, so let's hear what they think :)", "id": 12601012, "creation_time": "2017-08-25T20:28:06Z", "author": "ronoueb@gmail.com"}, {"text": "(In reply to B. Dahse from comment #18)\n> Thanks for your input here, Myk.\n> (In reply to Dave Townsend [:mossop] from comment #15)\n> > Comment on attachment 8887182\n> > Bug 1378010 - screenshot from command line with headless;\n> > \n> > https://reviewboard.mozilla.org/r/157930/#review177002\n> > \n> > A few questions and comments here.\n> > \n> > Does this (or should this) support taking screenshots with a currently\n> > running instance of Firefox?\n> > \n> It doesn't. We always designed this feature to be like Chrome's (which also\n> takes the screenshot and exits). As for if it should, maybe that's for\n> Brendan or Myk to answer.\n\nHave you tested to see what happens in that case? I think it will actually work since when you run firefox any command line arguments simply get passed along to a running instance if there is one. Unless headless disables remoting I guess.\n\n> > ::: browser/components/shell/HeadlessShell.jsm:105\n> > (Diff revision 4)\n> > > +    // Parse `window-size`\n> > > +    try {\n> > > +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> > > +    } catch (e) {\n> > > +      dump(\"expected format: --window-size width[,height]\\n\");\n> > > +      return;\n> > \n> > Does this cause the process to exit? I'm not seeing how\n> > \n> Yes, but it's a little tricky. When handleCmdLineArgs returns, there is an\n> early return in nsBrowserContentHandler.js:732. Since no browser windows\n> exist and the early return in nsBrowserContentHandler prevents one from\n> being created, the process exits.\n\nOk I thought it might be something like that but it's a little non-obvious. Given that this is an async function it might be tempting to await something before the return which presumably would cause the app to exit early. Can you wrap the whole function in a last window closing survival block to ensure that never happens, using a try...finally block should do it.\n\n> > ::: toolkit/xre/nsAppRunner.cpp:574\n> > (Diff revision 4)\n> > >  \n> > >    return ar;\n> > >  }\n> > >  \n> > > +/**\n> > > + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n> > \n> > It doesn't seem to ignore these parameters. Rather it still matches even if\n> > there is a delimeter there regardless of the data past it.\n> > \n> This is possibly bad wording on my behalf. CheckArg and the other ways to\n> check command line arguments in nsAppRunner, will say that --screenshot is\n> not present if you do --screenshot=<data>, since they consider all of that\n> as one command line argument. Instead of changing the behavior of those\n> functions, CheckArgExists was introduced. That comment considers just the\n> delimiter and the data that follows as parameters (and --screenshot as a\n> flag). Maybe it should be reworded as \"Ignore data that's passed in with the\n> flag\"?\n\nYeah that wording sounds better.", "id": 12601046, "creation_time": "2017-08-25T20:37:37Z", "author": "dtownsend@mozilla.com"}, {"text": "(In reply to Dave Townsend [:mossop] from comment #19)\n> (In reply to B. Dahse from comment #18)\n> > Thanks for your input here, Myk.\n> > (In reply to Dave Townsend [:mossop] from comment #15)\n> > > Comment on attachment 8887182\n> > > Bug 1378010 - screenshot from command line with headless;\n> > > \n> > > https://reviewboard.mozilla.org/r/157930/#review177002\n> > > \n> > > A few questions and comments here.\n> > > \n> > > Does this (or should this) support taking screenshots with a currently\n> > > running instance of Firefox?\n> > > \n> > It doesn't. We always designed this feature to be like Chrome's (which also\n> > takes the screenshot and exits). As for if it should, maybe that's for\n> > Brendan or Myk to answer.\n> \n> Have you tested to see what happens in that case? I think it will actually\n> work since when you run firefox any command line arguments simply get passed\n> along to a running instance if there is one. Unless headless disables\n> remoting I guess.\n> \nI haven't tested it, in fact I didn't know it works like that. In any case, starting one instance with\n/home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/dist/bin/firefox -profile /home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/tmp/scratch_user --headless google.com\nand another with\n/home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/dist/bin/firefox -profile /home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/tmp/scratch_user --screenshot=remote.png\ngives \"Firefox is already running, but is not responding. To open a new window, you must first close the existing Firefox process, or restart your system.\"\n\nBut I'll get started on addressing those review comments of yours that don't need input from elsewhere.", "id": 12601159, "creation_time": "2017-08-25T21:27:55Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\n> Why did you need to add this here?\n\nI don't know. Removing it doesn't seem to have any effect on the tests so let's keep it removed.", "id": 12601356, "creation_time": "2017-08-25T22:30:44Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\n> We're in an async function so it would be nicer to make a few small functions that wrap the toBlob and reader in ways that return promises that you can just await on.\n> \n> Something like:\n> \n>     function promiseCanvasBlob(canvas) {\n>         return new Promise(resolve => canvas.toBlob(resolve);\n>     }\n>     \n>     function readBlob(blob) {\n>       return new Promise(resolve => {\n>         let reader = new FileReader();\n>         reader.onloadend = () => resolve(reader);\n>         reader.readAsArrayBuffer(blob);\n>       });\n>     }\n\nYes, that's better. Nice one!", "id": 12601399, "creation_time": "2017-08-25T22:58:07Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/4-5/", "id": 12611276, "creation_time": "2017-08-29T21:34:51Z", "author": "ronoueb@gmail.com"}, {"text": "After a conversation with Myk, I changed multiple URLs to be an error instead of silently picking the first one. I also added two more test cases:\n1. Test that \"firefox [implicit url] -screenshot\" and \"firefox -screenshot [implicit url]\" behave the same\n2. Test that multiple URLs is an error", "id": 12611309, "creation_time": "2017-08-29T21:43:49Z", "author": "ronoueb@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review179276\n\nLooks good.", "id": 12611510, "creation_time": "2017-08-29T22:45:57Z", "author": "dtownsend@mozilla.com"}, {"text": "Here's a try run of the latest version https://treeherder.mozilla.org/#/jobs?repo=try&revision=4edf77e4885fec9c66d854bbf1d709fae0b6d1e6", "id": 12611643, "creation_time": "2017-08-29T23:35:33Z", "author": "ronoueb@gmail.com"}, {"text": "Screenshot only specific elements using a CSS selector +1", "id": 12615637, "creation_time": "2017-08-31T02:43:08Z", "author": "percyley@qq.com"}, {"text": "Don't think we have any plans for that in this feature. Maybe it's possible with our devtools screenshot (as mentioned in comment 1) and remote debugging?", "id": 12634215, "creation_time": "2017-09-06T16:56:48Z", "author": "ronoueb@gmail.com"}, {"text": "(In reply to B. Dahse from comment #28)\n> Don't think we have any plans for that in this feature. Maybe it's possible\n> with our devtools screenshot (as mentioned in comment 1) and remote\n> debugging?\n\nWithin the Firefox UI, you can use the Developer Toolbar / GCLI[1] and enter something like:\n\n```\nscreenshot --selector <selector>\n```\n\nto save it to a file.  There are other options for clipboard, etc.  Check `help screenshot`.\n\nYou can also right click a node in the DevTools inspector and choose \"Screenshot Node\".\n\nThe same actions could be triggered by a script connecting to the remote debugging port, but I am not aware of existing tools that do that today.\n\n[1]: https://developer.mozilla.org/en-US/docs/Tools/GCLI", "id": 12634255, "creation_time": "2017-09-06T17:10:15Z", "author": "jryans@gmail.com"}, {"text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/5-6/", "id": 12657304, "creation_time": "2017-09-13T18:07:04Z", "author": "ronoueb@gmail.com"}, {"text": "Changed the test to screenshot a support file instead of about:blank, because of a leak when screenshotting about:blank.", "id": 12657322, "creation_time": "2017-09-13T18:10:17Z", "author": "ronoueb@gmail.com"}, {"text": "Autoland can't push this until all pending issues in MozReview are marked as resolved.", "id": 12657496, "creation_time": "2017-09-13T18:28:26Z", "author": "ryanvm@gmail.com"}, {"text": "I see, should be no open issues in MozReview now.", "id": 12658970, "creation_time": "2017-09-13T18:40:37Z", "author": "ronoueb@gmail.com"}, {"text": "Pushed by ryanvm@gmail.com:\nhttps://hg.mozilla.org/integration/autoland/rev/2ce3e68d7242\nscreenshot from command line with headless; r=mossop", "id": 12659214, "creation_time": "2017-09-13T18:44:53Z", "author": "pulsebot@bots.tld"}, {"text": "https://hg.mozilla.org/mozilla-central/rev/2ce3e68d7242", "id": 12664417, "creation_time": "2017-09-14T06:25:15Z", "author": "wkocher@mozilla.com"}, {"text": "Release Note Request (optional, but appreciated)\n[Why is this notable]: Great new feature\n[Affects Firefox for Android]: No\n[Suggested wording]: Take a screenshot from the command line with --screenshot=/path/to/file\n[Links (documentation, blog post, etc)]: no yet", "id": 12670914, "creation_time": "2017-09-15T17:08:12Z", "author": "sledru@mozilla.com"}, {"text": "Is there an API to tap into these features from other languages, like PHP, and NodeJS?", "id": 12673556, "creation_time": "2017-09-16T20:13:24Z", "author": "teamleader@sitelease.ca"}, {"text": "(In reply to sitelease from comment #37)\n> Is there an API to tap into these features from other languages, like PHP,\n> and NodeJS?\n\nThere isn't an API for the screenshot feature specifically.  For headless mode generally, however, you can use the WebDriver API, which supports a variety of languages (including Node.js) and includes a method for taking a screenshot.  See its documentation:\n\nhttps://developer.mozilla.org/en-US/Firefox/Headless_mode\n\nAlso see this blog post, which gives an example of taking a screenshot using the Node.js API to WebDriver:\n\nhttps://mykzilla.org/2017/08/30/headless-firefox-in-node-js-with-selenium-webdriver/", "id": 12675206, "creation_time": "2017-09-18T01:29:53Z", "author": "myk@mykzilla.org"}, {"text": "I've had a go at documenting this. I've added this section to the headless mode doc:\n\nhttps://developer.mozilla.org/en-US/Firefox/Headless_mode#Taking_screenshots\n\nI've also added a note to the Fx57 rel notes:\n\nhttps://developer.mozilla.org/en-US/Firefox/Releases/57#Other\n\nCan you have a look and let me know if this reads ok?\n\nA couple of other points:\n\n* I couldn't get the screenshot=path or screenshot-path=path type stuff mentioned in comment 16 to work \u2014 how do you specify a custom path to save the screenshot at?\n* On Mac at least, the single dash version of window-size doesn't seem to work, e.g. -window-size=x. I had to use --window-size=x. This seems a little inconsistent, given that -headless and -screenshot work?", "id": 12701944, "creation_time": "2017-09-26T08:34:02Z", "author": "cmills@mozilla.com"}, {"text": "(In reply to Chris Mills (Mozilla, MDN editor) [:cmills] from comment #39)\n> I've had a go at documenting this. I've added this section to the headless\n> mode doc:\n> \n> https://developer.mozilla.org/en-US/Firefox/Headless_mode#Taking_screenshots\n> \n> I've also added a note to the Fx57 rel notes:\n> \n> https://developer.mozilla.org/en-US/Firefox/Releases/57#Other\n> \n> Can you have a look and let me know if this reads ok?\n\nBoth of these look great.\n\n\n> A couple of other points:\n> \n> * I couldn't get the screenshot=path or screenshot-path=path type stuff\n> mentioned in comment 16 to work \u2014 how do you specify a custom path to save\n> the screenshot at?\n\nSpecifying the path to the file without an equals sign works:\n\n> /path/to/firefox -screenshot path/to/name.png https://developer.mozilla.com\n\nBut the version with the equals sign should also work.  I filed bug 1406590 on that.\n\n\n> * On Mac at least, the single dash version of window-size doesn't seem to\n> work, e.g. -window-size=x. I had to use --window-size=x. This seems a little\n> inconsistent, given that -headless and -screenshot work?\n\nIndeed, it's very inconsistent.  I filed bug 1406589 on this.", "id": 12736832, "creation_time": "2017-10-07T00:31:54Z", "author": "myk@mykzilla.org"}, {"text": "Following up on the leak in bug 1331152, I looked at the code that was landed in this bug and I see [1] has been added in bug 1403934. Were the linux64-asan builds fine after that change?\n\n[1]: http://searchfox.org/mozilla-central/source/browser/components/shell/HeadlessShell.jsm#159", "id": 12786003, "creation_time": "2017-10-24T16:17:19Z", "author": "ronoueb@gmail.com"}, {"text": "(In reply to B. Dahse from comment #41)\n> Following up on the leak in bug 1331152, I looked at the code that was\n> landed in this bug and I see [1] has been added in bug 1403934. Were the\n> linux64-asan builds fine after that change?\n\nYeah, that could cause it. For leak checking to work, you have to be really patient with shutdown. I see this comment in nsAppStartup::Quit(uint32_t aMode):\n      // no matter what, make sure we send the exit event.  If\n      // worst comes to worst, we'll do a leaky shutdown but we WILL\n      // shut down. Well, assuming that all *this* stuff works ;-).\n\nMaybe something related to this is leaking? It is a very small leak of some JS stuff. Maybe that nsAppExitEvent stuff could hold alive some JS stuff?", "id": 12797232, "creation_time": "2017-10-27T22:09:51Z", "author": "continuation@gmail.com"}, {"text": "(In reply to Andrew McCreight [:mccr8] from comment #42)\n> Yeah, that could cause it. For leak checking to work, you have to be really\n> patient with shutdown. I see this comment in nsAppStartup::Quit(uint32_t\n> aMode):\n>       // no matter what, make sure we send the exit event.  If\n>       // worst comes to worst, we'll do a leaky shutdown but we WILL\n>       // shut down. Well, assuming that all *this* stuff works ;-).\n> \n> Maybe something related to this is leaking? It is a very small leak of some\n> JS stuff. Maybe that nsAppExitEvent stuff could hold alive some JS stuff?\n\nI was wondering about that too and changed eForceQuit to the kinder, gentler eAttemptQuit in this tryserver run a couple days ago:\n\nhttps://treeherder.mozilla.org/#/jobs?repo=try&revision=cbf71fe31964725079836fd1f7908a340d52994e\n\nUnfortunately, it didn't resolve the problem.  Perhaps eAttemptQuit still doesn't make nsAppStartup::Quit patient enough?", "id": 12797258, "creation_time": "2017-10-27T22:25:14Z", "author": "myk@mykzilla.org"}, {"text": "One temporary fix would be to disable LSan on the process by adding detect_leaks=0 to ASAN_OPTIONS.", "id": 12803128, "creation_time": "2017-10-30T19:33:08Z", "author": "continuation@gmail.com"}], "attachments": [{"content_type": "text/x-review-board-request", "creator": "ronoueb@gmail.com", "flags": [{"modification_date": "2017-08-29T22:45:57Z", "creation_date": "2017-08-29T21:34:51Z", "type_id": 748, "status": "+", "name": "review", "id": 1637867, "setter": "dtownsend@mozilla.com"}], "is_patch": 0, "creation_time": "2017-07-17T19:41:47Z", "id": 8887182, "is_obsolete": 0}]}
-{"blocks": [], "cf_tracking_geckoview64": "---", "is_cc_accessible": true, "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-10-27T19:51:36Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cc_detail": [], "summary": "clicking a second time on the very bottom of the main menu button doesn't close the menu", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "version": "Trunk", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "assigned_to_detail": {"email": "nobody@mozilla.org", "real_name": "Nobody; OK to take it and work on it", "name": "nobody@mozilla.org", "nick": "nobody", "id": 1}, "creator": "asa@mozilla.org", "last_change_time": "2017-10-27T19:51:36Z", "creator_detail": {"email": "asa@mozilla.org", "real_name": "Asa Dotzler [:asa]", "name": "asa@mozilla.org", "nick": "asa", "id": 5003}, "comment_count": 3, "cc": [], "duplicates": [], "assigned_to": "nobody@mozilla.org", "groups": [], "see_also": [], "id": 1379535, "whiteboard": "", "creation_time": "2017-07-10T04:11:15Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": 1412390, "cf_status_firefox66": "---", "resolution": "DUPLICATE", "classification": "Client Software", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "cf_status_firefox57": "affected", "component": "Menus", "cf_status_geckoview64": "---", "product": "Firefox", "target_milestone": "---", "cf_platform_rel": "---", "history": [{"when": "2017-07-10T04:14:45Z", "who": "asa@mozilla.org", "changes": [{"removed": "clicking a second time on the very bottom of the main menu doesn't close the menu", "added": "clicking a second time on the very bottom of the main menu button doesn't close the menu", "field_name": "summary"}]}, {"when": "2017-10-27T19:51:36Z", "who": "asa@mozilla.org", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "DUPLICATE", "field_name": "resolution"}, {"removed": "", "added": "2017-10-27T19:51:36Z", "field_name": "cf_last_resolved"}]}], "comments": [{"text": "When you click a second time on the main menu, it should roll up. This works for the top 80% or so of the button but if you clicked in the bottom fifth or so of the button a second time, the menu stays open. Perhaps the menu's little arrow where it connects to the menu button is eating the click.", "id": 12458951, "creation_time": "2017-07-10T04:11:15Z", "author": "asa@mozilla.org"}, {"text": "Tested with 7/9 nightly build on Windows 10", "id": 12458954, "creation_time": "2017-07-10T04:13:17Z", "author": "asa@mozilla.org"}, {"text": "\n\n*** This bug has been marked as a duplicate of bug 1412390 ***", "id": 12796824, "creation_time": "2017-10-27T19:51:36Z", "author": "asa@mozilla.org"}], "attachments": []}
+{
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "is_cc_accessible": true,
+    "cf_status_thunderbird_esr52": "---",
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-07-04T02:36:27Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cc_detail": [{
+        "email": "dvander@alliedmods.net",
+        "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency",
+        "name": "dvander@alliedmods.net",
+        "nick": "dvander",
+        "id": 309316
+    }, {
+        "email": "Virtual@teknik.io",
+        "real_name": "Virtual_ManPL [:Virtual] - (please needinfo? me - so I will see your comment/reply/question/etc.)",
+        "name": "Virtual@teknik.io",
+        "nick": "Virtual",
+        "id": 342842
+    }, {
+        "email": "yfdyh000@gmail.com",
+        "real_name": "YF (Yang)",
+        "name": "yfdyh000@gmail.com",
+        "nick": "yfdyh000",
+        "id": 398515
+    }],
+    "summary": "Firefox Nightly 56 shows no buttons and no page content.",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "x86",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "56 Branch",
+    "mentors_detail": [],
+    "cf_tracking_thunderbird_esr52": "---",
+    "is_creator_accessible": true,
+    "is_confirmed": false,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "nobody@mozilla.org",
+        "real_name": "Nobody; OK to take it and work on it",
+        "name": "nobody@mozilla.org",
+        "nick": "nobody",
+        "id": 1
+    },
+    "creator": "johngraciliano@gmail.com",
+    "last_change_time": "2017-07-17T21:46:57Z",
+    "creator_detail": {
+        "email": "johngraciliano@gmail.com",
+        "real_name": "",
+        "name": "johngraciliano@gmail.com",
+        "nick": "johngraciliano",
+        "id": 532161
+    },
+    "comment_count": 3,
+    "cc": ["dvander@alliedmods.net", "Virtual@teknik.io", "yfdyh000@gmail.com"],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "nobody@mozilla.org",
+    "groups": [],
+    "see_also": [],
+    "id": 1378004,
+    "whiteboard": "",
+    "creation_time": "2017-07-04T00:08:07Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": 1377866,
+    "cf_status_firefox66": "---",
+    "resolution": "DUPLICATE",
+    "classification": "Components",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Windows 8",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "major",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "component": "Graphics",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "---",
+    "product": "Core",
+    "cf_platform_rel": "---",
+    "history": [{
+        "when": "2017-07-04T02:36:27Z",
+        "who": "yfdyh000@gmail.com",
+        "changes": [{
+            "removed": "UNCONFIRMED",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "Unspecified",
+            "added": "x86",
+            "field_name": "platform"
+        }, {
+            "removed": "Untriaged",
+            "added": "Graphics",
+            "field_name": "component"
+        }, {
+            "removed": "",
+            "added": "yfdyh000@gmail.com",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "DUPLICATE",
+            "field_name": "resolution"
+        }, {
+            "removed": "Firefox",
+            "added": "Core",
+            "field_name": "product"
+        }, {
+            "removed": "normal",
+            "added": "major",
+            "field_name": "severity"
+        }, {
+            "removed": "Unspecified",
+            "added": "Windows 8",
+            "field_name": "op_sys"
+        }, {
+            "removed": "",
+            "added": "2017-07-04T02:36:27Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }, {
+        "when": "2017-07-04T05:00:38Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "removed": "",
+            "added": "dvander@alliedmods.net",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "needinfo?(johngraciliano@gmail.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-04T07:53:38Z",
+        "who": "Virtual@teknik.io",
+        "changes": [{
+            "removed": "",
+            "added": "Virtual@MsgSafe.io",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-17T21:46:57Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "removed": "needinfo?(johngraciliano@gmail.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }],
+    "comments": [{
+        "text": "User Agent: Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0\nBuild ID: 20170701030203\n\nSteps to reproduce:\n\nUpdated Nightly. (Either via interface or running firefox-56.0a1.en-US.win64.installer.exe [2017.07.02 mozilla central]).  This is in a Windows 8 machine!\n\n\nActual results:\n\nAfter restarting, nothing showed the bars were empty, the content was empty.  However (some?) buttons areas in the navigation bar were useful (tool tips show up).  A click above on the area below the close button made the options panel to show and I was able to restart in safe mode.  Firefox works in Safe Mode.  However, Firefox will not work with a new profile, even after refreshing Firefox.  I reverted to 2017.07.01. The 2017.07.03 does not fix anything for me.\n\n\nExpected results:\n\nFirefox Nightly should work mostly after an update.",
+        "id": 12445163,
+        "creation_time": "2017-07-04T00:08:07Z",
+        "author": "johngraciliano@gmail.com"
+    }, {
+        "text": "\n\n*** This bug has been marked as a duplicate of bug 1377866 ***",
+        "id": 12445279,
+        "creation_time": "2017-07-04T02:36:27Z",
+        "author": "yfdyh000@gmail.com"
+    }, {
+        "text": "John, if you get a chance could you attach your about:support? I will make sure the configuration is included in the fix for bug 1377866.",
+        "id": 12445393,
+        "creation_time": "2017-07-04T05:00:38Z",
+        "author": "dvander@alliedmods.net"
+    }],
+    "attachments": []
+} {
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "is_cc_accessible": true,
+    "keywords": ["dev-doc-complete"],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "57+",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-09-14T06:25:15Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cc_detail": [{
+        "email": "bgrinstead@mozilla.com",
+        "real_name": "Brian Grinstead [:bgrins]",
+        "name": "bgrinstead@mozilla.com",
+        "nick": "bgrins",
+        "id": 476442
+    }, {
+        "email": "cmills@mozilla.com",
+        "real_name": "Chris Mills (Mozilla, MDN editor) [:cmills]",
+        "name": "cmills@mozilla.com",
+        "nick": "cmills",
+        "id": 475085
+    }, {
+        "email": "continuation@gmail.com",
+        "real_name": "Andrew McCreight [:mccr8]",
+        "name": "continuation@gmail.com",
+        "nick": "mccr8",
+        "id": 406194
+    }, {
+        "email": "dtownsend@mozilla.com",
+        "real_name": "Dave Townsend [:mossop] (he/him)",
+        "name": "dtownsend@mozilla.com",
+        "nick": "mossop",
+        "id": 91159
+    }, {
+        "email": "gilles.lepretre@lim.eu",
+        "real_name": "Gilles Lepretre",
+        "name": "gilles.lepretre@lim.eu",
+        "nick": "gilles.lepretre",
+        "id": 528158
+    }, {
+        "email": "hskupin@gmail.com",
+        "real_name": "Henrik Skupin (:whimboo)",
+        "name": "hskupin@gmail.com",
+        "nick": "whimboo",
+        "id": 76551
+    }, {
+        "email": "john@netpurgatory.com",
+        "real_name": "John C. Vernaleo",
+        "name": "john@netpurgatory.com",
+        "nick": "john",
+        "id": 450704
+    }, {
+        "email": "jryans@gmail.com",
+        "real_name": "J. Ryan Stinnett [:jryans]",
+        "name": "jryans@gmail.com",
+        "nick": "jryans",
+        "id": 282978
+    }, {
+        "email": "marsjaninzmarsa@gmail.com",
+        "real_name": "Kuba Niewiarowski",
+        "name": "marsjaninzmarsa@gmail.com",
+        "nick": "marsjaninzmarsa",
+        "id": 470481
+    }, {
+        "email": "myk@mykzilla.org",
+        "real_name": "Myk Melez [:myk] [@mykmelez]",
+        "name": "myk@mykzilla.org",
+        "nick": "myk",
+        "id": 27300
+    }, {
+        "email": "percyley@qq.com",
+        "real_name": "yisibl",
+        "name": "percyley@qq.com",
+        "nick": "percyley",
+        "id": 543470
+    }, {
+        "email": "ronoueb@gmail.com",
+        "real_name": "B. Dahse",
+        "name": "ronoueb@gmail.com",
+        "nick": "ronoueb",
+        "id": 564735
+    }, {
+        "email": "sledru@mozilla.com",
+        "real_name": "Sylvestre Ledru [:sylvestre]",
+        "name": "sledru@mozilla.com",
+        "nick": "sylvestre",
+        "id": 495955
+    }, {
+        "email": "teamleader@sitelease.ca",
+        "real_name": "sitelease",
+        "name": "teamleader@sitelease.ca",
+        "nick": "teamleader",
+        "id": 602370
+    }],
+    "summary": "Take a screenshot from the command line with headless",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "assigned_to_detail": {
+        "email": "ronoueb@gmail.com",
+        "real_name": "B. Dahse",
+        "name": "ronoueb@gmail.com",
+        "nick": "ronoueb",
+        "id": 564735
+    },
+    "creator": "bdahl@mozilla.com",
+    "last_change_time": "2018-11-15T00:59:49Z",
+    "creator_detail": {
+        "email": "bdahl@mozilla.com",
+        "real_name": "Brendan Dahl [:bdahl]",
+        "name": "bdahl@mozilla.com",
+        "nick": "bdahl",
+        "id": 425126
+    },
+    "comment_count": 45,
+    "cc": ["bgrinstead@mozilla.com", "cmills@mozilla.com", "continuation@gmail.com", "dtownsend@mozilla.com", "gilles.lepretre@lim.eu", "hskupin@gmail.com", "john@netpurgatory.com", "jryans@gmail.com", "marsjaninzmarsa@gmail.com", "myk@mykzilla.org", "percyley@qq.com", "ronoueb@gmail.com", "sledru@mozilla.com", "teamleader@sitelease.ca"],
+    "duplicates": [],
+    "assigned_to": "ronoueb@gmail.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1378010,
+    "whiteboard": "",
+    "creation_time": "2017-07-04T00:21:49Z",
+    "depends_on": [1331152, 1507352],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "FIXED",
+    "classification": "Client Software",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [{
+        "modification_date": "2017-10-24T16:17:19Z",
+        "requestee": "bdahl@mozilla.com",
+        "creation_date": "2017-10-24T16:17:19Z",
+        "type_id": 800,
+        "status": "?",
+        "name": "needinfo",
+        "id": 1670173,
+        "setter": "ronoueb@gmail.com"
+    }],
+    "cf_status_firefox64": "---",
+    "cf_status_firefox57": "fixed",
+    "component": "Headless",
+    "cf_status_geckoview64": "---",
+    "product": "Firefox",
+    "target_milestone": "Firefox 57",
+    "cf_platform_rel": "---",
+    "history": [{
+        "when": "2017-07-05T23:29:28Z",
+        "who": "jryans@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "jryans@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-06T18:24:06Z",
+        "who": "bgrinstead@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "bgrinstead@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-07T16:10:52Z",
+        "who": "myk@mykzilla.org",
+        "changes": [{
+            "removed": "",
+            "added": "myk@mykzilla.org",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-10T23:07:05Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "ronoueb@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-17T19:41:47Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "",
+            "added": "review?(bdahl@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-18T20:56:48Z",
+        "who": "bdahl@mozilla.com",
+        "changes": [{
+            "removed": "nobody@mozilla.org",
+            "added": "ronoueb@gmail.com",
+            "field_name": "assigned_to"
+        }]
+    }, {
+        "when": "2017-08-03T00:56:05Z",
+        "who": "bdahl@mozilla.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "review?(bdahl@mozilla.com)",
+            "added": "review-",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-15T17:54:18Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "review-",
+            "added": "review?(bdahl@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-23T17:51:48Z",
+        "who": "bdahl@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "dtownsend@mozilla.com",
+            "field_name": "cc"
+        }, {
+            "attachment_id": 8887182,
+            "removed": "review?(bdahl@mozilla.com)",
+            "added": "review?(dtownsend@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-23T21:57:35Z",
+        "who": "dtownsend@mozilla.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "review?(dtownsend@mozilla.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-25T20:28:06Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "needinfo?(bdahl@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-29T21:34:51Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "",
+            "added": "review?(dtownsend@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-29T22:45:57Z",
+        "who": "dtownsend@mozilla.com",
+        "changes": [{
+            "attachment_id": 8887182,
+            "removed": "review?(dtownsend@mozilla.com)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-30T11:29:34Z",
+        "who": "cmills@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "cmills@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-30T14:34:19Z",
+        "who": "john@netpurgatory.com",
+        "changes": [{
+            "removed": "",
+            "added": "john@netpurgatory.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-30T18:36:01Z",
+        "who": "marsjaninzmarsa@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "marsjaninzmarsa@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-31T02:43:08Z",
+        "who": "percyley@qq.com",
+        "changes": [{
+            "removed": "",
+            "added": "percyley@qq.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-09-01T14:42:13Z",
+        "who": "gilles.lepretre@lim.eu",
+        "changes": [{
+            "removed": "",
+            "added": "gilles.lepretre@lim.eu",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-09-06T16:56:48Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "needinfo?(jryans@gmail.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-06T17:10:15Z",
+        "who": "jryans@gmail.com",
+        "changes": [{
+            "removed": "needinfo?(jryans@gmail.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-13T18:13:11Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "checkin-needed",
+            "field_name": "keywords"
+        }]
+    }, {
+        "when": "2017-09-13T18:28:26Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "checkin-needed",
+            "added": "",
+            "field_name": "keywords"
+        }, {
+            "removed": "",
+            "added": "needinfo?(ronoueb@gmail.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-13T18:40:37Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "needinfo?(ronoueb@gmail.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-13T18:40:51Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "checkin-needed",
+            "field_name": "keywords"
+        }]
+    }, {
+        "when": "2017-09-13T18:44:53Z",
+        "who": "pulsebot@bots.tld",
+        "changes": [{
+            "removed": "checkin-needed",
+            "added": "",
+            "field_name": "keywords"
+        }]
+    }, {
+        "when": "2017-09-14T06:25:15Z",
+        "who": "wkocher@mozilla.com",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "---",
+            "added": "Firefox 57",
+            "field_name": "target_milestone"
+        }, {
+            "removed": "",
+            "added": "2017-09-14T06:25:15Z",
+            "field_name": "cf_last_resolved"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox57"
+        }]
+    }, {
+        "when": "2017-09-14T19:59:40Z",
+        "who": "cmills@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "dev-doc-needed",
+            "field_name": "keywords"
+        }]
+    }, {
+        "when": "2017-09-15T17:08:12Z",
+        "who": "sledru@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "sledru@mozilla.com",
+            "field_name": "cc"
+        }, {
+            "removed": "---",
+            "added": "57+",
+            "field_name": "cf_tracking_firefox_relnote"
+        }]
+    }, {
+        "when": "2017-09-16T20:13:24Z",
+        "who": "teamleader@sitelease.ca",
+        "changes": [{
+            "removed": "",
+            "added": "teamleader@sitelease.ca",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-09-18T21:55:56Z",
+        "who": "bdahl@mozilla.com",
+        "changes": [{
+            "removed": "needinfo?(bdahl@mozilla.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-09-26T08:34:02Z",
+        "who": "cmills@mozilla.com",
+        "changes": [{
+            "removed": "dev-doc-needed",
+            "added": "dev-doc-complete",
+            "field_name": "keywords"
+        }]
+    }, {
+        "when": "2017-10-18T16:29:18Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "1331152",
+            "field_name": "depends_on"
+        }]
+    }, {
+        "when": "2017-10-24T16:17:19Z",
+        "who": "ronoueb@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "needinfo?(bdahl@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-10-27T21:29:51Z",
+        "who": "continuation@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "continuation@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-11-21T19:34:09Z",
+        "who": "hskupin@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "hskupin@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2018-11-15T00:59:49Z",
+        "who": "ehsan@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "1507352",
+            "field_name": "depends_on"
+        }]
+    }],
+    "comments": [{
+        "text": "It'd be nice to easily take a screen shot of a web page from the command line using headless Firefox similar to what Chrome supports[1].\n\nFor example: `firefox --headless --screenshot http://google.com` would produce screenshot.png\n\nA rough outline of what needs to be done:\n - check for the arg somewhere in nsAppRunner.cpp and set a flag (maybe in HeadlessWidget?) that we can later retrieve\n - then once the page is loaded (after first paint or some amount delay?) use drawWindow to save the png [3]\n - exit firefox\n\nFor finding spots where we could listen to the page loading I would follow firefox's handling of the URL command line argument and attach a listener somewhere along the way to the window.\n\n\n[1] https://chromium.googlesource.com/chromium/src/+/lkgr/headless/app/headless_shell.cc#37\n\n[2] http://searchfox.org/mozilla-central/rev/a3a739de04ee6134c11546568a33dbb6a6a29907/toolkit/xre/nsAppRunner.cpp\n\n[3] http://searchfox.org/mozilla-central/rev/a3a739de04ee6134c11546568a33dbb6a6a29907/testing/marionette/capture.js#131",
+        "id": 12445185,
+        "creation_time": "2017-07-04T00:21:49Z",
+        "author": "bdahl@mozilla.com"
+    }, {
+        "text": "Not sure if it's of interest for headless, but you might get some ideas from DevTools' screenshot code[1] (triggered via inspector context menus, screenshot buttons, and GCLI commands).\n\nProbably you can't use the code directly, but some features might be nice to borrow, such as:\n\n1. Screenshot only specific elements using a CSS selector\n2. Save to clipboard instead of file\n3. Full page screenshot (entire height / width of the document, not just what is within the viewport)\n4. Allows specifying a custom devicePixelRatio value to check the result for different monitor pixel densities\n5. Allows specifying an arbitrary delay\n\n[1]: http://searchfox.org/mozilla-central/source/devtools/shared/gcli/commands/screenshot.js",
+        "id": 12449891,
+        "creation_time": "2017-07-05T23:29:28Z",
+        "author": "jryans@gmail.com"
+    }, {
+        "text": "Some Chrome defaults:\n- window size 800x600\n- screenshot.png goes into working directory\n- captures with scroll bars\nThere doesn't seem to be a way to make Chrome capture the whole page.\n\nOur devtools will capture the whole page if you use the screenshot button from the toolbox and the screenshots will go in the download manager.",
+        "id": 12461719,
+        "creation_time": "2017-07-10T23:07:05Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Created attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nAdd a `--screenshot` argument that can be used with `--headless` and `--url` to take a screenshot of the page.\nDefault is a full page screenshot, but `--window-size=width,height` can change this.\nA path for the screenshot can be supplied with `--screenshot=/path/to/file.png`.\nAlso adds a chrome-test that tests the above.\n\nReview commit: https://reviewboard.mozilla.org/r/157930/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/157930/",
+        "id": 12480418,
+        "creation_time": "2017-07-17T19:41:47Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review163700\n\nLooks really good overall. Just a few little things below (mainly making takeScreenshot more like synchronous js). Feel free to grab me if any of it's unclear! I also have a few slight feature changes after talking with Myk, but I'll leave that comment in the bug.\n\n::: browser/components/nsBrowserContentHandler.js:454\n(Diff revision 1)\n>      let info =\n>                \"  --browser          Open a browser window.\\n\" +\n>                \"  --new-window <url> Open <url> in a new window.\\n\" +\n>                \"  --new-tab <url>    Open <url> in a new tab.\\n\" +\n>                \"  --private-window <url> Open <url> in a new private window.\\n\";\n>      if (AppConstants.platform == \"win\") {\n\nLet's add documentation for the new flags up here. We'll also need to wrap it an if and only show on linux/windows. We don't need to do this now, but we should expose a flag for if headless is supported (I'll file a bug).\n\n::: browser/components/shell/HeadlessShell.jsm:49\n(Diff revision 1)\n> +    webProgress.addProgressListener(progressListener,\n> +                                    Ci.nsIWebProgress.NOTIFY_LOCATION);\n> +  });\n> +}\n> +\n> +async function takeScreenshot(fullpage, contentWidth, contentHeight, path, url) {\n\nWe don't really use the result of this function below, but it is a bit odd that it resolves before the screenshot may actually be saved.\n\n::: browser/components/shell/HeadlessShell.jsm:52\n(Diff revision 1)\n> +}\n> +\n> +async function takeScreenshot(fullpage, contentWidth, contentHeight, path, url) {\n> +  // Don't quit even though we don't create a window.\n> +  Services.startup.enterLastWindowClosingSurvivalArea();\n> +\n\nStart regular a try/catch/finally here.\n\n::: browser/components/shell/HeadlessShell.jsm:68\n(Diff revision 1)\n> +                        : contentWindow.innerHeight;\n> +  canvas.width = width;\n> +  canvas.height = height;\n> +  context.drawWindow(contentWindow, 0, 0, width, height, 'rgb(255, 255, 255)');\n> +\n> +  canvas.toBlob((b) => {\n\nDo an await new Promise(...) here that resolves when the file is done writing.\n\n::: browser/components/shell/HeadlessShell.jsm:75\n(Diff revision 1)\n> +    reader.onloadend = function() {\n> +      OS.File.writeAtomic(path, new Uint8Array(reader.result), {flush:true})\n> +      .then(() => dump('Screenshot saved to: ' + path + '\\n'))\n> +      .catch((reason) => dump('Failure saving screenshot: ' + reason + '\\n'))\n> +      .then(() => { // \"finally\"\n> +        webNavigation.close();\n\nMove .close into the finally and exitLastWindowClosingSurvivalArea after the finally.\n\n::: browser/components/shell/HeadlessShell.jsm:113\n(Diff revision 1)\n> +        if (dimensions[0] > 0 && dimensions[1] > 0) {\n> +          fullpage = false;\n> +          contentWidth = dimensions[0];\n> +          contentHeight = dimensions[1];\n> +        } else {\n> +          throw 0; // Ill-formed `window-size`\n\nI recommend always using throw new Error(....) so a stack gets attached to it.\n\n::: browser/components/shell/test/test_headless_screenshot.html:86\n(Diff revision 1)\n> +    let proc = await Subprocess.call({\n> +      command: firefoxExe,\n> +      arguments: firefoxArgs.concat([\"--window-size=hello\"]),\n> +    });\n> +    let str;\n> +    let foundErr;\n\nI originally had said let's test for the error message, but after thinking about it some more, we should really just check the behavior and make sure a screenshot doesn't exist. That way we don't have to hardcode string error messages in two places.",
+        "id": 12484285,
+        "creation_time": "2017-07-18T20:34:20Z",
+        "author": "bdahl@mozilla.com"
+    }, {
+        "text": "A few slight modifications after talking with Myk:\n\n`firefox --screenshot` should imply headless, so let's check for it in nsAppRunner[1] and enable headless if present.\n\n`firefox --screenshot --window-size=800` should set the width but do a fullpage screenshot\n\n[1] http://searchfox.org/mozilla-central/rev/88180977d79654af025158d8ebeb8c2aa11940eb/toolkit/xre/nsAppRunner.cpp#3170",
+        "id": 12484355,
+        "creation_time": "2017-07-18T20:55:53Z",
+        "author": "bdahl@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/1-2/",
+        "id": 12488329,
+        "creation_time": "2017-07-19T23:24:29Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Addressed review comments and added some more tests. Try is closed right now, so I don't know if changing about:mozilla to about:blank helps.",
+        "id": 12488349,
+        "creation_time": "2017-07-19T23:31:53Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Here's a try submission with the most recent changes https://treeherder.mozilla.org/#/jobs?repo=try&revision=ce5c76344bf8abbda29fcb6f08b3aa0124f343b9",
+        "id": 12490573,
+        "creation_time": "2017-07-20T15:49:37Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/2-3/",
+        "id": 12517369,
+        "creation_time": "2017-07-29T00:43:03Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Try run to go with the code in the review request: https://treeherder.mozilla.org/#/jobs?repo=try&revision=28380a2a9dbd6b76dec05ca6cbf2cdd25888dcc2&group_state=expanded",
+        "id": 12517384,
+        "creation_time": "2017-07-29T00:44:38Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n::: browser/components/nsBrowserContentHandler.js:462\n(Diff revision 3)\n> +      info += \"  --screenshot[=<path>]        Save screenshot of page to <path> or in working directory.\\n\";\n> +      info += \"  --window-size=width[,height] Width of full page screenshot or width and height of region to screenshot.\\n\";\n\nTo be consistent with above, let's show these options in the generic form e.g. --screenshot [<path>]\n\n::: browser/components/nsBrowserContentHandler.js\n(Diff revision 3)\n>        if (URLlist.length) {\n>          openWindow(null, gBrowserContentHandler.chromeURL, \"_blank\",\n>                     \"chrome,dialog=no,all\" + gBrowserContentHandler.getFeatures(cmdLine),\n>                     URLlist);\n>        }\n> -\n\nRevert unchanged line\n\n::: browser/components/shell/HeadlessShell.jsm:57\n(Diff revision 3)\n> +\n> +  try {\n> +    let windowlessBrowser = Services.appShell.createWindowlessBrowser(false);\n> +    var webNavigation = windowlessBrowser.QueryInterface(Ci.nsIWebNavigation);\n> +    let contentWindow = await loadContentWindow(webNavigation, url);\n> +    contentWindow.resizeTo(contentWidth, contentHeight);\n\nWe don't need to fix this now, but can you file a follow up bug to add parameters to set the initial size of the browserless window so we don't have to resize?\n\n::: browser/components/shell/test/chrome.ini:2\n(Diff revision 3)\n> +[test_headless_screenshot.html]\n> +skip-if = (os != 'win' && os != 'linux')\n\nPlease file a follow up bug to enable this for macos.\n\n::: browser/components/shell/test/test_headless_screenshot.html:26\n(Diff revision 3)\n> +  const mochiPrefsPath = mochiPrefsFile.path;\n> +  const mochiPrefsName = mochiPrefsFile.leafName;\n> +  const profilePath = OS.Path.join(OS.Constants.Path.tmpDir, \"headless_test_screenshot_profile\");\n> +  const prefsPath = OS.Path.join(profilePath, mochiPrefsName);\n> +  const screenshotPath = OS.Path.join(OS.Constants.Path.tmpDir, \"headless_test_screenshot.png\");\n> +  const firefoxArgs = [\"-profile\", profilePath, \"-no-remote\", \"-url\", \"about:blank\", \"-screenshot\", screenshotPath];\n\nLet's add a few more simple tests for those tricky edge cases we discussed.\n\ne.g.\n--screenshot about:blank (no --url and no path)\n--screenshot (no --url and no optional url)",
+        "id": 12531420,
+        "creation_time": "2017-08-03T00:56:05Z",
+        "author": "bdahl@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n> We don't need to fix this now, but can you file a follow up bug to add parameters to set the initial size of the browserless window so we don't have to resize?\n\nhttps://bugzilla.mozilla.org/show_bug.cgi?id=1387585",
+        "id": 12538200,
+        "creation_time": "2017-08-04T20:25:28Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review169460\n\n> Please file a follow up bug to enable this for macos.\n\nhttps://bugzilla.mozilla.org/show_bug.cgi?id=1387587",
+        "id": 12538209,
+        "creation_time": "2017-08-04T20:27:23Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/3-4/",
+        "id": 12568652,
+        "creation_time": "2017-08-15T17:54:18Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\nA few questions and comments here.\n\nDoes this (or should this) support taking screenshots with a currently running instance of Firefox?\n\n::: browser/components/nsBrowserContentHandler.js:8\n(Diff revision 4)\n>   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */\n>  \n>  Components.utils.import(\"resource://gre/modules/XPCOMUtils.jsm\");\n>  Components.utils.import(\"resource://gre/modules/Services.jsm\");\n>  Components.utils.import(\"resource://gre/modules/AppConstants.jsm\");\n> +Components.utils.import(\"resource:///modules/HeadlessShell.jsm\");\n\nPlease import this lazily\n\n::: browser/components/nsBrowserContentHandler.js:462\n(Diff revision 4)\n> +      info += \"  --screenshot [<path>]        Save screenshot of page to <path> or in working directory.\\n\";\n> +      info += \"  --window-size width[,height] Width of full page screenshot or width and height of region to screenshot.\\n\";\n\nMake these output lines less than 78 characters.\n\n::: browser/components/nsBrowserGlue.js:75\n(Diff revision 4)\n>    [\"DirectoryLinksProvider\", \"resource:///modules/DirectoryLinksProvider.jsm\"],\n>    [\"ExtensionsUI\", \"resource:///modules/ExtensionsUI.jsm\"],\n>    [\"Feeds\", \"resource:///modules/Feeds.jsm\"],\n>    [\"FileUtils\", \"resource://gre/modules/FileUtils.jsm\"],\n>    [\"FormValidationHandler\", \"resource:///modules/FormValidationHandler.jsm\"],\n> +  [\"HeadlessShell\", \"resource:///modules/HeadlessShell.jsm\"],\n\nWhy did you need to add this here?\n\n::: browser/components/shell/HeadlessShell.jsm:32\n(Diff revision 4)\n> +        docShell = webNavigation.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                   .getInterface(Ci.nsIDocShell);\n\nI don't think the docshell will have changed\n\n::: browser/components/shell/HeadlessShell.jsm:35\n(Diff revision 4)\n> +          return;\n> +        }\n> +        docShell = webNavigation.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                   .getInterface(Ci.nsIDocShell);\n> +        let contentWindow = docShell.QueryInterface(Ci.nsIInterfaceRequestor)\n> +                            .getInterface(Ci.nsIDOMWindow);\n\nLine up the periods please.\n\n::: browser/components/shell/HeadlessShell.jsm:69\n(Diff revision 4)\n> +    await new Promise((resolve, reject) => {\n> +      canvas.toBlob((blob) => {\n> +        let reader = new FileReader();\n> +        reader.onloadend = function() {\n> +          OS.File.writeAtomic(path, new Uint8Array(reader.result), {flush: true})\n> +          .then(() => dump(\"Screenshot saved to: \" + path + \"\\n\"))\n> +          .catch((reason) => dump(\"Failure saving screenshot: \" + reason + \"\\n\"))\n> +          .then(() => resolve()); // \"finally\"\n> +        };\n> +        reader.readAsArrayBuffer(blob);\n> +      });\n> +    });\n\nWe're in an async function so it would be nicer to make a few small functions that wrap the toBlob and reader in ways that return promises that you can just await on.\n\nSomething like:\n\n    function promiseCanvasBlob(canvas) {\n        return new Promise(resolve => canvas.toBlob(resolve);\n    }\n    \n    function readBlob(blob) {\n      return new Promise(resolve => {\n        let reader = new FileReader();\n        reader.onloadend = () => resolve(reader);\n        reader.readAsArrayBuffer(blob);\n      });\n    }\n\n::: browser/components/shell/HeadlessShell.jsm:97\n(Diff revision 4)\n> +    let contentWidth = 1366;\n> +    let contentHeight = 768;\n\nWhere do these numbers come from?\n\n::: browser/components/shell/HeadlessShell.jsm:105\n(Diff revision 4)\n> +    // Parse `window-size`\n> +    try {\n> +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> +    } catch (e) {\n> +      dump(\"expected format: --window-size width[,height]\\n\");\n> +      return;\n\nDoes this cause the process to exit? I'm not seeing how\n\n::: browser/components/shell/HeadlessShell.jsm:138\n(Diff revision 4)\n> +    // Only command line argument left should be `screenshot`\n> +    // There could still be URLs however\n> +    try {\n> +      var path = cmdLine.handleFlagWithParam(\"screenshot\", true);\n> +      if (!cmdLine.length && !URLlist.length) {\n> +        URLlist.push(path); // Assume the user wanted to specify a URL\n\nThis is a bit weird and I wouldn't want to box us into a corner of supporting this in the future. In this case just log a message saying there was nothing to screenshot and exit.\n\n::: toolkit/xre/nsAppRunner.cpp:574\n(Diff revision 4)\n>  \n>    return ar;\n>  }\n>  \n> +/**\n> + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n\nIt doesn't seem to ignore these parameters. Rather it still matches even if there is a delimeter there regardless of the data past it.\n\n::: toolkit/xre/nsAppRunner.cpp:3214\n(Diff revision 4)\n>  \n>    if (ChaosMode::isActive(ChaosFeature::Any)) {\n>      printf_stderr(\"*** You are running in chaos test mode. See ChaosMode.h. ***\\n\");\n>    }\n>  \n> -  if (CheckArg(\"headless\")) {\n> +  if (CheckArg(\"headless\") || CheckArgExists(\"screenshot\")) {\n\nDo we actually need to test this here? Should screenshot always imply headless? We could just require users to also pass the headless argument if they don't want to see the UI when taking a screenshot.",
+        "id": 12593320,
+        "creation_time": "2017-08-23T21:57:35Z",
+        "author": "dtownsend@mozilla.com"
+    }, {
+        "text": "(In reply to Dave Townsend [:mossop] from comment #15)\n> This is a bit weird and I wouldn't want to box us into a corner of\n> supporting this in the future. In this case just log a message saying there\n> was nothing to screenshot and exit.\n\nIf I understand it correctly, this code enables us to support both the optional path parameter to the --screenshot flag and the implicit URL parameter (i.e. the `[URL]` in `firefox [ options ... ] [URL]`).\n\nFrom a product perspective, I'd like to continue supporting the implicit URL parameter, which is consistent with both existing Firefox and with the Chrome implementation of the --screenshot flag <https://developers.google.com/web/updates/2017/04/headless-chrome#screenshots>.\n\nI also think the optional path parameter is a useful addition to the feature (and a nice differentiator vis-a-vis Chrome).  So I would prefer to support both, if that's possible.\n\nIf the heuristic differentiation between a URL and a path is too complex/brittle from an implementation standpoint, however, and we need to make the specification of the URL and/or path more explicit, then my preference would be to require explicit specification of the path, while continuing to allow implicit URLs.\n\nExplicit specification of the path could be:\n\n  --screenshot-path <path>\n\nOr:\n\n  --screenshot=path\n\nOr another such format that makes it possible (but optional) to specify a path for the screenshot file.  I don't have a strong preference.",
+        "id": 12600449,
+        "creation_time": "2017-08-25T17:31:58Z",
+        "author": "myk@mykzilla.org"
+    }, {
+        "text": "(In reply to Myk Melez [:myk] [@mykmelez] from comment #16)\n> (In reply to Dave Townsend [:mossop] from comment #15)\n> > This is a bit weird and I wouldn't want to box us into a corner of\n> > supporting this in the future. In this case just log a message saying there\n> > was nothing to screenshot and exit.\n> \n> If I understand it correctly, this code enables us to support both the\n> optional path parameter to the --screenshot flag and the implicit URL\n> parameter (i.e. the `[URL]` in `firefox [ options ... ] [URL]`).\n\nThat matches my understanding so:\n\n    firefox --screenshot foo\n\nwill take a screenshot of site foo\n\n    firefox --screenshot foo bar\n\nwill take a screenshot of site bar called foo.\n\nMy opinion is that the first case should be consistent with the second and gave an error about no url being given.\n\n> From a product perspective, I'd like to continue supporting the implicit URL\n> parameter, which is consistent with both existing Firefox and with the\n> Chrome implementation of the --screenshot flag\n> <https://developers.google.com/web/updates/2017/04/headless-\n> chrome#screenshots>.\n\nAh, I didn't realise we're trying to clone a Chrome behaviour here.\n\n> I also think the optional path parameter is a useful addition to the feature\n> (and a nice differentiator vis-a-vis Chrome).  So I would prefer to support\n> both, if that's possible.\n> \n> If the heuristic differentiation between a URL and a path is too\n> complex/brittle from an implementation standpoint, however, and we need to\n> make the specification of the URL and/or path more explicit, then my\n> preference would be to require explicit specification of the path, while\n> continuing to allow implicit URLs.\n> \n> Explicit specification of the path could be:\n> \n>   --screenshot-path <path>\n> \n> Or:\n> \n>   --screenshot=path\n> \n> Or another such format that makes it possible (but optional) to specify a\n> path for the screenshot file.  I don't have a strong preference.\n\nI defer to your judgement as this is really a product call.",
+        "id": 12600520,
+        "creation_time": "2017-08-25T17:52:07Z",
+        "author": "dtownsend@mozilla.com"
+    }, {
+        "text": "Thanks for your input here, Myk.\n(In reply to Dave Townsend [:mossop] from comment #15)\n> Comment on attachment 8887182\n> Bug 1378010 - screenshot from command line with headless;\n> \n> https://reviewboard.mozilla.org/r/157930/#review177002\n> \n> A few questions and comments here.\n> \n> Does this (or should this) support taking screenshots with a currently\n> running instance of Firefox?\n> \nIt doesn't. We always designed this feature to be like Chrome's (which also takes the screenshot and exits). As for if it should, maybe that's for Brendan or Myk to answer.\n> ::: browser/components/shell/HeadlessShell.jsm:97\n> (Diff revision 4)\n> > +    let contentWidth = 1366;\n> > +    let contentHeight = 768;\n> \n> Where do these numbers come from?\n> \nIt's the most common resolution of Firefox users IIRC. I'll add a code comment.\n> ::: browser/components/shell/HeadlessShell.jsm:105\n> (Diff revision 4)\n> > +    // Parse `window-size`\n> > +    try {\n> > +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> > +    } catch (e) {\n> > +      dump(\"expected format: --window-size width[,height]\\n\");\n> > +      return;\n> \n> Does this cause the process to exit? I'm not seeing how\n> \nYes, but it's a little tricky. When handleCmdLineArgs returns, there is an early return in nsBrowserContentHandler.js:732. Since no browser windows exist and the early return in nsBrowserContentHandler prevents one from being created, the process exits.\n> ::: toolkit/xre/nsAppRunner.cpp:574\n> (Diff revision 4)\n> >  \n> >    return ar;\n> >  }\n> >  \n> > +/**\n> > + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n> \n> It doesn't seem to ignore these parameters. Rather it still matches even if\n> there is a delimeter there regardless of the data past it.\n> \nThis is possibly bad wording on my behalf. CheckArg and the other ways to check command line arguments in nsAppRunner, will say that --screenshot is not present if you do --screenshot=<data>, since they consider all of that as one command line argument. Instead of changing the behavior of those functions, CheckArgExists was introduced. That comment considers just the delimiter and the data that follows as parameters (and --screenshot as a flag). Maybe it should be reworded as \"Ignore data that's passed in with the flag\"?\n> ::: toolkit/xre/nsAppRunner.cpp:3214\n> (Diff revision 4)\n> >  \n> >    if (ChaosMode::isActive(ChaosFeature::Any)) {\n> >      printf_stderr(\"*** You are running in chaos test mode. See ChaosMode.h. ***\\n\");\n> >    }\n> >  \n> > -  if (CheckArg(\"headless\")) {\n> > +  if (CheckArg(\"headless\") || CheckArgExists(\"screenshot\")) {\n> \n> Do we actually need to test this here? Should screenshot always imply\n> headless? We could just require users to also pass the headless argument if\n> they don't want to see the UI when taking a screenshot.\n\nIt doesn't actually work if not in headless mode. Again, I don't know if it should, but I think Brendan and Myk decided that screenshot should imply headless, so let's hear what they think :)",
+        "id": 12601012,
+        "creation_time": "2017-08-25T20:28:06Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "(In reply to B. Dahse from comment #18)\n> Thanks for your input here, Myk.\n> (In reply to Dave Townsend [:mossop] from comment #15)\n> > Comment on attachment 8887182\n> > Bug 1378010 - screenshot from command line with headless;\n> > \n> > https://reviewboard.mozilla.org/r/157930/#review177002\n> > \n> > A few questions and comments here.\n> > \n> > Does this (or should this) support taking screenshots with a currently\n> > running instance of Firefox?\n> > \n> It doesn't. We always designed this feature to be like Chrome's (which also\n> takes the screenshot and exits). As for if it should, maybe that's for\n> Brendan or Myk to answer.\n\nHave you tested to see what happens in that case? I think it will actually work since when you run firefox any command line arguments simply get passed along to a running instance if there is one. Unless headless disables remoting I guess.\n\n> > ::: browser/components/shell/HeadlessShell.jsm:105\n> > (Diff revision 4)\n> > > +    // Parse `window-size`\n> > > +    try {\n> > > +      var dimensionsStr = cmdLine.handleFlagWithParam(\"window-size\", true);\n> > > +    } catch (e) {\n> > > +      dump(\"expected format: --window-size width[,height]\\n\");\n> > > +      return;\n> > \n> > Does this cause the process to exit? I'm not seeing how\n> > \n> Yes, but it's a little tricky. When handleCmdLineArgs returns, there is an\n> early return in nsBrowserContentHandler.js:732. Since no browser windows\n> exist and the early return in nsBrowserContentHandler prevents one from\n> being created, the process exits.\n\nOk I thought it might be something like that but it's a little non-obvious. Given that this is an async function it might be tempting to await something before the return which presumably would cause the app to exit early. Can you wrap the whole function in a last window closing survival block to ensure that never happens, using a try...finally block should do it.\n\n> > ::: toolkit/xre/nsAppRunner.cpp:574\n> > (Diff revision 4)\n> > >  \n> > >    return ar;\n> > >  }\n> > >  \n> > > +/**\n> > > + * Check for a commandline flag. Ignore parameters of the form -arg <data> and -arg=<data>.\n> > \n> > It doesn't seem to ignore these parameters. Rather it still matches even if\n> > there is a delimeter there regardless of the data past it.\n> > \n> This is possibly bad wording on my behalf. CheckArg and the other ways to\n> check command line arguments in nsAppRunner, will say that --screenshot is\n> not present if you do --screenshot=<data>, since they consider all of that\n> as one command line argument. Instead of changing the behavior of those\n> functions, CheckArgExists was introduced. That comment considers just the\n> delimiter and the data that follows as parameters (and --screenshot as a\n> flag). Maybe it should be reworded as \"Ignore data that's passed in with the\n> flag\"?\n\nYeah that wording sounds better.",
+        "id": 12601046,
+        "creation_time": "2017-08-25T20:37:37Z",
+        "author": "dtownsend@mozilla.com"
+    }, {
+        "text": "(In reply to Dave Townsend [:mossop] from comment #19)\n> (In reply to B. Dahse from comment #18)\n> > Thanks for your input here, Myk.\n> > (In reply to Dave Townsend [:mossop] from comment #15)\n> > > Comment on attachment 8887182\n> > > Bug 1378010 - screenshot from command line with headless;\n> > > \n> > > https://reviewboard.mozilla.org/r/157930/#review177002\n> > > \n> > > A few questions and comments here.\n> > > \n> > > Does this (or should this) support taking screenshots with a currently\n> > > running instance of Firefox?\n> > > \n> > It doesn't. We always designed this feature to be like Chrome's (which also\n> > takes the screenshot and exits). As for if it should, maybe that's for\n> > Brendan or Myk to answer.\n> \n> Have you tested to see what happens in that case? I think it will actually\n> work since when you run firefox any command line arguments simply get passed\n> along to a running instance if there is one. Unless headless disables\n> remoting I guess.\n> \nI haven't tested it, in fact I didn't know it works like that. In any case, starting one instance with\n/home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/dist/bin/firefox -profile /home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/tmp/scratch_user --headless google.com\nand another with\n/home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/dist/bin/firefox -profile /home/bdahse/src/mozilla-unified/obj-x86_64-pc-linux-gnu/tmp/scratch_user --screenshot=remote.png\ngives \"Firefox is already running, but is not responding. To open a new window, you must first close the existing Firefox process, or restart your system.\"\n\nBut I'll get started on addressing those review comments of yours that don't need input from elsewhere.",
+        "id": 12601159,
+        "creation_time": "2017-08-25T21:27:55Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\n> Why did you need to add this here?\n\nI don't know. Removing it doesn't seem to have any effect on the tests so let's keep it removed.",
+        "id": 12601356,
+        "creation_time": "2017-08-25T22:30:44Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review177002\n\n> We're in an async function so it would be nicer to make a few small functions that wrap the toBlob and reader in ways that return promises that you can just await on.\n> \n> Something like:\n> \n>     function promiseCanvasBlob(canvas) {\n>         return new Promise(resolve => canvas.toBlob(resolve);\n>     }\n>     \n>     function readBlob(blob) {\n>       return new Promise(resolve => {\n>         let reader = new FileReader();\n>         reader.onloadend = () => resolve(reader);\n>         reader.readAsArrayBuffer(blob);\n>       });\n>     }\n\nYes, that's better. Nice one!",
+        "id": 12601399,
+        "creation_time": "2017-08-25T22:58:07Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/4-5/",
+        "id": 12611276,
+        "creation_time": "2017-08-29T21:34:51Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "After a conversation with Myk, I changed multiple URLs to be an error instead of silently picking the first one. I also added two more test cases:\n1. Test that \"firefox [implicit url] -screenshot\" and \"firefox -screenshot [implicit url]\" behave the same\n2. Test that multiple URLs is an error",
+        "id": 12611309,
+        "creation_time": "2017-08-29T21:43:49Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nhttps://reviewboard.mozilla.org/r/157930/#review179276\n\nLooks good.",
+        "id": 12611510,
+        "creation_time": "2017-08-29T22:45:57Z",
+        "author": "dtownsend@mozilla.com"
+    }, {
+        "text": "Here's a try run of the latest version https://treeherder.mozilla.org/#/jobs?repo=try&revision=4edf77e4885fec9c66d854bbf1d709fae0b6d1e6",
+        "id": 12611643,
+        "creation_time": "2017-08-29T23:35:33Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Screenshot only specific elements using a CSS selector +1",
+        "id": 12615637,
+        "creation_time": "2017-08-31T02:43:08Z",
+        "author": "percyley@qq.com"
+    }, {
+        "text": "Don't think we have any plans for that in this feature. Maybe it's possible with our devtools screenshot (as mentioned in comment 1) and remote debugging?",
+        "id": 12634215,
+        "creation_time": "2017-09-06T16:56:48Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "(In reply to B. Dahse from comment #28)\n> Don't think we have any plans for that in this feature. Maybe it's possible\n> with our devtools screenshot (as mentioned in comment 1) and remote\n> debugging?\n\nWithin the Firefox UI, you can use the Developer Toolbar / GCLI[1] and enter something like:\n\n```\nscreenshot --selector <selector>\n```\n\nto save it to a file.  There are other options for clipboard, etc.  Check `help screenshot`.\n\nYou can also right click a node in the DevTools inspector and choose \"Screenshot Node\".\n\nThe same actions could be triggered by a script connecting to the remote debugging port, but I am not aware of existing tools that do that today.\n\n[1]: https://developer.mozilla.org/en-US/docs/Tools/GCLI",
+        "id": 12634255,
+        "creation_time": "2017-09-06T17:10:15Z",
+        "author": "jryans@gmail.com"
+    }, {
+        "text": "Comment on attachment 8887182\nBug 1378010 - screenshot from command line with headless;\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/157930/diff/5-6/",
+        "id": 12657304,
+        "creation_time": "2017-09-13T18:07:04Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Changed the test to screenshot a support file instead of about:blank, because of a leak when screenshotting about:blank.",
+        "id": 12657322,
+        "creation_time": "2017-09-13T18:10:17Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Autoland can't push this until all pending issues in MozReview are marked as resolved.",
+        "id": 12657496,
+        "creation_time": "2017-09-13T18:28:26Z",
+        "author": "ryanvm@gmail.com"
+    }, {
+        "text": "I see, should be no open issues in MozReview now.",
+        "id": 12658970,
+        "creation_time": "2017-09-13T18:40:37Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "Pushed by ryanvm@gmail.com:\nhttps://hg.mozilla.org/integration/autoland/rev/2ce3e68d7242\nscreenshot from command line with headless; r=mossop",
+        "id": 12659214,
+        "creation_time": "2017-09-13T18:44:53Z",
+        "author": "pulsebot@bots.tld"
+    }, {
+        "text": "https://hg.mozilla.org/mozilla-central/rev/2ce3e68d7242",
+        "id": 12664417,
+        "creation_time": "2017-09-14T06:25:15Z",
+        "author": "wkocher@mozilla.com"
+    }, {
+        "text": "Release Note Request (optional, but appreciated)\n[Why is this notable]: Great new feature\n[Affects Firefox for Android]: No\n[Suggested wording]: Take a screenshot from the command line with --screenshot=/path/to/file\n[Links (documentation, blog post, etc)]: no yet",
+        "id": 12670914,
+        "creation_time": "2017-09-15T17:08:12Z",
+        "author": "sledru@mozilla.com"
+    }, {
+        "text": "Is there an API to tap into these features from other languages, like PHP, and NodeJS?",
+        "id": 12673556,
+        "creation_time": "2017-09-16T20:13:24Z",
+        "author": "teamleader@sitelease.ca"
+    }, {
+        "text": "(In reply to sitelease from comment #37)\n> Is there an API to tap into these features from other languages, like PHP,\n> and NodeJS?\n\nThere isn't an API for the screenshot feature specifically.  For headless mode generally, however, you can use the WebDriver API, which supports a variety of languages (including Node.js) and includes a method for taking a screenshot.  See its documentation:\n\nhttps://developer.mozilla.org/en-US/Firefox/Headless_mode\n\nAlso see this blog post, which gives an example of taking a screenshot using the Node.js API to WebDriver:\n\nhttps://mykzilla.org/2017/08/30/headless-firefox-in-node-js-with-selenium-webdriver/",
+        "id": 12675206,
+        "creation_time": "2017-09-18T01:29:53Z",
+        "author": "myk@mykzilla.org"
+    }, {
+        "text": "I've had a go at documenting this. I've added this section to the headless mode doc:\n\nhttps://developer.mozilla.org/en-US/Firefox/Headless_mode#Taking_screenshots\n\nI've also added a note to the Fx57 rel notes:\n\nhttps://developer.mozilla.org/en-US/Firefox/Releases/57#Other\n\nCan you have a look and let me know if this reads ok?\n\nA couple of other points:\n\n* I couldn't get the screenshot=path or screenshot-path=path type stuff mentioned in comment 16 to work \u2014 how do you specify a custom path to save the screenshot at?\n* On Mac at least, the single dash version of window-size doesn't seem to work, e.g. -window-size=x. I had to use --window-size=x. This seems a little inconsistent, given that -headless and -screenshot work?",
+        "id": 12701944,
+        "creation_time": "2017-09-26T08:34:02Z",
+        "author": "cmills@mozilla.com"
+    }, {
+        "text": "(In reply to Chris Mills (Mozilla, MDN editor) [:cmills] from comment #39)\n> I've had a go at documenting this. I've added this section to the headless\n> mode doc:\n> \n> https://developer.mozilla.org/en-US/Firefox/Headless_mode#Taking_screenshots\n> \n> I've also added a note to the Fx57 rel notes:\n> \n> https://developer.mozilla.org/en-US/Firefox/Releases/57#Other\n> \n> Can you have a look and let me know if this reads ok?\n\nBoth of these look great.\n\n\n> A couple of other points:\n> \n> * I couldn't get the screenshot=path or screenshot-path=path type stuff\n> mentioned in comment 16 to work \u2014 how do you specify a custom path to save\n> the screenshot at?\n\nSpecifying the path to the file without an equals sign works:\n\n> /path/to/firefox -screenshot path/to/name.png https://developer.mozilla.com\n\nBut the version with the equals sign should also work.  I filed bug 1406590 on that.\n\n\n> * On Mac at least, the single dash version of window-size doesn't seem to\n> work, e.g. -window-size=x. I had to use --window-size=x. This seems a little\n> inconsistent, given that -headless and -screenshot work?\n\nIndeed, it's very inconsistent.  I filed bug 1406589 on this.",
+        "id": 12736832,
+        "creation_time": "2017-10-07T00:31:54Z",
+        "author": "myk@mykzilla.org"
+    }, {
+        "text": "Following up on the leak in bug 1331152, I looked at the code that was landed in this bug and I see [1] has been added in bug 1403934. Were the linux64-asan builds fine after that change?\n\n[1]: http://searchfox.org/mozilla-central/source/browser/components/shell/HeadlessShell.jsm#159",
+        "id": 12786003,
+        "creation_time": "2017-10-24T16:17:19Z",
+        "author": "ronoueb@gmail.com"
+    }, {
+        "text": "(In reply to B. Dahse from comment #41)\n> Following up on the leak in bug 1331152, I looked at the code that was\n> landed in this bug and I see [1] has been added in bug 1403934. Were the\n> linux64-asan builds fine after that change?\n\nYeah, that could cause it. For leak checking to work, you have to be really patient with shutdown. I see this comment in nsAppStartup::Quit(uint32_t aMode):\n      // no matter what, make sure we send the exit event.  If\n      // worst comes to worst, we'll do a leaky shutdown but we WILL\n      // shut down. Well, assuming that all *this* stuff works ;-).\n\nMaybe something related to this is leaking? It is a very small leak of some JS stuff. Maybe that nsAppExitEvent stuff could hold alive some JS stuff?",
+        "id": 12797232,
+        "creation_time": "2017-10-27T22:09:51Z",
+        "author": "continuation@gmail.com"
+    }, {
+        "text": "(In reply to Andrew McCreight [:mccr8] from comment #42)\n> Yeah, that could cause it. For leak checking to work, you have to be really\n> patient with shutdown. I see this comment in nsAppStartup::Quit(uint32_t\n> aMode):\n>       // no matter what, make sure we send the exit event.  If\n>       // worst comes to worst, we'll do a leaky shutdown but we WILL\n>       // shut down. Well, assuming that all *this* stuff works ;-).\n> \n> Maybe something related to this is leaking? It is a very small leak of some\n> JS stuff. Maybe that nsAppExitEvent stuff could hold alive some JS stuff?\n\nI was wondering about that too and changed eForceQuit to the kinder, gentler eAttemptQuit in this tryserver run a couple days ago:\n\nhttps://treeherder.mozilla.org/#/jobs?repo=try&revision=cbf71fe31964725079836fd1f7908a340d52994e\n\nUnfortunately, it didn't resolve the problem.  Perhaps eAttemptQuit still doesn't make nsAppStartup::Quit patient enough?",
+        "id": 12797258,
+        "creation_time": "2017-10-27T22:25:14Z",
+        "author": "myk@mykzilla.org"
+    }, {
+        "text": "One temporary fix would be to disable LSan on the process by adding detect_leaks=0 to ASAN_OPTIONS.",
+        "id": 12803128,
+        "creation_time": "2017-10-30T19:33:08Z",
+        "author": "continuation@gmail.com"
+    }],
+    "attachments": [{
+        "content_type": "text/x-review-board-request",
+        "creator": "ronoueb@gmail.com",
+        "flags": [{
+            "modification_date": "2017-08-29T22:45:57Z",
+            "creation_date": "2017-08-29T21:34:51Z",
+            "type_id": 748,
+            "status": "+",
+            "name": "review",
+            "id": 1637867,
+            "setter": "dtownsend@mozilla.com"
+        }],
+        "is_patch": 0,
+        "creation_time": "2017-07-17T19:41:47Z",
+        "id": 8887182,
+        "is_obsolete": 0
+    }]
+} {
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "is_cc_accessible": true,
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-10-27T19:51:36Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cc_detail": [],
+    "summary": "clicking a second time on the very bottom of the main menu button doesn't close the menu",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "Trunk",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "assigned_to_detail": {
+        "email": "nobody@mozilla.org",
+        "real_name": "Nobody; OK to take it and work on it",
+        "name": "nobody@mozilla.org",
+        "nick": "nobody",
+        "id": 1
+    },
+    "creator": "asa@mozilla.org",
+    "last_change_time": "2017-10-27T19:51:36Z",
+    "creator_detail": {
+        "email": "asa@mozilla.org",
+        "real_name": "Asa Dotzler [:asa]",
+        "name": "asa@mozilla.org",
+        "nick": "asa",
+        "id": 5003
+    },
+    "comment_count": 3,
+    "cc": [],
+    "duplicates": [],
+    "assigned_to": "nobody@mozilla.org",
+    "groups": [],
+    "see_also": [],
+    "id": 1379535,
+    "whiteboard": "",
+    "creation_time": "2017-07-10T04:11:15Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": 1412390,
+    "cf_status_firefox66": "---",
+    "resolution": "DUPLICATE",
+    "classification": "Client Software",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "cf_status_firefox57": "affected",
+    "component": "Menus",
+    "cf_status_geckoview64": "---",
+    "product": "Firefox",
+    "target_milestone": "---",
+    "cf_platform_rel": "---",
+    "history": [{
+        "when": "2017-07-10T04:14:45Z",
+        "who": "asa@mozilla.org",
+        "changes": [{
+            "removed": "clicking a second time on the very bottom of the main menu doesn't close the menu",
+            "added": "clicking a second time on the very bottom of the main menu button doesn't close the menu",
+            "field_name": "summary"
+        }]
+    }, {
+        "when": "2017-10-27T19:51:36Z",
+        "who": "asa@mozilla.org",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "DUPLICATE",
+            "field_name": "resolution"
+        }, {
+            "removed": "",
+            "added": "2017-10-27T19:51:36Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }],
+    "comments": [{
+        "text": "When you click a second time on the main menu, it should roll up. This works for the top 80% or so of the button but if you clicked in the bottom fifth or so of the button a second time, the menu stays open. Perhaps the menu's little arrow where it connects to the menu button is eating the click.",
+        "id": 12458951,
+        "creation_time": "2017-07-10T04:11:15Z",
+        "author": "asa@mozilla.org"
+    }, {
+        "text": "Tested with 7/9 nightly build on Windows 10",
+        "id": 12458954,
+        "creation_time": "2017-07-10T04:13:17Z",
+        "author": "asa@mozilla.org"
+    }, {
+        "text": "\n\n*** This bug has been marked as a duplicate of bug 1412390 ***",
+        "id": 12796824,
+        "creation_time": "2017-10-27T19:51:36Z",
+        "author": "asa@mozilla.org"
+    }],
+    "attachments": []
+}

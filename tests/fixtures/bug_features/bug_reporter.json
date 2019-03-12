@@ -1,3 +1,996 @@
-{"blocks": [1333962, 1350432], "cf_tracking_geckoview64": "---", "cf_status_geckoview66": "---", "is_cc_accessible": true, "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-08-25T23:27:33Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cf_tracking_geckoview66": "---", "cc_detail": [{"email": "dvander@alliedmods.net", "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency", "name": "dvander@alliedmods.net", "nick": "dvander", "id": 309316}, {"email": "jryans@gmail.com", "real_name": "J. Ryan Stinnett [:jryans]", "name": "jryans@gmail.com", "nick": "jryans", "id": 282978}, {"email": "kanru@kanru.info", "real_name": "Kan-Ru Chen [:kanru] (UTC+8)", "name": "kanru@kanru.info", "nick": "kanru", "id": 428625}], "summary": "Provide easy access to the currently selected tab", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "bill.mccloskey@gmail.com", "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)", "name": "bill.mccloskey@gmail.com", "nick": "billm", "id": 389993}, "creator": "bill.mccloskey@gmail.com", "last_change_time": "2017-08-25T23:27:33Z", "creator_detail": {"email": "bill.mccloskey@gmail.com", "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)", "name": "bill.mccloskey@gmail.com", "nick": "billm", "id": 389993}, "comment_count": 4, "cc": ["dvander@alliedmods.net", "jryans@gmail.com", "kanru@kanru.info"], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "bill.mccloskey@gmail.com", "groups": [], "see_also": [], "id": 1383333, "whiteboard": "", "creation_time": "2017-07-22T00:00:48Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "FIXED", "classification": "Components", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "cf_status_firefox57": "fixed", "component": "DOM: Content Processes", "cf_status_geckoview64": "---", "target_milestone": "mozilla57", "product": "Core", "history": [{"when": "2017-07-22T00:00:48Z", "who": "bill.mccloskey@gmail.com", "changes": [{"attachment_id": 8888993, "removed": "", "added": "review?(dvander@alliedmods.net)", "field_name": "flagtypes.name"}, {"removed": "", "added": "dvander@alliedmods.net", "field_name": "cc"}]}, {"when": "2017-07-25T04:11:23Z", "who": "dvander@alliedmods.net", "changes": [{"attachment_id": 8888993, "removed": "review?(dvander@alliedmods.net)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-08-02T03:39:00Z", "who": "jryans@gmail.com", "changes": [{"removed": "", "added": "jryans@gmail.com", "field_name": "cc"}]}, {"when": "2017-08-18T22:53:33Z", "who": "bill.mccloskey@gmail.com", "changes": [{"removed": "Provide easy access to the currently selected tab (when there is only one)", "added": "Provide easy access to the currently selected tab", "field_name": "summary"}]}, {"when": "2017-08-18T22:55:32Z", "who": "bill.mccloskey@gmail.com", "changes": [{"attachment_id": 8888993, "removed": "0", "added": "1", "field_name": "attachments.isobsolete"}, {"removed": "", "added": "kchen@mozilla.com", "field_name": "cc"}, {"attachment_id": 8899011, "removed": "", "added": "review?(kchen@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-08-18T23:00:52Z", "who": "bill.mccloskey@gmail.com", "changes": [{"removed": "", "added": "1333962", "field_name": "blocks"}]}, {"when": "2017-08-22T12:45:50Z", "who": "kanru@kanru.info", "changes": [{"attachment_id": 8899011, "removed": "review?(kchen@mozilla.com)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-08-25T23:27:33Z", "who": "wkocher@mozilla.com", "changes": [{"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "---", "added": "mozilla57", "field_name": "target_milestone"}, {"removed": "", "added": "2017-08-25T23:27:33Z", "field_name": "cf_last_resolved"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox57"}]}], "comments": [{"text": "Created attachment 8888993\npatch\n\nI've decided to make a simplifying assumption for the initial Quantum DOM patches: if only one tab is in the foreground, then we'll label vsyncs correctly for that tab and also prioritize runnables for that tab. If multiple tabs (from multiple windows) are in the foreground, then you won't get any benefit from Quantum DOM. This shouldn't be too hard to fix in the future, but it's a pain to deal with right now.\n\nThis patch provides an easy accessor for the foreground TabChild (if there is only one). I imagine other people might find this useful as well for various performance optimizations.", "id": 12495651, "creation_time": "2017-07-22T00:00:48Z", "author": "bill.mccloskey@gmail.com"}, {"text": "Created attachment 8899011\npatch v2\n\nI realized that we do need to keep track of multiple active tabs. When tab switching, for example, two tabs can be active at once. And that's specifically a case where I would like the Quantum DOM scheduler to be effective.\n\nDavid is on PTO, so asking Kan-Ru for review.", "id": 12580228, "creation_time": "2017-08-18T22:55:32Z", "author": "bill.mccloskey@gmail.com"}, {"text": "Pushed by wmccloskey@mozilla.com:\nhttps://hg.mozilla.org/integration/mozilla-inbound/rev/7f426b4432ff\nKeep track of foreground TabChildren (r=kanru)", "id": 12600436, "creation_time": "2017-08-25T17:29:27Z", "author": "pulsebot@bots.tld"}, {"text": "https://hg.mozilla.org/mozilla-central/rev/7f426b4432ff", "id": 12601469, "creation_time": "2017-08-25T23:27:33Z", "author": "wkocher@mozilla.com"}], "attachments": [{"content_type": "text/plain", "creator": "bill.mccloskey@gmail.com", "flags": [{"modification_date": "2017-07-25T04:11:23Z", "creation_date": "2017-07-22T00:00:48Z", "type_id": 4, "status": "+", "name": "review", "id": 1616063, "setter": "dvander@alliedmods.net"}], "is_patch": 1, "creation_time": "2017-07-22T00:00:48Z", "id": 8888993, "is_obsolete": 1}, {"content_type": "text/plain", "creator": "bill.mccloskey@gmail.com", "flags": [{"modification_date": "2017-08-22T12:45:50Z", "creation_date": "2017-08-18T22:55:32Z", "type_id": 4, "status": "+", "name": "review", "id": 1632198, "setter": "kanru@kanru.info"}], "is_patch": 1, "creation_time": "2017-08-18T22:55:32Z", "id": 8899011, "is_obsolete": 0}]}
-{"blocks": [], "cf_tracking_geckoview64": "---", "cf_status_geckoview66": "---", "is_cc_accessible": true, "keywords": [], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-07-30T16:49:26Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cf_tracking_geckoview66": "---", "cc_detail": [{"email": "chrismore.bugzilla@gmail.com", "real_name": "Chris More [:cmore]", "name": "chrismore.bugzilla@gmail.com", "nick": "cmore", "id": 404027}, {"email": "cornel.ionce@softvision.ro", "real_name": "Cornel Ionce [:cornel_ionce], Desktop Release QA", "name": "cornel.ionce@softvision.ro", "nick": "cornel_ionce", "id": 458186}, {"email": "gijskruitbosch+bugs@gmail.com", "real_name": ":Gijs (he/him)", "name": "gijskruitbosch+bugs@gmail.com", "nick": "Gijs", "id": 159069}, {"email": "jcristau@mozilla.com", "real_name": "Julien Cristau [:jcristau]", "name": "jcristau@mozilla.com", "nick": "jcristau", "id": 580382}, {"email": "jmaher@mozilla.com", "real_name": "Joel Maher ( :jmaher ) (UTC-4)", "name": "jmaher@mozilla.com", "nick": "jmaher", "id": 324370}, {"email": "mcooper@mozilla.com", "real_name": "Michael Cooper [:mythmon]", "name": "mcooper@mozilla.com", "nick": "mythmon", "id": 446256}, {"email": "mkelly@mozilla.com", "real_name": "Michael Kelly [:mkelly,:Osmose]", "name": "mkelly@mozilla.com", "nick": "mkelly", "id": 417275}, {"email": "pdolanjski@mozilla.com", "real_name": "Peter Dolanjski [:pdol]", "name": "pdolanjski@mozilla.com", "nick": "pdol", "id": 455532}], "summary": "fetch+run shield studies soon after first startup", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "cf_status_firefox55": "fixed", "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "P1", "assigned_to_detail": {"email": "rhelmer@mozilla.com", "real_name": "Robert Helmer [:rhelmer]", "name": "rhelmer@mozilla.com", "nick": "rhelmer", "id": 17036}, "creator": "rhelmer@mozilla.com", "last_change_time": "2018-01-27T19:10:40Z", "creator_detail": {"email": "rhelmer@mozilla.com", "real_name": "Robert Helmer [:rhelmer]", "name": "rhelmer@mozilla.com", "nick": "rhelmer", "id": 17036}, "comment_count": 28, "cc": ["chrismore.bugzilla@gmail.com", "cornel.ionce@softvision.ro", "gijskruitbosch+bugs@gmail.com", "jcristau@mozilla.com", "jmaher@mozilla.com", "mcooper@mozilla.com", "mkelly@mozilla.com", "pdolanjski@mozilla.com"], "duplicates": [], "assigned_to": "rhelmer@mozilla.com", "groups": [], "see_also": [], "id": 1383338, "whiteboard": "", "creation_time": "2017-07-22T00:37:36Z", "depends_on": [1385177, 1385915], "cf_tracking_geckoview65": "---", "cf_status_firefox56": "fixed", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "FIXED", "classification": "Client Software", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "component": "Normandy Client", "cf_status_geckoview64": "---", "target_milestone": "---", "product": "Firefox", "history": [{"when": "2017-07-22T00:39:57Z", "who": "rhelmer@mozilla.com", "changes": [{"removed": "fetch+run shield studies soon after startup", "added": "fetch+run shield studies soon after first startup", "field_name": "summary"}]}, {"when": "2017-07-22T00:40:56Z", "who": "rhelmer@mozilla.com", "changes": [{"removed": "--", "added": "P1", "field_name": "priority"}, {"removed": "NEW", "added": "ASSIGNED", "field_name": "status"}, {"removed": "nobody@mozilla.org", "added": "rhelmer@mozilla.com", "field_name": "assigned_to"}]}, {"when": "2017-07-24T07:45:00Z", "who": "jcristau@mozilla.com", "changes": [{"removed": "", "added": "jcristau@mozilla.com", "field_name": "cc"}]}, {"when": "2017-07-26T17:13:28Z", "who": "rhelmer@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "", "added": "review?(gijskruitbosch+bugs@gmail.com), review?(mcooper@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-26T17:37:14Z", "who": "mcooper@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "review?(mcooper@mozilla.com)", "added": "review-", "field_name": "flagtypes.name"}]}, {"when": "2017-07-26T18:01:29Z", "who": "rhelmer@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "review-", "added": "review?(mcooper@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-26T18:02:09Z", "who": "mcooper@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "review?(mcooper@mozilla.com)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-07-26T18:23:10Z", "who": "gijskruitbosch+bugs@gmail.com", "changes": [{"attachment_id": 8890442, "removed": "review?(gijskruitbosch+bugs@gmail.com)", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-07-26T20:13:54Z", "who": "rhelmer@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "", "added": "approval-mozilla-beta?", "field_name": "flagtypes.name"}]}, {"when": "2017-07-27T09:02:02Z", "who": "cbook@mozilla.com", "changes": [{"removed": "ASSIGNED", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "", "added": "2017-07-27T09:02:02Z", "field_name": "cf_last_resolved"}, {"removed": "---", "added": "fixed", "field_name": "cf_status_firefox56"}]}, {"when": "2017-07-27T10:07:21Z", "who": "jcristau@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "approval-mozilla-beta?", "added": "approval-mozilla-beta+", "field_name": "flagtypes.name"}]}, {"when": "2017-07-27T10:07:44Z", "who": "jcristau@mozilla.com", "changes": [{"removed": "---", "added": "affected", "field_name": "cf_status_firefox55"}]}, {"when": "2017-07-27T12:40:20Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "affected", "added": "fixed", "field_name": "cf_status_firefox55"}]}, {"when": "2017-07-27T18:44:43Z", "who": "jmaher@mozilla.com", "changes": [{"removed": "", "added": "jmaher@mozilla.com", "field_name": "cc"}]}, {"when": "2017-07-28T05:30:50Z", "who": "rhelmer@mozilla.com", "changes": [{"removed": "", "added": "1385177", "field_name": "depends_on"}]}, {"when": "2017-07-28T10:50:58Z", "who": "cornel.ionce@softvision.ro", "changes": [{"removed": "", "added": "cornel.ionce@softvision.ro", "field_name": "cc"}, {"removed": "", "added": "needinfo?(rhelmer@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T15:37:55Z", "who": "rhelmer@mozilla.com", "changes": [{"removed": "needinfo?(rhelmer@mozilla.com)", "added": "needinfo?(mkelly@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T18:45:20Z", "who": "mkelly@mozilla.com", "changes": [{"removed": "needinfo?(mkelly@mozilla.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T19:02:28Z", "who": "mkelly@mozilla.com", "changes": [{"removed": "RESOLVED", "added": "REOPENED", "field_name": "status"}, {"removed": "FIXED", "added": "", "field_name": "resolution"}, {"removed": "", "added": "needinfo?(rhelmer@mozilla.com)", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T20:29:48Z", "who": "rhelmer@mozilla.com", "changes": [{"removed": "needinfo?(rhelmer@mozilla.com)", "added": "", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T20:31:04Z", "who": "rhelmer@mozilla.com", "changes": [{"attachment_id": 8890442, "removed": "0", "added": "1", "field_name": "attachments.isobsolete"}]}, {"when": "2017-07-28T20:40:01Z", "who": "mkelly@mozilla.com", "changes": [{"attachment_id": 8891498, "removed": "", "added": "review+", "field_name": "flagtypes.name"}]}, {"when": "2017-07-28T21:38:35Z", "who": "rhelmer@mozilla.com", "changes": [{"attachment_id": 8891498, "removed": "", "added": "approval-mozilla-beta?", "field_name": "flagtypes.name"}]}, {"when": "2017-07-30T16:49:26Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "REOPENED", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "FIXED", "field_name": "resolution"}, {"removed": "2017-07-27T09:02:02Z", "added": "2017-07-30T16:49:26Z", "field_name": "cf_last_resolved"}]}, {"when": "2017-07-31T09:19:02Z", "who": "jcristau@mozilla.com", "changes": [{"removed": "fixed", "added": "affected", "field_name": "cf_status_firefox55"}]}, {"when": "2017-07-31T09:21:02Z", "who": "jcristau@mozilla.com", "changes": [{"attachment_id": 8891498, "removed": "approval-mozilla-beta?", "added": "approval-mozilla-beta+", "field_name": "flagtypes.name"}]}, {"when": "2017-07-31T11:41:58Z", "who": "ryanvm@gmail.com", "changes": [{"removed": "affected", "added": "fixed", "field_name": "cf_status_firefox55"}]}, {"when": "2017-08-03T15:03:36Z", "who": "igoldan@mozilla.com", "changes": [{"removed": "", "added": "1385915", "field_name": "depends_on"}]}, {"when": "2017-08-16T11:31:49Z", "who": "jmaher@mozilla.com", "changes": [{"removed": "", "added": "1390824", "field_name": "depends_on"}]}, {"when": "2017-08-16T19:37:08Z", "who": "jmaher@mozilla.com", "changes": [{"removed": "1390824", "added": "", "field_name": "depends_on"}]}, {"when": "2018-01-27T19:10:40Z", "who": "automation@bmo.tld", "changes": [{"removed": "Shield", "added": "Firefox", "field_name": "product"}]}], "comments": [{"text": "Currently the shield recipe client sets its own timer which runs every 24 hours. This precludes downloading+running recipes in early startup (such as onboarding and retention-related experiments).\n\nThis work is tracked in https://github.com/mozilla/normandy/pull/895\n\nSince this runs early in startup and only on the first run, we can't rely on the gofaster update mechanism - only Firefox versions that ship with this feature will be able to take advantage of it.", "id": 12495689, "creation_time": "2017-07-22T00:37:36Z", "author": "rhelmer@mozilla.com"}, {"text": "Created attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview commit: https://reviewboard.mozilla.org/r/161560/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/161560/", "id": 12508869, "creation_time": "2017-07-26T17:13:28Z", "author": "rhelmer@mozilla.com"}, {"text": "This patch is the same as https://github.com/mozilla/normandy/pull/895, with a minor change to one of the tests so it will apply to both mozilla-central and mozilla-beta repos.", "id": 12508876, "creation_time": "2017-07-26T17:16:43Z", "author": "rhelmer@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166872\n\nCan you update the version number in install.rdf.in to 55.1? That will compare greater than what is there now, so it updates correctly, but will compare less than future versions, especially 61 that I'm working on in bug 1384652.", "id": 12508954, "creation_time": "2017-07-26T17:37:14Z", "author": "mcooper@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/161560/diff/1-2/", "id": 12509068, "creation_time": "2017-07-26T18:01:29Z", "author": "rhelmer@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166896", "id": 12509073, "creation_time": "2017-07-26T18:02:09Z", "author": "mcooper@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/161560/diff/2-3/", "id": 12509120, "creation_time": "2017-07-26T18:16:55Z", "author": "rhelmer@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166916\n\nrs=me", "id": 12509155, "creation_time": "2017-07-26T18:23:10Z", "author": "gijskruitbosch+bugs@gmail.com"}, {"text": "Pushed by rhelmer@mozilla.com:\nhttps://hg.mozilla.org/integration/autoland/rev/02874c4ecef4\nfetch and run shield studies soon after UI startup r=Gijs,mythmon", "id": 12509503, "creation_time": "2017-07-26T20:13:34Z", "author": "pulsebot@bots.tld"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nApproval Request Comment\n[Feature/Bug causing the regression]: bug 1383338\n[User impact if declined]: inability to run retention tests for first-time users\n[Is this code covered by automated tests?]: yes\n[Has the fix been verified in Nightly?]: no\n[Needs manual test from QE? If yes, steps to reproduce]: yes, please contact shield team (#normandy in IRC) to coordinate\n[List of other uplifts needed for the feature/fix]: none\n[Is the change risky?]: no\n[Why is the change risky/not risky?]: runs once on first run only, easy to test\n[String changes made/needed]: none", "id": 12509505, "creation_time": "2017-07-26T20:13:54Z", "author": "rhelmer@mozilla.com"}, {"text": "https://hg.mozilla.org/mozilla-central/rev/02874c4ecef4", "id": 12511204, "creation_time": "2017-07-27T09:02:02Z", "author": "cbook@mozilla.com"}, {"text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nrun shield client on first run, beta55+\n\nshould be in 55.0b13", "id": 12511422, "creation_time": "2017-07-27T10:07:21Z", "author": "jcristau@mozilla.com"}, {"text": "https://hg.mozilla.org/releases/mozilla-beta/rev/bc34fc74f1e1", "id": 12511727, "creation_time": "2017-07-27T12:40:20Z", "author": "ryanvm@gmail.com"}, {"text": "this seems to have introduced a large improvement in fileIO:\n== Change summary for alert #8376 (as of July 26 2017 21:05 UTC) ==\n\nImprovements:\n\n 95%  tp5n nonmain_startup_fileio windows7-32 opt e10s     66,880.17 -> 3,217.00\n\nFor up to date results, see: https://treeherder.mozilla.org/perf.html#/alerts?id=8376\n\nthis is not on the main thread, are we pushing much fileIO after startup completely?", "id": 12513092, "creation_time": "2017-07-27T18:44:43Z", "author": "jmaher@mozilla.com"}, {"text": "(In reply to Joel Maher ( :jmaher) (UTC-9) (PTO: back August 2nd) from comment #13)\n> this seems to have introduced a large improvement in fileIO:\n> == Change summary for alert #8376 (as of July 26 2017 21:05 UTC) ==\n> \n> Improvements:\n> \n>  95%  tp5n nonmain_startup_fileio windows7-32 opt e10s     66,880.17 ->\n> 3,217.00\n> \n> For up to date results, see:\n> https://treeherder.mozilla.org/perf.html#/alerts?id=8376\n> \n> this is not on the main thread, are we pushing much fileIO after startup\n> completely?\n\nThat's interesting. I did not expect that but we are indeed waiting until after UI startup to do anything now. I wasn't aware that shield was doing much IO before startup before this change, though...", "id": 12513145, "creation_time": "2017-07-27T19:03:37Z", "author": "rhelmer@mozilla.com"}, {"text": "Could you or someone please submit a request on pi-requests@mozilla.com with the details needed so we can test this?\nTried on #normandy but got no answer there.\n\nThanks!", "id": 12515042, "creation_time": "2017-07-28T10:50:58Z", "author": "cornel.ionce@softvision.ro"}, {"text": "(In reply to Cornel Ionce [:cornel_ionce], Desktop Release QA from comment #15)\n> Could you or someone please submit a request on pi-requests@mozilla.com with\n> the details needed so we can test this?\n> Tried on #normandy but got no answer there.\n> \n> Thanks!\n\nOsmose, can you help with this? I'm thinking maybe we provide a test URL and instructions for QA to ensure that first-run works, that only filtered recipes run, etc.\n\nAlso note that we need to backport bug 1385177 (disable self-support detection in shield) before this can be effectively tested, that should land momentarily.", "id": 12515837, "creation_time": "2017-07-28T15:37:55Z", "author": "rhelmer@mozilla.com"}, {"text": "I'm working on getting a Beta build on trypush for testing, but found a bug.\n\nRecipeRunner.run is async, but is called synchronously from init(). By the time the recipes are executed, the first run pref has already been set to false, and the normandy.isFirstRun filter fails on the first run.", "id": 12516421, "creation_time": "2017-07-28T18:45:20Z", "author": "mkelly@mozilla.com"}, {"text": "About to push a fix for this.", "id": 12516710, "creation_time": "2017-07-28T20:29:48Z", "author": "rhelmer@mozilla.com"}, {"text": "Created attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nReview commit: https://reviewboard.mozilla.org/r/162618/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/162618/", "id": 12516712, "creation_time": "2017-07-28T20:31:02Z", "author": "rhelmer@mozilla.com"}, {"text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nhttps://reviewboard.mozilla.org/r/162618/#review167974\n\nThis fixes the bug I observed in my test build. Thanks!", "id": 12516738, "creation_time": "2017-07-28T20:40:01Z", "author": "mkelly@mozilla.com"}, {"text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/162618/diff/1-2/", "id": 12516741, "creation_time": "2017-07-28T20:40:38Z", "author": "rhelmer@mozilla.com"}, {"text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nApproval Request Comment\n[Feature/Bug causing the regression]: bug 1383338 (followup)\n[User impact if declined]: inability to run retention tests for first-time users\n[Is this code covered by automated tests?]: yes\n[Has the fix been verified in Nightly?]: no\n[Needs manual test from QE? If yes, steps to reproduce]: yes, please contact shield team (#normandy in IRC) to coordinate\n[List of other uplifts needed for the feature/fix]: none\n[Is the change risky?]: no\n[Why is the change risky/not risky?]: runs once on first run only, easy to test\n[String changes made/needed]: none", "id": 12516914, "creation_time": "2017-07-28T21:38:35Z", "author": "rhelmer@mozilla.com"}, {"text": "Pushed by rhelmer@mozilla.com:\nhttps://hg.mozilla.org/integration/autoland/rev/d776548e6846\nawait shield recipe runner so recipes have a chance to see if this is first run r=mkelly", "id": 12516916, "creation_time": "2017-07-28T21:39:21Z", "author": "pulsebot@bots.tld"}, {"text": "QA request with testing steps has been sent to pi-request.", "id": 12516990, "creation_time": "2017-07-28T22:01:41Z", "author": "mkelly@mozilla.com"}, {"text": "https://hg.mozilla.org/mozilla-central/rev/d776548e6846", "id": 12518572, "creation_time": "2017-07-30T16:49:26Z", "author": "ryanvm@gmail.com"}, {"text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nfollowup fix needed for 55 rc1", "id": 12521387, "creation_time": "2017-07-31T09:21:02Z", "author": "jcristau@mozilla.com"}, {"text": "https://hg.mozilla.org/releases/mozilla-beta/rev/2ccefa352a99", "id": 12521695, "creation_time": "2017-07-31T11:41:58Z", "author": "ryanvm@gmail.com"}], "attachments": [{"content_type": "text/x-review-board-request", "creator": "rhelmer@mozilla.com", "flags": [{"modification_date": "2017-07-26T18:23:10Z", "creation_date": "2017-07-26T17:13:28Z", "type_id": 748, "status": "+", "name": "review", "id": 1618464, "setter": "gijskruitbosch+bugs@gmail.com"}, {"modification_date": "2017-07-26T18:02:09Z", "creation_date": "2017-07-26T17:13:28Z", "type_id": 748, "status": "+", "name": "review", "id": 1618465, "setter": "mcooper@mozilla.com"}, {"modification_date": "2017-07-27T10:07:21Z", "creation_date": "2017-07-26T20:13:54Z", "type_id": 721, "status": "+", "name": "approval-mozilla-beta", "id": 1618614, "setter": "jcristau@mozilla.com"}], "is_patch": 0, "creation_time": "2017-07-26T17:13:28Z", "id": 8890442, "is_obsolete": 1}, {"content_type": "text/x-review-board-request", "creator": "rhelmer@mozilla.com", "flags": [{"modification_date": "2017-07-28T20:40:01Z", "creation_date": "2017-07-28T20:40:01Z", "type_id": 748, "status": "+", "name": "review", "id": 1620057, "setter": "mkelly@mozilla.com"}, {"modification_date": "2017-07-31T09:21:02Z", "creation_date": "2017-07-28T21:38:35Z", "type_id": 721, "status": "+", "name": "approval-mozilla-beta", "id": 1620102, "setter": "jcristau@mozilla.com"}], "is_patch": 0, "creation_time": "2017-07-28T20:31:02Z", "id": 8891498, "is_obsolete": 0}]}
-{"blocks": [], "cf_tracking_geckoview64": "---", "cf_status_geckoview66": "---", "is_cc_accessible": true, "keywords": ["bulk-close-intermittents", "intermittent-failure"], "cf_qa_whiteboard": "", "url": "", "qa_contact": "", "cf_tracking_firefox64": "---", "cf_status_geckoview65": "---", "cf_rank": null, "cf_status_firefox65": "---", "cf_fx_iteration": "---", "cf_tracking_firefox_relnote": "---", "cf_tracking_firefox65": "---", "cf_last_resolved": "2017-09-13T20:36:13Z", "cf_tracking_firefox66": "---", "cf_fx_points": "---", "cf_tracking_geckoview66": "---", "cc_detail": [], "summary": "Intermittent svg/filters/css-filters/hue-rotate-turn.html == svg/filters/css-filters/hue-rotate-turn-ref.html | image comparison, max difference: 255, number of differing pixels: 800000", "cf_has_str": "---", "cf_user_story": "", "platform": "Unspecified", "cf_status_firefox_esr60": "---", "votes": 0, "version": "unspecified", "mentors_detail": [], "is_creator_accessible": true, "is_confirmed": true, "priority": "--", "cf_status_thunderbird_esr60": "---", "assigned_to_detail": {"email": "nobody@mozilla.org", "real_name": "Nobody; OK to take it and work on it", "name": "nobody@mozilla.org", "nick": "nobody", "id": 1}, "creator": "intermittent-bug-filer@mozilla.bugs", "last_change_time": "2017-09-13T20:36:13Z", "creator_detail": {"email": "intermittent-bug-filer@mozilla.bugs", "real_name": "Treeherder Bug Filer", "name": "intermittent-bug-filer@mozilla.bugs", "nick": "intermittent-bug-filer", "id": 573381}, "comment_count": 3, "cc": [], "duplicates": [], "cf_tracking_thunderbird_esr60": "---", "assigned_to": "nobody@mozilla.org", "groups": [], "see_also": [], "id": 1383341, "whiteboard": "", "creation_time": "2017-07-22T00:46:44Z", "depends_on": [], "cf_tracking_geckoview65": "---", "mentors": [], "dupe_of": null, "cf_status_firefox66": "---", "resolution": "INCOMPLETE", "classification": "Components", "alias": null, "cf_has_regression_range": "---", "op_sys": "Unspecified", "status": "RESOLVED", "cf_crash_signature": "", "is_open": false, "severity": "normal", "cf_tracking_firefox_esr60": "---", "flags": [], "cf_status_firefox64": "---", "component": "SVG", "cf_status_geckoview64": "---", "target_milestone": "---", "product": "Core", "history": [{"when": "2017-09-13T20:36:13Z", "who": "bug-husbandry-bot@mozilla.bugs", "changes": [{"removed": "", "added": "bulk-close-intermittents", "field_name": "keywords"}, {"removed": "NEW", "added": "RESOLVED", "field_name": "status"}, {"removed": "", "added": "INCOMPLETE", "field_name": "resolution"}, {"removed": "", "added": "2017-09-13T20:36:13Z", "field_name": "cf_last_resolved"}]}], "comments": [{"text": "Filed by: wkocher [at] mozilla.com\n\nhttps://treeherder.mozilla.org/logviewer.html#?job_id=116555889&repo=autoland\n\nhttps://archive.mozilla.org/pub/firefox/tinderbox-builds/autoland-win32-pgo/1500671585/autoland_win7_vm_gfx_test_pgo-reftest-no-accel-bm139-tests1-windows-build784.txt.gz\n\nhttps://hg.mozilla.org/mozilla-central/raw-file/tip/layout/tools/reftest/reftest-analyzer.xhtml#logurl=https://archive.mozilla.org/pub/firefox/tinderbox-builds/autoland-win32-pgo/1500671585/autoland_win7_vm_gfx_test_pgo-reftest-no-accel-bm139-tests1-windows-build784.txt.gz&only_show_unexpected=1", "id": 12495695, "creation_time": "2017-07-22T00:46:44Z", "author": "intermittent-bug-filer@mozilla.bugs"}, {"text": "1 failures in 822 pushes (0.001 failures/push) were associated with this bug in the last 7 days.   \n\nRepository breakdown:\n* autoland: 1\n\nPlatform breakdown:\n* windows7-32-vm: 1\n\nFor more details, see:\nhttps://brasstacks.mozilla.com/orangefactor/?display=Bug&bugid=1383341&startday=2017-07-17&endday=2017-07-23&tree=all", "id": 12498719, "creation_time": "2017-07-24T01:30:07Z", "author": "orangefactor@bots.tld"}, {"text": "1 failures in 1008 pushes (0.001 failures/push) were associated with this bug in the last 7 days.   \n\nRepository breakdown:\n* mozilla-inbound: 1\n\nPlatform breakdown:\n* windows7-32-vm: 1\n\nFor more details, see:\nhttps://brasstacks.mozilla.com/orangefactor/?display=Bug&bugid=1383341&startday=2017-07-24&endday=2017-07-30&tree=all", "id": 12519187, "creation_time": "2017-07-31T01:05:50Z", "author": "orangefactor@bots.tld"}], "attachments": []}
+{
+    "blocks": [1333962, 1350432],
+    "cf_tracking_geckoview64": "---",
+    "cf_status_geckoview66": "---",
+    "is_cc_accessible": true,
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-08-25T23:27:33Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_geckoview66": "---",
+    "cc_detail": [{
+        "email": "dvander@alliedmods.net",
+        "real_name": "David Anderson [:dvander] - inactive, e-mail if emergency",
+        "name": "dvander@alliedmods.net",
+        "nick": "dvander",
+        "id": 309316
+    }, {
+        "email": "jryans@gmail.com",
+        "real_name": "J. Ryan Stinnett [:jryans]",
+        "name": "jryans@gmail.com",
+        "nick": "jryans",
+        "id": 282978
+    }, {
+        "email": "kanru@kanru.info",
+        "real_name": "Kan-Ru Chen [:kanru] (UTC+8)",
+        "name": "kanru@kanru.info",
+        "nick": "kanru",
+        "id": 428625
+    }],
+    "summary": "Provide easy access to the currently selected tab",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "bill.mccloskey@gmail.com",
+        "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)",
+        "name": "bill.mccloskey@gmail.com",
+        "nick": "billm",
+        "id": 389993
+    },
+    "creator": "bill.mccloskey@gmail.com",
+    "last_change_time": "2017-08-25T23:27:33Z",
+    "creator_detail": {
+        "email": "bill.mccloskey@gmail.com",
+        "real_name": "Bill McCloskey [inactive unless it's an emergency] (:billm)",
+        "name": "bill.mccloskey@gmail.com",
+        "nick": "billm",
+        "id": 389993
+    },
+    "comment_count": 4,
+    "cc": ["dvander@alliedmods.net", "jryans@gmail.com", "kanru@kanru.info"],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "bill.mccloskey@gmail.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1383333,
+    "whiteboard": "",
+    "creation_time": "2017-07-22T00:00:48Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "FIXED",
+    "classification": "Components",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "cf_status_firefox57": "fixed",
+    "component": "DOM: Content Processes",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "mozilla57",
+    "product": "Core",
+    "history": [{
+        "when": "2017-07-22T00:00:48Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "",
+            "added": "review?(dvander@alliedmods.net)",
+            "field_name": "flagtypes.name"
+        }, {
+            "removed": "",
+            "added": "dvander@alliedmods.net",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-25T04:11:23Z",
+        "who": "dvander@alliedmods.net",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "review?(dvander@alliedmods.net)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-02T03:39:00Z",
+        "who": "jryans@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "jryans@gmail.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-08-18T22:53:33Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "removed": "Provide easy access to the currently selected tab (when there is only one)",
+            "added": "Provide easy access to the currently selected tab",
+            "field_name": "summary"
+        }]
+    }, {
+        "when": "2017-08-18T22:55:32Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "attachment_id": 8888993,
+            "removed": "0",
+            "added": "1",
+            "field_name": "attachments.isobsolete"
+        }, {
+            "removed": "",
+            "added": "kchen@mozilla.com",
+            "field_name": "cc"
+        }, {
+            "attachment_id": 8899011,
+            "removed": "",
+            "added": "review?(kchen@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-18T23:00:52Z",
+        "who": "bill.mccloskey@gmail.com",
+        "changes": [{
+            "removed": "",
+            "added": "1333962",
+            "field_name": "blocks"
+        }]
+    }, {
+        "when": "2017-08-22T12:45:50Z",
+        "who": "kanru@kanru.info",
+        "changes": [{
+            "attachment_id": 8899011,
+            "removed": "review?(kchen@mozilla.com)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-08-25T23:27:33Z",
+        "who": "wkocher@mozilla.com",
+        "changes": [{
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "---",
+            "added": "mozilla57",
+            "field_name": "target_milestone"
+        }, {
+            "removed": "",
+            "added": "2017-08-25T23:27:33Z",
+            "field_name": "cf_last_resolved"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox57"
+        }]
+    }],
+    "comments": [{
+        "text": "Created attachment 8888993\npatch\n\nI've decided to make a simplifying assumption for the initial Quantum DOM patches: if only one tab is in the foreground, then we'll label vsyncs correctly for that tab and also prioritize runnables for that tab. If multiple tabs (from multiple windows) are in the foreground, then you won't get any benefit from Quantum DOM. This shouldn't be too hard to fix in the future, but it's a pain to deal with right now.\n\nThis patch provides an easy accessor for the foreground TabChild (if there is only one). I imagine other people might find this useful as well for various performance optimizations.",
+        "id": 12495651,
+        "creation_time": "2017-07-22T00:00:48Z",
+        "author": "bill.mccloskey@gmail.com"
+    }, {
+        "text": "Created attachment 8899011\npatch v2\n\nI realized that we do need to keep track of multiple active tabs. When tab switching, for example, two tabs can be active at once. And that's specifically a case where I would like the Quantum DOM scheduler to be effective.\n\nDavid is on PTO, so asking Kan-Ru for review.",
+        "id": 12580228,
+        "creation_time": "2017-08-18T22:55:32Z",
+        "author": "bill.mccloskey@gmail.com"
+    }, {
+        "text": "Pushed by wmccloskey@mozilla.com:\nhttps://hg.mozilla.org/integration/mozilla-inbound/rev/7f426b4432ff\nKeep track of foreground TabChildren (r=kanru)",
+        "id": 12600436,
+        "creation_time": "2017-08-25T17:29:27Z",
+        "author": "pulsebot@bots.tld"
+    }, {
+        "text": "https://hg.mozilla.org/mozilla-central/rev/7f426b4432ff",
+        "id": 12601469,
+        "creation_time": "2017-08-25T23:27:33Z",
+        "author": "wkocher@mozilla.com"
+    }],
+    "attachments": [{
+        "content_type": "text/plain",
+        "creator": "bill.mccloskey@gmail.com",
+        "flags": [{
+            "modification_date": "2017-07-25T04:11:23Z",
+            "creation_date": "2017-07-22T00:00:48Z",
+            "type_id": 4,
+            "status": "+",
+            "name": "review",
+            "id": 1616063,
+            "setter": "dvander@alliedmods.net"
+        }],
+        "is_patch": 1,
+        "creation_time": "2017-07-22T00:00:48Z",
+        "id": 8888993,
+        "is_obsolete": 1
+    }, {
+        "content_type": "text/plain",
+        "creator": "bill.mccloskey@gmail.com",
+        "flags": [{
+            "modification_date": "2017-08-22T12:45:50Z",
+            "creation_date": "2017-08-18T22:55:32Z",
+            "type_id": 4,
+            "status": "+",
+            "name": "review",
+            "id": 1632198,
+            "setter": "kanru@kanru.info"
+        }],
+        "is_patch": 1,
+        "creation_time": "2017-08-18T22:55:32Z",
+        "id": 8899011,
+        "is_obsolete": 0
+    }]
+} {
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "cf_status_geckoview66": "---",
+    "is_cc_accessible": true,
+    "keywords": [],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-07-30T16:49:26Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_geckoview66": "---",
+    "cc_detail": [{
+        "email": "chrismore.bugzilla@gmail.com",
+        "real_name": "Chris More [:cmore]",
+        "name": "chrismore.bugzilla@gmail.com",
+        "nick": "cmore",
+        "id": 404027
+    }, {
+        "email": "cornel.ionce@softvision.ro",
+        "real_name": "Cornel Ionce [:cornel_ionce], Desktop Release QA",
+        "name": "cornel.ionce@softvision.ro",
+        "nick": "cornel_ionce",
+        "id": 458186
+    }, {
+        "email": "gijskruitbosch+bugs@gmail.com",
+        "real_name": ":Gijs (he/him)",
+        "name": "gijskruitbosch+bugs@gmail.com",
+        "nick": "Gijs",
+        "id": 159069
+    }, {
+        "email": "jcristau@mozilla.com",
+        "real_name": "Julien Cristau [:jcristau]",
+        "name": "jcristau@mozilla.com",
+        "nick": "jcristau",
+        "id": 580382
+    }, {
+        "email": "jmaher@mozilla.com",
+        "real_name": "Joel Maher ( :jmaher ) (UTC-4)",
+        "name": "jmaher@mozilla.com",
+        "nick": "jmaher",
+        "id": 324370
+    }, {
+        "email": "mcooper@mozilla.com",
+        "real_name": "Michael Cooper [:mythmon]",
+        "name": "mcooper@mozilla.com",
+        "nick": "mythmon",
+        "id": 446256
+    }, {
+        "email": "mkelly@mozilla.com",
+        "real_name": "Michael Kelly [:mkelly,:Osmose]",
+        "name": "mkelly@mozilla.com",
+        "nick": "mkelly",
+        "id": 417275
+    }, {
+        "email": "pdolanjski@mozilla.com",
+        "real_name": "Peter Dolanjski [:pdol]",
+        "name": "pdolanjski@mozilla.com",
+        "nick": "pdol",
+        "id": 455532
+    }],
+    "summary": "fetch+run shield studies soon after first startup",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "cf_status_firefox55": "fixed",
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "P1",
+    "assigned_to_detail": {
+        "email": "rhelmer@mozilla.com",
+        "real_name": "Robert Helmer [:rhelmer]",
+        "name": "rhelmer@mozilla.com",
+        "nick": "rhelmer",
+        "id": 17036
+    },
+    "creator": "rhelmer@mozilla.com",
+    "last_change_time": "2018-01-27T19:10:40Z",
+    "creator_detail": {
+        "email": "rhelmer@mozilla.com",
+        "real_name": "Robert Helmer [:rhelmer]",
+        "name": "rhelmer@mozilla.com",
+        "nick": "rhelmer",
+        "id": 17036
+    },
+    "comment_count": 28,
+    "cc": ["chrismore.bugzilla@gmail.com", "cornel.ionce@softvision.ro", "gijskruitbosch+bugs@gmail.com", "jcristau@mozilla.com", "jmaher@mozilla.com", "mcooper@mozilla.com", "mkelly@mozilla.com", "pdolanjski@mozilla.com"],
+    "duplicates": [],
+    "assigned_to": "rhelmer@mozilla.com",
+    "groups": [],
+    "see_also": [],
+    "id": 1383338,
+    "whiteboard": "",
+    "creation_time": "2017-07-22T00:37:36Z",
+    "depends_on": [1385177, 1385915],
+    "cf_tracking_geckoview65": "---",
+    "cf_status_firefox56": "fixed",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "FIXED",
+    "classification": "Client Software",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "component": "Normandy Client",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "---",
+    "product": "Firefox",
+    "history": [{
+        "when": "2017-07-22T00:39:57Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "removed": "fetch+run shield studies soon after startup",
+            "added": "fetch+run shield studies soon after first startup",
+            "field_name": "summary"
+        }]
+    }, {
+        "when": "2017-07-22T00:40:56Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "removed": "--",
+            "added": "P1",
+            "field_name": "priority"
+        }, {
+            "removed": "NEW",
+            "added": "ASSIGNED",
+            "field_name": "status"
+        }, {
+            "removed": "nobody@mozilla.org",
+            "added": "rhelmer@mozilla.com",
+            "field_name": "assigned_to"
+        }]
+    }, {
+        "when": "2017-07-24T07:45:00Z",
+        "who": "jcristau@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "jcristau@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-26T17:13:28Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "",
+            "added": "review?(gijskruitbosch+bugs@gmail.com), review?(mcooper@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-26T17:37:14Z",
+        "who": "mcooper@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "review?(mcooper@mozilla.com)",
+            "added": "review-",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-26T18:01:29Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "review-",
+            "added": "review?(mcooper@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-26T18:02:09Z",
+        "who": "mcooper@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "review?(mcooper@mozilla.com)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-26T18:23:10Z",
+        "who": "gijskruitbosch+bugs@gmail.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "review?(gijskruitbosch+bugs@gmail.com)",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-26T20:13:54Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "",
+            "added": "approval-mozilla-beta?",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-27T09:02:02Z",
+        "who": "cbook@mozilla.com",
+        "changes": [{
+            "removed": "ASSIGNED",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "",
+            "added": "2017-07-27T09:02:02Z",
+            "field_name": "cf_last_resolved"
+        }, {
+            "removed": "---",
+            "added": "fixed",
+            "field_name": "cf_status_firefox56"
+        }]
+    }, {
+        "when": "2017-07-27T10:07:21Z",
+        "who": "jcristau@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "approval-mozilla-beta?",
+            "added": "approval-mozilla-beta+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-27T10:07:44Z",
+        "who": "jcristau@mozilla.com",
+        "changes": [{
+            "removed": "---",
+            "added": "affected",
+            "field_name": "cf_status_firefox55"
+        }]
+    }, {
+        "when": "2017-07-27T12:40:20Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "affected",
+            "added": "fixed",
+            "field_name": "cf_status_firefox55"
+        }]
+    }, {
+        "when": "2017-07-27T18:44:43Z",
+        "who": "jmaher@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "jmaher@mozilla.com",
+            "field_name": "cc"
+        }]
+    }, {
+        "when": "2017-07-28T05:30:50Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "1385177",
+            "field_name": "depends_on"
+        }]
+    }, {
+        "when": "2017-07-28T10:50:58Z",
+        "who": "cornel.ionce@softvision.ro",
+        "changes": [{
+            "removed": "",
+            "added": "cornel.ionce@softvision.ro",
+            "field_name": "cc"
+        }, {
+            "removed": "",
+            "added": "needinfo?(rhelmer@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T15:37:55Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "removed": "needinfo?(rhelmer@mozilla.com)",
+            "added": "needinfo?(mkelly@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T18:45:20Z",
+        "who": "mkelly@mozilla.com",
+        "changes": [{
+            "removed": "needinfo?(mkelly@mozilla.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T19:02:28Z",
+        "who": "mkelly@mozilla.com",
+        "changes": [{
+            "removed": "RESOLVED",
+            "added": "REOPENED",
+            "field_name": "status"
+        }, {
+            "removed": "FIXED",
+            "added": "",
+            "field_name": "resolution"
+        }, {
+            "removed": "",
+            "added": "needinfo?(rhelmer@mozilla.com)",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T20:29:48Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "removed": "needinfo?(rhelmer@mozilla.com)",
+            "added": "",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T20:31:04Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "attachment_id": 8890442,
+            "removed": "0",
+            "added": "1",
+            "field_name": "attachments.isobsolete"
+        }]
+    }, {
+        "when": "2017-07-28T20:40:01Z",
+        "who": "mkelly@mozilla.com",
+        "changes": [{
+            "attachment_id": 8891498,
+            "removed": "",
+            "added": "review+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-28T21:38:35Z",
+        "who": "rhelmer@mozilla.com",
+        "changes": [{
+            "attachment_id": 8891498,
+            "removed": "",
+            "added": "approval-mozilla-beta?",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-30T16:49:26Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "REOPENED",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "FIXED",
+            "field_name": "resolution"
+        }, {
+            "removed": "2017-07-27T09:02:02Z",
+            "added": "2017-07-30T16:49:26Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }, {
+        "when": "2017-07-31T09:19:02Z",
+        "who": "jcristau@mozilla.com",
+        "changes": [{
+            "removed": "fixed",
+            "added": "affected",
+            "field_name": "cf_status_firefox55"
+        }]
+    }, {
+        "when": "2017-07-31T09:21:02Z",
+        "who": "jcristau@mozilla.com",
+        "changes": [{
+            "attachment_id": 8891498,
+            "removed": "approval-mozilla-beta?",
+            "added": "approval-mozilla-beta+",
+            "field_name": "flagtypes.name"
+        }]
+    }, {
+        "when": "2017-07-31T11:41:58Z",
+        "who": "ryanvm@gmail.com",
+        "changes": [{
+            "removed": "affected",
+            "added": "fixed",
+            "field_name": "cf_status_firefox55"
+        }]
+    }, {
+        "when": "2017-08-03T15:03:36Z",
+        "who": "igoldan@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "1385915",
+            "field_name": "depends_on"
+        }]
+    }, {
+        "when": "2017-08-16T11:31:49Z",
+        "who": "jmaher@mozilla.com",
+        "changes": [{
+            "removed": "",
+            "added": "1390824",
+            "field_name": "depends_on"
+        }]
+    }, {
+        "when": "2017-08-16T19:37:08Z",
+        "who": "jmaher@mozilla.com",
+        "changes": [{
+            "removed": "1390824",
+            "added": "",
+            "field_name": "depends_on"
+        }]
+    }, {
+        "when": "2018-01-27T19:10:40Z",
+        "who": "automation@bmo.tld",
+        "changes": [{
+            "removed": "Shield",
+            "added": "Firefox",
+            "field_name": "product"
+        }]
+    }],
+    "comments": [{
+        "text": "Currently the shield recipe client sets its own timer which runs every 24 hours. This precludes downloading+running recipes in early startup (such as onboarding and retention-related experiments).\n\nThis work is tracked in https://github.com/mozilla/normandy/pull/895\n\nSince this runs early in startup and only on the first run, we can't rely on the gofaster update mechanism - only Firefox versions that ship with this feature will be able to take advantage of it.",
+        "id": 12495689,
+        "creation_time": "2017-07-22T00:37:36Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Created attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview commit: https://reviewboard.mozilla.org/r/161560/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/161560/",
+        "id": 12508869,
+        "creation_time": "2017-07-26T17:13:28Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "This patch is the same as https://github.com/mozilla/normandy/pull/895, with a minor change to one of the tests so it will apply to both mozilla-central and mozilla-beta repos.",
+        "id": 12508876,
+        "creation_time": "2017-07-26T17:16:43Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166872\n\nCan you update the version number in install.rdf.in to 55.1? That will compare greater than what is there now, so it updates correctly, but will compare less than future versions, especially 61 that I'm working on in bug 1384652.",
+        "id": 12508954,
+        "creation_time": "2017-07-26T17:37:14Z",
+        "author": "mcooper@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/161560/diff/1-2/",
+        "id": 12509068,
+        "creation_time": "2017-07-26T18:01:29Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166896",
+        "id": 12509073,
+        "creation_time": "2017-07-26T18:02:09Z",
+        "author": "mcooper@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/161560/diff/2-3/",
+        "id": 12509120,
+        "creation_time": "2017-07-26T18:16:55Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nhttps://reviewboard.mozilla.org/r/161560/#review166916\n\nrs=me",
+        "id": 12509155,
+        "creation_time": "2017-07-26T18:23:10Z",
+        "author": "gijskruitbosch+bugs@gmail.com"
+    }, {
+        "text": "Pushed by rhelmer@mozilla.com:\nhttps://hg.mozilla.org/integration/autoland/rev/02874c4ecef4\nfetch and run shield studies soon after UI startup r=Gijs,mythmon",
+        "id": 12509503,
+        "creation_time": "2017-07-26T20:13:34Z",
+        "author": "pulsebot@bots.tld"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nApproval Request Comment\n[Feature/Bug causing the regression]: bug 1383338\n[User impact if declined]: inability to run retention tests for first-time users\n[Is this code covered by automated tests?]: yes\n[Has the fix been verified in Nightly?]: no\n[Needs manual test from QE? If yes, steps to reproduce]: yes, please contact shield team (#normandy in IRC) to coordinate\n[List of other uplifts needed for the feature/fix]: none\n[Is the change risky?]: no\n[Why is the change risky/not risky?]: runs once on first run only, easy to test\n[String changes made/needed]: none",
+        "id": 12509505,
+        "creation_time": "2017-07-26T20:13:54Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "https://hg.mozilla.org/mozilla-central/rev/02874c4ecef4",
+        "id": 12511204,
+        "creation_time": "2017-07-27T09:02:02Z",
+        "author": "cbook@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8890442\nBug 1383338 - fetch and run shield studies soon after UI startup\n\nrun shield client on first run, beta55+\n\nshould be in 55.0b13",
+        "id": 12511422,
+        "creation_time": "2017-07-27T10:07:21Z",
+        "author": "jcristau@mozilla.com"
+    }, {
+        "text": "https://hg.mozilla.org/releases/mozilla-beta/rev/bc34fc74f1e1",
+        "id": 12511727,
+        "creation_time": "2017-07-27T12:40:20Z",
+        "author": "ryanvm@gmail.com"
+    }, {
+        "text": "this seems to have introduced a large improvement in fileIO:\n== Change summary for alert #8376 (as of July 26 2017 21:05 UTC) ==\n\nImprovements:\n\n 95%  tp5n nonmain_startup_fileio windows7-32 opt e10s     66,880.17 -> 3,217.00\n\nFor up to date results, see: https://treeherder.mozilla.org/perf.html#/alerts?id=8376\n\nthis is not on the main thread, are we pushing much fileIO after startup completely?",
+        "id": 12513092,
+        "creation_time": "2017-07-27T18:44:43Z",
+        "author": "jmaher@mozilla.com"
+    }, {
+        "text": "(In reply to Joel Maher ( :jmaher) (UTC-9) (PTO: back August 2nd) from comment #13)\n> this seems to have introduced a large improvement in fileIO:\n> == Change summary for alert #8376 (as of July 26 2017 21:05 UTC) ==\n> \n> Improvements:\n> \n>  95%  tp5n nonmain_startup_fileio windows7-32 opt e10s     66,880.17 ->\n> 3,217.00\n> \n> For up to date results, see:\n> https://treeherder.mozilla.org/perf.html#/alerts?id=8376\n> \n> this is not on the main thread, are we pushing much fileIO after startup\n> completely?\n\nThat's interesting. I did not expect that but we are indeed waiting until after UI startup to do anything now. I wasn't aware that shield was doing much IO before startup before this change, though...",
+        "id": 12513145,
+        "creation_time": "2017-07-27T19:03:37Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Could you or someone please submit a request on pi-requests@mozilla.com with the details needed so we can test this?\nTried on #normandy but got no answer there.\n\nThanks!",
+        "id": 12515042,
+        "creation_time": "2017-07-28T10:50:58Z",
+        "author": "cornel.ionce@softvision.ro"
+    }, {
+        "text": "(In reply to Cornel Ionce [:cornel_ionce], Desktop Release QA from comment #15)\n> Could you or someone please submit a request on pi-requests@mozilla.com with\n> the details needed so we can test this?\n> Tried on #normandy but got no answer there.\n> \n> Thanks!\n\nOsmose, can you help with this? I'm thinking maybe we provide a test URL and instructions for QA to ensure that first-run works, that only filtered recipes run, etc.\n\nAlso note that we need to backport bug 1385177 (disable self-support detection in shield) before this can be effectively tested, that should land momentarily.",
+        "id": 12515837,
+        "creation_time": "2017-07-28T15:37:55Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "I'm working on getting a Beta build on trypush for testing, but found a bug.\n\nRecipeRunner.run is async, but is called synchronously from init(). By the time the recipes are executed, the first run pref has already been set to false, and the normandy.isFirstRun filter fails on the first run.",
+        "id": 12516421,
+        "creation_time": "2017-07-28T18:45:20Z",
+        "author": "mkelly@mozilla.com"
+    }, {
+        "text": "About to push a fix for this.",
+        "id": 12516710,
+        "creation_time": "2017-07-28T20:29:48Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Created attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nReview commit: https://reviewboard.mozilla.org/r/162618/diff/#index_header\nSee other reviews: https://reviewboard.mozilla.org/r/162618/",
+        "id": 12516712,
+        "creation_time": "2017-07-28T20:31:02Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nhttps://reviewboard.mozilla.org/r/162618/#review167974\n\nThis fixes the bug I observed in my test build. Thanks!",
+        "id": 12516738,
+        "creation_time": "2017-07-28T20:40:01Z",
+        "author": "mkelly@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nReview request updated; see interdiff: https://reviewboard.mozilla.org/r/162618/diff/1-2/",
+        "id": 12516741,
+        "creation_time": "2017-07-28T20:40:38Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nApproval Request Comment\n[Feature/Bug causing the regression]: bug 1383338 (followup)\n[User impact if declined]: inability to run retention tests for first-time users\n[Is this code covered by automated tests?]: yes\n[Has the fix been verified in Nightly?]: no\n[Needs manual test from QE? If yes, steps to reproduce]: yes, please contact shield team (#normandy in IRC) to coordinate\n[List of other uplifts needed for the feature/fix]: none\n[Is the change risky?]: no\n[Why is the change risky/not risky?]: runs once on first run only, easy to test\n[String changes made/needed]: none",
+        "id": 12516914,
+        "creation_time": "2017-07-28T21:38:35Z",
+        "author": "rhelmer@mozilla.com"
+    }, {
+        "text": "Pushed by rhelmer@mozilla.com:\nhttps://hg.mozilla.org/integration/autoland/rev/d776548e6846\nawait shield recipe runner so recipes have a chance to see if this is first run r=mkelly",
+        "id": 12516916,
+        "creation_time": "2017-07-28T21:39:21Z",
+        "author": "pulsebot@bots.tld"
+    }, {
+        "text": "QA request with testing steps has been sent to pi-request.",
+        "id": 12516990,
+        "creation_time": "2017-07-28T22:01:41Z",
+        "author": "mkelly@mozilla.com"
+    }, {
+        "text": "https://hg.mozilla.org/mozilla-central/rev/d776548e6846",
+        "id": 12518572,
+        "creation_time": "2017-07-30T16:49:26Z",
+        "author": "ryanvm@gmail.com"
+    }, {
+        "text": "Comment on attachment 8891498\nBug 1383338 - await shield recipe runner so recipes have a chance to see if this is first run\n\nfollowup fix needed for 55 rc1",
+        "id": 12521387,
+        "creation_time": "2017-07-31T09:21:02Z",
+        "author": "jcristau@mozilla.com"
+    }, {
+        "text": "https://hg.mozilla.org/releases/mozilla-beta/rev/2ccefa352a99",
+        "id": 12521695,
+        "creation_time": "2017-07-31T11:41:58Z",
+        "author": "ryanvm@gmail.com"
+    }],
+    "attachments": [{
+        "content_type": "text/x-review-board-request",
+        "creator": "rhelmer@mozilla.com",
+        "flags": [{
+            "modification_date": "2017-07-26T18:23:10Z",
+            "creation_date": "2017-07-26T17:13:28Z",
+            "type_id": 748,
+            "status": "+",
+            "name": "review",
+            "id": 1618464,
+            "setter": "gijskruitbosch+bugs@gmail.com"
+        }, {
+            "modification_date": "2017-07-26T18:02:09Z",
+            "creation_date": "2017-07-26T17:13:28Z",
+            "type_id": 748,
+            "status": "+",
+            "name": "review",
+            "id": 1618465,
+            "setter": "mcooper@mozilla.com"
+        }, {
+            "modification_date": "2017-07-27T10:07:21Z",
+            "creation_date": "2017-07-26T20:13:54Z",
+            "type_id": 721,
+            "status": "+",
+            "name": "approval-mozilla-beta",
+            "id": 1618614,
+            "setter": "jcristau@mozilla.com"
+        }],
+        "is_patch": 0,
+        "creation_time": "2017-07-26T17:13:28Z",
+        "id": 8890442,
+        "is_obsolete": 1
+    }, {
+        "content_type": "text/x-review-board-request",
+        "creator": "rhelmer@mozilla.com",
+        "flags": [{
+            "modification_date": "2017-07-28T20:40:01Z",
+            "creation_date": "2017-07-28T20:40:01Z",
+            "type_id": 748,
+            "status": "+",
+            "name": "review",
+            "id": 1620057,
+            "setter": "mkelly@mozilla.com"
+        }, {
+            "modification_date": "2017-07-31T09:21:02Z",
+            "creation_date": "2017-07-28T21:38:35Z",
+            "type_id": 721,
+            "status": "+",
+            "name": "approval-mozilla-beta",
+            "id": 1620102,
+            "setter": "jcristau@mozilla.com"
+        }],
+        "is_patch": 0,
+        "creation_time": "2017-07-28T20:31:02Z",
+        "id": 8891498,
+        "is_obsolete": 0
+    }]
+} {
+    "blocks": [],
+    "cf_tracking_geckoview64": "---",
+    "cf_status_geckoview66": "---",
+    "is_cc_accessible": true,
+    "keywords": ["bulk-close-intermittents", "intermittent-failure"],
+    "cf_qa_whiteboard": "",
+    "url": "",
+    "qa_contact": "",
+    "cf_tracking_firefox64": "---",
+    "cf_status_geckoview65": "---",
+    "cf_rank": null,
+    "cf_status_firefox65": "---",
+    "cf_fx_iteration": "---",
+    "cf_tracking_firefox_relnote": "---",
+    "cf_tracking_firefox65": "---",
+    "cf_last_resolved": "2017-09-13T20:36:13Z",
+    "cf_tracking_firefox66": "---",
+    "cf_fx_points": "---",
+    "cf_tracking_geckoview66": "---",
+    "cc_detail": [],
+    "summary": "Intermittent svg/filters/css-filters/hue-rotate-turn.html == svg/filters/css-filters/hue-rotate-turn-ref.html | image comparison, max difference: 255, number of differing pixels: 800000",
+    "cf_has_str": "---",
+    "cf_user_story": "",
+    "platform": "Unspecified",
+    "cf_status_firefox_esr60": "---",
+    "votes": 0,
+    "version": "unspecified",
+    "mentors_detail": [],
+    "is_creator_accessible": true,
+    "is_confirmed": true,
+    "priority": "--",
+    "cf_status_thunderbird_esr60": "---",
+    "assigned_to_detail": {
+        "email": "nobody@mozilla.org",
+        "real_name": "Nobody; OK to take it and work on it",
+        "name": "nobody@mozilla.org",
+        "nick": "nobody",
+        "id": 1
+    },
+    "creator": "intermittent-bug-filer@mozilla.bugs",
+    "last_change_time": "2017-09-13T20:36:13Z",
+    "creator_detail": {
+        "email": "intermittent-bug-filer@mozilla.bugs",
+        "real_name": "Treeherder Bug Filer",
+        "name": "intermittent-bug-filer@mozilla.bugs",
+        "nick": "intermittent-bug-filer",
+        "id": 573381
+    },
+    "comment_count": 3,
+    "cc": [],
+    "duplicates": [],
+    "cf_tracking_thunderbird_esr60": "---",
+    "assigned_to": "nobody@mozilla.org",
+    "groups": [],
+    "see_also": [],
+    "id": 1383341,
+    "whiteboard": "",
+    "creation_time": "2017-07-22T00:46:44Z",
+    "depends_on": [],
+    "cf_tracking_geckoview65": "---",
+    "mentors": [],
+    "dupe_of": null,
+    "cf_status_firefox66": "---",
+    "resolution": "INCOMPLETE",
+    "classification": "Components",
+    "alias": null,
+    "cf_has_regression_range": "---",
+    "op_sys": "Unspecified",
+    "status": "RESOLVED",
+    "cf_crash_signature": "",
+    "is_open": false,
+    "severity": "normal",
+    "cf_tracking_firefox_esr60": "---",
+    "flags": [],
+    "cf_status_firefox64": "---",
+    "component": "SVG",
+    "cf_status_geckoview64": "---",
+    "target_milestone": "---",
+    "product": "Core",
+    "history": [{
+        "when": "2017-09-13T20:36:13Z",
+        "who": "bug-husbandry-bot@mozilla.bugs",
+        "changes": [{
+            "removed": "",
+            "added": "bulk-close-intermittents",
+            "field_name": "keywords"
+        }, {
+            "removed": "NEW",
+            "added": "RESOLVED",
+            "field_name": "status"
+        }, {
+            "removed": "",
+            "added": "INCOMPLETE",
+            "field_name": "resolution"
+        }, {
+            "removed": "",
+            "added": "2017-09-13T20:36:13Z",
+            "field_name": "cf_last_resolved"
+        }]
+    }],
+    "comments": [{
+        "text": "Filed by: wkocher [at] mozilla.com\n\nhttps://treeherder.mozilla.org/logviewer.html#?job_id=116555889&repo=autoland\n\nhttps://archive.mozilla.org/pub/firefox/tinderbox-builds/autoland-win32-pgo/1500671585/autoland_win7_vm_gfx_test_pgo-reftest-no-accel-bm139-tests1-windows-build784.txt.gz\n\nhttps://hg.mozilla.org/mozilla-central/raw-file/tip/layout/tools/reftest/reftest-analyzer.xhtml#logurl=https://archive.mozilla.org/pub/firefox/tinderbox-builds/autoland-win32-pgo/1500671585/autoland_win7_vm_gfx_test_pgo-reftest-no-accel-bm139-tests1-windows-build784.txt.gz&only_show_unexpected=1",
+        "id": 12495695,
+        "creation_time": "2017-07-22T00:46:44Z",
+        "author": "intermittent-bug-filer@mozilla.bugs"
+    }, {
+        "text": "1 failures in 822 pushes (0.001 failures/push) were associated with this bug in the last 7 days.   \n\nRepository breakdown:\n* autoland: 1\n\nPlatform breakdown:\n* windows7-32-vm: 1\n\nFor more details, see:\nhttps://brasstacks.mozilla.com/orangefactor/?display=Bug&bugid=1383341&startday=2017-07-17&endday=2017-07-23&tree=all",
+        "id": 12498719,
+        "creation_time": "2017-07-24T01:30:07Z",
+        "author": "orangefactor@bots.tld"
+    }, {
+        "text": "1 failures in 1008 pushes (0.001 failures/push) were associated with this bug in the last 7 days.   \n\nRepository breakdown:\n* mozilla-inbound: 1\n\nPlatform breakdown:\n* windows7-32-vm: 1\n\nFor more details, see:\nhttps://brasstacks.mozilla.com/orangefactor/?display=Bug&bugid=1383341&startday=2017-07-24&endday=2017-07-30&tree=all",
+        "id": 12519187,
+        "creation_time": "2017-07-31T01:05:50Z",
+        "author": "orangefactor@bots.tld"
+    }],
+    "attachments": []
+}
