@@ -268,7 +268,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 bug[field].remove(to_remove)
                             continue
 
-                        assert to_remove in bug[field], f'{to_remove} is not in {bug[field]}, for field {field}'
+                        assert to_remove in bug[field], f'{to_remove} is not in {bug[field]}, for field {field} of {bug["id"]}'
                         bug[field].remove(to_remove)
 
                 if change['removed']:
@@ -289,9 +289,9 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                     if bug[field] != new_value:
                         # TODO: try to remove the cf_ part when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
                         if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]):
-                            print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
+                            print(f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
-                            assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
+                            assert False, f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
 
                 bug[field] = old_value
 
