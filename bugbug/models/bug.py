@@ -95,11 +95,11 @@ class BugModel(Model):
                     classes[int(bug_id)] = 'd'
 
         for bug_id, category in labels.get_labels('defect_feature_task'):
-            assert category in ['d', 'f', 't']
+            assert category in ['d', 'e', 't']
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category == 'd' else 0
             elif kind == 'regression':
-                if category in ['f', 't']:
+                if category in ['e', 't']:
                     classes[int(bug_id)] = 0
             elif kind == 'defect_feature_task':
                 classes[int(bug_id)] = category
@@ -123,7 +123,7 @@ class BugModel(Model):
                 if kind in ['bug', 'regression']:
                     classes[bug_id] = 0
                 else:
-                    classes[bug_id] = 'f'
+                    classes[bug_id] = 'e'
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
