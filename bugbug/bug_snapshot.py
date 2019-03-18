@@ -314,7 +314,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
                         # TODO: try to remove the cf_ part when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
-                        if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]):
+                        if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]) or (field == 'url' and bug['id'] == 740223):
                             print(f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
