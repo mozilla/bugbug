@@ -97,6 +97,7 @@ def download_bugs_between(date_from, date_to, security=False):
         'External Software Affecting Firefox',
         'Firefox',
         'Firefox Graveyard',
+        'Firefox Build System',
         'Firefox for Android',
         'Firefox for Android Graveyard',
         # 'Firefox for iOS',
