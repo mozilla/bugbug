@@ -64,10 +64,29 @@ def op_sys(op_sys):
 
 
 def product(product):
-    if product == 'Web Compatibility Tools':
-        return 'Web Compatibility'
+    mapping = {
+        'Web Compatibility Tools': 'Web Compatibility',
+        'Mozilla Developer Network': 'developer.mozilla.org',
+        'MozReview': 'MozReview Graveyard',
+        'mozilla.org graveyard': 'mozilla.org Graveyard',
+        'TaskCluster': 'Taskcluster',
+        'Firefox OS': 'Firefox OS Graveyard',
+        'Add-on SDK': 'Add-on SDK Graveyard',
+        'Connected Devices': 'Connected Devices Graveyard',
+    }
 
-    return product
+    return mapping[product] if product in mapping else product
+
+
+def target_milestone(target_milestone):
+    if target_milestone.startswith('Seamonkey'):
+        return target_milestone.lower()
+
+    mapping = {
+        '6.2.2': '6.2.2.1',
+    }
+
+    return mapping[target_milestone] if target_milestone in mapping else target_milestone
 
 
 FIELD_TYPES = {
@@ -81,6 +100,7 @@ FIELD_TYPES = {
     'groups': group_mapping,
     'op_sys': op_sys,
     'product': product,
+    'target_milestone': target_milestone,
 }
 
 
