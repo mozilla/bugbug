@@ -48,6 +48,7 @@ Run the `run.py` script to perform training / classification. The first time `ru
     pushlog = ~/.mozbuild/version-control-tools/hgext/pushlog
     hgmo = ~/.mozbuild/version-control-tools/hgext/hgmo
     mozext = ~/.mozbuild/version-control-tools/hgext/mozext
+    firefoxtree = ~/.mozbuild/version-control-tools/hgext/firefoxtree
     ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
 
