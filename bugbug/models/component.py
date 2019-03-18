@@ -32,7 +32,7 @@ class ComponentModel(Model):
         'Core::Print': 'Core::Printing: Output',
         'Firefox::Activity Streams': 'Firefox::Activity Streams: Newtab',
         'DevTools': 'DevTools::General',
-        'External Software Affecting Firefox': 'External Software Affecting Firefox: Other',
+        'External Software Affecting Firefox': 'External Software Affecting Firefox::Other',
         'WebExtensions': 'WebExtensions::Untriaged',
     }
 
