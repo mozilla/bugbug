@@ -36,50 +36,6 @@ class ComponentModel(Model):
         'WebExtensions': 'WebExtensions::Untriaged',
     }
 
-    MEANINGFUL_COMPONENTS = [
-        'Core::CSS Parsing and Computation', 'Core::Canvas: 2D', 'Core::Canvas: WebGL', 'Core::DOM',
-        'Core::DOM: Animation', 'Core::DOM: CSS Object Model', 'Core::DOM: Content Processes',
-        'Core::DOM: Device Interfaces', 'Core::DOM: Events', 'Core::DOM: IndexedDB',
-        'Core::DOM: Push Notifications', 'Core::DOM: Security', 'Core::DOM: Service Workers',
-        'Core::DOM: Web Payments', 'Core::DOM: Workers', 'Core::Disability Access APIs',
-        'Core::Document Navigation', 'Core::Drag and Drop', 'Core::Editor', 'Core::Event Handling',
-        'Core::Gecko Profiler', 'Core::Geolocation', 'Core::HTML: Parser', 'Core::ImageLib',
-        'Core::Internationalization', 'Core::MFBT', 'Core::MathML', 'Core::Memory Allocator',
-        'Core::Panning and Zooming', 'Core::Plug-ins', 'Core::Preferences: Backend', 'Core::SVG',
-        'Core::Security', 'Core::Security: PSM', 'Core::Security: Process Sandboxing', 'Core::Selection',
-        'Core::Spelling checker', 'Core::String', 'Core::Web Audio', 'Core::Web Painting', 'Core::Web Replay',
-        'Core::Web Speech', 'Core::WebVR', 'Core::Widget', 'Core::Widget: Android', 'Core::Widget: Cocoa',
-        'Core::Widget: Gtk', 'Core::Widget: Win32', 'Core::XPCOM', 'Core::XPConnect', 'Core::XUL',
-        'DevTools::Accessibility Tools', 'DevTools::Animation Inspector', 'DevTools::CSS Rules Inspector',
-        'DevTools::Console', 'DevTools::Debugger', 'DevTools::Font Inspector', 'DevTools::Framework',
-        'DevTools::Inspector', 'DevTools::JSON Viewer', 'DevTools::Memory', 'DevTools::Netmonitor',
-        'DevTools::Performance Tools (Profiler/Timeline)', 'DevTools::Responsive Design Mode',
-        'DevTools::Shared Components', 'DevTools::Storage Inspector', 'DevTools::Style Editor', 'DevTools::WebIDE',
-        'DevTools::about:debugging',
-        'Firefox for Android::Activity Stream', 'Firefox for Android::Android Sync',
-        'Firefox for Android::Audio/Video', 'Firefox for Android::Awesomescreen',
-        'Firefox for Android::Firefox Accounts', 'Firefox for Android::GeckoView',
-        'Firefox for Android::Keyboards and IME', 'Firefox for Android::Metrics',
-        'Firefox for Android::Settings and Preferences', 'Firefox for Android::Testing',
-        'Firefox for Android::Theme and Visual Design', 'Firefox for Android::Toolbar',
-        'Firefox for Android::Web Apps',
-        'Firefox::Address Bar', 'Firefox::Device Permissions', 'Firefox::Downloads Panel',
-        'Firefox::Enterprise Policies', 'Firefox::Extension Compatibility', 'Firefox::File Handling',
-        'Firefox::Installer', 'Firefox::Keyboard Navigation', 'Firefox::Menus', 'Firefox::Migration',
-        'Firefox::New Tab Page', 'Firefox::Normandy Client', 'Firefox::PDF Viewer', 'Firefox::Pocket',
-        'Firefox::Preferences', 'Firefox::Private Browsing', 'Firefox::Screenshots', 'Firefox::Search',
-        'Firefox::Security', 'Firefox::Session Restore', 'Firefox::Shell Integration',
-        'Firefox::Site Identity and Permission Panels', 'Firefox::Sync', 'Firefox::Tabbed Browser',
-        'Firefox::Theme', 'Firefox::Toolbars and Customization', 'Firefox::Tours',
-        'Firefox::Tracking Protection', 'Firefox::WebPayments UI',
-        'Toolkit::Add-ons Manager', 'Toolkit::Application Update', 'Toolkit::Blocklist Policy Requests',
-        'Toolkit::Crash Reporting', 'Toolkit::Downloads API', 'Toolkit::Find Toolbar', 'Toolkit::Form Autofill',
-        'Toolkit::Form Manager', 'Toolkit::Notifications and Alerts', 'Toolkit::Performance Monitoring',
-        'Toolkit::Places', 'Toolkit::Reader Mode', 'Toolkit::Safe Browsing', 'Toolkit::Startup and Profile System',
-        'Toolkit::Storage', 'Toolkit::Telemetry', 'Toolkit::Themes', 'Toolkit::Video/Audio Controls',
-        'Toolkit::XUL Widgets',
-    ]
-
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
 
@@ -121,10 +77,15 @@ class ComponentModel(Model):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
 
-    def filter_component(self, bug_data):
-        full_comp = f'{bug_data["product"]}::{bug_data["component"]}'
+        self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()}
 
-        if full_comp in self.MEANINGFUL_COMPONENTS:
+    def filter_component(self, product, component):
+        full_comp = f'{product}::{component}'
+
+        if full_comp in self.CONFLATED_COMPONENTS_INVERSE_MAPPING:
+            return self.CONFLATED_COMPONENTS_INVERSE_MAPPING[full_comp]
+
+        if (product, component) in self.meaningful_product_components:
             return full_comp
 
         for conflated_component in self.CONFLATED_COMPONENTS:
@@ -134,11 +95,23 @@ class ComponentModel(Model):
         return None
 
     def get_labels(self):
-        classes = {}
-
+        product_components = {}
         for bug_data in bugzilla.get_bugs():
-            bug_id = int(bug_data['id'])
-            component = self.filter_component(bug_data)
+            product_components[bug_data['id']] = (bug_data['product'], bug_data['component'])
+
+        def is_meaningful(product, component):
+            return product in self.PRODUCTS and component not in ['General', 'Untriaged']
+
+        product_component_counts = Counter(((product, component) for product, component in product_components.values() if is_meaningful(product, component))).most_common()
+
+        max_count = product_component_counts[0][1]
+        threshold = max_count / 100
+
+        self.meaningful_product_components = set(product_component for product_component, count in product_component_counts if count > threshold)
+
+        classes = {}
+        for bug_id, (product, component) in product_components.items():
+            component = self.filter_component(product, component)
 
             if component:
                 classes[bug_id] = component
