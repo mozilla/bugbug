@@ -123,6 +123,19 @@ class ComponentModel(Model):
         for component, count in component_counts:
             print(f'{component}: {count}')
 
+        # Assert there is at least one bug for each conflated component.
+        for conflated_component in self.CONFLATED_COMPONENTS:
+            assert any(conflated_component == component for component, count in component_counts), f'There should be at least one bug matching {conflated_component}*'
+
+        # Assert there is at least one bug for each component the conflated components are mapped to.
+        for conflated_component_mapping in self.CONFLATED_COMPONENTS_MAPPING.values():
+            assert any(conflated_component_mapping == f'{product}::{component}' for product, component in product_components.values()), f'There should be at least one bug in {conflated_component_mapping}'
+
+        # Assert all conflated components are either in conflated_components_mapping or exist as components.
+        for conflated_component in self.CONFLATED_COMPONENTS:
+            assert conflated_component in self.CONFLATED_COMPONENTS_MAPPING or \
+                any(conflated_component == f'{product}::{component}' for product, component in product_components.values()), f'It should be possible to map {conflated_component}'
+
         return {bug_id: component for bug_id, component in classes.items() if component in top_components}
 
     def get_feature_names(self):
