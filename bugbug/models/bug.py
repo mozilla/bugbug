@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
+
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
@@ -94,7 +96,13 @@ class BugModel(Model):
                 if category != 'nobug':
                     classes[int(bug_id)] = 'd'
 
-        for bug_id, category in labels.get_labels('defect_feature_task'):
+        defect_feature_task_e = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_e')}
+        defect_feature_task_p = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_p')}
+        defect_feature_task_s = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_s')}
+
+        defect_feature_task_common = ((bug_id, category) for bug_id, category in defect_feature_task_p.items() if (bug_id not in defect_feature_task_e or defect_feature_task_e[bug_id] == defect_feature_task_p[bug_id]) and (bug_id not in defect_feature_task_s or defect_feature_task_s[bug_id] == defect_feature_task_p[bug_id]))
+
+        for bug_id, category in itertools.chain(labels.get_labels('defect_feature_task'), defect_feature_task_common):
             assert category in ['d', 'e', 't']
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category == 'd' else 0
