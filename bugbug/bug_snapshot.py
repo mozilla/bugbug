@@ -288,7 +288,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # TODO: Users can change their email, try with all emails from a mapping file.
                             continue
 
-                        if to_remove in ['checkin-needed', '#relman/triage/defer-to-group']:
+                        if to_remove in ['checkin-needed', '#relman/triage/defer-to-group', 'conduit-needs-discussion']:
                             # TODO: https://bugzilla.mozilla.org/show_bug.cgi?id=1513981.
                             if to_remove in bug[field]:
                                 bug[field].remove(to_remove)
