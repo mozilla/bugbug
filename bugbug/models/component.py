@@ -18,13 +18,13 @@ from bugbug.model import Model
 class ComponentModel(Model):
     PRODUCTS = {
         'Core', 'External Software Affecting Firefox', 'DevTools', 'Firefox for Android', 'Firefox', 'Toolkit',
-        'WebExtensions'
+        'WebExtensions', 'Firefox Build System',
     }
 
     CONFLATED_COMPONENTS = [
         'Core::Audio/Video', 'Core::DOM', 'Core::Graphics', 'Core::IPC', 'Core::JavaScript', 'Core::Layout',
         'Core::Networking', 'Core::Print', 'Core::WebRTC', 'Firefox::Activity Streams', 'Toolkit::Password Manager',
-        'DevTools', 'External Software Affecting Firefox', 'WebExtensions',
+        'DevTools', 'External Software Affecting Firefox', 'WebExtensions', 'Firefox Build System',
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
@@ -34,6 +34,7 @@ class ComponentModel(Model):
         'DevTools': 'DevTools::General',
         'External Software Affecting Firefox': 'External Software Affecting Firefox::Other',
         'WebExtensions': 'WebExtensions::Untriaged',
+        'Firefox Build System': 'Firefox Build System::General',
     }
 
     def __init__(self, lemmatization=False):
