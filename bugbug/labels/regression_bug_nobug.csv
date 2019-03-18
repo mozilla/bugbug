@@ -1,4 +1,6 @@
 bug_id,category
+35,bug_unknown_regression
+101,bug_unknown_regression
 92144,nobug
 218415,nobug
 244549,bug_unknown_regression
@@ -30,6 +32,7 @@ bug_id,category
 678392,nobug
 699844,nobug
 739219,nobug
+740223,bug_unknown_regression
 759342,regression
 764076,regression
 786819,nobug
@@ -126,6 +129,7 @@ bug_id,category
 1210726,nobug
 1210729,nobug
 1213517,nobug
+1216175,bug_unknown_regression
 1217152,bug_unknown_regression
 1221348,regression
 1221539,nobug
@@ -151,6 +155,7 @@ bug_id,category
 1249225,nobug
 1249934,regression
 1250461,nobug
+1251020,bug_unknown_regression
 1253386,regression
 1254812,regression
 1255735,regression
@@ -174,6 +179,7 @@ bug_id,category
 1288692,bug_unknown_regression
 1289662,nobug
 1294490,nobug
+1294650,bug_unknown_regression
 1297122,nobug
 1297485,regression
 1297630,nobug
@@ -190,6 +196,7 @@ bug_id,category
 1307108,nobug
 1308039,nobug
 1308940,nobug
+1310240,bug_unknown_regression
 1311541,nobug
 1311731,nobug
 1312587,nobug
@@ -199,6 +206,7 @@ bug_id,category
 1316281,nobug
 1317701,nobug
 1318404,bug_unknown_regression
+1319278,bug_unknown_regression
 1319493,bug_unknown_regression
 1320616,regression
 1322018,regression
@@ -209,6 +217,7 @@ bug_id,category
 1331557,nobug
 1331674,nobug
 1332040,regression
+1333035,bug_unknown_regression
 1333965,regression
 1336437,nobug
 1337043,regression
@@ -281,6 +290,7 @@ bug_id,category
 1374571,bug_unknown_regression
 1375244,nobug
 1376535,nobug
+1376831,bug_unknown_regression
 1376948,nobug
 1377208,nobug
 1377430,regression
@@ -664,6 +674,7 @@ bug_id,category
 1450997,nobug
 1451013,nobug
 1451203,regression
+1451250,bug_unknown_regression
 1451408,nobug
 1451425,nobug
 1451484,nobug
@@ -1632,6 +1643,7 @@ bug_id,category
 1488462,regression
 1488620,nobug
 1488659,nobug
+1488679,regression
 1488681,regression
 1488684,nobug
 1488691,bug_unknown_regression
@@ -2048,6 +2060,7 @@ bug_id,category
 1514404,nobug
 1514413,bug_unknown_regression
 1514581,regression
+1514723,bug_unknown_regression
 1514724,nobug
 1514791,regression
 1514806,nobug
@@ -2088,8 +2101,35 @@ bug_id,category
 1526276,bug_unknown_regression
 1527711,nobug
 1527936,nobug
+1528551,bug_unknown_regression
+1528562,bug_unknown_regression
 1528830,nobug
+1528879,nobug
+1528942,bug_unknown_regression
+1528998,bug_unknown_regression
+1529020,bug_unknown_regression
+1529025,bug_unknown_regression
+1529071,nobug
+1529108,bug_unknown_regression
+1529110,bug_unknown_regression
+1529170,bug_unknown_regression
+1529184,bug_unknown_regression
+1529352,nobug
+1529364,nobug
+1529464,nobug
+1529486,bug_unknown_regression
 1529558,nobug
+1530220,bug_unknown_regression
+1530227,bug_unknown_regression
+1530232,bug_unknown_regression
+1530276,nobug
+1530298,nobug
+1530306,bug_unknown_regression
 1530327,nobug
+1530554,regression
 1530625,nobug
+1530861,regression
+1530995,bug_unknown_regression
+1531142,bug_unknown_regression
+1531156,bug_unknown_regression
 1531354,nobug
