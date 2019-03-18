@@ -22,8 +22,8 @@ class ComponentModel(Model):
     }
 
     CONFLATED_COMPONENTS = [
-        'Core::Audio/Video', 'Core::Graphics', 'Core::IPC', 'Core::JavaScript', 'Core::Layout', 'Core::Networking',
-        'Core::Print', 'Core::WebRTC', 'Firefox::Activity Streams', 'Toolkit::Password Manager',
+        'Core::Audio/Video', 'Core::DOM', 'Core::Graphics', 'Core::IPC', 'Core::JavaScript', 'Core::Layout',
+        'Core::Networking', 'Core::Print', 'Core::WebRTC', 'Firefox::Activity Streams', 'Toolkit::Password Manager',
         'DevTools', 'External Software Affecting Firefox', 'WebExtensions',
     ]
 
