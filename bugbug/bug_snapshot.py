@@ -22,6 +22,12 @@ def keyword_mapping(keyword):
         'footprint': 'memory-footprint',
         'ateam-marionette-firefox-puppeteer': 'pi-marionette-firefox-puppeteer',
         'ateam-marionette-big': 'pi-marionette-big',
+        'ateam-marionette-runner': 'pi-marionette-runner',
+        'ateam-marionette-server': 'pi-marionette-server',
+        'ateam-marionette-client': 'pi-marionette-client',
+        'ateam-marionette-intermittent': 'pi-marionette-intermittent',
+        'csec-dos': 'csectype-dos',
+        'csec-oom': 'csectype-oom',
     }
 
     return mapping[keyword] if keyword in mapping else keyword
