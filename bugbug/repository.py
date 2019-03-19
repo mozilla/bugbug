@@ -8,6 +8,7 @@ import concurrent.futures
 import itertools
 import multiprocessing
 import os
+import re
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
@@ -50,7 +51,9 @@ def _transform(commit):
         'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
         'ever_backedout': commit.backedoutby != b'',
         'added': 0,
+        'test_added': 0,
         'deleted': 0,
+        'test_deleted': 0,
         'files_modified_num': 0,
         'types': set(),
         'components': list(),
@@ -67,8 +70,13 @@ def _transform(commit):
             obj['types'].add('binary')
             continue
 
-        obj['added'] += len(stats['added']) + len(stats['touched'])
-        obj['deleted'] += len(stats['deleted']) + len(stats['touched'])
+        if re.search(r'\/?[^\w](test|tests)\/', path):
+            obj['test_added'] += len(stats['added']) + len(stats['touched'])
+            obj['test_deleted'] += len(stats['deleted']) + len(stats['touched'])
+        else:
+            obj['added'] += len(stats['added']) + len(stats['touched'])
+            obj['deleted'] += len(stats['deleted']) + len(stats['touched'])
+
         ext = os.path.splitext(path)[1]
         if ext in ['.js', '.jsm']:
             type_ = 'JavaScript'
