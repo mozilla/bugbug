@@ -242,7 +242,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 found_flag = f
 
                         # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
-                        if obj['id'] not in [1052536, 1201115, 1213517, 794863] and not (to_remove == 'in-testsuite+' and obj['id'] in [1344690, 1362387, 1380306]) and not (to_remove == 'in-testsuite-' and bug['id'] in [1370129]) and not (to_remove == 'approval-comm-esr52?' and bug['id'] == 1352850) and not (to_remove == 'checkin+' and bug['id'] in [1357808, 1361361, 1365763]) and not (to_remove == 'webcompat?' and obj['id'] in [1360579, 1364598]) and not (to_remove == 'qe-verify-' and bug['id'] in [1363358, 1370506, 1374024, 1377911, 1393848, 1396334]):
+                        if obj['id'] not in [1052536, 1201115, 1213517, 794863] and not (to_remove == 'in-testsuite+' and obj['id'] in [1318438, 1312852, 1332255, 1344690, 1362387, 1380306]) and not (to_remove == 'in-testsuite-' and bug['id'] in [1321444, 1342431, 1370129]) and not (to_remove == 'approval-comm-esr52?' and bug['id'] == 1352850) and not (to_remove == 'checkin+' and bug['id'] in [1308868, 1357808, 1361361, 1365763, 1328454]) and not (to_remove == 'checkin-' and bug['id'] == 1412952) and not (to_remove == 'webcompat?' and obj['id'] in [1360579, 1364598]) and not (to_remove == 'qe-verify-' and bug['id'] in [1322685, 1336510, 1363358, 1370506, 1374024, 1377911, 1393848, 1396334, 1398874, 1419371]):
                             assert found_flag is not None, f'flag {to_remove} not found in {bug["id"]}'
                         if found_flag is not None:
                             obj['flags'].remove(found_flag)
