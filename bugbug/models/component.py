@@ -28,6 +28,7 @@ class ComponentModel(Model):
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
+        'Core::DOM': 'Core::DOM: Core & HTML',
         'Core::JavaScript': 'Core::JavaScript Engine',
         'Core::Print': 'Core::Printing: Output',
         'Firefox::Activity Streams': 'Firefox::Activity Streams: Newtab',
