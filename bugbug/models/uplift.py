@@ -57,10 +57,7 @@ class UpliftModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def rollback(self, change):
-        if change['field_name'].startswith('flagtypes.name') and change['added'].startswith('approval-mozilla-'):
-            if change['added'].endswith('+') or change['added'].endswith('-'):
-                return True
-        return False
+        return (change['field_name'].startswith('flagtypes.name') and change['added'].startswith('approval-mozilla-') and (change['added'].endswith('+') or change['added'].endswith('-')))
 
     def get_labels(self):
         classes = {}
