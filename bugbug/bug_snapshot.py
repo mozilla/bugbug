@@ -216,8 +216,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 found_flag = f
 
                         # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
-                        if obj['id'] not in [1052536, 1201115, 1213517]:
-                            assert found_flag is not None, f'flag {to_remove} not found'
+                        if obj['id'] not in [1052536, 1201115, 1213517, 1336510]:
+                            assert found_flag is not None, 'flag {} not found in {}'.format(to_remove, obj['id'])
                         if found_flag is not None:
                             obj['flags'].remove(found_flag)
 
