@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import itertools
 import multiprocessing
 import os
 from collections import defaultdict
@@ -24,7 +25,7 @@ db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.
 
 COMPONENTS = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'ever_backedout', 'author_email'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email'])
 
 author_experience = {}
 author_experience_90_days = {}
@@ -47,7 +48,7 @@ def _transform(commit):
         'desc': desc,
         'date': str(commit.date),
         'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
-        'ever_backedout': commit.ever_backedout,
+        'ever_backedout': commit.backedoutby != b'',
         'added': 0,
         'deleted': 0,
         'files_modified_num': 0,
@@ -93,11 +94,11 @@ def _transform(commit):
     return obj
 
 
-def hg_log(hg, first_rev):
+def _hg_log(revs):
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0'
 
-    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=f'{first_rev}:tip')
-    x = hg.rawcommand(args)
+    args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=revs[0] + b':' + revs[-1], branch='central')
+    x = HG.rawcommand(args)
     out = x.split(b'\x00')[:-1]
 
     revs = []
@@ -111,26 +112,60 @@ def hg_log(hg, first_rev):
             desc=rev[2],
             date=dt,
             bug=rev[4],
-            ever_backedout=(rev[5] != b''),
+            backedoutby=rev[5],
             author_email=rev[6],
         ))
 
     return revs
 
 
-def get_rev(hg, date):
-    return hg.log(revrange='pushdate("{}")'.format(date.strftime('%Y-%m-%d')), limit=1)[0].node.decode('utf-8')
+def get_revs(hg, date):
+    rev_range = 'pushdate("{}"):tip'.format(date.strftime('%Y-%m-%d'))
+    args = hglib.util.cmdbuilder(b'log', template='{node}\n', no_merges=True, rev=rev_range, branch='central')
+    x = hg.rawcommand(args)
+    return x.splitlines()
 
 
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
-    first_rev = get_rev(hg, date_from)
+    revs = get_revs(hg, date_from)
 
-    commits = hg_log(hg, first_rev)
-    commits_num = len(commits)
+    commits_num = len(revs)
+
+    assert commits_num > 0, 'There should definitely be more than 0 commits, something is wrong'
 
     hg.close()
+
+    processes = multiprocessing.cpu_count()
+
+    print(f'Mining {commits_num} commits using {processes} processes...')
+
+    CHUNK_SIZE = 256
+    revs_groups = [revs[i:(i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
+
+    with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
+        commits = executor.map(_hg_log, revs_groups, chunksize=20)
+        commits = tqdm(commits, total=len(revs_groups))
+        commits = list(itertools.chain.from_iterable(commits))
+
+    # Don't analyze backouts.
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != b'')
+    commits = [commit for commit in commits if commit.node not in backouts]
+
+    # Don't analyze commits that are not linked to a bug.
+    commits = [commit for commit in commits if commit.bug != b'']
+
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, '.hg-annotate-ignore-revs'), 'r') as f:
+        ignore_revs = set(l[:40].encode('utf-8') for l in f)
+
+    commits = [commit for commit in commits if commit.node not in ignore_revs]
+
+    commits_num = len(commits)
+
+    print(f'Analyzing {commits_num} patches...')
 
     # Total previous number of commits by the author.
     total_commits_by_author = defaultdict(int)
@@ -142,7 +177,7 @@ def download_commits(repo_dir, date_from):
     for commit in commits:
         author_experience[commit] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
-        if not commit.ever_backedout:
+        if not commit.backedoutby:
             total_commits_by_author[commit.author] += 1
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
@@ -159,7 +194,7 @@ def download_commits(repo_dir, date_from):
 
         author_experience_90_days[commit] = len(commits_by_author[commit.author])
 
-        if not commit.ever_backedout:
+        if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)
 
     global COMPONENTS

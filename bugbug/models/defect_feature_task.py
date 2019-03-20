@@ -14,7 +14,7 @@ class DefectFeatureTaskModel(BugModel):
         classes = self.get_bugbug_labels('defect_feature_task')
 
         print('{} defects'.format(sum(1 for label in classes.values() if label == 'd')))
-        print('{} features'.format(sum(1 for label in classes.values() if label == 'f')))
+        print('{} enhancements'.format(sum(1 for label in classes.values() if label == 'e')))
         print('{} tasks'.format(sum(1 for label in classes.values() if label == 't')))
 
         return classes
@@ -24,6 +24,6 @@ class DefectFeatureTaskModel(BugModel):
             if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
                 classes[i] = 'd' if not probabilities else [1., 0., 0.]
             elif 'feature' in bug['keywords']:
-                classes[i] = 'f' if not probabilities else [0., 1., 0.]
+                classes[i] = 'e' if not probabilities else [0., 1., 0.]
 
         return classes

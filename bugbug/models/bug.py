@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
+
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
@@ -94,12 +96,18 @@ class BugModel(Model):
                 if category != 'nobug':
                     classes[int(bug_id)] = 'd'
 
-        for bug_id, category in labels.get_labels('defect_feature_task'):
-            assert category in ['d', 'f', 't']
+        defect_feature_task_e = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_e')}
+        defect_feature_task_p = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_p')}
+        defect_feature_task_s = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_s')}
+
+        defect_feature_task_common = ((bug_id, category) for bug_id, category in defect_feature_task_p.items() if (bug_id not in defect_feature_task_e or defect_feature_task_e[bug_id] == defect_feature_task_p[bug_id]) and (bug_id not in defect_feature_task_s or defect_feature_task_s[bug_id] == defect_feature_task_p[bug_id]))
+
+        for bug_id, category in itertools.chain(labels.get_labels('defect_feature_task'), defect_feature_task_common):
+            assert category in ['d', 'e', 't']
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category == 'd' else 0
             elif kind == 'regression':
-                if category in ['f', 't']:
+                if category in ['e', 't']:
                     classes[int(bug_id)] = 0
             elif kind == 'defect_feature_task':
                 classes[int(bug_id)] = category
@@ -123,12 +131,15 @@ class BugModel(Model):
                 if kind in ['bug', 'regression']:
                     classes[bug_id] = 0
                 else:
-                    classes[bug_id] = 'f'
+                    classes[bug_id] = 'e'
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
-                        if change['field_name'] == 'keywords' and change['removed'] == 'regression':
-                            classes[bug_id] = 0
+                        if change['field_name'] == 'keywords':
+                            if 'regression' in change['removed'].split(','):
+                                classes[bug_id] = 0
+                            elif 'regression' in change['added'].split(','):
+                                classes[bug_id] = 1
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}

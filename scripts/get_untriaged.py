@@ -61,7 +61,7 @@ def run_untriaged(untriaged_bugs):
             classifiable = p[p >= 0.7].size >= 1
             classification = ''
 
-            expected_component = model.filter_component(bug)
+            expected_component = model.filter_component(bug['product'], bug['component'])
             if not expected_component:
                 print('Skipping bug: {}'.format(bug['id']))
                 continue

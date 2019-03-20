@@ -43,6 +43,13 @@ Run the `run.py` script to perform training / classification. The first time `ru
 
 1. Clone https://hg.mozilla.org/mozilla-central/.
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
+3. Enable the pushlog, hgmo and mozext extensions. For example, if you are on Linux, add the following to the extensions section of the `~/.hgrc` file:
+    ```
+    pushlog = ~/.mozbuild/version-control-tools/hgext/pushlog
+    hgmo = ~/.mozbuild/version-control-tools/hgext/hgmo
+    mozext = ~/.mozbuild/version-control-tools/hgext/mozext
+    firefoxtree = ~/.mozbuild/version-control-tools/hgext/firefoxtree
+    ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
 
 Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to the `log` command.
