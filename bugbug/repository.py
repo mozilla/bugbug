@@ -8,7 +8,6 @@ import concurrent.futures
 import itertools
 import multiprocessing
 import os
-import re
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
@@ -41,6 +40,12 @@ def _init(repo_dir):
     HG = hglib.open(repo_dir)
 
 
+def is_test(path):
+    return ('/test/' in path or '/tests/' in path or '/mochitest/' in path or '/unit/' in path or '/gtest/'
+            in path or 'testing/' in path or '/jsapi-tests/' in path or '/reftests/' in path or '/reftest/'
+            in path or '/crashtests/' in path or '/crashtest/' in path or '/gtests/' in path or '/googletest/' in path)
+
+
 def _transform(commit):
     desc = commit.desc.decode('utf-8')
 
@@ -70,7 +75,7 @@ def _transform(commit):
             obj['types'].add('binary')
             continue
 
-        if re.search(r'\/?[^\w](test|tests)\/', path):
+        if is_test(path):
             obj['test_added'] += len(stats['added']) + len(stats['touched'])
             obj['test_deleted'] += len(stats['deleted']) + len(stats['touched'])
         else:
