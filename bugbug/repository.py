@@ -40,6 +40,7 @@ def _init(repo_dir):
     HG = hglib.open(repo_dir)
 
 
+# This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
 def is_test(path):
     return ('/test/' in path or '/tests/' in path or '/mochitest/' in path or '/unit/' in path or '/gtest/'
             in path or 'testing/' in path or '/jsapi-tests/' in path or '/reftests/' in path or '/reftest/'
