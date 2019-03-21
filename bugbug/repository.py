@@ -24,8 +24,9 @@ COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1', 'v1')
 
 COMPONENTS = {}
+COMP_TOUCHED_PREV = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email', 'files', 'file_copies'])
 
 author_experience = {}
 author_experience_90_days = {}
@@ -66,6 +67,7 @@ def _transform(commit):
         'author_experience': author_experience[commit],
         'author_experience_90_days': author_experience_90_days[commit],
         'author_email': commit.author_email.decode('utf-8'),
+        'comp_touched_prev': 0,
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -105,11 +107,13 @@ def _transform(commit):
 
     obj['components'] = list(set('::'.join(COMPONENTS[fl]) for fl in patch_data.keys() if COMPONENTS.get(fl)))
 
+    obj['comp_touched_prev'] = COMP_TOUCHED_PREV[commit]
+
     return obj
 
 
 def _hg_log(revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=revs[0] + b':' + revs[-1], branch='central')
     x = HG.rawcommand(args)
@@ -128,6 +132,8 @@ def _hg_log(revs):
             bug=rev[4],
             backedoutby=rev[5],
             author_email=rev[6],
+            files=rev[7],
+            file_copies=rev[8],
         ))
 
     return revs
@@ -215,6 +221,25 @@ def download_commits(repo_dir, date_from):
     r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
     r.raise_for_status()
     COMPONENTS = r.json()
+
+    components_touched = {}
+
+    for commit in commits:
+        comp = set('::'.join(COMPONENTS[fl]) for fl in commit.files.decode('utf-8').split('|') if fl in COMPONENTS)
+        for cp in comp:
+            if cp in components_touched:
+                components_touched[cp] += 1
+            else:
+                components_touched[cp] = 1
+
+        COMP_TOUCHED_PREV[commit] = sum(components_touched[cp]-1 for cp in comp)
+
+        if len(commit.file_copies) > 0:
+            for fl in commit.file_copies.decode('utf-8').split('|'):
+                cpy, src = fl[:fl.find('(')-1], fl[fl.find('(')+1:-1]
+
+                if cpy in COMPONENTS and src in COMPONENTS:
+                    components_touched['::'.join(COMPONENTS[cpy])] = components_touched['::'.join(COMPONENTS[src])]
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
