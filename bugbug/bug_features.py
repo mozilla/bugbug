@@ -118,6 +118,17 @@ class patches(object):
         return sum(1 for a in bug['attachments'] if a['is_patch'] or a['content_type'] in ['text/x-review-board-request', 'text/x-phabricator-request'])
 
 
+class negatively_reviewed_patches(object):
+    def __call__(self, bug, **kwargs):
+        add = 0
+        for a in bug['attachments']:
+            if a['is_patch'] or a['content_type'] in ['text/x-review-board-request', 'text/x-phabricator-request']:
+                for flag in a['flags']:
+                    if flag['name'] == 'review' and flag['status'] == '-':
+                        add += 1
+        return add
+
+
 class landings(object):
     def __call__(self, bug, **kwargs):
         return sum(1 for c in bug['comments'] if '://hg.mozilla.org/' in c['text'])
