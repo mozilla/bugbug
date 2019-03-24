@@ -5,7 +5,7 @@ scikit-learn==0.20.3
 xgboost==0.82
 requests==2.21.0
 imbalanced-learn==0.4.3
-spacy==2.1.1
+spacy==2.1.3
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en-core-web-sm
 python-hglib==2.6.1
 shap==0.28.5
