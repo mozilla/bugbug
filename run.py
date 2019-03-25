@@ -76,10 +76,30 @@ if __name__ == '__main__':
 
             if model.calculate_importance:
                 probas, importances = model.classify(bug, probabilities=True, importances=True)
-
                 feature_names = model.get_feature_names()
-                for i, (importance, index, is_positive) in enumerate(importances):
-                    print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+
+                if len(importances.shape) < 2:
+                    for i, (importance, index, is_positive) in enumerate(importances):
+                        print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+                else:
+                    # Number of classes to be printed
+                    no_of_classes = 6
+
+                    for i, (feature_index, shap_sum, *feature) in enumerate(importances):
+                        class_indices = np.argsort(feature)[::-1]
+                        print(f'{str(i+1).zfill(2)}. {feature_names[int(feature_index)]} (Importance: {shap_sum:.5f})')
+
+                        for index in class_indices[:no_of_classes]:
+                            class_no = f'Class {str(index).zfill(3)}    '
+                            print(class_no, end='')
+                        print()
+                        for index in class_indices[:no_of_classes]:
+                            imp_val = f'{feature[index]:.7f}'
+                            # Horizontally align the importance value
+                            print(imp_val, end=' ' * (len(class_no) - len(imp_val)))
+                        print('\n\n')
+                    print()
+
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)
 

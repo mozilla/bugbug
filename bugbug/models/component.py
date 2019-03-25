@@ -42,7 +42,6 @@ class ComponentModel(Model):
         Model.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
-        self.calculate_importance = False
 
         feature_extractors = [
             bug_features.has_str(),

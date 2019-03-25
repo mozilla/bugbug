@@ -41,26 +41,56 @@ class Model():
         return []
 
     def get_important_features(self, cutoff, shap_values):
-        # Calculate the values that represent the fraction of the model output variability attributable
-        # to each feature across the whole dataset.
-        shap_sums = shap_values.sum(0)
-        abs_shap_sums = np.abs(shap_values).sum(0)
-        rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+        # shap_values is a list for models with vector output
+        if isinstance(shap_values, list):
+            shap_values = np.array(shap_values)
+            class_shap_values = []
 
-        cut_off_value = cutoff * np.amax(rel_shap_sums)
+            for matrix in shap_values:
+                shap_sum = (np.abs(matrix)).sum(0)
+                class_shap_values.append(shap_sum)
 
-        # Get indices of features that pass the cut off value
-        top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
-        # Get the importance values of the top features from their indices
-        top_features = np.take(rel_shap_sums, top_feature_indices)
-        # Gets the sign of the importance from shap_sums as boolean
-        is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
-        # Stack the importance, indices and shap_sums in a 2D array
-        top_features = np.column_stack((top_features, top_feature_indices, is_positive))
-        # Sort the array (in decreasing order of importance values)
-        top_features = top_features[top_features[:, 0].argsort()][::-1]
+            # Importance of features (sum of all classes)
+            feature_shap_vals = np.array(class_shap_values).sum(0)
+            sorted_feature_indices = np.argsort(feature_shap_vals)[::-1]
+            # features: matrix of [features x classes] sorted by importance of features
+            features = (np.array(class_shap_values).T)[sorted_feature_indices]
 
-        return top_features
+            cut_off_value = cutoff * np.amax(feature_shap_vals)
+            # Gets the number of features that pass the cut off value
+            cut_off_len = len(np.where(feature_shap_vals >= cut_off_value)[0])
+
+            # Stack the original indices and feature importance along with the features
+            # above the cut off length
+            top_features = np.column_stack((
+                sorted_feature_indices[:cut_off_len],
+                feature_shap_vals[sorted_feature_indices][:cut_off_len],
+                features[:cut_off_len]
+            ))
+
+            return top_features
+
+        else:
+            # Calculate the values that represent the fraction of the model output variability attributable
+            # to each feature across the whole dataset.
+            shap_sums = shap_values.sum(0)
+            abs_shap_sums = np.abs(shap_values).sum(0)
+            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+
+            cut_off_value = cutoff * np.amax(rel_shap_sums)
+
+            # Get indices of features that pass the cut off value
+            top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
+            # Get the importance values of the top features from their indices
+            top_features = np.take(rel_shap_sums, top_feature_indices)
+            # Gets the sign of the importance from shap_sums as boolean
+            is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
+            # Stack the importance, indices and shap_sums a 2D array
+            top_features = np.column_stack((top_features, top_feature_indices, is_positive))
+            # Sort the array (in decreasing order of importance values)
+            top_features = top_features[top_features[:, 0].argsort()][::-1]
+
+            return top_features
 
     def train(self, importance_cutoff=0.15):
         classes = self.get_labels()
@@ -113,12 +143,26 @@ class Model():
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
-
             important_features = self.get_important_features(importance_cutoff, shap_values)
+            if isinstance(shap_values, list):
+                # Number of classes to be printed
+                no_of_classes = 6
+                print('\n Top Features \n')
+                for i, (feature_index, shap_sum, *feature) in enumerate(important_features):
+                    class_indices = np.argsort(feature)[::-1]
+                    print(f'{str(i+1).zfill(2)}. {feature_names[int(feature_index)]} (Importance: {shap_sum:.5f})')
 
+                    for index in class_indices[:no_of_classes]:
+                        class_no = f'Class {str(index).zfill(3)}    '
+                        print(class_no, end='')
+                    print()
+                    for index in class_indices[:no_of_classes]:
+                        imp_val = f'{feature[index]:.7f}'
+                        # Horizontally align the importance value
+                        print(imp_val, end=' ' * (len(class_no) - len(imp_val)))
+                    print('\n\n')
+                print()
+        else:
             print(f'\nTop {len(important_features)} Features:')
             for i, [importance, index, is_positive] in enumerate(important_features):
                 print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
@@ -178,10 +222,6 @@ class Model():
         if importances:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
-
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
 
             importances = self.get_important_features(importance_cutoff, shap_values)
 
