@@ -40,6 +40,13 @@ def _init(repo_dir):
     HG = hglib.open(repo_dir)
 
 
+# This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
+def is_test(path):
+    return ('/test/' in path or '/tests/' in path or '/mochitest/' in path or '/unit/' in path or '/gtest/'
+            in path or 'testing/' in path or '/jsapi-tests/' in path or '/reftests/' in path or '/reftest/'
+            in path or '/crashtests/' in path or '/crashtest/' in path or '/gtests/' in path or '/googletest/' in path)
+
+
 def _transform(commit):
     desc = commit.desc.decode('utf-8')
 
@@ -50,7 +57,9 @@ def _transform(commit):
         'bug_id': int(commit.bug.decode('utf-8')) if commit.bug else None,
         'ever_backedout': commit.backedoutby != b'',
         'added': 0,
+        'test_added': 0,
         'deleted': 0,
+        'test_deleted': 0,
         'files_modified_num': 0,
         'types': set(),
         'components': list(),
@@ -67,8 +76,13 @@ def _transform(commit):
             obj['types'].add('binary')
             continue
 
-        obj['added'] += len(stats['added']) + len(stats['touched'])
-        obj['deleted'] += len(stats['deleted']) + len(stats['touched'])
+        if is_test(path):
+            obj['test_added'] += len(stats['added']) + len(stats['touched'])
+            obj['test_deleted'] += len(stats['deleted']) + len(stats['touched'])
+        else:
+            obj['added'] += len(stats['added']) + len(stats['touched'])
+            obj['deleted'] += len(stats['deleted']) + len(stats['touched'])
+
         ext = os.path.splitext(path)[1]
         if ext in ['.js', '.jsm']:
             type_ = 'JavaScript'

@@ -43,7 +43,7 @@ class UpliftModel(Model):
         ]
 
         self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
+            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
@@ -55,6 +55,9 @@ class UpliftModel(Model):
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor='cpu_predictor')
+
+    def rollback(self, change):
+        return (change['field_name'] == 'flagtypes.name' and change['added'].startswith('approval-mozilla-') and (change['added'].endswith('+') or change['added'].endswith('-')))
 
     def get_labels(self):
         classes = {}

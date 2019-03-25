@@ -22,6 +22,12 @@ def keyword_mapping(keyword):
         'footprint': 'memory-footprint',
         'ateam-marionette-firefox-puppeteer': 'pi-marionette-firefox-puppeteer',
         'ateam-marionette-big': 'pi-marionette-big',
+        'ateam-marionette-runner': 'pi-marionette-runner',
+        'ateam-marionette-server': 'pi-marionette-server',
+        'ateam-marionette-client': 'pi-marionette-client',
+        'ateam-marionette-intermittent': 'pi-marionette-intermittent',
+        'csec-dos': 'csectype-dos',
+        'csec-oom': 'csectype-oom',
     }
 
     return mapping[keyword] if keyword in mapping else keyword
@@ -58,10 +64,29 @@ def op_sys(op_sys):
 
 
 def product(product):
-    if product == 'Web Compatibility Tools':
-        return 'Web Compatibility'
+    mapping = {
+        'Web Compatibility Tools': 'Web Compatibility',
+        'Mozilla Developer Network': 'developer.mozilla.org',
+        'MozReview': 'MozReview Graveyard',
+        'mozilla.org graveyard': 'mozilla.org Graveyard',
+        'TaskCluster': 'Taskcluster',
+        'Firefox OS': 'Firefox OS Graveyard',
+        'Add-on SDK': 'Add-on SDK Graveyard',
+        'Connected Devices': 'Connected Devices Graveyard',
+    }
 
-    return product
+    return mapping[product] if product in mapping else product
+
+
+def target_milestone(target_milestone):
+    if target_milestone.startswith('Seamonkey'):
+        return target_milestone.lower()
+
+    mapping = {
+        '6.2.2': '6.2.2.1',
+    }
+
+    return mapping[target_milestone] if target_milestone in mapping else target_milestone
 
 
 FIELD_TYPES = {
@@ -75,6 +100,7 @@ FIELD_TYPES = {
     'groups': group_mapping,
     'op_sys': op_sys,
     'product': product,
+    'target_milestone': target_milestone,
 }
 
 
@@ -216,8 +242,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 found_flag = f
 
                         # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
-                        if obj['id'] not in [1052536, 1201115, 1213517]:
-                            assert found_flag is not None, f'flag {to_remove} not found'
+                        if obj['id'] not in [1052536, 1201115, 1213517, 794863] and not (to_remove == 'in-testsuite+' and obj['id'] in [1318438, 1312852, 1332255, 1344690, 1362387, 1380306]) and not (to_remove == 'in-testsuite-' and bug['id'] in [1321444, 1342431, 1370129]) and not (to_remove == 'approval-comm-esr52?' and bug['id'] == 1352850) and not (to_remove == 'checkin+' and bug['id'] in [1308868, 1357808, 1361361, 1365763, 1328454]) and not (to_remove == 'checkin-' and bug['id'] == 1412952) and not (to_remove == 'webcompat?' and obj['id'] in [1360579, 1364598]) and not (to_remove == 'qe-verify-' and bug['id'] in [1322685, 1336510, 1363358, 1370506, 1374024, 1377911, 1393848, 1396334, 1398874, 1419371]):
+                            assert found_flag is not None, f'flag {to_remove} not found in {bug["id"]}'
                         if found_flag is not None:
                             obj['flags'].remove(found_flag)
 
@@ -262,13 +288,13 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # TODO: Users can change their email, try with all emails from a mapping file.
                             continue
 
-                        if to_remove in ['checkin-needed', '#relman/triage/defer-to-group']:
+                        if to_remove in ['checkin-needed', '#relman/triage/defer-to-group', 'conduit-needs-discussion']:
                             # TODO: https://bugzilla.mozilla.org/show_bug.cgi?id=1513981.
                             if to_remove in bug[field]:
                                 bug[field].remove(to_remove)
                             continue
 
-                        assert to_remove in bug[field], f'{to_remove} is not in {bug[field]}, for field {field}'
+                        assert to_remove in bug[field], f'{to_remove} is not in {bug[field]}, for field {field} of {bug["id"]}'
                         bug[field].remove(to_remove)
 
                 if change['removed']:
@@ -288,10 +314,10 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
                         # TODO: try to remove the cf_ part when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
-                        if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]):
-                            print(f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}')
+                        if not all_inconsistencies and (any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]) or (field == 'url' and bug['id'] == 740223):
+                            print(f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
-                            assert False, f'Current value for field {field}:\n{bug[field]}\nis different from previous value:\n{new_value}'
+                            assert False, f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
 
                 bug[field] = old_value
 
