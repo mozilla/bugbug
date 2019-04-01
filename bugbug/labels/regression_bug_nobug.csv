@@ -8,6 +8,7 @@ bug_id,category
 428981,bug_unknown_regression
 441355,nobug
 447581,nobug
+500500,nobug
 518272,regression
 526299,regression
 528988,bug_unknown_regression
@@ -144,6 +145,7 @@ bug_id,category
 1237782,nobug
 1239708,nobug
 1240547,nobug
+1240692,nobug
 1241535,nobug
 1243108,regression
 1246045,regression
@@ -2119,10 +2121,14 @@ bug_id,category
 1529464,nobug
 1529486,bug_unknown_regression
 1529558,nobug
+1530182,nobug
+1530183,nobug
+1530193,nobug
 1530220,bug_unknown_regression
 1530227,bug_unknown_regression
 1530232,bug_unknown_regression
 1530276,nobug
+1530277,nobug
 1530298,nobug
 1530306,bug_unknown_regression
 1530327,nobug
@@ -2133,3 +2139,7 @@ bug_id,category
 1531142,bug_unknown_regression
 1531156,bug_unknown_regression
 1531354,nobug
+1535010,nobug
+1536573,nobug
+1538279,nobug
+1538686,nobug
