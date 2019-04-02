@@ -134,10 +134,20 @@ def _hg_log(revs):
 
 
 def get_revs(hg, date):
-    rev_range = 'pushdate("{}"):tip'.format(date.strftime('%Y-%m-%d'))
-    args = hglib.util.cmdbuilder(b'log', template='{node}\n', no_merges=True, rev=rev_range, branch='central')
-    x = hg.rawcommand(args)
-    return x.splitlines()
+    revs = []
+
+    # Since there are cases where on a given day there was no push, we have
+    # to backtrack until we find a "good" day.
+    while len(revs) == 0:
+        rev_range = 'pushdate("{}"):tip'.format(date.strftime('%Y-%m-%d'))
+
+        args = hglib.util.cmdbuilder(b'log', template='{node}\n', no_merges=True, rev=rev_range, branch='central')
+        x = hg.rawcommand(args)
+        revs = x.splitlines()
+
+        date -= relativedelta(days=1)
+
+    return revs
 
 
 def download_commits(repo_dir, date_from):
