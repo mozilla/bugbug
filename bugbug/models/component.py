@@ -38,8 +38,8 @@ class ComponentModel(Model):
         'Firefox Build System': 'Firefox Build System::General',
     }
 
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, ngrams=1):
+        Model.__init__(self, lemmatization, ngrams)
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -70,9 +70,9 @@ class ComponentModel(Model):
             ('union', ColumnTransformer([
                 ('data', DictVectorizer(), 'data'),
 
-                ('title', self.text_vectorizer(min_df=0.0001, ngram_range=(1, self.ngrams)), 'title'),
+                ('title', self.text_vectorizer(min_df=0.01, ngram_range=(1, self.ngrams)), 'title'),
 
-                ('comments', self.text_vectorizer(min_df=0.0001, ngram_range=(1, self.ngrams)), 'comments'),
+                ('comments', self.text_vectorizer(min_df=0.01, ngram_range=(1, self.ngrams)), 'comments'),
             ])),
         ])
 
