@@ -61,6 +61,9 @@ if __name__ == '__main__':
     elif args.goal == 'devdocneeded':
         from bugbug.models.devdocneeded import DevDocNeededModel
         model_class = DevDocNeededModel
+    elif args.goal == 'assignee':
+        from bugbug.models.assignee import AssigneeModel
+        model_class = AssigneeModel
 
     if args.train:
         db.download()
