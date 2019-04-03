@@ -92,6 +92,7 @@ def target_milestone(target_milestone):
 FIELD_TYPES = {
     'blocks': int,
     'depends_on': int,
+    'regressed_by': int,
     'is_confirmed': bool_str,
     'is_cc_accessible': bool_str,
     'is_creator_accessible': bool_str,
