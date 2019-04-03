@@ -8,6 +8,7 @@ import concurrent.futures
 import itertools
 import multiprocessing
 import os
+import time
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
@@ -198,6 +199,8 @@ def download_commits(repo_dir, date_from):
 
     global author_experience
     global author_experience_90_days
+
+    start = time.perf_counter()
     for commit in commits:
         author_experience[commit.node] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
@@ -221,6 +224,9 @@ def download_commits(repo_dir, date_from):
         if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)
 
+    print()
+    print('Time (author): {}'.format(time.perf_counter() - start))
+
     global COMPONENTS
     r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
     r.raise_for_status()
@@ -233,6 +239,7 @@ def download_commits(repo_dir, date_from):
     components_touched = defaultdict(int)
     prev_commits_90_days = []
 
+    start = time.perf_counter()
     for commit in commits:
         comp = set(COMPONENTS[fl] for fl in commit.files if fl in COMPONENTS)
 
@@ -271,12 +278,22 @@ def download_commits(repo_dir, date_from):
         COMP_TOUCHED_PREV_90_DAYS[commit.node] = sum(components_touched_90_days[cp] for cp in comp)
         prev_commits_90_days.append(commit)
 
+    print('Time (component): {}'.format(time.perf_counter() - start))
+    print()
+
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
-    with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
-        commits = executor.map(_transform, commits, chunksize=64)
-        commits = tqdm(commits, total=commits_num)
-        db.write(COMMITS_DB, commits)
+    start = time.perf_counter()
+    try:
+        with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
+            commits = executor.map(_transform, commits, chunksize=64)
+            commits = tqdm(commits, total=commits_num)
+            db.write(COMMITS_DB, commits)
+    except:
+        print('Exception Time: {}'.format(time.perf_counter() - start))
+
+    print()
+    print('Time (mining commits): {}'.format(time.perf_counter() - start))
 
 
 def get_commit_map():
