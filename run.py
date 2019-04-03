@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal',
                         help='Goal of the classifier',
-                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectfeaturetask'],
+                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectfeaturetask', 'assignee'],
                         default='bug')
     parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
