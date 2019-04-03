@@ -41,8 +41,8 @@ class ComponentModel(Model):
     def __init__(self, lemmatization=False, ngrams=1):
         Model.__init__(self, lemmatization, ngrams)
 
-        self.cross_validation_enabled = False
-        self.calculate_importance = False
+        self.cross_validation_enabled = True
+        self.calculate_importance = True
 
         feature_extractors = [
             bug_features.has_str(),
