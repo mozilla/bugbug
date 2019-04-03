@@ -2,6 +2,7 @@ bug_id,category
 35,bug_unknown_regression
 101,bug_unknown_regression
 92144,nobug
+96774,regression
 218415,nobug
 244549,bug_unknown_regression
 346014,bug_unknown_regression
