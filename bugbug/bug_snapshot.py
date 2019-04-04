@@ -121,7 +121,35 @@ def parse_flag_change(change):
     return name, status, requestee
 
 
+def is_expected_inconsistent_field(field, last_product, bug_id):
+    # TODO: Remove the Graveyard case when https://bugzilla.mozilla.org/show_bug.cgi?id=1541926 is fixed.
+    return \
+        (field.startswith('cf_') and last_product == 'Firefox for Android Graveyard') or\
+        (field == 'cf_tracking_firefox59' and bug_id in [1443367, 1443630]) or\
+        (field == 'cf_status_firefox60' and bug_id in [1442627, 1443505, 1443599, 1443600, 1443603, 1443605, 1443608, 1443609, 1443611, 1443614, 1443615, 1443617, 1443644]) or\
+        (field in ['cf_has_str', 'cf_has_regression_range'] and bug_id == 1440338)
+
+
+def is_expected_inconsistent_change_field(field, bug_id, new_value):
+    # The 'enhancement' severity has been removed, but it doesn't show up in the history.
+    # See https://bugzilla.mozilla.org/show_bug.cgi?id=1541362.
+    return \
+        (field in ['status', 'resolution', 'cf_last_resolved'] and bug_id == 1312722) or\
+        (field == 'cf_last_resolved' and bug_id == 1321567) or\
+        (field == 'url' and bug_id == 740223) or\
+        (field == 'severity' and new_value == 'enhancement') or\
+        (field == 'cf_status_firefox_esr52' and bug_id in [1436341, 1443518, 1443637]) or\
+        (field == 'cf_status_firefox57' and bug_id in [1328936, 1381197, 1382577, 1382605, 1382606, 1382607, 1382609, 1383711, 1387511, 1394996, 1403927, 1403977, 1404917, 1406290, 1407347, 1409651, 1410351]) or\
+        (field == 'cf_status_firefox58' and bug_id in [1328936, 1383870, 1394996, 1397772, 1408468, 1418410, 1436341, 1441537, 1443511, 1443518, 1443527, 1443544, 1443612, 1443630, 1443637]) or\
+        (field == 'cf_status_firefox59' and bug_id in [1328936, 1394996, 1397772, 1403334, 1428996, 1431306, 1436341, 1441537, 1443511, 1443518, 1443527, 1443533, 1443544, 1443612, 1443630, 1443637]) or\
+        (field == 'cf_status_firefox60' and bug_id in [1362303, 1363862, 1375913, 1390583, 1401847, 1402845, 1414901, 1421387, 1434483, 1434869, 1436287, 1437803, 1438608, 1440146, 1441052, 1442160, 1442186, 1442861, 1443205, 1443368, 1443371, 1443438, 1443507, 1443511, 1443518, 1443525, 1443527, 1443528, 1443533, 1443560, 1443578, 1443585, 1443593, 1443612, 1443630, 1443637, 1443646, 1443650, 1443651, 1443664]) or\
+        (field == 'cf_tracking_firefox60' and bug_id in [1375913, 1439875]) or\
+        (field == 'priority' and bug_id == 1337747)
+
+
 def rollback(bug, when, verbose=True, all_inconsistencies=False):
+    last_product = bug['product']
+
     change_to_return = None
     if when is not None:
         for history in bug['history']:
@@ -264,8 +292,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
 
             if change['added'] != '---':
                 if field not in bug:
-                    # TODO: try to remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
-                    if not all_inconsistencies and any(field.startswith(k) for k in ['cf_']):
+                    if not all_inconsistencies and is_expected_inconsistent_field(field, last_product, bug['id']):
                         if verbose:
                             print(f'{field} is not in bug {bug["id"]}')
                     else:
@@ -309,9 +336,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 # TODO: Users can change their email, try with all emails from a mapping file.
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
-                        # TODO: try to remove the cf_ part when https://bugzilla.mozilla.org/show_bug.cgi?id=1508695 is fixed.
-                        # The 'enhancement' severity has been removed, but it doesn't show up in the history.
-                        if not all_inconsistencies and ((any(field.startswith(k) for k in ['cf_']) or bug['id'] in [1304729, 1304515, 1312722, 1337747]) or (field == 'url' and bug['id'] == 740223) or (field == 'severity' and new_value == 'enhancement')):
+                        if not all_inconsistencies and is_expected_inconsistent_change_field(field, bug['id'], new_value):
                             print(f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}')
                         else:
                             assert False, f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
