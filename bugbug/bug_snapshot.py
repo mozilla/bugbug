@@ -192,12 +192,6 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
             if field in ['alias', 'restrict_comments']:
                 continue
 
-            # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1513956 and https://bugzilla.mozilla.org/show_bug.cgi?id=1513995 are fixed.
-            if field in ['summary', 'whiteboard']:
-                change['added'] = change['added'].rstrip()
-                change['removed'] = change['removed'].rstrip()
-                bug[field] = bug[field].rstrip()
-
             if field == 'longdescs.isprivate':
                 # Ignore for now.
                 continue
