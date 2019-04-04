@@ -26,6 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
     parser.add_argument('--generate-sheet', help='Perform evaluation on bugs from last week and generate a csv file', action='store_true')
+    parser.add_argument('--token', help='Bugzilla token', action='store')
     args = parser.parse_args()
 
     model_file_name = '{}{}model'.format(
@@ -93,8 +94,10 @@ if __name__ == '__main__':
             input()
 
     if args.generate_sheet:
+        assert args.token is not None, 'A Bugzilla token should be set in order to download bugs'
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
+        bugzilla.set_token(args.token)
         bugs = bugzilla.download_bugs_between(a_week_ago, today)
 
         print(f'Classifying {len(bugs)} bugs...')
