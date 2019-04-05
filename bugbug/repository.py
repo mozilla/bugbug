@@ -8,7 +8,6 @@ import concurrent.futures
 import itertools
 import multiprocessing
 import os
-import time
 from collections import defaultdict
 from collections import namedtuple
 from datetime import datetime
@@ -24,14 +23,15 @@ from bugbug import db
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1', 'v1')
 
-COMPONENTS = {}
-COMP_TOUCHED_PREV = defaultdict(int)
-COMP_TOUCHED_PREV_90_DAYS = defaultdict(int)
+path_to_component = {}
 
 Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email', 'files', 'file_copies'])
 
 author_experience = {}
 author_experience_90_days = {}
+
+components_touched_prev = defaultdict(int)
+components_touched_prev_90_days = defaultdict(int)
 
 
 def get_commits():
@@ -69,8 +69,8 @@ def _transform(commit):
         'author_experience': author_experience[commit.node],
         'author_experience_90_days': author_experience_90_days[commit.node],
         'author_email': commit.author_email.decode('utf-8'),
-        'comp_touched_prev': 0,
-        'comp_touched_prev_90_days': 0,
+        'components_touched_prev': components_touched_prev[commit.node],
+        'components_touched_prev_90_days': components_touched_prev_90_days[commit.node],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -108,11 +108,7 @@ def _transform(commit):
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
 
-    obj['components'] = list(set(COMPONENTS[fl] for fl in patch_data.keys() if COMPONENTS.get(fl)))
-
-    obj['comp_touched_prev'] = COMP_TOUCHED_PREV[commit.node]
-
-    obj['comp_touched_prev_90_days'] = COMP_TOUCHED_PREV_90_DAYS[commit.node]
+    obj['components'] = list(set(path_to_component[path] for path in patch_data.keys() if path_to_component.get(path)))
 
     return obj
 
@@ -129,6 +125,16 @@ def _hg_log(revs):
         posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
 
+        file_copies = {}
+        for file_copy in rev[8].split(b'|'):
+            if not file_copy:
+                continue
+
+            parts = file_copy.split(b' (')
+            copied = parts[0].decode('utf-8')
+            orig = parts[1][:-1].decode('utf-8')
+            file_copies[orig] = copied
+
         revs.append(Commit(
             node=rev[0],
             author=rev[1],
@@ -138,7 +144,7 @@ def _hg_log(revs):
             backedoutby=rev[5],
             author_email=rev[6],
             files=rev[7].decode('utf-8').split('|'),
-            file_copies={fl[fl.find('(') + 1:-1]: fl[:fl.find('(') - 1] for fl in rev[8].decode('utf-8').split('|')} if len(rev[8]) > 0 else {},
+            file_copies=file_copies,
         ))
 
     return revs
@@ -199,8 +205,6 @@ def download_commits(repo_dir, date_from):
 
     global author_experience
     global author_experience_90_days
-
-    start = time.perf_counter()
     for commit in commits:
         author_experience[commit.node] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
@@ -224,34 +228,29 @@ def download_commits(repo_dir, date_from):
         if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)
 
-    print()
-    print('Time (author): {}'.format(time.perf_counter() - start))
-
-    global COMPONENTS
+    global path_to_component
     r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
     r.raise_for_status()
-    COMPONENTS = r.json()
-    COMPONENTS = {fl: '::'.join(cmp) for fl, cmp in COMPONENTS.items()}
+    path_to_component = r.json()
+    path_to_component = {path: '::'.join(component) for path, component in path_to_component.items()}
 
-    global COMP_TOUCHED_PREV
-    global COMP_TOUCHED_PREV_90_DAYS
+    global components_touched_prev
+    global components_touched_prev_90_days
 
     components_touched = defaultdict(int)
     prev_commits_90_days = []
-
-    start = time.perf_counter()
     for commit in commits:
-        comp = set(COMPONENTS[fl] for fl in commit.files if fl in COMPONENTS)
+        components = set(path_to_component[path] for path in commit.files if path in path_to_component)
 
-        for cp in comp:
-            COMP_TOUCHED_PREV[commit.node] += components_touched[cp]
+        for component in components:
+            components_touched_prev[commit.node] += components_touched[component]
 
-            components_touched[cp] += 1
+            components_touched[component] += 1
 
         if len(commit.file_copies) > 0:
-            for src, cpy in commit.file_copies.items():
-                if src in COMPONENTS and cpy in COMPONENTS:
-                    components_touched[COMPONENTS[cpy]] = components_touched[COMPONENTS[src]]
+            for orig, copied in commit.file_copies.items():
+                if orig in path_to_component and copied in path_to_component:
+                    components_touched[path_to_component[copied]] = components_touched[path_to_component[orig]]
 
         for i, prev_commit in enumerate(prev_commits_90_days):
             if (commit.date - prev_commit.date).days <= 90:
@@ -263,37 +262,26 @@ def download_commits(repo_dir, date_from):
             prev_commits_90_days = prev_commits_90_days[cut + 1:]
 
         components_touched_90_days = defaultdict(int)
-
         for prev_commit in prev_commits_90_days:
-            comp_prev = set(COMPONENTS[fl] for fl in prev_commit.files if fl in COMPONENTS)
+            components_prev = set(path_to_component[path] for path in prev_commit.files if path in path_to_component)
 
-            for cp_prev in comp_prev:
-                components_touched_90_days[cp_prev] += 1
+            for component_prev in components_prev:
+                components_touched_90_days[component_prev] += 1
 
             if len(prev_commit.file_copies) > 0:
-                for src, cpy in prev_commit.file_copies.items():
-                    if src in COMPONENTS and cpy in COMPONENTS:
-                        components_touched_90_days[COMPONENTS[cpy]] = components_touched_90_days[COMPONENTS[src]]
+                for orig, copied in prev_commit.file_copies.items():
+                    if orig in path_to_component and copied in path_to_component:
+                        components_touched_90_days[path_to_component[copied]] = components_touched_90_days[path_to_component[orig]]
 
-        COMP_TOUCHED_PREV_90_DAYS[commit.node] = sum(components_touched_90_days[cp] for cp in comp)
+        components_touched_prev_90_days[commit.node] = sum(components_touched_90_days[component] for component in components)
         prev_commits_90_days.append(commit)
-
-    print('Time (component): {}'.format(time.perf_counter() - start))
-    print()
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
-    start = time.perf_counter()
-    try:
-        with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
-            commits = executor.map(_transform, commits, chunksize=64)
-            commits = tqdm(commits, total=commits_num)
-            db.write(COMMITS_DB, commits)
-    except:
-        print('Exception Time: {}'.format(time.perf_counter() - start))
-
-    print()
-    print('Time (mining commits): {}'.format(time.perf_counter() - start))
+    with concurrent.futures.ProcessPoolExecutor(initializer=_init, initargs=(repo_dir,)) as executor:
+        commits = executor.map(_transform, commits, chunksize=64)
+        commits = tqdm(commits, total=commits_num)
+        db.write(COMMITS_DB, commits)
 
 
 def get_commit_map():
