@@ -126,13 +126,13 @@ def _hg_log(revs):
         dt = datetime.fromtimestamp(posixtime)
 
         file_copies = {}
-        for file_copy in rev[8].split(b'|'):
+        for file_copy in rev[8].decode('utf-8').split('|'):
             if not file_copy:
                 continue
 
-            parts = file_copy.split(b' (')
-            copied = parts[0].decode('utf-8')
-            orig = parts[1][:-1].decode('utf-8')
+            parts = file_copy.split(' (')
+            copied = parts[0]
+            orig = parts[1][:-1]
             file_copies[orig] = copied
 
         revs.append(Commit(
