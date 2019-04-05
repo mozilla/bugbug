@@ -113,6 +113,7 @@ class BugModel(Model):
                 classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
+        # And also use the new bug type field.
         bug_ids = set()
         for bug in bugzilla.get_bugs():
             bug_id = int(bug['id'])
@@ -140,6 +141,42 @@ class BugModel(Model):
                                 classes[bug_id] = 0
                             elif 'regression' in change['added'].split(','):
                                 classes[bug_id] = 1
+
+            # We can use the type as a label for bugs after the migration (https://bugzilla.mozilla.org/show_bug.cgi?id=1524738), and for bugs whose type has been modified.
+            # We can't use 'defect' as a label unless it is a result of a change, because bugs are filed by default as 'defect' and so they could be mistakes.
+            can_use_type = False
+            can_use_defect_type = False
+
+            if bug['id'] > 1540807:
+                can_use_type = True
+
+            # We can use the type as a label for bugs whose type has been modified.
+            if not can_use_type or bug['type'] == 'defect':
+                for history in bug['history']:
+                    for change in history['changes']:
+                        if change['field_name'] == 'type':
+                            can_use_type = can_use_defect_type = True
+
+            if can_use_type:
+                if bug['type'] == 'enhancement':
+                    if kind == 'bug':
+                        classes[int(bug_id)] = 0
+                    elif kind == 'regression':
+                        classes[int(bug_id)] = 0
+                    elif kind == 'defect_feature_task':
+                        classes[int(bug_id)] = 'e'
+                elif bug['type'] == 'task':
+                    if kind == 'bug':
+                        classes[int(bug_id)] = 0
+                    elif kind == 'regression':
+                        classes[int(bug_id)] = 0
+                    elif kind == 'defect_feature_task':
+                        classes[int(bug_id)] = 't'
+                elif bug['type'] == 'defect' and can_use_defect_type:
+                    if kind == 'bug':
+                        classes[int(bug_id)] = 1
+                    elif kind == 'defect_feature_task':
+                        classes[int(bug_id)] = 'd'
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
