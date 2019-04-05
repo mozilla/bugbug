@@ -81,7 +81,7 @@ class BugModel(Model):
                     classes[int(bug_id)] = 0
             elif kind == 'defect_enhancement_task':
                 if category == 'True':
-                    classes[int(bug_id)] = 'd'
+                    classes[int(bug_id)] = 'defect'
 
         for bug_id, category in labels.get_labels('regression_bug_nobug'):
             assert category in ['nobug', 'bug_unknown_regression', 'bug_no_regression', 'regression'], f'unexpected category {category}'
@@ -94,7 +94,7 @@ class BugModel(Model):
                 classes[int(bug_id)] = 1 if category == 'regression' else 0
             elif kind == 'defect_enhancement_task':
                 if category != 'nobug':
-                    classes[int(bug_id)] = 'd'
+                    classes[int(bug_id)] = 'defect'
 
         defect_enhancement_task_e = {bug_id: category for bug_id, category in labels.get_labels('defect_enhancement_task_e')}
         defect_enhancement_task_p = {bug_id: category for bug_id, category in labels.get_labels('defect_enhancement_task_p')}
@@ -110,7 +110,12 @@ class BugModel(Model):
                 if category in ['e', 't']:
                     classes[int(bug_id)] = 0
             elif kind == 'defect_enhancement_task':
-                classes[int(bug_id)] = category
+                if category == 'd':
+                    classes[int(bug_id)] = 'defect'
+                elif category == 'e':
+                    classes[int(bug_id)] = 'enhancement'
+                elif category == 't':
+                    classes[int(bug_id)] = 'task'
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
@@ -127,12 +132,12 @@ class BugModel(Model):
                 if kind in ['bug', 'regression']:
                     classes[bug_id] = 1
                 else:
-                    classes[bug_id] = 'd'
+                    classes[bug_id] = 'defect'
             elif any(keyword in bug['keywords'] for keyword in ['feature']):
                 if kind in ['bug', 'regression']:
                     classes[bug_id] = 0
                 else:
-                    classes[bug_id] = 'e'
+                    classes[bug_id] = 'enhancement'
             elif kind == 'regression':
                 for history in bug['history']:
                     for change in history['changes']:
@@ -165,19 +170,19 @@ class BugModel(Model):
                     elif kind == 'regression':
                         classes[int(bug_id)] = 0
                     elif kind == 'defect_enhancement_task':
-                        classes[int(bug_id)] = 'e'
+                        classes[int(bug_id)] = 'enhancement'
                 elif bug['type'] == 'task':
                     if kind == 'bug':
                         classes[int(bug_id)] = 0
                     elif kind == 'regression':
                         classes[int(bug_id)] = 0
                     elif kind == 'defect_enhancement_task':
-                        classes[int(bug_id)] = 't'
+                        classes[int(bug_id)] = 'task'
                 elif bug['type'] == 'defect' and can_use_defect_type:
                     if kind == 'bug':
                         classes[int(bug_id)] = 1
                     elif kind == 'defect_enhancement_task':
-                        classes[int(bug_id)] = 'd'
+                        classes[int(bug_id)] = 'defect'
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
