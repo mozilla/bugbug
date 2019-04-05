@@ -68,7 +68,7 @@ class BugModel(Model):
         self.clf.set_params(predictor='cpu_predictor')
 
     def get_bugbug_labels(self, kind='bug'):
-        assert kind in ['bug', 'regression', 'defect_feature_task']
+        assert kind in ['bug', 'regression', 'defect_enhancement_task']
 
         classes = {}
 
@@ -79,7 +79,7 @@ class BugModel(Model):
             elif kind == 'regression':
                 if category == 'False':
                     classes[int(bug_id)] = 0
-            elif kind == 'defect_feature_task':
+            elif kind == 'defect_enhancement_task':
                 if category == 'True':
                     classes[int(bug_id)] = 'd'
 
@@ -92,24 +92,24 @@ class BugModel(Model):
                     continue
 
                 classes[int(bug_id)] = 1 if category == 'regression' else 0
-            elif kind == 'defect_feature_task':
+            elif kind == 'defect_enhancement_task':
                 if category != 'nobug':
                     classes[int(bug_id)] = 'd'
 
-        defect_feature_task_e = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_e')}
-        defect_feature_task_p = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_p')}
-        defect_feature_task_s = {bug_id: category for bug_id, category in labels.get_labels('defect_feature_task_s')}
+        defect_enhancement_task_e = {bug_id: category for bug_id, category in labels.get_labels('defect_enhancement_task_e')}
+        defect_enhancement_task_p = {bug_id: category for bug_id, category in labels.get_labels('defect_enhancement_task_p')}
+        defect_enhancement_task_s = {bug_id: category for bug_id, category in labels.get_labels('defect_enhancement_task_s')}
 
-        defect_feature_task_common = ((bug_id, category) for bug_id, category in defect_feature_task_p.items() if (bug_id not in defect_feature_task_e or defect_feature_task_e[bug_id] == defect_feature_task_p[bug_id]) and (bug_id not in defect_feature_task_s or defect_feature_task_s[bug_id] == defect_feature_task_p[bug_id]))
+        defect_enhancement_task_common = ((bug_id, category) for bug_id, category in defect_enhancement_task_p.items() if (bug_id not in defect_enhancement_task_e or defect_enhancement_task_e[bug_id] == defect_enhancement_task_p[bug_id]) and (bug_id not in defect_enhancement_task_s or defect_enhancement_task_s[bug_id] == defect_enhancement_task_p[bug_id]))
 
-        for bug_id, category in itertools.chain(labels.get_labels('defect_feature_task'), defect_feature_task_common):
+        for bug_id, category in itertools.chain(labels.get_labels('defect_enhancement_task'), defect_enhancement_task_common):
             assert category in ['d', 'e', 't']
             if kind == 'bug':
                 classes[int(bug_id)] = 1 if category == 'd' else 0
             elif kind == 'regression':
                 if category in ['e', 't']:
                     classes[int(bug_id)] = 0
-            elif kind == 'defect_feature_task':
+            elif kind == 'defect_enhancement_task':
                 classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
@@ -164,19 +164,19 @@ class BugModel(Model):
                         classes[int(bug_id)] = 0
                     elif kind == 'regression':
                         classes[int(bug_id)] = 0
-                    elif kind == 'defect_feature_task':
+                    elif kind == 'defect_enhancement_task':
                         classes[int(bug_id)] = 'e'
                 elif bug['type'] == 'task':
                     if kind == 'bug':
                         classes[int(bug_id)] = 0
                     elif kind == 'regression':
                         classes[int(bug_id)] = 0
-                    elif kind == 'defect_feature_task':
+                    elif kind == 'defect_enhancement_task':
                         classes[int(bug_id)] = 't'
                 elif bug['type'] == 'defect' and can_use_defect_type:
                     if kind == 'bug':
                         classes[int(bug_id)] = 1
-                    elif kind == 'defect_feature_task':
+                    elif kind == 'defect_enhancement_task':
                         classes[int(bug_id)] = 'd'
 
         # Remove labels which belong to bugs for which we have no data.

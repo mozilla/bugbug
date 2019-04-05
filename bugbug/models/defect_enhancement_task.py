@@ -6,12 +6,12 @@
 from bugbug.models.bug import BugModel
 
 
-class DefectFeatureTaskModel(BugModel):
+class DefectEnhancementTaskModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
     def get_labels(self):
-        classes = self.get_bugbug_labels('defect_feature_task')
+        classes = self.get_bugbug_labels('defect_enhancement_task')
 
         print('{} defects'.format(sum(1 for label in classes.values() if label == 'd')))
         print('{} enhancements'.format(sum(1 for label in classes.values() if label == 'e')))

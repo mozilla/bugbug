@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser.add_argument('--train', help='Perform training', action='store_true')
     parser.add_argument('--goal',
                         help='Goal of the classifier',
-                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectfeaturetask', 'assignee'],
+                        choices=['bug', 'regression', 'tracking', 'qaneeded', 'uplift', 'component', 'devdocneeded', 'defectenhancementtask', 'assignee'],
                         default='bug')
     parser.add_argument('--classifier', help='Type of the classifier', choices=['default', 'nn'], default='default')
     parser.add_argument('--classify', help='Perform evaluation', action='store_true')
@@ -37,9 +37,9 @@ if __name__ == '__main__':
     if args.goal == 'bug':
         from bugbug.models.bug import BugModel
         model_class = BugModel
-    elif args.goal == 'defectfeaturetask':
-        from bugbug.models.defect_feature_task import DefectFeatureTaskModel
-        model_class = DefectFeatureTaskModel
+    elif args.goal == 'defectenhancementtask':
+        from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
+        model_class = DefectEnhancementTaskModel
     elif args.goal == 'regression':
         from bugbug.models.regression import RegressionModel
         model_class = RegressionModel
