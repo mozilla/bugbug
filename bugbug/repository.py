@@ -23,12 +23,15 @@ from bugbug import db
 COMMITS_DB = 'data/commits.json'
 db.register(COMMITS_DB, 'https://www.dropbox.com/s/mz3afgncx0siijc/commits.json.xz?dl=1', 'v1')
 
-COMPONENTS = {}
+path_to_component = {}
 
-Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email'])
+Commit = namedtuple('Commit', ['node', 'author', 'desc', 'date', 'bug', 'backedoutby', 'author_email', 'files', 'file_copies'])
 
 author_experience = {}
 author_experience_90_days = {}
+
+components_touched_prev = defaultdict(int)
+components_touched_prev_90_days = defaultdict(int)
 
 
 def get_commits():
@@ -63,9 +66,11 @@ def _transform(commit):
         'files_modified_num': 0,
         'types': set(),
         'components': list(),
-        'author_experience': author_experience[commit],
-        'author_experience_90_days': author_experience_90_days[commit],
+        'author_experience': author_experience[commit.node],
+        'author_experience_90_days': author_experience_90_days[commit.node],
         'author_email': commit.author_email.decode('utf-8'),
+        'components_touched_prev': components_touched_prev[commit.node],
+        'components_touched_prev_90_days': components_touched_prev_90_days[commit.node],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -103,13 +108,13 @@ def _transform(commit):
     # Covert to a list, as a set is not JSON-serializable.
     obj['types'] = list(obj['types'])
 
-    obj['components'] = list(set('::'.join(COMPONENTS[fl]) for fl in patch_data.keys() if COMPONENTS.get(fl)))
+    obj['components'] = list(set(path_to_component[path] for path in patch_data.keys() if path_to_component.get(path)))
 
     return obj
 
 
 def _hg_log(revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0'
 
     args = hglib.util.cmdbuilder(b'log', template=template, no_merges=True, rev=revs[0] + b':' + revs[-1], branch='central')
     x = HG.rawcommand(args)
@@ -120,6 +125,16 @@ def _hg_log(revs):
         posixtime = float(rev[3].split(b'.', 1)[0])
         dt = datetime.fromtimestamp(posixtime)
 
+        file_copies = {}
+        for file_copy in rev[8].decode('utf-8').split('|'):
+            if not file_copy:
+                continue
+
+            parts = file_copy.split(' (')
+            copied = parts[0]
+            orig = parts[1][:-1]
+            file_copies[orig] = copied
+
         revs.append(Commit(
             node=rev[0],
             author=rev[1],
@@ -128,6 +143,8 @@ def _hg_log(revs):
             bug=rev[4],
             backedoutby=rev[5],
             author_email=rev[6],
+            files=rev[7].decode('utf-8').split('|'),
+            file_copies=file_copies,
         ))
 
     return revs
@@ -199,7 +216,7 @@ def download_commits(repo_dir, date_from):
     global author_experience
     global author_experience_90_days
     for commit in commits:
-        author_experience[commit] = total_commits_by_author[commit.author]
+        author_experience[commit.node] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
         if not commit.backedoutby:
             total_commits_by_author[commit.author] += 1
@@ -216,15 +233,58 @@ def download_commits(repo_dir, date_from):
         if cut is not None:
             commits_by_author[commit.author] = commits_by_author[commit.author][cut + 1:]
 
-        author_experience_90_days[commit] = len(commits_by_author[commit.author])
+        author_experience_90_days[commit.node] = len(commits_by_author[commit.author])
 
         if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)
 
-    global COMPONENTS
+    global path_to_component
     r = requests.get('https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json')
     r.raise_for_status()
-    COMPONENTS = r.json()
+    path_to_component = r.json()
+    path_to_component = {path: '::'.join(component) for path, component in path_to_component.items()}
+
+    global components_touched_prev
+    global components_touched_prev_90_days
+
+    components_touched = defaultdict(int)
+    prev_commits_90_days = []
+    for commit in commits:
+        components = set(path_to_component[path] for path in commit.files if path in path_to_component)
+
+        for component in components:
+            components_touched_prev[commit.node] += components_touched[component]
+
+            components_touched[component] += 1
+
+        if len(commit.file_copies) > 0:
+            for orig, copied in commit.file_copies.items():
+                if orig in path_to_component and copied in path_to_component:
+                    components_touched[path_to_component[copied]] = components_touched[path_to_component[orig]]
+
+        for i, prev_commit in enumerate(prev_commits_90_days):
+            if (commit.date - prev_commit.date).days <= 90:
+                break
+
+            cut = i
+
+        if cut is not None:
+            prev_commits_90_days = prev_commits_90_days[cut + 1:]
+
+        components_touched_90_days = defaultdict(int)
+        for prev_commit in prev_commits_90_days:
+            components_prev = set(path_to_component[path] for path in prev_commit.files if path in path_to_component)
+
+            for component_prev in components_prev:
+                components_touched_90_days[component_prev] += 1
+
+            if len(prev_commit.file_copies) > 0:
+                for orig, copied in prev_commit.file_copies.items():
+                    if orig in path_to_component and copied in path_to_component:
+                        components_touched_90_days[path_to_component[copied]] = components_touched_90_days[path_to_component[orig]]
+
+        components_touched_prev_90_days[commit.node] = sum(components_touched_90_days[component] for component in components)
+        prev_commits_90_days.append(commit)
 
     print(f'Mining commits using {multiprocessing.cpu_count()} processes...')
 
