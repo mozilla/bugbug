@@ -47,6 +47,9 @@ author_experience_90_days = {}
 components_touched_prev = defaultdict(int)
 components_touched_prev_90_days = defaultdict(int)
 
+files_touched_prev = defaultdict(int)
+files_touched_prev_90_days = defaultdict(int)
+
 
 def get_commits():
     return db.read(COMMITS_DB)
@@ -97,6 +100,8 @@ def _transform(commit):
         "author_email": commit.author_email.decode("utf-8"),
         "components_touched_prev": components_touched_prev[commit.node],
         "components_touched_prev_90_days": components_touched_prev_90_days[commit.node],
+        "files_touched_prev": files_touched_prev[commit.node],
+        "files_touched_prev_90_days": files_touched_prev_90_days[commit.node],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -365,6 +370,42 @@ def download_commits(repo_dir, date_from):
         components_touched_prev_90_days[commit.node] = sum(
             components_touched_90_days[component] for component in components
         )
+        prev_commits_90_days.append(commit)
+
+    global files_touched_prev
+    global files_touched_prev_90_days
+
+    files_touched = defaultdict(int)
+    prev_commits_90_days = []
+    for commit in commits:
+        for path in commit.files:
+            files_touched_prev[commit.node] += files_touched[path]
+
+            files_touched[path] += 1
+
+        if len(commit.file_copies) > 0:
+            for orig, copied in commit.file_copies.items():
+                files_touched[copied] = files_touched[orig]
+
+        for i, prev_commit in enumerate(prev_commits_90_days):
+            if (commit.date - prev_commit.date).days <= 90:
+                break
+
+            cut = i
+
+        if cut is not None:
+            prev_commits_90_days = prev_commits_90_days[cut + 1:]
+
+        files_touched_90_days = defaultdict(int)
+        for prev_commit in prev_commits_90_days:
+            for path_prev in prev_commit.files:
+                files_touched_90_days[path_prev] += 1
+
+            if len(prev_commit.file_copies) > 0:
+                for orig, copied in prev_commit.file_copies.items():
+                    files_touched_90_days[copied] = files_touched_90_days[orig]
+
+        files_touched_prev_90_days[commit.node] = sum(files_touched_90_days[path] for path in commit.files)
         prev_commits_90_days.append(commit)
 
     print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
