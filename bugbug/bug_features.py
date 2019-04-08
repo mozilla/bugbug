@@ -291,7 +291,7 @@ class had_severity_enhancement(object):
     def __call__(self, bug, **kwargs):
         for history in bug['history']:
             for change in history['changes']:
-                if change['field_name'].startswith('severity') and change['added'] == 'enhancement':
+                if change['field_name'] == 'severity' and change['added'] == 'enhancement':
                     return True
 
         return False
