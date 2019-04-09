@@ -50,8 +50,8 @@ setup(
     license="MPL2",
     entry_points={
         "console_scripts": [
-            "bugbug-data-commits = scripts.retriever:main_retrieve_commits",
-            "bugbug-data-bugzilla = scripts.retriever:main_retrieve_bugs",
+            "bugbug-data-commits = scripts.commit_retriever:main",
+            "bugbug-data-bugzilla = scripts.bug_retriever:main",
         ]
     },
 )
