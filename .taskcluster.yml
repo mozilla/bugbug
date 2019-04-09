@@ -93,7 +93,7 @@ tasks:
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
                pip install -r test-requirements.txt &&
-               python -c 'from bugbug import bugzilla, db; db.download' &&
+               python -c 'from bugbug import bugzilla, db; db.download()' &&
                python -m pytest tests/test_*.py"
         metadata:
           name: bugbug tests
