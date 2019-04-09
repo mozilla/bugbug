@@ -136,6 +136,7 @@ tasks:
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
+               pip install -r requirements.txt &&
                python setup.py sdist &&
                pip install dist/bugbug-$(cat VERSION).tar.gz"
         metadata:
