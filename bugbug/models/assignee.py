@@ -10,19 +10,18 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features
-from bugbug import bugzilla
+from bugbug import bug_features, bugzilla
 from bugbug.model import Model
 
 MINIMUM_ASSIGNMENTS = 5
 ADDRESSES_TO_EXCLUDE = [
-    'nobody@bugzilla.org',
-    'nobody@example.com',
-    'nobody@fedoraproject.org',
-    'nobody@mozilla.org',
-    'nobody@msg1.fake',
-    'nobody@nss.bugs',
-    'nobody@t4b.me'
+    "nobody@bugzilla.org",
+    "nobody@example.com",
+    "nobody@fedoraproject.org",
+    "nobody@mozilla.org",
+    "nobody@msg1.fake",
+    "nobody@nss.bugs",
+    "nobody@t4b.me",
 ]
 
 
@@ -54,41 +53,66 @@ class AssigneeModel(Model):
             bug_features.cleanup_synonyms,
         ]
 
-        self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
-            ('union', ColumnTransformer([
-                ('data', DictVectorizer(), 'data'),
-
-                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
-
-                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
-            ])),
-        ])
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
+                ),
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            (
+                                "comments",
+                                self.text_vectorizer(min_df=0.0001),
+                                "comments",
+                            ),
+                        ]
+                    ),
+                ),
+            ]
+        )
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor='cpu_predictor')
+        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            if bug_data['assigned_to_detail']['email'] in ADDRESSES_TO_EXCLUDE:
+            if bug_data["assigned_to_detail"]["email"] in ADDRESSES_TO_EXCLUDE:
                 continue
 
-            bug_id = int(bug_data['id'])
-            classes[bug_id] = bug_data['assigned_to_detail']['email']
+            bug_id = int(bug_data["id"])
+            classes[bug_id] = bug_data["assigned_to_detail"]["email"]
 
         assignee_counts = Counter(classes.values()).most_common()
-        top_assignees = set(assignee for assignee, count in assignee_counts if count > MINIMUM_ASSIGNMENTS)
+        top_assignees = set(
+            assignee
+            for assignee, count in assignee_counts
+            if count > MINIMUM_ASSIGNMENTS
+        )
 
-        print(f'{len(top_assignees)} assignees')
+        print(f"{len(top_assignees)} assignees")
         for assignee, count in assignee_counts:
-            print(f'{assignee}: {count}')
+            print(f"{assignee}: {count}")
 
-        return {bug_id: assignee for bug_id, assignee in classes.items() if assignee in top_assignees}
+        return {
+            bug_id: assignee
+            for bug_id, assignee in classes.items()
+            if assignee in top_assignees
+        }
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps['union'].get_feature_names()
+        return self.extraction_pipeline.named_steps["union"].get_feature_names()
 
     def rollback(self, change):
-        return change['field_name'].startswith('assigned_to')
+        return change["field_name"].startswith("assigned_to")

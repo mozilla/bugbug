@@ -9,11 +9,11 @@ import sys
 
 
 def get_labels_dir():
-    return os.path.join(os.path.dirname(sys.modules[__package__].__file__), 'labels')
+    return os.path.join(os.path.dirname(sys.modules[__package__].__file__), "labels")
 
 
 def get_labels(file_name):
-    with open(os.path.join(get_labels_dir(), f'{file_name}.csv'), 'r') as f:
+    with open(os.path.join(get_labels_dir(), f"{file_name}.csv"), "r") as f:
         reader = csv.reader(f)
         next(reader)
         yield from reader

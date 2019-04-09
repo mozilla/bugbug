@@ -9,9 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features
-from bugbug import bugzilla
-from bugbug import labels
+from bugbug import bug_features, bugzilla, labels
 from bugbug.model import Model
 
 
@@ -45,7 +43,7 @@ class TrackingModel(Model):
             bug_features.comment_count(),
             bug_features.comment_length(),
             bug_features.reporter_experience(),
-            bug_features.number_of_bug_dependencies()
+            bug_features.number_of_bug_dependencies(),
         ]
 
         cleanup_functions = [
@@ -57,42 +55,59 @@ class TrackingModel(Model):
             bug_features.cleanup_crash,
         ]
 
-        self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions, rollback=True, rollback_when=self.rollback)),
-            ('union', ColumnTransformer([
-                ('data', DictVectorizer(), 'data'),
-
-                ('title', self.text_vectorizer(min_df=0.0001), 'title'),
-
-                ('comments', self.text_vectorizer(min_df=0.0001), 'comments'),
-            ])),
-        ])
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
+                ),
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            (
+                                "comments",
+                                self.text_vectorizer(min_df=0.0001),
+                                "comments",
+                            ),
+                        ]
+                    ),
+                ),
+            ]
+        )
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor='cpu_predictor')
+        self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
-        return change['field_name'].startswith('cf_tracking_firefox')
+        return change["field_name"].startswith("cf_tracking_firefox")
 
     def get_labels(self):
         classes = {}
 
-        for bug_id, category in labels.get_labels('tracking'):
-            assert category in ['True', 'False'], f'unexpected category {category}'
-            classes[int(bug_id)] = 1 if category == 'True' else 0
+        for bug_id, category in labels.get_labels("tracking"):
+            assert category in ["True", "False"], f"unexpected category {category}"
+            classes[int(bug_id)] = 1 if category == "True" else 0
 
         for bug_data in bugzilla.get_bugs():
-            bug_id = int(bug_data['id'])
+            bug_id = int(bug_data["id"])
 
-            for entry in bug_data['history']:
-                for change in entry['changes']:
-                    if change['field_name'].startswith('cf_tracking_firefox'):
-                        if change['added'] in ['blocking', '+']:
+            for entry in bug_data["history"]:
+                for change in entry["changes"]:
+                    if change["field_name"].startswith("cf_tracking_firefox"):
+                        if change["added"] in ["blocking", "+"]:
                             classes[bug_id] = 1
-                        elif change['added'] == '-':
+                        elif change["added"] == "-":
                             classes[bug_id] = 0
 
-            if bug_data['resolution'] in ['INVALID', 'DUPLICATE']:
+            if bug_data["resolution"] in ["INVALID", "DUPLICATE"]:
                 continue
 
             if bug_id not in classes:
@@ -101,11 +116,11 @@ class TrackingModel(Model):
         return classes
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps['union'].get_feature_names()
+        return self.extraction_pipeline.named_steps["union"].get_feature_names()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if bug['resolution'] in ['INVALID', 'DUPLICATE']:
-                classes[i] = 0 if not probabilities else [1., 0.]
+            if bug["resolution"] in ["INVALID", "DUPLICATE"]:
+                classes[i] = 0 if not probabilities else [1.0, 0.0]
 
         return classes

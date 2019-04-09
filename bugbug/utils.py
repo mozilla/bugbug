@@ -4,8 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import numpy as np
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
@@ -45,9 +44,9 @@ class MissingOrdinalEncoder(OrdinalEncoder):
 
     def fit(self, X, y=None):
         self._categories = self.categories
-        self._fit(X, handle_unknown='ignore')
+        self._fit(X, handle_unknown="ignore")
         return self
 
     def transform(self, X):
-        X_int, _ = self._transform(X, handle_unknown='ignore')
+        X_int, _ = self._transform(X, handle_unknown="ignore")
         return X_int.astype(self.dtype, copy=False)
