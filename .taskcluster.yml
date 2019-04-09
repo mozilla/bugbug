@@ -116,6 +116,7 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
+               python -c 'from bugbug import bugzilla, db; db.download()' &&
                python -m bugbug.bug_snapshot"
         metadata:
           name: bugbug rollback test
