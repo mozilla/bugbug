@@ -31,3 +31,27 @@ services:
         target: /cache/
         volume:
           nocopy: true
+
+  bugbug-train-component:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_component
+    image: mozilla/bugbug-train-component
+
+  bugbug-train-defect:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_defect
+    image: mozilla/bugbug-train-defect
+
+  bugbug-train-regression:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regression
+    image: mozilla/bugbug-train-regression
+
+  bugbug-train-tracking:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_tracking
+    image: mozilla/bugbug-train-tracking
