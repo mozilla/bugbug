@@ -1,0 +1,33 @@
+version: '3.2'
+services:
+  bugbug-base:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.base
+    image: mozilla/bugbug-base
+
+  bugbug-commit-retrieval:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.commit_retrieval
+    image: mozilla/bugbug-commit-retrieval
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
+  bugbug-bugs-retrieval:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.bugs_retrieval
+    image: mozilla/bugbug-bugs-retrieval
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
