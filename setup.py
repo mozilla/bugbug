@@ -48,4 +48,10 @@ setup(
     packages=find_packages(exclude=["contrib", "docs", "tests"]),
     include_package_data=True,
     license="MPL2",
+    entry_points={
+        "console_scripts": [
+            "bugbug-data-commits = scripts.retriever:main_retrieve_commits",
+            "bugbug-data-bugzilla = scripts.retriever:main_retrieve_bugs",
+        ]
+    },
 )
