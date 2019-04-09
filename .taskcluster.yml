@@ -40,7 +40,7 @@ tasks:
           image: python
           command:
             - "/bin/bash"
-            - "-lc"
+            - "-lcx"
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
@@ -63,7 +63,7 @@ tasks:
           image: python
           command:
             - "/bin/bash"
-            - "-lc"
+            - "-lcx"
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
@@ -87,7 +87,7 @@ tasks:
           image: python
           command:
             - "/bin/bash"
-            - "-lc"
+            - "-lcx"
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
@@ -111,7 +111,7 @@ tasks:
           image: python
           command:
             - "/bin/bash"
-            - "-lc"
+            - "-lcx"
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
@@ -133,7 +133,7 @@ tasks:
           image: python
           command:
             - "/bin/bash"
-            - "-lc"
+            - "-lcx"
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
