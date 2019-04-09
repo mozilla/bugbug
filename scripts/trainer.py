@@ -4,7 +4,6 @@ import argparse
 import lzma
 import os
 import shutil
-from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
