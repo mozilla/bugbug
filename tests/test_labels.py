@@ -11,7 +11,7 @@ from bugbug import labels
 def test_get_labels_dir():
     path = labels.get_labels_dir()
     assert os.path.isabs(path)
-    assert path.endswith('labels')
+    assert path.endswith("labels")
 
 
 def test_get_all_bug_ids():

@@ -11,19 +11,35 @@ class DefectEnhancementTaskModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
     def get_labels(self):
-        classes = self.get_bugbug_labels('defect_enhancement_task')
+        classes = self.get_bugbug_labels("defect_enhancement_task")
 
-        print('{} defects'.format(sum(1 for label in classes.values() if label == 'defect')))
-        print('{} enhancements'.format(sum(1 for label in classes.values() if label == 'enhancement')))
-        print('{} tasks'.format(sum(1 for label in classes.values() if label == 'task')))
+        print(
+            "{} defects".format(
+                sum(1 for label in classes.values() if label == "defect")
+            )
+        )
+        print(
+            "{} enhancements".format(
+                sum(1 for label in classes.values() if label == "enhancement")
+            )
+        )
+        print(
+            "{} tasks".format(sum(1 for label in classes.values() if label == "task"))
+        )
 
         return classes
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if any(keyword in bug['keywords'] for keyword in ['regression', 'talos-regression']) or ('cf_has_regression_range' in bug and bug['cf_has_regression_range'] == 'yes'):
-                classes[i] = 'defect' if not probabilities else [1., 0., 0.]
-            elif 'feature' in bug['keywords']:
-                classes[i] = 'enhancement' if not probabilities else [0., 1., 0.]
+            if any(
+                keyword in bug["keywords"]
+                for keyword in ["regression", "talos-regression"]
+            ) or (
+                "cf_has_regression_range" in bug
+                and bug["cf_has_regression_range"] == "yes"
+            ):
+                classes[i] = "defect" if not probabilities else [1.0, 0.0, 0.0]
+            elif "feature" in bug["keywords"]:
+                classes[i] = "enhancement" if not probabilities else [0.0, 1.0, 0.0]
 
         return classes

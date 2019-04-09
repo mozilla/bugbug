@@ -6,9 +6,7 @@
 from keras.preprocessing.sequence import pad_sequences
 from keras.preprocessing.text import Tokenizer
 from keras.utils import to_categorical
-from sklearn.base import BaseEstimator
-from sklearn.base import ClassifierMixin
-from sklearn.base import TransformerMixin
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 
 from bugbug.utils import numpy_to_dict
 
