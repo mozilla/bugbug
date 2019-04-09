@@ -1,0 +1,60 @@
+version: 1
+policy:
+  pullRequests: public
+tasks:
+  $let:
+    decision_task_id: {$eval: as_slugid("decision_task")}
+    expires_in: {$fromNow: '1 year'}
+    user: ${event.sender.login}
+
+    head_branch:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.head.ref}
+      else:
+        $if: 'tasks_for == "github-push"'
+        then: ${event.ref}
+        else: ${event.release.target_commitish}
+
+    head_rev:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.head.sha}
+      else:
+        $if: 'tasks_for == "github-push"'
+        then: ${event.after}
+        else: ${event.release.tag_name}
+
+    repository:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.head.repo.html_url}
+      else: ${event.repository.html_url}
+  in:
+    - $if: 'tasks_for in ["github-pull-request", "github-push"]'
+      then:
+        taskId: {$eval: as_slugid("tests_task")}
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: aws-provisioner-v1
+        workerType: github-worker
+        payload:
+          maxRunTime: 3600
+          image: python
+          command:
+            - "/bin/bash"
+            - "-lc"
+            - "git clone ${repository} &&
+               cd bugbug &&
+               git checkout ${head_rev} &&
+               pip install -r requirements.txt &&
+               pip install -r test-requirements.txt &&
+               flake8 &&
+               python run.py --train --goal bug &&
+               python run.py --goal bug &&
+               python -m pytest tests/test_*.py &&
+               python -m bugbug.bug_snapshot &&
+               python setup.py sdist &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz"
+        metadata:
+          name: bugbug tests
+          description: bugbug tests
+          owner: ${user}@users.noreply.github.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
