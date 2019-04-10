@@ -153,6 +153,8 @@ tasks:
         provisionerId: aws-provisioner-v1
         workerType: github-worker
         payload:
+          capabilities:
+            privileged: true
           maxRunTime: 3600
           image: babadie/taskboot:latest
           environmnent:
@@ -162,6 +164,8 @@ tasks:
             - taskboot
             - build
             - infra/dockerfile.base
+        scopes:
+          - docker-worker:capability:privileged
         metadata:
           name: bugbug docker build
           description: bugbug docker build
