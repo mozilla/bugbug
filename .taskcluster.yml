@@ -68,8 +68,8 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
-               python run.py --train --goal bug &&
-               python run.py --goal bug"
+               python run.py --train --goal component &&
+               python run.py --goal component"
         metadata:
           name: bugbug training test
           description: bugbug training test
