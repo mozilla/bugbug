@@ -157,7 +157,7 @@ tasks:
             privileged: true
           maxRunTime: 3600
           image: babadie/taskboot:latest
-          environmnent:
+          env:
             GIT_REPOSITORY: ${repository}
             GIT_REVISION: ${head_rev}
           command:
