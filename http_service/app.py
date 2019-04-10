@@ -3,17 +3,23 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import os
 
-from flask import Flask, current_app, jsonify
+from flask import Flask, current_app, jsonify, request
 
 from bugbug import bugzilla
 
 from .models import load_model
 
+API_TOKEN = "X-Api-Key"
+
 application = Flask(__name__)
 
 bugzilla.set_token(os.environ.get("BUGBUG_BUGZILLA_TOKEN"))
+
+logging.basicConfig(level=logging.INFO)
+LOGGER = logging.getLogger()
 
 
 def get_model(model):
@@ -28,6 +34,15 @@ def get_model(model):
 
 @application.route("/<model>/predict/<bug_id>")
 def model_prediction(model, bug_id):
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify({"message": "Error, missing X-API-KEY"}), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
     bugs = bugzilla._download([bug_id])
     model = get_model(model)
     probs = model.classify(list(bugs.values()), True)
