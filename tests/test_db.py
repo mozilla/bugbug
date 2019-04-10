@@ -11,19 +11,19 @@ from bugbug import db
 @pytest.fixture
 def mock_db(tmp_path):
     def register_db(db_format, db_compression):
-        db_name = f'prova.{db_format}'
+        db_name = f"prova.{db_format}"
         if db_compression is not None:
-            db_name += f'.{db_compression}'
+            db_name += f".{db_compression}"
 
         db_path = tmp_path / db_name
-        db.register(db_path, 'https://alink', 1)
+        db.register(db_path, "https://alink", 1)
         return db_path
 
     return register_db
 
 
-@pytest.mark.parametrize('db_format', ['json', 'pickle'])
-@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+@pytest.mark.parametrize("db_format", ["json", "pickle"])
+@pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
 def test_write_read(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
@@ -32,8 +32,8 @@ def test_write_read(mock_db, db_format, db_compression):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-@pytest.mark.parametrize('db_format', ['json', 'pickle'])
-@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+@pytest.mark.parametrize("db_format", ["json", "pickle"])
+@pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
 def test_append(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
@@ -46,8 +46,8 @@ def test_append(mock_db, db_format, db_compression):
     assert list(db.read(db_path)) == [1, 2, 3, 4, 5, 6, 7]
 
 
-@pytest.mark.parametrize('db_format', ['json', 'pickle'])
-@pytest.mark.parametrize('db_compression', [None, 'gz', 'zstd'])
+@pytest.mark.parametrize("db_format", ["json", "pickle"])
+@pytest.mark.parametrize("db_compression", [None, "gz", "zstd"])
 def test_delete(mock_db, db_format, db_compression):
     db_path = mock_db(db_format, db_compression)
 
@@ -61,7 +61,7 @@ def test_delete(mock_db, db_format, db_compression):
 
 
 def test_unregistered_db(tmp_path):
-    db_path = tmp_path / 'prova.json'
+    db_path = tmp_path / "prova.json"
 
     with pytest.raises(AssertionError):
         list(db.read(db_path))
@@ -73,16 +73,12 @@ def test_unregistered_db(tmp_path):
         db.append(db_path, range(7))
 
 
-@pytest.mark.parametrize('db_name', [
-    'prova',
-    'prova.',
-    'prova.gz',
-    'prova.unknown.gz',
-    'prova.json.unknown',
-])
+@pytest.mark.parametrize(
+    "db_name", ["prova", "prova.", "prova.gz", "prova.unknown.gz", "prova.json.unknown"]
+)
 def test_bad_format_compression(tmp_path, db_name):
     db_path = tmp_path / db_name
-    db.register(db_path, 'https://alink', 1)
+    db.register(db_path, "https://alink", 1)
 
     with pytest.raises(AssertionError):
         db.write(db_path, range(7))
