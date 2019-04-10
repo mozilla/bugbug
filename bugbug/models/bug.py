@@ -16,8 +16,8 @@ from bugbug.model import Model
 
 
 class BugModel(Model):
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, old=False):
+        Model.__init__(self, lemmatization, old)
 
         self.sampler = BorderlineSMOTE(random_state=0)
 
@@ -42,7 +42,8 @@ class BugModel(Model):
             bug_features.product(),
             bug_features.component(),
         ]
-
+        if (old == True):
+            feature_extractors.append(bug_features.had_severity_enhancement)
         cleanup_functions = [
             bug_features.cleanup_url,
             bug_features.cleanup_fileref,
