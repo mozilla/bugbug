@@ -68,3 +68,9 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/nlp` contains utility functions for NLP;
 - `bugbug/labels.py` contains utility functions for handling labels;
 - `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
+
+## Auto-formatting setup
+
+This project is using [pre-commit](https://pre-commit.com/). Please run `pre-commit install` to install the git pre-commit hooks on your clone.
+
+Then every time you will try to commit, it will check that the files are correctly formatted before letting you commit.

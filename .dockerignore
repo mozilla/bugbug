@@ -1,0 +1,5 @@
+venv
+data/
+docker-compose.yml
+cache/
+http_service/
