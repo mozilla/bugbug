@@ -50,7 +50,7 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument("--token", help="Bugzilla token", action="store")
-    parser.add_argument("--old", help="Analyze old bugs", action="store_true")
+    parser.add_argument("--historical", help="Analyze historical bugs", action="store_true")
     args = parser.parse_args()
 
     model_file_name = "{}{}model".format(
@@ -101,8 +101,8 @@ if __name__ == "__main__":
 
     if args.train:
         db.download()
-        if args.old and model_class == BugModel:
-            model = model_class(args.lemmatization, args.old)
+        if args.historical and model_class == BugModel:
+            model = model_class(args.lemmatization, args.historical)
         else:
             model = model_class(args.lemmatization)
         model.train()

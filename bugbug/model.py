@@ -17,7 +17,7 @@ from bugbug.nlp import SpacyVectorizer
 
 
 class Model:
-    def __init__(self, lemmatization=False, old=False):
+    def __init__(self, lemmatization=False, historical=False):
         if lemmatization:
             self.text_vectorizer = SpacyVectorizer
         else:
