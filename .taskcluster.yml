@@ -59,7 +59,7 @@ tasks:
         provisionerId: aws-provisioner-v1
         workerType: github-worker
         payload:
-          maxRunTime: 3600
+          maxRunTime: 28800
           image: python
           command:
             - "/bin/bash"
