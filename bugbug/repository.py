@@ -319,7 +319,11 @@ def download_commits(repo_dir, date_from):
     global components_touched_prev
     global components_touched_prev_90_days
 
+    global files_touched_prev
+    global files_touched_prev_90_days
+
     components_touched = defaultdict(int)
+    files_touched = defaultdict(int)
     prev_commits_90_days = []
     for commit in commits:
         components = set(
@@ -333,12 +337,19 @@ def download_commits(repo_dir, date_from):
 
             components_touched[component] += 1
 
+        for path in commit.files:
+            files_touched_prev[commit.node] += files_touched[path]
+
+            files_touched[path] += 1
+
         if len(commit.file_copies) > 0:
             for orig, copied in commit.file_copies.items():
                 if orig in path_to_component and copied in path_to_component:
                     components_touched[path_to_component[copied]] = components_touched[
                         path_to_component[orig]
                     ]
+
+                files_touched[copied] = files_touched[orig]
 
         for i, prev_commit in enumerate(prev_commits_90_days):
             if (commit.date - prev_commit.date).days <= 90:
@@ -350,6 +361,7 @@ def download_commits(repo_dir, date_from):
             prev_commits_90_days = prev_commits_90_days[cut + 1 :]
 
         components_touched_90_days = defaultdict(int)
+        files_touched_90_days = defaultdict(int)
         for prev_commit in prev_commits_90_days:
             components_prev = set(
                 path_to_component[path]
@@ -360,6 +372,9 @@ def download_commits(repo_dir, date_from):
             for component_prev in components_prev:
                 components_touched_90_days[component_prev] += 1
 
+            for path_prev in prev_commit.files:
+                files_touched_90_days[path_prev] += 1
+
             if len(prev_commit.file_copies) > 0:
                 for orig, copied in prev_commit.file_copies.items():
                     if orig in path_to_component and copied in path_to_component:
@@ -367,45 +382,14 @@ def download_commits(repo_dir, date_from):
                             path_to_component[copied]
                         ] = components_touched_90_days[path_to_component[orig]]
 
+                    files_touched_90_days[copied] = files_touched_90_days[orig]
+
         components_touched_prev_90_days[commit.node] = sum(
             components_touched_90_days[component] for component in components
         )
-        prev_commits_90_days.append(commit)
-
-    global files_touched_prev
-    global files_touched_prev_90_days
-
-    files_touched = defaultdict(int)
-    prev_commits_90_days = []
-    for commit in commits:
-        for path in commit.files:
-            files_touched_prev[commit.node] += files_touched[path]
-
-            files_touched[path] += 1
-
-        if len(commit.file_copies) > 0:
-            for orig, copied in commit.file_copies.items():
-                files_touched[copied] = files_touched[orig]
-
-        for i, prev_commit in enumerate(prev_commits_90_days):
-            if (commit.date - prev_commit.date).days <= 90:
-                break
-
-            cut = i
-
-        if cut is not None:
-            prev_commits_90_days = prev_commits_90_days[cut + 1:]
-
-        files_touched_90_days = defaultdict(int)
-        for prev_commit in prev_commits_90_days:
-            for path_prev in prev_commit.files:
-                files_touched_90_days[path_prev] += 1
-
-            if len(prev_commit.file_copies) > 0:
-                for orig, copied in prev_commit.file_copies.items():
-                    files_touched_90_days[copied] = files_touched_90_days[orig]
-
-        files_touched_prev_90_days[commit.node] = sum(files_touched_90_days[path] for path in commit.files)
+        files_touched_prev_90_days[commit.node] = sum(
+            files_touched_90_days[path] for path in commit.files
+        )
         prev_commits_90_days.append(commit)
 
     print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
