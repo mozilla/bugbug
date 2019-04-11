@@ -1,0 +1,69 @@
+version: '3.2'
+services:
+  bugbug-base:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.base
+    image: mozilla/bugbug-base
+
+  bugbug-commit-retrieval:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.commit_retrieval
+    image: mozilla/bugbug-commit-retrieval
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
+  bugbug-bugs-retrieval:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.bugs_retrieval
+    image: mozilla/bugbug-bugs-retrieval
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
+  bugbug-train-component:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_component
+    image: mozilla/bugbug-train-component
+
+  bugbug-train-defect:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_defect
+    image: mozilla/bugbug-train-defect
+
+  bugbug-train-regression:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regression
+    image: mozilla/bugbug-train-regression
+
+  bugbug-train-tracking:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_tracking
+    image: mozilla/bugbug-train-tracking
+
+  bugbug-http-service:
+    build:
+      context: http_service
+    image: mozilla/bugbug-http-service
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host

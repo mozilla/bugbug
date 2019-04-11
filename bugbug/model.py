@@ -10,14 +10,13 @@ from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import cross_validate
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla
 from bugbug.nlp import SpacyVectorizer
 
 
-class Model():
+class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
             self.text_vectorizer = SpacyVectorizer
@@ -26,6 +25,16 @@ class Model():
 
         self.cross_validation_enabled = True
         self.sampler = None
+
+        self.calculate_importance = True
+
+    @property
+    def le(self):
+        """Classifier agnostic getter for the label encoder property"""
+        try:
+            return self.clf._le
+        except AttributeError:
+            return self.clf.le_
 
     def get_feature_names(self):
         return []
@@ -58,18 +67,20 @@ class Model():
 
         # Get bugs, filtering out those for which we have no labels.
         def bugs():
-            return (bug for bug in bugzilla.get_bugs() if bug['id'] in classes)
+            return (bug for bug in bugzilla.get_bugs() if bug["id"] in classes)
 
         # Calculate labels.
-        y = np.array([classes[bug['id']] for bug in bugs()])
+        y = np.array([classes[bug["id"]] for bug in bugs()])
 
         # Extract features from the bugs.
         X = self.extraction_pipeline.fit_transform(bugs())
 
-        print(f'X: {X.shape}, y: {y.shape}')
+        print(f"X: {X.shape}, y: {y.shape}")
 
         # Split dataset in training and test.
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.1, random_state=0
+        )
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -77,29 +88,31 @@ class Model():
 
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
-            scorings = ['accuracy']
+            scorings = ["accuracy"]
             if len(class_names) == 2:
-                scorings += ['precision', 'recall']
+                scorings += ["precision", "recall"]
 
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
-            print('Cross Validation scores:')
+            print("Cross Validation scores:")
             for scoring in scorings:
-                score = scores[f'test_{scoring}']
-                print(f'{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})')
+                score = scores[f"test_{scoring}"]
+                print(
+                    f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
+                )
 
         # Training on the resampled dataset if sampler is provided.
         if self.sampler is not None:
             X_train, y_train = self.sampler.fit_resample(X_train, y_train)
 
-        print(f'X_train: {X_train.shape}, y_train: {y_train.shape}')
-        print(f'X_test: {X_test.shape}, y_test: {y_test.shape}')
+        print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+        print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
         self.clf.fit(X_train, y_train)
 
         # Evaluate results on the test set.
         feature_names = self.get_feature_names()
-        if len(feature_names):
+        if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
@@ -107,15 +120,19 @@ class Model():
             if isinstance(shap_values, list):
                 shap_values = np.sum(np.abs(shap_values), axis=0)
 
-            important_features = self.get_important_features(importance_cutoff, shap_values)
+            important_features = self.get_important_features(
+                importance_cutoff, shap_values
+            )
 
-            print(f'\nTop {len(important_features)} Features:')
+            print(f"\nTop {len(important_features)} Features:")
             for i, [importance, index, is_positive] in enumerate(important_features):
-                print(f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})')
+                print(
+                    f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
+                )
 
         y_pred = self.clf.predict(X_test)
 
-        print(f'No confidence threshold - {len(y_test)} classified')
+        print(f"No confidence threshold - {len(y_test)} classified")
         print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
@@ -133,11 +150,21 @@ class Model():
                 y_test_filter.append(y_test[i])
                 y_pred_filter.append(argmax)
 
-            y_pred_filter = self.clf._le.inverse_transform(y_pred_filter)
+            y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
-            print(f'\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified')
-            print(metrics.confusion_matrix(y_test_filter, y_pred_filter, labels=class_names))
-            print(classification_report_imbalanced(y_test_filter, y_pred_filter, labels=class_names))
+            print(
+                f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
+            )
+            print(
+                metrics.confusion_matrix(
+                    y_test_filter, y_pred_filter, labels=class_names
+                )
+            )
+            print(
+                classification_report_imbalanced(
+                    y_test_filter, y_pred_filter, labels=class_names
+                )
+            )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
@@ -148,9 +175,13 @@ class Model():
     def overwrite_classes(self, bugs, classes, probabilities):
         return classes
 
-    def classify(self, bugs, probabilities=False, importances=False, importance_cutoff=0.15):
+    def classify(
+        self, bugs, probabilities=False, importances=False, importance_cutoff=0.15
+    ):
         assert bugs is not None
-        assert self.extraction_pipeline is not None and self.clf is not None, 'The module needs to be initialized first'
+        assert (
+            self.extraction_pipeline is not None and self.clf is not None
+        ), "The module needs to be initialized first"
 
         if not isinstance(bugs, list):
             bugs = [bugs]
@@ -168,6 +199,10 @@ class Model():
         if importances:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
+
+            # TODO: Actually implement feature importance visualization for multiclass problems.
+            if isinstance(shap_values, list):
+                shap_values = np.sum(np.abs(shap_values), axis=0)
 
             importances = self.get_important_features(importance_cutoff, shap_values)
 

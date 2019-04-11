@@ -1,0 +1,13 @@
+FROM mozilla/bugbug-base:latest
+
+# Mercurial need Python2 :(
+RUN apt-get update && apt-get install -y python-pip
+
+RUN python2 -m pip install mercurial==4.8
+
+# Robustcheckout setup
+RUN hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/
+
+COPY infra/hgrc /root/.hgrc
+
+CMD bugbug-data-commits /cache/

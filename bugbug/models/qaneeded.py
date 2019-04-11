@@ -9,8 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features
-from bugbug import bugzilla
+from bugbug import bug_features, bugzilla
 from bugbug.model import Model
 
 
@@ -24,7 +23,7 @@ class QANeededModel(Model):
             bug_features.has_str(),
             bug_features.has_regression_range(),
             bug_features.severity(),
-            bug_features.keywords({'qawanted'}),
+            bug_features.keywords({"qawanted"}),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),
@@ -42,39 +41,56 @@ class QANeededModel(Model):
             bug_features.cleanup_synonyms,
         ]
 
-        self.extraction_pipeline = Pipeline([
-            ('bug_extractor', bug_features.BugExtractor(feature_extractors, cleanup_functions)),
-            ('union', ColumnTransformer([
-                ('data', DictVectorizer(), 'data'),
-
-                ('title', self.text_vectorizer(), 'title'),
-
-                ('comments', self.text_vectorizer(), 'comments'),
-            ])),
-        ])
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
+                ),
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            ("title", self.text_vectorizer(), "title"),
+                            ("comments", self.text_vectorizer(), "comments"),
+                        ]
+                    ),
+                ),
+            ]
+        )
 
         self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor='cpu_predictor')
+        self.clf.set_params(predictor="cpu_predictor")
+
+    def rollback(self, change):
+        return any(
+            change["added"].startswith(prefix)
+            for prefix in ["qawanted", "qe-verify", "qaurgent"]
+        )
 
     def get_labels(self):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            bug_id = int(bug_data['id'])
+            bug_id = int(bug_data["id"])
 
-            for entry in bug_data['history']:
-                for change in entry['changes']:
-                    if change['added'].startswith('qawanted'):
+            for entry in bug_data["history"]:
+                for change in entry["changes"]:
+                    if any(
+                        change["added"].startswith(label)
+                        for label in ["qawanted", "qe-verify", "qaurgent"]
+                    ):
                         classes[bug_id] = 1
-                    elif 'flags' in entry:
-                        for flag in entry['flags']:
-                            if flag['name'].startswith('qe-verify'):
-                                classes[bug_id] = 1
-
             if bug_id not in classes:
                 classes[bug_id] = 0
 
         return classes
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps['union'].get_feature_names()
+        return self.extraction_pipeline.named_steps["union"].get_feature_names()
