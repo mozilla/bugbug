@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import numpy as np
-#import shap
+import shap
 from imblearn.metrics import classification_report_imbalanced
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
@@ -16,8 +16,8 @@ from bugbug import bugzilla
 from bugbug.nlp import SpacyVectorizer
 
 
-class Model():
-    def __init__(self, lemmatization=False, ngrams=1):
+class Model:
+    def __init__(self, lemmatization=False):
         if lemmatization:
             self.text_vectorizer = SpacyVectorizer
         else:
@@ -25,7 +25,7 @@ class Model():
 
         self.cross_validation_enabled = True
         self.sampler = None
-        self.ngrams = ngrams
+
         self.calculate_importance = True
 
     @property
@@ -113,7 +113,7 @@ class Model():
         # Evaluate results on the test set.
         feature_names = self.get_feature_names()
         if self.calculate_importance and len(feature_names):
-            #explainer = shap.TreeExplainer(self.clf)
+            explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
             # TODO: Actually implement feature importance visualization for multiclass problems.
@@ -197,7 +197,7 @@ class Model():
         classes = self.overwrite_classes(bugs, classes, probabilities)
 
         if importances:
-            #explainer = shap.TreeExplainer(self.clf)
+            explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
             # TODO: Actually implement feature importance visualization for multiclass problems.

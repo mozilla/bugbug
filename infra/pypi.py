@@ -14,5 +14,4 @@ data = r.json()
 
 os.environ['TWINE_USERNAME'] = data['secret']['pypi']['username']
 os.environ['TWINE_PASSWORD'] = data['secret']['pypi']['password']
-
 subprocess.run(['twine', 'upload', 'dist/*'], check=True)

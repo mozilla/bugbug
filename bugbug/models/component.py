@@ -55,8 +55,8 @@ class ComponentModel(Model):
         "Firefox Build System": "Firefox Build System::General",
     }
 
-    def __init__(self, lemmatization=False, ngrams=1):
-        Model.__init__(self, lemmatization, ngrams)
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
 
         self.cross_validation_enabled = True
         self.calculate_importance = True
@@ -95,7 +95,7 @@ class ComponentModel(Model):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            ("title", self.text_vectorizer(min_df=0.0001, ngram_range=(1,2)), "title"),
                             (
                                 "comments",
                                 self.text_vectorizer(min_df=0.0001),

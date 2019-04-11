@@ -7,8 +7,8 @@ from bugbug.models.bug import BugModel
 
 
 class RegressionModel(BugModel):
-    def __init__(self, lemmatization=False, ngrams=1):
-        BugModel.__init__(self, lemmatization, ngrams)
+    def __init__(self, lemmatization=False):
+        BugModel.__init__(self, lemmatization)
 
     def get_labels(self):
         return self.get_bugbug_labels("regression")

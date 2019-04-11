@@ -55,3 +55,15 @@ services:
       context: .
       dockerfile: infra/dockerfile.train_tracking
     image: mozilla/bugbug-train-tracking
+
+  bugbug-http-service:
+    build:
+      context: http_service
+    image: mozilla/bugbug-http-service
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host

@@ -16,8 +16,8 @@ from bugbug.model import Model
 
 
 class BugModel(Model):
-    def __init__(self, lemmatization=False, ngrams=1):
-        Model.__init__(self, lemmatization, ngrams)
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
 
         self.sampler = BorderlineSMOTE(random_state=0)
 
