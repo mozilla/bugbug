@@ -6,7 +6,7 @@
 from bugbug.models.bug import BugModel
 
 
-def test_get_tracking_labels():
+def test_get_bug_labels():
     model = BugModel()
     classes = model.get_labels()
     # labels from bug_nobug.csv
@@ -17,3 +17,7 @@ def test_get_tracking_labels():
     assert classes[518272]  # regression
     assert classes[528988]  # bug_unknown_regression
     assert classes[1037762]  # bug_no_regression
+    # labels from defectenhancementtask.csv
+    assert not classes[1488307]  # task
+    assert classes[1488310]  # defect
+    assert not classes[1531080]  # enhancement
