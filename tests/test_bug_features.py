@@ -6,6 +6,8 @@
 import json
 import os
 
+import pytest
+
 from bugbug.bug_features import (
     blocked_bugs_number,
     bug_reporter,
@@ -31,30 +33,34 @@ from bugbug.bug_features import (
 )
 
 
-def read(filename, feature_extractor_class, expected_results):
-    path = os.path.join("tests/fixtures/bug_features", filename)
-    feature_extractor = feature_extractor_class()
-    assert os.path.exists(path)
+@pytest.fixture
+def read(get_fixture_path):
+    def _read(path, feature_extractor_class, expected_results):
+        feature_extractor = feature_extractor_class()
 
-    with open(path, "r") as f:
-        results = (feature_extractor(json.loads(line)) for line in f)
-        for result, expected_result in zip(results, expected_results):
-            assert result == expected_result
+        path = get_fixture_path(os.path.join("bug_features", path))
+
+        with open(path, "r") as f:
+            results = (feature_extractor(json.loads(line)) for line in f)
+            for result, expected_result in zip(results, expected_results):
+                assert result == expected_result
+
+    return _read
 
 
-def test_has_str():
+def test_has_str(read):
     read("has_str.json", has_str, ["yes", None, "no"])
 
 
-def test_has_regression_range():
+def test_has_regression_range(read):
     read("has_regression_range.json", has_regression_range, ["yes", None])
 
 
-def test_has_crash_signature():
+def test_has_crash_signature(read):
     read("has_crash_signature.json", has_crash_signature, [False, True])
 
 
-def test_keywords():
+def test_keywords(read):
     read(
         "keywords.json",
         keywords,
@@ -65,27 +71,27 @@ def test_keywords():
     )
 
 
-def test_severity():
+def test_severity(read):
     read("severity.json", severity, ["major", "normal"])
 
 
-def test_is_coverity_issue():
+def test_is_coverity_issue(read):
     read("is_coverity_issue.json", is_coverity_issue, [False, True])
 
 
-def test_has_url():
+def test_has_url(read):
     read("has_url.json", has_url, [True, False])
 
 
-def test_has_w3c_url():
+def test_has_w3c_url(read):
     read("has_w3c_url.json", has_w3c_url, [True, False])
 
 
-def test_has_github_url():
+def test_has_github_url(read):
     read("has_github_url.json", has_github_url, [True, False])
 
 
-def test_whiteboard():
+def test_whiteboard(read):
     read(
         "whiteboard.json",
         whiteboard,
@@ -103,35 +109,35 @@ def test_whiteboard():
     )
 
 
-def test_patches():
+def test_patches(read):
     read("patches.json", patches, [1, 0])
 
 
-def test_landings():
+def test_landings(read):
     read("landings.json", landings, [2, 1])
 
 
-def test_title():
+def test_title(read):
     read("title.json", title, [["fail"], []])
 
 
-def test_product():
+def test_product(read):
     read("product.json", product, ["Core", "Firefox for Android"])
 
 
-def test_component():
+def test_component(read):
     read("component.json", component, ["Graphics", "CSS Parsing and Computation"])
 
 
-def test_is_mozillian():
+def test_is_mozillian(read):
     read("is_mozillian.json", is_mozillian, [False, True, True])
 
 
-def test_blocked_bugs_number():
+def test_blocked_bugs_number(read):
     read("blocked_bugs_number.json", blocked_bugs_number, [2, 0])
 
 
-def test_bug_reporter():
+def test_bug_reporter(read):
     read(
         "bug_reporter.json",
         bug_reporter,
@@ -143,13 +149,13 @@ def test_bug_reporter():
     )
 
 
-def test_has_cve_in_alias():
+def test_has_cve_in_alias(read):
     read("has_cve_in_alias.json", has_cve_in_alias, [True, False])
 
 
-def test_comment_count():
+def test_comment_count(read):
     read("comment_count.json", comment_count, [4, 28])
 
 
-def test_comment_length():
+def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
