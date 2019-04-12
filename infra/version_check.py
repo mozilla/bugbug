@@ -5,10 +5,23 @@
 
 import subprocess
 
-with open('VERSION', 'r') as f:
+with open("VERSION", "r") as f:
     version = f.read().rstrip()
 
-p = subprocess.run(['git', 'describe', '--abbrev=0', '--tags'], check=True, capture_output=True)
-cur_tag = p.stdout.decode('utf-8')[1:].rstrip()
+try:
+    p = subprocess.run(
+        ["git", "describe", "--abbrev=0", "--tags"], check=True, capture_output=True
+    )
+except subprocess.CalledProcessError as e:
+    print(f"{e.cmd} failed with return code {e.returncode}")
+    print("stdout:")
+    print(e.stdout)
+    print("stderr:")
+    print(e.stderr)
+    raise Exception("Failure while getting latest tag")
 
-assert version == cur_tag, 'Version in the VERSION file ({version}) should be the same as the current tag ({cur_tag})'
+cur_tag = p.stdout.decode("utf-8")[1:].rstrip()
+
+assert (
+    version == cur_tag
+), "Version in the VERSION file ({version}) should be the same as the current tag ({cur_tag})"
