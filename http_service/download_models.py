@@ -7,27 +7,20 @@ import logging
 import lzma
 import os
 import shutil
-import sys
 from urllib.request import urlretrieve
 
 import requests
 
-from bugbug.models.component import ComponentModel
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
-
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-
-MODELS = {
-    "defectenhancementtask": DefectEnhancementTaskModel,
-    "component": ComponentModel,
-    "regression": RegressionModel,
-}
-
 BASE_URL = "https://index.taskcluster.net/v1/task/project.releng.services.project.testing.bugbug_train.latest/artifacts/public"
 
+MODELS_NAMES = (
+    "defectenhancementtask",
+    "component",
+    "regression",
+)
 
 def retrieve_model(name):
     os.makedirs("models", exist_ok=True)
@@ -38,6 +31,7 @@ def retrieve_model(name):
     model_url = f"{BASE_URL}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
     r = requests.head(model_url, allow_redirects=True)
+    r.raise_for_status()
     new_etag = r.headers["ETag"]
 
     try:
@@ -62,41 +56,10 @@ def retrieve_model(name):
     return file_path
 
 
-def get_model_path(name):
-    file_name = f"{name}model"
-    file_path = os.path.join("models", file_name)
-
-    return file_path
-
-
 def preload_models():
-    for model_name in MODELS.keys():
+    for model_name in MODELS_NAMES:
         retrieve_model(model_name)
 
 
-def load_model(model):
-    model_file_path = get_model_path(model)
-    model = MODELS[model].load(model_file_path)
-    return model
-
-
-def check_models():
-    for model_name in MODELS.keys():
-        # Try loading the model
-        load_model(model_name)
-
-
 if __name__ == "__main__":
-    if sys.argv[1] == "download":
-        preload_models()
-    elif sys.argv[1] == "check":
-        try:
-            check_models()
-        except Exception:
-            LOGGER.warning(
-                "Failed to validate the models, please run `python models.py download`",
-                exc_info=True,
-            )
-            sys.exit(1)
-    else:
-        raise ValueError(f"Unknown command {sys.argv[1]}")
+    preload_models()
