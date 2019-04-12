@@ -43,7 +43,7 @@ class BugModel(Model):
             bug_features.component(),
         ]
 
-        if (historical):
+        if historical:
             feature_extractors.append(bug_features.had_severity_enhancement())
 
         cleanup_functions = [
