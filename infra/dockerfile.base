@@ -1,9 +1,12 @@
+#syntax=docker/dockerfile:experimental
 FROM python:3.7.3
 
 COPY requirements.txt /code/bugbug/
 
-RUN pip install --disable-pip-version-check --no-cache-dir -r /code/bugbug/requirements.txt
+RUN --mount=type=cache,target=/cache/pip \
+	pip install --disable-pip-version-check --cache-dir=/cache/pip -r /code/bugbug/requirements.txt
 
 COPY . /code/bugbug/
 
-RUN pip install /code/bugbug/
+RUN --mount=type=cache,target=/cache/pip \
+	pip install --cache-dir=/cache/pip /code/bugbug/
