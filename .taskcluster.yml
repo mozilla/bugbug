@@ -160,15 +160,19 @@ tasks:
             GIT_REPOSITORY: ${repository}
             GIT_REVISION: ${head_rev}
           command:
-            - taskboot
-            - build
-            - infra/dockerfile.base
-            - --write
-            - /base.tar
+            - "/bin/bash"
+            - "-lcx"
+            - "taskboot build infra/dockerfile.base --tag mozilla/bugbug-base:latest &&
+               taskboot build infra/dockerfile.bugs_retrieval --write /bugs_retrieval.tar &&
+               taskboot build infra/dockerfile.commit_retrieval --write /commit_retrieval.tar"
           artifacts:
-            public/bugbug-base.tar:
+            public/bugbug-bugs-retrieval.tar:
               expires: {$fromNow: '2 weeks'}
-              path: /base.tar
+              path: /bugs_retrieval.tar
+              type: file
+            public/bugbug-commit-retrieval.tar:
+              expires: {$fromNow: '2 weeks'}
+              path: /commit_retrieval.tar
               type: file
         scopes:
           - docker-worker:capability:privileged
