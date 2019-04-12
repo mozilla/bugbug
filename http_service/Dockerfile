@@ -11,6 +11,6 @@ WORKDIR /code/
 
 COPY models/ /code/models/
 
-RUN python bugbug_http_service/models.py check
+RUN python bugbug_http_service/check_models.py
 
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "bugbug_http_service.app", "--preload", "--timeout", "30", "-w", "3"]
