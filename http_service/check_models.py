@@ -6,6 +6,7 @@
 import logging
 import os
 import sys
+
 from bugbug.models.component import ComponentModel
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
