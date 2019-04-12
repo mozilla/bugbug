@@ -101,7 +101,8 @@ if __name__ == "__main__":
 
     if args.train:
         db.download()
-        if args.historical and model_class == BugModel:
+
+        if args.historical:
             model = model_class(args.lemmatization, args.historical)
         else:
             model = model_class(args.lemmatization)
