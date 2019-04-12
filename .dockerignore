@@ -98,3 +98,4 @@ venv/
 cache/
 data/
 http_service/
+.taskcluster.yml
