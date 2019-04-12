@@ -8,20 +8,25 @@ import shutil
 
 import pytest
 
+from bugbug import bugzilla, db, repository
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 @pytest.fixture(scope="session")
 def mock_data(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("")
-    print(tmp_path)
     os.mkdir(tmp_path / "data")
 
-    shutil.copyfile(
-        os.path.join(FIXTURES_DIR, "bugs.json"), tmp_path / "data" / "bugs.json"
-    )
+    DBs = [os.path.basename(bugzilla.BUGS_DB), os.path.basename(repository.COMMITS_DB)]
+
+    for f in DBs:
+        shutil.copyfile(os.path.join(FIXTURES_DIR, f), tmp_path / "data" / f)
 
     os.chdir(tmp_path)
+
+    for f in DBs:
+        db.update_ver_file(os.path.join("data", f))
 
 
 @pytest.fixture
