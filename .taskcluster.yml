@@ -160,8 +160,8 @@ tasks:
             GIT_REPOSITORY: ${repository}
             GIT_REVISION: ${head_rev}
           command:
-            - "/bin/bash"
-            - "-lcx"
+            - "/bin/sh"
+            - "-lcxe"
             - "taskboot build infra/dockerfile.base --tag mozilla/bugbug-base:latest &&
                taskboot build infra/dockerfile.bugs_retrieval --write /bugs_retrieval.tar &&
                taskboot build infra/dockerfile.commit_retrieval --write /commit_retrieval.tar"
