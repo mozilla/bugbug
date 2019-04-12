@@ -39,16 +39,16 @@ tasks:
           maxRunTime: 3600
           image: python
           $if: 'tasks_for == "github-push"'
-          then: 
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "git clone ${repository} &&
-               cd bugbug &&
-               git checkout ${head_rev} &&
-               pip install -r test-requirements.txt &&
-               flake8 &&
-               python infra/version_check.py"
+          then:
+              command:
+                - "/bin/bash"
+                - "-lcx"
+                - "git clone ${repository} &&
+                   cd bugbug &&
+                   git checkout ${head_rev} &&
+                   pip install -r test-requirements.txt &&
+                   flake8 &&
+                   python infra/version_check.py"
           else:
               command:
                 - "/bin/bash"
