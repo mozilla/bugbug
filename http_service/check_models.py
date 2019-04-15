@@ -19,7 +19,7 @@ MODELS = {
     "component": ComponentModel,
     "regression": RegressionModel,
 }
-MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
+MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 
 
 def load_model(model):

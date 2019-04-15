@@ -1,4 +1,4 @@
-*model
+http_service/models/*model*
 
 data/
 sheets/

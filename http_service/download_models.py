@@ -21,7 +21,7 @@ MODELS_NAMES = (
     "component",
     "regression",
 )
-MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
+MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 
 def retrieve_model(name):
     os.makedirs(MODELS_DIR, exist_ok=True)
