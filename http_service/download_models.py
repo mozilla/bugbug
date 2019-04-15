@@ -21,12 +21,13 @@ MODELS_NAMES = (
     "component",
     "regression",
 )
+MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 
 def retrieve_model(name):
-    os.makedirs("models", exist_ok=True)
+    os.makedirs(MODELS_DIR, exist_ok=True)
 
     file_name = f"{name}model"
-    file_path = os.path.join("models", file_name)
+    file_path = os.path.join(MODELS_DIR, file_name)
 
     model_url = f"{BASE_URL}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
@@ -47,6 +48,7 @@ def retrieve_model(name):
         with lzma.open(f"{file_path}.xz", "rb") as input_f:
             with open(file_path, "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
+                LOGGER.info(f'Written model in {file_path}')
 
         with open(f"{file_path}.etag", "w") as f:
             f.write(new_etag)
