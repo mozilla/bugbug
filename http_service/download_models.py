@@ -41,7 +41,7 @@ def retrieve_model(name):
         old_etag = None
 
     if old_etag != new_etag:
-        LOGGER.info(f"Downloading the model from {model_url}")
+        LOGGER.info(f"Downloading the model from {model_url} in {file_path}")
         urlretrieve(model_url, f"{file_path}.xz")
 
         with lzma.open(f"{file_path}.xz", "rb") as input_f:

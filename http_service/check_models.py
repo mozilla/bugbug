@@ -30,6 +30,7 @@ def get_model_path(name):
 
 def load_model(model):
     model_file_path = get_model_path(model)
+    LOGGER.info(f'Lookup model in {model_file_path}')
     model = MODELS[model].load(model_file_path)
     return model
 
