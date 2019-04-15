@@ -157,8 +157,8 @@ tasks:
           maxRunTime: 3600
           image: babadie/taskboot:latest
           command:
-            - "/bin/bash"
-            - "-lcx"
+            - "/bin/sh"
+            - "-lcxe"
             - "git clone ${repository} /src &&
                cd /src &&
                git checkout ${head_rev} &&
