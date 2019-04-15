@@ -8,6 +8,7 @@ import concurrent.futures
 import itertools
 import multiprocessing
 import os
+import re
 from collections import defaultdict, namedtuple
 from datetime import datetime
 
@@ -38,10 +39,13 @@ Commit = namedtuple(
         "author_email",
         "files",
         "file_copies",
+        "reviewers",
     ],
 )
 
 author_experience = {}
+reviewer_experience = {}
+reviewer_experience_90_days = {}
 author_experience_90_days = {}
 
 components_touched_prev = defaultdict(int)
@@ -49,6 +53,46 @@ components_touched_prev_90_days = defaultdict(int)
 
 files_touched_prev = defaultdict(int)
 files_touched_prev_90_days = defaultdict(int)
+
+# This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
+# gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
+def get_reviewers(commit_description, flag_re=None):
+    SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
+    LIST = r"[;,\/\\]\s*"
+    LIST_RE = re.compile(LIST)
+
+    IRC_NICK = r"[a-zA-Z0-9\-\_]+"
+    REVIEWERS_RE = re.compile(
+        r"([\s\(\.\[;,])"
+        + r"("
+        + SPECIFIER
+        + r")"
+        + r"("
+        + IRC_NICK
+        + r"(?:"
+        + LIST
+        + r"(?![a-z0-9\.\-]+[=?])"
+        + IRC_NICK
+        + r")*"
+        + r")?"
+    )
+
+    if commit_description == "":
+        return
+
+    commit_summary = commit_description.splitlines().pop(0)
+    res = []
+    for match in re.finditer(REVIEWERS_RE, commit_summary):
+        if not match.group(3):
+            continue
+
+        for reviewer in re.split(LIST_RE, match.group(3)):
+            if flag_re is None:
+                res.append(reviewer)
+            elif flag_re.match(match.group(2)):
+                res.append(reviewer)
+
+    return res
 
 
 def get_commits():
@@ -84,6 +128,7 @@ def _transform(commit):
 
     obj = {
         "author": commit.author.decode("utf-8"),
+        "reviewers" : commit.reviewers,
         "desc": desc,
         "date": str(commit.date),
         "bug_id": int(commit.bug.decode("utf-8")) if commit.bug else None,
@@ -97,6 +142,8 @@ def _transform(commit):
         "components": list(),
         "author_experience": author_experience[commit.node],
         "author_experience_90_days": author_experience_90_days[commit.node],
+        "reviewer_experience": reviewer_experience[commit.node],
+        "reviewer_experience_90_days": reviewer_experience_90_days[commit.node],
         "author_email": commit.author_email.decode("utf-8"),
         "components_touched_prev": components_touched_prev[commit.node],
         "components_touched_prev_90_days": components_touched_prev_90_days[commit.node],
@@ -202,6 +249,7 @@ def _hg_log(revs):
                 author_email=rev[6],
                 files=rev[7].decode("utf-8").split("|"),
                 file_copies=file_copies,
+                reviewers=tuple(get_reviewers(rev[2].decode("utf-8"))),
             )
         )
 
@@ -276,16 +324,30 @@ def download_commits(repo_dir, date_from):
 
     # Total previous number of commits by the author.
     total_commits_by_author = defaultdict(int)
+    total_reviews_by_reviewer = defaultdict(int)
     # Previous commits by the author, in a 90 days window.
     commits_by_author = defaultdict(list)
+    reviews_by_reviewer = defaultdict(list)
 
     global author_experience
+    global reviewer_experience
     global author_experience_90_days
+    global reviewer_experience_90_days
+
     for commit in commits:
         author_experience[commit.node] = total_commits_by_author[commit.author]
         # We don't want to consider backed out commits when calculating author/reviewer experience.
         if not commit.backedoutby:
             total_commits_by_author[commit.author] += 1
+
+        if commit.reviewers is not ():
+            reviewer_experience[commit.node] = sum(
+                total_reviews_by_reviewer[reviewer] for reviewer in commit.reviewers
+            )
+            for reviewer in commit.reviewers:
+                total_reviews_by_reviewer[reviewer] += 1
+        else:
+            reviewer_experience[commit.node] = 0
 
         # Keep only the previous commits from a window of 90 days in the commits_by_author map.
         cut = None
@@ -302,6 +364,24 @@ def download_commits(repo_dir, date_from):
             ]
 
         author_experience_90_days[commit.node] = len(commits_by_author[commit.author])
+
+        for reviewer in commit.reviewers:
+            cut = None
+            for i, prev_commit in enumerate(reviews_by_reviewer[reviewer]):
+                if (commit.date - prev_commit.date).days <= 90:
+                    break
+
+                cut = i
+
+            if cut is not None:
+                reviews_by_reviewer[reviewer] = reviews_by_reviewer[reviewer][
+                    cut + 1 :
+                ]
+
+            reviewer_experience_90_days[commit.node] = len(reviews_by_reviewer[reviewer])
+
+            if not commit.backedoutby:
+                reviews_by_reviewer[reviewer].append(commit)
 
         if not commit.backedoutby:
             commits_by_author[commit.author].append(commit)

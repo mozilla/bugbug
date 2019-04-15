@@ -305,6 +305,16 @@ class commit_author_experience(object):
         return sum(res) / len(res)
 
 
+class commit_reviewer_experience(object):
+    def __call__(self, bug, **kwargs):
+        res = [
+            commit["reviewer_experience"]
+            for commit in bug["commits"]
+            if not commit["ever_backedout"]
+        ]
+        return sum(res) / len(res)
+
+
 class commit_no_of_backouts(object):
     def __call__(self, bug, **kwargs):
         return sum(1 for commit in bug["commits"] if commit["ever_backedout"])
