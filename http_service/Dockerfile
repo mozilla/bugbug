@@ -9,8 +9,8 @@ COPY . /code/bugbug_http_service/
 # Load the models
 WORKDIR /code/
 
-COPY models/ /code/models/
+COPY ./models /code/models
 
-RUN python bugbug_http_service/check_models.py
+RUN python /code/bugbug_http_service/check_models.py
 
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "bugbug_http_service.app", "--preload", "--timeout", "30", "-w", "3"]

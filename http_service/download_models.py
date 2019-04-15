@@ -21,13 +21,13 @@ MODELS_NAMES = (
     "component",
     "regression",
 )
+MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
 
 def retrieve_model(name):
-    models_dir = os.path.join(os.getcwd(), "models")
-    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(MODELS_DIR, exist_ok=True)
 
     file_name = f"{name}model"
-    file_path = os.path.join(models_dir, file_name)
+    file_path = os.path.join(MODELS_DIR, file_name)
 
     model_url = f"{BASE_URL}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
