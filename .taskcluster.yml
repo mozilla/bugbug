@@ -156,14 +156,15 @@ tasks:
             privileged: true
           maxRunTime: 3600
           image: babadie/taskboot:latest
-          env:
-            GIT_REPOSITORY: ${repository}
-            GIT_REVISION: ${head_rev}
           command:
-            - taskboot
-            - build-compose
-            - --write
-            - /images
+            - "/bin/bash"
+            - "-lcx"
+            - "git clone ${repository} /src &&
+               cd /src &&
+               git checkout ${head_rev} &&
+               pip install requests &&
+               python http_service/download_models.py &&
+               taskboot --target /src build-compose --write /images"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
