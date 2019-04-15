@@ -23,10 +23,11 @@ MODELS_NAMES = (
 )
 
 def retrieve_model(name):
-    os.makedirs("models", exist_ok=True)
+    models_dir = os.path.join(os.getcwd(), "models")
+    os.makedirs(models_dir, exist_ok=True)
 
     file_name = f"{name}model"
-    file_path = os.path.join("models", file_name)
+    file_path = os.path.join(models_dir, file_name)
 
     model_url = f"{BASE_URL}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
@@ -41,12 +42,13 @@ def retrieve_model(name):
         old_etag = None
 
     if old_etag != new_etag:
-        LOGGER.info(f"Downloading the model from {model_url} in {file_path}")
+        LOGGER.info(f"Downloading the model from {model_url}")
         urlretrieve(model_url, f"{file_path}.xz")
 
         with lzma.open(f"{file_path}.xz", "rb") as input_f:
             with open(file_path, "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
+                LOGGER.info(f'Written model in {file_path}')
 
         with open(f"{file_path}.etag", "w") as f:
             f.write(new_etag)

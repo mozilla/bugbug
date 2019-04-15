@@ -23,7 +23,7 @@ MODELS = {
 
 def get_model_path(name):
     file_name = f"{name}model"
-    file_path = os.path.join("models", file_name)
+    file_path = os.path.join(os.getcwd(), "models", file_name)
 
     return file_path
 
