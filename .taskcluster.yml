@@ -159,12 +159,11 @@ tasks:
           command:
             - "/bin/sh"
             - "-lcxe"
-            - "git clone ${repository} bugbug &&
-               cd bugbug &&
+            - "git clone ${repository} /code &&
+               cd /code &&
                git checkout ${head_rev} &&
-               pip install requests &&
                python http_service/download_models.py &&
-               taskboot --target bugbug build-compose --write /images"
+               taskboot --target /code build-compose --write /images"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
