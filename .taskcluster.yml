@@ -69,7 +69,6 @@ tasks:
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  pip install -r test-requirements.txt &&
-                 flake8 &&
                  python infra/version_check.py"
           metadata:
             name: bugbug version_check
