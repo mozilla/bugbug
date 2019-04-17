@@ -155,7 +155,7 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 3600
-          image: babadie/taskboot:latest
+          image: mozilla/taskboot:latest
           command:
             - "/bin/sh"
             - "-lcxe"
