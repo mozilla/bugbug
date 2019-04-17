@@ -68,7 +68,6 @@ tasks:
               - "git clone ${repository} &&
                  cd bugbug &&
                  git checkout ${head_rev} &&
-                 pip install -r test-requirements.txt &&
                  python infra/version_check.py"
           metadata:
             name: bugbug version_check
