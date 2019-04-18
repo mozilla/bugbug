@@ -45,13 +45,35 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r test-requirements.txt &&
-               flake8 &&
-               python infra/version_check.py"
+               flake8"
         metadata:
           name: bugbug lint
           description: bugbug lint
           owner: ${user}@users.noreply.github.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push"'
+        then:
+          taskId: {$eval: as_slugid("version_check_task")}
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '1 hour'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            maxRunTime: 3600
+            image: python
+            command:
+              - "/bin/bash"
+              - "-lcx"
+              - "git clone ${repository} &&
+                 cd bugbug &&
+                 git checkout ${head_rev} &&
+                 python infra/version_check.py"
+          metadata:
+            name: bugbug tag version check
+            description: bugbug tag version check
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("training_test_task")}
         created: {$fromNow: ''}
@@ -185,6 +207,7 @@ tasks:
             - {$eval: as_slugid("tests_task")}
             - {$eval: as_slugid("rollback_test_task")}
             - {$eval: as_slugid("packaging_test_task")}
+            - {$eval: as_slugid("version_check_task")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
           created: {$fromNow: ''}
