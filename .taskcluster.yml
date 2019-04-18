@@ -70,8 +70,8 @@ tasks:
                  git checkout ${head_rev} &&
                  python infra/version_check.py"
           metadata:
-            name: bugbug version_check
-            description: bugbug version_check
+            name: bugbug tag version check
+            description: bugbug tag version check
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
