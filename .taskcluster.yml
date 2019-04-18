@@ -161,7 +161,7 @@ tasks:
                cd /code &&
                git checkout ${head_rev} &&
                python http_service/download_models.py &&
-               taskboot --target /code build-compose --write /images"
+               taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
@@ -207,5 +207,33 @@ tasks:
           metadata:
             name: bugbug PyPI release
             description: bugbug PyPI release
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          dependencies:
+            - {$eval: as_slugid("docker_build")}
+          scopes:
+            - secrets:get:project/relman/bugbug/deploy
+          taskId: {$eval: as_slugid("docker_push")}
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '1 hour'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:latest
+            env:
+              TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+            command:
+              - taskboot
+              - push-artifact
+          metadata:
+            name: bugbug docker push
+            description: bugbug docker push
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
