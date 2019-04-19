@@ -128,7 +128,7 @@ def _transform(commit):
 
     obj = {
         "author": commit.author.decode("utf-8"),
-        "reviewers" : commit.reviewers,
+        "reviewers": commit.reviewers,
         "desc": desc,
         "date": str(commit.date),
         "bug_id": int(commit.bug.decode("utf-8")) if commit.bug else None,
@@ -365,6 +365,7 @@ def download_commits(repo_dir, date_from):
 
         author_experience_90_days[commit.node] = len(commits_by_author[commit.author])
 
+        reviewer_experience_90_days[commit.node] = 0
         for reviewer in commit.reviewers:
             cut = None
             for i, prev_commit in enumerate(reviews_by_reviewer[reviewer]):
@@ -374,11 +375,11 @@ def download_commits(repo_dir, date_from):
                 cut = i
 
             if cut is not None:
-                reviews_by_reviewer[reviewer] = reviews_by_reviewer[reviewer][
-                    cut + 1 :
-                ]
+                reviews_by_reviewer[reviewer] = reviews_by_reviewer[reviewer][cut + 1 :]
 
-            reviewer_experience_90_days[commit.node] = len(reviews_by_reviewer[reviewer])
+            reviewer_experience_90_days[commit.node] += len(
+                reviews_by_reviewer[reviewer]
+            )
 
             if not commit.backedoutby:
                 reviews_by_reviewer[reviewer].append(commit)
