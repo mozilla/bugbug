@@ -16,12 +16,9 @@ LOGGER = logging.getLogger()
 
 BASE_URL = "https://index.taskcluster.net/v1/task/project.releng.services.project.testing.bugbug_train.latest/artifacts/public"
 
-MODELS_NAMES = (
-    "defectenhancementtask",
-    "component",
-    "regression",
-)
-MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
+MODELS_NAMES = ("defectenhancementtask", "component", "regression")
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+
 
 def retrieve_model(name):
     os.makedirs(MODELS_DIR, exist_ok=True)
@@ -48,7 +45,7 @@ def retrieve_model(name):
         with lzma.open(f"{file_path}.xz", "rb") as input_f:
             with open(file_path, "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
-                LOGGER.info(f'Written model in {file_path}')
+                LOGGER.info(f"Written model in {file_path}")
 
         with open(f"{file_path}.etag", "w") as f:
             f.write(new_etag)

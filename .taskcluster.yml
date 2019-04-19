@@ -45,7 +45,7 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r test-requirements.txt &&
-               flake8"
+               pre-commit run -a" # TODO Be smarter and run only on modified files
         metadata:
           name: bugbug lint
           description: bugbug lint

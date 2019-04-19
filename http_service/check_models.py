@@ -19,12 +19,12 @@ MODELS = {
     "component": ComponentModel,
     "regression": RegressionModel,
 }
-MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 
 
 def load_model(model):
     model_file_path = os.path.join(MODELS_DIR, f"{model}model")
-    LOGGER.info(f'Lookup model in {model_file_path}')
+    LOGGER.info(f"Lookup model in {model_file_path}")
     model = MODELS[model].load(model_file_path)
     return model
 
