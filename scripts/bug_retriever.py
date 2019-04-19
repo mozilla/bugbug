@@ -2,7 +2,6 @@
 
 import argparse
 import lzma
-import os
 import shutil
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -10,19 +9,10 @@ from logging import INFO, basicConfig, getLogger
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bug_snapshot, bugzilla, labels
+from bugbug.utils import get_secret
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-
-def get_secret(secret_id):
-    """ Return the secret value
-
-    TODO: Support task-cluster secret API
-    """
-    env_variable_name = f"BUGBUG_{secret_id}"
-
-    return os.environ[env_variable_name]
 
 
 class Retriever(object):
