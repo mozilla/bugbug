@@ -6,9 +6,12 @@
 import os
 
 import numpy as np
+import taskcluster
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
+
+TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
 
 
 def numpy_to_dict(array):
@@ -54,6 +57,25 @@ class MissingOrdinalEncoder(OrdinalEncoder):
         return X_int.astype(self.dtype, copy=False)
 
 
+def get_taskcluster_options():
+    """
+    Helper to get the Taskcluster setup options
+    according to current environment (local or Taskcluster)
+    """
+    options = taskcluster.optionsFromEnvironment()
+    proxy_url = os.environ.get("TASKCLUSTER_PROXY_URL")
+
+    if proxy_url is not None:
+        # Always use proxy url when available
+        options["rootUrl"] = proxy_url
+
+    if "rootUrl" not in options:
+        # Always have a value in root url
+        options["rootUrl"] = TASKCLUSTER_DEFAULT_URL
+
+    return options
+
+
 def get_secret(secret_id):
     """ Return the secret value
 
@@ -61,4 +83,11 @@ def get_secret(secret_id):
     """
     env_variable_name = f"BUGBUG_{secret_id}"
 
-    return os.environ[env_variable_name]
+    # Try in the environment first
+    secret_from_env = os.environ.get(env_variable_name)
+
+    if secret_from_env:
+        return secret_from_env
+
+    secrets = taskcluster.Secrets(get_taskcluster_options())
+    return secrets.get(secret_id)
