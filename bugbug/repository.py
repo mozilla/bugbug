@@ -365,6 +365,7 @@ def download_commits(repo_dir, date_from):
 
         author_experience_90_days[commit.node] = len(commits_by_author[commit.author])
 
+        reviewer_experience_90_days[commit.node] = 0
         for reviewer in commit.reviewers:
             cut = None
             for i, prev_commit in enumerate(reviews_by_reviewer[reviewer]):
