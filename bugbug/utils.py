@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
+
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -50,3 +52,13 @@ class MissingOrdinalEncoder(OrdinalEncoder):
     def transform(self, X):
         X_int, _ = self._transform(X, handle_unknown="ignore")
         return X_int.astype(self.dtype, copy=False)
+
+
+def get_secret(secret_id):
+    """ Return the secret value
+
+    TODO: Support task-cluster secret API
+    """
+    env_variable_name = f"BUGBUG_{secret_id}"
+
+    return os.environ[env_variable_name]
