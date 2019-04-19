@@ -8,11 +8,13 @@ import subprocess
 
 import requests
 
-r = requests.get(f'{os.environ["TASKCLUSTER_PROXY_URL"]}/secrets/v1/secret/project/relman/bugbug/deploy')
+r = requests.get(
+    f'{os.environ["TASKCLUSTER_PROXY_URL"]}/secrets/v1/secret/project/relman/bugbug/deploy'
+)
 r.raise_for_status()
 data = r.json()
 
-os.environ['TWINE_USERNAME'] = data['secret']['pypi']['username']
-os.environ['TWINE_PASSWORD'] = data['secret']['pypi']['password']
+os.environ["TWINE_USERNAME"] = data["secret"]["pypi"]["username"]
+os.environ["TWINE_PASSWORD"] = data["secret"]["pypi"]["password"]
 
-subprocess.run(['twine', 'upload', 'dist/*'], check=True)
+subprocess.run(["twine", "upload", "dist/*"], check=True)
