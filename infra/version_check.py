@@ -24,4 +24,4 @@ cur_tag = p.stdout.decode("utf-8")[1:].rstrip()
 
 assert (
     version == cur_tag
-), "Version in the VERSION file ({version}) should be the same as the current tag ({cur_tag})"
+), f"Version in the VERSION file ({version}) should be the same as the current tag ({cur_tag})"
