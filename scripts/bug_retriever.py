@@ -9,7 +9,7 @@ from logging import INFO, basicConfig, getLogger
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bug_snapshot, bugzilla, labels
-from bugbug.scripts import get_secret
+from bugbug.utils import get_secret
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
