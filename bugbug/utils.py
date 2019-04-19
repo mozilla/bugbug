@@ -78,8 +78,6 @@ def get_taskcluster_options():
 
 def get_secret(secret_id):
     """ Return the secret value
-
-    TODO: Support task-cluster secret API
     """
     env_variable_name = f"BUGBUG_{secret_id}"
 
