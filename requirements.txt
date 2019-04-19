@@ -17,3 +17,4 @@ keras==2.2.4
 tqdm==4.31.1
 python-dateutil==2.8.0
 zstandard==0.11.0
+taskcluster==7.0.1
