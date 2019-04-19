@@ -44,7 +44,7 @@ tasks:
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
-               pip install pre-commit==1.15.2 &&
+               pip install -r test-requirements.txt &&
                pre-commit run -a" # TODO Be smarter and run only on modified files
         metadata:
           name: bugbug lint
