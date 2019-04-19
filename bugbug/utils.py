@@ -87,5 +87,14 @@ def get_secret(secret_id):
     if secret_from_env:
         return secret_from_env
 
-    secrets = taskcluster.Secrets(get_taskcluster_options())
-    return secrets.get(secret_id)
+    # If not in env, try with TC if we have the secret id
+    tc_secret_id = os.environ.get("TC_SECRET_ID")
+
+    if tc_secret_id:
+        secrets = taskcluster.Secrets(get_taskcluster_options())
+        secret_bucket = secrets.get(tc_secret_id)
+
+        return secret_bucket["secret"][secret_id]
+
+    else:
+        raise ValueError("Failed to find secret {}".format(secret_id))
