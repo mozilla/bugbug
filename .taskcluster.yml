@@ -146,13 +146,13 @@ tasks:
 
       - taskId: {$eval: as_slugid("docker_build")}
         created: {$fromNow: ''}
-        deadline: {$fromNow: '1 hour'}
+        deadline: {$fromNow: '3 hours'}
         provisionerId: aws-provisioner-v1
         workerType: releng-svc
         payload:
           capabilities:
             privileged: true
-          maxRunTime: 3600
+          maxRunTime: 10800
           image: mozilla/taskboot:latest
           command:
             - "/bin/sh"
@@ -218,7 +218,7 @@ tasks:
             - secrets:get:project/relman/bugbug/deploy
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
-          deadline: {$fromNow: '1 hour'}
+          deadline: {$fromNow: '4 hours'}
           provisionerId: aws-provisioner-v1
           workerType: github-worker
           payload:
@@ -247,7 +247,7 @@ tasks:
             - hooks:modify-hook:project-relman/bugbug
             - assume:hook-id:project-relman/bugbug
           created: {$fromNow: ''}
-          deadline: {$fromNow: '1 hour'}
+          deadline: {$fromNow: '5 hours'}
           provisionerId: aws-provisioner-v1
           workerType: github-worker
           payload:
