@@ -377,7 +377,7 @@ def download_commits(repo_dir, date_from):
             if cut is not None:
                 reviews_by_reviewer[reviewer] = reviews_by_reviewer[reviewer][cut + 1 :]
 
-            reviewer_experience_90_days[commit.node] = len(
+            reviewer_experience_90_days[commit.node] += len(
                 reviews_by_reviewer[reviewer]
             )
 
