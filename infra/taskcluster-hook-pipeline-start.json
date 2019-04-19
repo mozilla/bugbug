@@ -1,6 +1,6 @@
 {
     "schedule": [
-        "0 0 * * * *"
+        "0 0 0 * * *"
     ],
     "metadata": {
         "description": "",
@@ -29,25 +29,27 @@
             "cache": {},
             "capabilities": {},
             "command": [
-                "/hello"
+                "/bin/bash",
+                "-lcx",
+                "git clone https://github.com/mozilla/bugbug && cd bugbug && git checkout data-pipeline-definition && pip install taskcluster json-e requests pyyaml && python infra/spawn_data_pipeline.py data-pipeline.yml"
             ],
             "env": {},
             "features": {
                 "taskclusterProxy": true
             },
-            "image": "hello-world",
+            "image": "python:3.7.3",
             "maxRunTime": 7200
         },
         "priority": "normal",
         "provisionerId": "aws-provisioner-v1",
         "retries": 5,
         "routes": [
-            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug"
+            "assume:hook-id:project-relman/bugbug",
+            "secrets:get:project/relman/bugbug/production"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"
