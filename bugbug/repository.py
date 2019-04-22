@@ -153,7 +153,9 @@ def _transform(commit):
         "files_touched_prev": files_touched_prev[commit.node],
         "files_touched_prev_90_days": files_touched_prev_90_days[commit.node],
         "directories_touched_prev": directories_touched_prev[commit.node],
-        "directories_touched_prev_90_days": directories_touched_prev_90_days[commit.node],
+        "directories_touched_prev_90_days": directories_touched_prev_90_days[
+            commit.node
+        ],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -433,9 +435,7 @@ def download_commits(repo_dir, date_from):
             files_touched[path] += 1
 
         directories = set(
-            directory
-            for path in commit.files
-            for directory in path.split('/')[:2]
+            directory for path in commit.files for directory in path.split("/")[:2]
         )
         for directory in directories:
             directories_touched_prev[commit.node] += directories_touched[directory]
@@ -479,7 +479,7 @@ def download_commits(repo_dir, date_from):
             directories_prev = set(
                 directory
                 for path in prev_commit.files
-                for directory in path.split('/')[:2]
+                for directory in path.split("/")[:2]
             )
             for directory_prev in directories_prev:
                 directories_touched_90_days[directory_prev] += 1
