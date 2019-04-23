@@ -148,19 +148,14 @@ class BugModel(Model):
         for bug_id, category in itertools.chain(
             labels.get_labels("defect_enhancement_task"), defect_enhancement_task_common
         ):
-            assert category in ["d", "e", "t"]
+            assert category in ["defect", "enhancement", "task"]
             if kind == "bug":
-                classes[int(bug_id)] = 1 if category == "d" else 0
+                classes[int(bug_id)] = 1 if category == "defect" else 0
             elif kind == "regression":
-                if category in ["e", "t"]:
+                if category in ["enhancement", "task"]:
                     classes[int(bug_id)] = 0
             elif kind == "defect_enhancement_task":
-                if category == "d":
-                    classes[int(bug_id)] = "defect"
-                elif category == "e":
-                    classes[int(bug_id)] = "enhancement"
-                elif category == "t":
-                    classes[int(bug_id)] = "task"
+                classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
