@@ -129,6 +129,10 @@ class BugModel(Model):
             bug_id: category
             for bug_id, category in labels.get_labels("defect_enhancement_task_s")
         }
+        defect_enhancement_task_h = {
+            bug_id: category
+            for bug_id, category in labels.get_labels("defect_enhancement_task_h")
+        }
 
         defect_enhancement_task_common = (
             (bug_id, category)
@@ -141,6 +145,11 @@ class BugModel(Model):
             and (
                 bug_id not in defect_enhancement_task_s
                 or defect_enhancement_task_s[bug_id]
+                == defect_enhancement_task_p[bug_id]
+            )
+            and (
+                bug_id not in defect_enhancement_task_h
+                or defect_enhancement_task_h[bug_id]
                 == defect_enhancement_task_p[bug_id]
             )
         )
