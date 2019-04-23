@@ -31,12 +31,16 @@ class DefectEnhancementTaskModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if any(
-                keyword in bug["keywords"]
-                for keyword in ["regression", "talos-regression"]
-            ) or (
-                "cf_has_regression_range" in bug
-                and bug["cf_has_regression_range"] == "yes"
+            if (
+                any(
+                    keyword in bug["keywords"]
+                    for keyword in ["regression", "talos-regression"]
+                )
+                or (
+                    "cf_has_regression_range" in bug
+                    and bug["cf_has_regression_range"] == "yes"
+                )
+                or len(bug["regressed_by"]) > 0
             ):
                 classes[i] = "defect" if not probabilities else [1.0, 0.0, 0.0]
             elif "feature" in bug["keywords"]:
