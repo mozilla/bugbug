@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:experimental
-FROM python:3.7.3
+FROM python:3.7.3-slim
 
 COPY requirements.txt /code/bugbug/
 
