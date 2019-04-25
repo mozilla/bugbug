@@ -7,7 +7,6 @@ from collections import defaultdict
 from functools import lru_cache
 
 import numpy as np
-from gensim.models import KeyedVectors
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -16,10 +15,15 @@ try:
     import spacy
 
     from spacy.tokenizer import Tokenizer
+    from gensim.models import KeyedVectors
 
     nlp = spacy.load("en_core_web_sm")
 except ImportError:
     spacy = None
+
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with `pip install bugbug[nlp]`"
+)
 
 
 def spacy_token_lemmatizer(text):
@@ -34,8 +38,7 @@ class SpacyVectorizer(TfidfVectorizer):
 
         # Detect when the optional dependency is missing
         if spacy is None:
-            msg = "Optional dependency Spacy is missing"
-            raise NotImplementedError(msg)
+            raise NotImplementedError(OPT_MSG_MISSING)
 
         super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
 
@@ -54,8 +57,7 @@ class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
 
         # Detect when the optional dependency is missing
         if spacy is None:
-            msg = "Optional dependency Spacy is missing"
-            raise NotImplementedError(msg)
+            raise NotImplementedError(OPT_MSG_MISSING)
 
     def fit(self, x, y=None):
         return self

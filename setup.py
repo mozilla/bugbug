@@ -41,6 +41,7 @@ extras_require = {
     "nlp": [
         "spacy==2.1.3",
         "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en-core-web-sm",
+        "gensim==3.7.2",
     ]
 }
 
