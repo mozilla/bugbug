@@ -454,6 +454,27 @@ def download_commits(repo_dir, date_from):
 
                 files_touched[copied] = files_touched[orig]
 
+                orig_directories = [
+                    directory
+                    for directory in os.path.dirname(orig).split("/")[:2]
+                    if directory != ""
+                ]
+                copied_directories = [
+                    directory
+                    for directory in os.path.dirname(copied).split("/")[:2]
+                    if directory != ""
+                ]
+                if len(orig_directories) == len(copied_directories):
+                    for i in range(len(orig_directories)):
+                        if orig_directories[i] != copied_directories[i]:
+                            directories_touched[
+                                copied_directories[i]
+                            ] = directories_touched[orig_directories[i]]
+                elif orig_directories and copied_directories:
+                    directories_touched[copied_directories[0]] = directories_touched[
+                        orig_directories[0]
+                    ]
+
         for i, prev_commit in enumerate(prev_commits_90_days):
             if (commit.date - prev_commit.date).days <= 90:
                 break
@@ -496,6 +517,27 @@ def download_commits(repo_dir, date_from):
                         ] = components_touched_90_days[path_to_component[orig]]
 
                     files_touched_90_days[copied] = files_touched_90_days[orig]
+
+                    orig_directories = [
+                        directory
+                        for directory in os.path.dirname(orig).split("/")[:2]
+                        if directory != ""
+                    ]
+                    copied_directories = [
+                        directory
+                        for directory in os.path.dirname(copied).split("/")[:2]
+                        if directory != ""
+                    ]
+                    if len(orig_directories) == len(copied_directories):
+                        for i in range(len(orig_directories)):
+                            if orig_directories[i] != copied_directories[i]:
+                                directories_touched_90_days[
+                                    copied_directories[i]
+                                ] = directories_touched_90_days[orig_directories[i]]
+                    elif orig_directories and copied_directories:
+                        directories_touched_90_days[
+                            copied_directories[0]
+                        ] = directories_touched_90_days[orig_directories[0]]
 
         components_touched_prev_90_days[commit.node] = sum(
             components_touched_90_days[component] for component in components
