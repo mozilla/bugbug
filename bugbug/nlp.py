@@ -7,13 +7,19 @@ from collections import defaultdict
 from functools import lru_cache
 
 import numpy as np
-import spacy
 from gensim.models import KeyedVectors
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
-from spacy.tokenizer import Tokenizer
 
-nlp = spacy.load("en_core_web_sm")
+# Spacy is an optional dependency
+try:
+    import spacy
+
+    from spacy.tokenizer import Tokenizer
+
+    nlp = spacy.load("en_core_web_sm")
+except ImportError:
+    spacy = None
 
 
 def spacy_token_lemmatizer(text):
@@ -25,6 +31,12 @@ def spacy_token_lemmatizer(text):
 
 class SpacyVectorizer(TfidfVectorizer):
     def __init__(self, *args, **kwargs):
+
+        # Detect when the optional dependency is missing
+        if spacy is None:
+            msg = "Optional dependency Spacy is missing"
+            raise NotImplementedError(msg)
+
         super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
 
 
@@ -39,6 +51,11 @@ class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.model = get_word_embeddings()
         self.dim = len(self.model["if"])
+
+        # Detect when the optional dependency is missing
+        if spacy is None:
+            msg = "Optional dependency Spacy is missing"
+            raise NotImplementedError(msg)
 
     def fit(self, x, y=None):
         return self

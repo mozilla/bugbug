@@ -37,6 +37,13 @@ install_requires, dependency_links = read_requirements("requirements.txt")
 with open(os.path.join(here, "VERSION")) as f:
     version = f.read().strip()
 
+extras_require = {
+    "nlp": [
+        "spacy==2.1.3",
+        "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.1.0/en_core_web_sm-2.1.0.tar.gz#egg=en-core-web-sm",
+    ]
+}
+
 setup(
     name="bugbug",
     version=version,
@@ -44,6 +51,7 @@ setup(
     author="Marco Castelluccio",
     author_email="mcastelluccio@mozilla.com",
     install_requires=install_requires,
+    extra_require=extras_require,
     dependency_links=dependency_links,
     packages=find_packages(exclude=["contrib", "docs", "tests"]),
     include_package_data=True,
