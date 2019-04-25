@@ -1,12 +1,14 @@
 #syntax=docker/dockerfile:experimental
 FROM python:3.7.3-slim
 
-COPY requirements.txt /code/bugbug/
+# Setup dependencies in a cachable step
+COPY requirements.txt /requirements.txt
+RUN apt-get update && \
+		apt-get install -y gcc g++ libgomp1 && \
+		pip install --disable-pip-version-check -r /requirements.txt && \
+		apt-get remove -y gcc g++ && \
+		apt-get autoremove -y
 
-RUN --mount=type=cache,target=/cache/pip \
-	pip install --disable-pip-version-check --cache-dir=/cache/pip -r /code/bugbug/requirements.txt
-
-COPY . /code/bugbug/
-
-RUN --mount=type=cache,target=/cache/pip \
-	pip install --cache-dir=/cache/pip /code/bugbug/
+# Setup bugbug with a bind RO mount
+RUN --mount=type=bind,target=/tmp/bugbug \
+	pip install /tmp/bugbug
