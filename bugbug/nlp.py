@@ -3,6 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from __future__ import print_function
+
+import sys
 from collections import defaultdict
 from functools import lru_cache
 
@@ -16,13 +19,21 @@ try:
 
     from spacy.tokenizer import Tokenizer
     from gensim.models import KeyedVectors
-
-    nlp = spacy.load("en_core_web_sm")
 except ImportError:
     spacy = None
 
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    msg = "Spacy model is missing, install it with: %s -m spacy download en_core_web_sm"
+    print(msg % sys.executable, file=sys.stderr)
+
+    spacy = None
+
 OPT_MSG_MISSING = (
-    "Optional dependencies are missing, install them with `pip install bugbug[nlp]`"
+    "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
+    "You might need also to download the models with: %s -m spacy download en_core_web_sm"
+    % sys.executable
 )
 
 
@@ -52,12 +63,12 @@ def get_word_embeddings():
 
 class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
-        self.model = get_word_embeddings()
-        self.dim = len(self.model["if"])
-
         # Detect when the optional dependency is missing
         if spacy is None:
             raise NotImplementedError(OPT_MSG_MISSING)
+
+        self.model = get_word_embeddings()
+        self.dim = len(self.model["if"])
 
     def fit(self, x, y=None):
         return self
