@@ -232,6 +232,8 @@ tasks:
             command:
               - taskboot
               - push-artifact
+          routes:
+            - notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
           metadata:
             name: bugbug docker push
             description: bugbug docker push
@@ -265,8 +267,6 @@ tasks:
               - infra/taskcluster-hook-pipeline-start.json
               - project-relman
               - bugbug
-          routes:
-            - notify.pulse.route.project.bugbug.deploy_ending.on-complete
           metadata:
             name: bugbug update hooks
             description: bugbug update hooks
@@ -274,9 +274,6 @@ tasks:
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("dummy_task_pulse")}
-        scopes:
-          - hooks:modify-hook:project-relman/bugbug
-          - assume:hook-id:project-relman/bugbug
         created: {$fromNow: ''}
         deadline: {$fromNow: '5 hours'}
         provisionerId: aws-provisioner-v1
@@ -293,7 +290,7 @@ tasks:
           command:
             - echo 'dummy'
         routes:
-          - notify.pulse.route.project.bugbug.deploy_ending.on-complete
+          - notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
         metadata:
           name: bugbug dummy
           description: bugbug dummy
