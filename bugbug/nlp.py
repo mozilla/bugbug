@@ -26,7 +26,8 @@ except ImportError:
     pass
 
 try:
-    nlp = spacy.load("en_core_web_sm")
+    if HAS_OPTIONAL_DEPENDENCIES:
+        nlp = spacy.load("en_core_web_sm")
 except OSError:
     msg = "Spacy model is missing, install it with: %s -m spacy download en_core_web_sm"
     print(msg % sys.executable, file=sys.stderr)
