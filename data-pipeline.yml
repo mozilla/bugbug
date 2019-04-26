@@ -1,0 +1,229 @@
+version: 1
+tasks:
+  - ID: commit-retrieval
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '12 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    payload:
+      maxRunTime: 43200
+      image: mozilla/bugbug-commit-retrieval
+
+      artifacts:
+        public/commits.json.xz:
+          path: /data/commits.json.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug commit retrieval
+      description: bugbug commit retrieval
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: bugs-retrieval
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '24 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc
+    payload:
+      env:
+        TC_SECRET_ID: project/relman/bugbug/production
+      maxRunTime: 86400
+      image: mozilla/bugbug-bugs-retrieval
+
+      artifacts:
+        public/bugs.json.xz:
+          path: /data/bugs.json.xz
+          type: file
+
+      features:
+        taskclusterProxy:
+          true
+    scopes:
+      - "secrets:get:project/relman/bugbug/production"
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug bugs retrieval
+      description: bugbug bugs retrieval
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-component
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '48 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-component
+
+      artifacts:
+        public/componentmodel.xz:
+          path: /componentmodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug train component model
+      description: bugbug train component model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-defect
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '48 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-defect
+
+      artifacts:
+        public/defectenhancementtaskmodel.xz:
+          path: /defectenhancementtaskmodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug train defect model
+      description: bugbug train defect model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-regression
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '48 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-regression
+
+      artifacts:
+        public/regressionmodel.xz:
+          path: /regressionmodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug train regression model
+      description: bugbug train regression model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-tracking
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '48 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-tracking
+
+      artifacts:
+        public/trackingmodel.xz:
+          path: /trackingmodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug train tracking model
+      description: bugbug train tracking model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: docker-build
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '49 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc
+    dependencies:
+      - train-tracking
+      - train-regression
+      - train-defect
+      - train-component
+    payload:
+      capabilities:
+        privileged: true
+      maxRunTime: 3600
+      image: mozilla/taskboot:latest
+      command:
+        - "/bin/sh"
+        - "-lcxe"
+        - "git clone https://github.com/mozilla/bugbug /code &&
+           cd /code &&
+           git checkout master &&
+           python http_service/download_models.py &&
+           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service"
+      artifacts:
+        public/bugbug:
+          expires: {$fromNow: '2 weeks'}
+          path: /images
+          type: directory
+    scopes:
+      - docker-worker:capability:privileged
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug docker http build
+      description: bugbug docker http build
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: docker-push
+    dependencies:
+      - docker-build
+    scopes:
+      - secrets:get:project/relman/bugbug/deploy
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '50 hour'}
+    provisionerId: aws-provisioner-v1
+    workerType: github-worker
+    payload:
+      features:
+        taskclusterProxy:
+          true
+      maxRunTime: 3600
+      image: mozilla/taskboot:latest
+      env:
+        TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+      command:
+        - taskboot
+        - push-artifact
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug docker http push
+      description: bugbug docker http push
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml

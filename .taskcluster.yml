@@ -219,6 +219,7 @@ tasks:
             - {$eval: as_slugid("docker_build")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
+            - queue:route:project.relman.bugbug.deploy_ending.*
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
@@ -235,6 +236,8 @@ tasks:
             command:
               - taskboot
               - push-artifact
+          routes:
+            - project.relman.bugbug.deploy_ending
           metadata:
             name: bugbug docker push
             description: bugbug docker push
