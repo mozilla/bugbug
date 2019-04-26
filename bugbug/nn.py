@@ -7,7 +7,9 @@ from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 
 from bugbug.utils import numpy_to_dict
 
-HAS_OPTIONAL_DEPENDENCIES = False
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
+)
 
 try:
     from keras.preprocessing.sequence import pad_sequences
@@ -16,21 +18,11 @@ try:
 
     HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
-    pass
-
-
-OPT_MSG_MISSING = (
-    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
-)
+    raise ImportError(OPT_MSG_MISSING)
 
 
 class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def __init__(self, maxlen, vocab_size):
-
-        # Detect when the Keras optional dependency is missing
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         self.maxlen = maxlen
         self.tokenizer = Tokenizer(num_words=vocab_size)
 
@@ -45,10 +37,6 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
 
 class KerasClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, fit_params):
-        # Detect when the Keras optional dependency is missing
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         self.fit_params = fit_params
 
     def fit(self, X, y):

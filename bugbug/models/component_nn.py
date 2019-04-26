@@ -17,7 +17,9 @@ from bugbug.utils import (
     StructuredColumnTransformer,
 )
 
-HAS_OPTIONAL_DEPENDENCIES = False
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
+)
 
 try:
     from keras import Input, layers
@@ -32,24 +34,12 @@ try:
         SpatialDropout1D,
     )
     from keras.models import Model as KerasModel
-
-    HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
-    pass
-
-
-OPT_MSG_MISSING = (
-    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
-)
+    raise ImportError(OPT_MSG_MISSING)
 
 
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
-
-        # Detect when the Keras optional dependency is missing
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         # (epochs, batch_size) combinations
         fit_params = [(2, 256), (2, 512), (1, 1024)]
         super().__init__(fit_params=fit_params)
@@ -204,10 +194,6 @@ class ComponentNNClassifier(KerasClassifier):
 
 class ComponentNNModel(ComponentModel):
     def __init__(self, *args, **kwargs):
-        # Detect when the Keras optional dependency is missing
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         super().__init__(*args, **kwargs)
 
         self.short_desc_maxlen = 20
