@@ -37,6 +37,20 @@ install_requires, dependency_links = read_requirements("requirements.txt")
 with open(os.path.join(here, "VERSION")) as f:
     version = f.read().strip()
 
+# Read the extra requirements
+extras = ["nlp"]
+
+extras_require = {}
+
+for extra in extras:
+    extras_install, extra_links = read_requirements("extra-%s-requirements.txt" % extra)
+
+    # Merge the dependency links
+    dependency_links.extend(extra_links)
+
+    extras_require[extra] = extras_install
+
+
 setup(
     name="bugbug",
     version=version,
@@ -44,6 +58,7 @@ setup(
     author="Marco Castelluccio",
     author_email="mcastelluccio@mozilla.com",
     install_requires=install_requires,
+    extras_require=extras_require,
     dependency_links=dependency_links,
     packages=find_packages(exclude=["contrib", "docs", "tests"]),
     include_package_data=True,
@@ -55,4 +70,9 @@ setup(
             "bugbug-train = scripts.trainer:main",
         ]
     },
+    classifiers=[
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3 :: Only",
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    ],
 )

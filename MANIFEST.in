@@ -1,5 +1,6 @@
 include VERSION
 include requirements.txt
+include extra-nlp-requirements.txt
 recursive-include bugbug/labels *
 
 recursive-exclude * __pycache__
