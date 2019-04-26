@@ -38,7 +38,7 @@ with open(os.path.join(here, "VERSION")) as f:
     version = f.read().strip()
 
 # Read the extra requirements
-extras = ["nlp"]
+extras = ["nlp", "nn"]
 
 extras_require = {}
 
