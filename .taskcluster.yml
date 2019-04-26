@@ -289,7 +289,8 @@ tasks:
             GIT_REPOSITORY: ${repository}
             GIT_REVISION: ${head_rev}
           command:
-            - echo 'dummy'
+            - sh
+            - "--version"
         scopes:
           - queue:route:notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
         routes:
