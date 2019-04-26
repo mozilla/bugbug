@@ -216,6 +216,7 @@ tasks:
             - {$eval: as_slugid("docker_build")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
+            - queue:route:notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
@@ -289,6 +290,8 @@ tasks:
             GIT_REVISION: ${head_rev}
           command:
             - echo 'dummy'
+        scopes:
+          - queue:route:notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
         routes:
           - notify.pulse.route.project.relman.bugbug.deploy_ending.on-complete
         metadata:
