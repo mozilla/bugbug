@@ -3,16 +3,34 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from keras.preprocessing.sequence import pad_sequences
-from keras.preprocessing.text import Tokenizer
-from keras.utils import to_categorical
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 
 from bugbug.utils import numpy_to_dict
 
+HAS_OPTIONAL_DEPENDENCIES = False
+
+try:
+    from keras.preprocessing.sequence import pad_sequences
+    from keras.preprocessing.text import Tokenizer
+    from keras.utils import to_categorical
+
+    HAS_OPTIONAL_DEPENDENCIES = True
+except ImportError:
+    pass
+
+
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
+)
+
 
 class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def __init__(self, maxlen, vocab_size):
+
+        # Detect when the Keras optional dependency is missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         self.maxlen = maxlen
         self.tokenizer = Tokenizer(num_words=vocab_size)
 
@@ -27,6 +45,10 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
 
 class KerasClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, fit_params):
+        # Detect when the Keras optional dependency is missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         self.fit_params = fit_params
 
     def fit(self, X, y):

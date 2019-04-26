@@ -3,18 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from keras import Input, layers
-from keras.layers import (
-    GRU,
-    Bidirectional,
-    Dense,
-    Dropout,
-    Embedding,
-    Flatten,
-    GlobalMaxPooling1D,
-    SpatialDropout1D,
-)
-from keras.models import Model as KerasModel
 from sklearn.ensemble import VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline, make_pipeline
@@ -29,9 +17,38 @@ from bugbug.utils import (
     StructuredColumnTransformer,
 )
 
+HAS_OPTIONAL_DEPENDENCIES = False
+
+try:
+    from keras import Input, layers
+    from keras.layers import (
+        GRU,
+        Bidirectional,
+        Dense,
+        Dropout,
+        Embedding,
+        Flatten,
+        GlobalMaxPooling1D,
+        SpatialDropout1D,
+    )
+    from keras.models import Model as KerasModel
+
+    HAS_OPTIONAL_DEPENDENCIES = True
+except ImportError:
+    pass
+
+
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
+)
+
 
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
+
+        # Detect when the Keras optional dependency is missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
 
         # (epochs, batch_size) combinations
         fit_params = [(2, 256), (2, 512), (1, 1024)]
@@ -187,6 +204,10 @@ class ComponentNNClassifier(KerasClassifier):
 
 class ComponentNNModel(ComponentModel):
     def __init__(self, *args, **kwargs):
+        # Detect when the Keras optional dependency is missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         super().__init__(*args, **kwargs)
 
         self.short_desc_maxlen = 20
