@@ -241,40 +241,40 @@ tasks:
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
-          taskId: {$eval: as_slugid("update_hook")}
-          dependencies:
-            - {$eval: as_slugid("docker_push")}
-          scopes:
-            - hooks:modify-hook:project-relman/bugbug
-            - assume:hook-id:project-relman/bugbug
-          created: {$fromNow: ''}
-          deadline: {$fromNow: '5 hours'}
-          provisionerId: aws-provisioner-v1
-          workerType: github-worker
-          payload:
-            features:
-              taskclusterProxy:
-                true
-            maxRunTime: 3600
-            image: mozilla/taskboot:latest
-            env:
-              GIT_REPOSITORY: ${repository}
-              GIT_REVISION: ${head_rev}
-            command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-pipeline-start.json
-              - project-relman
-              - bugbug
-          metadata:
-            name: bugbug update hooks
-            description: bugbug update hooks
-            owner: ${user}@users.noreply.github.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+      - taskId: {$eval: as_slugid("update_hook")}
+        dependencies:
+          - {$eval: as_slugid("docker_push")}
+        scopes:
+          - hooks:modify-hook:project-relman/bugbug
+          - assume:hook-id:project-relman/bugbug
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '5 hours'}
+        provisionerId: aws-provisioner-v1
+        workerType: github-worker
+        payload:
+          features:
+            taskclusterProxy:
+              true
+          maxRunTime: 3600
+          image: mozilla/taskboot:latest
+          env:
+            GIT_REPOSITORY: ${repository}
+            GIT_REVISION: ${head_rev}
+          command:
+            - taskboot
+            - build-hook
+            - infra/taskcluster-hook-pipeline-start.json
+            - project-relman
+            - bugbug
+        metadata:
+          name: bugbug update hooks
+          description: bugbug update hooks
+          owner: ${user}@users.noreply.github.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("dummyy_task_pulse")}
+        dependencies:
+          - {$eval: as_slugid("update_hook")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '5 hours'}
         provisionerId: aws-provisioner-v1

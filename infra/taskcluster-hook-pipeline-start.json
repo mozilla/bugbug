@@ -2,7 +2,7 @@
     "bindings": [
         {
             "exchange": "exchange/taskcluster-queue/v1/task-completed",
-            "routingKeyPattern": "route.project.bugbug.deploy_ending"
+            "routingKeyPattern": "route.project.relman.bugbug.deploy_ending"
         }
     ],
     "schedule": [
