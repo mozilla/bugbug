@@ -7,7 +7,8 @@ RUN apt-get update && \
 		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
 		pip install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
 		apt-get remove -y gcc g++ && \
-		apt-get autoremove -y
+		apt-get autoremove -y && \
+		rm -rf /var/lib/apt/lists/*
 
 # Setup bugbug with a bind RO mount
 RUN --mount=type=bind,target=/tmp/bugbug \
