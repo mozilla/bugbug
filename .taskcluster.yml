@@ -265,6 +265,8 @@ tasks:
               - infra/taskcluster-hook-pipeline-start.json
               - project-relman
               - bugbug
+          routes:
+            - notify.pulse.route.project.bugbug.deploy_ending.on-complete
           metadata:
             name: bugbug update hooks
             description: bugbug update hooks
