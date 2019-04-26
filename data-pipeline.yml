@@ -4,7 +4,7 @@ tasks:
     created: {$fromNow: ''}
     deadline: {$fromNow: '12 hours'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc # TODO FIX ME BEFORE MERGING
+    workerType: releng-svc-compute
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-commit-retrieval
@@ -15,7 +15,7 @@ tasks:
           type: file
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug commit retrieval
@@ -46,7 +46,7 @@ tasks:
       - "secrets:get:project/relman/bugbug/production"
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug bugs retrieval
@@ -58,7 +58,7 @@ tasks:
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc # TODO FIX ME BEFORE MERGING
+    workerType: releng-svc-compute
     dependencies:
       - commit-retrieval
       - bugs-retrieval
@@ -72,7 +72,7 @@ tasks:
           type: file
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug train component model
@@ -84,7 +84,7 @@ tasks:
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc # TODO FIX ME BEFORE MERGING
+    workerType: releng-svc-compute
     dependencies:
       - commit-retrieval
       - bugs-retrieval
@@ -98,7 +98,7 @@ tasks:
           type: file
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug train defect model
@@ -110,7 +110,7 @@ tasks:
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc # TODO FIX ME BEFORE MERGING
+    workerType: releng-svc-compute
     dependencies:
       - commit-retrieval
       - bugs-retrieval
@@ -124,7 +124,7 @@ tasks:
           type: file
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug train regression model
@@ -136,7 +136,7 @@ tasks:
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc # TODO FIX ME BEFORE MERGING
+    workerType: releng-svc-compute
     dependencies:
       - commit-retrieval
       - bugs-retrieval
@@ -150,7 +150,7 @@ tasks:
           type: file
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug train tracking model
@@ -190,7 +190,7 @@ tasks:
       - docker-worker:capability:privileged
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug docker http build
@@ -220,7 +220,7 @@ tasks:
         - push-artifact
 
     routes:
-      # - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug docker http push
