@@ -19,8 +19,6 @@
 This script triggers the data pipeline for the bugbug project
 """
 
-from __future__ import print_function
-
 import argparse
 import os
 import sys
@@ -81,13 +79,16 @@ def main():
         # Try render the task template
         context = {}
         payload = jsone.render(task, context)
-        # raise Exception(payload)
-        # # TODO: the task_id will not match the taskId in the yaml file
+
+        # We need to generate new unique task ids for taskcluster to be happy
+        # but need to identify dependencies across tasks. So we create a
+        # mapping between an internal ID and the generate ID
+
         task_id = taskcluster.utils.slugId()
         task_internal_id = payload.pop("ID")
 
         if task_internal_id in id_mapping:
-            raise ValueError("Conflicting IDS {}".format(task_internal_id))
+            raise ValueError("Conflicting IDs {}".format(task_internal_id))
 
         id_mapping[task_internal_id] = task_id
 
@@ -104,10 +105,8 @@ def main():
 
         payload["dependencies"] = new_dependencies
 
-        print("TASK", task_id, payload)
         tasks.append((task_id, payload))
 
-    print("https://tools.taskcluster.net/task-group-inspector/#/" + task_group_id)
     # Now sends them
     queue = taskcluster.Queue(options)
     try:

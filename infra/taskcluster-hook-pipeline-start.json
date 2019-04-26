@@ -50,6 +50,7 @@
         "provisionerId": "aws-provisioner-v1",
         "retries": 5,
         "routes": [
+            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed"
         ],
         "schedulerId": "-",
