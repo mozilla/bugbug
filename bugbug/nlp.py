@@ -13,22 +13,23 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Spacy is an optional dependency
+HAS_OPTIONAL_DEPENDENCIES = False
+
 try:
     import spacy
 
     from spacy.tokenizer import Tokenizer
     from gensim.models import KeyedVectors
+
+    HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
-    spacy = None
+    pass
 
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
     msg = "Spacy model is missing, install it with: %s -m spacy download en_core_web_sm"
     print(msg % sys.executable, file=sys.stderr)
-
-    spacy = None
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
@@ -48,7 +49,7 @@ class SpacyVectorizer(TfidfVectorizer):
     def __init__(self, *args, **kwargs):
 
         # Detect when the optional dependency is missing
-        if spacy is None:
+        if not HAS_OPTIONAL_DEPENDENCIES:
             raise NotImplementedError(OPT_MSG_MISSING)
 
         super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
@@ -64,7 +65,7 @@ def get_word_embeddings():
 class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
         # Detect when the optional dependency is missing
-        if spacy is None:
+        if not HAS_OPTIONAL_DEPENDENCIES:
             raise NotImplementedError(OPT_MSG_MISSING)
 
         self.model = get_word_embeddings()
