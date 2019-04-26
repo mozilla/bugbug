@@ -274,7 +274,7 @@ tasks:
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - taskId: {$eval: as_slugid("dummy_task_pulse")}
+      - taskId: {$eval: as_slugid("dummyy_task_pulse")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '5 hours'}
         provisionerId: aws-provisioner-v1
