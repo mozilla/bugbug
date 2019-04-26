@@ -242,8 +242,8 @@ tasks:
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("update_hook")}
-        dependencies:
-          - {$eval: as_slugid("docker_push")}
+        dependencies: []
+          # - {$eval: as_slugid("docker_push")}
         scopes:
           - hooks:modify-hook:project-relman/bugbug
           - assume:hook-id:project-relman/bugbug
