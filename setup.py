@@ -70,4 +70,9 @@ setup(
             "bugbug-train = scripts.trainer:main",
         ]
     },
+    classifiers=[
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3 :: Only",
+        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    ],
 )

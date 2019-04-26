@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from __future__ import print_function
-
 import sys
 from collections import defaultdict
 from functools import lru_cache
@@ -29,13 +27,16 @@ try:
     if HAS_OPTIONAL_DEPENDENCIES:
         nlp = spacy.load("en_core_web_sm")
 except OSError:
-    msg = "Spacy model is missing, install it with: %s -m spacy download en_core_web_sm"
-    print(msg % sys.executable, file=sys.stderr)
+    msg = (
+        "Spacy model is missing, install it with: "
+        f"{sys.executable} -m spacy download en_core_web_sm"
+    )
+    print(msg, file=sys.stderr)
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
-    "You might need also to download the models with: %s -m spacy download en_core_web_sm"
-    % sys.executable
+    "You might need also to download the models with: "
+    f"{sys.executable} -m spacy download en_core_web_sm"
 )
 
 
