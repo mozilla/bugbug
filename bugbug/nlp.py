@@ -50,7 +50,7 @@ def spacy_token_lemmatizer(text):
 class SpacyVectorizer(TfidfVectorizer):
     def __init__(self, *args, **kwargs):
 
-        # Detect when the optional dependency is missing
+        # Detect when the Spacy optional dependency is missing
         if not HAS_OPTIONAL_DEPENDENCIES:
             raise NotImplementedError(OPT_MSG_MISSING)
 
@@ -66,7 +66,7 @@ def get_word_embeddings():
 
 class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
-        # Detect when the optional dependency is missing
+        # Detect when the Gensim optional dependency are missing
         if not HAS_OPTIONAL_DEPENDENCIES:
             raise NotImplementedError(OPT_MSG_MISSING)
 
