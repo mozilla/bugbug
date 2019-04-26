@@ -161,14 +161,17 @@ tasks:
                cd /code &&
                git checkout ${head_rev} &&
                python http_service/download_models.py &&
-               taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images"
+               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
               path: /images
               type: directory
+          cache:
+            bugbug-build: /cache
         scopes:
           - docker-worker:capability:privileged
+          - docker-worker:cache:bugbug-build
         metadata:
           name: bugbug docker build
           description: bugbug docker build
