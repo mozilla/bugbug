@@ -90,7 +90,6 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
-               python -m spacy download en_core_web_sm &&
                pip install -r test-requirements.txt &&
                python -m pytest tests/test_*.py"
         metadata:
@@ -114,7 +113,6 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
-               python -m spacy download en_core_web_sm &&
                python -c 'from bugbug import bugzilla, db; db.download()' &&
                python -m bugbug.bug_snapshot"
         metadata:
@@ -138,7 +136,6 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
-               python -m spacy download en_core_web_sm &&
                python setup.py sdist &&
                pip install dist/bugbug-$(cat VERSION).tar.gz"
         metadata:
