@@ -32,19 +32,9 @@ def get_model(model):
     return getattr(current_app, attribute, model)
 
 
-@application.route("/<model>/predict/<bug_id>")
-def model_prediction(model, bug_id):
-    headers = request.headers
-
-    auth = headers.get(API_TOKEN)
-
-    if not auth:
-        return jsonify({"message": "Error, missing X-API-KEY"}), 401
-    else:
-        LOGGER.info("Request with API TOKEN %r", auth)
-
+def classify_bug(model_name, bug_id):
     bugs = bugzilla._download([bug_id])
-    model = get_model(model)
+    model = get_model(model_name)
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
     suggestions = model.clf._le.inverse_transform(indexes)
@@ -54,5 +44,21 @@ def model_prediction(model, bug_id):
         "indexes": indexes.tolist(),
         "suggestions": suggestions.tolist(),
     }
+
+    return data
+
+
+@application.route("/<model_name>/predict/<bug_id>")
+def model_prediction(model_name, bug_id):
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify({"message": "Error, missing X-API-KEY"}), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    data = classify_bug(model_name, bug_id)
 
     return jsonify(**data)
