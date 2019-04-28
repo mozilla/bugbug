@@ -7,30 +7,15 @@ import logging
 import os
 import sys
 
-from bugbug.models.component import ComponentModel
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
+# Non-relative imports might be brittle
+from models import MODELS_NAMES, load_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS = {
-    "defectenhancementtask": DefectEnhancementTaskModel,
-    "component": ComponentModel,
-    "regression": RegressionModel,
-}
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
-
-
-def load_model(model):
-    model_file_path = os.path.join(MODELS_DIR, f"{model}model")
-    LOGGER.info(f"Lookup model in {model_file_path}")
-    model = MODELS[model].load(model_file_path)
-    return model
-
 
 def check_models():
-    for model_name in MODELS.keys():
+    for model_name in MODELS_NAMES:
         # Try loading the model
         load_model(model_name)
 
@@ -47,7 +32,7 @@ if __name__ == "__main__":
         check_models()
     except Exception:
         LOGGER.warning(
-            "Failed to validate the models, please run `python models.py download`",
+            "Failed to validate the models, please run `python download_models.py`",
             exc_info=True,
         )
         sys.exit(1)
