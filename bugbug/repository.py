@@ -282,6 +282,20 @@ def get_revs(hg, date):
     return revs
 
 
+def get_directories(files):
+    if isinstance(files, str):
+        files = [files]
+
+    directories = set()
+    for path in files:
+        path_dirs = (
+            os.path.dirname(path).split("/")[:2] if os.path.dirname(path) else []
+        )
+        if path_dirs:
+            directories.update([path_dirs[0], "/".join(path_dirs)])
+    return list(directories)
+
+
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
@@ -434,13 +448,7 @@ def download_commits(repo_dir, date_from):
 
             files_touched[path] += 1
 
-        directories = set()
-        for path in commit.files:
-            path_dirs = (
-                os.path.dirname(path).split("/")[:2] if os.path.dirname(path) else []
-            )
-            if path_dirs:
-                directories.update([path_dirs[0], "/".join(path_dirs)])
+        directories = get_directories(commit.files)
 
         for directory in directories:
             directories_touched_prev[commit.node] += directories_touched[directory]
@@ -456,24 +464,9 @@ def download_commits(repo_dir, date_from):
 
                 files_touched[copied] = files_touched[orig]
 
-                orig_directories = (
-                    os.path.dirname(orig).split("/")[:2]
-                    if os.path.dirname(orig)
-                    else []
-                )
-                if orig_directories and len(orig_directories) > 1:
-                    orig_directories = [orig_directories[0], "/".join(orig_directories)]
+                orig_directories = get_directories(orig)
 
-                copied_directories = (
-                    os.path.dirname(copied).split("/")[:2]
-                    if os.path.dirname(copied)
-                    else []
-                )
-                if copied_directories and len(copied_directories) > 1:
-                    copied_directories = [
-                        copied_directories[0],
-                        "/".join(copied_directories),
-                    ]
+                copied_directories = get_directories(copied)
 
                 if len(orig_directories) == len(copied_directories):
                     for i in range(len(orig_directories)):
@@ -511,15 +504,7 @@ def download_commits(repo_dir, date_from):
             for path_prev in prev_commit.files:
                 files_touched_90_days[path_prev] += 1
 
-            directories_prev = set()
-            for path in prev_commit.files:
-                path_dirs = (
-                    os.path.dirname(path).split("/")[:2]
-                    if os.path.dirname(path)
-                    else []
-                )
-                if path_dirs:
-                    directories_prev.update([path_dirs[0], "/".join(path_dirs)])
+            directories_prev = get_directories(prev_commit.files)
 
             for directory_prev in directories_prev:
                 directories_touched_90_days[directory_prev] += 1
@@ -533,27 +518,9 @@ def download_commits(repo_dir, date_from):
 
                     files_touched_90_days[copied] = files_touched_90_days[orig]
 
-                    orig_directories = (
-                        os.path.dirname(orig).split("/")[:2]
-                        if os.path.dirname(orig)
-                        else []
-                    )
-                    if orig_directories and len(orig_directories) > 1:
-                        orig_directories = [
-                            orig_directories[0],
-                            "/".join(orig_directories),
-                        ]
+                    orig_directories = get_directories(orig)
 
-                    copied_directories = (
-                        os.path.dirname(copied).split("/")[:2]
-                        if os.path.dirname(copied)
-                        else []
-                    )
-                    if copied_directories and len(copied_directories) > 1:
-                        copied_directories = [
-                            copied_directories[0],
-                            "/".join(copied_directories),
-                        ]
+                    copied_directories = get_directories(copied)
 
                     if len(orig_directories) == len(copied_directories):
                         for i in range(len(orig_directories)):
