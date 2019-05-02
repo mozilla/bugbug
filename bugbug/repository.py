@@ -289,7 +289,7 @@ def get_directories(files):
     directories = set()
     for path in files:
         path_dirs = (
-            os.path.dirname(path).split("/")[:2] if os.path.dirname(path) else []
+            os.path.dirname(path).split("/", 2)[:2] if os.path.dirname(path) else []
         )
         if path_dirs:
             directories.update([path_dirs[0], "/".join(path_dirs)])
