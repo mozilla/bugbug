@@ -153,7 +153,7 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.0
+          image: mozilla/taskboot@sha256:680a63de610fd30a75d268fb96d4e88b0364d17cbc70ab64246df5cfbdd35d37
           command:
             - "/bin/sh"
             - "-lcxe"
@@ -229,7 +229,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.0
+            image: mozilla/taskboot@sha256:680a63de610fd30a75d268fb96d4e88b0364d17cbc70ab64246df5cfbdd35d37
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
