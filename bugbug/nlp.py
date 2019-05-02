@@ -3,17 +3,41 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import sys
 from collections import defaultdict
 from functools import lru_cache
 
 import numpy as np
-import spacy
-from gensim.models import KeyedVectors
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
-from spacy.tokenizer import Tokenizer
 
-nlp = spacy.load("en_core_web_sm")
+HAS_OPTIONAL_DEPENDENCIES = False
+
+try:
+    import spacy
+
+    from spacy.tokenizer import Tokenizer
+    from gensim.models import KeyedVectors
+
+    HAS_OPTIONAL_DEPENDENCIES = True
+except ImportError:
+    pass
+
+try:
+    if HAS_OPTIONAL_DEPENDENCIES:
+        nlp = spacy.load("en_core_web_sm")
+except OSError:
+    msg = (
+        "Spacy model is missing, install it with: "
+        f"{sys.executable} -m spacy download en_core_web_sm"
+    )
+    print(msg, file=sys.stderr)
+
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
+    "You might need also to download the models with: "
+    f"{sys.executable} -m spacy download en_core_web_sm"
+)
 
 
 def spacy_token_lemmatizer(text):
@@ -25,6 +49,11 @@ def spacy_token_lemmatizer(text):
 
 class SpacyVectorizer(TfidfVectorizer):
     def __init__(self, *args, **kwargs):
+
+        # Detect when the Spacy optional dependency is missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         super().__init__(tokenizer=spacy_token_lemmatizer, *args, **kwargs)
 
 
@@ -37,6 +66,10 @@ def get_word_embeddings():
 
 class MeanEmbeddingTransformer(BaseEstimator, TransformerMixin):
     def __init__(self):
+        # Detect when the Gensim optional dependency are missing
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         self.model = get_word_embeddings()
         self.dim = len(self.model["if"])
 

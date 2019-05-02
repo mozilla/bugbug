@@ -130,6 +130,7 @@ def _transform(commit):
     desc = commit.desc.decode("utf-8")
 
     obj = {
+        "node": commit.node.decode("utf-8"),
         "author": commit.author.decode("utf-8"),
         "reviewers": commit.reviewers,
         "desc": desc,

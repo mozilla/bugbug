@@ -3,18 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from keras import Input, layers
-from keras.layers import (
-    GRU,
-    Bidirectional,
-    Dense,
-    Dropout,
-    Embedding,
-    Flatten,
-    GlobalMaxPooling1D,
-    SpatialDropout1D,
-)
-from keras.models import Model as KerasModel
 from sklearn.ensemble import VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline, make_pipeline
@@ -29,10 +17,29 @@ from bugbug.utils import (
     StructuredColumnTransformer,
 )
 
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
+)
+
+try:
+    from keras import Input, layers
+    from keras.layers import (
+        GRU,
+        Bidirectional,
+        Dense,
+        Dropout,
+        Embedding,
+        Flatten,
+        GlobalMaxPooling1D,
+        SpatialDropout1D,
+    )
+    from keras.models import Model as KerasModel
+except ImportError:
+    raise ImportError(OPT_MSG_MISSING)
+
 
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
-
         # (epochs, batch_size) combinations
         fit_params = [(2, 256), (2, 512), (1, 1024)]
         super().__init__(fit_params=fit_params)

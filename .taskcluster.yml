@@ -153,22 +153,24 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:latest
+          image: mozilla/taskboot:0.1.0
           command:
             - "/bin/sh"
             - "-lcxe"
             - "git clone ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
-               python http_service/download_models.py &&
-               taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images"
+               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
               path: /images
               type: directory
+          cache:
+            bugbug-build: /cache
         scopes:
           - docker-worker:capability:privileged
+          - docker-worker:cache:bugbug-build
         metadata:
           name: bugbug docker build
           description: bugbug docker build
@@ -216,6 +218,7 @@ tasks:
             - {$eval: as_slugid("docker_build")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
+            - queue:route:project.relman.bugbug.deploy_ending.*
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
@@ -226,12 +229,14 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:latest
+            image: mozilla/taskboot:0.1.0
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
               - taskboot
               - push-artifact
+          routes:
+            - project.relman.bugbug.deploy_ending
           metadata:
             name: bugbug docker push
             description: bugbug docker push
@@ -255,7 +260,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:latest
+            image: mozilla/taskboot:0.1.0
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}

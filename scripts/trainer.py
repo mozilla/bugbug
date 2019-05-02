@@ -15,7 +15,7 @@ from bugbug.models.tracking import TrackingModel
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-BASE_URL = "https://index.taskcluster.net/v1/task/project.releng.services.project.testing.bugbug_data.latest/artifacts/public"
+BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.latest/artifacts/public"
 
 
 class Trainer(object):
@@ -68,13 +68,15 @@ class Trainer(object):
 
         # Bugs.json
         logger.info("Downloading bugs database")
-        urlretrieve(f"{BASE_URL}/bugs.json.xz", "data/bugs.json.xz")
+        bugs_url = BASE_URL.format("bugs")
+        urlretrieve(f"{bugs_url}/bugs.json.xz", "data/bugs.json.xz")
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
         # Commits.json
         logger.info("Downloading commits database")
-        urlretrieve(f"{BASE_URL}/commits.json.xz", "data/commits.json.xz")
+        commits_url = BASE_URL.format("commits")
+        urlretrieve(f"{commits_url}/commits.json.xz", "data/commits.json.xz")
         logger.info("Decompressing commits database")
         self.decompress_file("data/commits.json")
 

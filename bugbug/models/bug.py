@@ -129,6 +129,10 @@ class BugModel(Model):
             bug_id: category
             for bug_id, category in labels.get_labels("defect_enhancement_task_s")
         }
+        defect_enhancement_task_h = {
+            bug_id: category
+            for bug_id, category in labels.get_labels("defect_enhancement_task_h")
+        }
 
         defect_enhancement_task_common = (
             (bug_id, category)
@@ -143,24 +147,24 @@ class BugModel(Model):
                 or defect_enhancement_task_s[bug_id]
                 == defect_enhancement_task_p[bug_id]
             )
+            and (
+                bug_id not in defect_enhancement_task_h
+                or defect_enhancement_task_h[bug_id]
+                == defect_enhancement_task_p[bug_id]
+            )
         )
 
         for bug_id, category in itertools.chain(
             labels.get_labels("defect_enhancement_task"), defect_enhancement_task_common
         ):
-            assert category in ["d", "e", "t"]
+            assert category in ["defect", "enhancement", "task"]
             if kind == "bug":
-                classes[int(bug_id)] = 1 if category == "d" else 0
+                classes[int(bug_id)] = 1 if category == "defect" else 0
             elif kind == "regression":
-                if category in ["e", "t"]:
+                if category in ["enhancement", "task"]:
                     classes[int(bug_id)] = 0
             elif kind == "defect_enhancement_task":
-                if category == "d":
-                    classes[int(bug_id)] = "defect"
-                elif category == "e":
-                    classes[int(bug_id)] = "enhancement"
-                elif category == "t":
-                    classes[int(bug_id)] = "task"
+                classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
@@ -246,12 +250,16 @@ class BugModel(Model):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if any(
-                keyword in bug["keywords"]
-                for keyword in ["regression", "talos-regression"]
-            ) or (
-                "cf_has_regression_range" in bug
-                and bug["cf_has_regression_range"] == "yes"
+            if (
+                any(
+                    keyword in bug["keywords"]
+                    for keyword in ["regression", "talos-regression"]
+                )
+                or (
+                    "cf_has_regression_range" in bug
+                    and bug["cf_has_regression_range"] == "yes"
+                )
+                or len(bug["regressed_by"]) > 0
             ):
                 classes[i] = 1 if not probabilities else [0.0, 1.0]
             elif "feature" in bug["keywords"]:

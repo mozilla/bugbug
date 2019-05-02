@@ -1,6 +1,12 @@
 {
+    "bindings": [
+        {
+            "exchange": "exchange/taskcluster-queue/v1/task-completed",
+            "routingKeyPattern": "route.project.relman.bugbug.deploy_ending"
+        }
+    ],
     "schedule": [
-        "0 0 * * * *"
+        "0 0 0 * * 0"
     ],
     "metadata": {
         "description": "",
@@ -28,14 +34,11 @@
             "artifacts": {},
             "cache": {},
             "capabilities": {},
-            "command": [
-                "/hello"
-            ],
             "env": {},
             "features": {
                 "taskclusterProxy": true
             },
-            "image": "hello-world",
+            "image": "mozilla/bugbug-spawn-data-pipeline",
             "maxRunTime": 7200
         },
         "priority": "normal",
@@ -47,7 +50,8 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug"
+            "assume:hook-id:project-relman/bugbug",
+            "secrets:get:project/relman/bugbug/production"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"
