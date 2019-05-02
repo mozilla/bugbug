@@ -153,14 +153,14 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.0
+          image: mozilla/taskboot:0.1.1
           command:
             - "/bin/sh"
             - "-lcxe"
             - "git clone ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
-               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images"
+               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --build-arg CHECK_MODELS=0"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
@@ -229,12 +229,13 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.0
+            image: mozilla/taskboot:0.1.1
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
               - taskboot
               - push-artifact
+              - --exclude-filter *http-service*
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
@@ -260,7 +261,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.0
+            image: mozilla/taskboot:0.1.1
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
