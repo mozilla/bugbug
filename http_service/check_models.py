@@ -36,6 +36,13 @@ def check_models():
 
 
 if __name__ == "__main__":
+
+    should_check_models = os.environ.get("CHECK_MODELS", "1")
+
+    if should_check_models == "0":
+        print("Skipping checking models as instructed by env var $CHECK_MODELS")
+        sys.exit(0)
+
     try:
         check_models()
     except Exception:

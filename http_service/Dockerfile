@@ -1,9 +1,20 @@
-FROM mozilla/bugbug-http-service-base:latest
+FROM mozilla/bugbug-base:latest
+
+RUN env
+
+COPY requirements.txt /code/bugbug_http_service/
+
+RUN pip install -r /code/bugbug_http_service/requirements.txt
+
+COPY . /code/bugbug_http_service/
 
 # Load the models
 WORKDIR /code/
 
 COPY ./models /code/models
+
+ARG CHECK_MODELS
+ENV CHECK_MODELS="${CHECK_MODELS}"
 
 RUN python /code/bugbug_http_service/check_models.py
 

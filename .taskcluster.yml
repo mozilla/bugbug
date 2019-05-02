@@ -160,7 +160,7 @@ tasks:
             - "git clone ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
-               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images"
+               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --build-arg CHECK_MODELS=0"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
