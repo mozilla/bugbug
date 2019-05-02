@@ -54,6 +54,9 @@ components_touched_prev_90_days = defaultdict(int)
 files_touched_prev = defaultdict(int)
 files_touched_prev_90_days = defaultdict(int)
 
+directories_touched_prev = defaultdict(int)
+directories_touched_prev_90_days = defaultdict(int)
+
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
 # gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
 def get_reviewers(commit_description, flag_re=None):
@@ -150,6 +153,10 @@ def _transform(commit):
         "components_touched_prev_90_days": components_touched_prev_90_days[commit.node],
         "files_touched_prev": files_touched_prev[commit.node],
         "files_touched_prev_90_days": files_touched_prev_90_days[commit.node],
+        "directories_touched_prev": directories_touched_prev[commit.node],
+        "directories_touched_prev_90_days": directories_touched_prev_90_days[
+            commit.node
+        ],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -274,6 +281,20 @@ def get_revs(hg, date):
         date -= relativedelta(days=1)
 
     return revs
+
+
+def get_directories(files):
+    if isinstance(files, str):
+        files = [files]
+
+    directories = set()
+    for path in files:
+        path_dirs = (
+            os.path.dirname(path).split("/", 2)[:2] if os.path.dirname(path) else []
+        )
+        if path_dirs:
+            directories.update([path_dirs[0], "/".join(path_dirs)])
+    return list(directories)
 
 
 def download_commits(repo_dir, date_from):
@@ -404,8 +425,12 @@ def download_commits(repo_dir, date_from):
     global files_touched_prev
     global files_touched_prev_90_days
 
+    global directories_touched_prev
+    global directories_touched_prev_90_days
+
     components_touched = defaultdict(int)
     files_touched = defaultdict(int)
+    directories_touched = defaultdict(int)
     prev_commits_90_days = []
     for commit in commits:
         components = set(
@@ -424,6 +449,13 @@ def download_commits(repo_dir, date_from):
 
             files_touched[path] += 1
 
+        directories = get_directories(commit.files)
+
+        for directory in directories:
+            directories_touched_prev[commit.node] += directories_touched[directory]
+
+            directories_touched[directory] += 1
+
         if len(commit.file_copies) > 0:
             for orig, copied in commit.file_copies.items():
                 if orig in path_to_component and copied in path_to_component:
@@ -432,6 +464,21 @@ def download_commits(repo_dir, date_from):
                     ]
 
                 files_touched[copied] = files_touched[orig]
+
+                orig_directories = get_directories(orig)
+
+                copied_directories = get_directories(copied)
+
+                if len(orig_directories) == len(copied_directories):
+                    for i in range(len(orig_directories)):
+                        if orig_directories[i] != copied_directories[i]:
+                            directories_touched[
+                                copied_directories[i]
+                            ] = directories_touched[orig_directories[i]]
+                elif orig_directories and copied_directories:
+                    directories_touched[copied_directories[0]] = directories_touched[
+                        orig_directories[0]
+                    ]
 
         for i, prev_commit in enumerate(prev_commits_90_days):
             if (commit.date - prev_commit.date).days <= 90:
@@ -444,6 +491,7 @@ def download_commits(repo_dir, date_from):
 
         components_touched_90_days = defaultdict(int)
         files_touched_90_days = defaultdict(int)
+        directories_touched_90_days = defaultdict(int)
         for prev_commit in prev_commits_90_days:
             components_prev = set(
                 path_to_component[path]
@@ -457,6 +505,11 @@ def download_commits(repo_dir, date_from):
             for path_prev in prev_commit.files:
                 files_touched_90_days[path_prev] += 1
 
+            directories_prev = get_directories(prev_commit.files)
+
+            for directory_prev in directories_prev:
+                directories_touched_90_days[directory_prev] += 1
+
             if len(prev_commit.file_copies) > 0:
                 for orig, copied in prev_commit.file_copies.items():
                     if orig in path_to_component and copied in path_to_component:
@@ -466,11 +519,29 @@ def download_commits(repo_dir, date_from):
 
                     files_touched_90_days[copied] = files_touched_90_days[orig]
 
+                    orig_directories = get_directories(orig)
+
+                    copied_directories = get_directories(copied)
+
+                    if len(orig_directories) == len(copied_directories):
+                        for i in range(len(orig_directories)):
+                            if orig_directories[i] != copied_directories[i]:
+                                directories_touched_90_days[
+                                    copied_directories[i]
+                                ] = directories_touched_90_days[orig_directories[i]]
+                    elif orig_directories and copied_directories:
+                        directories_touched_90_days[
+                            copied_directories[0]
+                        ] = directories_touched_90_days[orig_directories[0]]
+
         components_touched_prev_90_days[commit.node] = sum(
             components_touched_90_days[component] for component in components
         )
         files_touched_prev_90_days[commit.node] = sum(
             files_touched_90_days[path] for path in commit.files
+        )
+        directories_touched_prev_90_days[commit.node] = sum(
+            directories_touched_90_days[directory] for directory in directories
         )
         prev_commits_90_days.append(commit)
 
