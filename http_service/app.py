@@ -6,47 +6,57 @@
 import json
 import logging
 import os
+from collections import UserDict, defaultdict
+from multiprocessing.pool import AsyncResult, Pool
 
-from flask import Flask, current_app, jsonify, request
+from flask import Flask, jsonify, request
 
-from bugbug import bugzilla
-
-from .models import load_model
+from .models import classify_bug
 
 API_TOKEN = "X-Api-Key"
 
 application = Flask(__name__)
 
-bugzilla.set_token(os.environ.get("BUGBUG_BUGZILLA_TOKEN"))
+BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
 
-def get_model(model):
-    attribute = f"bugbug_model_{model}"
-
-    if not hasattr(current_app, attribute):
-        model = load_model(model)
-        setattr(current_app, attribute, model)
-
-    return getattr(current_app, attribute, model)
+POOL = Pool(4)
 
 
-def classify_bug(model_name, bug_ids):
-    bugs = bugzilla._download(bug_ids)
-    model = get_model(model_name)
-    probs = model.classify(list(bugs.values()), True)
-    indexes = probs.argmax(axis=-1)
-    suggestions = model.clf._le.inverse_transform(indexes)
+class Database(UserDict):
+    # We might want to customize the database with cache invalidation or plug
+    # it into a real database / caching service
+    pass
 
-    data = {
-        "probs": probs.tolist(),
-        "indexes": indexes.tolist(),
-        "suggestions": suggestions.tolist(),
-    }
 
-    return data
+MODELS_DB = defaultdict(Database)
+
+
+def schedule_bug_classification(model_name, bug_id):
+    """ Schedule the classification of a single bug_id
+    """
+    res = POOL.apply_async(classify_bug, (model_name, bug_id, BUGZILLA_TOKEN))
+
+    MODELS_DB[model_name][bug_id] = res
+
+
+def get_bug_classification(model_name, bug_id):
+    bug_result = MODELS_DB[model_name][bug_id]
+
+    if isinstance(bug_result, AsyncResult):
+        if bug_result.ready():
+            real_result = bug_result.get()
+
+            MODELS_DB[model_name][bug_id] = real_result
+            bug_result = real_result
+        else:
+            # Indicate that the result is not yet ready
+            bug_result = {"ready": False}
+
+    return bug_result
 
 
 @application.route("/<model_name>/predict/<bug_id>")
@@ -79,9 +89,15 @@ def batch_prediction(model_name):
     # TODO Check is JSON is valid and validate against a request schema
     batch_body = json.loads(request.data)
 
-    print("BATCH BODY", request.data, batch_body)
     bugs = batch_body["bugs"]
 
-    data = classify_bug(model_name, bugs)
+    for bug in bugs:
+        if bug not in MODELS_DB[model_name]:
+            schedule_bug_classification(model_name, bug)
+
+    data = {}
+
+    for bug in bugs:
+        data[bug] = get_bug_classification(model_name, bug)
 
     return jsonify(**data)

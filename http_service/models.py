@@ -11,6 +11,7 @@ from urllib.request import urlretrieve
 
 import requests
 
+from bugbug import bugzilla
 from bugbug.models.component import ComponentModel
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
@@ -68,3 +69,22 @@ def retrieve_model(name):
         LOGGER.info(f"ETAG for {model_url} is ok")
 
     return file_path
+
+
+def classify_bug(model_name, bug_ids, bugzilla_token):
+    # This should be called in a process worker so it should be safe to set
+    # the token here
+    bugzilla.set_token(bugzilla_token)
+    bugs = bugzilla._download(bug_ids)
+    model = load_model(model_name)  # TODO: Cache the model in the process memory
+    probs = model.classify(list(bugs.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.clf._le.inverse_transform(indexes)
+
+    data = {
+        "probs": probs.tolist(),
+        "indexes": indexes.tolist(),
+        "suggestions": suggestions.tolist(),
+    }
+
+    return data
