@@ -14,7 +14,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.project.bugbug.train_{}.latest/artifacts/public"
+BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 
 MODELS_NAMES = ("defectenhancementtask", "component", "regression")
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
