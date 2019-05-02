@@ -10,11 +10,11 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla
-from bugbug.model import Model
+from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.model import BugModel
 
 
-class ComponentModel(Model):
+class ComponentModel(BugModel):
     PRODUCTS = {
         "Core",
         "External Software Affecting Firefox",
@@ -56,7 +56,7 @@ class ComponentModel(Model):
     }
 
     def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -77,9 +77,9 @@ class ComponentModel(Model):
         ]
 
         cleanup_functions = [
-            bug_features.cleanup_fileref,
-            bug_features.cleanup_url,
-            bug_features.cleanup_synonyms,
+            feature_cleanup.fileref,
+            feature_cleanup.url,
+            feature_cleanup.synonyms,
         ]
 
         self.extraction_pipeline = Pipeline(

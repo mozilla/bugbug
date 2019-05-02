@@ -9,13 +9,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla
-from bugbug.model import Model
+from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.model import BugModel
 
 
-class DevDocNeededModel(Model):
+class DevDocNeededModel(BugModel):
     def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization)
 
         self.sampler = RandomUnderSampler(random_state=0)
 
@@ -41,9 +41,9 @@ class DevDocNeededModel(Model):
         ]
 
         cleanup_functions = [
-            bug_features.cleanup_fileref,
-            bug_features.cleanup_url,
-            bug_features.cleanup_synonyms,
+            feature_cleanup.fileref,
+            feature_cleanup.url,
+            feature_cleanup.synonyms,
         ]
 
         self.extraction_pipeline = Pipeline(

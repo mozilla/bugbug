@@ -11,13 +11,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, labels
-from bugbug.model import Model
+from bugbug import bug_features, bugzilla, feature_cleanup, labels
+from bugbug.model import BugModel
 
 
-class BugModel(Model):
+class DefectModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
-        Model.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization)
 
         self.sampler = BorderlineSMOTE(random_state=0)
 
@@ -47,9 +47,9 @@ class BugModel(Model):
             feature_extractors.append(bug_features.had_severity_enhancement())
 
         cleanup_functions = [
-            bug_features.cleanup_url,
-            bug_features.cleanup_fileref,
-            bug_features.cleanup_synonyms,
+            feature_cleanup.url,
+            feature_cleanup.fileref,
+            feature_cleanup.synonyms,
         ]
 
         self.extraction_pipeline = Pipeline(
