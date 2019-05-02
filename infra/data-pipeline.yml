@@ -17,6 +17,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_commits.latest
     metadata:
       name: bugbug commit retrieval
       description: bugbug commit retrieval
@@ -48,6 +49,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_bugs.latest
     metadata:
       name: bugbug bugs retrieval
       description: bugbug bugs retrieval
@@ -74,6 +76,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_component.latest
     metadata:
       name: bugbug train component model
       description: bugbug train component model
@@ -100,6 +103,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_defectenhancementtask.latest
     metadata:
       name: bugbug train defect model
       description: bugbug train defect model
@@ -126,6 +130,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regression.latest
     metadata:
       name: bugbug train regression model
       description: bugbug train regression model
@@ -152,6 +157,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_tracking.latest
     metadata:
       name: bugbug train tracking model
       description: bugbug train tracking model

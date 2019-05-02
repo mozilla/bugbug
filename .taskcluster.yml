@@ -160,7 +160,6 @@ tasks:
             - "git clone ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
-               python http_service/download_models.py &&
                taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images"
           artifacts:
             public/bugbug:

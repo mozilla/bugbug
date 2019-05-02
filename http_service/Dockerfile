@@ -1,10 +1,4 @@
-FROM mozilla/bugbug-base:latest
-
-COPY requirements.txt /code/bugbug_http_service/
-
-RUN pip install -r /code/bugbug_http_service/requirements.txt
-
-COPY . /code/bugbug_http_service/
+FROM mozilla/bugbug-http-service-base:latest
 
 # Load the models
 WORKDIR /code/
