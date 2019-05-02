@@ -67,3 +67,9 @@ services:
         published: 8000
         protocol: tcp
         mode: host
+
+  bugbug-spawn-data-pipeline:
+    build:
+      context: infra/
+      dockerfile: dockerfile.spawn_data_pipeline
+    image: mozilla/bugbug-spawn-data-pipeline
