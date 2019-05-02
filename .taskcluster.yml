@@ -235,7 +235,8 @@ tasks:
             command:
               - taskboot
               - push-artifact
-              - --exclude-filter *http-service*
+              - --exclude-filter
+              - "*http-service*"
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
