@@ -25,7 +25,8 @@ if __name__ == "__main__":
         "--goal",
         help="Goal of the classifier",
         choices=[
-            "bug",
+            # bug classifiers
+            "defect",
             "regression",
             "tracking",
             "qaneeded",
@@ -34,8 +35,10 @@ if __name__ == "__main__":
             "devdocneeded",
             "defectenhancementtask",
             "assignee",
+            # commit classifiers
+            "backout",
         ],
-        default="bug",
+        default="defect",
     )
     parser.add_argument(
         "--classifier",
@@ -59,10 +62,10 @@ if __name__ == "__main__":
         args.goal, "" if args.classifier == "default" else args.classifier
     )
 
-    if args.goal == "bug":
-        from bugbug.models.bug import BugModel
+    if args.goal == "defect":
+        from bugbug.models.defect import DefectModel
 
-        model_class = BugModel
+        model_class = DefectModel
     elif args.goal == "defectenhancementtask":
         from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 
@@ -100,6 +103,10 @@ if __name__ == "__main__":
         from bugbug.models.assignee import AssigneeModel
 
         model_class = AssigneeModel
+    elif args.goal == "backout":
+        from bugbug.models.backout import BackoutModel
+
+        model_class = BackoutModel
 
     if args.train:
         db.download()
