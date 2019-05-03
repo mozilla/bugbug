@@ -214,7 +214,7 @@ class Model:
         """ Subclasses can implements their own check, the base model doesn't
         check anything at the moment
         """
-        pass
+        return True
 
 
 class BugModel(Model):

@@ -206,7 +206,7 @@ class ComponentModel(BugModel):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
 
     def check(self):
-        super().check()
+        success = super().check()
 
         # Check that the most meaningful product components stills have at
         # least a bug in this component. If the check is failing that could
@@ -215,7 +215,6 @@ class ComponentModel(BugModel):
         # - TODO: Complete this list
 
         limit = 1
-        success = True
 
         for product, component in self.meaningful_product_components:
             query_data = [
