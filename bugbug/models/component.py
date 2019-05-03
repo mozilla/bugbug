@@ -223,9 +223,8 @@ class ComponentModel(BugModel):
                 "component": component,
                 # We just wants to check if at least one bug exists, we don't
                 # need to download all the bugs for every component
-                # ("count_only", 1), # TODO: Bugzilla class doesn't likes when
+                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
                 # we pass count_only
-                # "count_only": 1,
                 "limit": limit,
             }
 
@@ -235,6 +234,55 @@ class ComponentModel(BugModel):
                 msg = f"Component {component!r} of product {product!r} have {bugs_number} bugs in it, failure"
                 print(msg)
                 success = False
-                break
+
+        # Check that the conflated components still exists and have at least
+        # one bug
+
+        # Assert there is at least one bug for each component the conflated
+        # components are mapped to.
+        for conflated_component_mapping in self.CONFLATED_COMPONENTS_MAPPING.values():
+            product, component = conflated_component_mapping.split("::", 1)
+
+            query_data = {
+                # Search bugs in the given product and component
+                "product": product,
+                "component": component,
+                # We just wants to check if at least one bug exists, we don't
+                # need to download all the bugs for every component
+                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
+                # we pass count_only
+                "limit": limit,
+            }
+
+            bugs_number = count_bugs(query_data)
+
+            if bugs_number != limit:
+                msg = (
+                    f"There should be at least one bug in {conflated_component_mapping}"
+                )
+                print(msg)
+                success = False
+
+        # Assert all conflated components are either in conflated_components_mapping or exist as components.
+        for conflated_component in self.CONFLATED_COMPONENTS:
+            product, component = conflated_component.split("::", 1)
+
+            query_data = {
+                # Search bugs in the given product and component
+                "product": product,
+                "component": component,
+                # We just wants to check if at least one bug exists, we don't
+                # need to download all the bugs for every component
+                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
+                # we pass count_only
+                "limit": limit,
+            }
+
+            bugs_number = count_bugs(query_data)
+
+            if bugs_number != limit:
+                msg = f"It should be possible to maps {conflated_component}"
+                print(msg)
+                success = False
 
         return success
