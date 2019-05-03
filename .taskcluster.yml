@@ -98,30 +98,6 @@ tasks:
           owner: ${user}@users.noreply.github.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - taskId: {$eval: as_slugid("rollback_test_task")}
-        created: {$fromNow: ''}
-        deadline: {$fromNow: '1 hour'}
-        provisionerId: aws-provisioner-v1
-        workerType: github-worker
-        payload:
-          maxRunTime: 3600
-          image: python
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "git clone ${repository} &&
-               cd bugbug &&
-               git checkout ${head_rev} &&
-               pip install -r requirements.txt &&
-               mkdir data/ &&
-               cp tests/fixtures/bugs.json data/bugs.json &&
-               python -m bugbug.bug_snapshot"
-        metadata:
-          name: bugbug rollback test
-          description: bugbug rollback test
-          owner: ${user}@users.noreply.github.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
       - taskId: {$eval: as_slugid("packaging_test_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
