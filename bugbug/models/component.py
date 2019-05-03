@@ -231,28 +231,14 @@ class ComponentModel(BugModel):
         # Check that the conflated components still exists and have at least
         # one bug
 
-        # Assert there is at least one bug for each component the conflated
-        # components are mapped to.
-        for conflated_component_mapping in self.CONFLATED_COMPONENTS_MAPPING.values():
-            product, component = conflated_component_mapping.split("::", 1)
-
-            query_data = {
-                # Search bugs in the given product and component
-                "product": product,
-                "component": component,
-            }
-
-            bugs_number = count_bugs(query_data)
-
-            if bugs_number == 0:
-                msg = (
-                    f"There should be at least one bug in {conflated_component_mapping}"
-                )
-                print(msg)
-                success = False
-
         # Assert all conflated components are either in conflated_components_mapping or exist as components.
         for conflated_component in self.CONFLATED_COMPONENTS:
+
+            if conflated_component in self.CONFLATED_COMPONENTS_MAPPING:
+                conflated_component = self.CONFLATED_COMPONENTS_MAPPING[
+                    conflated_component
+                ]
+
             product, component = conflated_component.split("::", 1)
 
             query_data = {

@@ -20,7 +20,7 @@ class ModelChecker:
             raise ValueError(exception)
 
         # TODO: What is the standard file path of the models?
-        model_file_name = f"models/{model_name}model"
+        model_file_name = f"{model_name}model"
 
         if model_name == "component":
             model_class = ComponentModel
