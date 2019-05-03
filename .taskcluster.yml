@@ -262,7 +262,7 @@ tasks:
             - {$eval: as_slugid("docker_push")}
           scopes:
             - hooks:modify-hook:project-relman/bugbug
-            - assume:hook-id:project-relman/bugbug
+            - assume:hook-id:project-relman/bugbug-checks
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
           provisionerId: aws-provisioner-v1
@@ -281,7 +281,7 @@ tasks:
               - build-hook
               - infra/taskcluster-hook-check-models-start.json
               - project-relman
-              - bugbug
+              - bugbug-checks
           metadata:
             name: bugbug update check hook
             description: bugbug update check hook
