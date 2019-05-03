@@ -224,7 +224,7 @@ tasks:
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
-          taskId: {$eval: as_slugid("update_hook")}
+          taskId: {$eval: as_slugid("update_hook_data_pipeline")}
           dependencies:
             - {$eval: as_slugid("docker_push")}
           scopes:
@@ -250,7 +250,40 @@ tasks:
               - project-relman
               - bugbug
           metadata:
-            name: bugbug update hooks
-            description: bugbug update hooks
+            name: bugbug update data hook
+            description: bugbug update data hook
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("update_hook_check_pipeline")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug
+            - assume:hook-id:project-relman/bugbug
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:0.1.1
+            env:
+              GIT_REPOSITORY: ${repository}
+              GIT_REVISION: ${head_rev}
+            command:
+              - taskboot
+              - build-hook
+              - infra/taskcluster-hook-check-models-start.json
+              - project-relman
+              - bugbug
+          metadata:
+            name: bugbug update check hook
+            description: bugbug update check hook
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
