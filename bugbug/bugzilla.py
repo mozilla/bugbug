@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import csv
 import json
 import os
 
@@ -28,6 +29,8 @@ ATTACHMENT_INCLUDE_FIELDS = [
 ]
 
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
+
+PRODUCT_COMPONENT_CSV_REPORT = "https://bugzilla.mozilla.org/report.cgi?f1=creation_ts&o1=greaterthan&resolution=---&x_axis_field=product&y_axis_field=component&width=600&height=350&action=wrap&ctype=csv&format=table"
 
 
 def get_bug_fields():
@@ -225,3 +228,30 @@ def count_bugs(bug_query_params):
     count = r.json()["bug_count"]
 
     return count
+
+
+def get_product_component_count():
+    csv_file = requests.get(PRODUCT_COMPONENT_CSV_REPORT)
+    csv_file.raise_for_status()
+
+    csv_content = csv_file.text.splitlines()
+    component_key = "Component / Product"
+
+    bugs_number = {}
+
+    csv_reader = csv.DictReader(csv_content)
+    for row in csv_reader:
+        # Extract the component key
+        component = row[component_key]
+
+        for product, value in row.items():
+            if product == component_key:
+                continue
+
+            if not int(value):
+                continue
+
+            full_comp = f"{product}::{component}"
+            bugs_number[full_comp] = int(value)
+
+    return bugs_number

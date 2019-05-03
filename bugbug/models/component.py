@@ -11,7 +11,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
-from bugbug.bugzilla import count_bugs
+from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 
 
@@ -208,6 +208,9 @@ class ComponentModel(BugModel):
     def check(self):
         success = super().check()
 
+        # Get the number of bugs per full component to fasten up the check
+        bugs_number = get_product_component_count()
+
         # Check that the most meaningful product components stills have at
         # least a bug in this component. If the check is failing that could
         # means that:
@@ -215,16 +218,10 @@ class ComponentModel(BugModel):
         # - TODO: Complete this list
 
         for product, component in self.meaningful_product_components:
-            query_data = {
-                # Search bugs in the given product and component
-                "product": product,
-                "component": component,
-            }
+            full_comp = f"{product}::{component}"
 
-            bugs_number = count_bugs(query_data)
-
-            if bugs_number == 0:
-                msg = f"Component {component!r} of product {product!r} have {bugs_number} bugs in it, failure"
+            if full_comp not in bugs_number.keys():
+                msg = f"Component {component!r} of product {product!r} have 0 bugs in it, failure"
                 print(msg)
                 success = False
 
@@ -234,22 +231,13 @@ class ComponentModel(BugModel):
         # Assert all conflated components are either in conflated_components_mapping or exist as components.
         for conflated_component in self.CONFLATED_COMPONENTS:
 
-            if conflated_component in self.CONFLATED_COMPONENTS_MAPPING:
-                conflated_component = self.CONFLATED_COMPONENTS_MAPPING[
-                    conflated_component
-                ]
+            matching_components = [
+                full_comp
+                for full_comp in bugs_number.keys()
+                if full_comp.startswith(conflated_component)
+            ]
 
-            product, component = conflated_component.split("::", 1)
-
-            query_data = {
-                # Search bugs in the given product and component
-                "product": product,
-                "component": component,
-            }
-
-            bugs_number = count_bugs(query_data)
-
-            if bugs_number == 0:
+            if not matching_components:
                 msg = f"It should be possible to maps {conflated_component}"
                 print(msg)
                 success = False
