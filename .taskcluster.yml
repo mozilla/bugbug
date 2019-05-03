@@ -115,7 +115,7 @@ tasks:
                pip install -r requirements.txt &&
                mkdir data/ &&
                cp tests/fixtures/bugs.json data/bugs.json &&
-               python -m bugbug.bug_snapshot --verbose"
+               python -m bugbug.bug_snapshot"
         metadata:
           name: bugbug rollback test
           description: bugbug rollback test

@@ -164,6 +164,37 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: rollback-test-task
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '49 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc
+    dependencies:
+      - train-tracking
+      - train-regression
+      - train-defect
+      - train-component
+    payload:
+      maxRunTime: 3600
+      image: python
+      command:
+        - "/bin/bash"
+        - "-lcx"
+        - "git clone ${repository} &&
+           cd bugbug &&
+           git checkout ${head_rev} &&
+           pip install -r requirements.txt &&
+           python -c 'from bugbug import bugzilla, db; db.download()' &&
+           python -m bugbug.bug_snapshot"
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug rollback test
+      description: bugbug rollback test
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: docker-build
     created: {$fromNow: ''}
     deadline: {$fromNow: '49 hours'}
@@ -206,6 +237,7 @@ tasks:
 
   - ID: docker-push
     dependencies:
+      - rollback-test-task
       - docker-build
     scopes:
       - secrets:get:project/relman/bugbug/deploy
