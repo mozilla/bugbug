@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import Counter
+from urllib.parse import urlencode
 
 import xgboost
 from sklearn.compose import ColumnTransformer
@@ -203,3 +204,46 @@ class ComponentModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def check(self):
+        super().check()
+
+        # Check that the most meaningful product components stills have at
+        # least a bug in this component. If the check is failing that could
+        # means that:
+        # - A component has been renamed / removed
+        # - TODO: Complete this list
+
+        limit = 1
+        success = True
+
+        for product, component in self.meaningful_product_components:
+            query_data = [
+                # TODO: Do we want to match bugs in graveyard?
+                ("classification", "Client Software"),
+                ("classification", "Developer Infrastructure"),
+                ("classification", "Components"),
+                ("classification", "Server Software"),
+                ("classification", "Other"),
+                # Search bugs in the given product and component
+                ("product", product),
+                ("component", component),
+                # We just wants to check if at least one bug exists, we don't
+                # need to download all the bugs for every component
+                # ("count_only", 1), # TODO: Bugzilla class doesn't likes when
+                # we pass count_only
+                ("limit", limit),
+            ]
+
+            query = urlencode(query_data)
+
+            # TODO: How to limit the number of bugs or the data retrieved?
+            bugs = bugzilla._download(query)
+
+            if len(bugs) != limit:
+                msg = f"Component {component!r} of product {product!r} have {len(bugs)} bugs in it, failure"
+                print(msg)
+                success = False
+                break
+
+        return success

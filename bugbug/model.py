@@ -210,6 +210,12 @@ class Model:
 
         return classes
 
+    def check(self):
+        """ Subclasses can implements their own check, the base model doesn't
+        check anything at the moment
+        """
+        pass
+
 
 class BugModel(Model):
     def get_id(self, bug):
