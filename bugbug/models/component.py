@@ -218,12 +218,6 @@ class ComponentModel(BugModel):
 
         for product, component in self.meaningful_product_components:
             query_data = [
-                # TODO: Do we want to match bugs in graveyard?
-                ("classification", "Client Software"),
-                ("classification", "Developer Infrastructure"),
-                ("classification", "Components"),
-                ("classification", "Server Software"),
-                ("classification", "Other"),
                 # Search bugs in the given product and component
                 ("product", product),
                 ("component", component),
