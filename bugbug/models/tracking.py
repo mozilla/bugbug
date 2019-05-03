@@ -9,13 +9,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, labels
-from bugbug.model import Model
+from bugbug import bug_features, bugzilla, feature_cleanup, labels
+from bugbug.model import BugModel
 
 
-class TrackingModel(Model):
+class TrackingModel(BugModel):
     def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization)
 
         self.sampler = InstanceHardnessThreshold(random_state=0)
 
@@ -47,12 +47,12 @@ class TrackingModel(Model):
         ]
 
         cleanup_functions = [
-            bug_features.cleanup_url,
-            bug_features.cleanup_fileref,
-            bug_features.cleanup_hex,
-            bug_features.cleanup_dll,
-            bug_features.cleanup_synonyms,
-            bug_features.cleanup_crash,
+            feature_cleanup.url,
+            feature_cleanup.fileref,
+            feature_cleanup.hex,
+            feature_cleanup.dll,
+            feature_cleanup.synonyms,
+            feature_cleanup.crash,
         ]
 
         self.extraction_pipeline = Pipeline(

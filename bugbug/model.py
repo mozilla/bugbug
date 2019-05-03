@@ -12,7 +12,7 @@ from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import cross_validate, train_test_split
 
-from bugbug import bugzilla
+from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
 
 
@@ -65,15 +65,15 @@ class Model:
         classes = self.get_labels()
         class_names = sorted(list(set(classes.values())), reverse=True)
 
-        # Get bugs, filtering out those for which we have no labels.
-        def bugs():
-            return (bug for bug in bugzilla.get_bugs() if bug["id"] in classes)
+        # Get items, filtering out those for which we have no labels.
+        def trainable_items_gen():
+            return (item for item in self.items_gen() if self.get_id(item) in classes)
 
         # Calculate labels.
-        y = np.array([classes[bug["id"]] for bug in bugs()])
+        y = np.array([classes[self.get_id(item)] for item in trainable_items_gen()])
 
-        # Extract features from the bugs.
-        X = self.extraction_pipeline.fit_transform(bugs())
+        # Extract features from the items.
+        X = self.extraction_pipeline.fit_transform(trainable_items_gen())
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -172,29 +172,29 @@ class Model:
     def load(model_file_name):
         return joblib.load(model_file_name)
 
-    def overwrite_classes(self, bugs, classes, probabilities):
+    def overwrite_classes(self, items, classes, probabilities):
         return classes
 
     def classify(
-        self, bugs, probabilities=False, importances=False, importance_cutoff=0.15
+        self, items, probabilities=False, importances=False, importance_cutoff=0.15
     ):
-        assert bugs is not None
+        assert items is not None
         assert (
             self.extraction_pipeline is not None and self.clf is not None
         ), "The module needs to be initialized first"
 
-        if not isinstance(bugs, list):
-            bugs = [bugs]
+        if not isinstance(items, list):
+            items = [items]
 
-        assert isinstance(bugs[0], dict)
+        assert isinstance(items[0], dict)
 
-        X = self.extraction_pipeline.transform(bugs)
+        X = self.extraction_pipeline.transform(items)
         if probabilities:
             classes = self.clf.predict_proba(X)
         else:
             classes = self.clf.predict(X)
 
-        classes = self.overwrite_classes(bugs, classes, probabilities)
+        classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
             explainer = shap.TreeExplainer(self.clf)
@@ -209,3 +209,19 @@ class Model:
             return classes, importances
 
         return classes
+
+
+class BugModel(Model):
+    def get_id(self, bug):
+        return bug["id"]
+
+    def items_gen(self):
+        return (bug for bug in bugzilla.get_bugs())
+
+
+class CommitModel(Model):
+    def get_id(self, commit):
+        return commit["node"]
+
+    def items_gen(self):
+        return (commit for commit in repository.get_commits())

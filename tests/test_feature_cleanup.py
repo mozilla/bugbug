@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from bugbug import bug_features
+from bugbug import feature_cleanup
 
 
-def test_cleanup_url():
+def test_url():
     tests = [
         (
             "This code lies in https://github.com/marco-c/bugbug",
@@ -26,10 +26,10 @@ def test_cleanup_url():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_url(orig_text) == cleaned_text
+        assert feature_cleanup.url(orig_text) == cleaned_text
 
 
-def test_cleanup_fileref():
+def test_fileref():
     tests = [
         (
             "Some random filenames are file1.py , file2.cpp and file3.json",
@@ -37,10 +37,10 @@ def test_cleanup_fileref():
         )
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_fileref(orig_text) == cleaned_text
+        assert feature_cleanup.fileref(orig_text) == cleaned_text
 
 
-def test_cleanup_responses():
+def test_responses():
     tests = [
         (
             "A response can be of the form>This is the comment\n",
@@ -57,10 +57,10 @@ def test_cleanup_responses():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_responses(orig_text) == cleaned_text
+        assert feature_cleanup.responses(orig_text) == cleaned_text
 
 
-def test_cleanup_hex():
+def test_hex():
     tests = [
         (
             "0 scdetour.dll scdetour.dll@0x2dd77",
@@ -72,10 +72,10 @@ def test_cleanup_hex():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_hex(orig_text) == cleaned_text
+        assert feature_cleanup.hex(orig_text) == cleaned_text
 
 
-def test_cleanup_dll():
+def test_dll():
     tests = [
         (
             "Crashing thread: 0 scdetour.dll scdetour.dll@0x2dd77",
@@ -100,10 +100,10 @@ def test_cleanup_dll():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_dll(orig_text) == cleaned_text
+        assert feature_cleanup.dll(orig_text) == cleaned_text
 
 
-def test_cleanup_synonyms():
+def test_synonyms():
     tests = [
         (
             "I was in safemode, but the problem occurred in safe mode too",
@@ -118,10 +118,10 @@ def test_cleanup_synonyms():
         ("found via address sanitizer or asan", "found via asan or asan"),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_synonyms(orig_text) == cleaned_text
+        assert feature_cleanup.synonyms(orig_text) == cleaned_text
 
 
-def test_cleanup_crash():
+def test_crash():
     tests = [
         (
             "This bug was filed from the Socorro interface and is report bp-ba7ff893-687f-4381-b430-ba66b0170628.",
@@ -133,4 +133,4 @@ def test_cleanup_crash():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert bug_features.cleanup_crash(orig_text) == cleaned_text
+        assert feature_cleanup.crash(orig_text) == cleaned_text

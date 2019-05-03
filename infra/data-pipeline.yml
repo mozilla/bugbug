@@ -83,7 +83,7 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
-  - ID: train-defect
+  - ID: train-defectenhancementtask
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
@@ -105,8 +105,8 @@ tasks:
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_defectenhancementtask.latest
     metadata:
-      name: bugbug train defect model
-      description: bugbug train defect model
+      name: bugbug train defect/enhancement/task model
+      description: bugbug train defect/enhancement/task model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
