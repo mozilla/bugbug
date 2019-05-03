@@ -65,15 +65,11 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 3600
-      image: python
+      image: mozilla/bugbug-base
       command:
         - "/bin/bash"
         - "-lcx"
-        - "git clone ${repository} &&
-           cd bugbug &&
-           git checkout ${head_rev} &&
-           pip install -r requirements.txt &&
-           python -c 'from bugbug import bugzilla, db; db.download()' &&
+        - "python -c 'from bugbug import bugzilla, db; db.download()' &&
            python -m bugbug.bug_snapshot"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
