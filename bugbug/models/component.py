@@ -214,8 +214,6 @@ class ComponentModel(BugModel):
         # - A component has been renamed / removed
         # - TODO: Complete this list
 
-        limit = 1
-
         for product, component in self.meaningful_product_components:
             query_data = {
                 # Search bugs in the given product and component
@@ -225,7 +223,7 @@ class ComponentModel(BugModel):
 
             bugs_number = count_bugs(query_data)
 
-            if bugs_number != limit:
+            if bugs_number == 0:
                 msg = f"Component {component!r} of product {product!r} have {bugs_number} bugs in it, failure"
                 print(msg)
                 success = False
@@ -246,7 +244,7 @@ class ComponentModel(BugModel):
 
             bugs_number = count_bugs(query_data)
 
-            if bugs_number != limit:
+            if bugs_number == 0:
                 msg = (
                     f"There should be at least one bug in {conflated_component_mapping}"
                 )
@@ -265,7 +263,7 @@ class ComponentModel(BugModel):
 
             bugs_number = count_bugs(query_data)
 
-            if bugs_number != limit:
+            if bugs_number == 0:
                 msg = f"It should be possible to maps {conflated_component}"
                 print(msg)
                 success = False
