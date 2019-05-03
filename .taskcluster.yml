@@ -261,7 +261,7 @@ tasks:
           dependencies:
             - {$eval: as_slugid("docker_push")}
           scopes:
-            - hooks:modify-hook:project-relman/bugbug
+            - hooks:modify-hook:project-relman/bugbug-checks
             - assume:hook-id:project-relman/bugbug-checks
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
