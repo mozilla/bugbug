@@ -215,3 +215,17 @@ def download_bugs(bug_ids, products=None, security=False):
 
 def delete_bugs(bug_ids):
     db.delete(BUGS_DB, lambda bug: bug["id"] in set(bug_ids))
+
+
+def count_bugs(bug_query_params):
+    bugs = {}
+
+    def bughandler(bug):
+        print("BUG", bug)
+        bugs.add(int(bug["id"]))
+
+    Bugzilla(
+        bug_query_params, bughandler=bughandler, include_fields=["id"]
+    ).get_data().wait()
+
+    return len(bugs)

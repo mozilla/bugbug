@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import Counter
-from urllib.parse import urlencode
 
 import xgboost
 from sklearn.compose import ColumnTransformer
@@ -12,6 +11,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.bugzilla import count_bugs
 from bugbug.model import BugModel
 
 
@@ -217,24 +217,22 @@ class ComponentModel(BugModel):
         limit = 1
 
         for product, component in self.meaningful_product_components:
-            query_data = [
+            query_data = {
                 # Search bugs in the given product and component
-                ("product", product),
-                ("component", component),
+                "product": product,
+                "component": component,
                 # We just wants to check if at least one bug exists, we don't
                 # need to download all the bugs for every component
                 # ("count_only", 1), # TODO: Bugzilla class doesn't likes when
                 # we pass count_only
-                ("limit", limit),
-            ]
+                # "count_only": 1,
+                "limit": limit,
+            }
 
-            query = urlencode(query_data)
+            bugs_number = count_bugs(query_data)
 
-            # TODO: How to limit the number of bugs or the data retrieved?
-            bugs = bugzilla._download(query)
-
-            if len(bugs) != limit:
-                msg = f"Component {component!r} of product {product!r} have {len(bugs)} bugs in it, failure"
+            if bugs_number != limit:
+                msg = f"Component {component!r} of product {product!r} have {bugs_number} bugs in it, failure"
                 print(msg)
                 success = False
                 break
