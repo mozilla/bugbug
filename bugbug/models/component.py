@@ -221,11 +221,6 @@ class ComponentModel(BugModel):
                 # Search bugs in the given product and component
                 "product": product,
                 "component": component,
-                # We just wants to check if at least one bug exists, we don't
-                # need to download all the bugs for every component
-                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
-                # we pass count_only
-                "limit": limit,
             }
 
             bugs_number = count_bugs(query_data)
@@ -247,11 +242,6 @@ class ComponentModel(BugModel):
                 # Search bugs in the given product and component
                 "product": product,
                 "component": component,
-                # We just wants to check if at least one bug exists, we don't
-                # need to download all the bugs for every component
-                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
-                # we pass count_only
-                "limit": limit,
             }
 
             bugs_number = count_bugs(query_data)
@@ -271,11 +261,6 @@ class ComponentModel(BugModel):
                 # Search bugs in the given product and component
                 "product": product,
                 "component": component,
-                # We just wants to check if at least one bug exists, we don't
-                # need to download all the bugs for every component
-                # "count_only": 1, # TODO: Bugzilla class doesn't likes when
-                # we pass count_only
-                "limit": limit,
             }
 
             bugs_number = count_bugs(query_data)

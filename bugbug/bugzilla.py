@@ -218,14 +218,10 @@ def delete_bugs(bug_ids):
 
 
 def count_bugs(bug_query_params):
-    bugs = {}
+    bug_query_params["count_only"] = 1
 
-    def bughandler(bug):
-        print("BUG", bug)
-        bugs.add(int(bug["id"]))
+    r = requests.get("https://bugzilla.mozilla.org/rest/bug", params=bug_query_params)
+    r.raise_for_status()
+    count = r.json()["bug_count"]
 
-    Bugzilla(
-        bug_query_params, bughandler=bughandler, include_fields=["id"]
-    ).get_data().wait()
-
-    return len(bugs)
+    return count
