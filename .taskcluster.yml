@@ -113,6 +113,8 @@ tasks:
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install -r requirements.txt &&
+               mkdir data/ &&
+               cp tests/fixtures/bugs.json data/bugs.json &&
                python -m bugbug.bug_snapshot"
         metadata:
           name: bugbug rollback test
