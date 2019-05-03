@@ -7,6 +7,6 @@ RUN pip install --disable-pip-version-check --no-cache-dir -r /code/spawn_data_p
 
 ADD spawn_data_pipeline.py /code
 
-ADD check-scheduling.yml /code
+ADD check-pipeline.yml /code
 
-CMD python /code/spawn_data_pipeline.py /code/check-scheduling.yml
+CMD python /code/spawn_data_pipeline.py /code/check-pipeline.yml
