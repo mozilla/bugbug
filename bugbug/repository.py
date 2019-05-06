@@ -48,11 +48,11 @@ reviewer_experience = {}
 reviewer_experience_90_days = {}
 author_experience_90_days = {}
 
-components_touched_prev = defaultdict(int)
-components_touched_prev_90_days = defaultdict(int)
+components_touched_prev = defaultdict(set)
+components_touched_prev_90_days = defaultdict(set)
 
-files_touched_prev = defaultdict(int)
-files_touched_prev_90_days = defaultdict(int)
+files_touched_prev = defaultdict(set)
+files_touched_prev_90_days = defaultdict(set)
 
 directories_touched_prev = defaultdict(set)
 directories_touched_prev_90_days = defaultdict(set)
@@ -149,10 +149,12 @@ def _transform(commit):
         "reviewer_experience": reviewer_experience[commit.node],
         "reviewer_experience_90_days": reviewer_experience_90_days[commit.node],
         "author_email": commit.author_email.decode("utf-8"),
-        "components_touched_prev": components_touched_prev[commit.node],
-        "components_touched_prev_90_days": components_touched_prev_90_days[commit.node],
-        "files_touched_prev": files_touched_prev[commit.node],
-        "files_touched_prev_90_days": files_touched_prev_90_days[commit.node],
+        "components_touched_prev": len(components_touched_prev[commit.node]),
+        "components_touched_prev_90_days": len(
+            components_touched_prev_90_days[commit.node]
+        ),
+        "files_touched_prev": len(files_touched_prev[commit.node]),
+        "files_touched_prev_90_days": len(files_touched_prev_90_days[commit.node]),
         "directories_touched_prev": len(directories_touched_prev[commit.node]),
         "directories_touched_prev_90_days": len(
             directories_touched_prev_90_days[commit.node]
@@ -428,8 +430,8 @@ def download_commits(repo_dir, date_from):
     global directories_touched_prev
     global directories_touched_prev_90_days
 
-    components_touched = defaultdict(int)
-    files_touched = defaultdict(int)
+    components_touched = defaultdict(set)
+    files_touched = defaultdict(set)
     directories_touched = defaultdict(set)
     prev_commits_90_days = []
     for commit in commits:
@@ -440,14 +442,14 @@ def download_commits(repo_dir, date_from):
         )
 
         for component in components:
-            components_touched_prev[commit.node] += components_touched[component]
+            components_touched_prev[commit.node].update(components_touched[component])
 
-            components_touched[component] += 1
+            components_touched[component].add(commit.node)
 
         for path in commit.files:
-            files_touched_prev[commit.node] += files_touched[path]
+            files_touched_prev[commit.node].update(files_touched[path])
 
-            files_touched[path] += 1
+            files_touched[path].add(commit.node)
 
         directories = get_directories(commit.files)
 
@@ -489,8 +491,8 @@ def download_commits(repo_dir, date_from):
         if cut is not None:
             prev_commits_90_days = prev_commits_90_days[cut + 1 :]
 
-        components_touched_90_days = defaultdict(int)
-        files_touched_90_days = defaultdict(int)
+        components_touched_90_days = defaultdict(set)
+        files_touched_90_days = defaultdict(set)
         directories_touched_90_days = defaultdict(set)
         for prev_commit in prev_commits_90_days:
             components_prev = set(
@@ -500,10 +502,10 @@ def download_commits(repo_dir, date_from):
             )
 
             for component_prev in components_prev:
-                components_touched_90_days[component_prev] += 1
+                components_touched_90_days[component_prev].add(prev_commit.node)
 
             for path_prev in prev_commit.files:
-                files_touched_90_days[path_prev] += 1
+                files_touched_90_days[path_prev].add(prev_commit.node)
 
             directories_prev = get_directories(prev_commit.files)
 
@@ -534,12 +536,12 @@ def download_commits(repo_dir, date_from):
                             copied_directories[0]
                         ] = directories_touched_90_days[orig_directories[0]]
 
-        components_touched_prev_90_days[commit.node] = sum(
-            components_touched_90_days[component] for component in components
-        )
-        files_touched_prev_90_days[commit.node] = sum(
-            files_touched_90_days[path] for path in commit.files
-        )
+        for component in components:
+            components_touched_prev_90_days[commit.node].update(
+                components_touched_90_days[component]
+            )
+        for path in commit.files:
+            files_touched_prev_90_days[commit.node].update(files_touched_90_days[path])
         for directory in directories:
             directories_touched_prev_90_days[commit.node].update(
                 directories_touched_90_days[directory]
