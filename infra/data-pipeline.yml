@@ -13,7 +13,10 @@ tasks:
         public/commits.json.xz:
           path: /data/commits.json.xz
           type: file
-
+      cache:
+        bugbug-mercurial-repository: /cache
+    scopes:
+      - "docker-worker:cache:bugbug-mercurial-repository"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
@@ -45,7 +48,6 @@ tasks:
           true
     scopes:
       - "secrets:get:project/relman/bugbug/production"
-
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
