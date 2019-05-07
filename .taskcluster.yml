@@ -159,7 +159,6 @@ tasks:
           dependencies:
             - {$eval: as_slugid("lint_task")}
             - {$eval: as_slugid("tests_task")}
-            - {$eval: as_slugid("rollback_test_task")}
             - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("version_check_task")}
           scopes:
