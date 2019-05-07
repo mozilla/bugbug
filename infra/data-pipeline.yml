@@ -199,7 +199,7 @@ tasks:
       - rollback-test-task
       - train-tracking
       - train-regression
-      - train-defect
+      - train-defectenhancementtask
       - train-component
     payload:
       capabilities:

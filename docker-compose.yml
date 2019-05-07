@@ -38,10 +38,10 @@ services:
       dockerfile: infra/dockerfile.train_component
     image: mozilla/bugbug-train-component
 
-  bugbug-train-defect:
+  bugbug-train-defectenhancementtask:
     build:
       context: .
-      dockerfile: infra/dockerfile.train_defect
+      dockerfile: infra/dockerfile.train_defectenhancementtask
     image: mozilla/bugbug-train-defect
 
   bugbug-train-regression:
