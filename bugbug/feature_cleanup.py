@@ -7,28 +7,30 @@ import re
 
 
 def url(text):
-    text = re.sub(
-        r"http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+",
-        "__CODE_REFERENCE_URL__",
-        text,
+    pattern_reference_url = re.compile(
+        r"http[s]?://(hg.mozilla|searchfox|dxr.mozilla)\S+"
     )
-    return re.sub(r"http\S+", "__URL__", text)
+    pattern_url = re.compile(r"http\S+")
+    return pattern_url.sub(
+        "__URL__", pattern_reference_url.sub("__CODE_REFERENCE_URL__", text)
+    )
 
 
 def fileref(text):
-    return re.sub(
-        r"\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b",
-        "__FILE_REFERENCE__",
-        text,
+    pattern = re.compile(
+        r"\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b"
     )
+    return pattern.sub("__FILE_REFERENCE__", text)
 
 
 def responses(text):
-    return re.sub(">[^\n]+", " ", text)
+    pattern = re.compile(">[^\n]+")
+    return pattern.sub(" ", text)
 
 
 def hex(text):
-    return re.sub(r"\b0[xX][0-9a-fA-F]+\b", "__HEX_NUMBER__", text)
+    pattern = re.compile(r"\b0[xX][0-9a-fA-F]+\b")
+    return pattern.sub("__HEX_NUMBER__", text)
 
 
 FIREFOX_DLLS_MATCH = "|".join(
@@ -131,8 +133,8 @@ FIREFOX_DLLS_MATCH = "|".join(
 
 
 def dll(text):
-    regex = fr"\b(?!{FIREFOX_DLLS_MATCH})\w+(\.dll|\.so|\.dylib)\b"
-    return re.sub(regex, "__DLL_NAME__", text)
+    regex = re.compile(fr"\b(?!{FIREFOX_DLLS_MATCH})\w+(\.dll|\.so|\.dylib)\b")
+    return regex.sub("__DLL_NAME__", text)
 
 
 def synonyms(text):
@@ -159,19 +161,16 @@ def synonyms(text):
     ]
 
     for synonym_group, synonym_list in synonyms:
-        text = re.sub(
-            "|".join(fr"\b{synonym}\b" for synonym in synonym_list),
-            synonym_group,
-            text,
-            flags=re.IGNORECASE,
+        pattern = re.compile(
+            "|".join(fr"\b{synonym}\b" for synonym in synonym_list), flags=re.IGNORECASE
         )
+        text = pattern.sub(synonym_group, text)
 
     return text
 
 
 def crash(text):
-    return re.sub(
-        r"bp-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{6}[0-9]{6}\b",
-        "__CRASH_STATS_LINK__",
-        text,
+    pattern = re.compile(
+        r"bp-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{6}[0-9]{6}\b"
     )
+    return pattern.sub("__CRASH_STATS_LINK__", text)
