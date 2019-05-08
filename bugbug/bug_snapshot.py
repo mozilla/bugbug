@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import dateutil.parser
+from dateutil.relativedelta import relativedelta
 
 from bugbug import bugzilla
 
@@ -572,15 +573,19 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     bug["comments"] = [
         c
         for c in bug["comments"]
-        if dateutil.parser.parse(c["creation_time"]) <= rollback_date
+        if dateutil.parser.parse(c["creation_time"]) - relativedelta(seconds=3)
+        <= rollback_date
     ]
     bug["attachments"] = [
         a
         for a in bug["attachments"]
-        if dateutil.parser.parse(a["creation_time"]) <= rollback_date
+        if dateutil.parser.parse(a["creation_time"]) - relativedelta(seconds=3)
+        <= rollback_date
     ]
 
-    assert len(bug["comments"]) >= 1
+    assert (
+        len(bug["comments"]) >= 1
+    ), f"There must be at least one comment in bug {bug['id']}"
 
     return bug
 
