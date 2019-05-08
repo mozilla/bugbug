@@ -550,6 +550,18 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 bug[field].remove(to_remove)
                             continue
 
+                        # These keywords don't exist anymore.
+                        if field == "keywords" and to_remove in [
+                            "patch",
+                            "nsbeta1",
+                            "mozilla1.1",
+                            "mozilla1.0",
+                            "4xp",
+                            "sec-review-complete",
+                        ]:
+                            assert to_remove not in bug[field]
+                            continue
+
                         assert (
                             to_remove in bug[field]
                         ), f'{to_remove} is not in {bug[field]}, for field {field} of {bug["id"]}'
