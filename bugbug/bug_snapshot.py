@@ -540,7 +540,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # TODO: Users can change their email, try with all emails from a mapping file.
                             continue
 
-                        if to_remove in [
+                        if field == "keywords" and to_remove in [
                             "checkin-needed",
                             "#relman/triage/defer-to-group",
                             "conduit-needs-discussion",
