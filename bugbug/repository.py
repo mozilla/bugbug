@@ -268,23 +268,12 @@ def _hg_log(revs):
     return revs
 
 
-def get_revs(hg, date):
-    revs = []
-
-    # Since there are cases where on a given day there was no push, we have
-    # to backtrack until we find a "good" day.
-    while len(revs) == 0:
-        rev_range = 'pushdate("{}"):tip'.format(date.strftime("%Y-%m-%d"))
-
-        args = hglib.util.cmdbuilder(
-            b"log", template="{node}\n", no_merges=True, rev=rev_range, branch="central"
-        )
-        x = hg.rawcommand(args)
-        revs = x.splitlines()
-
-        date -= relativedelta(days=1)
-
-    return revs
+def get_revs(hg):
+    args = hglib.util.cmdbuilder(
+        b"log", template="{node}\n", no_merges=True, branch="central"
+    )
+    x = hg.rawcommand(args)
+    return x.splitlines()
 
 
 def get_directories(files):
@@ -304,7 +293,7 @@ def get_directories(files):
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg, date_from)
+    revs = get_revs(hg)
 
     commits_num = len(revs)
 
@@ -548,6 +537,9 @@ def download_commits(repo_dir, date_from):
             directories_touched_90_days[directory] for directory in directories
         )
         prev_commits_90_days.append(commit)
+
+    # Exclude commits outside the range we care about.
+    commits = [commit for commit in commits if commit.pushdate > date_from]
 
     print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
 
