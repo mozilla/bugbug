@@ -419,6 +419,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 "feedback",
                                 "ui-review",
                                 "sec-approval",
+                                "sec-review",
                             ]
                         ):
                             # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
