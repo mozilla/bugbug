@@ -156,6 +156,10 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
             ]
         )
         or (field in ["cf_has_str", "cf_has_regression_range"] and bug_id == 1_440_338)
+        or (field == "cf_has_regression_range" and bug_id == 1542185)
+        or (
+            field == "cf_has_str" and bug_id == 1462571
+        )  # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1550104 is fixed
     )
 
 
@@ -285,6 +289,15 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
         )
         or (field == "cf_tracking_firefox60" and bug_id in [1_375_913, 1_439_875])
         or (field == "priority" and bug_id == 1_337_747)
+        or (
+            field == "type" and bug_id == 1540796
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550120 is fixed.
+        or (
+            field == "cf_last_resolved" and bug_id == 1540998
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550128 is fixed.
+        or (
+            field == "type" and bug_id == 1257155
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550129 is fixed.
     )
 
 
