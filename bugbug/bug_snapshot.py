@@ -589,9 +589,11 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 field, bug["id"], new_value
                             )
                         ):
-                            print(
-                                f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
-                            )
+                            # This case is too common, let's not print anything.
+                            if not (field == "severity" and new_value == "enhancement"):
+                                print(
+                                    f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
+                                )
                         else:
                             assert (
                                 False
