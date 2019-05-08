@@ -91,6 +91,13 @@ def target_milestone(target_milestone):
     )
 
 
+def null_str(val):
+    if val == "":
+        return None
+
+    return val
+
+
 FIELD_TYPES = {
     "blocks": int,
     "depends_on": int,
@@ -105,6 +112,7 @@ FIELD_TYPES = {
     "op_sys": op_sys,
     "product": product,
     "target_milestone": target_milestone,
+    "cf_due_date": null_str,
 }
 
 
