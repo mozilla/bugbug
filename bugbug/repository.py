@@ -35,6 +35,7 @@ Commit = namedtuple(
         "author",
         "desc",
         "date",
+        "pushdate",
         "bug",
         "backedoutby",
         "author_email",
@@ -220,7 +221,7 @@ def _transform(commit):
 
 
 def _hg_log(revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -234,8 +235,9 @@ def _hg_log(revs):
 
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        posixtime = float(rev[3].split(b".", 1)[0])
-        dt = datetime.fromtimestamp(posixtime)
+        date = datetime.fromtimestamp(float(rev[3].split(b".", 1)[0]))
+
+        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b"-", 1)[0]))
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
@@ -252,7 +254,8 @@ def _hg_log(revs):
                 node=rev[0],
                 author=rev[1],
                 desc=rev[2],
-                date=dt,
+                date=date,
+                pushdate=pushdate,
                 bug=rev[4],
                 backedoutby=rev[5],
                 author_email=rev[6],
