@@ -29,6 +29,7 @@ def keyword_mapping(keyword):
         "ateam-marionette-intermittent": "pi-marionette-intermittent",
         "csec-dos": "csectype-dos",
         "csec-oom": "csectype-oom",
+        "bug-quality": "bmo-bug-quality",
     }
 
     return mapping[keyword] if keyword in mapping else keyword
