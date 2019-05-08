@@ -407,6 +407,10 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # Skip this for now.
                             continue
 
+                        # These flags have been removed.
+                        if to_remove in ["platform-rel?", "blocking0.3-"]:
+                            continue
+
                         if any(
                             to_remove.startswith(s)
                             for s in [
