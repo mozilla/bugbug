@@ -10,7 +10,7 @@ from bugbug import bugzilla
 
 
 def bool_str(val):
-    assert val in ["0", "1"]
+    assert val in ["", "0", "1"], f"Unexpected boolean value: '{val}'"
 
     return True if val == "1" else False
 
