@@ -119,7 +119,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-defect
+      image: mozilla/bugbug-train-defectenhancementtask
 
       artifacts:
         public/defectenhancementtaskmodel.xz:
