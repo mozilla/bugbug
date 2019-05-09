@@ -228,7 +228,7 @@ def _transform(commit):
     return obj
 
 
-def _hg_log(revs):
+def hg_log(hg, revs):
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
 
     args = hglib.util.cmdbuilder(
@@ -238,7 +238,7 @@ def _hg_log(revs):
         rev=revs[0] + b":" + revs[-1],
         branch="central",
     )
-    x = HG.rawcommand(args)
+    x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
 
     revs = []
@@ -274,6 +274,10 @@ def _hg_log(revs):
         )
 
     return revs
+
+
+def _hg_log(revs):
+    return hg_log(HG, revs)
 
 
 def get_revs(hg):
