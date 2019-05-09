@@ -16,7 +16,7 @@ def mock_db(tmp_path):
             db_name += f".{db_compression}"
 
         db_path = tmp_path / db_name
-        db.register(db_path, "https://alink", 1)
+        db.register(db_path, "https://alink")
         return db_path
 
     return register_db
@@ -78,7 +78,7 @@ def test_unregistered_db(tmp_path):
 )
 def test_bad_format_compression(tmp_path, db_name):
     db_path = tmp_path / db_name
-    db.register(db_path, "https://alink", 1)
+    db.register(db_path, "https://alink")
 
     with pytest.raises(AssertionError):
         db.write(db_path, range(7))

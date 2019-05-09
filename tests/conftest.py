@@ -8,7 +8,7 @@ import shutil
 
 import pytest
 
-from bugbug import bugzilla, db, repository
+from bugbug import bugzilla, repository
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -24,9 +24,6 @@ def mock_data(tmp_path_factory):
         shutil.copyfile(os.path.join(FIXTURES_DIR, f), tmp_path / "data" / f)
 
     os.chdir(tmp_path)
-
-    for f in DBs:
-        db.update_ver_file(os.path.join("data", f))
 
 
 @pytest.fixture
