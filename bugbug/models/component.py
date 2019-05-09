@@ -318,7 +318,7 @@ class ComponentModel(BugModel):
                         yield (product, component)
 
         meaningful_product_components = self.get_meaningful_product_components(
-            generate_meaningfull_tuples(), threshold_ratio=20
+            generate_meaningfull_tuples(), threshold_ratio=10
         )
 
         if not meaningful_product_components.issubset(
