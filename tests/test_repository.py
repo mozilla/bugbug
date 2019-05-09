@@ -77,3 +77,24 @@ def test_get_revs(fake_hg_repo):
     assert len(revs) == 2, "There should be two revisions now"
     assert revs[0].decode("ascii") == revision1
     assert revs[1].decode("ascii") == revision2
+
+
+def test_get_directories():
+    assert repository.get_directories("") == []
+    assert repository.get_directories("Makefile") == []
+    assert repository.get_directories("dom/aFile.jsm") == ["dom"]
+    assert set(
+        repository.get_directories("tools/code-coverage/CodeCoverageHandler.cpp")
+    ) == {"tools", "tools/code-coverage"}
+
+    assert repository.get_directories([""]) == []
+    assert repository.get_directories(["Makefile"]) == []
+    assert repository.get_directories(["dom/aFile.jsm"]) == ["dom"]
+    assert set(
+        repository.get_directories(["tools/code-coverage/CodeCoverageHandler.cpp"])
+    ) == {"tools", "tools/code-coverage"}
+    assert set(
+        repository.get_directories(
+            ["dom/aFile.jsm", "tools/code-coverage/CodeCoverageHandler.cpp"]
+        )
+    ) == {"dom", "tools", "tools/code-coverage"}
