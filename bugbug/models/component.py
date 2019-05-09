@@ -138,27 +138,12 @@ class ComponentModel(BugModel):
                 bug_data["component"],
             )
 
-        def is_meaningful(product, component):
-            return product in self.PRODUCTS and component not in [
-                "General",
-                "Untriaged",
-            ]
-
-        product_component_counts = Counter(
+        self.meaningful_product_components = self.get_meaningful_product_components(
             (
                 (product, component)
                 for product, component in product_components.values()
-                if is_meaningful(product, component)
+                if self.is_meaningful(product, component)
             )
-        ).most_common()
-
-        max_count = product_component_counts[0][1]
-        threshold = max_count / 100
-
-        self.meaningful_product_components = set(
-            product_component
-            for product_component, count in product_component_counts
-            if count > threshold
         )
 
         classes = {}
@@ -201,6 +186,26 @@ class ComponentModel(BugModel):
             for bug_id, component in classes.items()
             if component in top_components
         }
+
+    def is_meaningful(self, product, component):
+        return product in self.PRODUCTS and component not in ["General", "Untriaged"]
+
+    def get_meaningful_product_components(self, full_comp_tuples):
+        """ From the given full_comp_tuples iterable of (product, component)
+        tuples, returns the set of tuples which have at least 1% of the most
+        common tuple
+        """
+
+        product_component_counts = Counter(full_comp_tuples).most_common()
+
+        max_count = product_component_counts[0][1]
+        threshold = max_count / 100
+
+        return set(
+            product_component
+            for product_component, count in product_component_counts
+            if count > threshold
+        )
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
@@ -294,6 +299,35 @@ class ComponentModel(BugModel):
 
         # Check number 5, there is no component with many bugs that is not in
         # meaningful_product_components
+
+        # Recompute the meaningful components
+
+        def generate_meaningfull_tuples():
+            for full_comp, count in bugs_number.items():
+                product, component = full_comp.split("::", 1)
+
+                if not self.is_meaningful(product, component):
+                    continue
+
+                if count > 0:
+                    print("YIELD", product, component, count)
+                    for i in range(count):
+                        yield (product, component)
+
+        meaningful_product_components = self.get_meaningful_product_components(
+            generate_meaningfull_tuples()
+        )
+
+        if not meaningful_product_components == self.meaningful_product_components:
+            msg = f"Meaningful product components mismatch"
+
+            new_meaningful_product_components = meaningful_product_components.difference(
+                self.meaningful_product_components
+            )
+            msg = f"New meaningful product components {new_meaningful_product_components!r}"
+            print(msg)
+
+            success = False
 
         # TODO
 
