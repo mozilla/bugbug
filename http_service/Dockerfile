@@ -11,8 +11,6 @@ COPY . /code/bugbug_http_service/
 # Load the models
 WORKDIR /code/
 
-COPY ./models /code/models
-
 ARG CHECK_MODELS
 ENV CHECK_MODELS="${CHECK_MODELS}"
 

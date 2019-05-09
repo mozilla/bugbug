@@ -10,12 +10,16 @@ from collections import UserDict, defaultdict
 from multiprocessing.pool import AsyncResult, Pool
 
 from flask import Flask, jsonify, request
+from redis import Redis
+from rq import Queue
 
 from .models import classify_bug
 
 API_TOKEN = "X-Api-Key"
 
 application = Flask(__name__)
+redis_conn = Redis(host="localhost")
+q = Queue(connection=redis_conn)  # no args implies the default queue
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 
@@ -38,13 +42,15 @@ MODELS_DB = defaultdict(Database)
 def schedule_bug_classification(model_name, bug_id):
     """ Schedule the classification of a single bug_id
     """
-    res = POOL.apply_async(classify_bug, (model_name, bug_id, BUGZILLA_TOKEN))
+    res = q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN)
+
+    res = {}
 
     MODELS_DB[model_name][bug_id] = res
 
 
 def get_bug_classification(model_name, bug_id):
-    bug_result = MODELS_DB[model_name][bug_id]
+    bug_result = MODELS_DB[model_name].get(bug_id)
 
     if isinstance(bug_result, AsyncResult):
         if bug_result.ready():
@@ -56,12 +62,13 @@ def get_bug_classification(model_name, bug_id):
             # Indicate that the result is not yet ready
             bug_result = {"ready": False}
 
-    return bug_result
+    return bug_result or {"ready": False}
 
 
 @application.route("/<model_name>/predict/<bug_id>")
 def model_prediction(model_name, bug_id):
     headers = request.headers
+    redis_conn.ping()
 
     auth = headers.get(API_TOKEN)
 
@@ -70,7 +77,10 @@ def model_prediction(model_name, bug_id):
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
-    data = classify_bug(model_name, [bug_id])
+    if bug_id not in MODELS_DB[model_name]:
+        schedule_bug_classification(model_name, bug_id)
+
+    data = get_bug_classification(model_name, bug_id)
 
     return jsonify(**data)
 
