@@ -47,9 +47,9 @@ class DefectModel(BugModel):
             feature_extractors.append(bug_features.had_severity_enhancement())
 
         cleanup_functions = [
-            feature_cleanup.url,
-            feature_cleanup.fileref,
-            feature_cleanup.synonyms,
+            feature_cleanup.url(),
+            feature_cleanup.fileref(),
+            feature_cleanup.synonyms(),
         ]
 
         self.extraction_pipeline = Pipeline(

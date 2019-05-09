@@ -48,9 +48,9 @@ class AssigneeModel(BugModel):
         ]
 
         cleanup_functions = [
-            feature_cleanup.fileref,
-            feature_cleanup.url,
-            feature_cleanup.synonyms,
+            feature_cleanup.fileref(),
+            feature_cleanup.url(),
+            feature_cleanup.synonyms(),
         ]
 
         self.extraction_pipeline = Pipeline(
