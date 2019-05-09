@@ -356,6 +356,10 @@ def download_commits(repo_dir, date_from):
     first_pushdate = commits[0].pushdate
 
     experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
+    # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
+    # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
+    # for C should be 2 (A + B), and not 3 (A twice + B).
     complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
 
     def update_experiences(experience_type, day, items):
