@@ -221,7 +221,12 @@ class ComponentModel(BugModel):
             full_comp = f"{product}::{component}"
 
             if full_comp not in bugs_number.keys():
-                msg = f"Component {component!r} of product {product!r} have 0 bugs in it, failure"
+                msg = f"Component {component!r} of product {product!r} doesn't exists, failure"
+                print(msg)
+                success = False
+
+            elif bugs_number[full_comp] <= 0:
+                msg = f"Component {component!r} of product {product!r} have 0 bugs or less in it, failure"
                 print(msg)
                 success = False
 
