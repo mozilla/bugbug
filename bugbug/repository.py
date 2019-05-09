@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import copy
 import itertools
 import multiprocessing
 import os
@@ -35,6 +36,7 @@ Commit = namedtuple(
         "author",
         "desc",
         "date",
+        "pushdate",
         "bug",
         "backedoutby",
         "author_email",
@@ -44,19 +46,13 @@ Commit = namedtuple(
     ],
 )
 
-author_experience = {}
-reviewer_experience = {}
-reviewer_experience_90_days = {}
-author_experience_90_days = {}
+EXPERIENCE_TIMESPAN = 90
+EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
-components_touched_prev = defaultdict(int)
-components_touched_prev_90_days = defaultdict(int)
-
-files_touched_prev = defaultdict(int)
-files_touched_prev_90_days = defaultdict(int)
-
-directories_touched_prev = defaultdict(int)
-directories_touched_prev_90_days = defaultdict(int)
+experiences_by_commit = {
+    "total": defaultdict(lambda: defaultdict(int)),
+    EXPERIENCE_TIMESPAN_TEXT: defaultdict(lambda: defaultdict(int)),
+}
 
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
 # gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
@@ -145,19 +141,31 @@ def _transform(commit):
         "files_modified_num": 0,
         "types": set(),
         "components": list(),
-        "author_experience": author_experience[commit.node],
-        "author_experience_90_days": author_experience_90_days[commit.node],
-        "reviewer_experience": reviewer_experience[commit.node],
-        "reviewer_experience_90_days": reviewer_experience_90_days[commit.node],
+        "author_experience": experiences_by_commit["total"]["author"][commit.node],
+        f"author_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["author"][commit.node],
+        "reviewer_experience": experiences_by_commit["total"]["reviewer"][commit.node],
+        f"reviewer_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["reviewer"][commit.node],
         "author_email": commit.author_email.decode("utf-8"),
-        "components_touched_prev": components_touched_prev[commit.node],
-        "components_touched_prev_90_days": components_touched_prev_90_days[commit.node],
-        "files_touched_prev": files_touched_prev[commit.node],
-        "files_touched_prev_90_days": files_touched_prev_90_days[commit.node],
-        "directories_touched_prev": directories_touched_prev[commit.node],
-        "directories_touched_prev_90_days": directories_touched_prev_90_days[
+        "components_touched_prev": experiences_by_commit["total"]["component"][
             commit.node
         ],
+        f"components_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["component"][commit.node],
+        "files_touched_prev": experiences_by_commit["total"]["file"][commit.node],
+        f"files_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["file"][commit.node],
+        "directories_touched_prev": experiences_by_commit["total"]["directory"][
+            commit.node
+        ],
+        f"directories_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["directory"][commit.node],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -220,7 +228,7 @@ def _transform(commit):
 
 
 def _hg_log(revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -234,8 +242,9 @@ def _hg_log(revs):
 
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        posixtime = float(rev[3].split(b".", 1)[0])
-        dt = datetime.fromtimestamp(posixtime)
+        date = datetime.utcfromtimestamp(float(rev[3].split(b".", 1)[0]))
+
+        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b"-", 1)[0]))
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
@@ -252,7 +261,8 @@ def _hg_log(revs):
                 node=rev[0],
                 author=rev[1],
                 desc=rev[2],
-                date=dt,
+                date=date,
+                pushdate=pushdate,
                 bug=rev[4],
                 backedoutby=rev[5],
                 author_email=rev[6],
@@ -265,23 +275,12 @@ def _hg_log(revs):
     return revs
 
 
-def get_revs(hg, date):
-    revs = []
-
-    # Since there are cases where on a given day there was no push, we have
-    # to backtrack until we find a "good" day.
-    while len(revs) == 0:
-        rev_range = 'pushdate("{}"):tip'.format(date.strftime("%Y-%m-%d"))
-
-        args = hglib.util.cmdbuilder(
-            b"log", template="{node}\n", no_merges=True, rev=rev_range, branch="central"
-        )
-        x = hg.rawcommand(args)
-        revs = x.splitlines()
-
-        date -= relativedelta(days=1)
-
-    return revs
+def get_revs(hg):
+    args = hglib.util.cmdbuilder(
+        b"log", template="{node}\n", no_merges=True, branch="central"
+    )
+    x = hg.rawcommand(args)
+    return x.splitlines()
 
 
 def get_directories(files):
@@ -301,7 +300,7 @@ def get_directories(files):
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg, date_from)
+    revs = get_revs(hg)
 
     commits_num = len(revs)
 
@@ -345,70 +344,7 @@ def download_commits(repo_dir, date_from):
 
     print(f"Analyzing {commits_num} patches...")
 
-    # Total previous number of commits by the author.
-    total_commits_by_author = defaultdict(int)
-    total_reviews_by_reviewer = defaultdict(int)
-    # Previous commits by the author, in a 90 days window.
-    commits_by_author = defaultdict(list)
-    reviews_by_reviewer = defaultdict(list)
-
-    global author_experience
-    global reviewer_experience
-    global author_experience_90_days
-    global reviewer_experience_90_days
-
-    for commit in commits:
-        author_experience[commit.node] = total_commits_by_author[commit.author]
-        # We don't want to consider backed out commits when calculating author/reviewer experience.
-        if not commit.backedoutby:
-            total_commits_by_author[commit.author] += 1
-
-        if commit.reviewers is not ():
-            reviewer_experience[commit.node] = sum(
-                total_reviews_by_reviewer[reviewer] for reviewer in commit.reviewers
-            )
-            for reviewer in commit.reviewers:
-                total_reviews_by_reviewer[reviewer] += 1
-        else:
-            reviewer_experience[commit.node] = 0
-
-        # Keep only the previous commits from a window of 90 days in the commits_by_author map.
-        cut = None
-
-        for i, prev_commit in enumerate(commits_by_author[commit.author]):
-            if (commit.date - prev_commit.date).days <= 90:
-                break
-
-            cut = i
-
-        if cut is not None:
-            commits_by_author[commit.author] = commits_by_author[commit.author][
-                cut + 1 :
-            ]
-
-        author_experience_90_days[commit.node] = len(commits_by_author[commit.author])
-
-        reviewer_experience_90_days[commit.node] = 0
-        for reviewer in commit.reviewers:
-            cut = None
-            for i, prev_commit in enumerate(reviews_by_reviewer[reviewer]):
-                if (commit.date - prev_commit.date).days <= 90:
-                    break
-
-                cut = i
-
-            if cut is not None:
-                reviews_by_reviewer[reviewer] = reviews_by_reviewer[reviewer][cut + 1 :]
-
-            reviewer_experience_90_days[commit.node] += len(
-                reviews_by_reviewer[reviewer]
-            )
-
-            if not commit.backedoutby:
-                reviews_by_reviewer[reviewer].append(commit)
-
-        if not commit.backedoutby:
-            commits_by_author[commit.author].append(commit)
+    global experiences_by_commit
 
     global path_to_component
     r = requests.get(
@@ -420,131 +356,108 @@ def download_commits(repo_dir, date_from):
         path: "::".join(component) for path, component in path_to_component.items()
     }
 
-    global components_touched_prev
-    global components_touched_prev_90_days
+    first_pushdate = commits[0].pushdate
 
-    global files_touched_prev
-    global files_touched_prev_90_days
+    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
+    # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
+    # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
+    # for C should be 2 (A + B), and not 3 (A twice + B).
+    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
 
-    global directories_touched_prev
-    global directories_touched_prev_90_days
+    def update_experiences(experience_type, day, items):
+        for item in items:
+            exp = experiences[day][experience_type][item]
 
-    components_touched = defaultdict(int)
-    files_touched = defaultdict(int)
-    directories_touched = defaultdict(int)
-    prev_commits_90_days = []
-    for commit in commits:
-        components = set(
-            path_to_component[path]
-            for path in commit.files
-            if path in path_to_component
-        )
+            experiences_by_commit["total"][experience_type][commit.node] += exp
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                commit.node
+            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
 
-        for component in components:
-            components_touched_prev[commit.node] += components_touched[component]
+            # We don't want to consider backed out commits when calculating experiences.
+            if not commit.backedoutby:
+                experiences[day][experience_type][item] += 1
 
-            components_touched[component] += 1
+    def update_complex_experiences(experience_type, day, items):
+        all_commits = set()
+        before_timespan_commits = set()
+        for item in items:
+            all_commits.update(complex_experiences[day][experience_type][item])
 
-        for path in commit.files:
-            files_touched_prev[commit.node] += files_touched[path]
-
-            files_touched[path] += 1
-
-        directories = get_directories(commit.files)
-
-        for directory in directories:
-            directories_touched_prev[commit.node] += directories_touched[directory]
-
-            directories_touched[directory] += 1
-
-        if len(commit.file_copies) > 0:
-            for orig, copied in commit.file_copies.items():
-                if orig in path_to_component and copied in path_to_component:
-                    components_touched[path_to_component[copied]] = components_touched[
-                        path_to_component[orig]
-                    ]
-
-                files_touched[copied] = files_touched[orig]
-
-                orig_directories = get_directories(orig)
-
-                copied_directories = get_directories(copied)
-
-                if len(orig_directories) == len(copied_directories):
-                    for i in range(len(orig_directories)):
-                        if orig_directories[i] != copied_directories[i]:
-                            directories_touched[
-                                copied_directories[i]
-                            ] = directories_touched[orig_directories[i]]
-                elif orig_directories and copied_directories:
-                    directories_touched[copied_directories[0]] = directories_touched[
-                        orig_directories[0]
-                    ]
-
-        for i, prev_commit in enumerate(prev_commits_90_days):
-            if (commit.date - prev_commit.date).days <= 90:
-                break
-
-            cut = i
-
-        if cut is not None:
-            prev_commits_90_days = prev_commits_90_days[cut + 1 :]
-
-        components_touched_90_days = defaultdict(int)
-        files_touched_90_days = defaultdict(int)
-        directories_touched_90_days = defaultdict(int)
-        for prev_commit in prev_commits_90_days:
-            components_prev = set(
-                path_to_component[path]
-                for path in prev_commit.files
-                if path in path_to_component
+            before_timespan_commits.update(
+                complex_experiences[day - EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                    item
+                ]
             )
 
-            for component_prev in components_prev:
-                components_touched_90_days[component_prev] += 1
+            # We don't want to consider backed out commits when calculating experiences.
+            if not commit.backedoutby:
+                complex_experiences[day][experience_type][item].add(commit.node)
 
-            for path_prev in prev_commit.files:
-                files_touched_90_days[path_prev] += 1
+        experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
+        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+            commit.node
+        ] = len(all_commits - before_timespan_commits)
 
-            directories_prev = get_directories(prev_commit.files)
+    for commit in tqdm(commits):
+        days = (commit.pushdate - first_pushdate).days
+        assert days >= 0
 
-            for directory_prev in directories_prev:
-                directories_touched_90_days[directory_prev] += 1
+        if days not in experiences:
+            assert days not in complex_experiences
+            experiences[days] = copy.deepcopy(experiences[days - 1])
+            complex_experiences[days] = copy.deepcopy(complex_experiences[days - 1])
 
-            if len(prev_commit.file_copies) > 0:
-                for orig, copied in prev_commit.file_copies.items():
-                    if orig in path_to_component and copied in path_to_component:
-                        components_touched_90_days[
-                            path_to_component[copied]
-                        ] = components_touched_90_days[path_to_component[orig]]
+        update_experiences("author", days, [commit.author])
+        update_experiences("reviewer", days, commit.reviewers)
 
-                    files_touched_90_days[copied] = files_touched_90_days[orig]
+        # When a file is moved/copied, copy original experience values to the copied path.
+        if len(commit.file_copies) > 0:
+            for orig, copied in commit.file_copies.items():
+                orig_directories = get_directories(orig)
+                copied_directories = get_directories(copied)
 
-                    orig_directories = get_directories(orig)
+                if orig in path_to_component and copied in path_to_component:
+                    orig_component = path_to_component[orig]
+                    copied_component = path_to_component[copied]
+                else:
+                    orig_component = copied_component = None
 
-                    copied_directories = get_directories(copied)
+                for prev_day in complex_experiences.keys():
+                    if orig_component is not None:
+                        complex_experiences[prev_day]["component"][
+                            copied_component
+                        ] = complex_experiences[prev_day]["component"][orig_component]
 
-                    if len(orig_directories) == len(copied_directories):
-                        for i in range(len(orig_directories)):
-                            if orig_directories[i] != copied_directories[i]:
-                                directories_touched_90_days[
-                                    copied_directories[i]
-                                ] = directories_touched_90_days[orig_directories[i]]
-                    elif orig_directories and copied_directories:
-                        directories_touched_90_days[
-                            copied_directories[0]
-                        ] = directories_touched_90_days[orig_directories[0]]
+                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
+                        prev_day
+                    ]["file"][orig]
 
-        components_touched_prev_90_days[commit.node] = sum(
-            components_touched_90_days[component] for component in components
+                    for orig_directory, copied_directory in zip(
+                        orig_directories, copied_directories
+                    ):
+                        complex_experiences[prev_day]["directory"][
+                            copied_directory
+                        ] = complex_experiences[prev_day]["directory"][orig_directory]
+
+        update_complex_experiences("file", days, commit.files)
+
+        update_complex_experiences("directory", days, get_directories(commit.files))
+
+        components = list(
+            set(
+                path_to_component[path]
+                for path in commit.files
+                if path in path_to_component
+            )
         )
-        files_touched_prev_90_days[commit.node] = sum(
-            files_touched_90_days[path] for path in commit.files
-        )
-        directories_touched_prev_90_days[commit.node] = sum(
-            directories_touched_90_days[directory] for directory in directories
-        )
-        prev_commits_90_days.append(commit)
+
+        update_complex_experiences("component", days, components)
+
+        # TODO: We can delete anything older than 90 days at this point.
+
+    # Exclude commits outside the range we care about.
+    commits = [commit for commit in commits if commit.pushdate > date_from]
 
     print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
 
