@@ -239,7 +239,7 @@ def _hg_log(revs):
 
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        date = datetime.fromtimestamp(float(rev[3].split(b".", 1)[0]))
+        date = datetime.utcfromtimestamp(float(rev[3].split(b".", 1)[0]))
 
         pushdate = datetime.utcfromtimestamp(float(rev[9].split(b"-", 1)[0]))
 
