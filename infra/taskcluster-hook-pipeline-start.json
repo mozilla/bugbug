@@ -6,7 +6,7 @@
         }
     ],
     "schedule": [
-        "0 0 0 * * 0,3"
+        "0 0 1,16 * *"
     ],
     "metadata": {
         "description": "",
