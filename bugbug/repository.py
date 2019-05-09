@@ -345,11 +345,7 @@ def download_commits(repo_dir, date_from):
 
     commits = [commit for commit in commits if commit.node not in ignore_revs]
 
-    commits_num = len(commits)
-
-    print(f"Analyzing {commits_num} patches...")
-
-    global experiences_by_commit
+    print("Downloading file->component mapping...")
 
     global path_to_component
     r = requests.get(
@@ -360,6 +356,12 @@ def download_commits(repo_dir, date_from):
     path_to_component = {
         path: "::".join(component) for path, component in path_to_component.items()
     }
+
+    commits_num = len(commits)
+
+    print(f"Analyzing {commits_num} patches...")
+
+    global experiences_by_commit
 
     first_pushdate = commits[0].pushdate
 
