@@ -14,7 +14,9 @@ from bugbug import db
 
 BUGS_DB = "data/bugs.json"
 db.register(
-    BUGS_DB, "https://www.dropbox.com/s/vekjzqu4v0pu1v8/bugs.json.xz?dl=1", "v1"
+    BUGS_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.xz",
+    "v1",
 )
 
 ATTACHMENT_INCLUDE_FIELDS = [

@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from bugbug.models.bug import BugModel
+from bugbug.models.defect import DefectModel
 
 
 def test_get_bug_labels():
-    model = BugModel()
+    model = DefectModel()
     classes = model.get_labels()
     # labels from bug_nobug.csv
     assert classes[1087488]

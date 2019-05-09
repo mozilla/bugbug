@@ -2100,6 +2100,7 @@ bug_id,category
 1519307,nobug
 1519310,nobug
 1520012,nobug
+1521370,bug_no_regression
 1521839,nobug
 1522925,nobug
 1525337,nobug
@@ -2169,3 +2170,10 @@ bug_id,category
 1546306,bug_unknown_regression
 1546333,bug_unknown_regression
 1546337,bug_unknown_regression
+1546545,bug_unknown_regression
+1546546,bug_unknown_regression
+1546835,bug_unknown_regression
+1546884,bug_unknown_regression
+1547336,bug_unknown_regression
+1548432,bug_no_regression
+1548499,regression

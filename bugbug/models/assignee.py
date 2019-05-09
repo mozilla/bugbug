@@ -10,8 +10,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla
-from bugbug.model import Model
+from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.model import BugModel
 
 MINIMUM_ASSIGNMENTS = 5
 ADDRESSES_TO_EXCLUDE = [
@@ -25,9 +25,9 @@ ADDRESSES_TO_EXCLUDE = [
 ]
 
 
-class AssigneeModel(Model):
+class AssigneeModel(BugModel):
     def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization)
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
@@ -48,9 +48,9 @@ class AssigneeModel(Model):
         ]
 
         cleanup_functions = [
-            bug_features.cleanup_fileref,
-            bug_features.cleanup_url,
-            bug_features.cleanup_synonyms,
+            feature_cleanup.fileref,
+            feature_cleanup.url,
+            feature_cleanup.synonyms,
         ]
 
         self.extraction_pipeline = Pipeline(

@@ -13,10 +13,14 @@ tasks:
         public/commits.json.xz:
           path: /data/commits.json.xz
           type: file
-
+      cache:
+        bugbug-mercurial-repository: /cache
+    scopes:
+      - "docker-worker:cache:bugbug-mercurial-repository"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_commits.latest
     metadata:
       name: bugbug commit retrieval
       description: bugbug commit retrieval
@@ -44,13 +48,37 @@ tasks:
           true
     scopes:
       - "secrets:get:project/relman/bugbug/production"
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_bugs.latest
+    metadata:
+      name: bugbug bugs retrieval
+      description: bugbug bugs retrieval
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: rollback-test-task
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '25 hours'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 3600
+      image: mozilla/bugbug-base
+      command:
+        - "/bin/bash"
+        - "-lcx"
+        - "python -c 'from bugbug import bugzilla, db; db.download()' &&
+           python -m bugbug.bug_snapshot"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
-      name: bugbug bugs retrieval
-      description: bugbug bugs retrieval
+      name: bugbug rollback test
+      description: bugbug rollback test
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -74,13 +102,14 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_component.latest
     metadata:
       name: bugbug train component model
       description: bugbug train component model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
-  - ID: train-defect
+  - ID: train-defectenhancementtask
     created: {$fromNow: ''}
     deadline: {$fromNow: '48 hours'}
     provisionerId: aws-provisioner-v1
@@ -100,9 +129,10 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_defectenhancementtask.latest
     metadata:
-      name: bugbug train defect model
-      description: bugbug train defect model
+      name: bugbug train defect/enhancement/task model
+      description: bugbug train defect/enhancement/task model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -126,6 +156,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regression.latest
     metadata:
       name: bugbug train regression model
       description: bugbug train regression model
@@ -152,6 +183,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_tracking.latest
     metadata:
       name: bugbug train tracking model
       description: bugbug train tracking model
@@ -164,15 +196,16 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     dependencies:
+      - rollback-test-task
       - train-tracking
       - train-regression
-      - train-defect
+      - train-defectenhancementtask
       - train-component
     payload:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:latest
+      image: mozilla/taskboot:0.1.1
       command:
         - "/bin/sh"
         - "-lcxe"
@@ -212,7 +245,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:latest
+      image: mozilla/taskboot:0.1.1
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
