@@ -32,7 +32,7 @@
             "features": {
                 "taskclusterProxy": true
             },
-            "image": "mozilla/bugbug-check-pipeline",
+            "image": "mozilla/bugbug-spawn-check-pipeline",
             "maxRunTime": 7200
         },
         "priority": "normal",
