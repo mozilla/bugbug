@@ -192,6 +192,10 @@ tasks:
         then:
           dependencies:
             - {$eval: as_slugid("docker_build")}
+            - {$eval: as_slugid("lint_task")}
+            - {$eval: as_slugid("version_check_task")}
+            - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("packaging_test_task")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
             - queue:route:project.relman.bugbug.deploy_ending.*
@@ -225,10 +229,6 @@ tasks:
         then:
           taskId: {$eval: as_slugid("update_hook")}
           dependencies:
-            - {$eval: as_slugid("lint_task")}
-            - {$eval: as_slugid("version_check_task")}
-            - {$eval: as_slugid("tests_task")}
-            - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("docker_push")}
           scopes:
             - hooks:modify-hook:project-relman/bugbug
