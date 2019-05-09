@@ -330,6 +330,4 @@ class ComponentModel(BugModel):
 
             success = False
 
-        # TODO
-
         return success
