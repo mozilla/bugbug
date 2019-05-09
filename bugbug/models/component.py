@@ -211,9 +211,9 @@ class ComponentModel(BugModel):
         # Get the number of bugs per full component to fasten up the check
         bugs_number = get_product_component_count()
 
-        # Check that the most meaningful product components stills have at
-        # least a bug in this component. If the check is failing that could
-        # means that:
+        # Check number 1, check that the most meaningful product components
+        # stills have at least a bug in this component. If the check is
+        # failing that could means that:
         # - A component has been renamed / removed
         # - TODO: Complete this list
 
@@ -230,10 +230,52 @@ class ComponentModel(BugModel):
                 print(msg)
                 success = False
 
-        # Check that the conflated components still exists and have at least
-        # one bug
+        # Check number 2, check that conflated components in
+        # CONFLATED_COMPONENTS match at least one component which has more
+        # than 0 bugs
 
-        # Assert all conflated components are either in conflated_components_mapping or exist as components.
+        for conflated_component in self.CONFLATED_COMPONENTS:
+
+            matching_components = [
+                full_comp
+                for full_comp in bugs_number.keys()
+                if full_comp.startswith(conflated_component)
+            ]
+
+            if not matching_components:
+                msg = f"{conflated_component} doesn't match any component"
+                print(msg)
+                success = False
+                continue
+
+            matching_components_values = [
+                bugs_number[full_comp]
+                for full_comp in matching_components
+                if bugs_number[full_comp] > 0
+            ]
+
+            if not matching_components_values:
+                msg = f"{conflated_component} should match at least one component with more than 0 bugs"
+                print(msg)
+                success = False
+
+        # Check number 3, check that values of CONFLATED_COMPONENTS_MAPPING
+        # still exist as components and have more than 0 bugs
+
+        for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
+
+            if full_comp not in bugs_number:
+                msg = f"{full_comp} from conflated component mapping doesn't exists, failure"
+                print(msg)
+                success = False
+            elif bugs_number[full_comp] <= 0:
+                msg = f"{full_comp} from conflated component mapping have less than 1 bug, failure"
+                print(msg)
+                success = False
+
+        # Check number 4, conflated components in CONFLATED_COMPONENTS either
+        # exist as components or are in CONFLATED_COMPONENTS_MAPPING
+
         for conflated_component in self.CONFLATED_COMPONENTS:
 
             in_mapping = conflated_component in self.CONFLATED_COMPONENTS_MAPPING
@@ -244,9 +286,15 @@ class ComponentModel(BugModel):
                 if full_comp.startswith(conflated_component)
             ]
 
-            if not (in_mapping or matching_components):
+            if not (matching_components or in_mapping):
                 msg = f"It should be possible to maps {conflated_component}"
                 print(msg)
                 success = False
+                continue
+
+        # Check number 5, there is no component with many bugs that is not in
+        # meaningful_product_components
+
+        # TODO
 
         return success
