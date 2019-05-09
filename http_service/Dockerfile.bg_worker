@@ -1,0 +1,17 @@
+FROM mozilla/bugbug-base:latest
+
+COPY requirements.txt /code/bugbug_http_service/
+
+RUN pip install -r /code/bugbug_http_service/requirements.txt
+
+COPY . /code/bugbug_http_service/
+
+# Load the models
+WORKDIR /code/
+
+ARG CHECK_MODELS
+ENV CHECK_MODELS="${CHECK_MODELS}"
+
+RUN python /code/bugbug_http_service/check_models.py
+
+CMD ["rq", "worker", "high", "default", "low", "-u", "redis://redis:6379/0"]

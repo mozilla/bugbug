@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import logging
 import lzma
 import os
@@ -10,6 +11,7 @@ import shutil
 from urllib.request import urlretrieve
 
 import requests
+from redis import Redis
 
 from bugbug import bugzilla
 from bugbug.models.component import ComponentModel
@@ -71,20 +73,30 @@ def retrieve_model(name):
     return file_path
 
 
-def classify_bug(model_name, bug_ids, bugzilla_token):
+def classify_bug(model_name, bug_id, bugzilla_token, expiration=500):
     # This should be called in a process worker so it should be safe to set
     # the token here
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla._download(bug_ids)
+    bugs = bugzilla._download(bug_id)
     model = load_model(model_name)  # TODO: Cache the model in the process memory
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
     suggestions = model.clf._le.inverse_transform(indexes)
 
     data = {
-        "probs": probs.tolist(),
-        "indexes": indexes.tolist(),
-        "suggestions": suggestions.tolist(),
+        "probs": probs.tolist()[0],  # Redis-py doesn't like a list
+        "indexes": indexes.tolist()[0],  # Redis-py doesn't like a list
+        "suggestions": suggestions.tolist()[0],  # Redis-py doesn't like a list
     }
 
-    return data
+    encoded_data = json.dumps(data)
+
+    redis_key = f"result_{model_name}_{bug_id}"
+
+    # TODO: Put redis address in env
+    redis = Redis(host="localhost")
+
+    redis.set(redis_key, encoded_data)
+    redis.expire(redis_key, expiration)
+
+    return "OK"

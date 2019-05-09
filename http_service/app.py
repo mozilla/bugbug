@@ -6,8 +6,6 @@
 import json
 import logging
 import os
-from collections import UserDict, defaultdict
-from multiprocessing.pool import AsyncResult, Pool
 
 from flask import Flask, jsonify, request
 from redis import Redis
@@ -27,42 +25,23 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
 
-POOL = Pool(4)
-
-
-class Database(UserDict):
-    # We might want to customize the database with cache invalidation or plug
-    # it into a real database / caching service
-    pass
-
-
-MODELS_DB = defaultdict(Database)
-
-
 def schedule_bug_classification(model_name, bug_id):
     """ Schedule the classification of a single bug_id
     """
-    res = q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN)
 
-    res = {}
-
-    MODELS_DB[model_name][bug_id] = res
+    # TODO: Do not reschedule bug if already scheduled
+    # Likely need to set a custom job_id
+    q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN)
 
 
 def get_bug_classification(model_name, bug_id):
-    bug_result = MODELS_DB[model_name].get(bug_id)
+    redis_key = f"result_{model_name}_{bug_id}"
+    result = redis_conn.get(redis_key)
 
-    if isinstance(bug_result, AsyncResult):
-        if bug_result.ready():
-            real_result = bug_result.get()
+    if result:
+        return json.loads(result)
 
-            MODELS_DB[model_name][bug_id] = real_result
-            bug_result = real_result
-        else:
-            # Indicate that the result is not yet ready
-            bug_result = {"ready": False}
-
-    return bug_result or {"ready": False}
+    return None
 
 
 @application.route("/<model_name>/predict/<bug_id>")
@@ -77,10 +56,11 @@ def model_prediction(model_name, bug_id):
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
-    if bug_id not in MODELS_DB[model_name]:
-        schedule_bug_classification(model_name, bug_id)
-
     data = get_bug_classification(model_name, bug_id)
+
+    if not data:
+        schedule_bug_classification(model_name, bug_id)
+        data = {"ready": False}
 
     return jsonify(**data)
 
@@ -101,13 +81,12 @@ def batch_prediction(model_name):
 
     bugs = batch_body["bugs"]
 
-    for bug in bugs:
-        if bug not in MODELS_DB[model_name]:
-            schedule_bug_classification(model_name, bug)
-
     data = {}
 
     for bug in bugs:
         data[bug] = get_bug_classification(model_name, bug)
+        if not data[bug]:
+            schedule_bug_classification(model_name, bug)
+            data[bug] = {"ready": False}
 
     return jsonify(**data)

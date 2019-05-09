@@ -1,0 +1,50 @@
+version: '3.2'
+services:
+  bugbug-http-service:
+    build:
+      context: .
+    image: mozilla/bugbug-http-service
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host
+    depends_on:
+      - redis
+
+  bugbug-http-service-bg-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+    depends_on:
+      - redis
+
+  bugbug-http-service-rq-dasboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    command:
+      - rq-dashboard
+      - "-u"
+      - "redis://redis:6379/0"
+    ports:
+      - target: 9181
+        published: 9181
+        protocol: tcp
+        mode: host
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:4
+    ports:
+      - target: 6379
+        published: 6379
+        protocol: tcp
+        mode: host
