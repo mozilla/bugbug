@@ -231,13 +231,15 @@ class ComponentModel(BugModel):
         # Assert all conflated components are either in conflated_components_mapping or exist as components.
         for conflated_component in self.CONFLATED_COMPONENTS:
 
+            in_mapping = conflated_component in self.CONFLATED_COMPONENTS_MAPPING
+
             matching_components = [
                 full_comp
                 for full_comp in bugs_number.keys()
                 if full_comp.startswith(conflated_component)
             ]
 
-            if not matching_components:
+            if not (in_mapping or matching_components):
                 msg = f"It should be possible to maps {conflated_component}"
                 print(msg)
                 success = False
