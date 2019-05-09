@@ -190,7 +190,7 @@ class ComponentModel(BugModel):
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]
 
-    def get_meaningful_product_components(self, full_comp_tuples):
+    def get_meaningful_product_components(self, full_comp_tuples, threshold_ratio=100):
         """ From the given full_comp_tuples iterable of (product, component)
         tuples, returns the set of tuples which have at least 1% of the most
         common tuple
@@ -199,7 +199,9 @@ class ComponentModel(BugModel):
         product_component_counts = Counter(full_comp_tuples).most_common()
 
         max_count = product_component_counts[0][1]
-        threshold = max_count / 100
+        print("Max count", product_component_counts[0])
+        threshold = max_count / threshold_ratio
+        print("Threshold", threshold)
 
         return set(
             product_component
@@ -311,14 +313,17 @@ class ComponentModel(BugModel):
                     continue
 
                 if count > 0:
+                    print("Yield", (product, component), count)
                     for i in range(count):
                         yield (product, component)
 
         meaningful_product_components = self.get_meaningful_product_components(
-            generate_meaningfull_tuples()
+            generate_meaningfull_tuples(), threshold_ratio=20
         )
 
-        if not meaningful_product_components == self.meaningful_product_components:
+        if not meaningful_product_components.issubset(
+            self.meaningful_product_components
+        ):
             msg = f"Meaningful product components mismatch"
             print(msg)
 
