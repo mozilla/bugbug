@@ -30,7 +30,7 @@ ATTACHMENT_INCLUDE_FIELDS = [
 
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
 
-PRODUCT_COMPONENT_CSV_REPORT = "https://bugzilla.mozilla.org/report.cgi?f1=creation_ts&o1=greaterthan&resolution=---&x_axis_field=product&y_axis_field=component&width=600&height=350&action=wrap&ctype=csv&format=table"
+PRODUCT_COMPONENT_CSV_REPORT = "https://bugzilla.mozilla.org/report.cgi?f1=creation_ts&o1=greaterthan&x_axis_field=product&y_axis_field=component&action=wrap&ctype=csv&format=table"
 
 
 def get_bug_fields():
