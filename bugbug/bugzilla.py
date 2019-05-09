@@ -6,8 +6,11 @@
 import csv
 import json
 import os
+from datetime import datetime
+from urllib.parse import urlencode, urlparse, urlunparse
 
 import requests
+from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
@@ -30,7 +33,7 @@ ATTACHMENT_INCLUDE_FIELDS = [
 
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
 
-PRODUCT_COMPONENT_CSV_REPORT = "https://bugzilla.mozilla.org/report.cgi?f1=creation_ts&o1=greaterthan&x_axis_field=product&y_axis_field=component&action=wrap&ctype=csv&format=table"
+PRODUCT_COMPONENT_CSV_REPORT_BASE_URL = "https://bugzilla.mozilla.org/report.cgi"
 
 
 def get_bug_fields():
@@ -230,15 +233,38 @@ def count_bugs(bug_query_params):
     return count
 
 
+def get_product_component_csv_report():
+    six_month_ago = datetime.utcnow() - relativedelta(months=6)
+
+    # Base params
+    url_params = {
+        "f1": "creation_ts",
+        "o1": "greaterthan",
+        "x_axis_field": "product",
+        "y_axis_field": "component",
+        "action": "wrap",
+        "ctype": "csv",
+        "format": "table",
+        "v1": six_month_ago.strftime("%Y-%m-%d"),
+    }
+
+    parsed_url = urlparse(PRODUCT_COMPONENT_CSV_REPORT_BASE_URL)
+    parsed_url = parsed_url._replace(query=urlencode(url_params))
+
+    return urlunparse(parsed_url)
+
+
 def get_product_component_count():
     """ Returns a dictionary where keys are full components (in the form of
     `{product}::{component}`) and the value if the number of bugs for the
     given full component. Full component with 0 bugs are returned.
     """
-    csv_file = requests.get(PRODUCT_COMPONENT_CSV_REPORT)
+    url = get_product_component_csv_report()
+    csv_file = requests.get(url)
     csv_file.raise_for_status()
+    content = csv_file.text
 
-    csv_content = csv_file.text.splitlines()
+    csv_content = content.splitlines()
     component_key = "Component / Product"
 
     bugs_number = {}
