@@ -225,6 +225,10 @@ tasks:
         then:
           taskId: {$eval: as_slugid("update_hook")}
           dependencies:
+            - {$eval: as_slugid("lint_task")}
+            - {$eval: as_slugid("version_check_task")}
+            - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("docker_push")}
           scopes:
             - hooks:modify-hook:project-relman/bugbug
