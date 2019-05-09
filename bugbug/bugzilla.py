@@ -231,6 +231,10 @@ def count_bugs(bug_query_params):
 
 
 def get_product_component_count():
+    """ Returns a dictionary where keys are full components (in the form of
+    `{product}::{component}`) and the value if the number of bugs for the
+    given full component. Full component with 0 bugs are not returned.
+    """
     csv_file = requests.get(PRODUCT_COMPONENT_CSV_REPORT)
     csv_file.raise_for_status()
 
