@@ -4,12 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import dateutil.parser
+from dateutil.relativedelta import relativedelta
 
 from bugbug import bugzilla
 
 
 def bool_str(val):
-    assert val in ["0", "1"]
+    assert val in ["", "0", "1"], f"Unexpected boolean value: '{val}'"
 
     return True if val == "1" else False
 
@@ -28,6 +29,7 @@ def keyword_mapping(keyword):
         "ateam-marionette-intermittent": "pi-marionette-intermittent",
         "csec-dos": "csectype-dos",
         "csec-oom": "csectype-oom",
+        "bug-quality": "bmo-bug-quality",
     }
 
     return mapping[keyword] if keyword in mapping else keyword
@@ -71,6 +73,8 @@ def product(product):
         "Firefox OS": "Firefox OS Graveyard",
         "Add-on SDK": "Add-on SDK Graveyard",
         "Connected Devices": "Connected Devices Graveyard",
+        "Seamonkey": "Mozilla Application Suite",
+        "SeaMonkey": "Mozilla Application Suite",
     }
 
     return mapping[product] if product in mapping else product
@@ -87,6 +91,13 @@ def target_milestone(target_milestone):
     )
 
 
+def null_str(val):
+    if val == "":
+        return None
+
+    return val
+
+
 FIELD_TYPES = {
     "blocks": int,
     "depends_on": int,
@@ -101,6 +112,7 @@ FIELD_TYPES = {
     "op_sys": op_sys,
     "product": product,
     "target_milestone": target_milestone,
+    "cf_due_date": null_str,
 }
 
 
@@ -144,6 +156,10 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
             ]
         )
         or (field in ["cf_has_str", "cf_has_regression_range"] and bug_id == 1_440_338)
+        or (field == "cf_has_regression_range" and bug_id == 1542185)
+        or (
+            field == "cf_has_str" and bug_id == 1462571
+        )  # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1550104 is fixed
     )
 
 
@@ -273,6 +289,15 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
         )
         or (field == "cf_tracking_firefox60" and bug_id in [1_375_913, 1_439_875])
         or (field == "priority" and bug_id == 1_337_747)
+        or (
+            field == "type" and bug_id == 1540796
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550120 is fixed.
+        or (
+            field == "cf_last_resolved" and bug_id == 1540998
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550128 is fixed.
+        or (
+            field == "type" and bug_id == 1257155
+        )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550129 is fixed.
     )
 
 
@@ -382,6 +407,10 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # Skip this for now.
                             continue
 
+                        # These flags have been removed.
+                        if to_remove in ["platform-rel?", "blocking0.3-"]:
+                            continue
+
                         if any(
                             to_remove.startswith(s)
                             for s in [
@@ -390,6 +419,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 "feedback",
                                 "ui-review",
                                 "sec-approval",
+                                "sec-review",
                             ]
                         ):
                             # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
@@ -510,7 +540,7 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # TODO: Users can change their email, try with all emails from a mapping file.
                             continue
 
-                        if to_remove in [
+                        if field == "keywords" and to_remove in [
                             "checkin-needed",
                             "#relman/triage/defer-to-group",
                             "conduit-needs-discussion",
@@ -518,6 +548,18 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                             # TODO: https://bugzilla.mozilla.org/show_bug.cgi?id=1513981.
                             if to_remove in bug[field]:
                                 bug[field].remove(to_remove)
+                            continue
+
+                        # These keywords don't exist anymore.
+                        if field == "keywords" and to_remove in [
+                            "patch",
+                            "nsbeta1",
+                            "mozilla1.1",
+                            "mozilla1.0",
+                            "4xp",
+                            "sec-review-complete",
+                        ]:
+                            assert to_remove not in bug[field]
                             continue
 
                         assert (
@@ -547,9 +589,11 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                                 field, bug["id"], new_value
                             )
                         ):
-                            print(
-                                f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
-                            )
+                            # This case is too common, let's not print anything.
+                            if not (field == "severity" and new_value == "enhancement"):
+                                print(
+                                    f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
+                                )
                         else:
                             assert (
                                 False
@@ -572,15 +616,19 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     bug["comments"] = [
         c
         for c in bug["comments"]
-        if dateutil.parser.parse(c["creation_time"]) <= rollback_date
+        if dateutil.parser.parse(c["creation_time"]) - relativedelta(seconds=3)
+        <= rollback_date
     ]
     bug["attachments"] = [
         a
         for a in bug["attachments"]
-        if dateutil.parser.parse(a["creation_time"]) <= rollback_date
+        if dateutil.parser.parse(a["creation_time"]) - relativedelta(seconds=3)
+        <= rollback_date
     ]
 
-    assert len(bug["comments"]) >= 1
+    assert (
+        len(bug["comments"]) >= 1
+    ), f"There must be at least one comment in bug {bug['id']}"
 
     return bug
 

@@ -192,9 +192,12 @@ tasks:
         then:
           dependencies:
             - {$eval: as_slugid("docker_build")}
+            - {$eval: as_slugid("lint_task")}
+            - {$eval: as_slugid("version_check_task")}
+            - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("packaging_test_task")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
-            - queue:route:project.relman.bugbug.deploy_ending.*
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
@@ -213,8 +216,6 @@ tasks:
               - push-artifact
               - --exclude-filter
               - "*http-service*"
-          routes:
-            - project.relman.bugbug.deploy_ending
           metadata:
             name: bugbug docker push
             description: bugbug docker push
@@ -229,6 +230,7 @@ tasks:
           scopes:
             - hooks:modify-hook:project-relman/bugbug
             - assume:hook-id:project-relman/bugbug
+            - queue:route:project.relman.bugbug.deploy_ending.*
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
           provisionerId: aws-provisioner-v1
@@ -248,6 +250,8 @@ tasks:
               - infra/taskcluster-hook-pipeline-start.json
               - project-relman
               - bugbug
+          routes:
+            - project.relman.bugbug.deploy_ending
           metadata:
             name: bugbug update hooks
             description: bugbug update hooks
