@@ -311,7 +311,6 @@ class ComponentModel(BugModel):
                     continue
 
                 if count > 0:
-                    print("YIELD", product, component, count)
                     for i in range(count):
                         yield (product, component)
 
@@ -321,6 +320,7 @@ class ComponentModel(BugModel):
 
         if not meaningful_product_components == self.meaningful_product_components:
             msg = f"Meaningful product components mismatch"
+            print(msg)
 
             new_meaningful_product_components = meaningful_product_components.difference(
                 self.meaningful_product_components
