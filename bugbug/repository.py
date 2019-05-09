@@ -46,9 +46,12 @@ Commit = namedtuple(
     ],
 )
 
+EXPERIENCE_TIMESPAN = 90
+EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+
 experiences_by_commit = {
     "total": defaultdict(lambda: defaultdict(int)),
-    "90_days": defaultdict(lambda: defaultdict(int)),
+    EXPERIENCE_TIMESPAN_TEXT: defaultdict(lambda: defaultdict(int)),
 }
 
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
@@ -139,30 +142,30 @@ def _transform(commit):
         "types": set(),
         "components": list(),
         "author_experience": experiences_by_commit["total"]["author"][commit.node],
-        "author_experience_90_days": experiences_by_commit["90_days"]["author"][
-            commit.node
-        ],
+        f"author_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["author"][commit.node],
         "reviewer_experience": experiences_by_commit["total"]["reviewer"][commit.node],
-        "reviewer_experience_90_days": experiences_by_commit["90_days"]["reviewer"][
-            commit.node
-        ],
+        f"reviewer_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["reviewer"][commit.node],
         "author_email": commit.author_email.decode("utf-8"),
         "components_touched_prev": experiences_by_commit["total"]["component"][
             commit.node
         ],
-        "components_touched_prev_90_days": experiences_by_commit["90_days"][
-            "component"
-        ][commit.node],
+        f"components_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["component"][commit.node],
         "files_touched_prev": experiences_by_commit["total"]["file"][commit.node],
-        "files_touched_prev_90_days": experiences_by_commit["90_days"]["file"][
-            commit.node
-        ],
+        f"files_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["file"][commit.node],
         "directories_touched_prev": experiences_by_commit["total"]["directory"][
             commit.node
         ],
-        "directories_touched_prev_90_days": experiences_by_commit["90_days"][
-            "directory"
-        ][commit.node],
+        f"directories_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            EXPERIENCE_TIMESPAN_TEXT
+        ]["directory"][commit.node],
     }
 
     patch = HG.export(revs=[commit.node], git=True)
@@ -367,9 +370,9 @@ def download_commits(repo_dir, date_from):
             exp = experiences[day][experience_type][item]
 
             experiences_by_commit["total"][experience_type][commit.node] += exp
-            experiences_by_commit["90_days"][experience_type][commit.node] += (
-                exp - experiences[day - 90][experience_type][item]
-            )
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                commit.node
+            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
 
             # We don't want to consider backed out commits when calculating experiences.
             if not commit.backedoutby:
@@ -377,12 +380,14 @@ def download_commits(repo_dir, date_from):
 
     def update_complex_experiences(experience_type, day, items):
         all_commits = set()
-        before_90_days_commits = set()
+        before_timespan_commits = set()
         for item in items:
             all_commits.update(complex_experiences[day][experience_type][item])
 
-            before_90_days_commits.update(
-                complex_experiences[day - 90][experience_type][item]
+            before_timespan_commits.update(
+                complex_experiences[day - EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                    item
+                ]
             )
 
             # We don't want to consider backed out commits when calculating experiences.
@@ -390,9 +395,9 @@ def download_commits(repo_dir, date_from):
                 complex_experiences[day][experience_type][item].add(commit.node)
 
         experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
-        experiences_by_commit["90_days"][experience_type][commit.node] = len(
-            all_commits - before_90_days_commits
-        )
+        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+            commit.node
+        ] = len(all_commits - before_timespan_commits)
 
     for commit in tqdm(commits):
         days = (commit.pushdate - first_pushdate).days
