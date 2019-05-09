@@ -385,9 +385,7 @@ def download_commits(repo_dir, date_from):
             all_commits.update(complex_experiences[day][experience_type][item])
 
             before_timespan_commits.update(
-                complex_experiences[day - EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                    item
-                ]
+                complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
             )
 
             # We don't want to consider backed out commits when calculating experiences.
