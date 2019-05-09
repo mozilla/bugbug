@@ -217,9 +217,10 @@ class ComponentModel(BugModel):
         bugs_number = get_product_component_count()
 
         # Check number 1, check that the most meaningful product components
-        # stills have at least a bug in this component. If the check is
-        # failing that could means that:
+        # still have at least a bug in this component. If the check is failing
+        # that could mean that:
         # - A component has been renamed / removed
+        # - A component is not used anymore by developers
         # - TODO: Complete this list
 
         for product, component in self.meaningful_product_components:

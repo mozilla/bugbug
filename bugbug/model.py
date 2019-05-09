@@ -211,7 +211,7 @@ class Model:
         return classes
 
     def check(self):
-        """ Subclasses can implements their own check, the base model doesn't
+        """ Subclasses can implement their own check, the base model doesn't
         check anything at the moment
         """
         return True
