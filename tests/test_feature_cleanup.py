@@ -26,7 +26,7 @@ def test_url():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.url(orig_text) == cleaned_text
+        assert feature_cleanup.url()(orig_text) == cleaned_text
 
 
 def test_fileref():
@@ -37,7 +37,7 @@ def test_fileref():
         )
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.fileref(orig_text) == cleaned_text
+        assert feature_cleanup.fileref()(orig_text) == cleaned_text
 
 
 def test_responses():
@@ -57,7 +57,7 @@ def test_responses():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.responses(orig_text) == cleaned_text
+        assert feature_cleanup.responses()(orig_text) == cleaned_text
 
 
 def test_hex():
@@ -72,7 +72,7 @@ def test_hex():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.hex(orig_text) == cleaned_text
+        assert feature_cleanup.hex()(orig_text) == cleaned_text
 
 
 def test_dll():
@@ -100,7 +100,7 @@ def test_dll():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.dll(orig_text) == cleaned_text
+        assert feature_cleanup.dll()(orig_text) == cleaned_text
 
 
 def test_synonyms():
@@ -118,7 +118,7 @@ def test_synonyms():
         ("found via address sanitizer or asan", "found via asan or asan"),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.synonyms(orig_text) == cleaned_text
+        assert feature_cleanup.synonyms()(orig_text) == cleaned_text
 
 
 def test_crash():
@@ -133,4 +133,4 @@ def test_crash():
         ),
     ]
     for orig_text, cleaned_text in tests:
-        assert feature_cleanup.crash(orig_text) == cleaned_text
+        assert feature_cleanup.crash()(orig_text) == cleaned_text

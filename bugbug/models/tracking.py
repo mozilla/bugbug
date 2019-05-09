@@ -47,12 +47,12 @@ class TrackingModel(BugModel):
         ]
 
         cleanup_functions = [
-            feature_cleanup.url,
-            feature_cleanup.fileref,
-            feature_cleanup.hex,
-            feature_cleanup.dll,
-            feature_cleanup.synonyms,
-            feature_cleanup.crash,
+            feature_cleanup.url(),
+            feature_cleanup.fileref(),
+            feature_cleanup.hex(),
+            feature_cleanup.dll(),
+            feature_cleanup.synonyms(),
+            feature_cleanup.crash(),
         ]
 
         self.extraction_pipeline = Pipeline(
