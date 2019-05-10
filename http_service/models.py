@@ -73,40 +73,51 @@ def retrieve_model(name):
     return file_path
 
 
-def classify_bug(model_name, bug_id, bugzilla_token, expiration=500):
+def classify_bug(model_name, bug_ids, bugzilla_token, expiration=500):
     # This should be called in a process worker so it should be safe to set
     # the token here
+    bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla._download(bug_id)
-    redis_key = f"result_{model_name}_{bug_id}"
+    bugs = bugzilla._download(bug_ids)
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
     redis = Redis.from_url(redis_url)
 
-    if not bugs:
-        print("Couldn't get the bug back!")
+    missing_bugs = bug_ids_set.difference(bugs.keys())
+
+    for bug_id in missing_bugs:
+        redis_key = f"result_{model_name}_{bug_id}"
+
         # TODO: Find a better error format
         encoded_data = json.dumps({"available": False})
 
         redis.set(redis_key, encoded_data)
         redis.expire(redis_key, expiration)
 
-        return "OK"
+    if not bugs:
+        return "NOK"
 
     model = load_model(model_name)  # TODO: Cache the model in the process memory
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
     suggestions = model.clf._le.inverse_transform(indexes)
 
-    data = {
-        "probs": probs.tolist()[0],  # Redis-py doesn't like a list
-        "indexes": indexes.tolist()[0],  # Redis-py doesn't like a list
-        "suggestions": suggestions.tolist()[0],  # Redis-py doesn't like a list
-    }
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
 
-    encoded_data = json.dumps(data)
+    for i, bug_id in enumerate(bugs.keys()):
+        data = {
+            "probs": probs_list[i],
+            "indexes": indexes_list[i],
+            "suggestions": suggestions_list[i],
+        }
 
-    redis.set(redis_key, encoded_data)
-    redis.expire(redis_key, expiration)
+        encoded_data = json.dumps(data)
+
+        redis_key = f"result_{model_name}_{bug_id}"
+
+        redis.set(redis_key, encoded_data)
+        redis.expire(redis_key, expiration)
 
     return "OK"

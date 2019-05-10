@@ -6,12 +6,11 @@
 import json
 import logging
 import os
+import uuid
 
 from flask import Flask, jsonify, request
 from redis import Redis
 from rq import Queue
-from rq.exceptions import NoSuchJobError
-from rq.job import Job
 
 from .models import classify_bug
 
@@ -29,29 +28,21 @@ LOGGER = logging.getLogger()
 
 
 def get_job_id(model_name, bug_id):
-    return f"rq_job_{model_name}_{bug_id}"
+    return uuid.uuid4().hex
 
 
-def schedule_bug_classification(model_name, bug_id):
-    """ Schedule the classification of a single bug_id
+def schedule_bug_classification(model_name, bug_ids):
+    """ Schedule the classification of a bug_id list
     """
 
-    job_id = get_job_id(model_name, bug_id)
+    job_id = get_job_id(model_name, bug_ids)
 
-    try:
-        job = Job.fetch(job_id, connection=redis_conn)
+    print("Scheduling", bug_ids)
+    q.enqueue(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN, job_id=job_id)
 
-        status = job.get_status()
-        print("Status", job.get_status())
-        if status in ("started", "running", "queued"):
-            print("Skipping rescheduling")
-            return
-    except NoSuchJobError:
-        print("No sucj job")
-        pass
 
-    print("Scheduling", bug_id)
-    q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN, job_id=job_id)
+def is_running(model_name, bug_id):
+    return False
 
 
 def get_bug_classification(model_name, bug_id):
@@ -79,7 +70,7 @@ def model_prediction(model_name, bug_id):
     data = get_bug_classification(model_name, bug_id)
 
     if not data:
-        schedule_bug_classification(model_name, bug_id)
+        schedule_bug_classification(model_name, [bug_id])
         data = {"ready": False}
 
     return jsonify(**data)
@@ -102,11 +93,18 @@ def batch_prediction(model_name):
     bugs = batch_body["bugs"]
 
     data = {}
+    missing_bugs = []
 
     for bug in bugs:
         data[bug] = get_bug_classification(model_name, bug)
         if not data[bug]:
-            schedule_bug_classification(model_name, bug)
+
+            if not is_running(model_name, bug):
+                missing_bugs.append(bug)
             data[bug] = {"ready": False}
+
+    if missing_bugs:
+        print("Scheduling call for missing bugs")
+        schedule_bug_classification(model_name, missing_bugs)
 
     return jsonify(**data)
