@@ -223,19 +223,20 @@ class ComponentModel(BugModel):
         # that could mean that:
         # - A component has been renamed / removed
         # - A component is not used anymore by developers
-        # - TODO: Complete this list
 
         for product, component in self.meaningful_product_components:
             full_comp = f"{product}::{component}"
 
             if full_comp not in bugs_number.keys():
-                msg = f"Component {component!r} of product {product!r} doesn't exists, failure"
-                print(msg)
+                print(
+                    f"Component {component!r} of product {product!r} doesn't exists, failure"
+                )
                 success = False
 
             elif bugs_number[full_comp] <= 0:
-                msg = f"Component {component!r} of product {product!r} have 0 bugs or less in it, failure"
-                print(msg)
+                print(
+                    f"Component {component!r} of product {product!r} have 0 bugs or less in it, failure"
+                )
                 success = False
 
         # Check number 2, check that conflated components in
@@ -251,8 +252,7 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components:
-                msg = f"{conflated_component} doesn't match any component"
-                print(msg)
+                print(f"{conflated_component} doesn't match any component")
                 success = False
                 continue
 
@@ -263,8 +263,9 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components_values:
-                msg = f"{conflated_component} should match at least one component with more than 0 bugs"
-                print(msg)
+                print(
+                    f"{conflated_component} should match at least one component with more than 0 bugs"
+                )
                 success = False
 
         # Check number 3, check that values of CONFLATED_COMPONENTS_MAPPING
@@ -273,12 +274,14 @@ class ComponentModel(BugModel):
         for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
 
             if full_comp not in bugs_number:
-                msg = f"{full_comp} from conflated component mapping doesn't exists, failure"
-                print(msg)
+                print(
+                    f"{full_comp} from conflated component mapping doesn't exists, failure"
+                )
                 success = False
             elif bugs_number[full_comp] <= 0:
-                msg = f"{full_comp} from conflated component mapping have less than 1 bug, failure"
-                print(msg)
+                print(
+                    f"{full_comp} from conflated component mapping have less than 1 bug, failure"
+                )
                 success = False
 
         # Check number 4, conflated components in CONFLATED_COMPONENTS either
@@ -295,8 +298,7 @@ class ComponentModel(BugModel):
             ]
 
             if not (matching_components or in_mapping):
-                msg = f"It should be possible to maps {conflated_component}"
-                print(msg)
+                print(f"It should be possible to map {conflated_component}")
                 success = False
                 continue
 
@@ -305,7 +307,7 @@ class ComponentModel(BugModel):
 
         # Recompute the meaningful components
 
-        def generate_meaningfull_tuples():
+        def generate_meaningful_tuples():
             for full_comp, count in bugs_number.items():
                 product, component = full_comp.split("::", 1)
 
@@ -313,25 +315,24 @@ class ComponentModel(BugModel):
                     continue
 
                 if count > 0:
-                    print("Yield", (product, component), count)
                     for i in range(count):
                         yield (product, component)
 
         meaningful_product_components = self.get_meaningful_product_components(
-            generate_meaningfull_tuples(), threshold_ratio=10
+            generate_meaningful_tuples(), threshold_ratio=10
         )
 
         if not meaningful_product_components.issubset(
             self.meaningful_product_components
         ):
-            msg = f"Meaningful product components mismatch"
-            print(msg)
+            print(msg=f"Meaningful product components mismatch")
 
             new_meaningful_product_components = meaningful_product_components.difference(
                 self.meaningful_product_components
             )
-            msg = f"New meaningful product components {new_meaningful_product_components!r}"
-            print(msg)
+            print(
+                f"New meaningful product components {new_meaningful_product_components!r}"
+            )
 
             success = False
 
