@@ -10,6 +10,8 @@ import os
 from flask import Flask, jsonify, request
 from redis import Redis
 from rq import Queue
+from rq.exceptions import NoSuchJobError
+from rq.job import Job
 
 from .models import classify_bug
 
@@ -25,13 +27,30 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
 
+def get_job_id(model_name, bug_id):
+    return f"rq_job_{model_name}_{bug_id}"
+
+
 def schedule_bug_classification(model_name, bug_id):
     """ Schedule the classification of a single bug_id
     """
 
-    # TODO: Do not reschedule bug if already scheduled
-    # Likely need to set a custom job_id
-    q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN)
+    job_id = get_job_id(model_name, bug_id)
+
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+
+        status = job.get_status()
+        print("Status", job.get_status())
+        if status in ("started", "running", "queued"):
+            print("Skipping rescheduling")
+            return
+    except NoSuchJobError:
+        print("No sucj job")
+        pass
+
+    print("Scheduling", bug_id)
+    q.enqueue(classify_bug, model_name, bug_id, BUGZILLA_TOKEN, job_id=job_id)
 
 
 def get_bug_classification(model_name, bug_id):
