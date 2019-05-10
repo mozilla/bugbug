@@ -2,7 +2,7 @@ version: 1
 tasks:
   - ID: commit-retrieval
     created: {$fromNow: ''}
-    deadline: {$fromNow: '12 hours'}
+    deadline: {$fromNow: '72 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     payload:
@@ -29,7 +29,7 @@ tasks:
 
   - ID: bugs-retrieval
     created: {$fromNow: ''}
-    deadline: {$fromNow: '24 hours'}
+    deadline: {$fromNow: '72 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     payload:
@@ -60,7 +60,7 @@ tasks:
 
   - ID: rollback-test-task
     created: {$fromNow: ''}
-    deadline: {$fromNow: '25 hours'}
+    deadline: {$fromNow: '73 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     dependencies:
@@ -84,7 +84,7 @@ tasks:
 
   - ID: train-component
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '144 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
@@ -111,7 +111,7 @@ tasks:
 
   - ID: train-defectenhancementtask
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '144 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
@@ -138,7 +138,7 @@ tasks:
 
   - ID: train-regression
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '144 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
@@ -165,7 +165,7 @@ tasks:
 
   - ID: train-tracking
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '144 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
@@ -192,7 +192,7 @@ tasks:
 
   - ID: docker-build
     created: {$fromNow: ''}
-    deadline: {$fromNow: '49 hours'}
+    deadline: {$fromNow: '145 hours'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     dependencies:
@@ -237,7 +237,7 @@ tasks:
     scopes:
       - secrets:get:project/relman/bugbug/deploy
     created: {$fromNow: ''}
-    deadline: {$fromNow: '50 hour'}
+    deadline: {$fromNow: '146 hour'}
     provisionerId: aws-provisioner-v1
     workerType: github-worker
     payload:
