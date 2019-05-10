@@ -11,6 +11,8 @@ import uuid
 from flask import Flask, jsonify, request
 from redis import Redis
 from rq import Queue
+from rq.exceptions import NoSuchJobError
+from rq.job import Job
 
 from .models import classify_bug
 
@@ -31,6 +33,10 @@ def get_job_id(model_name, bug_id):
     return uuid.uuid4().hex
 
 
+def get_mapping_key(model_name, bug_id):
+    return f"bugbug:mapping_{model_name}_{bug_id}"
+
+
 def schedule_bug_classification(model_name, bug_ids):
     """ Schedule the classification of a bug_id list
     """
@@ -38,10 +44,34 @@ def schedule_bug_classification(model_name, bug_ids):
     job_id = get_job_id(model_name, bug_ids)
 
     print("Scheduling", bug_ids)
+
+    # Set the mapping before queuing to avoid some race conditions
+    job_id_mapping = {get_mapping_key(model_name, bug_id): job_id for bug_id in bug_ids}
+    redis_conn.mset(job_id_mapping)
+
     q.enqueue(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN, job_id=job_id)
 
 
 def is_running(model_name, bug_id):
+    # Check if there is a job
+    mapping_key = get_mapping_key(model_name, bug_id)
+
+    job_id = redis_conn.get(mapping_key)
+
+    if not job_id:
+        return False
+
+    try:
+        job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
+    except NoSuchJobError:
+        # The job might have expired from redis
+        return False
+
+    job_status = job.get_status()
+    if job_status in ("running", "started", "queued"):
+        print("Bug already running", model_name, bug_id)
+        return True
+
     return False
 
 
@@ -96,15 +126,17 @@ def batch_prediction(model_name):
     missing_bugs = []
 
     for bug in bugs:
-        data[bug] = get_bug_classification(model_name, bug)
-        if not data[bug]:
-
+        data[str(bug)] = get_bug_classification(model_name, bug)
+        if not data[str(bug)]:
             if not is_running(model_name, bug):
                 missing_bugs.append(bug)
-            data[bug] = {"ready": False}
+            data[str(bug)] = {"ready": False}
 
     if missing_bugs:
         print("Scheduling call for missing bugs")
+        # TODO: We should probably schedule chunks of bugs to avoid jobs that
+        # are running for too long and reduce pressure on bugzilla, it mights
+        # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
     return jsonify(**data)

@@ -97,7 +97,12 @@ def classify_bug(model_name, bug_ids, bugzilla_token, expiration=500):
     if not bugs:
         return "NOK"
 
-    model = load_model(model_name)  # TODO: Cache the model in the process memory
+    # TODO: Cache the model in the process memory, it's quite hard as the RQ
+    # worker is forking before starting
+    model = load_model(model_name)
+
+    # TODO: Classify could choke on a single bug which could make the whole
+    # job to fails. What should we do here?
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
     suggestions = model.clf._le.inverse_transform(indexes)
