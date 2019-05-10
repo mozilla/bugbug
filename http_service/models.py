@@ -80,8 +80,8 @@ def classify_bug(model_name, bug_id, bugzilla_token, expiration=500):
     bugs = bugzilla._download(bug_id)
     redis_key = f"result_{model_name}_{bug_id}"
 
-    # TODO: Put redis address in env
-    redis = Redis(host="localhost")
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
+    redis = Redis.from_url(redis_url)
 
     if not bugs:
         print("Couldn't get the bug back!")
