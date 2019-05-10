@@ -329,7 +329,7 @@ def calculate_experiences(commits):
             if not commit.backedoutby:
                 experiences[day][experience_type][item] += 1
 
-    def update_complex_experiences(experience_type, day, items):
+    def update_complex_experiences(experience_type, day, items, self_node):
         all_commits = set()
         before_timespan_commits = set()
         for item in items:
@@ -342,6 +342,9 @@ def calculate_experiences(commits):
             # We don't want to consider backed out commits when calculating experiences.
             if not commit.backedoutby:
                 complex_experiences[day][experience_type][item].add(commit.node)
+
+        # If a commit changes two files in the same component, we shouldn't increase the exp by two.
+        all_commits.discard(self_node)
 
         experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
         experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
@@ -389,9 +392,11 @@ def calculate_experiences(commits):
                             copied_directory
                         ] = complex_experiences[prev_day]["directory"][orig_directory]
 
-        update_complex_experiences("file", days, commit.files)
+        update_complex_experiences("file", days, commit.files, commit.node)
 
-        update_complex_experiences("directory", days, get_directories(commit.files))
+        update_complex_experiences(
+            "directory", days, get_directories(commit.files), commit.node
+        )
 
         components = list(
             set(
@@ -401,7 +406,7 @@ def calculate_experiences(commits):
             )
         )
 
-        update_complex_experiences("component", days, components)
+        update_complex_experiences("component", days, components, commit.node)
 
         # TODO: We can delete anything older than 90 days at this point.
 
