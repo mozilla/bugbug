@@ -351,14 +351,19 @@ def calculate_experiences(commits):
             commit.node
         ] = len(all_commits - before_timespan_commits)
 
+    prev_days = 0
+
     for commit in tqdm(commits):
         days = (commit.pushdate - first_pushdate).days
         assert days >= 0
 
-        if days not in experiences:
+        if days not in experiences and days != prev_days:
             assert days not in complex_experiences
-            experiences[days] = copy.deepcopy(experiences[days - 1])
-            complex_experiences[days] = copy.deepcopy(complex_experiences[days - 1])
+            for day in range(prev_days + 1, days + 1):
+                experiences[day] = copy.deepcopy(experiences[day - 1])
+                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
+
+        prev_days = days
 
         update_experiences("author", days, [commit.author])
         update_experiences("reviewer", days, commit.reviewers)
