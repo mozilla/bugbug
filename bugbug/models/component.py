@@ -199,9 +199,7 @@ class ComponentModel(BugModel):
         product_component_counts = Counter(full_comp_tuples).most_common()
 
         max_count = product_component_counts[0][1]
-        print("Max count", product_component_counts[0])
         threshold = max_count / threshold_ratio
-        print("Threshold", threshold)
 
         return set(
             product_component
@@ -325,7 +323,7 @@ class ComponentModel(BugModel):
         if not meaningful_product_components.issubset(
             self.meaningful_product_components
         ):
-            print(msg=f"Meaningful product components mismatch")
+            print(f"Meaningful product components mismatch")
 
             new_meaningful_product_components = meaningful_product_components.difference(
                 self.meaningful_product_components
