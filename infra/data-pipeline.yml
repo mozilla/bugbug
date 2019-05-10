@@ -13,7 +13,10 @@ tasks:
         public/commits.json.xz:
           path: /data/commits.json.xz
           type: file
-
+      cache:
+        bugbug-mercurial-repository: /cache
+    scopes:
+      - "docker-worker:cache:bugbug-mercurial-repository"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
@@ -45,7 +48,6 @@ tasks:
           true
     scopes:
       - "secrets:get:project/relman/bugbug/production"
-
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
@@ -117,7 +119,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-defect
+      image: mozilla/bugbug-train-defectenhancementtask
 
       artifacts:
         public/defectenhancementtaskmodel.xz:
@@ -197,7 +199,7 @@ tasks:
       - rollback-test-task
       - train-tracking
       - train-regression
-      - train-defect
+      - train-defectenhancementtask
       - train-component
     payload:
       capabilities:

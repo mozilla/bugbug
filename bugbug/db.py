@@ -17,11 +17,9 @@ import zstandard
 
 DATABASES = {}
 
-VER_PATH = "data/DB_VERSION.json"
 
-
-def register(path, url, version):
-    DATABASES[path] = {"url": url, "version": version}
+def register(path, url):
+    DATABASES[path] = {"url": url}
 
     # Create DB parent directory.
     parent_dir = os.path.dirname(path)
@@ -32,20 +30,18 @@ def register(path, url, version):
 # Download and extract databases.
 def download():
     for path, info in DATABASES.items():
-        if os.path.exists(path) and not is_outdated(path):
+        if os.path.exists(path):
             continue
 
         xz_path = f"{path}.xz"
 
         # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path) or is_outdated(path):
+        if not os.path.exists(xz_path):
             urlretrieve(DATABASES[path]["url"], xz_path)
 
         with open(path, "wb") as output_f:
             with lzma.open(xz_path) as input_f:
                 shutil.copyfileobj(input_f, output_f)
-
-        update_ver_file(path)
 
 
 class Store:
@@ -157,25 +153,3 @@ def delete(path, match):
 
     os.unlink(path)
     os.rename(new_path, path)
-
-
-def is_outdated(path):
-    if not os.path.exists(VER_PATH):
-        return True
-
-    with open(VER_PATH) as db:
-        ver = json.load(db)
-    return DATABASES[path]["version"] != ver[path] if path in ver else True
-
-
-def update_ver_file(db_path):
-    if os.path.exists(VER_PATH):
-        with open(VER_PATH) as db:
-            ver_dict = json.load(db)
-    else:
-        ver_dict = {}
-
-    ver_dict[db_path] = DATABASES[db_path]["version"]
-
-    with open(VER_PATH, "w") as db:
-        json.dump(ver_dict, db)
