@@ -5,6 +5,7 @@
 
 import os
 import shutil
+from datetime import datetime
 
 import hglib
 import pytest
@@ -98,3 +99,166 @@ def test_get_directories():
             ["dom/aFile.jsm", "tools/code-coverage/CodeCoverageHandler.cpp"]
         )
     ) == {"dom", "tools", "tools/code-coverage"}
+
+
+def test_calculate_experiences():
+    commits = [
+        repository.Commit(
+            node="commit1",
+            author="author1",
+            desc="commit1",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug="123",
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            files=["dom/file1.cpp", "apps/file1.jsm"],
+            file_copies={},
+            reviewers=("reviewer1", "reviewer2"),
+        ),
+        repository.Commit(
+            node="commit2",
+            author="author2",
+            desc="commit2",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug="123",
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            files=["dom/file1.cpp"],
+            file_copies={},
+            reviewers=("reviewer1",),
+        ),
+        repository.Commit(
+            node="commit3",
+            author="author1",
+            desc="commit3",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug="123",
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            files=["dom/file2.cpp", "apps/file1.jsm"],
+            file_copies={},
+            reviewers=("reviewer2",),
+        ),
+        repository.Commit(
+            node="commit4",
+            author="author2",
+            desc="commit4",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 1),
+            bug="123",
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            files=["dom/file1.cpp", "apps/file2.jsm"],
+            file_copies={},
+            reviewers=("reviewer1", "reviewer2"),
+        ),
+        repository.Commit(
+            node="commit5",
+            author="author3",
+            desc="commit5",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 2),
+            bug="123",
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            files=["dom/file1.cpp"],
+            file_copies={"dom/file1.cpp": "dom/file1copied.cpp"},
+            reviewers=("reviewer3",),
+        ),
+        repository.Commit(
+            node="commit6",
+            author="author3",
+            desc="commit6",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 3),
+            bug="123",
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            files=["dom/file1.cpp", "dom/file1copied.cpp"],
+            file_copies={},
+            reviewers=("reviewer3",),
+        ),
+    ]
+
+    repository.path_to_component = {
+        "dom/file1.cpp": "Core::DOM",
+        "dom/file1copied.cpp": "Core::DOM",
+        "dom/file2.cpp": "Core::Layout",
+        "apps/file1.jsm": "Firefox::Boh",
+        "apps/file2.jsm": "Firefox::Boh",
+    }
+
+    repository.calculate_experiences(commits)
+
+    assert repository.experiences_by_commit["total"]["author"]["commit1"] == 0
+    assert repository.experiences_by_commit["total"]["author"]["commit2"] == 0
+    assert repository.experiences_by_commit["total"]["author"]["commit3"] == 1
+    assert repository.experiences_by_commit["total"]["author"]["commit4"] == 1
+    assert repository.experiences_by_commit["total"]["author"]["commit5"] == 0
+    assert repository.experiences_by_commit["total"]["author"]["commit6"] == 1
+
+    assert repository.experiences_by_commit["90_days"]["author"]["commit1"] == 0
+    assert repository.experiences_by_commit["90_days"]["author"]["commit2"] == 0
+    assert repository.experiences_by_commit["90_days"]["author"]["commit3"] == 1
+    assert repository.experiences_by_commit["90_days"]["author"]["commit4"] == 0
+    assert repository.experiences_by_commit["90_days"]["author"]["commit5"] == 0
+    assert repository.experiences_by_commit["90_days"]["author"]["commit6"] == 1
+
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit1"] == 0
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit2"] == 1
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit3"] == 1
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit4"] == 4
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit5"] == 0
+    assert repository.experiences_by_commit["total"]["reviewer"]["commit6"] == 1
+
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit1"] == 0
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit2"] == 1
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit3"] == 1
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit4"] == 0
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit5"] == 0
+    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit6"] == 1
+
+    assert repository.experiences_by_commit["total"]["file"]["commit1"] == 0
+    assert repository.experiences_by_commit["total"]["file"]["commit2"] == 1
+    assert repository.experiences_by_commit["total"]["file"]["commit3"] == 1
+    assert repository.experiences_by_commit["total"]["file"]["commit4"] == 2
+    assert repository.experiences_by_commit["total"]["file"]["commit5"] == 3
+    assert repository.experiences_by_commit["total"]["file"]["commit6"] == 4
+
+    assert repository.experiences_by_commit["90_days"]["file"]["commit1"] == 0
+    assert repository.experiences_by_commit["90_days"]["file"]["commit2"] == 1
+    assert repository.experiences_by_commit["90_days"]["file"]["commit3"] == 1
+    assert repository.experiences_by_commit["90_days"]["file"]["commit4"] == 0
+    assert repository.experiences_by_commit["90_days"]["file"]["commit5"] == 1
+    assert repository.experiences_by_commit["90_days"]["file"]["commit6"] == 2
+
+    assert repository.experiences_by_commit["total"]["directory"]["commit1"] == 0
+    assert repository.experiences_by_commit["total"]["directory"]["commit2"] == 1
+    assert repository.experiences_by_commit["total"]["directory"]["commit3"] == 2
+    assert repository.experiences_by_commit["total"]["directory"]["commit4"] == 3
+    assert repository.experiences_by_commit["total"]["directory"]["commit5"] == 4
+    assert repository.experiences_by_commit["total"]["directory"]["commit6"] == 5
+
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit1"] == 0
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit2"] == 1
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit3"] == 2
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit4"] == 0
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit5"] == 1
+    assert repository.experiences_by_commit["90_days"]["directory"]["commit6"] == 2
+
+    assert repository.experiences_by_commit["total"]["component"]["commit1"] == 0
+    assert repository.experiences_by_commit["total"]["component"]["commit2"] == 1
+    assert repository.experiences_by_commit["total"]["component"]["commit3"] == 1
+    assert repository.experiences_by_commit["total"]["component"]["commit4"] == 3
+    assert repository.experiences_by_commit["total"]["component"]["commit5"] == 3
+    assert repository.experiences_by_commit["total"]["component"]["commit6"] == 4
+
+    assert repository.experiences_by_commit["90_days"]["component"]["commit1"] == 0
+    assert repository.experiences_by_commit["90_days"]["component"]["commit2"] == 1
+    assert repository.experiences_by_commit["90_days"]["component"]["commit3"] == 1
+    assert repository.experiences_by_commit["90_days"]["component"]["commit4"] == 0
+    assert repository.experiences_by_commit["90_days"]["component"]["commit5"] == 1
+    assert repository.experiences_by_commit["90_days"]["component"]["commit6"] == 2
