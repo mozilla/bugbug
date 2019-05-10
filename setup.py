@@ -68,6 +68,7 @@ setup(
             "bugbug-data-commits = scripts.commit_retriever:main",
             "bugbug-data-bugzilla = scripts.bug_retriever:main",
             "bugbug-train = scripts.trainer:main",
+            "bugbug-check = scripts.check:main",
         ]
     },
     classifiers=[

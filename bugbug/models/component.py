@@ -11,6 +11,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 
 
@@ -137,27 +138,12 @@ class ComponentModel(BugModel):
                 bug_data["component"],
             )
 
-        def is_meaningful(product, component):
-            return product in self.PRODUCTS and component not in [
-                "General",
-                "Untriaged",
-            ]
-
-        product_component_counts = Counter(
+        self.meaningful_product_components = self.get_meaningful_product_components(
             (
                 (product, component)
                 for product, component in product_components.values()
-                if is_meaningful(product, component)
+                if self.is_meaningful(product, component)
             )
-        ).most_common()
-
-        max_count = product_component_counts[0][1]
-        threshold = max_count / 100
-
-        self.meaningful_product_components = set(
-            product_component
-            for product_component, count in product_component_counts
-            if count > threshold
         )
 
         classes = {}
@@ -201,5 +187,151 @@ class ComponentModel(BugModel):
             if component in top_components
         }
 
+    def is_meaningful(self, product, component):
+        return product in self.PRODUCTS and component not in ["General", "Untriaged"]
+
+    def get_meaningful_product_components(self, full_comp_tuples, threshold_ratio=100):
+        """ From the given full_comp_tuples iterable of (product, component)
+        tuples, returns the set of tuples which have at least 1% of the most
+        common tuple
+        """
+
+        product_component_counts = Counter(full_comp_tuples).most_common()
+
+        max_count = product_component_counts[0][1]
+        threshold = max_count / threshold_ratio
+
+        return set(
+            product_component
+            for product_component, count in product_component_counts
+            if count > threshold
+        )
+
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def check(self):
+        success = super().check()
+
+        # Get the number of bugs per full component to fasten up the check
+        bugs_number = get_product_component_count()
+
+        # Check number 1, check that the most meaningful product components
+        # still have at least a bug in this component. If the check is failing
+        # that could mean that:
+        # - A component has been renamed / removed
+        # - A component is not used anymore by developers
+
+        for product, component in self.meaningful_product_components:
+            full_comp = f"{product}::{component}"
+
+            if full_comp not in bugs_number.keys():
+                print(
+                    f"Component {component!r} of product {product!r} doesn't exists, failure"
+                )
+                success = False
+
+            elif bugs_number[full_comp] <= 0:
+                print(
+                    f"Component {component!r} of product {product!r} have 0 bugs or less in it, failure"
+                )
+                success = False
+
+        # Check number 2, check that conflated components in
+        # CONFLATED_COMPONENTS match at least one component which has more
+        # than 0 bugs
+
+        for conflated_component in self.CONFLATED_COMPONENTS:
+
+            matching_components = [
+                full_comp
+                for full_comp in bugs_number.keys()
+                if full_comp.startswith(conflated_component)
+            ]
+
+            if not matching_components:
+                print(f"{conflated_component} doesn't match any component")
+                success = False
+                continue
+
+            matching_components_values = [
+                bugs_number[full_comp]
+                for full_comp in matching_components
+                if bugs_number[full_comp] > 0
+            ]
+
+            if not matching_components_values:
+                print(
+                    f"{conflated_component} should match at least one component with more than 0 bugs"
+                )
+                success = False
+
+        # Check number 3, check that values of CONFLATED_COMPONENTS_MAPPING
+        # still exist as components and have more than 0 bugs
+
+        for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
+
+            if full_comp not in bugs_number:
+                print(
+                    f"{full_comp} from conflated component mapping doesn't exists, failure"
+                )
+                success = False
+            elif bugs_number[full_comp] <= 0:
+                print(
+                    f"{full_comp} from conflated component mapping have less than 1 bug, failure"
+                )
+                success = False
+
+        # Check number 4, conflated components in CONFLATED_COMPONENTS either
+        # exist as components or are in CONFLATED_COMPONENTS_MAPPING
+
+        for conflated_component in self.CONFLATED_COMPONENTS:
+
+            in_mapping = conflated_component in self.CONFLATED_COMPONENTS_MAPPING
+
+            matching_components = [
+                full_comp
+                for full_comp in bugs_number.keys()
+                if full_comp.startswith(conflated_component)
+            ]
+
+            if not (matching_components or in_mapping):
+                print(f"It should be possible to map {conflated_component}")
+                success = False
+                continue
+
+        # Check number 5, there is no component with many bugs that is not in
+        # meaningful_product_components
+
+        # Recompute the meaningful components
+
+        def generate_meaningful_tuples():
+            for full_comp, count in bugs_number.items():
+                product, component = full_comp.split("::", 1)
+
+                if not self.is_meaningful(product, component):
+                    continue
+
+                if count > 0:
+                    for i in range(count):
+                        yield (product, component)
+
+        meaningful_product_components = self.get_meaningful_product_components(
+            generate_meaningful_tuples(), threshold_ratio=10
+        )
+
+        if not meaningful_product_components.issubset(
+            self.meaningful_product_components
+        ):
+            print(f"Meaningful product components mismatch")
+
+            new_meaningful_product_components = meaningful_product_components.difference(
+                self.meaningful_product_components
+            )
+            print(
+                f"New meaningful product components {new_meaningful_product_components!r}"
+            )
+
+            success = False
+
+        return success
