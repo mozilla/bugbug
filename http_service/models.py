@@ -78,6 +78,21 @@ def classify_bug(model_name, bug_id, bugzilla_token, expiration=500):
     # the token here
     bugzilla.set_token(bugzilla_token)
     bugs = bugzilla._download(bug_id)
+    redis_key = f"result_{model_name}_{bug_id}"
+
+    # TODO: Put redis address in env
+    redis = Redis(host="localhost")
+
+    if not bugs:
+        print("Couldn't get the bug back!")
+        # TODO: Find a better error format
+        encoded_data = json.dumps({"available": False})
+
+        redis.set(redis_key, encoded_data)
+        redis.expire(redis_key, expiration)
+
+        return "OK"
+
     model = load_model(model_name)  # TODO: Cache the model in the process memory
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
@@ -90,11 +105,6 @@ def classify_bug(model_name, bug_id, bugzilla_token, expiration=500):
     }
 
     encoded_data = json.dumps(data)
-
-    redis_key = f"result_{model_name}_{bug_id}"
-
-    # TODO: Put redis address in env
-    redis = Redis(host="localhost")
 
     redis.set(redis_key, encoded_data)
     redis.expire(redis_key, expiration)
