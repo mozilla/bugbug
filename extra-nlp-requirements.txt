@@ -1,2 +1,2 @@
-spacy==2.1.3
+spacy==2.1.4
 gensim==3.7.3
