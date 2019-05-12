@@ -9,6 +9,7 @@ import os
 import random
 
 from bugbug import bugzilla
+from bugbug.models import load_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -20,13 +21,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 if args.goal == "str":
-    from bugbug.models.bug import BugModel
-
-    model = BugModel.load("bugmodel")
+    model = load_model("bug")
 elif args.goal == "regressionrange":
-    from bugbug.models.regression import RegressionModel
-
-    model = RegressionModel.load("regressionmodel")
+    model = load_model("regression")
 
 file_path = os.path.join("bugbug", "labels", f"{args.goal}.csv")
 
