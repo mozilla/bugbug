@@ -3,6 +3,7 @@ tasks:
   - ID: check-component
     created: {$fromNow: ''}
     deadline: {$fromNow: '12 hours'}
+    expires: {$fromNow: '1 week'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     payload:
