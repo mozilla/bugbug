@@ -7,6 +7,7 @@ from bugbug.models.assignee import AssigneeModel
 from bugbug.models.backout import BackoutModel
 from bugbug.models.component import ComponentModel
 from bugbug.models.component_nn import ComponentNNModel
+from bugbug.models.defect import DefectModel
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.devdocneeded import DevDocNeededModel
 from bugbug.models.qaneeded import QANeededModel
@@ -23,6 +24,7 @@ MODELS = {
     "bug": BugModel,
     "component": ComponentModel,
     "component_nn": ComponentNNModel,
+    "defect": DefectModel,
     "defectenhancementtask": DefectEnhancementTaskModel,
     "devdocneeded": DevDocNeededModel,
     "qaneeded": QANeededModel,
