@@ -75,7 +75,7 @@ class BackoutModel(CommitModel):
         for commit_data in repository.get_commits():
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
 
-        return classes
+        return classes, [0, 1]
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

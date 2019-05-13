@@ -3,18 +3,32 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import itertools
-
+import numpy as np
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.pipeline import Pipeline
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, labels
+from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
-import numpy as np
+
+keyword_dict = {
+    "sec-critical": "security",
+    "sec-high": "security",
+    "sec-moderate": "security",
+    "sec-low": "security",
+    "sec-other": "security",
+    "sec-audit": "security",
+    "sec-vector": "security",
+    "sec-want": "security",
+    "memory-footprint": "memory",
+    "memory-leak": "memory",
+    "crash": "crash",
+    "crashreportid": "crash",
+    "perf": "performance",
+}
 
 
 class BugTypeModel(BugModel):
@@ -28,7 +42,7 @@ class BugTypeModel(BugModel):
             bug_features.severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords({"regression", "talos-regression", "feature"}),
+            bug_features.keywords(set(keyword_dict.keys())),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),
@@ -83,20 +97,16 @@ class BugTypeModel(BugModel):
 
     def get_labels(self):
         classes = {}
-        keyword_list = []
-        for bug_data in bugzilla.get_bugs():
-            for keyword in bug_data["keywords"]:
-                if keyword not in keyword_list:
-                    keyword_list.append(keyword)
+        keyword_list = list(set(keyword_dict.values()))
 
         for bug_data in bugzilla.get_bugs():
             target = np.zeros(len(keyword_list))
             for keyword in bug_data["keywords"]:
-                target[keyword_list.index(keyword)] = 1
+                target[keyword_list.index(keyword_dict[keyword])] = 1
 
             classes[int(bug_data["id"])] = target
 
-        return classes
+        return classes, keyword_list
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

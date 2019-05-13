@@ -113,7 +113,7 @@ class TrackingModel(BugModel):
             if bug_id not in classes:
                 classes[bug_id] = 0
 
-        return classes
+        return classes, [0, 1]
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

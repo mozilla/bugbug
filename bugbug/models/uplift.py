@@ -93,7 +93,7 @@ class UpliftModel(BugModel):
                     elif flag["status"] == "-":
                         classes[bug_id] = 0
 
-        return classes
+        return classes, [0, 1]
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

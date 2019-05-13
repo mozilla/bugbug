@@ -11,4 +11,4 @@ class RegressionModel(DefectModel):
         DefectModel.__init__(self, lemmatization)
 
     def get_labels(self):
-        return self.get_bugbug_labels("regression")
+        return self.get_bugbug_labels("regression"), [0, 1]
