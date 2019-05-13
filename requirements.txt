@@ -10,7 +10,7 @@ python-hglib==2.6.1
 shap==0.28.5
 pandas==0.24.2
 parsepatch==0.1.3
-tqdm==4.31.1
+tqdm==4.32.0
 python-dateutil==2.8.0
 zstandard==0.11.0
 taskcluster==7.0.1
