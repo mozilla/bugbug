@@ -436,7 +436,12 @@ def calculate_experiences(commits):
 
         update_complex_experiences("component", days, components, commit.node)
 
-        # TODO: We can delete anything older than 90 days at this point.
+        old_days = [
+            day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
+        ]
+        for day in old_days:
+            del experiences[day]
+            del complex_experiences[day]
 
 
 def download_commits(repo_dir, date_from):
