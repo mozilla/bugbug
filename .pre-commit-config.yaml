@@ -24,4 +24,6 @@ repos:
     -   id: mixed-line-ending
     -   id: name-tests-test
         args: ['--django']
+    -   id: check-json
+        exclude: ^tests/fixtures/
 python_version: python3.6
