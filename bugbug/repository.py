@@ -229,8 +229,8 @@ def _transform(commit):
     obj["average_file_size"] = (
         obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
     )
-    obj["maximum_file_size"] = max(sizes)
-    obj["minimum_file_size"] = min(sizes)
+    obj["maximum_file_size"] = max(sizes) if len(sizes) > 0 else 0
+    obj["minimum_file_size"] = min(sizes) if len(sizes) > 0 else 0
 
     obj["files_modified_num"] = len(patch_data)
 
