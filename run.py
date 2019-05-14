@@ -35,6 +35,7 @@ if __name__ == "__main__":
             "devdocneeded",
             "defectenhancementtask",
             "assignee",
+            "bugtype",
             # commit classifiers
             "backout",
         ],
@@ -107,6 +108,10 @@ if __name__ == "__main__":
         from bugbug.models.backout import BackoutModel
 
         model_class = BackoutModel
+    elif args.goal == "bugtype":
+        from bugbug.models.bugtype import BugTypeModel
+
+        model_class = BugTypeModel
 
     if args.train:
         db.download()

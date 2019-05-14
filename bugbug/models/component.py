@@ -181,11 +181,13 @@ class ComponentModel(BugModel):
                 for product, component in product_components.values()
             ), f"It should be possible to map {conflated_component}"
 
-        return {
+        classes = {
             bug_id: component
             for bug_id, component in classes.items()
             if component in top_components
         }
+
+        return classes, set(classes.values())
 
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]

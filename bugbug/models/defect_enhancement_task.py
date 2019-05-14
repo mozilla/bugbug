@@ -27,7 +27,7 @@ class DefectEnhancementTaskModel(DefectModel):
             "{} tasks".format(sum(1 for label in classes.values() if label == "task"))
         )
 
-        return classes
+        return classes, ["defect", "enhancement", "task"]
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

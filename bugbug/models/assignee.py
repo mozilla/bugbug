@@ -105,11 +105,13 @@ class AssigneeModel(BugModel):
         for assignee, count in assignee_counts:
             print(f"{assignee}: {count}")
 
-        return {
+        classes = {
             bug_id: assignee
             for bug_id, assignee in classes.items()
             if assignee in top_assignees
         }
+
+        return classes, set(classes.values())
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
