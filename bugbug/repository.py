@@ -101,7 +101,8 @@ def get_commits():
 
 def _init(repo_dir):
     global HG
-    HG = hglib.open(repo_dir)
+    os.chdir(repo_dir)
+    HG = hglib.open(".")
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
@@ -169,6 +170,8 @@ def _transform(commit):
         ]["directory"][commit.node],
     }
 
+    sizes = []
+
     patch = HG.export(revs=[commit.node], git=True)
     patch_data = Patch.parse_patch(
         patch.decode("utf-8", "ignore"), skip_comments=False, add_lines_for_new=True
@@ -211,6 +214,23 @@ def _transform(commit):
         else:
             type_ = ext
         obj["types"].add(type_)
+
+        try:
+            after = HG.cat([path.encode("utf-8")], rev=commit.node)
+        except hglib.error.CommandError as e:
+            if b"no such file in rev" in e.err:
+                after = b""
+            else:
+                raise
+
+        sizes.append(after.count(b"\n"))
+
+    obj["total_file_size"] = sum(sizes)
+    obj["average_file_size"] = (
+        obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
+    )
+    obj["maximum_file_size"] = max(sizes)
+    obj["minimum_file_size"] = min(sizes)
 
     obj["files_modified_num"] = len(patch_data)
 
