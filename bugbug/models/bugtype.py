@@ -110,3 +110,12 @@ class BugTypeModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            for keyword in bug["keywords"]:
+                target = np.zeros(len(list(set(keyword_dict.values()))))
+                if keyword in keyword_dict:
+                    classes[i] = 0 if not probabilities else [1.0, 0.0]
+
+        return classes
