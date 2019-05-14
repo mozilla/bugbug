@@ -73,13 +73,6 @@ class Trainer(object):
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
-        # Commits.json
-        logger.info("Downloading commits database")
-        commits_url = BASE_URL.format("commits")
-        urlretrieve(f"{commits_url}/commits.json.xz", "data/commits.json.xz")
-        logger.info("Decompressing commits database")
-        self.decompress_file("data/commits.json")
-
         if model == "defect":
             # Train classifier for defect-vs-enhancement-vs-task.
             self.train_defect_enhancement_task()

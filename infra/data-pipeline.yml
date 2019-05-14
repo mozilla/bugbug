@@ -92,7 +92,6 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -120,7 +119,6 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -148,7 +146,6 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -176,7 +173,6 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
