@@ -10,6 +10,7 @@ import itertools
 import multiprocessing
 import os
 import re
+import sys
 from collections import defaultdict, namedtuple
 from datetime import datetime
 
@@ -128,8 +129,8 @@ def _transform(commit):
     desc = commit.desc.decode("utf-8")
 
     obj = {
-        "node": commit.node.decode("utf-8"),
-        "author": commit.author.decode("utf-8"),
+        "node": commit.node,
+        "author": commit.author,
         "reviewers": commit.reviewers,
         "desc": desc,
         "date": str(commit.date),
@@ -172,7 +173,7 @@ def _transform(commit):
 
     sizes = []
 
-    patch = HG.export(revs=[commit.node], git=True)
+    patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = Patch.parse_patch(
         patch.decode("utf-8", "ignore"), skip_comments=False, add_lines_for_new=True
     )
@@ -216,7 +217,7 @@ def _transform(commit):
         obj["types"].add(type_)
 
         try:
-            after = HG.cat([path.encode("utf-8")], rev=commit.node)
+            after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
         except hglib.error.CommandError as e:
             if b"no such file in rev" in e.err:
                 after = b""
@@ -275,21 +276,23 @@ def hg_log(hg, revs):
             parts = file_copy.split(" (")
             copied = parts[0]
             orig = parts[1][:-1]
-            file_copies[orig] = copied
+            file_copies[sys.intern(orig)] = sys.intern(copied)
 
         revs.append(
             Commit(
-                node=rev[0],
-                author=rev[1],
+                node=sys.intern(rev[0].decode("ascii")),
+                author=sys.intern(rev[1].decode("utf-8")),
                 desc=rev[2],
                 date=date,
                 pushdate=pushdate,
                 bug=rev[4],
-                backedoutby=rev[5],
+                backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6],
-                files=rev[7].decode("utf-8").split("|"),
+                files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
                 file_copies=file_copies,
-                reviewers=tuple(get_reviewers(rev[2].decode("utf-8"))),
+                reviewers=tuple(
+                    sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8"))
+                ),
             )
         )
 
@@ -464,9 +467,7 @@ def download_commits(repo_dir, date_from):
         commits = list(itertools.chain.from_iterable(commits))
 
     # Don't analyze backouts.
-    backouts = set(
-        commit.backedoutby for commit in commits if commit.backedoutby != b""
-    )
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
     commits = [commit for commit in commits if commit.node not in backouts]
 
     # Don't analyze commits that are not linked to a bug.
@@ -475,7 +476,7 @@ def download_commits(repo_dir, date_from):
     # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
     # large and not meaningful formatting changes).
     with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
-        ignore_revs = set(l[:40].encode("utf-8") for l in f)
+        ignore_revs = set(l[:40] for l in f)
 
     commits = [commit for commit in commits if commit.node not in ignore_revs]
 
