@@ -87,7 +87,7 @@ tasks:
 
   - ID: train-component
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -114,7 +114,7 @@ tasks:
 
   - ID: train-defectenhancementtask
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -141,7 +141,7 @@ tasks:
 
   - ID: train-regression
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -168,7 +168,7 @@ tasks:
 
   - ID: train-tracking
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -195,7 +195,7 @@ tasks:
 
   - ID: docker-build
     created: {$fromNow: ''}
-    deadline: {$fromNow: '145 hours'}
+    deadline: {$fromNow: '119 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
@@ -241,7 +241,7 @@ tasks:
     scopes:
       - secrets:get:project/relman/bugbug/deploy
     created: {$fromNow: ''}
-    deadline: {$fromNow: '146 hour'}
+    deadline: {$fromNow: '120 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: github-worker
