@@ -228,7 +228,7 @@ def _transform(commit):
     return obj
 
 
-def _hg_log(revs):
+def hg_log(hg, revs):
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
 
     args = hglib.util.cmdbuilder(
@@ -238,7 +238,7 @@ def _hg_log(revs):
         rev=revs[0] + b":" + revs[-1],
         branch="central",
     )
-    x = HG.rawcommand(args)
+    x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
 
     revs = []
@@ -276,6 +276,10 @@ def _hg_log(revs):
     return revs
 
 
+def _hg_log(revs):
+    return hg_log(HG, revs)
+
+
 def get_revs(hg):
     args = hglib.util.cmdbuilder(
         b"log", template="{node}\n", no_merges=True, branch="central", rev="0:tip"
@@ -296,6 +300,120 @@ def get_directories(files):
         if path_dirs:
             directories.update([path_dirs[0], "/".join(path_dirs)])
     return list(directories)
+
+
+def calculate_experiences(commits):
+    print(f"Analyzing experiences from {len(commits)} commits...")
+
+    global experiences_by_commit
+
+    first_pushdate = commits[0].pushdate
+
+    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
+    # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
+    # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
+    # for C should be 2 (A + B), and not 3 (A twice + B).
+    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+
+    def update_experiences(experience_type, day, items):
+        for item in items:
+            exp = experiences[day][experience_type][item]
+
+            experiences_by_commit["total"][experience_type][commit.node] += exp
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                commit.node
+            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
+
+            # We don't want to consider backed out commits when calculating experiences.
+            if not commit.backedoutby:
+                experiences[day][experience_type][item] += 1
+
+    def update_complex_experiences(experience_type, day, items, self_node):
+        all_commits = set()
+        before_timespan_commits = set()
+        for item in items:
+            all_commits.update(complex_experiences[day][experience_type][item])
+
+            before_timespan_commits.update(
+                complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            )
+
+            # We don't want to consider backed out commits when calculating experiences.
+            if not commit.backedoutby:
+                complex_experiences[day][experience_type][item].add(commit.node)
+
+        # If a commit changes two files in the same component, we shouldn't increase the exp by two.
+        all_commits.discard(self_node)
+
+        experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
+        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+            commit.node
+        ] = len(all_commits - before_timespan_commits)
+
+    prev_days = 0
+
+    for commit in tqdm(commits):
+        days = (commit.pushdate - first_pushdate).days
+        assert days >= 0
+
+        if days not in experiences and days != prev_days:
+            assert days not in complex_experiences
+            for day in range(prev_days + 1, days + 1):
+                experiences[day] = copy.deepcopy(experiences[day - 1])
+                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
+
+        prev_days = days
+
+        update_experiences("author", days, [commit.author])
+        update_experiences("reviewer", days, commit.reviewers)
+
+        # When a file is moved/copied, copy original experience values to the copied path.
+        if len(commit.file_copies) > 0:
+            for orig, copied in commit.file_copies.items():
+                orig_directories = get_directories(orig)
+                copied_directories = get_directories(copied)
+
+                if orig in path_to_component and copied in path_to_component:
+                    orig_component = path_to_component[orig]
+                    copied_component = path_to_component[copied]
+                else:
+                    orig_component = copied_component = None
+
+                for prev_day in complex_experiences.keys():
+                    if orig_component is not None:
+                        complex_experiences[prev_day]["component"][
+                            copied_component
+                        ] = complex_experiences[prev_day]["component"][orig_component]
+
+                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
+                        prev_day
+                    ]["file"][orig]
+
+                    for orig_directory, copied_directory in zip(
+                        orig_directories, copied_directories
+                    ):
+                        complex_experiences[prev_day]["directory"][
+                            copied_directory
+                        ] = complex_experiences[prev_day]["directory"][orig_directory]
+
+        update_complex_experiences("file", days, commit.files, commit.node)
+
+        update_complex_experiences(
+            "directory", days, get_directories(commit.files), commit.node
+        )
+
+        components = list(
+            set(
+                path_to_component[path]
+                for path in commit.files
+                if path in path_to_component
+            )
+        )
+
+        update_complex_experiences("component", days, components, commit.node)
+
+        # TODO: We can delete anything older than 90 days at this point.
 
 
 def download_commits(repo_dir, date_from):
@@ -341,11 +459,7 @@ def download_commits(repo_dir, date_from):
 
     commits = [commit for commit in commits if commit.node not in ignore_revs]
 
-    commits_num = len(commits)
-
-    print(f"Analyzing {commits_num} patches...")
-
-    global experiences_by_commit
+    print("Downloading file->component mapping...")
 
     global path_to_component
     r = requests.get(
@@ -357,108 +471,14 @@ def download_commits(repo_dir, date_from):
         path: "::".join(component) for path, component in path_to_component.items()
     }
 
-    first_pushdate = commits[0].pushdate
-
-    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
-    # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
-    # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
-    # for C should be 2 (A + B), and not 3 (A twice + B).
-    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
-
-    def update_experiences(experience_type, day, items):
-        for item in items:
-            exp = experiences[day][experience_type][item]
-
-            experiences_by_commit["total"][experience_type][commit.node] += exp
-            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                commit.node
-            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
-
-            # We don't want to consider backed out commits when calculating experiences.
-            if not commit.backedoutby:
-                experiences[day][experience_type][item] += 1
-
-    def update_complex_experiences(experience_type, day, items):
-        all_commits = set()
-        before_timespan_commits = set()
-        for item in items:
-            all_commits.update(complex_experiences[day][experience_type][item])
-
-            before_timespan_commits.update(
-                complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
-            )
-
-            # We don't want to consider backed out commits when calculating experiences.
-            if not commit.backedoutby:
-                complex_experiences[day][experience_type][item].add(commit.node)
-
-        experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
-        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-            commit.node
-        ] = len(all_commits - before_timespan_commits)
-
-    for commit in tqdm(commits):
-        days = (commit.pushdate - first_pushdate).days
-        assert days >= 0
-
-        if days not in experiences:
-            assert days not in complex_experiences
-            experiences[days] = copy.deepcopy(experiences[days - 1])
-            complex_experiences[days] = copy.deepcopy(complex_experiences[days - 1])
-
-        update_experiences("author", days, [commit.author])
-        update_experiences("reviewer", days, commit.reviewers)
-
-        # When a file is moved/copied, copy original experience values to the copied path.
-        if len(commit.file_copies) > 0:
-            for orig, copied in commit.file_copies.items():
-                orig_directories = get_directories(orig)
-                copied_directories = get_directories(copied)
-
-                if orig in path_to_component and copied in path_to_component:
-                    orig_component = path_to_component[orig]
-                    copied_component = path_to_component[copied]
-                else:
-                    orig_component = copied_component = None
-
-                for prev_day in complex_experiences.keys():
-                    if orig_component is not None:
-                        complex_experiences[prev_day]["component"][
-                            copied_component
-                        ] = complex_experiences[prev_day]["component"][orig_component]
-
-                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
-                        prev_day
-                    ]["file"][orig]
-
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        complex_experiences[prev_day]["directory"][
-                            copied_directory
-                        ] = complex_experiences[prev_day]["directory"][orig_directory]
-
-        update_complex_experiences("file", days, commit.files)
-
-        update_complex_experiences("directory", days, get_directories(commit.files))
-
-        components = list(
-            set(
-                path_to_component[path]
-                for path in commit.files
-                if path in path_to_component
-            )
-        )
-
-        update_complex_experiences("component", days, components)
-
-        # TODO: We can delete anything older than 90 days at this point.
+    calculate_experiences(commits)
 
     # Exclude commits outside the range we care about.
     commits = [commit for commit in commits if commit.pushdate > date_from]
 
-    print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
+    commits_num = len(commits)
+
+    print(f"Mining {commits_num} commits using {processes} processes...")
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)
