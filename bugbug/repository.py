@@ -492,6 +492,13 @@ def download_commits(repo_dir, date_from):
         path: "::".join(component) for path, component in path_to_component.items()
     }
 
+    # TODO: Remove this once calculate_experiences is faster and less memory hungry.
+    commits = [
+        commit
+        for commit in commits
+        if commit.pushdate > date_from - relativedelta(years=1)
+    ]
+
     calculate_experiences(commits)
 
     # Exclude commits outside the range we care about.
