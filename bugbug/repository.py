@@ -301,7 +301,7 @@ def _hg_log(revs):
 
 def get_revs(hg):
     args = hglib.util.cmdbuilder(
-        b"log", template="{node}\n", no_merges=True, branch="central", rev="-1000:tip"
+        b"log", template="{node}\n", no_merges=True, branch="central", rev="0:tip"
     )
     x = hg.rawcommand(args)
     return x.splitlines()
