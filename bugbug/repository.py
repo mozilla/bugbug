@@ -16,8 +16,8 @@ from datetime import datetime
 
 import hglib
 import requests
+import rs_parsepatch
 from dateutil.relativedelta import relativedelta
-import rs_parsepatch as rs_pp
 from tqdm import tqdm
 
 from bugbug import db
@@ -174,7 +174,7 @@ def _transform(commit):
     sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
-    patch_data = rs_pp.get_counts(patch)
+    patch_data = rs_parsepatch.get_counts(patch)
     components = set()
     for stats in patch_data:
         if stats["binary"]:
