@@ -65,7 +65,7 @@ def test_get_revs(fake_hg_repo):
     add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
     revision1 = commit(hg)
 
-    revs = repository.get_revs(hg)
+    revs = repository.get_revs(hg, None)
 
     assert len(revs) == 1, "There should be one revision now"
     assert revs[0].decode("ascii") == revision1
@@ -73,7 +73,7 @@ def test_get_revs(fake_hg_repo):
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
     revision2 = commit(hg)
 
-    revs = repository.get_revs(hg)
+    revs = repository.get_revs(hg, None)
 
     assert len(revs) == 2, "There should be two revisions now"
     assert revs[0].decode("ascii") == revision1
