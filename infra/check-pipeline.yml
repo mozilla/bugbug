@@ -5,7 +5,7 @@ tasks:
     deadline: {$fromNow: '12 hours'}
     expires: {$fromNow: '1 week'}
     provisionerId: aws-provisioner-v1
-    workerType: releng-svc-compute
+    workerType: taskcluster-generic
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-base
