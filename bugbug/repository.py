@@ -219,9 +219,9 @@ def _transform(commit):
             type_ = ext
         obj["types"].add(type_)
 
-        if not stats["deleted"] and not stats["binary"]:
+        if not stats["deleted"]:
             try:
-                after = HG.cat([path.encode("utf-8")], rev=commit.node)
+                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
                 sizes.append(after.count(b"\n"))
             except hglib.error.CommandError as e:
                 print((e, stats))
