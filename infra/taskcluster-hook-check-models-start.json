@@ -44,7 +44,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug"
+            "assume:hook-id:project-relman/bugbug-checks"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"
