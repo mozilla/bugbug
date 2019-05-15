@@ -53,9 +53,21 @@ class Trainer(object):
         model.train()
         self.compress_file("trackingmodel")
 
+    def train_stepstoreproduce(self):
+        logger.info("Training *stepstoreproduce* model")
+        model = TrackingModel()
+        model.train()
+        self.compress_file("stepstoreproduce")
+
     def go(self, model):
         # TODO: Stop hard-coding them
-        valid_models = ["defect", "component", "regression", "tracking"]
+        valid_models = [
+            "defect",
+            "component",
+            "regression",
+            "tracking",
+            "stepstoreproduce",
+        ]
 
         if model not in valid_models:
             exception = (

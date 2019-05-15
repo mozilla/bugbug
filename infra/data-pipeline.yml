@@ -193,6 +193,33 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: train-stepstoreproduce
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-stepstoreproduce
+
+      artifacts:
+        public/trackingmodel.xz:
+          path: /stepstoreproducemodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_stepstoreproduce.latest
+    metadata:
+      name: bugbug train stepstoreproduce model
+      description: bugbug train stepstoreproduce model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: docker-build
     created: {$fromNow: ''}
     deadline: {$fromNow: '119 hours'}
