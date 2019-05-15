@@ -224,7 +224,6 @@ def _transform(commit):
                 after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
                 sizes.append(after.count(b"\n"))
             except hglib.error.CommandError as e:
-                print((e, stats))
                 if b"no such file in rev" not in e.err:
                     raise
 
