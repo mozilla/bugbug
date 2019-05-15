@@ -10,6 +10,8 @@ class DefectEnhancementTaskModel(DefectModel):
     def __init__(self, lemmatization=False):
         DefectModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
     def get_labels(self):
         classes = self.get_bugbug_labels("defect_enhancement_task")
 
