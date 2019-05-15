@@ -92,5 +92,16 @@ class StepsToReproduceModel(BugModel):
 
         return classes, [0, 1]
 
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            if bug["cf_has_str"] == "no":
+                classes[i] = 0 if not probabilities else [1.0, 0.0]
+            elif bug["cf_has_str"] == "yes":
+                classes[i] = 1 if not probabilities else [0.0, 1.0]
+            elif "stepswanted" in bug["keywords"]:
+                classes[i] = 0 if not probabilities else [1.0, 0.0]
+
+        return classes
+
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
