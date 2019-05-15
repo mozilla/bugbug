@@ -16,8 +16,8 @@ from datetime import datetime
 
 import hglib
 import requests
+import rs_parsepatch
 from dateutil.relativedelta import relativedelta
-from parsepatch.patch import Patch
 from tqdm import tqdm
 
 from bugbug import db
@@ -174,21 +174,24 @@ def _transform(commit):
     sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
-    patch_data = Patch.parse_patch(
-        patch.decode("utf-8", "ignore"), skip_comments=False, add_lines_for_new=True
-    )
-    for path, stats in patch_data.items():
-        if "added" not in stats:
-            # Must be a binary file
+    patch_data = rs_parsepatch.get_counts(patch)
+    components = set()
+    for stats in patch_data:
+        if stats["binary"]:
             obj["types"].add("binary")
             continue
 
+        path = stats["filename"]
+        component = path_to_component.get(path)
+        if component:
+            components.add(component)
+
         if is_test(path):
-            obj["test_added"] += len(stats["added"]) + len(stats["touched"])
-            obj["test_deleted"] += len(stats["deleted"]) + len(stats["touched"])
+            obj["test_added"] += stats["added_lines"]
+            obj["test_deleted"] += stats["deleted_lines"]
         else:
-            obj["added"] += len(stats["added"]) + len(stats["touched"])
-            obj["deleted"] += len(stats["deleted"]) + len(stats["touched"])
+            obj["added"] += stats["added_lines"]
+            obj["deleted"] += stats["deleted_lines"]
 
         ext = os.path.splitext(path)[1]
         if ext in [".js", ".jsm"]:
@@ -216,15 +219,13 @@ def _transform(commit):
             type_ = ext
         obj["types"].add(type_)
 
-        try:
-            after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
-        except hglib.error.CommandError as e:
-            if b"no such file in rev" in e.err:
-                after = b""
-            else:
-                raise
-
-        sizes.append(after.count(b"\n"))
+        if not stats["deleted"]:
+            try:
+                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
+                sizes.append(after.count(b"\n"))
+            except hglib.error.CommandError as e:
+                if b"no such file in rev" not in e.err:
+                    raise
 
     obj["total_file_size"] = sum(sizes)
     obj["average_file_size"] = (
@@ -238,13 +239,7 @@ def _transform(commit):
     # Covert to a list, as a set is not JSON-serializable.
     obj["types"] = list(obj["types"])
 
-    obj["components"] = list(
-        set(
-            path_to_component[path]
-            for path in patch_data.keys()
-            if path_to_component.get(path)
-        )
-    )
+    obj["components"] = list(components)
 
     return obj
 
