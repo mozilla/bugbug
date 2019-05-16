@@ -21,7 +21,6 @@ OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
 )
 
-
 try:
     from keras import Input, layers
     from keras.layers import (
