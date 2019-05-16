@@ -37,7 +37,7 @@ class Trainer(object):
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
-        logger.info(f"Training *{model_name}* name")
+        logger.info(f"Training *{model_name}* model")
 
         model_class = get_model_class(model_name)
         model = model_class()
