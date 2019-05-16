@@ -97,13 +97,15 @@ def model_prediction(model_name, bug_id):
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
+    status_code = 200
     data = get_bug_classification(model_name, bug_id)
 
     if not data:
         schedule_bug_classification(model_name, [bug_id])
+        status_code = 202
         data = {"ready": False}
 
-    return jsonify(**data)
+    return jsonify(**data), status_code
 
 
 @application.route("/<model_name>/predict/batch", methods=["POST"])
@@ -122,6 +124,7 @@ def batch_prediction(model_name):
 
     bugs = batch_body["bugs"]
 
+    status_code = 200
     data = {}
     missing_bugs = []
 
@@ -129,6 +132,7 @@ def batch_prediction(model_name):
         data[str(bug)] = get_bug_classification(model_name, bug)
         if not data[str(bug)]:
             if not is_running(model_name, bug):
+                status_code = 202
                 missing_bugs.append(bug)
             data[str(bug)] = {"ready": False}
 
@@ -139,4 +143,4 @@ def batch_prediction(model_name):
         # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
-    return jsonify(**data)
+    return jsonify(**data), status_code
