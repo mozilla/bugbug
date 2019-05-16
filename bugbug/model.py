@@ -62,8 +62,8 @@ class Model:
         return top_features
 
     def train(self, importance_cutoff=0.15):
-        classes = self.get_labels()
-        class_names = sorted(list(set(classes.values())), reverse=True)
+        classes, class_names = self.get_labels()
+        class_names = sorted(list(class_names), reverse=True)
 
         # Get items, filtering out those for which we have no labels.
         def trainable_items_gen():
@@ -209,6 +209,12 @@ class Model:
             return classes, importances
 
         return classes
+
+    def check(self):
+        """ Subclasses can implement their own check, the base model doesn't
+        check anything at the moment
+        """
+        return True
 
 
 class BugModel(Model):

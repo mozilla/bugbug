@@ -42,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: infra/dockerfile.train_defectenhancementtask
-    image: mozilla/bugbug-train-defect
+    image: mozilla/bugbug-train-defectenhancementtask
 
   bugbug-train-regression:
     build:
@@ -74,3 +74,9 @@ services:
       context: infra/
       dockerfile: dockerfile.spawn_data_pipeline
     image: mozilla/bugbug-spawn-data-pipeline
+
+  bugbug-spawn-check-pipeline:
+    build:
+      context: infra/
+      dockerfile: dockerfile.spawn_check_pipeline
+    image: mozilla/bugbug-spawn-check-pipeline

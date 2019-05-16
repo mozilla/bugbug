@@ -3,10 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import csv
 import json
 import os
+from datetime import datetime
 
 import requests
+from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
@@ -29,6 +32,8 @@ ATTACHMENT_INCLUDE_FIELDS = [
 ]
 
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
+
+PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
 
 def get_bug_fields():
@@ -216,3 +221,63 @@ def download_bugs(bug_ids, products=None, security=False):
 
 def delete_bugs(bug_ids):
     db.delete(BUGS_DB, lambda bug: bug["id"] in set(bug_ids))
+
+
+def count_bugs(bug_query_params):
+    bug_query_params["count_only"] = 1
+
+    r = requests.get("https://bugzilla.mozilla.org/rest/bug", params=bug_query_params)
+    r.raise_for_status()
+    count = r.json()["bug_count"]
+
+    return count
+
+
+def get_product_component_csv_report():
+    six_month_ago = datetime.utcnow() - relativedelta(months=6)
+
+    # Base params
+    url_params = {
+        "f1": "creation_ts",
+        "o1": "greaterthan",
+        "v1": six_month_ago.strftime("%Y-%m-%d"),
+        "x_axis_field": "product",
+        "y_axis_field": "component",
+        "action": "wrap",
+        "ctype": "csv",
+        "format": "table",
+    }
+
+    return PRODUCT_COMPONENT_CSV_REPORT_URL, url_params
+
+
+def get_product_component_count():
+    """ Returns a dictionary where keys are full components (in the form of
+    `{product}::{component}`) and the value of the number of bugs for the
+    given full components. Full component with 0 bugs are returned.
+    """
+    url, params = get_product_component_csv_report()
+    csv_file = requests.get(url, params=params)
+    csv_file.raise_for_status()
+    content = csv_file.text
+
+    csv_content = content.splitlines()
+    component_key = "Component / Product"
+
+    bugs_number = {}
+
+    csv_reader = csv.DictReader(csv_content)
+    for row in csv_reader:
+        # Extract the component key
+        component = row[component_key]
+
+        for product, raw_value in row.items():
+            if product == component_key:
+                continue
+
+            value = int(raw_value)
+
+            full_comp = f"{product}::{component}"
+            bugs_number[full_comp] = value
+
+    return bugs_number

@@ -7,8 +7,10 @@ from bugbug.models.defect import DefectModel
 
 
 class DefectEnhancementTaskModel(DefectModel):
-    def __init__(self, lemmatization=False):
-        DefectModel.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, historical=False):
+        DefectModel.__init__(self, lemmatization, historical)
+
+        self.calculate_importance = False
 
     def get_labels(self):
         classes = self.get_bugbug_labels("defect_enhancement_task")
@@ -27,7 +29,7 @@ class DefectEnhancementTaskModel(DefectModel):
             "{} tasks".format(sum(1 for label in classes.values() if label == "task"))
         )
 
-        return classes
+        return classes, ["defect", "enhancement", "task"]
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

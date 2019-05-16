@@ -9,7 +9,7 @@ from bugbug.models.qaneeded import QANeededModel
 
 def test_get_qaneeded_labels():
     model = QANeededModel()
-    classes = model.get_labels()
+    classes, _ = model.get_labels()
     assert not classes[1389220]
     assert classes[1389223], "Bug should contain qawanted in a field"
     assert classes[1390433], "Bug should contain qe-verify in a field"

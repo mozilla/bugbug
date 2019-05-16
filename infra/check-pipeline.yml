@@ -1,0 +1,23 @@
+version: 1
+tasks:
+  - ID: check-component
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '12 hours'}
+    expires: {$fromNow: '1 week'}
+    provisionerId: aws-provisioner-v1
+    workerType: taskcluster-generic
+    payload:
+      maxRunTime: 43200
+      image: mozilla/bugbug-base
+      command:
+        - bugbug-check
+        - component
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug check component
+      description: bugbug check component
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/infra/check-pipeline.yml

@@ -2,7 +2,8 @@ version: 1
 tasks:
   - ID: commit-retrieval
     created: {$fromNow: ''}
-    deadline: {$fromNow: '12 hours'}
+    deadline: {$fromNow: '72 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     payload:
@@ -29,7 +30,8 @@ tasks:
 
   - ID: bugs-retrieval
     created: {$fromNow: ''}
-    deadline: {$fromNow: '24 hours'}
+    deadline: {$fromNow: '72 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     payload:
@@ -60,7 +62,8 @@ tasks:
 
   - ID: rollback-test-task
     created: {$fromNow: ''}
-    deadline: {$fromNow: '25 hours'}
+    deadline: {$fromNow: '73 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     dependencies:
@@ -84,11 +87,11 @@ tasks:
 
   - ID: train-component
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -111,15 +114,15 @@ tasks:
 
   - ID: train-defectenhancementtask
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-defect
+      image: mozilla/bugbug-train-defectenhancementtask
 
       artifacts:
         public/defectenhancementtaskmodel.xz:
@@ -138,11 +141,11 @@ tasks:
 
   - ID: train-regression
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -165,11 +168,11 @@ tasks:
 
   - ID: train-tracking
     created: {$fromNow: ''}
-    deadline: {$fromNow: '48 hours'}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     dependencies:
-      - commit-retrieval
       - bugs-retrieval
     payload:
       maxRunTime: 25200
@@ -192,7 +195,8 @@ tasks:
 
   - ID: docker-build
     created: {$fromNow: ''}
-    deadline: {$fromNow: '49 hours'}
+    deadline: {$fromNow: '119 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
     dependencies:
@@ -205,7 +209,7 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       command:
         - "/bin/sh"
         - "-lcxe"
@@ -237,7 +241,8 @@ tasks:
     scopes:
       - secrets:get:project/relman/bugbug/deploy
     created: {$fromNow: ''}
-    deadline: {$fromNow: '50 hour'}
+    deadline: {$fromNow: '120 hours'}
+    expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: github-worker
     payload:
@@ -245,7 +250,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
