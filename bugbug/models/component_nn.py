@@ -22,8 +22,6 @@ OPT_MSG_MISSING = (
 )
 
 
-HAS_OPTIONAL_DEPENDENCIES = False
-
 try:
     from keras import Input, layers
     from keras.layers import (
@@ -37,18 +35,12 @@ try:
         SpatialDropout1D,
     )
     from keras.models import Model as KerasModel
-
-    HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
-    pass
+    raise ImportError(OPT_MSG_MISSING)
 
 
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
-
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         # (epochs, batch_size) combinations
         fit_params = [(2, 256), (2, 512), (1, 1024)]
         super().__init__(fit_params=fit_params)

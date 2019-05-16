@@ -11,23 +11,16 @@ OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
 )
 
-HAS_OPTIONAL_DEPENDENCIES = False
-
 try:
     from keras.preprocessing.text import Tokenizer
     from keras.preprocessing.sequence import pad_sequences
     from keras.utils import to_categorical
-
-    HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
-    pass
+    raise ImportError(OPT_MSG_MISSING)
 
 
 class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def __init__(self, maxlen, vocab_size):
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         self.maxlen = maxlen
         self.tokenizer = Tokenizer(num_words=vocab_size)
 
@@ -42,9 +35,6 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
 
 class KerasClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, fit_params):
-        if not HAS_OPTIONAL_DEPENDENCIES:
-            raise NotImplementedError(OPT_MSG_MISSING)
-
         self.fit_params = fit_params
 
     def fit(self, X, y):
