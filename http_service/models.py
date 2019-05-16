@@ -14,27 +14,20 @@ import requests
 from redis import Redis
 
 from bugbug import bugzilla
-from bugbug.models.component import ComponentModel
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
+from bugbug.models import get_model_class
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS = {
-    "defectenhancementtask": DefectEnhancementTaskModel,
-    "component": ComponentModel,
-    "regression": RegressionModel,
-}
-MODELS_NAMES = MODELS.keys()
+MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.releng.services.project.testing.bugbug_train.latest/artifacts/public"
 
 
-def load_model(model):
-    model_file_path = os.path.join(MODELS_DIR, f"{model}model")
+def load_model(model_name):
+    model_file_path = os.path.join(MODELS_DIR, f"{model_name}model")
     LOGGER.info(f"Lookup model in {model_file_path}")
-    model = MODELS[model].load(model_file_path)
+    model = get_model_class(model_name).load(model_file_path)
     return model
 
 
