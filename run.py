@@ -37,6 +37,7 @@ if __name__ == "__main__":
             "assignee",
             "bugtype",
             "stepstoreproduce",
+            "regressionrange",
             # commit classifiers
             "backout",
         ],
@@ -117,6 +118,10 @@ if __name__ == "__main__":
         from bugbug.models.stepstoreproduce import StepsToReproduceModel
 
         model_class = StepsToReproduceModel
+    elif args.goal == "regressionrange":
+        from bugbug.models.regressionrange import RegressionRangeModel
+
+        model_class = RegressionRangeModel
     if args.train:
         db.download()
 
