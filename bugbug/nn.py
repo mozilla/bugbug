@@ -11,13 +11,22 @@ OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nn]\n"
 )
 
+HAS_OPTIONAL_DEPENDENCIES = False
+
+try:
+    from keras.preprocessing.text import Tokenizer
+    from keras.preprocessing.sequence import pad_sequences
+    from keras.utils import to_categorical
+
+    HAS_OPTIONAL_DEPENDENCIES = True
+except ImportError:
+    pass
+
 
 class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def __init__(self, maxlen, vocab_size):
-        try:
-            from keras.preprocessing.text import Tokenizer
-        except ImportError:
-            raise ImportError(OPT_MSG_MISSING)
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
 
         self.maxlen = maxlen
         self.tokenizer = Tokenizer(num_words=vocab_size)
@@ -27,25 +36,18 @@ class KerasTextToSequences(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, data):
-        try:
-            from keras.preprocessing.sequence import pad_sequences
-        except ImportError:
-            raise ImportError(OPT_MSG_MISSING)
-
         sequences = self.tokenizer.texts_to_sequences(data)
         return pad_sequences(sequences, maxlen=self.maxlen)
 
 
 class KerasClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, fit_params):
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         self.fit_params = fit_params
 
     def fit(self, X, y):
-        try:
-            from keras.utils import to_categorical
-        except ImportError:
-            raise ImportError(OPT_MSG_MISSING)
-
         X_dict = numpy_to_dict(X)
 
         y = to_categorical(y)

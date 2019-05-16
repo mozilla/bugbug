@@ -22,8 +22,33 @@ OPT_MSG_MISSING = (
 )
 
 
+HAS_OPTIONAL_DEPENDENCIES = False
+
+try:
+    from keras import Input, layers
+    from keras.layers import (
+        GRU,
+        Bidirectional,
+        Dense,
+        Dropout,
+        Embedding,
+        Flatten,
+        GlobalMaxPooling1D,
+        SpatialDropout1D,
+    )
+    from keras.models import Model as KerasModel
+
+    HAS_OPTIONAL_DEPENDENCIES = True
+except ImportError:
+    pass
+
+
 class ComponentNNClassifier(KerasClassifier):
     def __init__(self, **kwargs):
+
+        if not HAS_OPTIONAL_DEPENDENCIES:
+            raise NotImplementedError(OPT_MSG_MISSING)
+
         # (epochs, batch_size) combinations
         fit_params = [(2, 256), (2, 512), (1, 1024)]
         super().__init__(fit_params=fit_params)
@@ -56,22 +81,6 @@ class ComponentNNClassifier(KerasClassifier):
         return self
 
     def model_creator(self, X, y):
-        try:
-            from keras import Input, layers
-            from keras.layers import (
-                GRU,
-                Bidirectional,
-                Dense,
-                Dropout,
-                Embedding,
-                Flatten,
-                GlobalMaxPooling1D,
-                SpatialDropout1D,
-            )
-            from keras.models import Model as KerasModel
-        except ImportError:
-            raise ImportError(OPT_MSG_MISSING)
-
         short_desc_inp = Input(shape=(self.short_desc_maxlen,), name="title_sequence")
         short_desc_emb = Embedding(self.short_desc_vocab_size, self.short_desc_emb_sz)(
             short_desc_inp
