@@ -37,15 +37,7 @@ class Trainer(object):
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
-        log_messages = {
-            "component": "Training *component* model",
-            "defectenhancementtask": "Training *defect vs enhancement vs task* model",
-            "regression": "Training *regression vs non-regression* model",
-            "training": "Training *tracking* model",
-        }
-
-        if log_messages.get(model_name):
-            logger.info(log_messages[model_name])
+        logger.info(f"Training *{model_name}* name")
 
         model_class = get_model_class(model_name)
         model = model_class()
