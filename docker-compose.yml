@@ -69,6 +69,14 @@ services:
         protocol: tcp
         mode: host
 
+  bugbug-http-service-bg-worker:
+    build:
+      context: http_service
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+
   bugbug-spawn-data-pipeline:
     build:
       context: infra/
