@@ -6,6 +6,7 @@ services:
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - REDISTOGO_URL
     ports:
       - target: 8000
         published: 8000
@@ -21,6 +22,7 @@ services:
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - REDISTOGO_URL
     depends_on:
       - redis
 

@@ -73,7 +73,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token, expiration=500):
     bugzilla.set_token(bugzilla_token)
     bugs = bugzilla._download(bug_ids)
 
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
+    redis_url = os.environ.get("REDISTOGO_URL", "redis://localhost/0")
     redis = Redis.from_url(redis_url)
 
     missing_bugs = bug_ids_set.difference(bugs.keys())
