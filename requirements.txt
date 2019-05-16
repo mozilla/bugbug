@@ -4,7 +4,7 @@ numpy==1.16.3
 scipy==1.2.1
 scikit-learn==0.21.1
 xgboost==0.82
-requests==2.21.0
+requests==2.22.0
 imbalanced-learn==0.4.3
 python-hglib==2.6.1
 shap==0.28.5
