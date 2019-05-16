@@ -73,7 +73,7 @@ if __name__ == "__main__":
         elif args.classifier == "nn":
             model_class_name = "component_nn"
         else:
-            raise ValueError(f"Unkown value {args.classifier}")
+            raise ValueError(f"Unknown value {args.classifier}")
 
     model_class = get_model_class(model_class_name)
 
