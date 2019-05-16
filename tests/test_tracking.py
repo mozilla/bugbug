@@ -8,6 +8,6 @@ from bugbug.models.tracking import TrackingModel
 
 def test_get_tracking_labels():
     model = TrackingModel()
-    classes = model.get_labels()
+    classes, _ = model.get_labels()
     assert not classes[1101825]
     assert classes[1042096]

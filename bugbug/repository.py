@@ -10,13 +10,14 @@ import itertools
 import multiprocessing
 import os
 import re
+import sys
 from collections import defaultdict, namedtuple
 from datetime import datetime
 
 import hglib
 import requests
+import rs_parsepatch
 from dateutil.relativedelta import relativedelta
-from parsepatch.patch import Patch
 from tqdm import tqdm
 
 from bugbug import db
@@ -101,7 +102,8 @@ def get_commits():
 
 def _init(repo_dir):
     global HG
-    HG = hglib.open(repo_dir)
+    os.chdir(repo_dir)
+    HG = hglib.open(".")
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
@@ -127,11 +129,12 @@ def _transform(commit):
     desc = commit.desc.decode("utf-8")
 
     obj = {
-        "node": commit.node.decode("utf-8"),
-        "author": commit.author.decode("utf-8"),
+        "node": commit.node,
+        "author": commit.author,
         "reviewers": commit.reviewers,
         "desc": desc,
         "date": str(commit.date),
+        "pushdate": str(commit.pushdate),
         "bug_id": int(commit.bug.decode("utf-8")) if commit.bug else None,
         "ever_backedout": commit.backedoutby != b"",
         "added": 0,
@@ -168,22 +171,27 @@ def _transform(commit):
         ]["directory"][commit.node],
     }
 
-    patch = HG.export(revs=[commit.node], git=True)
-    patch_data = Patch.parse_patch(
-        patch.decode("utf-8", "ignore"), skip_comments=False, add_lines_for_new=True
-    )
-    for path, stats in patch_data.items():
-        if "added" not in stats:
-            # Must be a binary file
+    sizes = []
+
+    patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
+    patch_data = rs_parsepatch.get_counts(patch)
+    components = set()
+    for stats in patch_data:
+        if stats["binary"]:
             obj["types"].add("binary")
             continue
 
+        path = stats["filename"]
+        component = path_to_component.get(path)
+        if component:
+            components.add(component)
+
         if is_test(path):
-            obj["test_added"] += len(stats["added"]) + len(stats["touched"])
-            obj["test_deleted"] += len(stats["deleted"]) + len(stats["touched"])
+            obj["test_added"] += stats["added_lines"]
+            obj["test_deleted"] += stats["deleted_lines"]
         else:
-            obj["added"] += len(stats["added"]) + len(stats["touched"])
-            obj["deleted"] += len(stats["deleted"]) + len(stats["touched"])
+            obj["added"] += stats["added_lines"]
+            obj["deleted"] += stats["deleted_lines"]
 
         ext = os.path.splitext(path)[1]
         if ext in [".js", ".jsm"]:
@@ -211,23 +219,32 @@ def _transform(commit):
             type_ = ext
         obj["types"].add(type_)
 
+        if not stats["deleted"]:
+            try:
+                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
+                sizes.append(after.count(b"\n"))
+            except hglib.error.CommandError as e:
+                if b"no such file in rev" not in e.err:
+                    raise
+
+    obj["total_file_size"] = sum(sizes)
+    obj["average_file_size"] = (
+        obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
+    )
+    obj["maximum_file_size"] = max(sizes) if len(sizes) > 0 else 0
+    obj["minimum_file_size"] = min(sizes) if len(sizes) > 0 else 0
+
     obj["files_modified_num"] = len(patch_data)
 
     # Covert to a list, as a set is not JSON-serializable.
     obj["types"] = list(obj["types"])
 
-    obj["components"] = list(
-        set(
-            path_to_component[path]
-            for path in patch_data.keys()
-            if path_to_component.get(path)
-        )
-    )
+    obj["components"] = list(components)
 
     return obj
 
 
-def _hg_log(revs):
+def hg_log(hg, revs):
     template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
 
     args = hglib.util.cmdbuilder(
@@ -237,7 +254,7 @@ def _hg_log(revs):
         rev=revs[0] + b":" + revs[-1],
         branch="central",
     )
-    x = HG.rawcommand(args)
+    x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
 
     revs = []
@@ -254,30 +271,49 @@ def _hg_log(revs):
             parts = file_copy.split(" (")
             copied = parts[0]
             orig = parts[1][:-1]
-            file_copies[orig] = copied
+            file_copies[sys.intern(orig)] = sys.intern(copied)
 
         revs.append(
             Commit(
-                node=rev[0],
-                author=rev[1],
+                node=sys.intern(rev[0].decode("ascii")),
+                author=sys.intern(rev[1].decode("utf-8")),
                 desc=rev[2],
                 date=date,
                 pushdate=pushdate,
                 bug=rev[4],
-                backedoutby=rev[5],
+                backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6],
-                files=rev[7].decode("utf-8").split("|"),
+                files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
                 file_copies=file_copies,
-                reviewers=tuple(get_reviewers(rev[2].decode("utf-8"))),
+                reviewers=tuple(
+                    sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8"))
+                ),
             )
         )
 
     return revs
 
 
-def get_revs(hg):
+def _hg_log(revs):
+    return hg_log(HG, revs)
+
+
+def get_revs(hg, date_from=None):
+    # TODO: Retrieve all commits once calculate_experiences is faster and less memory hungry.
+    if date_from is not None:
+        pushdate = (date_from - relativedelta(months=12)).strftime("%Y-%m-%d")
+        rev_start = f"pushdate('>{pushdate}')"
+    else:
+        rev_start = 0
+
+    print(f"Getting revs from {rev_start} to tip...")
+
     args = hglib.util.cmdbuilder(
-        b"log", template="{node}\n", no_merges=True, branch="central", rev="0:tip"
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="central",
+        rev=f"{rev_start}:tip",
     )
     x = hg.rawcommand(args)
     return x.splitlines()
@@ -297,64 +333,10 @@ def get_directories(files):
     return list(directories)
 
 
-def download_commits(repo_dir, date_from):
-    hg = hglib.open(repo_dir)
-
-    revs = get_revs(hg)
-
-    commits_num = len(revs)
-
-    assert (
-        commits_num > 0
-    ), "There should definitely be more than 0 commits, something is wrong"
-
-    hg.close()
-
-    processes = multiprocessing.cpu_count()
-
-    print(f"Mining {commits_num} commits using {processes} processes...")
-
-    CHUNK_SIZE = 256
-    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
-
-    with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init, initargs=(repo_dir,)
-    ) as executor:
-        commits = executor.map(_hg_log, revs_groups, chunksize=20)
-        commits = tqdm(commits, total=len(revs_groups))
-        commits = list(itertools.chain.from_iterable(commits))
-
-    # Don't analyze backouts.
-    backouts = set(
-        commit.backedoutby for commit in commits if commit.backedoutby != b""
-    )
-    commits = [commit for commit in commits if commit.node not in backouts]
-
-    # Don't analyze commits that are not linked to a bug.
-    commits = [commit for commit in commits if commit.bug != b""]
-
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
-    # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
-        ignore_revs = set(l[:40].encode("utf-8") for l in f)
-
-    commits = [commit for commit in commits if commit.node not in ignore_revs]
-
-    commits_num = len(commits)
-
-    print(f"Analyzing {commits_num} patches...")
+def calculate_experiences(commits):
+    print(f"Analyzing experiences from {len(commits)} commits...")
 
     global experiences_by_commit
-
-    global path_to_component
-    r = requests.get(
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
-    )
-    r.raise_for_status()
-    path_to_component = r.json()
-    path_to_component = {
-        path: "::".join(component) for path, component in path_to_component.items()
-    }
 
     first_pushdate = commits[0].pushdate
 
@@ -378,7 +360,7 @@ def download_commits(repo_dir, date_from):
             if not commit.backedoutby:
                 experiences[day][experience_type][item] += 1
 
-    def update_complex_experiences(experience_type, day, items):
+    def update_complex_experiences(experience_type, day, items, self_node):
         all_commits = set()
         before_timespan_commits = set()
         for item in items:
@@ -392,19 +374,27 @@ def download_commits(repo_dir, date_from):
             if not commit.backedoutby:
                 complex_experiences[day][experience_type][item].add(commit.node)
 
+        # If a commit changes two files in the same component, we shouldn't increase the exp by two.
+        all_commits.discard(self_node)
+
         experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
         experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
             commit.node
         ] = len(all_commits - before_timespan_commits)
 
+    prev_days = 0
+
     for commit in tqdm(commits):
         days = (commit.pushdate - first_pushdate).days
         assert days >= 0
 
-        if days not in experiences:
+        if days not in experiences and days != prev_days:
             assert days not in complex_experiences
-            experiences[days] = copy.deepcopy(experiences[days - 1])
-            complex_experiences[days] = copy.deepcopy(complex_experiences[days - 1])
+            for day in range(prev_days + 1, days + 1):
+                experiences[day] = copy.deepcopy(experiences[day - 1])
+                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
+
+        prev_days = days
 
         update_experiences("author", days, [commit.author])
         update_experiences("reviewer", days, commit.reviewers)
@@ -438,9 +428,11 @@ def download_commits(repo_dir, date_from):
                             copied_directory
                         ] = complex_experiences[prev_day]["directory"][orig_directory]
 
-        update_complex_experiences("file", days, commit.files)
+        update_complex_experiences("file", days, commit.files, commit.node)
 
-        update_complex_experiences("directory", days, get_directories(commit.files))
+        update_complex_experiences(
+            "directory", days, get_directories(commit.files), commit.node
+        )
 
         components = list(
             set(
@@ -450,14 +442,77 @@ def download_commits(repo_dir, date_from):
             )
         )
 
-        update_complex_experiences("component", days, components)
+        update_complex_experiences("component", days, components, commit.node)
 
-        # TODO: We can delete anything older than 90 days at this point.
+        old_days = [
+            day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
+        ]
+        for day in old_days:
+            del experiences[day]
+            del complex_experiences[day]
+
+
+def download_commits(repo_dir, date_from):
+    hg = hglib.open(repo_dir)
+
+    revs = get_revs(hg, date_from)
+
+    commits_num = len(revs)
+
+    assert (
+        commits_num > 0
+    ), "There should definitely be more than 0 commits, something is wrong"
+
+    hg.close()
+
+    processes = multiprocessing.cpu_count()
+
+    print(f"Mining {commits_num} commits using {processes} processes...")
+
+    CHUNK_SIZE = 256
+    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
+
+    with concurrent.futures.ProcessPoolExecutor(
+        initializer=_init, initargs=(repo_dir,)
+    ) as executor:
+        commits = executor.map(_hg_log, revs_groups, chunksize=20)
+        commits = tqdm(commits, total=len(revs_groups))
+        commits = list(itertools.chain.from_iterable(commits))
+
+    # Don't analyze backouts.
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
+    commits = [commit for commit in commits if commit.node not in backouts]
+
+    # Don't analyze commits that are not linked to a bug.
+    commits = [commit for commit in commits if commit.bug != b""]
+
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
+        ignore_revs = set(l[:40] for l in f)
+
+    commits = [commit for commit in commits if commit.node not in ignore_revs]
+
+    print("Downloading file->component mapping...")
+
+    global path_to_component
+    r = requests.get(
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
+    )
+    r.raise_for_status()
+    path_to_component = r.json()
+    path_to_component = {
+        path: "::".join(component) for path, component in path_to_component.items()
+    }
+
+    calculate_experiences(commits)
 
     # Exclude commits outside the range we care about.
     commits = [commit for commit in commits if commit.pushdate > date_from]
 
-    print(f"Mining commits using {multiprocessing.cpu_count()} processes...")
+    commits_num = len(commits)
+
+    print(f"Mining {commits_num} commits using {processes} processes...")
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)

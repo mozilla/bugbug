@@ -1,13 +1,5 @@
 # bugbug
 
-## Contributing
-
-Discussions happen in #bugbug on irc.mozilla.org.
-
-1. Issues marked as `good first issue` are self-contained enough that a contributor should be able to work on them.
-2. Issues marked as `reserved-for-beginners` are reserved for people who have never contributed to the project before.
-3. Issues are to be considered as not assigned, until there is a PR linked to them.
-
 ## Classifiers
 - **bug vs feature** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
 
@@ -25,6 +17,7 @@ Discussions happen in #bugbug on irc.mozilla.org.
 
 - **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
 
+- **bugtype** - The aim of this classifier is to classify bugs according to their type.
 
 ## Setup
 

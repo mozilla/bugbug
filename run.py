@@ -36,6 +36,8 @@ if __name__ == "__main__":
             "devdocneeded",
             "defectenhancementtask",
             "assignee",
+            "bugtype",
+            "stepstoreproduce",
             # commit classifiers
             "backout",
         ],

@@ -8,7 +8,7 @@ from bugbug.models.defect import DefectModel
 
 def test_get_bug_labels():
     model = DefectModel()
-    classes = model.get_labels()
+    classes, _ = model.get_labels()
     # labels from bug_nobug.csv
     assert classes[1087488]
     assert not classes[1101825]

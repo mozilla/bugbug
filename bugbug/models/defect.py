@@ -243,7 +243,7 @@ class DefectModel(BugModel):
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
     def get_labels(self):
-        return self.get_bugbug_labels("bug")
+        return (self.get_bugbug_labels("bug"), [0, 1])
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

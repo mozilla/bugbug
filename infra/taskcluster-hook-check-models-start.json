@@ -15,7 +15,7 @@
             "$fromNow": "2 hours"
         },
         "expires": {
-            "$fromNow": "1 month"
+            "$fromNow": "1 week"
         },
         "extra": {},
         "metadata": {
@@ -44,7 +44,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug",
+            "assume:hook-id:project-relman/bugbug-checks"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"

@@ -5,6 +5,7 @@ import os
 from bugbug.model import BugModel
 from bugbug.models.assignee import AssigneeModel
 from bugbug.models.backout import BackoutModel
+from bugbug.models.bugtype import BugTypeModel
 from bugbug.models.component import ComponentModel
 from bugbug.models.component_nn import ComponentNNModel
 from bugbug.models.defect import DefectModel
@@ -12,6 +13,7 @@ from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.devdocneeded import DevDocNeededModel
 from bugbug.models.qaneeded import QANeededModel
 from bugbug.models.regression import RegressionModel
+from bugbug.models.stepstoreproduce import StepsToReproduceModel
 from bugbug.models.tracking import TrackingModel
 from bugbug.models.uplift import UpliftModel
 
@@ -22,6 +24,7 @@ MODELS = {
     "assignee": AssigneeModel,
     "backout": BackoutModel,
     "bug": BugModel,
+    "bugtype": BugTypeModel,
     "component": ComponentModel,
     "component_nn": ComponentNNModel,
     "defect": DefectModel,
@@ -29,6 +32,7 @@ MODELS = {
     "devdocneeded": DevDocNeededModel,
     "qaneeded": QANeededModel,
     "regression": RegressionModel,
+    "stepstoreproduce": StepsToReproduceModel,
     "tracking": TrackingModel,
     "uplift": UpliftModel,
 }

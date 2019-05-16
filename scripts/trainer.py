@@ -37,13 +37,6 @@ class Trainer(object):
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
-        # Commits.json
-        logger.info("Downloading commits database")
-        commits_url = BASE_URL.format("commits")
-        urlretrieve(f"{commits_url}/commits.json.xz", "data/commits.json.xz")
-        logger.info("Decompressing commits database")
-        self.decompress_file("data/commits.json")
-
         log_messages = {
             "component": "Training *component* model",
             "defectenhancementtask": "Training *defect vs enhancement vs task* model",
