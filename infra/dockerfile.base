@@ -1,6 +1,6 @@
 FROM python:3.7.3-slim
 
-# Setup dependencies in a cachable step
+# Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
 RUN apt-get update && \
 		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
