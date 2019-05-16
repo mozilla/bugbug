@@ -19,9 +19,10 @@ from bugbug.models import get_model_class
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
+DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
 
 
 def load_model(model_name):
@@ -68,7 +69,9 @@ def retrieve_model(name):
     return file_path
 
 
-def classify_bug(model_name, bug_ids, bugzilla_token, expiration=500):
+def classify_bug(
+    model_name, bug_ids, bugzilla_token, expiration=DEFAULT_EXPIRATION_TTL
+):
     # This should be called in a process worker so it should be safe to set
     # the token here
     bug_ids_set = set(map(int, bug_ids))
