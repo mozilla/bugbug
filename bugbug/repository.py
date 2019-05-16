@@ -50,10 +50,7 @@ Commit = namedtuple(
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
-experiences_by_commit = {
-    "total": defaultdict(lambda: defaultdict(int)),
-    EXPERIENCE_TIMESPAN_TEXT: defaultdict(lambda: defaultdict(int)),
-}
+experiences_by_commit = {}
 
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
 # gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
@@ -144,31 +141,31 @@ def _transform(commit):
         "files_modified_num": 0,
         "types": set(),
         "components": list(),
-        "author_experience": experiences_by_commit["total"]["author"][commit.node],
+        "author_experience": experiences_by_commit["author"]["total"][commit.node],
         f"author_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["author"][commit.node],
-        "reviewer_experience": experiences_by_commit["total"]["reviewer"][commit.node],
+            "author"
+        ][EXPERIENCE_TIMESPAN_TEXT][commit.node],
+        "reviewer_experience": experiences_by_commit["reviewer"]["total"][commit.node],
         f"reviewer_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["reviewer"][commit.node],
+            "reviewer"
+        ][EXPERIENCE_TIMESPAN_TEXT][commit.node],
         "author_email": commit.author_email.decode("utf-8"),
-        "components_touched_prev": experiences_by_commit["total"]["component"][
+        "components_touched_prev": experiences_by_commit["component"]["total"][
             commit.node
         ],
         f"components_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
+            "component"
+        ][EXPERIENCE_TIMESPAN_TEXT][commit.node],
+        "files_touched_prev": experiences_by_commit["file"]["total"][commit.node],
+        f"files_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit["file"][
             EXPERIENCE_TIMESPAN_TEXT
-        ]["component"][commit.node],
-        "files_touched_prev": experiences_by_commit["total"]["file"][commit.node],
-        f"files_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["file"][commit.node],
-        "directories_touched_prev": experiences_by_commit["total"]["directory"][
+        ][commit.node],
+        "directories_touched_prev": experiences_by_commit["directory"]["total"][
             commit.node
         ],
         f"directories_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["directory"][commit.node],
+            "directory"
+        ][EXPERIENCE_TIMESPAN_TEXT][commit.node],
     }
 
     sizes = []
@@ -333,54 +330,55 @@ def get_directories(files):
     return list(directories)
 
 
-def calculate_experiences(commits):
-    print(f"Analyzing experiences from {len(commits)} commits...")
-
-    global experiences_by_commit
-
+def inner_calculate_experiences(commits, experience_type):
     first_pushdate = commits[0].pushdate
 
-    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    experiences_by_commit = {
+        "total": defaultdict(int),
+        EXPERIENCE_TIMESPAN_TEXT: defaultdict(int),
+    }
+
+    experiences = defaultdict(lambda: defaultdict(int))
     # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    complex_experiences = defaultdict(lambda: defaultdict(set))
 
-    def update_experiences(experience_type, day, items):
+    def update_experiences(day, items):
         for item in items:
-            exp = experiences[day][experience_type][item]
+            exp = experiences[day][item]
 
-            experiences_by_commit["total"][experience_type][commit.node] += exp
-            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                commit.node
-            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
-
-            # We don't want to consider backed out commits when calculating experiences.
-            if not commit.backedoutby:
-                experiences[day][experience_type][item] += 1
-
-    def update_complex_experiences(experience_type, day, items, self_node):
-        all_commits = set()
-        before_timespan_commits = set()
-        for item in items:
-            all_commits.update(complex_experiences[day][experience_type][item])
-
-            before_timespan_commits.update(
-                complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            experiences_by_commit["total"][commit.node] += exp
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][commit.node] += (
+                exp - experiences[day - EXPERIENCE_TIMESPAN][item]
             )
 
             # We don't want to consider backed out commits when calculating experiences.
             if not commit.backedoutby:
-                complex_experiences[day][experience_type][item].add(commit.node)
+                experiences[day][item] += 1
+
+    def update_complex_experiences(day, items, self_node):
+        all_commits = set()
+        before_timespan_commits = set()
+        for item in items:
+            all_commits.update(complex_experiences[day][item])
+
+            before_timespan_commits.update(
+                complex_experiences[day - EXPERIENCE_TIMESPAN][item]
+            )
+
+            # We don't want to consider backed out commits when calculating experiences.
+            if not commit.backedoutby:
+                complex_experiences[day][item].add(commit.node)
 
         # If a commit changes two files in the same component, we shouldn't increase the exp by two.
         all_commits.discard(self_node)
 
-        experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
-        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-            commit.node
-        ] = len(all_commits - before_timespan_commits)
+        experiences_by_commit["total"][commit.node] = len(all_commits)
+        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][commit.node] = len(
+            all_commits - before_timespan_commits
+        )
 
     prev_days = 0
 
@@ -391,65 +389,107 @@ def calculate_experiences(commits):
         if days not in experiences and days != prev_days:
             assert days not in complex_experiences
             for day in range(prev_days + 1, days + 1):
-                experiences[day] = copy.deepcopy(experiences[day - 1])
-                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
+                if experience_type in ["author", "reviewer"]:
+                    experiences[day] = copy.deepcopy(experiences[day - 1])
+                elif experience_type in ["file", "directory", "component"]:
+                    complex_experiences[day] = copy.deepcopy(
+                        complex_experiences[day - 1]
+                    )
 
         prev_days = days
 
-        update_experiences("author", days, [commit.author])
-        update_experiences("reviewer", days, commit.reviewers)
+        if experience_type == "author":
+            update_experiences(days, [commit.author])
+
+        if experience_type == "reviewer":
+            update_experiences(days, commit.reviewers)
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        if len(commit.file_copies) > 0:
+        if (
+            experience_type in ["file", "directory", "component"]
+            and len(commit.file_copies) > 0
+        ):
             for orig, copied in commit.file_copies.items():
-                orig_directories = get_directories(orig)
-                copied_directories = get_directories(copied)
+                if experience_type == "directory":
+                    orig_directories = get_directories(orig)
+                    copied_directories = get_directories(copied)
 
-                if orig in path_to_component and copied in path_to_component:
-                    orig_component = path_to_component[orig]
-                    copied_component = path_to_component[copied]
-                else:
-                    orig_component = copied_component = None
+                if experience_type == "component":
+                    if orig in path_to_component and copied in path_to_component:
+                        orig_component = path_to_component[orig]
+                        copied_component = path_to_component[copied]
+                    else:
+                        orig_component = copied_component = None
 
                 for prev_day in complex_experiences.keys():
-                    if orig_component is not None:
-                        complex_experiences[prev_day]["component"][
-                            copied_component
-                        ] = complex_experiences[prev_day]["component"][orig_component]
+                    if experience_type == "component":
+                        if orig_component is not None:
+                            complex_experiences[prev_day][
+                                copied_component
+                            ] = complex_experiences[prev_day][orig_component]
 
-                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
-                        prev_day
-                    ]["file"][orig]
+                    if experience_type == "file":
+                        complex_experiences[prev_day][copied] = complex_experiences[
+                            prev_day
+                        ][orig]
 
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        complex_experiences[prev_day]["directory"][
-                            copied_directory
-                        ] = complex_experiences[prev_day]["directory"][orig_directory]
+                    if experience_type == "directory":
+                        for orig_directory, copied_directory in zip(
+                            orig_directories, copied_directories
+                        ):
+                            complex_experiences[prev_day][
+                                copied_directory
+                            ] = complex_experiences[prev_day][orig_directory]
 
-        update_complex_experiences("file", days, commit.files, commit.node)
+        if experience_type == "file":
+            update_complex_experiences(days, commit.files, commit.node)
 
-        update_complex_experiences(
-            "directory", days, get_directories(commit.files), commit.node
-        )
+        if experience_type == "directory":
+            update_complex_experiences(days, get_directories(commit.files), commit.node)
 
-        components = list(
-            set(
-                path_to_component[path]
-                for path in commit.files
-                if path in path_to_component
+        if experience_type == "component":
+            components = list(
+                set(
+                    path_to_component[path]
+                    for path in commit.files
+                    if path in path_to_component
+                )
             )
-        )
 
-        update_complex_experiences("component", days, components, commit.node)
+            update_complex_experiences(days, components, commit.node)
 
         old_days = [
             day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
         ]
         for day in old_days:
-            del experiences[day]
-            del complex_experiences[day]
+            if experience_type in ["author", "reviewer"]:
+                del experiences[day]
+            elif experience_type in ["file", "directory", "component"]:
+                del complex_experiences[day]
+            else:
+                assert False
+
+    return experience_type, experiences_by_commit
+
+
+def inner_calculate_experiences_star(args):
+    return inner_calculate_experiences(*args)
+
+
+def calculate_experiences(commits):
+    print(f"Analyzing experiences from {len(commits)} commits...")
+
+    global experiences_by_commit
+
+    experience_types = ["author", "reviewer", "file", "directory", "component"]
+
+    tasks = [(commits, experience_type) for experience_type in experience_types]
+
+    pool = multiprocessing.Pool(processes=len(tasks))
+    for experience_type, partial_experiences_by_commit in pool.imap_unordered(
+        inner_calculate_experiences_star, tasks, 1
+    ):
+        experiences_by_commit[experience_type] = partial_experiences_by_commit
 
 
 def download_commits(repo_dir, date_from):

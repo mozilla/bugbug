@@ -193,72 +193,72 @@ def test_calculate_experiences():
 
     repository.calculate_experiences(commits)
 
-    assert repository.experiences_by_commit["total"]["author"]["commit1"] == 0
-    assert repository.experiences_by_commit["total"]["author"]["commit2"] == 0
-    assert repository.experiences_by_commit["total"]["author"]["commit3"] == 1
-    assert repository.experiences_by_commit["total"]["author"]["commit4"] == 1
-    assert repository.experiences_by_commit["total"]["author"]["commit5"] == 0
-    assert repository.experiences_by_commit["total"]["author"]["commit6"] == 1
+    assert repository.experiences_by_commit["author"]["total"]["commit1"] == 0
+    assert repository.experiences_by_commit["author"]["total"]["commit2"] == 0
+    assert repository.experiences_by_commit["author"]["total"]["commit3"] == 1
+    assert repository.experiences_by_commit["author"]["total"]["commit4"] == 1
+    assert repository.experiences_by_commit["author"]["total"]["commit5"] == 0
+    assert repository.experiences_by_commit["author"]["total"]["commit6"] == 1
 
-    assert repository.experiences_by_commit["90_days"]["author"]["commit1"] == 0
-    assert repository.experiences_by_commit["90_days"]["author"]["commit2"] == 0
-    assert repository.experiences_by_commit["90_days"]["author"]["commit3"] == 1
-    assert repository.experiences_by_commit["90_days"]["author"]["commit4"] == 0
-    assert repository.experiences_by_commit["90_days"]["author"]["commit5"] == 0
-    assert repository.experiences_by_commit["90_days"]["author"]["commit6"] == 1
+    assert repository.experiences_by_commit["author"]["90_days"]["commit1"] == 0
+    assert repository.experiences_by_commit["author"]["90_days"]["commit2"] == 0
+    assert repository.experiences_by_commit["author"]["90_days"]["commit3"] == 1
+    assert repository.experiences_by_commit["author"]["90_days"]["commit4"] == 0
+    assert repository.experiences_by_commit["author"]["90_days"]["commit5"] == 0
+    assert repository.experiences_by_commit["author"]["90_days"]["commit6"] == 1
 
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit1"] == 0
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit2"] == 1
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit3"] == 1
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit4"] == 4
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit5"] == 0
-    assert repository.experiences_by_commit["total"]["reviewer"]["commit6"] == 1
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit1"] == 0
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit2"] == 1
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit3"] == 1
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit4"] == 4
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit5"] == 0
+    assert repository.experiences_by_commit["reviewer"]["total"]["commit6"] == 1
 
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit1"] == 0
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit2"] == 1
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit3"] == 1
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit4"] == 0
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit5"] == 0
-    assert repository.experiences_by_commit["90_days"]["reviewer"]["commit6"] == 1
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit1"] == 0
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit2"] == 1
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit3"] == 1
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit4"] == 0
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit5"] == 0
+    assert repository.experiences_by_commit["reviewer"]["90_days"]["commit6"] == 1
 
-    assert repository.experiences_by_commit["total"]["file"]["commit1"] == 0
-    assert repository.experiences_by_commit["total"]["file"]["commit2"] == 1
-    assert repository.experiences_by_commit["total"]["file"]["commit3"] == 1
-    assert repository.experiences_by_commit["total"]["file"]["commit4"] == 2
-    assert repository.experiences_by_commit["total"]["file"]["commit5"] == 3
-    assert repository.experiences_by_commit["total"]["file"]["commit6"] == 4
+    assert repository.experiences_by_commit["file"]["total"]["commit1"] == 0
+    assert repository.experiences_by_commit["file"]["total"]["commit2"] == 1
+    assert repository.experiences_by_commit["file"]["total"]["commit3"] == 1
+    assert repository.experiences_by_commit["file"]["total"]["commit4"] == 2
+    assert repository.experiences_by_commit["file"]["total"]["commit5"] == 3
+    assert repository.experiences_by_commit["file"]["total"]["commit6"] == 4
 
-    assert repository.experiences_by_commit["90_days"]["file"]["commit1"] == 0
-    assert repository.experiences_by_commit["90_days"]["file"]["commit2"] == 1
-    assert repository.experiences_by_commit["90_days"]["file"]["commit3"] == 1
-    assert repository.experiences_by_commit["90_days"]["file"]["commit4"] == 0
-    assert repository.experiences_by_commit["90_days"]["file"]["commit5"] == 1
-    assert repository.experiences_by_commit["90_days"]["file"]["commit6"] == 2
+    assert repository.experiences_by_commit["file"]["90_days"]["commit1"] == 0
+    assert repository.experiences_by_commit["file"]["90_days"]["commit2"] == 1
+    assert repository.experiences_by_commit["file"]["90_days"]["commit3"] == 1
+    assert repository.experiences_by_commit["file"]["90_days"]["commit4"] == 0
+    assert repository.experiences_by_commit["file"]["90_days"]["commit5"] == 1
+    assert repository.experiences_by_commit["file"]["90_days"]["commit6"] == 2
 
-    assert repository.experiences_by_commit["total"]["directory"]["commit1"] == 0
-    assert repository.experiences_by_commit["total"]["directory"]["commit2"] == 1
-    assert repository.experiences_by_commit["total"]["directory"]["commit3"] == 2
-    assert repository.experiences_by_commit["total"]["directory"]["commit4"] == 3
-    assert repository.experiences_by_commit["total"]["directory"]["commit5"] == 4
-    assert repository.experiences_by_commit["total"]["directory"]["commit6"] == 5
+    assert repository.experiences_by_commit["directory"]["total"]["commit1"] == 0
+    assert repository.experiences_by_commit["directory"]["total"]["commit2"] == 1
+    assert repository.experiences_by_commit["directory"]["total"]["commit3"] == 2
+    assert repository.experiences_by_commit["directory"]["total"]["commit4"] == 3
+    assert repository.experiences_by_commit["directory"]["total"]["commit5"] == 4
+    assert repository.experiences_by_commit["directory"]["total"]["commit6"] == 5
 
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit1"] == 0
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit2"] == 1
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit3"] == 2
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit4"] == 0
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit5"] == 1
-    assert repository.experiences_by_commit["90_days"]["directory"]["commit6"] == 2
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit1"] == 0
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit2"] == 1
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit3"] == 2
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit4"] == 0
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit5"] == 1
+    assert repository.experiences_by_commit["directory"]["90_days"]["commit6"] == 2
 
-    assert repository.experiences_by_commit["total"]["component"]["commit1"] == 0
-    assert repository.experiences_by_commit["total"]["component"]["commit2"] == 1
-    assert repository.experiences_by_commit["total"]["component"]["commit3"] == 1
-    assert repository.experiences_by_commit["total"]["component"]["commit4"] == 3
-    assert repository.experiences_by_commit["total"]["component"]["commit5"] == 3
-    assert repository.experiences_by_commit["total"]["component"]["commit6"] == 4
+    assert repository.experiences_by_commit["component"]["total"]["commit1"] == 0
+    assert repository.experiences_by_commit["component"]["total"]["commit2"] == 1
+    assert repository.experiences_by_commit["component"]["total"]["commit3"] == 1
+    assert repository.experiences_by_commit["component"]["total"]["commit4"] == 3
+    assert repository.experiences_by_commit["component"]["total"]["commit5"] == 3
+    assert repository.experiences_by_commit["component"]["total"]["commit6"] == 4
 
-    assert repository.experiences_by_commit["90_days"]["component"]["commit1"] == 0
-    assert repository.experiences_by_commit["90_days"]["component"]["commit2"] == 1
-    assert repository.experiences_by_commit["90_days"]["component"]["commit3"] == 1
-    assert repository.experiences_by_commit["90_days"]["component"]["commit4"] == 0
-    assert repository.experiences_by_commit["90_days"]["component"]["commit5"] == 1
-    assert repository.experiences_by_commit["90_days"]["component"]["commit6"] == 2
+    assert repository.experiences_by_commit["component"]["90_days"]["commit1"] == 0
+    assert repository.experiences_by_commit["component"]["90_days"]["commit2"] == 1
+    assert repository.experiences_by_commit["component"]["90_days"]["commit3"] == 1
+    assert repository.experiences_by_commit["component"]["90_days"]["commit4"] == 0
+    assert repository.experiences_by_commit["component"]["90_days"]["commit5"] == 1
+    assert repository.experiences_by_commit["component"]["90_days"]["commit6"] == 2
