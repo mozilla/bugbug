@@ -101,6 +101,14 @@ def test_get_directories():
     ) == {"dom", "tools", "tools/code-coverage"}
 
 
+# Testing the get commits method
+def test_get_commits():
+    retrieved_commits = repository.get_commits()
+
+    # Checking if were getting the same number of commits as in JSON
+    assert len(list(retrieved_commits)) == 5
+
+
 def test_calculate_experiences():
     commits = [
         repository.Commit(
