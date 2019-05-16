@@ -132,7 +132,7 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.1
+          image: mozilla/taskboot:0.1.2
           command:
             - "/bin/sh"
             - "-lcxe"
@@ -210,7 +210,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.1
+            image: mozilla/taskboot:0.1.2
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -242,7 +242,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.1
+            image: mozilla/taskboot:0.1.2
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
@@ -277,7 +277,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.1
+            image: mozilla/taskboot:0.1.2
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
