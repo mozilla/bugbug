@@ -382,7 +382,7 @@ def inner_calculate_experiences(commits, experience_type):
 
     prev_days = 0
 
-    for commit in tqdm(commits):
+    for commit in commits:
         days = (commit.pushdate - first_pushdate).days
         assert days >= 0
 
@@ -486,8 +486,9 @@ def calculate_experiences(commits):
     tasks = [(commits, experience_type) for experience_type in experience_types]
 
     pool = multiprocessing.Pool(processes=len(tasks))
-    for experience_type, partial_experiences_by_commit in pool.imap_unordered(
-        inner_calculate_experiences_star, tasks, 1
+    results = pool.imap_unordered(inner_calculate_experiences_star, tasks, 1)
+    for experience_type, partial_experiences_by_commit in tqdm(
+        results, total=len(tasks)
     ):
         experiences_by_commit[experience_type] = partial_experiences_by_commit
 
