@@ -306,6 +306,72 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
         or (
             field == "type" and bug_id == 1257155
         )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550129 is fixed.
+        or is_email(
+            new_value
+        )  # TODO: Users can change their email, try with all emails from a mapping file.
+    )
+
+
+def is_expected_inconsistent_change_list_field(field, bug_id, value):
+    return (
+        (
+            field == "keywords"
+            and value == "checkin-needed"
+            and bug_id in [1274602, 1341727]
+        )
+        or (
+            field == "keywords"
+            and value
+            in [
+                "patch",
+                "nsbeta1",
+                "mozilla1.1",
+                "mozilla1.0",
+                "4xp",
+                "sec-review-complete",
+            ]
+        )  # These keywords don't exist anymore.
+        or is_email(
+            value
+        )  # TODO: Users can change their email, try with all emails from a mapping file.
+    )
+
+
+def is_expected_inconsistent_change_flag(flag, obj_id):
+    # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
+    return (
+        obj_id in [1_052_536, 1_201_115, 1_213_517, 794_863]
+        or (
+            flag == "in-testsuite+"
+            and obj_id
+            in [1_318_438, 1_312_852, 1_332_255, 1_344_690, 1_362_387, 1_380_306]
+        )
+        or (flag == "in-testsuite-" and obj_id in [1321444, 1342431, 1370129])
+        or (
+            flag == "checkin+"
+            and obj_id
+            in [8880381, 8879995, 8872652, 8871000, 8870452, 8870505, 8864140, 8868787]
+        )
+        or (flag == "checkin-" and obj_id == 8924974)
+        or (flag == "webcompat?" and obj_id in [1_360_579, 1_364_598])
+        or (
+            flag == "qe-verify-"
+            and obj_id
+            in [
+                1322685,
+                1336510,
+                1363358,
+                1370506,
+                1374024,
+                1377911,
+                1393848,
+                1396334,
+                1398874,
+                1419371,
+            ]
+        )
+        or (flag == "approval-comm-beta+" and obj_id == 8972248)
+        or (flag in ["platform-rel?", "blocking0.3-"])  # These flags have been removed.
     )
 
 
@@ -420,14 +486,6 @@ def rollback(bug, when=None, do_assert=False):
 
                 if change["added"]:
                     for to_remove in change["added"].split(", "):
-                        if to_remove.startswith("approval-comm-beta"):
-                            # Skip this for now.
-                            continue
-
-                        # These flags have been removed.
-                        if to_remove in ["platform-rel?", "blocking0.3-"]:
-                            continue
-
                         if any(
                             to_remove.startswith(s)
                             for s in [
@@ -457,66 +515,14 @@ def rollback(bug, when=None, do_assert=False):
                                     )
                                 found_flag = f
 
-                        # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
-                        if (
-                            obj["id"] not in [1_052_536, 1_201_115, 1_213_517, 794_863]
-                            and not (
-                                to_remove == "in-testsuite+"
-                                and obj["id"]
-                                in [
-                                    1_318_438,
-                                    1_312_852,
-                                    1_332_255,
-                                    1_344_690,
-                                    1_362_387,
-                                    1_380_306,
-                                ]
-                            )
-                            and not (
-                                to_remove == "in-testsuite-"
-                                and bug["id"] in [1_321_444, 1_342_431, 1_370_129]
-                            )
-                            and not (
-                                to_remove == "approval-comm-esr52?"
-                                and bug["id"] == 1_352_850
-                            )
-                            and not (
-                                to_remove == "checkin+"
-                                and bug["id"]
-                                in [
-                                    1_308_868,
-                                    1_357_808,
-                                    1_361_361,
-                                    1_365_763,
-                                    1_328_454,
-                                ]
-                            )
-                            and not (to_remove == "checkin-" and bug["id"] == 1_412_952)
-                            and not (
-                                to_remove == "webcompat?"
-                                and obj["id"] in [1_360_579, 1_364_598]
-                            )
-                            and not (
-                                to_remove == "qe-verify-"
-                                and bug["id"]
-                                in [
-                                    1_322_685,
-                                    1_336_510,
-                                    1_363_358,
-                                    1_370_506,
-                                    1_374_024,
-                                    1_377_911,
-                                    1_393_848,
-                                    1_396_334,
-                                    1_398_874,
-                                    1_419_371,
-                                ]
-                            )
-                        ):
-                            if found_flag is None:
-                                assert_or_log(f"flag {to_remove} not found")
                         if found_flag is not None:
                             obj["flags"].remove(found_flag)
+                        elif not is_expected_inconsistent_change_flag(
+                            to_remove, obj["id"]
+                        ):
+                            assert_or_log(
+                                f"flag {to_remove} not found, in obj {obj['id']}"
+                            )
 
                 if change["removed"]:
                     # Inconsistent review flag.
@@ -549,39 +555,14 @@ def rollback(bug, when=None, do_assert=False):
                         if field in FIELD_TYPES:
                             to_remove = FIELD_TYPES[field](to_remove)
 
-                        if is_email(to_remove):
-                            # TODO: Users can change their email, try with all emails from a mapping file.
-                            continue
-
-                        if field == "keywords" and to_remove in [
-                            "checkin-needed",
-                            "#relman/triage/defer-to-group",
-                            "conduit-needs-discussion",
-                        ]:
-                            # TODO: https://bugzilla.mozilla.org/show_bug.cgi?id=1513981.
-                            if to_remove in bug[field]:
-                                bug[field].remove(to_remove)
-                            continue
-
-                        # These keywords don't exist anymore.
-                        if field == "keywords" and to_remove in [
-                            "patch",
-                            "nsbeta1",
-                            "mozilla1.1",
-                            "mozilla1.0",
-                            "4xp",
-                            "sec-review-complete",
-                        ]:
-                            if to_remove in bug[field]:
-                                assert_or_log(f"Found unexpected keyword {to_remove}")
-                            continue
-
-                        if to_remove not in bug[field]:
+                        if to_remove in bug[field]:
+                            bug[field].remove(to_remove)
+                        elif not is_expected_inconsistent_change_list_field(
+                            field, bug["id"], to_remove
+                        ):
                             assert_or_log(
                                 f"{to_remove} is not in {bug[field]}, for field {field}"
                             )
-                        else:
-                            bug[field].remove(to_remove)
 
                 if change["removed"]:
                     for to_add in change["removed"].split(", "):
@@ -596,16 +577,16 @@ def rollback(bug, when=None, do_assert=False):
                     old_value = change["removed"]
                     new_value = change["added"]
 
-                # TODO: Users can change their email, try with all emails from a mapping file.
-                if field in bug and not is_email(bug[field]):
-                    if bug[
-                        field
-                    ] != new_value and not is_expected_inconsistent_change_field(
+                if (
+                    field in bug
+                    and bug[field] != new_value
+                    and not is_expected_inconsistent_change_field(
                         field, bug["id"], new_value
-                    ):
-                        assert_or_log(
-                            f"Current value for field {field}: ({bug[field]}) is different from previous value: ({new_value})"
-                        )
+                    )
+                ):
+                    assert_or_log(
+                        f"Current value for field {field}: ({bug[field]}) is different from previous value: ({new_value})"
+                    )
 
                 bug[field] = old_value
 
