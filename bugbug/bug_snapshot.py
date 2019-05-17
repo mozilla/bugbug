@@ -63,6 +63,13 @@ def op_sys(op_sys):
     return op_sys
 
 
+def platform(platform):
+    if platform == "Macintosh":
+        return "PowerPC"
+
+    return platform
+
+
 def product(product):
     mapping = {
         "Web Compatibility Tools": "Web Compatibility",
@@ -110,6 +117,7 @@ FIELD_TYPES = {
     "keywords": keyword_mapping,
     "groups": group_mapping,
     "op_sys": op_sys,
+    "platform": platform,
     "product": product,
     "target_milestone": target_milestone,
     "cf_due_date": null_str,
