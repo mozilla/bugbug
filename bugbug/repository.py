@@ -345,7 +345,7 @@ def calculate_experiences(commits):
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(set)))
+    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     def update_experiences(experience_type, day, items):
         for item in items:
@@ -372,7 +372,7 @@ def calculate_experiences(commits):
 
             # We don't want to consider backed out commits when calculating experiences.
             if not commit.backedoutby:
-                complex_experiences[day][experience_type][item].add(commit.node)
+                complex_experiences[day][experience_type][item].append(commit.node)
 
         # If a commit changes two files in the same component, we shouldn't increase the exp by two.
         all_commits.discard(self_node)
