@@ -9,6 +9,9 @@ tasks:
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-base
+      env:
+        MODEL_DOWNLOAD_URL: https://index.taskcluster.net/v1/task/project.relman.bugbug.train_component.latest/artifacts/public/componentmodel.xz
+        SHOULD_DOWNLOAD_URL: 1
       command:
         - bugbug-check
         - component
