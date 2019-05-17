@@ -326,7 +326,6 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     for history in reversed(bug["history"]):
         # TODO: Handle changes to product and component.
         # TODO: This code might be removed when https://bugzilla.mozilla.org/show_bug.cgi?id=1513952 is fixed.
-        pass
 
         if ret:
             break
