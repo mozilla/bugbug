@@ -301,7 +301,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
     )
 
 
-def rollback(bug, when, verbose=True, all_inconsistencies=False):
+def rollback(bug, when=None):
     last_product = bug["product"]
 
     change_to_return = None
@@ -518,11 +518,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
 
             if change["added"] != "---":
                 if field not in bug:
-                    if not all_inconsistencies and is_expected_inconsistent_field(
-                        field, last_product, bug["id"]
-                    ):
-                        if verbose:
-                            print(f'{field} is not in bug {bug["id"]}')
+                    if is_expected_inconsistent_field(field, last_product, bug["id"]):
+                        print(f'{field} is not in bug {bug["id"]}')
                     else:
                         assert False, f'{field} is not in bug {bug["id"]}'
 
@@ -582,11 +579,8 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
                 # TODO: Users can change their email, try with all emails from a mapping file.
                 if field in bug and not is_email(bug[field]):
                     if bug[field] != new_value:
-                        if (
-                            not all_inconsistencies
-                            and is_expected_inconsistent_change_field(
-                                field, bug["id"], new_value
-                            )
+                        if is_expected_inconsistent_change_field(
+                            field, bug["id"], new_value
                         ):
                             # This case is too common, let's not print anything.
                             if not (field == "severity" and new_value == "enhancement"):
@@ -632,12 +626,12 @@ def rollback(bug, when, verbose=True, all_inconsistencies=False):
     return bug
 
 
-def get_inconsistencies(find_all=False):
+def get_inconsistencies():
     inconsistencies = []
 
     for bug in bugzilla.get_bugs():
         try:
-            rollback(bug, None, False, find_all)
+            rollback(bug)
         except Exception as e:
             print(bug["id"])
             print(e)
@@ -657,4 +651,5 @@ if __name__ == "__main__":
         if args.verbose:
             print(bug["id"])
             print(i)
-        rollback(bug, None, False)
+
+        rollback(bug)
