@@ -309,7 +309,14 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
     )
 
 
-def rollback(bug, when=None):
+def rollback(bug, when=None, do_assert=False):
+    def assert_or_log(msg):
+        msg = f'{msg}, in bug {bug["id"]}'
+        if do_assert:
+            assert False, msg
+        else:
+            print(msg)
+
     last_product = bug["product"]
 
     change_to_return = None
@@ -404,7 +411,10 @@ def rollback(bug, when=None):
                         if attachment["id"] == change["attachment_id"]:
                             obj = attachment
                             break
-                    assert obj is not None
+
+                    if obj is None:
+                        assert_or_log(f'Attachment {attachment["id"]} not found')
+                        continue
                 else:
                     obj = bug
 
@@ -441,9 +451,10 @@ def rollback(bug, when=None):
                                 and f["status"] == status
                                 and (requestee is None or f["requestee"] == requestee)
                             ):
-                                assert (
-                                    found_flag is None
-                                ), f'{f["name"]}{f["status"]}{f["requestee"]} found twice!'
+                                if found_flag is not None:
+                                    assert_or_log(
+                                        f'{f["name"]}{f["status"]}{f["requestee"]} found twice!'
+                                    )
                                 found_flag = f
 
                         # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
@@ -502,9 +513,8 @@ def rollback(bug, when=None):
                                 ]
                             )
                         ):
-                            assert (
-                                found_flag is not None
-                            ), f'flag {to_remove} not found in {bug["id"]}'
+                            if found_flag is None:
+                                assert_or_log(f"flag {to_remove} not found")
                         if found_flag is not None:
                             obj["flags"].remove(found_flag)
 
@@ -525,11 +535,10 @@ def rollback(bug, when=None):
                 continue
 
             if change["added"] != "---":
-                if field not in bug:
-                    if is_expected_inconsistent_field(field, last_product, bug["id"]):
-                        print(f'{field} is not in bug {bug["id"]}')
-                    else:
-                        assert False, f'{field} is not in bug {bug["id"]}'
+                if field not in bug and not is_expected_inconsistent_field(
+                    field, last_product, bug["id"]
+                ):
+                    assert_or_log(f"{field} is not present")
 
             if field in bug and isinstance(bug[field], list):
                 if change["added"]:
@@ -563,13 +572,16 @@ def rollback(bug, when=None):
                             "4xp",
                             "sec-review-complete",
                         ]:
-                            assert to_remove not in bug[field]
+                            if to_remove in bug[field]:
+                                assert_or_log(f"Found unexpected keyword {to_remove}")
                             continue
 
-                        assert (
-                            to_remove in bug[field]
-                        ), f'{to_remove} is not in {bug[field]}, for field {field} of {bug["id"]}'
-                        bug[field].remove(to_remove)
+                        if to_remove not in bug[field]:
+                            assert_or_log(
+                                f"{to_remove} is not in {bug[field]}, for field {field}"
+                            )
+                        else:
+                            bug[field].remove(to_remove)
 
                 if change["removed"]:
                     for to_add in change["removed"].split(", "):
@@ -586,19 +598,14 @@ def rollback(bug, when=None):
 
                 # TODO: Users can change their email, try with all emails from a mapping file.
                 if field in bug and not is_email(bug[field]):
-                    if bug[field] != new_value:
-                        if is_expected_inconsistent_change_field(
-                            field, bug["id"], new_value
-                        ):
-                            # This case is too common, let's not print anything.
-                            if not (field == "severity" and new_value == "enhancement"):
-                                print(
-                                    f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
-                                )
-                        else:
-                            assert (
-                                False
-                            ), f'Current value for field {field} of {bug["id"]}:\n{bug[field]}\nis different from previous value:\n{new_value}'
+                    if bug[
+                        field
+                    ] != new_value and not is_expected_inconsistent_change_field(
+                        field, bug["id"], new_value
+                    ):
+                        assert_or_log(
+                            f"Current value for field {field}: ({bug[field]}) is different from previous value: ({new_value})"
+                        )
 
                 bug[field] = old_value
 
@@ -627,9 +634,16 @@ def rollback(bug, when=None):
         <= rollback_date
     ]
 
-    assert (
-        len(bug["comments"]) >= 1
-    ), f"There must be at least one comment in bug {bug['id']}"
+    if len(bug["comments"]) == 0:
+        assert_or_log("There must be at least one comment")
+        bug["comments"] = [
+            {
+                "id": 0,
+                "text": "",
+                "author": bug["creator"],
+                "creation_time": bug["creation_time"],
+            }
+        ]
 
     return bug
 
@@ -639,7 +653,7 @@ def get_inconsistencies():
 
     for bug in bugzilla.get_bugs():
         try:
-            rollback(bug)
+            rollback(bug, do_assert=True)
         except Exception as e:
             print(bug["id"])
             print(e)
@@ -660,4 +674,4 @@ if __name__ == "__main__":
             print(bug["id"])
             print(i)
 
-        rollback(bug)
+        rollback(bug, do_assert=True)

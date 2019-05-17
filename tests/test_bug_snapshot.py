@@ -13,4 +13,4 @@ def test_bug_snapshot():
         print(bug["id"])
         print(i)
 
-        rollback(bug)
+        rollback(bug, do_assert=True)
