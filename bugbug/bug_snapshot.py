@@ -479,7 +479,7 @@ def rollback(bug, when=None, do_assert=False):
                             break
 
                     if obj is None:
-                        assert_or_log(f'Attachment {attachment["id"]} not found')
+                        assert_or_log(f'Attachment {change["attachment_id"]} not found')
                         continue
                 else:
                     obj = bug
