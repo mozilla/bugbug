@@ -348,39 +348,55 @@ def calculate_experiences(commits):
     complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
     def update_experiences(experience_type, day, items):
-        for item in items:
-            exp = experiences[day][experience_type][item]
+        total_exps = [experiences[day][experience_type][item] for item in items]
+        before_exps = [
+            experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            for item in items
+        ]
 
-            experiences_by_commit["total"][experience_type][commit.node] += exp
-            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                commit.node
-            ] += (exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item])
+        total_exps_sum = sum(total_exps)
 
-            # We don't want to consider backed out commits when calculating experiences.
-            if not commit.backedoutby:
+        experiences_by_commit["total"][experience_type][commit.node] = total_exps_sum
+        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+            commit.node
+        ] = total_exps_sum - sum(before_exps)
+
+        # We don't want to consider backed out commits when calculating experiences.
+        if not commit.backedoutby:
+            for item in items:
                 experiences[day][experience_type][item] += 1
 
-    def update_complex_experiences(experience_type, day, items, self_node):
-        all_commits = set()
-        before_timespan_commits = set()
-        for item in items:
-            all_commits.update(complex_experiences[day][experience_type][item])
+    def update_complex_experiences(experience_type, day, items):
+        all_commit_lists = [
+            complex_experiences[day][experience_type][item] for item in items
+        ]
+        before_commit_lists = [
+            complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            for item in items
+        ]
 
-            before_timespan_commits.update(
-                complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+        all_commits = set(sum(all_commit_lists, []))
+        timespan_commits = set(
+            sum(
+                (
+                    commit_list[len(before_commit_list) :]
+                    for commit_list, before_commit_list in zip(
+                        all_commit_lists, before_commit_lists
+                    )
+                ),
+                [],
             )
-
-            # We don't want to consider backed out commits when calculating experiences.
-            if not commit.backedoutby:
-                complex_experiences[day][experience_type][item].append(commit.node)
-
-        # If a commit changes two files in the same component, we shouldn't increase the exp by two.
-        all_commits.discard(self_node)
+        )
 
         experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
         experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
             commit.node
-        ] = len(all_commits - before_timespan_commits)
+        ] = len(timespan_commits)
+
+        # We don't want to consider backed out commits when calculating experiences.
+        if not commit.backedoutby:
+            for item in items:
+                complex_experiences[day][experience_type][item].append(commit.node)
 
     prev_days = 0
 
@@ -428,11 +444,9 @@ def calculate_experiences(commits):
                             copied_directory
                         ] = complex_experiences[prev_day]["directory"][orig_directory]
 
-        update_complex_experiences("file", days, commit.files, commit.node)
+        update_complex_experiences("file", days, commit.files)
 
-        update_complex_experiences(
-            "directory", days, get_directories(commit.files), commit.node
-        )
+        update_complex_experiences("directory", days, get_directories(commit.files))
 
         components = list(
             set(
@@ -442,7 +456,7 @@ def calculate_experiences(commits):
             )
         )
 
-        update_complex_experiences("component", days, components, commit.node)
+        update_complex_experiences("component", days, components)
 
         old_days = [
             day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
