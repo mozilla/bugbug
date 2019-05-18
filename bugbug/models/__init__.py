@@ -21,7 +21,7 @@ MODELS = {
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
-    "regressionrange" : "bugbug.model.regressionrange.RegressionRangeModel"
+    "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
 }
 
 
