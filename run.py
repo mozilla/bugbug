@@ -12,6 +12,7 @@ import numpy as np
 
 from bugbug import repository  # noqa
 from bugbug import bugzilla, db
+from bugbug.models import get_model_class
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -65,63 +66,18 @@ if __name__ == "__main__":
         args.goal, "" if args.classifier == "default" else args.classifier
     )
 
-    if args.goal == "defect":
-        from bugbug.models.defect import DefectModel
+    model_class_name = args.goal
 
-        model_class = DefectModel
-    elif args.goal == "defectenhancementtask":
-        from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-
-        model_class = DefectEnhancementTaskModel
-    elif args.goal == "regression":
-        from bugbug.models.regression import RegressionModel
-
-        model_class = RegressionModel
-    elif args.goal == "tracking":
-        from bugbug.models.tracking import TrackingModel
-
-        model_class = TrackingModel
-    elif args.goal == "qaneeded":
-        from bugbug.models.qaneeded import QANeededModel
-
-        model_class = QANeededModel
-    elif args.goal == "uplift":
-        from bugbug.models.uplift import UpliftModel
-
-        model_class = UpliftModel
-    elif args.goal == "component":
+    if args.goal == "component":
         if args.classifier == "default":
-            from bugbug.models.component import ComponentModel
-
-            model_class = ComponentModel
+            model_class_name = "component"
         elif args.classifier == "nn":
-            from bugbug.models.component_nn import ComponentNNModel
+            model_class_name = "component_nn"
+        else:
+            raise ValueError(f"Unknown value {args.classifier}")
 
-            model_class = ComponentNNModel
-    elif args.goal == "devdocneeded":
-        from bugbug.models.devdocneeded import DevDocNeededModel
+    model_class = get_model_class(model_class_name)
 
-        model_class = DevDocNeededModel
-    elif args.goal == "assignee":
-        from bugbug.models.assignee import AssigneeModel
-
-        model_class = AssigneeModel
-    elif args.goal == "backout":
-        from bugbug.models.backout import BackoutModel
-
-        model_class = BackoutModel
-    elif args.goal == "bugtype":
-        from bugbug.models.bugtype import BugTypeModel
-
-        model_class = BugTypeModel
-    elif args.goal == "stepstoreproduce":
-        from bugbug.models.stepstoreproduce import StepsToReproduceModel
-
-        model_class = StepsToReproduceModel
-    elif args.goal == "regressionrange":
-        from bugbug.models.regressionrange import RegressionRangeModel
-
-        model_class = RegressionRangeModel
     if args.train:
         db.download()
 

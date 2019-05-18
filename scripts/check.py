@@ -1,41 +1,45 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import lzma
+import os
+import shutil
 import sys
 from logging import INFO, basicConfig, getLogger
+from urllib.request import urlretrieve
 
-from bugbug.models.component import ComponentModel
+from bugbug.models import load_model
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
+def download_model(model_url, file_path):
+    logger.info(f"Downloading model from {model_url!r} and save it in {file_path!r}")
+    urlretrieve(model_url, f"{file_path}.xz")
+
+    with lzma.open(f"{file_path}.xz", "rb") as input_f:
+        with open(file_path, "wb") as output_f:
+            shutil.copyfileobj(input_f, output_f)
+            logger.info(f"Written model in {file_path}")
+
+
 class ModelChecker:
     def go(self, model_name):
-        # TODO: Stop hard-coding them
-        valid_models = ["component"]
+        should_download_model = bool(os.getenv("SHOULD_DOWNLOAD_MODEL"))
+        download_url = os.getenv("MODEL_DOWNLOAD_URL")
 
-        if model_name not in valid_models:
-            exception = f"Invalid model {model_name!r} name, use one of {valid_models!r} instead"
-            raise ValueError(exception)
-
-        # TODO: What is the standard file path of the models?
-        model_file_name = f"{model_name}model"
-
-        if model_name == "component":
-            model_class = ComponentModel
-        else:
-            # We shouldn't be here
-            raise Exception("valid_models is likely not up-to-date anymore")
+        if should_download_model and download_url:
+            download_url = download_model(download_url, f"{model_name}model")
 
         # Load the model
-        model = model_class.load(model_file_name)
+        model = load_model(model_name)
 
         # Then call the check method of the model
         success = model.check()
 
         if not success:
-            msg = f"Check of model {model_class!r} failed, check the output for reasons why"
+            msg = f"Check of model {model.__class__!r} failed, check the output for reasons why"
             logger.warning(msg)
             sys.exit(1)
 
