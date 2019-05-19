@@ -209,7 +209,7 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.2
+      image: mozilla/taskboot:0.1.3
       command:
         - "/bin/sh"
         - "-lcxe"
@@ -250,7 +250,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.2
+      image: mozilla/taskboot:0.1.3
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
@@ -263,5 +263,40 @@ tasks:
     metadata:
       name: bugbug docker http push
       description: bugbug docker http push
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: http-deploy
+    dependencies:
+      - docker-build
+    scopes:
+      - secrets:get:project/relman/bugbug/deploy
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '120 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: github-worker
+    payload:
+      features:
+        taskclusterProxy:
+          true
+      maxRunTime: 3600
+      image: mozilla/taskboot:0.1.3
+      env:
+        TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+      command:
+        - taskboot
+        - deploy-heroku
+        - --artifact-filter
+        - public/bugbug/bugbug-http-service.tar
+        - --heroku-app
+        - bugbug
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+    metadata:
+      name: bugbug docker http service deploy
+      description: bugbug docker http service deploy
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
