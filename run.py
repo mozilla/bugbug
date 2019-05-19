@@ -38,6 +38,7 @@ if __name__ == "__main__":
             "assignee",
             "bugtype",
             "stepstoreproduce",
+            "regressionrange",
             # commit classifiers
             "backout",
         ],
