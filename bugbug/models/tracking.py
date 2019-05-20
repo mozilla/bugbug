@@ -17,6 +17,8 @@ class TrackingModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
         self.sampler = InstanceHardnessThreshold(random_state=0)
 
         feature_extractors = [

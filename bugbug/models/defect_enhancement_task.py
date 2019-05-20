@@ -7,8 +7,8 @@ from bugbug.models.defect import DefectModel
 
 
 class DefectEnhancementTaskModel(DefectModel):
-    def __init__(self, lemmatization=False):
-        DefectModel.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, historical=False):
+        DefectModel.__init__(self, lemmatization, historical)
 
         self.calculate_importance = False
 

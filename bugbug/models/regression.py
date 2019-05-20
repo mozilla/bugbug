@@ -7,8 +7,8 @@ from bugbug.models.defect import DefectModel
 
 
 class RegressionModel(DefectModel):
-    def __init__(self, lemmatization=False):
-        DefectModel.__init__(self, lemmatization)
+    def __init__(self, lemmatization=False, historical=False):
+        DefectModel.__init__(self, lemmatization, historical)
 
     def get_labels(self):
         return self.get_bugbug_labels("regression"), [0, 1]

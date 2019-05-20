@@ -12,11 +12,9 @@ OPT_MSG_MISSING = (
 )
 
 try:
-    from keras.preprocessing.sequence import pad_sequences
     from keras.preprocessing.text import Tokenizer
+    from keras.preprocessing.sequence import pad_sequences
     from keras.utils import to_categorical
-
-    HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 

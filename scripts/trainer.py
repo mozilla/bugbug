@@ -7,10 +7,7 @@ import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
-from bugbug.models.component import ComponentModel
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
-from bugbug.models.tracking import TrackingModel
+from bugbug.models import get_model_class
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -29,40 +26,7 @@ class Trainer(object):
             with lzma.open(f"{path}.xz", "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
 
-    def train_defect_enhancement_task(self):
-        logger.info("Training *defect vs enhancement vs task* model")
-        model = DefectEnhancementTaskModel()
-        model.train()
-        self.compress_file("defectenhancementtaskmodel")
-
-    def train_component(self):
-        logger.info("Training *component* model")
-        model = ComponentModel()
-        model.train()
-        self.compress_file("componentmodel")
-
-    def train_regression(self):
-        logger.info("Training *regression vs non-regression* model")
-        model = RegressionModel()
-        model.train()
-        self.compress_file("regressionmodel")
-
-    def train_tracking(self):
-        logger.info("Training *tracking* model")
-        model = TrackingModel()
-        model.train()
-        self.compress_file("trackingmodel")
-
-    def go(self, model):
-        # TODO: Stop hard-coding them
-        valid_models = ["defect", "component", "regression", "tracking"]
-
-        if model not in valid_models:
-            exception = (
-                f"Invalid model {model!r} name, use one of {valid_models!r} instead"
-            )
-            raise ValueError(exception)
-
+    def go(self, model_name):
         # Download datasets that were built by bugbug_data.
         os.makedirs("data", exist_ok=True)
 
@@ -73,21 +37,14 @@ class Trainer(object):
         logger.info("Decompressing bugs database")
         self.decompress_file("data/bugs.json")
 
-        if model == "defect":
-            # Train classifier for defect-vs-enhancement-vs-task.
-            self.train_defect_enhancement_task()
-        elif model == "component":
-            # Train classifier for the component of a bug.
-            self.train_component()
-        elif model == "regression":
-            # Train classifier for regression-vs-nonregression.
-            self.train_regression()
-        elif model == "tracking":
-            # Train classifier for tracking bugs.
-            self.train_tracking()
-        else:
-            # We shouldn't be here
-            raise Exception("valid_models is likely not up-to-date anymore")
+        logger.info(f"Training *{model_name}* model")
+
+        model_class = get_model_class(model_name)
+        model = model_class()
+        model.train()
+
+        model_file_name = f"{model_name}model"
+        self.compress_file(model_file_name)
 
 
 def main():
