@@ -143,33 +143,24 @@ def _transform(commit):
         "test_deleted": 0,
         "files_modified_num": 0,
         "types": set(),
-        "components": list(),
-        "author_experience": experiences_by_commit["total"]["author"][commit.node],
-        f"author_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["author"][commit.node],
-        "reviewer_experience": experiences_by_commit["total"]["reviewer"][commit.node],
-        f"reviewer_experience_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["reviewer"][commit.node],
         "author_email": commit.author_email.decode("utf-8"),
-        "components_touched_prev": experiences_by_commit["total"]["component"][
-            commit.node
-        ],
-        f"components_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["component"][commit.node],
-        "files_touched_prev": experiences_by_commit["total"]["file"][commit.node],
-        f"files_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["file"][commit.node],
-        "directories_touched_prev": experiences_by_commit["total"]["directory"][
-            commit.node
-        ],
-        f"directories_touched_prev_{EXPERIENCE_TIMESPAN_TEXT}": experiences_by_commit[
-            EXPERIENCE_TIMESPAN_TEXT
-        ]["directory"][commit.node],
     }
+
+    for experience_type in ["author", "reviewer", "file", "directory", "component"]:
+        suffix = (
+            "experience"
+            if experience_type in ["author", "reviewer"]
+            else "touched_prev"
+        )
+
+        obj[f"{experience_type}_{suffix}"] = experiences_by_commit["total"][
+            experience_type
+        ][commit.node]
+        obj[
+            f"{experience_type}_{suffix}_{EXPERIENCE_TIMESPAN_TEXT}"
+        ] = experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+            commit.node
+        ]
 
     sizes = []
 
@@ -349,17 +340,34 @@ def calculate_experiences(commits):
 
     def update_experiences(experience_type, day, items):
         total_exps = [experiences[day][experience_type][item] for item in items]
-        before_exps = [
-            experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
-            for item in items
+        timespan_exps = [
+            exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            for exp, item in zip(total_exps, items)
         ]
 
         total_exps_sum = sum(total_exps)
+        timespan_exps_sum = sum(timespan_exps)
 
-        experiences_by_commit["total"][experience_type][commit.node] = total_exps_sum
-        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-            commit.node
-        ] = total_exps_sum - sum(before_exps)
+        if experience_type == "author":
+            experiences_by_commit["total"][experience_type][
+                commit.node
+            ] = total_exps_sum
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                commit.node
+            ] = timespan_exps_sum
+        else:
+            experiences_by_commit["total"][experience_type][commit.node] = {
+                "sum": total_exps_sum,
+                "max": max(total_exps) if len(total_exps) else 0,
+                "min": min(total_exps) if len(total_exps) else 0,
+            }
+            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
+                commit.node
+            ] = {
+                "sum": timespan_exps_sum,
+                "max": max(timespan_exps) if len(timespan_exps) else 0,
+                "min": min(timespan_exps) if len(timespan_exps) else 0,
+            }
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
@@ -374,24 +382,42 @@ def calculate_experiences(commits):
             complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
             for item in items
         ]
+        timespan_commit_lists = [
+            commit_list[len(before_commit_list) :]
+            for commit_list, before_commit_list in zip(
+                all_commit_lists, before_commit_lists
+            )
+        ]
 
         all_commits = set(sum(all_commit_lists, []))
-        timespan_commits = set(
-            sum(
-                (
-                    commit_list[len(before_commit_list) :]
-                    for commit_list, before_commit_list in zip(
-                        all_commit_lists, before_commit_lists
-                    )
-                ),
-                [],
-            )
-        )
+        timespan_commits = set(sum(timespan_commit_lists, []))
 
-        experiences_by_commit["total"][experience_type][commit.node] = len(all_commits)
+        experiences_by_commit["total"][experience_type][commit.node] = {
+            "sum": len(all_commits),
+            "max": max(len(all_commit_list) for all_commit_list in all_commit_lists)
+            if len(all_commit_lists)
+            else 0,
+            "min": min(len(all_commit_list) for all_commit_list in all_commit_lists)
+            if len(all_commit_lists)
+            else 0,
+        }
         experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
             commit.node
-        ] = len(timespan_commits)
+        ] = {
+            "sum": len(timespan_commits),
+            "max": max(
+                len(timespan_commit_list)
+                for timespan_commit_list in timespan_commit_lists
+            )
+            if len(timespan_commit_lists)
+            else 0,
+            "min": min(
+                len(timespan_commit_list)
+                for timespan_commit_list in timespan_commit_lists
+            )
+            if len(timespan_commit_lists)
+            else 0,
+        }
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
