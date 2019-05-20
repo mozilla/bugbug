@@ -7,6 +7,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, timezone
 
+import dateutil.parser
 import pandas as pd
 from libmozdata import versions
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -255,6 +256,23 @@ class affected_then_unaffected(object):
             unaffected_ver < affected_ver
             for unaffected_ver in unaffected
             for affected_ver in affected
+        )
+
+
+class has_image_attachment_at_bug_creation(object):
+    def __call__(self, bug, **kwargs):
+        bug_creation_time = dateutil.parser.parse(bug["creation_time"])
+        return any(
+            "image" in attachment["content_type"]
+            and dateutil.parser.parse(attachment["creation_time"]) == bug_creation_time
+            for attachment in bug["attachments"]
+        )
+
+
+class has_image_attachment(object):
+    def __call__(self, bug, **kwargs):
+        return any(
+            "image" in attachment["content_type"] for attachment in bug["attachments"]
         )
 
 
