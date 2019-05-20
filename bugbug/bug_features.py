@@ -438,25 +438,27 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 else:
                     bug["commits"] = []
 
-            for f in self.feature_extractors:
-                res = f(
+            for feature_extractor in self.feature_extractors:
+                res = feature_extractor(
                     bug,
                     reporter_experience=reporter_experience_map[bug["creator"]],
                     author_ids=author_ids,
                 )
+
+                feature_extractor_name = feature_extractor.__class__.__name__
 
                 if res is None:
                     continue
 
                 if isinstance(res, list):
                     for item in res:
-                        data[f.__class__.__name__ + "-" + item] = "True"
+                        data[f"{feature_extractor_name}-{item}"] = "True"
                     continue
 
                 if isinstance(res, bool):
                     res = str(res)
 
-                data[f.__class__.__name__] = res
+                data[feature_extractor_name] = res
 
             reporter_experience_map[bug["creator"]] += 1
 
