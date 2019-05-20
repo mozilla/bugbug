@@ -96,6 +96,20 @@ def get_reviewers(commit_description, flag_re=None):
     return res
 
 
+def get_directories(files):
+    if isinstance(files, str):
+        files = [files]
+
+    directories = set()
+    for path in files:
+        path_dirs = (
+            os.path.dirname(path).split("/", 2)[:2] if os.path.dirname(path) else []
+        )
+        if path_dirs:
+            directories.update([path_dirs[0], "/".join(path_dirs)])
+    return list(directories)
+
+
 def get_commits():
     return db.read(COMMITS_DB)
 
@@ -166,16 +180,12 @@ def _transform(commit):
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_counts(patch)
-    components = set()
     for stats in patch_data:
         if stats["binary"]:
             obj["types"].add("binary")
             continue
 
         path = stats["filename"]
-        component = path_to_component.get(path)
-        if component:
-            components.add(component)
 
         if is_test(path):
             obj["test_added"] += stats["added_lines"]
@@ -230,7 +240,15 @@ def _transform(commit):
     # Covert to a list, as a set is not JSON-serializable.
     obj["types"] = list(obj["types"])
 
-    obj["components"] = list(components)
+    obj["components"] = list(
+        set(
+            path_to_component[path]
+            for path in commit.files
+            if path in path_to_component
+        )
+    )
+    obj["directories"] = get_directories(commit.files)
+    obj["files"] = commit.files
 
     return obj
 
@@ -308,20 +326,6 @@ def get_revs(hg, date_from=None):
     )
     x = hg.rawcommand(args)
     return x.splitlines()
-
-
-def get_directories(files):
-    if isinstance(files, str):
-        files = [files]
-
-    directories = set()
-    for path in files:
-        path_dirs = (
-            os.path.dirname(path).split("/", 2)[:2] if os.path.dirname(path) else []
-        )
-        if path_dirs:
-            directories.update([path_dirs[0], "/".join(path_dirs)])
-    return list(directories)
 
 
 def calculate_experiences(commits):
