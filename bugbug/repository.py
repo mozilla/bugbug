@@ -55,6 +55,8 @@ experiences_by_commit = {
     EXPERIENCE_TIMESPAN_TEXT: defaultdict(lambda: defaultdict(int)),
 }
 
+seniority = defaultdict(int)
+
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
 # gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
 def get_reviewers(commit_description, flag_re=None):
@@ -174,6 +176,8 @@ def _transform(commit):
         ] = experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
             commit.node
         ]
+
+    obj["seniority"] = seniority[commit.node]
 
     sizes = []
 
@@ -331,6 +335,17 @@ def calculate_experiences(commits):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
     global experiences_by_commit
+    global seniority
+
+    first_commit_time = defaultdict(int)
+
+    for commit in commits:
+        if commit.author not in first_commit_time:
+            first_commit_time[commit.author] = commit.pushdate
+            seniority[commit.node] = 0
+        else:
+            time_lapse = commit.pushdate - first_commit_time[commit.author]
+            seniority[commit.node] = time_lapse.days
 
     first_pushdate = commits[0].pushdate
 
