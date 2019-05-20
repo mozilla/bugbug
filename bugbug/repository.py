@@ -155,7 +155,6 @@ def _transform(commit):
         "test_added": 0,
         "deleted": 0,
         "test_deleted": 0,
-        "files_modified_num": 0,
         "types": set(),
         "author_email": commit.author_email.decode("utf-8"),
     }
