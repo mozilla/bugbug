@@ -41,24 +41,30 @@ class author_experience_90_days(object):
 
 
 def get_exps(exp_type, commit):
-    suffix = "experience" if exp_type == "reviewer" else "touched_prev"
-
-    val_total = commit[f"{exp_type}_{suffix}"]
-    val_timespan = commit[f"{exp_type}_{suffix}_{EXPERIENCE_TIMESPAN_TEXT}"]
-
     items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
     items_num = len(commit[items_key])
 
     return {
         "num": items_num,
-        "sum": val_total["sum"],
-        "max": val_total["max"],
-        "min": val_total["min"],
-        "avg": val_total["sum"] / items_num if items_num > 0 else 0,
-        f"sum_{EXPERIENCE_TIMESPAN_TEXT}": val_timespan["sum"],
-        f"max_{EXPERIENCE_TIMESPAN_TEXT}": val_timespan["max"],
-        f"min_{EXPERIENCE_TIMESPAN_TEXT}": val_timespan["min"],
-        f"avg_{EXPERIENCE_TIMESPAN_TEXT}": val_timespan["sum"] / items_num
+        "sum": commit[f"touched_prev_total_{exp_type}_sum"],
+        "max": commit[f"touched_prev_total_{exp_type}_max"],
+        "min": commit[f"touched_prev_total_{exp_type}_min"],
+        "avg": commit[f"touched_prev_total_{exp_type}_sum"] / items_num
+        if items_num > 0
+        else 0,
+        f"sum_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
+        ],
+        f"max_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_max"
+        ],
+        f"min_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_min"
+        ],
+        f"avg_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
+        ]
+        / items_num
         if items_num > 0
         else 0,
     }
@@ -67,9 +73,9 @@ def get_exps(exp_type, commit):
 class author_experience(object):
     def __call__(self, commit, **kwargs):
         return {
-            "total": commit["author_experience"],
+            "total": commit["touched_prev_total_author_sum"],
             EXPERIENCE_TIMESPAN_TEXT: commit[
-                f"author_experience_{EXPERIENCE_TIMESPAN_TEXT}"
+                f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_sum"
             ],
         }
 
