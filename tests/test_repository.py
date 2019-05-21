@@ -193,6 +193,13 @@ def test_calculate_experiences():
 
     repository.calculate_experiences(commits)
 
+    assert commits[0].seniority_author == 0
+    assert commits[1].seniority_author == 0
+    assert commits[2].seniority_author == 0
+    assert commits[3].seniority_author == 365
+    assert commits[4].seniority_author == 0
+    assert commits[5].seniority_author == 1
+
     assert commits[0].touched_prev_total_author_sum == 0
     assert commits[1].touched_prev_total_author_sum == 0
     assert commits[2].touched_prev_total_author_sum == 1
