@@ -258,6 +258,22 @@ class affected_then_unaffected(object):
         )
 
 
+class has_image_attachment_at_bug_creation(object):
+    def __call__(self, bug, **kwargs):
+        return any(
+            "image" in attachment["content_type"]
+            and attachment["creation_time"] == bug["creation_time"]
+            for attachment in bug["attachments"]
+        )
+
+
+class has_image_attachment(object):
+    def __call__(self, bug, **kwargs):
+        return any(
+            "image" in attachment["content_type"] for attachment in bug["attachments"]
+        )
+
+
 class commit_added(object):
     def __call__(self, bug, **kwargs):
         return sum(

@@ -29,6 +29,6 @@ def get_all_bug_ids():
             # Assume the first row is the header.
             next(reader)
             # Assume the first column is the bug ID.
-            bug_ids.update([row[0] for row in reader])
+            bug_ids.update([int(row[0]) for row in reader])
 
     return list(bug_ids)
