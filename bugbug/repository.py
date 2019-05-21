@@ -341,7 +341,7 @@ def calculate_experiences(commits):
 
     first_commit_time = defaultdict(int)
 
-    for commit in commits:
+    for commit in tqdm(commits):
         if commit.author not in first_commit_time:
             first_commit_time[commit.author] = commit.pushdate
             seniority[commit.node] = 0
