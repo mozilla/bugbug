@@ -163,7 +163,7 @@ def _transform(commit):
         "desc": desc,
         "date": str(commit.date),
         "pushdate": str(commit.pushdate),
-        "bug_id": int(commit.bug.decode("utf-8")) if commit.bug else None,
+        "bug_id": int(commit.bug.decode("ascii")) if commit.bug else None,
         "ever_backedout": commit.backedoutby != "",
         "added": 0,
         "test_added": 0,
