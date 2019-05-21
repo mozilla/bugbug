@@ -11,7 +11,7 @@ import multiprocessing
 import os
 import re
 import sys
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from datetime import datetime
 
 import hglib
@@ -30,30 +30,44 @@ db.register(
 
 path_to_component = {}
 
-Commit = namedtuple(
-    "Commit",
-    [
-        "node",
-        "author",
-        "desc",
-        "date",
-        "pushdate",
-        "bug",
-        "backedoutby",
-        "author_email",
-        "files",
-        "file_copies",
-        "reviewers",
-    ],
-)
-
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
-experiences_by_commit = {
-    "total": defaultdict(lambda: defaultdict(int)),
-    EXPERIENCE_TIMESPAN_TEXT: defaultdict(lambda: defaultdict(int)),
-}
+
+class Commit:
+    def __init__(
+        self,
+        node,
+        author,
+        desc,
+        date,
+        pushdate,
+        bug,
+        backedoutby,
+        author_email,
+        files,
+        file_copies,
+        reviewers,
+    ):
+        self.node = node
+        self.author = author
+        self.desc = desc
+        self.date = date
+        self.pushdate = pushdate
+        self.bug = bug
+        self.backedoutby = backedoutby
+        self.author_email = author_email
+        self.files = files
+        self.file_copies = file_copies
+        self.reviewers = reviewers
+
+    def set_experience(self, exp_type, timespan, exp_sum, exp_max, exp_min):
+        exp_str = f"touched_prev_{timespan}_{exp_type}_"
+        setattr(self, f"{exp_str}sum", exp_sum)
+        if exp_type != "author":
+            setattr(self, f"{exp_str}max", exp_max)
+            setattr(self, f"{exp_str}min", exp_min)
+
 
 seniority = defaultdict(int)
 
@@ -161,21 +175,10 @@ def _transform(commit):
         "author_email": commit.author_email.decode("utf-8"),
     }
 
-    for experience_type in ["author", "reviewer", "file", "directory", "component"]:
-        suffix = (
-            "experience"
-            if experience_type in ["author", "reviewer"]
-            else "touched_prev"
-        )
-
-        obj[f"{experience_type}_{suffix}"] = experiences_by_commit["total"][
-            experience_type
-        ][commit.node]
-        obj[
-            f"{experience_type}_{suffix}_{EXPERIENCE_TIMESPAN_TEXT}"
-        ] = experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-            commit.node
-        ]
+    # Copy all experience fields.
+    for attr, value in commit.__dict__.items():
+        if attr.startswith(f"touched_prev"):
+            obj[attr] = value
 
     obj["seniority"] = seniority[commit.node]
 
@@ -334,7 +337,6 @@ def get_revs(hg, date_from=None):
 def calculate_experiences(commits):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    global experiences_by_commit
     global seniority
 
     first_commit_time = defaultdict(int)
@@ -366,26 +368,20 @@ def calculate_experiences(commits):
         total_exps_sum = sum(total_exps)
         timespan_exps_sum = sum(timespan_exps)
 
-        if experience_type == "author":
-            experiences_by_commit["total"][experience_type][
-                commit.node
-            ] = total_exps_sum
-            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                commit.node
-            ] = timespan_exps_sum
-        else:
-            experiences_by_commit["total"][experience_type][commit.node] = {
-                "sum": total_exps_sum,
-                "max": max(total_exps) if len(total_exps) else 0,
-                "min": min(total_exps) if len(total_exps) else 0,
-            }
-            experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-                commit.node
-            ] = {
-                "sum": timespan_exps_sum,
-                "max": max(timespan_exps) if len(timespan_exps) else 0,
-                "min": min(timespan_exps) if len(timespan_exps) else 0,
-            }
+        commit.set_experience(
+            experience_type,
+            "total",
+            total_exps_sum,
+            max(total_exps) if len(total_exps) else 0,
+            min(total_exps) if len(total_exps) else 0,
+        )
+        commit.set_experience(
+            experience_type,
+            EXPERIENCE_TIMESPAN_TEXT,
+            timespan_exps_sum,
+            max(timespan_exps) if len(timespan_exps) else 0,
+            min(timespan_exps) if len(timespan_exps) else 0,
+        )
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
@@ -410,32 +406,34 @@ def calculate_experiences(commits):
         all_commits = set(sum(all_commit_lists, []))
         timespan_commits = set(sum(timespan_commit_lists, []))
 
-        experiences_by_commit["total"][experience_type][commit.node] = {
-            "sum": len(all_commits),
-            "max": max(len(all_commit_list) for all_commit_list in all_commit_lists)
+        commit.set_experience(
+            experience_type,
+            "total",
+            len(all_commits),
+            max(len(all_commit_list) for all_commit_list in all_commit_lists)
             if len(all_commit_lists)
             else 0,
-            "min": min(len(all_commit_list) for all_commit_list in all_commit_lists)
+            min(len(all_commit_list) for all_commit_list in all_commit_lists)
             if len(all_commit_lists)
             else 0,
-        }
-        experiences_by_commit[EXPERIENCE_TIMESPAN_TEXT][experience_type][
-            commit.node
-        ] = {
-            "sum": len(timespan_commits),
-            "max": max(
+        )
+        commit.set_experience(
+            experience_type,
+            EXPERIENCE_TIMESPAN_TEXT,
+            len(timespan_commits),
+            max(
                 len(timespan_commit_list)
                 for timespan_commit_list in timespan_commit_lists
             )
             if len(timespan_commit_lists)
             else 0,
-            "min": min(
+            min(
                 len(timespan_commit_list)
                 for timespan_commit_list in timespan_commit_lists
             )
             if len(timespan_commit_lists)
             else 0,
-        }
+        )
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
