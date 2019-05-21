@@ -339,7 +339,7 @@ def calculate_experiences(commits):
 
     global seniority
 
-    first_commit_time = defaultdict(int)
+    first_commit_time = {}
 
     for commit in tqdm(commits):
         if commit.author not in first_commit_time:
