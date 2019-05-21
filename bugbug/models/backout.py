@@ -71,6 +71,17 @@ class BackoutModel(CommitModel):
         for commit_data in repository.get_commits():
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
 
+        print(
+            "{} commits were backed out".format(
+                sum(1 for label in classes.values() if label == 1)
+            )
+        )
+        print(
+            "{} commits were not backed out".format(
+                sum(1 for label in classes.values() if label == 0)
+            )
+        )
+
         return classes, [0, 1]
 
     def get_feature_names(self):
