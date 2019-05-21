@@ -69,8 +69,6 @@ class Commit:
             setattr(self, f"{exp_str}min", exp_min)
 
 
-seniority = defaultdict(int)
-
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
 # gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
 def get_reviewers(commit_description, flag_re=None):
@@ -180,7 +178,7 @@ def _transform(commit):
         if attr.startswith(f"touched_prev"):
             obj[attr] = value
 
-    obj["seniority"] = seniority[commit.node]
+    obj["seniority_author"] = commit.seniority_author
 
     sizes = []
 
@@ -337,17 +335,15 @@ def get_revs(hg, date_from=None):
 def calculate_experiences(commits):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    global seniority
-
     first_commit_time = {}
 
     for commit in tqdm(commits):
         if commit.author not in first_commit_time:
             first_commit_time[commit.author] = commit.pushdate
-            seniority[commit.node] = 0
+            commit.seniority_author = 0
         else:
             time_lapse = commit.pushdate - first_commit_time[commit.author]
-            seniority[commit.node] = time_lapse.days
+            commit.seniority_author = time_lapse.days
 
     first_pushdate = commits[0].pushdate
 
