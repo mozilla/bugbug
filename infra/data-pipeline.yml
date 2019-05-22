@@ -193,6 +193,33 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: train-regressionrange
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-regressionrange
+
+      artifacts:
+        public/regressionrangemodel.xz:
+          path: /regressionrangemodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regressionrange.latest
+    metadata:
+      name: bugbug train regressionrange model
+      description: bugbug train regressionrange model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: train-stepstoreproduce
     created: {$fromNow: ''}
     deadline: {$fromNow: '118 hours'}
@@ -206,7 +233,7 @@ tasks:
       image: mozilla/bugbug-train-stepstoreproduce
 
       artifacts:
-        public/trackingmodel.xz:
+        public/stepstoreproducemodel.xz:
           path: /stepstoreproducemodel.xz
           type: file
 
@@ -236,7 +263,7 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       command:
         - "/bin/sh"
         - "-lcxe"
@@ -277,7 +304,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
