@@ -16,7 +16,6 @@ from datetime import datetime
 
 import hglib
 import requests
-import rs_parsepatch
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -565,6 +564,9 @@ def download_commits(repo_dir, date_from):
     commits_num = len(commits)
 
     print(f"Mining {commits_num} commits using {processes} processes...")
+
+    global rs_parsepatch
+    import rs_parsepatch
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)
