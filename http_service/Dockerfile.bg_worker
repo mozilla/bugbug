@@ -14,4 +14,4 @@ ENV CHECK_MODELS="${CHECK_MODELS}"
 
 RUN python /code/bugbug_http_service/check_models.py
 
-CMD ["rq", "worker", "high", "default", "low", "-u", "redis://redis:6379/0"]
+CMD rq worker high default low -u $REDISTOGO_URL
