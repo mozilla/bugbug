@@ -25,7 +25,7 @@ MODELS = {
 }
 MODELS_NAMES = MODELS.keys()
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
-BASE_URL = "https://index.taskcluster.net/v1/task/project.releng.services.project.testing.bugbug_train.latest/artifacts/public"
+BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 
 
 def load_model(model):
@@ -41,7 +41,8 @@ def retrieve_model(name):
     file_name = f"{name}model"
     file_path = os.path.join(MODELS_DIR, file_name)
 
-    model_url = f"{BASE_URL}/{file_name}.xz"
+    base_url = BASE_URL.format(name)
+    model_url = f"{base_url}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
     r = requests.head(model_url, allow_redirects=True)
     r.raise_for_status()
