@@ -11,28 +11,19 @@ from urllib.request import urlretrieve
 
 import requests
 
-from bugbug.models.component import ComponentModel
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
+from bugbug.models import load_model as bugbug_load_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS = {
-    "defectenhancementtask": DefectEnhancementTaskModel,
-    "component": ComponentModel,
-    "regression": RegressionModel,
-}
-MODELS_NAMES = MODELS.keys()
+MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 
 
 def load_model(model):
-    model_file_path = os.path.join(MODELS_DIR, f"{model}model")
-    LOGGER.info(f"Lookup model in {model_file_path}")
-    model = MODELS[model].load(model_file_path)
-    return model
+    # TODO: Do not crash when the asked model is not one of the trained models
+    return bugbug_load_model(model, MODELS_DIR)
 
 
 def retrieve_model(name):
