@@ -29,6 +29,7 @@ keyword_dict = {
     "crashreportid": "crash",
     "perf": "performance",
 }
+keyword_list = list(set(keyword_dict.values()))
 
 
 class BugTypeModel(BugModel):
@@ -97,7 +98,6 @@ class BugTypeModel(BugModel):
 
     def get_labels(self):
         classes = {}
-        keyword_list = list(set(keyword_dict.values()))
 
         for bug_data in bugzilla.get_bugs():
             target = np.zeros(len(keyword_list))
@@ -110,3 +110,14 @@ class BugTypeModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            for keyword in bug["keywords"]:
+                if keyword in keyword_list:
+                    if probabilities:
+                        classes[i][keyword_list.index(keyword)] = 1.0
+                    else:
+                        classes[i][keyword_list.index(keyword)] = 1
+
+        return classes

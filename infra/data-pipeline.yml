@@ -87,7 +87,7 @@ tasks:
 
   - ID: train-component
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -114,7 +114,7 @@ tasks:
 
   - ID: train-defectenhancementtask
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -141,7 +141,7 @@ tasks:
 
   - ID: train-regression
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -168,7 +168,7 @@ tasks:
 
   - ID: train-tracking
     created: {$fromNow: ''}
-    deadline: {$fromNow: '144 hours'}
+    deadline: {$fromNow: '118 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
@@ -193,9 +193,63 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: train-regressionrange
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-regressionrange
+
+      artifacts:
+        public/regressionrangemodel.xz:
+          path: /regressionrangemodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regressionrange.latest
+    metadata:
+      name: bugbug train regressionrange model
+      description: bugbug train regressionrange model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-stepstoreproduce
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-stepstoreproduce
+
+      artifacts:
+        public/stepstoreproducemodel.xz:
+          path: /stepstoreproducemodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_stepstoreproduce.latest
+    metadata:
+      name: bugbug train stepstoreproduce model
+      description: bugbug train stepstoreproduce model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: docker-build
     created: {$fromNow: ''}
-    deadline: {$fromNow: '145 hours'}
+    deadline: {$fromNow: '119 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: releng-svc
@@ -209,7 +263,7 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       command:
         - "/bin/sh"
         - "-lcxe"
@@ -241,7 +295,7 @@ tasks:
     scopes:
       - secrets:get:project/relman/bugbug/deploy
     created: {$fromNow: ''}
-    deadline: {$fromNow: '146 hour'}
+    deadline: {$fromNow: '120 hours'}
     expires: {$fromNow: '1 month'}
     provisionerId: aws-provisioner-v1
     workerType: github-worker
@@ -250,7 +304,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.1
+      image: mozilla/taskboot:0.1.2
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:

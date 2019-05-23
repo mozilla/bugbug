@@ -15,4 +15,5 @@ def test_get_labels_dir():
 
 
 def test_get_all_bug_ids():
-    labels.get_all_bug_ids()
+    bug_ids = labels.get_all_bug_ids()
+    assert len(bug_ids) > 0

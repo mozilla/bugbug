@@ -44,6 +44,16 @@ class Retriever(object):
 
         logger.info("mozilla-central cloned")
 
+        try:
+            os.remove(os.path.join(self.repo_dir, ".hg", "pushlog2.db"))
+        except FileNotFoundError:
+            logger.info("pushlog database doesn't exist")
+
+        # Pull and update, to make sure the pushlog is generated.
+        hg = hglib.open(self.repo_dir)
+        hg.pull(update=True)
+        hg.close()
+
         two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
             years=2, months=6
         )
