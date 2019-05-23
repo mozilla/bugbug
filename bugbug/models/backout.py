@@ -28,16 +28,12 @@ class BackoutModel(CommitModel):
             commit_features.deleted(),
             commit_features.test_deleted(),
             commit_features.author_experience(),
-            commit_features.author_experience_90_days(),
             commit_features.reviewer_experience(),
-            commit_features.reviewer_experience_90_days(),
-            commit_features.components_touched_prev(),
-            commit_features.components_touched_prev_90_days(),
-            commit_features.files_touched_prev(),
-            commit_features.files_touched_prev_90_days(),
+            commit_features.component_touched_prev(),
+            commit_features.directory_touched_prev(),
+            commit_features.file_touched_prev(),
             commit_features.types(),
             commit_features.components(),
-            commit_features.number_of_reviewers(),
         ]
 
         cleanup_functions = [
@@ -74,6 +70,17 @@ class BackoutModel(CommitModel):
 
         for commit_data in repository.get_commits():
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
+
+        print(
+            "{} commits were backed out".format(
+                sum(1 for label in classes.values() if label == 1)
+            )
+        )
+        print(
+            "{} commits were not backed out".format(
+                sum(1 for label in classes.values() if label == 0)
+            )
+        )
 
         return classes, [0, 1]
 
