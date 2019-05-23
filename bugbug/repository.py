@@ -235,8 +235,8 @@ def _transform(commit):
     obj["average_file_size"] = (
         obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
     )
-    obj["maximum_file_size"] = max(sizes) if len(sizes) > 0 else 0
-    obj["minimum_file_size"] = min(sizes) if len(sizes) > 0 else 0
+    obj["maximum_file_size"] = max(sizes, default=0)
+    obj["minimum_file_size"] = min(sizes, default=0)
 
     obj["files_modified_num"] = len(patch_data)
 
@@ -367,15 +367,15 @@ def calculate_experiences(commits):
             experience_type,
             "total",
             total_exps_sum,
-            max(total_exps) if len(total_exps) else 0,
-            min(total_exps) if len(total_exps) else 0,
+            max(total_exps, default=0),
+            min(total_exps, default=0),
         )
         commit.set_experience(
             experience_type,
             EXPERIENCE_TIMESPAN_TEXT,
             timespan_exps_sum,
-            max(timespan_exps) if len(timespan_exps) else 0,
-            min(timespan_exps) if len(timespan_exps) else 0,
+            max(timespan_exps, default=0),
+            min(timespan_exps, default=0),
         )
 
         # We don't want to consider backed out commits when calculating experiences.
@@ -405,29 +405,33 @@ def calculate_experiences(commits):
             experience_type,
             "total",
             len(all_commits),
-            max(len(all_commit_list) for all_commit_list in all_commit_lists)
-            if len(all_commit_lists)
-            else 0,
-            min(len(all_commit_list) for all_commit_list in all_commit_lists)
-            if len(all_commit_lists)
-            else 0,
+            max(
+                (len(all_commit_list) for all_commit_list in all_commit_lists),
+                default=0,
+            ),
+            min(
+                (len(all_commit_list) for all_commit_list in all_commit_lists),
+                default=0,
+            ),
         )
         commit.set_experience(
             experience_type,
             EXPERIENCE_TIMESPAN_TEXT,
             len(timespan_commits),
             max(
-                len(timespan_commit_list)
-                for timespan_commit_list in timespan_commit_lists
-            )
-            if len(timespan_commit_lists)
-            else 0,
+                (
+                    len(timespan_commit_list)
+                    for timespan_commit_list in timespan_commit_lists
+                ),
+                default=0,
+            ),
             min(
-                len(timespan_commit_list)
-                for timespan_commit_list in timespan_commit_lists
-            )
-            if len(timespan_commit_lists)
-            else 0,
+                (
+                    len(timespan_commit_list)
+                    for timespan_commit_list in timespan_commit_lists
+                ),
+                default=0,
+            ),
         )
 
         # We don't want to consider backed out commits when calculating experiences.
