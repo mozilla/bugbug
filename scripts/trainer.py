@@ -43,8 +43,13 @@ class Trainer(object):
         model = model_class()
         model.train()
 
+        logger.info(f"Training done")
+
         model_file_name = f"{model_name}model"
+        assert os.path.exists(model_file_name)
         self.compress_file(model_file_name)
+
+        logger.info(f"Model compressed")
 
 
 def main():

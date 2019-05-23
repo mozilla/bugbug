@@ -6,6 +6,9 @@
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
+EXPERIENCE_TIMESPAN = 90
+EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+
 
 class files_modified_num(object):
     def __call__(self, commit, **kwargs):
@@ -32,49 +35,54 @@ class test_deleted(object):
         return commit["test_deleted"]
 
 
-class author_experience(object):
-    def __call__(self, commit, **kwargs):
-        return commit["author_experience"]
-
-
 class author_experience_90_days(object):
     def __call__(self, commit, **kwargs):
         return commit["author_experience_90_days"]
 
 
+def get_exps(exp_type, commit):
+    items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
+    items_num = len(commit[items_key])
+
+    return {
+        "num": items_num,
+        "sum": commit[f"touched_prev_total_{exp_type}_sum"],
+        "max": commit[f"touched_prev_total_{exp_type}_max"],
+        "min": commit[f"touched_prev_total_{exp_type}_min"],
+        "avg": commit[f"touched_prev_total_{exp_type}_sum"] / items_num
+        if items_num > 0
+        else 0,
+        f"sum_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
+        ],
+        f"max_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_max"
+        ],
+        f"min_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_min"
+        ],
+        f"avg_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
+        ]
+        / items_num
+        if items_num > 0
+        else 0,
+    }
+
+
+class author_experience(object):
+    def __call__(self, commit, **kwargs):
+        return {
+            "total": commit["touched_prev_total_author_sum"],
+            EXPERIENCE_TIMESPAN_TEXT: commit[
+                f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_sum"
+            ],
+        }
+
+
 class reviewer_experience(object):
     def __call__(self, commit, **kwargs):
-        return commit["reviewer_experience"]
-
-
-class reviewer_experience_90_days(object):
-    def __call__(self, commit, **kwargs):
-        return commit["reviewer_experience_90_days"]
-
-
-class components_touched_prev(object):
-    def __call__(self, commit, **kwargs):
-        return commit["components_touched_prev"]
-
-
-class components_touched_prev_90_days(object):
-    def __call__(self, commit, **kwargs):
-        return commit["components_touched_prev_90_days"]
-
-
-class files_touched_prev(object):
-    def __call__(self, commit, **kwargs):
-        return commit["files_touched_prev"]
-
-
-class files_touched_prev_90_days(object):
-    def __call__(self, commit, **kwargs):
-        return commit["files_touched_prev_90_days"]
-
-
-class types(object):
-    def __call__(self, commit, **kwargs):
-        return commit["types"]
+        return get_exps("reviewer", commit)
 
 
 class components(object):
@@ -82,9 +90,29 @@ class components(object):
         return commit["components"]
 
 
-class number_of_reviewers(object):
+class component_touched_prev(object):
     def __call__(self, commit, **kwargs):
-        return len(commit["reviewers"])
+        return get_exps("component", commit)
+
+
+class directories(object):
+    def __call__(self, commit, **kwargs):
+        return commit["directories"]
+
+
+class directory_touched_prev(object):
+    def __call__(self, commit, **kwargs):
+        return get_exps("directory", commit)
+
+
+class file_touched_prev(object):
+    def __call__(self, commit, **kwargs):
+        return get_exps("file", commit)
+
+
+class types(object):
+    def __call__(self, commit, **kwargs):
+        return commit["types"]
 
 
 class CommitExtractor(BaseEstimator, TransformerMixin):
@@ -101,21 +129,28 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
         for commit in commits:
             data = {}
 
-            for f in self.feature_extractors:
-                res = f(commit)
+            for feature_extractor in self.feature_extractors:
+                res = feature_extractor(commit)
+
+                feature_extractor_name = feature_extractor.__class__.__name__
 
                 if res is None:
                     continue
 
+                if isinstance(res, dict):
+                    for key, value in res.items():
+                        data[f"{feature_extractor_name}_{key}"] = value
+                    continue
+
                 if isinstance(res, list):
                     for item in res:
-                        data[f.__class__.__name__ + "-" + item] = "True"
+                        data[f"{feature_extractor_name}-{item}"] = "True"
                     continue
 
                 if isinstance(res, bool):
                     res = str(res)
 
-                data[f.__class__.__name__] = res
+                data[feature_extractor_name] = res
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
 

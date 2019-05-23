@@ -9,31 +9,29 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import commit_features, feature_cleanup, repository
-from bugbug.model import CommitModel
+from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug.model import BugModel
 
 
-class BackoutModel(CommitModel):
+class RegressionRangeModel(BugModel):
     def __init__(self, lemmatization=False):
-        CommitModel.__init__(self, lemmatization)
-
-        self.calculate_importance = False
+        BugModel.__init__(self, lemmatization)
 
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            commit_features.files_modified_num(),
-            commit_features.test_added(),
-            commit_features.added(),
-            commit_features.deleted(),
-            commit_features.test_deleted(),
-            commit_features.author_experience(),
-            commit_features.reviewer_experience(),
-            commit_features.component_touched_prev(),
-            commit_features.directory_touched_prev(),
-            commit_features.file_touched_prev(),
-            commit_features.types(),
-            commit_features.components(),
+            bug_features.has_str(),
+            bug_features.severity(),
+            bug_features.keywords({"regression", "regressionwindow-wanted"}),
+            bug_features.is_coverity_issue(),
+            bug_features.has_crash_signature(),
+            bug_features.has_url(),
+            bug_features.has_w3c_url(),
+            bug_features.has_github_url(),
+            bug_features.whiteboard(),
+            bug_features.patches(),
+            bug_features.landings(),
+            bug_features.title(),
         ]
 
         cleanup_functions = [
@@ -45,17 +43,16 @@ class BackoutModel(CommitModel):
         self.extraction_pipeline = Pipeline(
             [
                 (
-                    "commit_extractor",
-                    commit_features.CommitExtractor(
-                        feature_extractors, cleanup_functions
-                    ),
+                    "bug_extractor",
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("desc", self.text_vectorizer(), "desc"),
+                            ("title", self.text_vectorizer(), "title"),
+                            ("comments", self.text_vectorizer(), "comments"),
                         ]
                     ),
                 ),
@@ -68,16 +65,22 @@ class BackoutModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        for commit_data in repository.get_commits():
-            classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
-
+        for bug_data in bugzilla.get_bugs():
+            bug_id = int(bug_data["id"])
+            if "regressionwindow-wanted" in bug_data["keywords"]:
+                classes[bug_id] = 0
+            elif "cf_has_regression_range" in bug_data:
+                if bug_data["cf_has_regression_range"] == "yes":
+                    classes[bug_id] = 1
+                elif bug_data["cf_has_regression_range"] == "no":
+                    classes[bug_id] = 0
         print(
-            "{} commits were backed out".format(
+            "{} bugs have regression range".format(
                 sum(1 for label in classes.values() if label == 1)
             )
         )
         print(
-            "{} commits were not backed out".format(
+            "{} bugs don't have a regression range".format(
                 sum(1 for label in classes.values() if label == 0)
             )
         )
