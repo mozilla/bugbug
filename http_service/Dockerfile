@@ -18,4 +18,4 @@ ENV CHECK_MODELS="${CHECK_MODELS}"
 
 RUN python /code/bugbug_http_service/check_models.py
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "bugbug_http_service.app", "--preload", "--timeout", "30", "-w", "3"]
+CMD gunicorn -b 0.0.0.0:$PORT bugbug_http_service.app --preload --timeout 30 -w 3
