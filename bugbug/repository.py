@@ -11,7 +11,7 @@ import multiprocessing
 import os
 import re
 import sys
-from collections import defaultdict
+from collections import deque
 from datetime import datetime
 
 import hglib
@@ -320,6 +320,44 @@ def get_revs(hg):
     return x.splitlines()
 
 
+class exp_queue:
+    def __init__(self, start_day, maxlen, default):
+        self.list = deque([default] * maxlen, maxlen=maxlen)
+        self.start_day = start_day - (maxlen - 1)
+        self.default = default
+
+    @property
+    def last_day(self):
+        return self.start_day + (self.list.maxlen - 1)
+
+    def __getitem__(self, day):
+        assert day >= self.start_day, "Can't get a day from earlier than start day"
+
+        if day < 0:
+            return self.default
+
+        if day > self.last_day:
+            return self.list[-1]
+
+        return self.list[day - self.start_day]
+
+    def __setitem__(self, day, value):
+        if day == self.last_day:
+            self.list[day - self.start_day] = value
+        elif day > self.last_day:
+            last_val = self.list[-1]
+            for _ in range(self.last_day, day - 1):
+                self.list.append(last_val)
+
+            self.start_day = day - (self.list.maxlen - 1)
+
+            self.list.append(value)
+        else:
+            assert False, "Can't insert in the past"
+
+        assert day == self.last_day
+
+
 def calculate_experiences(commits):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
@@ -335,17 +373,27 @@ def calculate_experiences(commits):
 
     first_pushdate = commits[0].pushdate
 
-    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
+    # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    experiences = {}
+
+    def get_experience(exp_type, item, day, default):
+        if exp_type not in experiences:
+            experiences[exp_type] = {}
+
+        if item not in experiences[exp_type]:
+            experiences[exp_type][item] = exp_queue(
+                day, EXPERIENCE_TIMESPAN + 1, default
+            )
+
+        return experiences[exp_type][item][day]
 
     def update_experiences(experience_type, day, items):
-        total_exps = [experiences[day][experience_type][item] for item in items]
+        total_exps = [get_experience(experience_type, item, day, 0) for item in items]
         timespan_exps = [
-            exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            exp - get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, 0)
             for exp, item in zip(total_exps, items)
         ]
 
@@ -370,14 +418,14 @@ def calculate_experiences(commits):
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
             for item in items:
-                experiences[day][experience_type][item] += 1
+                experiences[experience_type][item][day] += 1
 
     def update_complex_experiences(experience_type, day, items):
         all_commit_lists = [
-            complex_experiences[day][experience_type][item] for item in items
+            get_experience(experience_type, item, day, list()) for item in items
         ]
         before_commit_lists = [
-            complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, list())
             for item in items
         ]
         timespan_commit_lists = [
@@ -426,57 +474,41 @@ def calculate_experiences(commits):
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
             for item in items:
-                complex_experiences[day][experience_type][item].append(commit.node)
-
-    prev_days = 0
+                experiences[experience_type][item][day] = experiences[experience_type][
+                    item
+                ][day] + [commit.node]
 
     for commit in tqdm(commits):
-        days = (commit.pushdate - first_pushdate).days
-        assert days >= 0
+        day = (commit.pushdate - first_pushdate).days
+        assert day >= 0
 
-        if days not in experiences and days != prev_days:
-            assert days not in complex_experiences
-            for day in range(prev_days + 1, days + 1):
-                experiences[day] = copy.deepcopy(experiences[day - 1])
-                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
-
-        prev_days = days
-
-        update_experiences("author", days, [commit.author])
-        update_experiences("reviewer", days, commit.reviewers)
+        update_experiences("author", day, [commit.author])
+        update_experiences("reviewer", day, commit.reviewers)
 
         # When a file is moved/copied, copy original experience values to the copied path.
         if len(commit.file_copies) > 0:
             for orig, copied in commit.file_copies.items():
                 orig_directories = get_directories(orig)
                 copied_directories = get_directories(copied)
+                for orig_directory, copied_directory in zip(
+                    orig_directories, copied_directories
+                ):
+                    experiences["directory"][copied_directory] = copy.deepcopy(
+                        experiences["directory"][orig_directory]
+                    )
 
                 if orig in path_to_component and copied in path_to_component:
                     orig_component = path_to_component[orig]
                     copied_component = path_to_component[copied]
-                else:
-                    orig_component = copied_component = None
+                    experiences["component"][copied_component] = copy.deepcopy(
+                        experiences["component"][orig_component]
+                    )
 
-                for prev_day in complex_experiences.keys():
-                    if orig_component is not None:
-                        complex_experiences[prev_day]["component"][
-                            copied_component
-                        ] = complex_experiences[prev_day]["component"][orig_component]
+                experiences["file"][copied] = copy.deepcopy(experiences["file"][orig])
 
-                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
-                        prev_day
-                    ]["file"][orig]
+        update_complex_experiences("file", day, commit.files)
 
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        complex_experiences[prev_day]["directory"][
-                            copied_directory
-                        ] = complex_experiences[prev_day]["directory"][orig_directory]
-
-        update_complex_experiences("file", days, commit.files)
-
-        update_complex_experiences("directory", days, get_directories(commit.files))
+        update_complex_experiences("directory", day, get_directories(commit.files))
 
         components = list(
             set(
@@ -486,14 +518,7 @@ def calculate_experiences(commits):
             )
         )
 
-        update_complex_experiences("component", days, components)
-
-        old_days = [
-            day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
-        ]
-        for day in old_days:
-            del experiences[day]
-            del complex_experiences[day]
+        update_complex_experiences("component", day, components)
 
 
 def download_commits(repo_dir, date_from):
