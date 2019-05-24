@@ -249,7 +249,7 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "python infra/set_env_var.py TAG ${tag} infra/taskcluster-hook-pipeline-start.json &&
+              - "python infra/set_hook_env_var.py TAG ${tag} infra/taskcluster-hook-pipeline-start.json &&
                  taskboot build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
@@ -283,7 +283,7 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "python infra/set_env_var.py TAG ${tag} infra/taskcluster-hook-check-models-start.json &&
+              - "python infra/set_hook_env_var.py TAG ${tag} infra/taskcluster-hook-check-models-start.json &&
                  taskboot build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
