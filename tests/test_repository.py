@@ -51,8 +51,8 @@ def add_file(hg, repo_dir, name, contents):
     hg.add(files=[bytes(path, "ascii")])
 
 
-def commit(hg):
-    commit_message = "Commit {}".format(hg.status())
+def commit(hg, message=None):
+    commit_message = "Commit {}".format(hg.status() if message is None else message)
 
     i, revision = hg.commit(message=commit_message, user="Moz Illa <milla@mozilla.org>")
 
@@ -76,6 +76,15 @@ def test_get_revs(fake_hg_repo):
     revs = repository.get_revs(hg)
 
     assert len(revs) == 2, "There should be two revisions now"
+    assert revs[0].decode("ascii") == revision1
+    assert revs[1].decode("ascii") == revision2
+
+    add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg, "big formatting change!\n# ignore-this-changeset")
+
+    revs = repository.get_revs(hg)
+
+    assert len(revs) == 2, "There should still be two revisions now"
     assert revs[0].decode("ascii") == revision1
     assert revs[1].decode("ascii") == revision2
 
