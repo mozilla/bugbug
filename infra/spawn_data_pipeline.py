@@ -110,7 +110,13 @@ def main():
         # Override the Docker image tag if needed
         if docker_tag:
             base_image = payload["payload"]["image"]
-            tagless_image = base_image.rsplit(":", 1)[0]
+            splitted_image = base_image.rsplit(":", 1)
+
+            if len(splitted_image) > 1:
+                err_msg = "Docker tag should be None or 'latest', not {!r}"
+                assert splitted_image[1] == "latest", err_msg.format(splitted_image[1])
+
+            tagless_image = splitted_image[0]
 
             new_image = "{}:{}".format(tagless_image, docker_tag)
             payload["payload"]["image"] = new_image
