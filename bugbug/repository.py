@@ -314,7 +314,11 @@ def get_revs(hg):
     print(f"Getting revs from 0 to tip...")
 
     args = hglib.util.cmdbuilder(
-        b"log", template="{node}\n", no_merges=True, branch="central", rev=f"0:tip"
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="central",
+        rev=f"0:tip & !desc('ignore-this-changeset')",
     )
     x = hg.rawcommand(args)
     return x.splitlines()
