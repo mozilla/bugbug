@@ -23,6 +23,7 @@ class BackoutModel(CommitModel):
 
         feature_extractors = [
             commit_features.files_modified_num(),
+            commit_features.file_size(),
             commit_features.test_added(),
             commit_features.added(),
             commit_features.deleted(),
@@ -34,6 +35,8 @@ class BackoutModel(CommitModel):
             commit_features.file_touched_prev(),
             commit_features.types(),
             commit_features.components(),
+            commit_features.directories(),
+            commit_features.files(),
         ]
 
         cleanup_functions = [
