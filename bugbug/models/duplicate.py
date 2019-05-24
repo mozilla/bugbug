@@ -15,7 +15,7 @@ from sklearn.metrics import accuracy_score
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_validate
 from sklearn.svm import LinearSVC
-
+from collections import defaultdict
 
 
 class DuplicateModel:
@@ -44,54 +44,82 @@ class DuplicateModel:
         return X
 
     def get_text(self, bug):
-        return bug["summary"] + " ".join(comment["text"] for comment in bug["comments"])
+        return bug["summary"] + " ".join(comment["text"] for comment in bug["comments"][0:1])
     
     def get_duplicate_map(self):
         
         bugs = bugzilla.get_bugs()
         bug = {}
-        duplicate_bug_map = {}
-        count = 500
+        dup_bugs = []
+        duplicate_bug_map = defaultdict(list)
+        #count = 2500
         for bug_data in bugs:
             bug_id = int(bug_data["id"])
 
-            if bug_data["resolution"] == "DUPLICATE":
-                count -= 1
-                duplicate_bug_map[bug_id] = int(bug_data["dupe_of"])
+            if bug_data["duplicates"] != []:
+            #    count -= 1
+                for ele2 in bug_data["duplicates"]:
+                    
+                    duplicate_bug_map[bug_id].append(int(ele2)) 
+                    dup_bugs.append(bug_id)
+                    dup_bugs.append(int(ele2))
             
             bug[bug_id] = bug_data
-            if not count :
-                break
+            #if not count :
+            #    break
 
-        return bug , duplicate_bug_map
+        return bug , duplicate_bug_map, list(set(dup_bugs))
 
     def get_labels(self):
         
-        bugs, duplicate_map = self.get_duplicate_map()
+        bugs, duplicate_map, dup_bugs = self.get_duplicate_map()
 
         res = pd.DataFrame()
 
         text1 = []
         text2 = []
 
-        for ind, val in duplicate_map.items():
-            if val in bugs:
-                text1.append(self.get_text(bugs[ind]))
-                text2.append(self.get_text(bugs[val]))
+        for ind, dups in duplicate_map.items():
+            for val in dups:
+                if val in bugs:
+                    text1.append(self.get_text(bugs[ind]))
+                    text2.append(self.get_text(bugs[val]))
 
         l = len(text1)
-        count = 500
+        print(str(l) + ' purely duplicate bugs')
+        #count = 1200
         for ind, val in bugs.items():
-            if not count:
-                break
-            if "duplicate" not in val["resolution"]:
+            #if not count:
+            #    break
+            if ind not in dup_bugs:
                 for ind2, val2 in bugs.items():
-                    if ind != ind2:
+                    if ind != ind2 and ind2 not in dup_bugs:
                         text1.append(self.get_text(bugs[ind]))
                         text2.append(self.get_text(bugs[ind2]))
-                        count -=1
-                    break
+                        #count -=1
+                    #break
+        l2 = len(text1) - l
+        print(str(l2) + " number of purely non duplicate bugs")
+        #count = 1200    
+        for dup1, b1 in duplicate_map.items():
+            
+            for dup2, b2 in duplicate_map.items():
+                if dup1 != dup2:
+                    for bug in b2:
+                        if bug in bugs:
+                            text1.append(self.get_text(bugs[dup1]))
+                            text2.append(self.get_text(bugs[bug]))
+                            #count -= 1
+                        #if not count:
+                        #    break
+                #if not count:
+                #    break
 
+            #if not count:
+            #    break  
+
+        
+        print(str(len(text1) - l2) + " number of hybrid bugs")
         res["text1"] = text1
         res["text2"] = text2
         res["labels"] = np.concatenate([np.ones(l),np.zeros(len(text1) - l)])
