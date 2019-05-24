@@ -310,22 +310,11 @@ def _hg_log(revs):
     return hg_log(HG, revs)
 
 
-def get_revs(hg, date_from=None):
-    # TODO: Retrieve all commits once calculate_experiences is faster and less memory hungry.
-    if date_from is not None:
-        pushdate = (date_from - relativedelta(months=12)).strftime("%Y-%m-%d")
-        rev_start = f"pushdate('>{pushdate}')"
-    else:
-        rev_start = 0
-
-    print(f"Getting revs from {rev_start} to tip...")
+def get_revs(hg):
+    print(f"Getting revs from 0 to tip...")
 
     args = hglib.util.cmdbuilder(
-        b"log",
-        template="{node}\n",
-        no_merges=True,
-        branch="central",
-        rev=f"{rev_start}:tip",
+        b"log", template="{node}\n", no_merges=True, branch="central", rev=f"0:tip"
     )
     x = hg.rawcommand(args)
     return x.splitlines()
@@ -510,7 +499,7 @@ def calculate_experiences(commits):
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg, date_from)
+    revs = get_revs(hg)
 
     commits_num = len(revs)
 
