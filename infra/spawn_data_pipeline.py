@@ -69,6 +69,8 @@ def main():
 
     id_mapping = {}
 
+    docker_tag = os.getenv("DOCKER_TAG", None)
+
     # First pass, do the template rendering and dependencies resolution
     tasks = []
 
@@ -104,6 +106,14 @@ def main():
             new_dependencies.append(decision_task_id)
 
         payload["dependencies"] = new_dependencies
+
+        # Override the Docker image tag if needed
+        if docker_tag:
+            base_image = payload["payload"]["image"]
+            tagless_image = base_image.rsplit(":", 1)[0]
+
+            new_image = "{}:{}".format(tagless_image, docker_tag)
+            payload["payload"]["image"] = new_image
 
         tasks.append((task_id, payload))
 
