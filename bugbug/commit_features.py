@@ -57,6 +57,12 @@ def get_exps(exp_type, commit):
         "avg": commit[f"touched_prev_total_{exp_type}_sum"] / items_num
         if items_num > 0
         else 0,
+        "sum_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"],
+        "max_backout": commit[f"touched_prev_total_{exp_type}_backout_max"],
+        "min_backout": commit[f"touched_prev_total_{exp_type}_backout_min"],
+        "avg_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"] / items_num
+        if items_num > 0
+        else 0,
         f"sum_{EXPERIENCE_TIMESPAN_TEXT}": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
         ],
@@ -72,6 +78,21 @@ def get_exps(exp_type, commit):
         / items_num
         if items_num > 0
         else 0,
+        f"sum_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
+        ],
+        f"max_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_max"
+        ],
+        f"min_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_min"
+        ],
+        f"avg_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
+        ]
+        / items_num
+        if items_num > 0
+        else 0,
     }
 
 
@@ -81,6 +102,10 @@ class author_experience(object):
             "total": commit["touched_prev_total_author_sum"],
             EXPERIENCE_TIMESPAN_TEXT: commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_sum"
+            ],
+            "total_backout": commit["touched_prev_total_author_backout_sum"],
+            f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+                f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
             ],
         }
 
