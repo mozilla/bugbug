@@ -425,10 +425,10 @@ def calculate_experiences(commits):
 
     def update_complex_experiences(experience_type, day, items):
         all_commit_lists = [
-            get_experience(experience_type, item, day, list()) for item in items
+            get_experience(experience_type, item, day, tuple()) for item in items
         ]
         before_commit_lists = [
-            get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, list())
+            get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, tuple())
             for item in items
         ]
         timespan_commit_lists = [
@@ -438,8 +438,8 @@ def calculate_experiences(commits):
             )
         ]
 
-        all_commits = set(sum(all_commit_lists, []))
-        timespan_commits = set(sum(timespan_commit_lists, []))
+        all_commits = set(sum(all_commit_lists, tuple()))
+        timespan_commits = set(sum(timespan_commit_lists, tuple()))
 
         commit.set_experience(
             experience_type,
@@ -477,9 +477,9 @@ def calculate_experiences(commits):
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
             for i, item in enumerate(items):
-                experiences[experience_type][item][day] = all_commit_lists[i] + [
-                    commit.node
-                ]
+                experiences[experience_type][item][day] = all_commit_lists[i] + (
+                    commit.node,
+                )
 
     for commit in tqdm(commits):
         day = (commit.pushdate - first_pushdate).days
