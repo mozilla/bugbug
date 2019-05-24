@@ -348,9 +348,9 @@ class exp_queue:
             last_val = self.list[-1]
             # We need to extend the list except for 2 elements (the last, which
             # is going to be the same, and the one we are adding now).
-            self.list.extend(
-                last_val for _ in range(min(day - self.last_day, self.list.maxlen) - 2)
-            )
+            range_end = min(day - self.last_day, self.list.maxlen) - 2
+            if range_end > 0:
+                self.list.extend(last_val for _ in range(range_end))
 
             self.start_day = day - (self.list.maxlen - 1)
 
