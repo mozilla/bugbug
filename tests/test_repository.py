@@ -65,7 +65,7 @@ def test_get_revs(fake_hg_repo):
     add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
     revision1 = commit(hg)
 
-    revs = repository.get_revs(hg, None)
+    revs = repository.get_revs(hg)
 
     assert len(revs) == 1, "There should be one revision now"
     assert revs[0].decode("ascii") == revision1
@@ -73,7 +73,7 @@ def test_get_revs(fake_hg_repo):
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
     revision2 = commit(hg)
 
-    revs = repository.get_revs(hg, None)
+    revs = repository.get_revs(hg)
 
     assert len(revs) == 2, "There should be two revisions now"
     assert revs[0].decode("ascii") == revision1
@@ -99,6 +99,71 @@ def test_get_directories():
             ["dom/aFile.jsm", "tools/code-coverage/CodeCoverageHandler.cpp"]
         )
     ) == {"dom", "tools", "tools/code-coverage"}
+
+
+def test_exp_queue():
+    q = repository.exp_queue(0, 4, 0)
+    q[0] = 1
+    assert q[0] == 1
+    q[0] = 2
+    assert q[0] == 2
+
+    q = repository.exp_queue(366, 91, 0)
+    assert q[366] == 0
+    assert q[276] == 0
+    q[366] += 1
+    assert q[367] == 1
+    assert q[277] == 0
+
+    q = repository.exp_queue(0, 4, 0)
+    assert q[0] == 0
+    q[0] += 1
+    assert q[0] == 1
+    q[0] += 1
+    assert q[0] == 2
+    assert q[1] == 2
+    q[1] += 1
+    assert q[1] == 3
+    assert q[9] == 3
+    q[9] += 1
+    assert q[9] == 4
+    assert q[6] == 3
+    assert q[11] == 4
+    q[11] += 1
+    assert q[11] == 5
+    q[12] += 1
+    assert q[12] == 6
+    q[13] += 1
+    assert q[13] == 7
+    q[14] += 1
+    assert q[14] == 8
+    q[15] += 1
+    assert q[15] == 9
+
+    q = repository.exp_queue(0, 4, 0)
+    assert q[0] == 0
+    q[0] += 1
+    assert q[0] == 1
+    assert q[1] == 1
+    assert q[9] == 1
+    q[9] += 1
+    assert q[9] == 2
+    assert q[10] == 2
+    assert q[8] == 1
+    assert q[7] == 1
+    assert q[6] == 1
+
+    q = repository.exp_queue(9, 3, 0)
+    assert q[8] == 0
+    assert q[9] == 0
+    q[9] += 1
+    assert q[11] == 1
+    assert q[10] == 1
+    assert q[8] == 0
+    assert q[11] == 1
+    assert q[8] == 0
+    assert q[9] == 1
+    assert q[12] == 1
 
 
 def test_calculate_experiences():
@@ -269,7 +334,7 @@ def test_calculate_experiences():
     assert commits[4].touched_prev_total_file_min == 3
     assert commits[5].touched_prev_total_file_sum == 4
     assert commits[5].touched_prev_total_file_max == 4
-    assert commits[5].touched_prev_total_file_min == 4
+    assert commits[5].touched_prev_total_file_min == 3
 
     assert commits[0].touched_prev_90_days_file_sum == 0
     assert commits[0].touched_prev_90_days_file_max == 0
@@ -288,7 +353,7 @@ def test_calculate_experiences():
     assert commits[4].touched_prev_90_days_file_min == 1
     assert commits[5].touched_prev_90_days_file_sum == 2
     assert commits[5].touched_prev_90_days_file_max == 2
-    assert commits[5].touched_prev_90_days_file_min == 2
+    assert commits[5].touched_prev_90_days_file_min == 1
 
     assert commits[0].touched_prev_total_directory_sum == 0
     assert commits[0].touched_prev_total_directory_max == 0
