@@ -537,6 +537,13 @@ def download_commits(repo_dir, date_from):
 
     hg.close()
 
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "rb") as f:
+        ignore_revs = set(l[:40] for l in f)
+
+    revs = [rev for rev in revs if rev not in ignore_revs]
+
     processes = multiprocessing.cpu_count()
 
     print(f"Mining {commits_num} commits using {processes} processes...")
@@ -557,13 +564,6 @@ def download_commits(repo_dir, date_from):
 
     # Don't analyze commits that are not linked to a bug.
     commits = [commit for commit in commits if commit.bug != b""]
-
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
-    # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
-        ignore_revs = set(l[:40] for l in f)
-
-    commits = [commit for commit in commits if commit.node not in ignore_revs]
 
     print("Downloading file->component mapping...")
 
