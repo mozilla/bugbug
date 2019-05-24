@@ -417,8 +417,8 @@ def calculate_experiences(commits):
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
-            for item in items:
-                experiences[experience_type][item][day] += 1
+            for i, item in enumerate(items):
+                experiences[experience_type][item][day] = total_exps[i] + 1
 
     def update_complex_experiences(experience_type, day, items):
         all_commit_lists = [
@@ -473,10 +473,10 @@ def calculate_experiences(commits):
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
-            for item in items:
-                experiences[experience_type][item][day] = experiences[experience_type][
-                    item
-                ][day] + [commit.node]
+            for i, item in enumerate(items):
+                experiences[experience_type][item][day] = all_commit_lists[i] + [
+                    commit.node
+                ]
 
     for commit in tqdm(commits):
         day = (commit.pushdate - first_pushdate).days
