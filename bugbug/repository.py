@@ -529,10 +529,8 @@ def download_commits(repo_dir, date_from):
 
     revs = get_revs(hg)
 
-    commits_num = len(revs)
-
     assert (
-        commits_num > 0
+        len(revs) > 0
     ), "There should definitely be more than 0 commits, something is wrong"
 
     hg.close()
@@ -546,7 +544,7 @@ def download_commits(repo_dir, date_from):
 
     processes = multiprocessing.cpu_count()
 
-    print(f"Mining {commits_num} commits using {processes} processes...")
+    print(f"Mining {len(revs)} commits using {processes} processes...")
 
     CHUNK_SIZE = 256
     revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
