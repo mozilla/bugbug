@@ -247,11 +247,10 @@ tasks:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-pipeline-start.json
-              - project-relman
-              - bugbug
+              - "/bin/bash"
+              - "-lcx"
+              - "python infra/set_env_var.py TAG ${tag} infra/taskcluster-hook-pipeline-start.json &&
+                 taskboot build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
@@ -282,11 +281,10 @@ tasks:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-check-models-start.json
-              - project-relman
-              - bugbug-checks
+              - "/bin/bash"
+              - "-lcx"
+              - "python infra/set_env_var.py TAG ${tag} infra/taskcluster-hook-check-models-start.json &&
+                 taskboot build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
             description: bugbug update check hook
