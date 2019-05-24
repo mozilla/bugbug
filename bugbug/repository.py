@@ -347,7 +347,7 @@ class exp_queue:
         elif day > self.last_day:
             last_val = self.list[-1]
             self.list.extend(
-                last_val for _ in range(min(day - 1 - self.last_day, self.list.maxlen))
+                last_val for _ in range(min(day - self.last_day, self.list.maxlen) - 2)
             )
 
             self.start_day = day - (self.list.maxlen - 1)

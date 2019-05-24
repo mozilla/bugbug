@@ -150,6 +150,7 @@ def test_exp_queue():
     assert q[9] == 2
     assert q[10] == 2
     assert q[8] == 1
+    assert q[7] == 1
     assert q[6] == 1
 
     q = repository.exp_queue(9, 3, 0)
