@@ -69,7 +69,7 @@ def main():
 
     id_mapping = {}
 
-    docker_tag = os.getenv("DOCKER_TAG", None)
+    docker_tag = os.getenv("TAG", None)
 
     # First pass, do the template rendering and dependencies resolution
     tasks = []
