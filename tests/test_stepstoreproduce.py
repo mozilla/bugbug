@@ -11,3 +11,4 @@ def test_get_labels():
     model = StepsToReproduceModel()
     classes, _ = model.get_labels()
     assert classes[1488310]
+    assert not classes[1372243]
