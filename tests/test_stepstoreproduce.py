@@ -10,5 +10,4 @@ from bugbug.models.stepstoreproduce import StepsToReproduceModel
 def test_get_labels():
     model = StepsToReproduceModel()
     classes, _ = model.get_labels()
-    # assert not classes[1101825]
-    assert classes[1042096]
+    assert classes[1488310]
