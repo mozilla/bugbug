@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import copy
 import itertools
+import math
 import multiprocessing
 import os
 import re
@@ -32,6 +33,24 @@ path_to_component = {}
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
+FILE_TYPES = {
+    ".js": "JavaScript",
+    ".jsm": "JavaScript",
+    ".c": "C/C++",
+    ".cpp": "C/C++",
+    ".cc": "C/C++",
+    ".cxx": "C/C++",
+    ".m": "C/C++",
+    ".mm": "C/C++",
+    ".h": "C/C++",
+    ".hh": "C/C++",
+    ".hpp": "C/C++",
+    ".hxx": "C/C++",
+    ".java": "Java",
+    ".py": "Python",
+    ".rs": "Rust",
+}
+
 
 class Commit:
     def __init__(
@@ -41,11 +60,9 @@ class Commit:
         desc,
         date,
         pushdate,
-        bug,
+        bug_id,
         backedoutby,
         author_email,
-        files,
-        file_copies,
         reviewers,
     ):
         self.node = node
@@ -53,19 +70,75 @@ class Commit:
         self.desc = desc
         self.date = date
         self.pushdate = pushdate
-        self.bug = bug
+        self.bug_id = bug_id
         self.backedoutby = backedoutby
+        self.ever_backedout = backedoutby != ""
         self.author_email = author_email
-        self.files = files
-        self.file_copies = file_copies
+        self.files = []
+        self.file_copies = {}
         self.reviewers = reviewers
+        self.added = 0
+        self.test_added = 0
+        self.deleted = 0
+        self.test_deleted = 0
+        self.types = set()
+        self.seniority_author = 0
+        self.total_file_size = 0
+        self.average_file_size = 0
+        self.maximum_file_size = 0
+        self.minimum_file_size = 0
+        self.files_modified_num = 0
+        self.components = []
+        self.directories = []
+        self.touched_prev = set()
+
+    def to_dict(self):
+        data = {
+            "node": self.node,
+            "author": self.author,
+            "desc": self.desc,
+            "date": str(self.date),
+            "pushdate": str(self.pushdate),
+            "bug_id": self.bug_id,
+            "ever_backedout": self.ever_backedout,
+            "author_email": self.author_email,
+            "files": self.files,
+            "reviewers": self.reviewers,
+            "added": self.added,
+            "test_added": self.test_added,
+            "deleted": self.deleted,
+            "test_deleted": self.test_deleted,
+            "types": list(self.types),
+            "seniority_author": self.seniority_author,
+            "total_file_size": self.total_file_size,
+            "average_file_size": self.average_file_size,
+            "maximum_file_size": self.maximum_file_size,
+            "minimum_file_size": self.minimum_file_size,
+            "files_modified_num": self.files_modified_num,
+            "components": self.components,
+            "directories": self.directories,
+        }
+        for attr in self.touched_prev:
+            data[attr] = getattr(self, attr)
+        return data
+
+    def set_attr(self, attr, val):
+        setattr(self, attr, val)
+        self.touched_prev.add(attr)
 
     def set_experience(self, exp_type, timespan, exp_sum, exp_max, exp_min):
         exp_str = f"touched_prev_{timespan}_{exp_type}_"
-        setattr(self, f"{exp_str}sum", exp_sum)
+        self.set_attr(f"{exp_str}sum", exp_sum)
         if exp_type != "author":
-            setattr(self, f"{exp_str}max", exp_max)
-            setattr(self, f"{exp_str}min", exp_min)
+            self.set_attr(f"{exp_str}max", exp_max)
+            self.set_attr(f"{exp_str}min", exp_min)
+
+    def set_files(self, files):
+        self.files = files
+        self.components = list(
+            set(path_to_component[path] for path in files if path in path_to_component)
+        )
+        self.directories = get_directories(files)
 
 
 # This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
@@ -153,31 +226,7 @@ def is_test(path):
 
 
 def _transform(commit):
-    desc = commit.desc.decode("utf-8")
-
-    obj = {
-        "node": commit.node,
-        "author": commit.author,
-        "reviewers": commit.reviewers,
-        "desc": desc,
-        "date": str(commit.date),
-        "pushdate": str(commit.pushdate),
-        "bug_id": int(commit.bug.decode("ascii")) if commit.bug else None,
-        "ever_backedout": commit.backedoutby != "",
-        "added": 0,
-        "test_added": 0,
-        "deleted": 0,
-        "test_deleted": 0,
-        "types": set(),
-        "author_email": commit.author_email.decode("utf-8"),
-    }
-
-    # Copy all experience fields.
-    for attr, value in commit.__dict__.items():
-        if attr.startswith(f"touched_prev"):
-            obj[attr] = value
-
-    obj["seniority_author"] = commit.seniority_author
+    hg_modified_files(HG, commit)
 
     sizes = []
 
@@ -185,43 +234,20 @@ def _transform(commit):
     patch_data = rs_parsepatch.get_counts(patch)
     for stats in patch_data:
         if stats["binary"]:
-            obj["types"].add("binary")
+            commit.types.add("binary")
             continue
 
         path = stats["filename"]
 
         if is_test(path):
-            obj["test_added"] += stats["added_lines"]
-            obj["test_deleted"] += stats["deleted_lines"]
+            commit.test_added += stats["added_lines"]
+            commit.test_deleted += stats["deleted_lines"]
         else:
-            obj["added"] += stats["added_lines"]
-            obj["deleted"] += stats["deleted_lines"]
+            commit.added += stats["added_lines"]
+            commit.deleted += stats["deleted_lines"]
 
         ext = os.path.splitext(path)[1]
-        if ext in [".js", ".jsm"]:
-            type_ = "JavaScript"
-        elif ext in [
-            ".c",
-            ".cpp",
-            ".cc",
-            ".cxx",
-            ".m",
-            ".mm",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-        ]:
-            type_ = "C/C++"
-        elif ext == ".java":
-            type_ = "Java"
-        elif ext == ".py":
-            type_ = "Python"
-        elif ext == ".rs":
-            type_ = "Rust"
-        else:
-            type_ = ext
-        obj["types"].add(type_)
+        commit.types.add(FILE_TYPES.get(ext, ext))
 
         if not stats["deleted"]:
             try:
@@ -231,39 +257,51 @@ def _transform(commit):
                 if b"no such file in rev" not in e.err:
                     raise
 
-    obj["total_file_size"] = sum(sizes)
-    obj["average_file_size"] = (
-        obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
+    commit.total_file_size = sum(sizes)
+    commit.average_file_size = (
+        commit.total_file_size / len(sizes) if len(sizes) > 0 else 0
     )
-    obj["maximum_file_size"] = max(sizes, default=0)
-    obj["minimum_file_size"] = min(sizes, default=0)
+    commit.maximum_file_size = max(sizes, default=0)
+    commit.minimum_file_size = min(sizes, default=0)
 
-    obj["files_modified_num"] = len(patch_data)
+    commit.files_modified_num = len(patch_data)
 
-    # Covert to a list, as a set is not JSON-serializable.
-    obj["types"] = list(obj["types"])
+    return commit
 
-    obj["components"] = list(
-        set(
-            path_to_component[path]
-            for path in commit.files
-            if path in path_to_component
-        )
+
+def hg_modified_files(hg, commit):
+    template = '{join(files,"|")}\\0{join(file_copies,"|")}\\0'
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template=template,
+        no_merges=True,
+        rev=commit.node.encode("ascii"),
+        branch="central",
     )
-    obj["directories"] = get_directories(commit.files)
-    obj["files"] = commit.files
+    x = hg.rawcommand(args)
+    files_str, file_copies_str = x.split(b"\x00")[:-1]
 
-    return obj
+    commit.file_copies = file_copies = {}
+    for file_copy in file_copies_str.decode("utf-8").split("|"):
+        if not file_copy:
+            continue
+
+        parts = file_copy.split(" (")
+        copied = parts[0]
+        orig = parts[1][:-1]
+        file_copies[sys.intern(orig)] = sys.intern(copied)
+
+    commit.set_files([sys.intern(f) for f in files_str.decode("utf-8").split("|")])
 
 
-def hg_log(hg, revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
+def hg_log(hg, rev_start, rev_end):
+    template = "{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
         template=template,
         no_merges=True,
-        rev=revs[0] + b":" + revs[-1],
+        rev=rev_start + b":" + rev_end,
         branch="central",
     )
     x = hg.rawcommand(args)
@@ -272,31 +310,18 @@ def hg_log(hg, revs):
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
         date = datetime.utcfromtimestamp(float(rev[3].split(b".", 1)[0]))
-
-        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b"-", 1)[0]))
-
-        file_copies = {}
-        for file_copy in rev[8].decode("utf-8").split("|"):
-            if not file_copy:
-                continue
-
-            parts = file_copy.split(" (")
-            copied = parts[0]
-            orig = parts[1][:-1]
-            file_copies[sys.intern(orig)] = sys.intern(copied)
+        pushdate = datetime.utcfromtimestamp(float(rev[7].split(b"-", 1)[0]))
 
         revs.append(
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
-                desc=rev[2],
+                desc=rev[2].decode("utf-8"),
                 date=date,
                 pushdate=pushdate,
-                bug=rev[4],
+                bug_id=int(rev[4].decode("ascii")) if rev[4] else None,
                 backedoutby=rev[5].decode("ascii"),
-                author_email=rev[6],
-                files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
-                file_copies=file_copies,
+                author_email=rev[6].decode("utf-8"),
                 reviewers=tuple(
                     sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8"))
                 ),
@@ -307,7 +332,7 @@ def hg_log(hg, revs):
 
 
 def _hg_log(revs):
-    return hg_log(HG, revs)
+    return hg_log(HG, *revs)
 
 
 def get_revs(hg):
@@ -369,7 +394,6 @@ def calculate_experiences(commits):
     for commit in tqdm(commits):
         if commit.author not in first_commit_time:
             first_commit_time[commit.author] = commit.pushdate
-            commit.seniority_author = 0
         else:
             time_lapse = commit.pushdate - first_commit_time[commit.author]
             commit.seniority_author = time_lapse.days
@@ -419,7 +443,7 @@ def calculate_experiences(commits):
         )
 
         # We don't want to consider backed out commits when calculating experiences.
-        if not commit.backedoutby:
+        if commit.ever_backedout:
             for i, item in enumerate(items):
                 experiences[experience_type][item][day] = total_exps[i] + 1
 
@@ -475,7 +499,7 @@ def calculate_experiences(commits):
         )
 
         # We don't want to consider backed out commits when calculating experiences.
-        if not commit.backedoutby:
+        if commit.ever_backedout:
             for i, item in enumerate(items):
                 experiences[experience_type][item][day] = all_commit_lists[i] + (
                     commit.node,
@@ -546,22 +570,28 @@ def download_commits(repo_dir, date_from):
 
     print(f"Mining {len(revs)} commits using {processes} processes...")
 
-    CHUNK_SIZE = 256
-    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
+    CHUNK_SIZE = int(math.ceil(len(revs) / processes))
+    REVS_COUNT = len(revs)
+
+    # revs_groups contains exactly num_processes elements so no need to have chunksize != 1
+    revs_groups = [
+        (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
+        for i in range(0, REVS_COUNT, CHUNK_SIZE)
+    ]
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)
     ) as executor:
-        commits = executor.map(_hg_log, revs_groups, chunksize=20)
+        commits = executor.map(_hg_log, revs_groups, chunksize=1)
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
     # Don't analyze backouts.
-    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
+    backouts = set(commit.backedoutby for commit in commits if commit.ever_backedout)
     commits = [commit for commit in commits if commit.node not in backouts]
 
     # Don't analyze commits that are not linked to a bug.
-    commits = [commit for commit in commits if commit.bug != b""]
+    commits = [commit for commit in commits if commit.bug_id is not None]
 
     print("Downloading file->component mapping...")
 
@@ -575,11 +605,6 @@ def download_commits(repo_dir, date_from):
         path: "::".join(component) for path, component in path_to_component.items()
     }
 
-    calculate_experiences(commits)
-
-    # Exclude commits outside the range we care about.
-    commits = [commit for commit in commits if commit.pushdate > date_from]
-
     commits_num = len(commits)
 
     print(f"Mining {commits_num} commits using {processes} processes...")
@@ -587,12 +612,19 @@ def download_commits(repo_dir, date_from):
     global rs_parsepatch
     import rs_parsepatch
 
+    # Exclude commits outside the range we care about.
+    recent_commits = [commit for commit in commits if commit.pushdate > date_from]
+    recent_commits_num = len(recent_commits)
+
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)
     ) as executor:
-        commits = executor.map(_transform, commits, chunksize=64)
-        commits = tqdm(commits, total=commits_num)
-        db.write(COMMITS_DB, commits)
+        recent_commits = executor.map(_transform, recent_commits, chunksize=64)
+        recent_commits = tqdm(recent_commits, total=recent_commits_num)
+        recent_commits = list(recent_commits)
+
+    calculate_experiences(commits)
+    db.write(COMMITS_DB, (commit.to_dict() for commit in commits))
 
 
 def get_commit_map():
