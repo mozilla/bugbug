@@ -269,7 +269,7 @@ def test_calculate_experiences():
         "apps/file2.jsm": "Firefox::Boh",
     }
 
-    repository.calculate_experiences(list(commits.values()))
+    repository.calculate_experiences(list(commits.values()), set())
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0
