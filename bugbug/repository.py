@@ -157,13 +157,11 @@ def is_test(path):
 
 
 def _transform(commit):
-    desc = commit.desc.decode("utf-8")
-
     obj = {
         "node": commit.node,
         "author": commit.author,
         "reviewers": commit.reviewers,
-        "desc": desc,
+        "desc": commit.desc,
         "date": str(commit.date),
         "pushdate": str(commit.pushdate),
         "bug_id": int(commit.bug.decode("ascii")) if commit.bug else None,
@@ -293,7 +291,7 @@ def hg_log(hg, revs):
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
-                desc=rev[2],
+                desc=rev[2].decode("utf-8"),
                 date=date,
                 pushdate=pushdate,
                 bug=rev[4],
@@ -609,12 +607,15 @@ def download_commits(repo_dir, date_from):
 
     calculate_experiences(commits)
 
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # Skip commits which are in .hg-annotate-ignore-revs or which have
+    # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
     with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
         ignore_revs = set(l[:40] for l in f)
 
     commits = [commit for commit in commits if commit.node not in ignore_revs]
+
+    commits = [commit for commit in commits if "ignore-this-changeset" in commit.desc]
 
     # Don't analyze backouts.
     backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
