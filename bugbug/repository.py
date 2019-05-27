@@ -581,13 +581,6 @@ def download_commits(repo_dir, date_from):
 
     hg.close()
 
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
-    # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "rb") as f:
-        ignore_revs = set(l[:40] for l in f)
-
-    revs = [rev for rev in revs if rev not in ignore_revs]
-
     processes = multiprocessing.cpu_count()
 
     print(f"Mining {len(revs)} commits using {processes} processes...")
@@ -602,13 +595,6 @@ def download_commits(repo_dir, date_from):
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
-    # Don't analyze backouts.
-    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
-    commits = [commit for commit in commits if commit.node not in backouts]
-
-    # Don't analyze commits that are not linked to a bug.
-    commits = [commit for commit in commits if commit.bug != b""]
-
     print("Downloading file->component mapping...")
 
     global path_to_component
@@ -622,6 +608,20 @@ def download_commits(repo_dir, date_from):
     }
 
     calculate_experiences(commits)
+
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
+        ignore_revs = set(l[:40] for l in f)
+
+    commits = [commit for commit in commits if commit.node not in ignore_revs]
+
+    # Don't analyze backouts.
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
+    commits = [commit for commit in commits if commit.node not in backouts]
+
+    # Don't analyze commits that are not linked to a bug.
+    commits = [commit for commit in commits if commit.bug != b""]
 
     # Exclude commits outside the range we care about.
     commits = [commit for commit in commits if commit.pushdate > date_from]
