@@ -166,6 +166,53 @@ def test_exp_queue():
     assert q[12] == 1
 
 
+def test_get_commits_to_ignore(tmpdir):
+    tmp_path = tmpdir.strpath
+
+    with open(os.path.join(tmp_path, ".hg-annotate-ignore-revs"), "w") as f:
+        f.write("commit1\ncommit2\n8ba995b74e18334ab3707f27e9eb8f4e37ba3d29\n")
+
+    def create_commit(node, desc, bug, backedoutby):
+        return repository.Commit(
+            node=node,
+            author="author",
+            desc=desc,
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug=bug,
+            backedoutby=backedoutby,
+            author_email="author@mozilla.org",
+            files=["dom/file1.cpp"],
+            file_copies={},
+            reviewers=("reviewer1", "reviewer2"),
+        )
+
+    commits = [
+        create_commit("commit", "", 123, ""),
+        create_commit("commit_backout", "", 123, ""),
+        create_commit("commit_backedout", "", 123, "commit_backout"),
+        create_commit("commit_no_bug", "", b"", ""),
+        create_commit(
+            "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+            "commit in .hg-annotate-ignore-revs",
+            123,
+            "",
+        ),
+        create_commit(
+            "commit_with_ignore_in_desc", "prova\nignore-this-changeset\n", 123, ""
+        ),
+    ]
+
+    leftovers = repository.get_commits_to_ignore(tmp_path, commits)
+    assert len(leftovers) == 4
+    assert set(commit.node for commit in leftovers) == {
+        "commit_backout",
+        "commit_no_bug",
+        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+        "commit_with_ignore_in_desc",
+    }
+
+
 def test_calculate_experiences():
     commits = {
         "commit1": repository.Commit(
