@@ -207,6 +207,19 @@ def test_calculate_experiences():
             file_copies={},
             reviewers=("reviewer1",),
         ),
+        "commit2refactoring": repository.Commit(
+            node="commit2refactoring",
+            author="author2",
+            desc="commit2refactoring",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug="123",
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            files=["dom/file1.cpp"],
+            file_copies={},
+            reviewers=("reviewer1",),
+        ),
         "commit3": repository.Commit(
             node="commit3",
             author="author1",
@@ -269,7 +282,9 @@ def test_calculate_experiences():
         "apps/file2.jsm": "Firefox::Boh",
     }
 
-    repository.calculate_experiences(list(commits.values()), set())
+    repository.calculate_experiences(
+        list(commits.values()), {commits["commit2refactoring"]}
+    )
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0
