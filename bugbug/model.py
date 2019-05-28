@@ -14,7 +14,7 @@ from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-
+from sklearn.metrics import accuracy_score
 
 class Model:
     def __init__(self, lemmatization=False):
@@ -231,3 +231,11 @@ class CommitModel(Model):
 
     def items_gen(self):
         return (commit for commit in repository.get_commits())
+
+# for the duplicate model class
+class BugCoupleModel(Model):
+    def get_id(self, bug):
+        return bug
+
+    def items_gen(self):
+        return (bug_id for bug_id in self.get_labels()[0])

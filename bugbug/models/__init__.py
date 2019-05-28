@@ -22,6 +22,7 @@ MODELS = {
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
     "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
+    "duplicate": "bugbug.models.duplicate.DuplicateModel",
 }
 
 

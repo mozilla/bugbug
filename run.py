@@ -39,6 +39,7 @@ if __name__ == "__main__":
             "bugtype",
             "stepstoreproduce",
             "regressionrange",
+            "duplicate",
             # commit classifiers
             "backout",
         ],
