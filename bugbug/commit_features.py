@@ -15,6 +15,16 @@ class files_modified_num(object):
         return commit["files_modified_num"]
 
 
+class file_size(object):
+    def __call__(self, commit, **kwargs):
+        return {
+            "sum": commit["total_file_size"],
+            "avg": commit["average_file_size"],
+            "max": commit["maximum_file_size"],
+            "min": commit["minimum_file_size"],
+        }
+
+
 class added(object):
     def __call__(self, commit, **kwargs):
         return commit["added"]
@@ -33,11 +43,6 @@ class deleted(object):
 class test_deleted(object):
     def __call__(self, commit, **kwargs):
         return commit["test_deleted"]
-
-
-class author_experience_90_days(object):
-    def __call__(self, commit, **kwargs):
-        return commit["author_experience_90_days"]
 
 
 def get_exps(exp_type, commit):
@@ -103,6 +108,11 @@ class directories(object):
 class directory_touched_prev(object):
     def __call__(self, commit, **kwargs):
         return get_exps("directory", commit)
+
+
+class files(object):
+    def __call__(self, commit, **kwargs):
+        return commit["files"]
 
 
 class file_touched_prev(object):

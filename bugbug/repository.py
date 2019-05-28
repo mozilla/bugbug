@@ -11,12 +11,11 @@ import multiprocessing
 import os
 import re
 import sys
-from collections import defaultdict
+from collections import deque
 from datetime import datetime
 
 import hglib
 import requests
-import rs_parsepatch
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -236,8 +235,8 @@ def _transform(commit):
     obj["average_file_size"] = (
         obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
     )
-    obj["maximum_file_size"] = max(sizes) if len(sizes) > 0 else 0
-    obj["minimum_file_size"] = min(sizes) if len(sizes) > 0 else 0
+    obj["maximum_file_size"] = max(sizes, default=0)
+    obj["minimum_file_size"] = min(sizes, default=0)
 
     obj["files_modified_num"] = len(patch_data)
 
@@ -311,25 +310,55 @@ def _hg_log(revs):
     return hg_log(HG, revs)
 
 
-def get_revs(hg, date_from=None):
-    # TODO: Retrieve all commits once calculate_experiences is faster and less memory hungry.
-    if date_from is not None:
-        pushdate = (date_from - relativedelta(months=12)).strftime("%Y-%m-%d")
-        rev_start = f"pushdate('>{pushdate}')"
-    else:
-        rev_start = 0
-
-    print(f"Getting revs from {rev_start} to tip...")
+def get_revs(hg):
+    print(f"Getting revs from 0 to tip...")
 
     args = hglib.util.cmdbuilder(
-        b"log",
-        template="{node}\n",
-        no_merges=True,
-        branch="central",
-        rev=f"{rev_start}:tip",
+        b"log", template="{node}\n", no_merges=True, branch="central", rev=f"0:tip"
     )
     x = hg.rawcommand(args)
     return x.splitlines()
+
+
+class exp_queue:
+    def __init__(self, start_day, maxlen, default):
+        self.list = deque([default] * maxlen, maxlen=maxlen)
+        self.start_day = start_day - (maxlen - 1)
+        self.default = default
+
+    @property
+    def last_day(self):
+        return self.start_day + (self.list.maxlen - 1)
+
+    def __getitem__(self, day):
+        assert day >= self.start_day, "Can't get a day from earlier than start day"
+
+        if day < 0:
+            return self.default
+
+        if day > self.last_day:
+            return self.list[-1]
+
+        return self.list[day - self.start_day]
+
+    def __setitem__(self, day, value):
+        if day == self.last_day:
+            self.list[day - self.start_day] = value
+        elif day > self.last_day:
+            last_val = self.list[-1]
+            # We need to extend the list except for 2 elements (the last, which
+            # is going to be the same, and the one we are adding now).
+            range_end = min(day - self.last_day, self.list.maxlen) - 2
+            if range_end > 0:
+                self.list.extend(last_val for _ in range(range_end))
+
+            self.start_day = day - (self.list.maxlen - 1)
+
+            self.list.append(value)
+        else:
+            assert False, "Can't insert in the past"
+
+        assert day == self.last_day
 
 
 def calculate_experiences(commits):
@@ -347,17 +376,27 @@ def calculate_experiences(commits):
 
     first_pushdate = commits[0].pushdate
 
-    experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-    # In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
+    # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    complex_experiences = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    experiences = {}
+
+    def get_experience(exp_type, item, day, default):
+        if exp_type not in experiences:
+            experiences[exp_type] = {}
+
+        if item not in experiences[exp_type]:
+            experiences[exp_type][item] = exp_queue(
+                day, EXPERIENCE_TIMESPAN + 1, default
+            )
+
+        return experiences[exp_type][item][day]
 
     def update_experiences(experience_type, day, items):
-        total_exps = [experiences[day][experience_type][item] for item in items]
+        total_exps = [get_experience(experience_type, item, day, 0) for item in items]
         timespan_exps = [
-            exp - experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            exp - get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, 0)
             for exp, item in zip(total_exps, items)
         ]
 
@@ -368,28 +407,28 @@ def calculate_experiences(commits):
             experience_type,
             "total",
             total_exps_sum,
-            max(total_exps) if len(total_exps) else 0,
-            min(total_exps) if len(total_exps) else 0,
+            max(total_exps, default=0),
+            min(total_exps, default=0),
         )
         commit.set_experience(
             experience_type,
             EXPERIENCE_TIMESPAN_TEXT,
             timespan_exps_sum,
-            max(timespan_exps) if len(timespan_exps) else 0,
-            min(timespan_exps) if len(timespan_exps) else 0,
+            max(timespan_exps, default=0),
+            min(timespan_exps, default=0),
         )
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
-            for item in items:
-                experiences[day][experience_type][item] += 1
+            for i, item in enumerate(items):
+                experiences[experience_type][item][day] = total_exps[i] + 1
 
     def update_complex_experiences(experience_type, day, items):
         all_commit_lists = [
-            complex_experiences[day][experience_type][item] for item in items
+            get_experience(experience_type, item, day, tuple()) for item in items
         ]
         before_commit_lists = [
-            complex_experiences[day - EXPERIENCE_TIMESPAN][experience_type][item]
+            get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, tuple())
             for item in items
         ]
         timespan_commit_lists = [
@@ -399,92 +438,80 @@ def calculate_experiences(commits):
             )
         ]
 
-        all_commits = set(sum(all_commit_lists, []))
-        timespan_commits = set(sum(timespan_commit_lists, []))
+        all_commits = set(sum(all_commit_lists, tuple()))
+        timespan_commits = set(sum(timespan_commit_lists, tuple()))
 
         commit.set_experience(
             experience_type,
             "total",
             len(all_commits),
-            max(len(all_commit_list) for all_commit_list in all_commit_lists)
-            if len(all_commit_lists)
-            else 0,
-            min(len(all_commit_list) for all_commit_list in all_commit_lists)
-            if len(all_commit_lists)
-            else 0,
+            max(
+                (len(all_commit_list) for all_commit_list in all_commit_lists),
+                default=0,
+            ),
+            min(
+                (len(all_commit_list) for all_commit_list in all_commit_lists),
+                default=0,
+            ),
         )
         commit.set_experience(
             experience_type,
             EXPERIENCE_TIMESPAN_TEXT,
             len(timespan_commits),
             max(
-                len(timespan_commit_list)
-                for timespan_commit_list in timespan_commit_lists
-            )
-            if len(timespan_commit_lists)
-            else 0,
+                (
+                    len(timespan_commit_list)
+                    for timespan_commit_list in timespan_commit_lists
+                ),
+                default=0,
+            ),
             min(
-                len(timespan_commit_list)
-                for timespan_commit_list in timespan_commit_lists
-            )
-            if len(timespan_commit_lists)
-            else 0,
+                (
+                    len(timespan_commit_list)
+                    for timespan_commit_list in timespan_commit_lists
+                ),
+                default=0,
+            ),
         )
 
         # We don't want to consider backed out commits when calculating experiences.
         if not commit.backedoutby:
-            for item in items:
-                complex_experiences[day][experience_type][item].append(commit.node)
-
-    prev_days = 0
+            for i, item in enumerate(items):
+                experiences[experience_type][item][day] = all_commit_lists[i] + (
+                    commit.node,
+                )
 
     for commit in tqdm(commits):
-        days = (commit.pushdate - first_pushdate).days
-        assert days >= 0
+        day = (commit.pushdate - first_pushdate).days
+        assert day >= 0
 
-        if days not in experiences and days != prev_days:
-            assert days not in complex_experiences
-            for day in range(prev_days + 1, days + 1):
-                experiences[day] = copy.deepcopy(experiences[day - 1])
-                complex_experiences[day] = copy.deepcopy(complex_experiences[day - 1])
-
-        prev_days = days
-
-        update_experiences("author", days, [commit.author])
-        update_experiences("reviewer", days, commit.reviewers)
+        update_experiences("author", day, [commit.author])
+        update_experiences("reviewer", day, commit.reviewers)
 
         # When a file is moved/copied, copy original experience values to the copied path.
         if len(commit.file_copies) > 0:
             for orig, copied in commit.file_copies.items():
                 orig_directories = get_directories(orig)
                 copied_directories = get_directories(copied)
+                for orig_directory, copied_directory in zip(
+                    orig_directories, copied_directories
+                ):
+                    experiences["directory"][copied_directory] = copy.deepcopy(
+                        experiences["directory"][orig_directory]
+                    )
 
                 if orig in path_to_component and copied in path_to_component:
                     orig_component = path_to_component[orig]
                     copied_component = path_to_component[copied]
-                else:
-                    orig_component = copied_component = None
+                    experiences["component"][copied_component] = copy.deepcopy(
+                        experiences["component"][orig_component]
+                    )
 
-                for prev_day in complex_experiences.keys():
-                    if orig_component is not None:
-                        complex_experiences[prev_day]["component"][
-                            copied_component
-                        ] = complex_experiences[prev_day]["component"][orig_component]
+                experiences["file"][copied] = copy.deepcopy(experiences["file"][orig])
 
-                    complex_experiences[prev_day]["file"][copied] = complex_experiences[
-                        prev_day
-                    ]["file"][orig]
+        update_complex_experiences("file", day, commit.files)
 
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        complex_experiences[prev_day]["directory"][
-                            copied_directory
-                        ] = complex_experiences[prev_day]["directory"][orig_directory]
-
-        update_complex_experiences("file", days, commit.files)
-
-        update_complex_experiences("directory", days, get_directories(commit.files))
+        update_complex_experiences("directory", day, get_directories(commit.files))
 
         components = list(
             set(
@@ -494,32 +521,30 @@ def calculate_experiences(commits):
             )
         )
 
-        update_complex_experiences("component", days, components)
-
-        old_days = [
-            day for day in experiences.keys() if day < days - EXPERIENCE_TIMESPAN
-        ]
-        for day in old_days:
-            del experiences[day]
-            del complex_experiences[day]
+        update_complex_experiences("component", day, components)
 
 
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg, date_from)
-
-    commits_num = len(revs)
+    revs = get_revs(hg)
 
     assert (
-        commits_num > 0
+        len(revs) > 0
     ), "There should definitely be more than 0 commits, something is wrong"
 
     hg.close()
 
+    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "rb") as f:
+        ignore_revs = set(l[:40] for l in f)
+
+    revs = [rev for rev in revs if rev not in ignore_revs]
+
     processes = multiprocessing.cpu_count()
 
-    print(f"Mining {commits_num} commits using {processes} processes...")
+    print(f"Mining {len(revs)} commits using {processes} processes...")
 
     CHUNK_SIZE = 256
     revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
@@ -537,13 +562,6 @@ def download_commits(repo_dir, date_from):
 
     # Don't analyze commits that are not linked to a bug.
     commits = [commit for commit in commits if commit.bug != b""]
-
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
-    # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
-        ignore_revs = set(l[:40] for l in f)
-
-    commits = [commit for commit in commits if commit.node not in ignore_revs]
 
     print("Downloading file->component mapping...")
 
@@ -565,6 +583,9 @@ def download_commits(repo_dir, date_from):
     commits_num = len(commits)
 
     print(f"Mining {commits_num} commits using {processes} processes...")
+
+    global rs_parsepatch
+    import rs_parsepatch
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)

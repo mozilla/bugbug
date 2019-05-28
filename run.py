@@ -12,7 +12,7 @@ import numpy as np
 
 from bugbug import repository  # noqa
 from bugbug import bugzilla, db
-from bugbug.models import get_model_class
+from bugbug.models import MODELS, get_model_class
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -23,27 +23,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
-        "--goal",
-        help="Goal of the classifier",
-        choices=[
-            # bug classifiers
-            "defect",
-            "regression",
-            "tracking",
-            "qaneeded",
-            "uplift",
-            "component",
-            "devdocneeded",
-            "defectenhancementtask",
-            "assignee",
-            "bugtype",
-            "stepstoreproduce",
-            "regressionrange",
-            "duplicate",
-            # commit classifiers
-            "backout",
-        ],
-        default="defect",
+        "--goal", help="Goal of the classifier", choices=MODELS.keys(), default="defect"
     )
     parser.add_argument(
         "--classifier",
