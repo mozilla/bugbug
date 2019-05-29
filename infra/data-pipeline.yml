@@ -270,7 +270,6 @@ tasks:
         - "git clone https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           python http_service/download_models.py &&
            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service"
       artifacts:
         public/bugbug:
