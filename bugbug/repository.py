@@ -538,24 +538,39 @@ def calculate_experiences(commits, commits_to_ignore):
                     for orig_directory, copied_directory in zip(
                         orig_directories, copied_directories
                     ):
-                        experiences["directory"][commit_type][
-                            copied_directory
-                        ] = copy.deepcopy(
-                            experiences["directory"][commit_type][orig_directory]
-                        )
+                        if orig_directory in experiences["directory"][commit_type]:
+                            experiences["directory"][commit_type][
+                                copied_directory
+                            ] = copy.deepcopy(
+                                experiences["directory"][commit_type][orig_directory]
+                            )
+                        else:
+                            print(
+                                f"Experience missing for directory {orig_directory}, type '{commit_type}', on commit {commit.node}"
+                            )
 
                     if orig in path_to_component and copied in path_to_component:
                         orig_component = path_to_component[orig]
                         copied_component = path_to_component[copied]
-                        experiences["component"][commit_type][
-                            copied_component
-                        ] = copy.deepcopy(
-                            experiences["component"][commit_type][orig_component]
-                        )
+                        if orig_component in experiences["component"][commit_type]:
+                            experiences["component"][commit_type][
+                                copied_component
+                            ] = copy.deepcopy(
+                                experiences["component"][commit_type][orig_component]
+                            )
+                        else:
+                            print(
+                                f"Experience missing for component {orig_component}, type '{commit_type}', on commit {commit.node}"
+                            )
 
-                    experiences["file"][commit_type][copied] = copy.deepcopy(
-                        experiences["file"][commit_type][orig]
-                    )
+                    if orig in experiences["file"][commit_type]:
+                        experiences["file"][commit_type][copied] = copy.deepcopy(
+                            experiences["file"][commit_type][orig]
+                        )
+                    else:
+                        print(
+                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                        )
 
         if commit not in commits_to_ignore:
             update_experiences("author", day, [commit.author])
