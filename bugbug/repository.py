@@ -60,6 +60,13 @@ class Commit:
         self.file_copies = file_copies
         self.reviewers = reviewers
 
+    def __eq__(self, other):
+        assert isinstance(other, Commit)
+        return self.node == other.node
+
+    def __hash__(self):
+        return hash(self.node)
+
     def set_experience(
         self, exp_type, commit_type, timespan, exp_sum, exp_max, exp_min
     ):
