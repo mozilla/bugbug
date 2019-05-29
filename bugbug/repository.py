@@ -446,9 +446,10 @@ def calculate_experiences(commits, commits_to_ignore):
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
+                to_add = 1 if commit not in commits_to_ignore else 0
                 for i, item in enumerate(items):
                     experiences[experience_type][commit_type][item][day] = (
-                        total_exps[i] + 1
+                        total_exps[i] + to_add
                     )
 
     def update_complex_experiences(experience_type, day, items):
@@ -519,10 +520,11 @@ def calculate_experiences(commits, commits_to_ignore):
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
+                to_add = (commit.node,) if commit not in commits_to_ignore else ()
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][
-                        day
-                    ] = all_commit_lists[i] + (commit.node,)
+                    experiences[experience_type][commit_type][item][day] = (
+                        all_commit_lists[i] + to_add
+                    )
 
     for commit in tqdm(commits):
         day = (commit.pushdate - first_pushdate).days
@@ -557,23 +559,22 @@ def calculate_experiences(commits, commits_to_ignore):
                         experiences["file"][commit_type][orig]
                     )
 
-        if commit not in commits_to_ignore:
-            update_experiences("author", day, [commit.author])
-            update_experiences("reviewer", day, commit.reviewers)
+        update_experiences("author", day, [commit.author])
+        update_experiences("reviewer", day, commit.reviewers)
 
-            update_complex_experiences("file", day, commit.files)
+        update_complex_experiences("file", day, commit.files)
 
-            update_complex_experiences("directory", day, get_directories(commit.files))
+        update_complex_experiences("directory", day, get_directories(commit.files))
 
-            components = list(
-                set(
-                    path_to_component[path]
-                    for path in commit.files
-                    if path in path_to_component
-                )
+        components = list(
+            set(
+                path_to_component[path]
+                for path in commit.files
+                if path in path_to_component
             )
+        )
 
-            update_complex_experiences("component", day, components)
+        update_complex_experiences("component", day, components)
 
 
 def get_commits_to_ignore(repo_dir, commits):
