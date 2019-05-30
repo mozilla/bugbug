@@ -107,6 +107,7 @@ class author_experience(object):
             f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
             ],
+            "seniority_author": commit["seniority_author"],
         }
 
 
@@ -120,6 +121,11 @@ class components(object):
         return commit["components"]
 
 
+class components_modified_num(object):
+    def __call__(self, commit, **kwargs):
+        return len(commit["components"])
+
+
 class component_touched_prev(object):
     def __call__(self, commit, **kwargs):
         return get_exps("component", commit)
@@ -128,6 +134,11 @@ class component_touched_prev(object):
 class directories(object):
     def __call__(self, commit, **kwargs):
         return commit["directories"]
+
+
+class directories_modified_num(object):
+    def __call__(self, commit, **kwargs):
+        return len(commit["directories"])
 
 
 class directory_touched_prev(object):
