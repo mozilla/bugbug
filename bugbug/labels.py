@@ -25,10 +25,10 @@ def get_all_bug_ids():
     labels_dir = get_labels_dir()
     for csv_file in os.listdir(labels_dir):
         with open(os.path.join(labels_dir, csv_file)) as f:
-            reader = csv.reader(f)
-            # Assume the first row is the header.
-            next(reader)
-            # Assume the first column is the bug ID.
-            bug_ids.update([int(row[0]) for row in reader])
+            reader = csv.DictReader(f)
+            if "bug_id" not in reader.fieldnames:
+                continue
+
+            bug_ids.update([int(row["bug_id"]) for row in reader])
 
     return list(bug_ids)
