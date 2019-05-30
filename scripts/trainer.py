@@ -31,7 +31,7 @@ class Trainer(object):
         logger.info(f"Downloading {db_type} database")
         url = BASE_URL.format(db_type)
         urlretrieve(f"{url}/{db_type}.json.xz", "data/{db_type}.json.xz")
-        logger.info("Decompressing {db_type} database")
+        logger.info(f"Decompressing {db_type} database")
         self.decompress_file(f"data/{db_type}.json")
 
     def go(self, model_name):
