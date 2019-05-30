@@ -110,7 +110,6 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
-        # Evaluate results on the test set.
         feature_names = self.get_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
@@ -130,6 +129,7 @@ class Model:
                     f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                 )
 
+        # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
