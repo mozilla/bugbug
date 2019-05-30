@@ -40,10 +40,10 @@ class Trainer(object):
 
         model_class = get_model_class(model_name)
 
-        if model.BugModel in model_class.__bases__:
+        if issubclass(model_class, model.BugModel):
             self.download_db("bugs")
 
-        if model.CommitModel in model_class.__bases__:
+        if issubclass(model_class, model.CommitModel):
             self.download_db("commits")
 
         logger.info(f"Training *{model_name}* model")

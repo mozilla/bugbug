@@ -19,9 +19,11 @@ def test_import_all_models():
 
 def test_component_is_bugmodel():
     model_class = get_model_class("component")
-    assert model.BugModel in model_class.__bases__
+    assert issubclass(model_class, model.BugModel)
+    model_class = get_model_class("regression")
+    assert issubclass(model_class, model.BugModel)
 
 
 def test_backout_is_commitmodel():
     model_class = get_model_class("backout")
-    assert model.CommitModel in model_class.__bases__
+    assert issubclass(model_class, model.CommitModel)
