@@ -335,6 +335,16 @@ class exp_queue:
         self.start_day = start_day - (maxlen - 1)
         self.default = default
 
+    def __deepcopy__(self, memo):
+        result = exp_queue.__new__(exp_queue)
+
+        # We don't need to deepcopy the list, as elements in the list are immutable.
+        result.list = self.list.copy()
+        result.start_day = self.start_day
+        result.default = self.default
+
+        return result
+
     @property
     def last_day(self):
         return self.start_day + (self.list.maxlen - 1)
