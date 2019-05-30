@@ -21,6 +21,7 @@ class Trainer(object):
         with lzma.open(f"{path}.xz", "rb") as input_f:
             with open(path, "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
+        assert os.path.exists(path), "Decompressed file exists"
 
     def compress_file(self, path):
         with open(path, "rb") as input_f:
@@ -28,11 +29,13 @@ class Trainer(object):
                 shutil.copyfileobj(input_f, output_f)
 
     def download_db(self, db_type):
-        logger.info(f"Downloading {db_type} database")
-        url = BASE_URL.format(db_type)
-        urlretrieve(f"{url}/{db_type}.json.xz", "data/{db_type}.json.xz")
+        path = f"data/{db_type}.json"
+        url = f"{BASE_URL.format(db_type)}/{db_type}.json.xz"
+        logger.info(f"Downloading {db_type} database from {url} to {path}.xz")
+        urlretrieve(url, f"{path}.xz")
+        assert os.path.exists(f"{path}.xz"), "Downloaded file exists"
         logger.info(f"Decompressing {db_type} database")
-        self.decompress_file(f"data/{db_type}.json")
+        self.decompress_file(path)
 
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
