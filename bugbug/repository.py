@@ -373,6 +373,13 @@ class exp_queue:
 def calculate_experiences(commits, commits_to_ignore):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
+    last_commit = {
+        "author": {},
+        "reviewer": {},
+        "file": {},
+        "directory": {},
+        "component": {},
+    }
     first_commit_time = {}
 
     for commit in tqdm(commits):
@@ -382,6 +389,26 @@ def calculate_experiences(commits, commits_to_ignore):
         else:
             time_lapse = commit.pushdate - first_commit_time[commit.author]
             commit.seniority_author = time_lapse.days
+
+        if commit not in commits_to_ignore:
+            last_commit["author"][commit.author] = commit
+            for reviewer in commit.reviewers:
+                last_commit["reviewer"][reviewer] = commit
+            for path in commit.files:
+                last_commit["file"][path] = commit
+            for directory in get_directories(commit.files):
+                last_commit["directory"][directory] = commit
+
+            components = list(
+                set(
+                    path_to_component[path]
+                    for path in commit.files
+                    if path in path_to_component
+                )
+            )
+
+            for component in components:
+                last_commit["component"][component] = commit
 
     first_pushdate = commits[0].pushdate
 
@@ -404,6 +431,13 @@ def calculate_experiences(commits, commits_to_ignore):
             )
 
         return experiences[exp_type][commit_type][item][day]
+
+    def del_experience(exp_type, items):
+        for item in items:
+            if last_commit[exp_type][item] is commit:
+                del last_commit[exp_type][item]
+                del experiences[exp_type][""][item]
+                del experiences[exp_type]["backout"][item]
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -450,6 +484,8 @@ def calculate_experiences(commits, commits_to_ignore):
                     experiences[experience_type][commit_type][item][day] = (
                         total_exps[i] + 1
                     )
+
+        del_experience(experience_type, items)
 
     def update_complex_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -523,6 +559,8 @@ def calculate_experiences(commits, commits_to_ignore):
                     experiences[experience_type][commit_type][item][
                         day
                     ] = all_commit_lists[i] + (commit.node,)
+
+        del_experience(experience_type, items)
 
     for commit in tqdm(commits):
         day = (commit.pushdate - first_pushdate).days
