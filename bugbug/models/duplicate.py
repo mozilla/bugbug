@@ -89,8 +89,10 @@ class DuplicateModel(BugCoupleModel):
             if duplicates_num == NUM_DUPLICATES:
                 break
 
+        duplicate_ids_set = set(duplicate_ids)
+
         for bug in bugs:
-            if bug not in set(duplicate_ids):
+            if bug not in duplicate_ids_set:
                 non_duplicate_ids.append(bug)
 
         print(f"Number of purely duplicate labels are: {duplicates_num}")
@@ -107,9 +109,8 @@ class DuplicateModel(BugCoupleModel):
                 break
 
         print(f"Number of purely non-duplicate labels are {dup_nondup_num}")
-        # Non we map non-dup to non-dup bug. However, these are really
-        # large in number, so I'm restricting the number to 2.5K
 
+        # Non we map non-dup to non-dup bug.
         nondup_nondup_num = 0
         for key in non_duplicate_ids:
             for key2 in non_duplicate_ids:

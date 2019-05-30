@@ -436,7 +436,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
     def fit(self, x, y=None):
         return self
 
-    # in case of duplicate model, bugs is a vector of tuples
     def transform(self, bugs):
         results = []
 

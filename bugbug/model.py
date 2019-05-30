@@ -235,7 +235,6 @@ class CommitModel(Model):
         return (commit for commit in repository.get_commits())
 
 
-# for the duplicate model class
 class BugCoupleModel(Model):
     def get_id(self, bug):
         return bug[0]["id"], bug[1]["id"]
