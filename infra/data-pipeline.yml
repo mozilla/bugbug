@@ -7,7 +7,7 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     payload:
-      maxRunTime: 43200
+      maxRunTime: 86400
       image: mozilla/bugbug-commit-retrieval
 
       artifacts:
