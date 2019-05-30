@@ -67,7 +67,9 @@ class Model:
 
         # Get items, filtering out those for which we have no labels.
         def trainable_items_gen():
-            return (item for item in self.items_gen() if self.get_id(item) in classes)
+            return (
+                item for item in self.items_gen(classes) if self.get_id(item) in classes
+            )
 
         # Calculate labels.
         y = np.array([classes[self.get_id(item)] for item in trainable_items_gen()])
@@ -186,7 +188,7 @@ class Model:
         if not isinstance(items, list):
             items = [items]
 
-        assert isinstance(items[0], dict)
+        assert isinstance(items[0], dict) or isinstance(items[0], tuple)
 
         X = self.extraction_pipeline.transform(items)
         if probabilities:
@@ -221,7 +223,7 @@ class BugModel(Model):
     def get_id(self, bug):
         return bug["id"]
 
-    def items_gen(self):
+    def items_gen(self, classes):
         return (bug for bug in bugzilla.get_bugs())
 
 
@@ -229,5 +231,17 @@ class CommitModel(Model):
     def get_id(self, commit):
         return commit["node"]
 
-    def items_gen(self):
+    def items_gen(self, classes):
         return (commit for commit in repository.get_commits())
+
+
+class BugCoupleModel(Model):
+    def get_id(self, bug):
+        return bug[0]["id"], bug[1]["id"]
+
+    def items_gen(self, classes):
+        bugs = {}
+        for bug in bugzilla.get_bugs():
+            bugs[bug["id"]] = bug
+
+        return ((bugs[bug_id1], bugs[bug_id2]) for bug_id1, bug_id2 in classes)

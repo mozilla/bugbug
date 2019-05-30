@@ -423,12 +423,14 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         rollback=False,
         rollback_when=None,
         commit_data=False,
+        merge_data=True,
     ):
         self.feature_extractors = feature_extractors
         self.cleanup_functions = cleanup_functions
         self.rollback = rollback
         self.rollback_when = rollback_when
         self.commit_map = repository.get_commit_map() if commit_data else None
+        self.merge_data = merge_data
         assert self.commit_map is None or len(self.commit_map) > 0
 
     def fit(self, x, y=None):
@@ -440,7 +442,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         reporter_experience_map = defaultdict(int)
         author_ids = get_author_ids() if self.commit_map else None
 
-        for bug in bugs:
+        def apply_transform(bug):
             bug_id = bug["id"]
 
             if self.rollback:
@@ -485,13 +487,37 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 for c in bug["comments"]:
                     c["text"] = cleanup_function(c["text"])
 
-            result = {
+            return {
                 "data": data,
                 "title": bug["summary"],
                 "first_comment": bug["comments"][0]["text"],
                 "comments": " ".join([c["text"] for c in bug["comments"]]),
             }
 
-            results.append(result)
+        for bug in bugs:
+            if isinstance(bug, dict):
+                results.append(apply_transform(bug))
+            elif isinstance(bug, tuple):
+                if self.merge_data:
+                    result1 = apply_transform(bug[0])
+                    result2 = apply_transform(bug[1])
+                    results.append(
+                        {
+                            "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}'
+                        }
+                    )
+                else:
+                    results.append(
+                        {
+                            "data1": result1["data"],
+                            "data2": result2["data"],
+                            "title1": result1["title"],
+                            "title2": result2["title"],
+                            "first_comment1": result1["first_comment"],
+                            "first_comment2": result2["first_comment"],
+                            "comments1": result1["comments"],
+                            "comments2": result2["comments"],
+                        }
+                    )
 
         return pd.DataFrame(results)
