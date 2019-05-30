@@ -307,7 +307,7 @@ def hg_log(hg, revs):
                 files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
                 file_copies=file_copies,
                 reviewers=tuple(
-                    sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8"))
+                    set(sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8")))
                 ),
             )
         )
