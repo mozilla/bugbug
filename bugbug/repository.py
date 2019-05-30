@@ -60,8 +60,19 @@ class Commit:
         self.file_copies = file_copies
         self.reviewers = reviewers
 
-    def set_experience(self, exp_type, timespan, exp_sum, exp_max, exp_min):
+    def __eq__(self, other):
+        assert isinstance(other, Commit)
+        return self.node == other.node
+
+    def __hash__(self):
+        return hash(self.node)
+
+    def set_experience(
+        self, exp_type, commit_type, timespan, exp_sum, exp_max, exp_min
+    ):
         exp_str = f"touched_prev_{timespan}_{exp_type}_"
+        if commit_type:
+            exp_str += f"{commit_type}_"
         setattr(self, f"{exp_str}sum", exp_sum)
         if exp_type != "author":
             setattr(self, f"{exp_str}max", exp_max)
@@ -153,13 +164,11 @@ def is_test(path):
 
 
 def _transform(commit):
-    desc = commit.desc.decode("utf-8")
-
     obj = {
         "node": commit.node,
         "author": commit.author,
         "reviewers": commit.reviewers,
-        "desc": desc,
+        "desc": commit.desc,
         "date": str(commit.date),
         "pushdate": str(commit.pushdate),
         "bug_id": int(commit.bug.decode("ascii")) if commit.bug else None,
@@ -289,7 +298,7 @@ def hg_log(hg, revs):
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
-                desc=rev[2],
+                desc=rev[2].decode("utf-8"),
                 date=date,
                 pushdate=pushdate,
                 bug=rev[4],
@@ -298,7 +307,7 @@ def hg_log(hg, revs):
                 files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
                 file_copies=file_copies,
                 reviewers=tuple(
-                    sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8"))
+                    set(sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8")))
                 ),
             )
         )
@@ -325,6 +334,16 @@ class exp_queue:
         self.list = deque([default] * maxlen, maxlen=maxlen)
         self.start_day = start_day - (maxlen - 1)
         self.default = default
+
+    def __deepcopy__(self, memo):
+        result = exp_queue.__new__(exp_queue)
+
+        # We don't need to deepcopy the list, as elements in the list are immutable.
+        result.list = self.list.copy()
+        result.start_day = self.start_day
+        result.default = self.default
+
+        return result
 
     @property
     def last_day(self):
@@ -361,9 +380,16 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits):
+def calculate_experiences(commits, commits_to_ignore):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
+    last_commit = {
+        "author": {},
+        "reviewer": {},
+        "file": {},
+        "directory": {},
+        "component": {},
+    }
     first_commit_time = {}
 
     for commit in tqdm(commits):
@@ -374,6 +400,26 @@ def calculate_experiences(commits):
             time_lapse = commit.pushdate - first_commit_time[commit.author]
             commit.seniority_author = time_lapse.days
 
+        if commit not in commits_to_ignore:
+            last_commit["author"][commit.author] = commit
+            for reviewer in commit.reviewers:
+                last_commit["reviewer"][reviewer] = commit
+            for path in commit.files:
+                last_commit["file"][path] = commit
+            for directory in get_directories(commit.files):
+                last_commit["directory"][directory] = commit
+
+            components = list(
+                set(
+                    path_to_component[path]
+                    for path in commit.files
+                    if path in path_to_component
+                )
+            )
+
+            for component in components:
+                last_commit["component"][component] = commit
+
     first_pushdate = commits[0].pushdate
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
@@ -382,146 +428,241 @@ def calculate_experiences(commits):
     # for C should be 2 (A + B), and not 3 (A twice + B).
     experiences = {}
 
-    def get_experience(exp_type, item, day, default):
+    def get_experience(exp_type, commit_type, item, day, default):
         if exp_type not in experiences:
             experiences[exp_type] = {}
 
-        if item not in experiences[exp_type]:
-            experiences[exp_type][item] = exp_queue(
+        if commit_type not in experiences[exp_type]:
+            experiences[exp_type][commit_type] = {}
+
+        if item not in experiences[exp_type][commit_type]:
+            experiences[exp_type][commit_type][item] = exp_queue(
                 day, EXPERIENCE_TIMESPAN + 1, default
             )
 
-        return experiences[exp_type][item][day]
+        return experiences[exp_type][commit_type][item][day]
+
+    def del_experience(exp_type, items):
+        for item in items:
+            if last_commit[exp_type][item] is commit:
+                del last_commit[exp_type][item]
+                del experiences[exp_type][""][item]
+                del experiences[exp_type]["backout"][item]
 
     def update_experiences(experience_type, day, items):
-        total_exps = [get_experience(experience_type, item, day, 0) for item in items]
-        timespan_exps = [
-            exp - get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, 0)
-            for exp, item in zip(total_exps, items)
-        ]
+        for commit_type in ["", "backout"]:
+            total_exps = [
+                get_experience(experience_type, commit_type, item, day, 0)
+                for item in items
+            ]
+            timespan_exps = [
+                exp
+                - get_experience(
+                    experience_type, commit_type, item, day - EXPERIENCE_TIMESPAN, 0
+                )
+                for exp, item in zip(total_exps, items)
+            ]
 
-        total_exps_sum = sum(total_exps)
-        timespan_exps_sum = sum(timespan_exps)
+            total_exps_sum = sum(total_exps)
+            timespan_exps_sum = sum(timespan_exps)
 
-        commit.set_experience(
-            experience_type,
-            "total",
-            total_exps_sum,
-            max(total_exps, default=0),
-            min(total_exps, default=0),
-        )
-        commit.set_experience(
-            experience_type,
-            EXPERIENCE_TIMESPAN_TEXT,
-            timespan_exps_sum,
-            max(timespan_exps, default=0),
-            min(timespan_exps, default=0),
-        )
+            commit.set_experience(
+                experience_type,
+                commit_type,
+                "total",
+                total_exps_sum,
+                max(total_exps, default=0),
+                min(total_exps, default=0),
+            )
+            commit.set_experience(
+                experience_type,
+                commit_type,
+                EXPERIENCE_TIMESPAN_TEXT,
+                timespan_exps_sum,
+                max(timespan_exps, default=0),
+                min(timespan_exps, default=0),
+            )
 
-        # We don't want to consider backed out commits when calculating experiences.
-        if not commit.backedoutby:
-            for i, item in enumerate(items):
-                experiences[experience_type][item][day] = total_exps[i] + 1
+            # We don't want to consider backed out commits when calculating normal experiences.
+            if (
+                commit_type == ""
+                and not commit.backedoutby
+                or commit_type == "backout"
+                and commit.backedoutby
+            ):
+                for i, item in enumerate(items):
+                    experiences[experience_type][commit_type][item][day] = (
+                        total_exps[i] + 1
+                    )
+
+        del_experience(experience_type, items)
 
     def update_complex_experiences(experience_type, day, items):
-        all_commit_lists = [
-            get_experience(experience_type, item, day, tuple()) for item in items
-        ]
-        before_commit_lists = [
-            get_experience(experience_type, item, day - EXPERIENCE_TIMESPAN, tuple())
-            for item in items
-        ]
-        timespan_commit_lists = [
-            commit_list[len(before_commit_list) :]
-            for commit_list, before_commit_list in zip(
-                all_commit_lists, before_commit_lists
-            )
-        ]
-
-        all_commits = set(sum(all_commit_lists, tuple()))
-        timespan_commits = set(sum(timespan_commit_lists, tuple()))
-
-        commit.set_experience(
-            experience_type,
-            "total",
-            len(all_commits),
-            max(
-                (len(all_commit_list) for all_commit_list in all_commit_lists),
-                default=0,
-            ),
-            min(
-                (len(all_commit_list) for all_commit_list in all_commit_lists),
-                default=0,
-            ),
-        )
-        commit.set_experience(
-            experience_type,
-            EXPERIENCE_TIMESPAN_TEXT,
-            len(timespan_commits),
-            max(
-                (
-                    len(timespan_commit_list)
-                    for timespan_commit_list in timespan_commit_lists
-                ),
-                default=0,
-            ),
-            min(
-                (
-                    len(timespan_commit_list)
-                    for timespan_commit_list in timespan_commit_lists
-                ),
-                default=0,
-            ),
-        )
-
-        # We don't want to consider backed out commits when calculating experiences.
-        if not commit.backedoutby:
-            for i, item in enumerate(items):
-                experiences[experience_type][item][day] = all_commit_lists[i] + (
-                    commit.node,
+        for commit_type in ["", "backout"]:
+            all_commit_lists = [
+                get_experience(experience_type, commit_type, item, day, tuple())
+                for item in items
+            ]
+            before_commit_lists = [
+                get_experience(
+                    experience_type,
+                    commit_type,
+                    item,
+                    day - EXPERIENCE_TIMESPAN,
+                    tuple(),
                 )
+                for item in items
+            ]
+            timespan_commit_lists = [
+                commit_list[len(before_commit_list) :]
+                for commit_list, before_commit_list in zip(
+                    all_commit_lists, before_commit_lists
+                )
+            ]
+
+            all_commits = set(sum(all_commit_lists, tuple()))
+            timespan_commits = set(sum(timespan_commit_lists, tuple()))
+
+            commit.set_experience(
+                experience_type,
+                commit_type,
+                "total",
+                len(all_commits),
+                max(
+                    (len(all_commit_list) for all_commit_list in all_commit_lists),
+                    default=0,
+                ),
+                min(
+                    (len(all_commit_list) for all_commit_list in all_commit_lists),
+                    default=0,
+                ),
+            )
+            commit.set_experience(
+                experience_type,
+                commit_type,
+                EXPERIENCE_TIMESPAN_TEXT,
+                len(timespan_commits),
+                max(
+                    (
+                        len(timespan_commit_list)
+                        for timespan_commit_list in timespan_commit_lists
+                    ),
+                    default=0,
+                ),
+                min(
+                    (
+                        len(timespan_commit_list)
+                        for timespan_commit_list in timespan_commit_lists
+                    ),
+                    default=0,
+                ),
+            )
+
+            # We don't want to consider backed out commits when calculating normal experiences.
+            if (
+                commit_type == ""
+                and not commit.backedoutby
+                or commit_type == "backout"
+                and commit.backedoutby
+            ):
+                for i, item in enumerate(items):
+                    experiences[experience_type][commit_type][item][
+                        day
+                    ] = all_commit_lists[i] + (commit.node,)
+
+        del_experience(experience_type, items)
 
     for commit in tqdm(commits):
         day = (commit.pushdate - first_pushdate).days
         assert day >= 0
-
-        update_experiences("author", day, [commit.author])
-        update_experiences("reviewer", day, commit.reviewers)
 
         # When a file is moved/copied, copy original experience values to the copied path.
         if len(commit.file_copies) > 0:
             for orig, copied in commit.file_copies.items():
                 orig_directories = get_directories(orig)
                 copied_directories = get_directories(copied)
-                for orig_directory, copied_directory in zip(
-                    orig_directories, copied_directories
-                ):
-                    experiences["directory"][copied_directory] = copy.deepcopy(
-                        experiences["directory"][orig_directory]
-                    )
 
-                if orig in path_to_component and copied in path_to_component:
-                    orig_component = path_to_component[orig]
-                    copied_component = path_to_component[copied]
-                    experiences["component"][copied_component] = copy.deepcopy(
-                        experiences["component"][orig_component]
-                    )
+                for commit_type in ["", "backout"]:
+                    for orig_directory, copied_directory in zip(
+                        orig_directories, copied_directories
+                    ):
+                        if orig_directory in experiences["directory"][commit_type]:
+                            experiences["directory"][commit_type][
+                                copied_directory
+                            ] = copy.deepcopy(
+                                experiences["directory"][commit_type][orig_directory]
+                            )
+                        else:
+                            print(
+                                f"Experience missing for directory {orig_directory}, type '{commit_type}', on commit {commit.node}"
+                            )
 
-                experiences["file"][copied] = copy.deepcopy(experiences["file"][orig])
+                    if orig in path_to_component and copied in path_to_component:
+                        orig_component = path_to_component[orig]
+                        copied_component = path_to_component[copied]
+                        if orig_component in experiences["component"][commit_type]:
+                            experiences["component"][commit_type][
+                                copied_component
+                            ] = copy.deepcopy(
+                                experiences["component"][commit_type][orig_component]
+                            )
+                        else:
+                            print(
+                                f"Experience missing for component {orig_component}, type '{commit_type}', on commit {commit.node}"
+                            )
 
-        update_complex_experiences("file", day, commit.files)
+                    if orig in experiences["file"][commit_type]:
+                        experiences["file"][commit_type][copied] = copy.deepcopy(
+                            experiences["file"][commit_type][orig]
+                        )
+                    else:
+                        print(
+                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                        )
 
-        update_complex_experiences("directory", day, get_directories(commit.files))
+        if commit not in commits_to_ignore:
+            update_experiences("author", day, [commit.author])
+            update_experiences("reviewer", day, commit.reviewers)
 
-        components = list(
-            set(
-                path_to_component[path]
-                for path in commit.files
-                if path in path_to_component
+            update_complex_experiences("file", day, commit.files)
+
+            update_complex_experiences("directory", day, get_directories(commit.files))
+
+            components = list(
+                set(
+                    path_to_component[path]
+                    for path in commit.files
+                    if path in path_to_component
+                )
             )
-        )
 
-        update_complex_experiences("component", day, components)
+            update_complex_experiences("component", day, components)
+
+
+def get_commits_to_ignore(repo_dir, commits):
+    # Skip commits which are in .hg-annotate-ignore-revs or which have
+    # 'ignore-this-changeset' in their description (mostly consisting of very
+    # large and not meaningful formatting changes).
+    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
+        ignore_revs = set(l[:40] for l in f)
+
+    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
+
+    def should_ignore(commit):
+        if commit.node in ignore_revs or "ignore-this-changeset" in commit.desc:
+            return True
+
+        # Don't analyze backouts.
+        if commit.node in backouts:
+            return True
+
+        # Don't analyze commits that are not linked to a bug.
+        if commit.bug == b"":
+            return True
+
+        return False
+
+    return set(commit for commit in commits if should_ignore(commit))
 
 
 def download_commits(repo_dir, date_from):
@@ -534,13 +675,6 @@ def download_commits(repo_dir, date_from):
     ), "There should definitely be more than 0 commits, something is wrong"
 
     hg.close()
-
-    # Skip commits which are in .hg-annotate-ignore-revs (mostly consisting of very
-    # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "rb") as f:
-        ignore_revs = set(l[:40] for l in f)
-
-    revs = [rev for rev in revs if rev not in ignore_revs]
 
     processes = multiprocessing.cpu_count()
 
@@ -556,13 +690,6 @@ def download_commits(repo_dir, date_from):
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
-    # Don't analyze backouts.
-    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
-    commits = [commit for commit in commits if commit.node not in backouts]
-
-    # Don't analyze commits that are not linked to a bug.
-    commits = [commit for commit in commits if commit.bug != b""]
-
     print("Downloading file->component mapping...")
 
     global path_to_component
@@ -575,7 +702,13 @@ def download_commits(repo_dir, date_from):
         path: "::".join(component) for path, component in path_to_component.items()
     }
 
-    calculate_experiences(commits)
+    commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
+    print(f"{len(commits_to_ignore)} commits to ignore")
+
+    calculate_experiences(commits, commits_to_ignore)
+
+    # Exclude commits to ignore.
+    commits = [commit for commit in commits if commit not in commits_to_ignore]
 
     # Exclude commits outside the range we care about.
     commits = [commit for commit in commits if commit.pushdate > date_from]

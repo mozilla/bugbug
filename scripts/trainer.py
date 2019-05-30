@@ -7,6 +7,7 @@ import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
+from bugbug import model
 from bugbug.models import get_model_class
 
 basicConfig(level=INFO)
@@ -26,22 +27,29 @@ class Trainer(object):
             with lzma.open(f"{path}.xz", "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
 
+    def download_db(self, db_type):
+        logger.info(f"Downloading {db_type} database")
+        url = BASE_URL.format(db_type)
+        urlretrieve(f"{url}/{db_type}.json.xz", "data/{db_type}.json.xz")
+        logger.info(f"Decompressing {db_type} database")
+        self.decompress_file(f"data/{db_type}.json")
+
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
         os.makedirs("data", exist_ok=True)
 
-        # Bugs.json
-        logger.info("Downloading bugs database")
-        bugs_url = BASE_URL.format("bugs")
-        urlretrieve(f"{bugs_url}/bugs.json.xz", "data/bugs.json.xz")
-        logger.info("Decompressing bugs database")
-        self.decompress_file("data/bugs.json")
+        model_class = get_model_class(model_name)
+
+        if issubclass(model_class, model.BugModel):
+            self.download_db("bugs")
+
+        if issubclass(model_class, model.CommitModel):
+            self.download_db("commits")
 
         logger.info(f"Training *{model_name}* model")
 
-        model_class = get_model_class(model_name)
-        model = model_class()
-        model.train()
+        model_obj = model_class()
+        model_obj.train()
 
         logger.info(f"Training done")
 

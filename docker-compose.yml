@@ -32,6 +32,12 @@ services:
         volume:
           nocopy: true
 
+  bugbug-train-backout:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_backout
+    image: mozilla/bugbug-train-backout
+
   bugbug-train-component:
     build:
       context: .
