@@ -266,7 +266,7 @@ def _transform(commit):
 
 
 def hg_log(hg, revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate}\\0'
+    template = '{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate|hgdate}\\0'
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -280,9 +280,11 @@ def hg_log(hg, revs):
 
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        date = datetime.utcfromtimestamp(float(rev[3].split(b".", 1)[0]))
+        assert b" " in rev[3]
+        date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
-        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b"-", 1)[0]))
+        assert b" " in rev[9]
+        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b" ", 1)[0]))
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
