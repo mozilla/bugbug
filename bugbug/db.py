@@ -6,10 +6,8 @@
 import gzip
 import io
 import json
-import lzma
 import os
 import pickle
-import shutil
 from contextlib import contextmanager
 from urllib.request import urlretrieve
 
@@ -33,15 +31,16 @@ def download():
         if os.path.exists(path):
             continue
 
-        xz_path = f"{path}.xz"
+        zst_path = f"{path}.zst"
 
-        # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path):
-            urlretrieve(DATABASES[path]["url"], xz_path)
+        # Only download if the zst file is not there yet.
+        if not os.path.exists(zst_path):
+            urlretrieve(DATABASES[path]["url"], zst_path)
 
+        dctx = zstandard.ZstdDecompressor()
         with open(path, "wb") as output_f:
-            with lzma.open(xz_path) as input_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(zst_path, "rb") as input_f:
+                dctx.copy_stream(input_f, output_f)
 
 
 class Store:

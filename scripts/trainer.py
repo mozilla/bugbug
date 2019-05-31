@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import lzma
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
+
+import zstandard
 
 from bugbug import model
 from bugbug.models import get_model_class
@@ -18,22 +18,24 @@ BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.
 
 class Trainer(object):
     def decompress_file(self, path):
-        with lzma.open(f"{path}.xz", "rb") as input_f:
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{path}.zst", "rb") as input_f:
             with open(path, "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+                dctx.copy_stream(input_f, output_f)
         assert os.path.exists(path), "Decompressed file exists"
 
     def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
-            with lzma.open(f"{path}.xz", "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
     def download_db(self, db_type):
         path = f"data/{db_type}.json"
-        url = f"{BASE_URL.format(db_type)}/{db_type}.json.xz"
-        logger.info(f"Downloading {db_type} database from {url} to {path}.xz")
-        urlretrieve(url, f"{path}.xz")
-        assert os.path.exists(f"{path}.xz"), "Downloaded file exists"
+        url = f"{BASE_URL.format(db_type)}/{db_type}.json.zst"
+        logger.info(f"Downloading {db_type} database from {url} to {path}.zst")
+        urlretrieve(url, f"{path}.zst")
+        assert os.path.exists(f"{path}.zst"), "Downloaded file exists"
         logger.info(f"Decompressing {db_type} database")
         self.decompress_file(path)
 

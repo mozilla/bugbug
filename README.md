@@ -23,8 +23,8 @@
 
 Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 
-If you update the bugs database, run `xz -v9 -k data/bugs.json`.
-If you update the commits database, run `xz -v9 -k data/commits.json`.
+If you update the bugs database, run `zstd data/bugs.json`.
+If you update the commits database, run `zstd data/commits.json`.
 
 
 ## Usage
