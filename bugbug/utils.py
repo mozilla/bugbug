@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import os
 
 import numpy as np
@@ -12,6 +13,17 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
 TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
+
+
+def split_tuple_iterator(iterable):
+    q = collections.deque()
+
+    def first_iter():
+        for first, second in iterable:
+            yield first
+            q.append(second)
+
+    return first_iter(), q
 
 
 def numpy_to_dict(array):
