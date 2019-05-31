@@ -50,6 +50,12 @@ services:
       dockerfile: infra/dockerfile.train_defectenhancementtask
     image: mozilla/bugbug-train-defectenhancementtask
 
+  bugbug-train-duplicate:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_duplicate
+    image: mozilla/bugbug-train-duplicate
+
   bugbug-train-regression:
     build:
       context: .
