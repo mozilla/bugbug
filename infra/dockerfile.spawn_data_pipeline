@@ -5,8 +5,8 @@ ADD spawn_data_pipeline_requirements.txt /code/
 
 RUN pip install --disable-pip-version-check --no-cache-dir -r /code/spawn_data_pipeline_requirements.txt
 
-ADD spawn_data_pipeline.py /code
+ADD spawn_pipeline.py /code
 
 ADD data-pipeline.yml /code
 
-CMD python /code/spawn_data_pipeline.py /code/data-pipeline.yml
+CMD python /code/spawn_pipeline.py /code/data-pipeline.yml
