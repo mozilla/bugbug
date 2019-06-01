@@ -5,11 +5,12 @@
 
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 import hglib
 import pytest
 import responses
+from dateutil.relativedelta import relativedelta
 
 from bugbug import repository
 
@@ -51,10 +52,20 @@ def add_file(hg, repo_dir, name, contents):
     hg.add(files=[bytes(path, "ascii")])
 
 
-def commit(hg):
-    commit_message = "Commit {}".format(hg.status())
+def commit(hg, commit_message=None, date=datetime(2019, 4, 16, tzinfo=timezone.utc)):
+    commit_message = (
+        commit_message
+        if commit_message is not None
+        else "Commit {}".format(
+            " ".join(
+                [elem.decode("ascii") for status in hg.status() for elem in status]
+            )
+        )
+    )
 
-    i, revision = hg.commit(message=commit_message, user="Moz Illa <milla@mozilla.org>")
+    i, revision = hg.commit(
+        message=commit_message, user="Moz Illa <milla@mozilla.org>", date=date
+    )
 
     return str(revision, "ascii")
 
@@ -78,6 +89,135 @@ def test_get_revs(fake_hg_repo):
     assert len(revs) == 2, "There should be two revisions now"
     assert revs[0].decode("ascii") == revision1
     assert revs[1].decode("ascii") == revision2
+
+
+def test_hg_log(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
+    revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
+
+    first_push_date = datetime.utcnow()
+    hg.push(dest=bytes(remote, "ascii"))
+
+    add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
+    revision2 = commit(hg, "Bug 123 - Prova. r=moz,rev2")
+
+    hg.copy(
+        bytes(os.path.join(local, "file2"), "ascii"),
+        bytes(os.path.join(local, "file2copy"), "ascii"),
+    )
+    revision3 = commit(hg)
+
+    hg.move(
+        bytes(os.path.join(local, "file2copy"), "ascii"),
+        bytes(os.path.join(local, "file2copymove"), "ascii"),
+    )
+    revision4 = commit(hg)
+
+    hg.backout(
+        rev=revision4,
+        message=f"Backout {revision4[:12]}",
+        user="sheriff",
+        date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    )
+    revision5 = hg.log(limit=1)[0][1].decode("ascii")
+
+    second_push_date = datetime.utcnow()
+    hg.push(dest=bytes(remote, "ascii"))
+
+    copy_pushlog_database(remote, local)
+
+    revs = repository.get_revs(hg)
+
+    commits = repository.hg_log(hg, revs)
+    assert len(commits) == 5, "hg log should return five commits"
+
+    assert commits[0].node == revision1
+    assert commits[0].author == "Moz Illa <milla@mozilla.org>"
+    assert commits[0].desc == "Commit A file1"
+    assert commits[0].date == datetime(1991, 4, 16)
+    assert (
+        first_push_date - relativedelta(seconds=1)
+        <= commits[0].pushdate
+        <= first_push_date + relativedelta(seconds=1)
+    )
+    assert commits[0].bug == b""
+    assert commits[0].backedoutby == ""
+    assert commits[0].author_email == b"milla@mozilla.org"
+    assert commits[0].files == ["file1"]
+    assert commits[0].file_copies == {}
+    assert commits[0].reviewers == tuple()
+
+    assert commits[1].node == revision2
+    assert commits[1].author == "Moz Illa <milla@mozilla.org>"
+    assert commits[1].desc == "Bug 123 - Prova. r=moz,rev2"
+    assert commits[1].date == datetime(2019, 4, 16)
+    assert (
+        second_push_date - relativedelta(seconds=1)
+        <= commits[1].pushdate
+        <= second_push_date + relativedelta(seconds=1)
+    )
+    assert commits[1].bug == b"123"
+    assert commits[1].backedoutby == ""
+    assert commits[1].author_email == b"milla@mozilla.org"
+    assert commits[1].files == ["file2"]
+    assert commits[1].file_copies == {}
+    assert set(commits[1].reviewers) == {"moz", "rev2"}
+
+    assert commits[2].node == revision3
+    assert commits[2].author == "Moz Illa <milla@mozilla.org>"
+    assert commits[2].desc == "Commit A file2copy"
+    assert commits[2].date == datetime(2019, 4, 16)
+    assert (
+        second_push_date - relativedelta(seconds=1)
+        <= commits[2].pushdate
+        <= second_push_date + relativedelta(seconds=1)
+    )
+    assert commits[2].bug == b""
+    assert commits[2].backedoutby == ""
+    assert commits[2].author_email == b"milla@mozilla.org"
+    assert commits[2].files == ["file2copy"]
+    assert commits[2].file_copies == {"file2": "file2copy"}
+    assert commits[2].reviewers == tuple()
+
+    assert commits[3].node == revision4
+    assert commits[3].author == "Moz Illa <milla@mozilla.org>"
+    assert commits[3].desc == "Commit A file2copymove R file2copy"
+    assert commits[3].date == datetime(2019, 4, 16)
+    assert (
+        second_push_date - relativedelta(seconds=1)
+        <= commits[3].pushdate
+        <= second_push_date + relativedelta(seconds=1)
+    )
+    assert commits[3].bug == b""
+    assert commits[3].backedoutby == revision5
+    assert commits[3].author_email == b"milla@mozilla.org"
+    assert commits[3].files == ["file2copy", "file2copymove"]
+    assert commits[3].file_copies == {"file2copy": "file2copymove"}
+    assert commits[3].reviewers == tuple()
+
+    assert commits[4].node == revision5
+    assert commits[4].author == "sheriff"
+    assert commits[4].desc == f"Backout {revision4[:12]}"
+    assert commits[4].date == datetime(2019, 4, 16)
+    assert (
+        second_push_date - relativedelta(seconds=1)
+        <= commits[4].pushdate
+        <= second_push_date + relativedelta(seconds=1)
+    )
+    assert commits[4].bug == b""
+    assert commits[4].backedoutby == ""
+    assert commits[4].author_email == b"sheriff"
+    assert commits[4].files == ["file2copy", "file2copymove"]
+    assert commits[4].file_copies == {"file2copymove": "file2copy"}
+    assert commits[4].reviewers == tuple()
+
+    commits = repository.hg_log(hg, [revs[1], revs[3]])
+    assert len(commits) == 3, "hg log should return three commits"
+    assert commits[0].node == revision2
+    assert commits[1].node == revision3
+    assert commits[2].node == revision4
 
 
 def test_get_directories():

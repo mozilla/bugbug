@@ -86,9 +86,14 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "apt-get update &&
+               apt-get install -y python-pip &&
+               python2 -m pip install mercurial==4.8 &&
+               git clone https://github.com/mozilla/version-control-tools.git &&
+               git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
+               cp infra/hgrc /root/.hgrc &&
                pip install -r requirements.txt &&
                pip install -r extra-nlp-requirements.txt &&
                pip install -r extra-nn-requirements.txt &&
