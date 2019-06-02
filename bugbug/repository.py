@@ -492,10 +492,9 @@ def calculate_experiences(commits, commits_to_ignore):
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
+                exps = experiences[experience_type][commit_type]
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][day] = (
-                        total_exps[i] + 1
-                    )
+                    exps[item][day] = total_exps[i] + 1
 
         del_experience(experience_type, items)
 
@@ -567,10 +566,9 @@ def calculate_experiences(commits, commits_to_ignore):
                 or commit_type == "backout"
                 and commit.backedoutby
             ):
+                exps = experiences[experience_type][commit_type]
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][
-                        day
-                    ] = all_commit_lists[i] + (commit.node,)
+                    exps[item][day] = all_commit_lists[i] + (commit.node,)
 
         del_experience(experience_type, items)
 
@@ -588,10 +586,9 @@ def calculate_experiences(commits, commits_to_ignore):
                     for orig_directory, copied_directory in zip(
                         orig_directories, copied_directories
                     ):
-                        if orig_directory in experiences["directory"][commit_type]:
-                            experiences["directory"][commit_type][
-                                copied_directory
-                            ] = copy.deepcopy(
+                        exps = experiences["directory"][commit_type]
+                        if orig_directory in exps:
+                            exps[copied_directory] = copy.deepcopy(
                                 experiences["directory"][commit_type][orig_directory]
                             )
                         else:
