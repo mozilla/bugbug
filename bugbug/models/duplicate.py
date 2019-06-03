@@ -65,8 +65,12 @@ class DuplicateModel(BugCoupleModel):
         bugs = []
 
         for bug_data in islice(bugzilla.get_bugs(), 0, NUM_DUPLICATES):
-            if bug_data["creator"] not in REPORTERS_TO_IGNORE:
-                bugs.append(bug_data["id"])
+            if (
+                bug_data["creator"] in REPORTERS_TO_IGNORE
+                or "dupeme" in bug_data["keywords"]
+            ):
+                continue
+            bugs.append(bug_data["id"])
 
         classes = {}
         # Only store ids of bugs that have duplicates or are duplicates
@@ -81,6 +85,7 @@ class DuplicateModel(BugCoupleModel):
             if (
                 bug_data["creator"] in REPORTERS_TO_IGNORE
                 or len(bug_data["duplicates"]) == 0
+                or "dupeme" in bug_data["keywords"]
             ):
                 continue
 
