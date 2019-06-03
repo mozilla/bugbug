@@ -60,18 +60,12 @@ class DuplicateModel(BugCoupleModel):
         self.clf = LinearSVCWithLabelEncoding(LinearSVC())
 
     def get_labels(self):
-        all_ids = []
-
-        for bug_data in bugzilla.get_bugs():
-            if (
-                bug_data["creator"] in REPORTERS_TO_IGNORE
-                or "dupeme" in bug_data["keywords"]
-            ):
-                continue
-
-            all_ids.append(bug_data["id"])
-
-        all_ids = set(all_ids)
+        all_ids = set(
+            bug["id"]
+            for bug in bugzilla.get_bugs()
+            if bug["creator"] not in REPORTERS_TO_IGNORE
+            and "dupeme" not in bug["keywords"]
+        )
 
         classes = {}
 
@@ -97,7 +91,7 @@ class DuplicateModel(BugCoupleModel):
                     classes[(bug_id, duplicate_bug_id)] = 1
                 duplicates_num += 1
 
-        # Remove duplicate IDs.
+        # Remove duplicate duplicate IDs.
         duplicate_ids = list(set(duplicate_ids))
 
         # Store all remaining ids
