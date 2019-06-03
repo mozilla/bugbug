@@ -322,11 +322,15 @@ def _hg_log(revs):
     return hg_log(HG, revs)
 
 
-def get_revs(hg):
-    print(f"Getting revs from 0 to tip...")
+def get_revs(hg, rev_start=0):
+    print(f"Getting revs from {rev_start} to tip...")
 
     args = hglib.util.cmdbuilder(
-        b"log", template="{node}\n", no_merges=True, branch="central", rev=f"0:tip"
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="central",
+        rev=f"{rev_start}:tip",
     )
     x = hg.rawcommand(args)
     return x.splitlines()
