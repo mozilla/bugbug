@@ -18,6 +18,7 @@ MODELS = {
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "regression": "bugbug.models.regression.RegressionModel",
+    "regressor": "bugbug.models.regressor.RegressorModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
