@@ -7,6 +7,7 @@ import argparse
 import concurrent.futures
 import copy
 import itertools
+import json
 import multiprocessing
 import os
 import re
@@ -667,6 +668,34 @@ def get_commits_to_ignore(repo_dir, commits):
     return set(commit for commit in commits if should_ignore(commit))
 
 
+def download_component_mapping():
+    global path_to_component
+
+    component_mapping_url = "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
+
+    r = requests.head(component_mapping_url, allow_redirects=True)
+    new_etag = r.headers["ETag"]
+
+    try:
+        with open(f"data/component_mapping.etag", "r") as f:
+            old_etag = f.read()
+    except IOError:
+        old_etag = None
+
+    if old_etag != new_etag:
+        r = requests.get(component_mapping_url)
+        r.raise_for_status()
+        with open("data/component_mapping.json", "w") as f:
+            f.write(r.text)
+
+    with open("data/component_mapping.json", "r") as f:
+        path_to_component = json.load(f)
+
+    path_to_component = {
+        path: "::".join(component) for path, component in path_to_component.items()
+    }
+
+
 def download_commits(repo_dir, date_from):
     hg = hglib.open(repo_dir)
 
@@ -694,15 +723,7 @@ def download_commits(repo_dir, date_from):
 
     print("Downloading file->component mapping...")
 
-    global path_to_component
-    r = requests.get(
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
-    )
-    r.raise_for_status()
-    path_to_component = r.json()
-    path_to_component = {
-        path: "::".join(component) for path, component in path_to_component.items()
-    }
+    download_component_mapping()
 
     commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
     print(f"{len(commits_to_ignore)} commits to ignore")
