@@ -60,7 +60,7 @@ class DuplicateModel(BugCoupleModel):
         self.clf = LinearSVCWithLabelEncoding(LinearSVC())
 
     def get_labels(self):
-        bugs = []
+        all_ids = []
 
         for bug_data in bugzilla.get_bugs():
             if (
@@ -69,7 +69,9 @@ class DuplicateModel(BugCoupleModel):
             ):
                 continue
 
-            bugs.append(bug_data["id"])
+            all_ids.append(bug_data["id"])
+
+        all_ids = set(all_ids)
 
         classes = {}
 
@@ -85,13 +87,13 @@ class DuplicateModel(BugCoupleModel):
                 continue
 
             bug_id = bug_data["id"]
-            if bug_id not in bugs:
+            if bug_id not in all_ids:
                 continue
 
             duplicate_ids.append(bug_id)
 
             for duplicate_bug_id in bug_data["duplicates"]:
-                if duplicate_bug_id not in bugs:
+                if duplicate_bug_id not in all_ids:
                     continue
 
                 duplicate_ids.append(duplicate_bug_id)
@@ -104,11 +106,7 @@ class DuplicateModel(BugCoupleModel):
             if duplicates_num == NUM_DUPLICATES:
                 break
 
-        duplicate_ids_set = set(duplicate_ids)
-
-        for bug_id in bugs:
-            if bug_id not in duplicate_ids_set:
-                non_duplicate_ids.append(bug_id)
+        non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
         print(f"Number of duplicate labels are: {duplicates_num}")
 
