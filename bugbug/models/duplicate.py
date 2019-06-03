@@ -19,6 +19,8 @@ NUM_DUPLICATES = 3000
 NUM_DUP_NONDUPS = 2000
 NUM_NONDUPS_NONDUPS = 2000
 
+REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
+
 
 class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
     def __init__(self, clf):
@@ -63,6 +65,11 @@ class DuplicateModel(BugCoupleModel):
         bugs = []
 
         for bug_data in islice(bugzilla.get_bugs(), 0, NUM_DUPLICATES):
+            if (
+                bug_data["creator"] in REPORTERS_TO_IGNORE
+                or "dupeme" in bug_data["keywords"]
+            ):
+                continue
             bugs.append(bug_data["id"])
 
         classes = {}
@@ -75,7 +82,11 @@ class DuplicateModel(BugCoupleModel):
         duplicates_num = 0
 
         for bug_data in bugzilla.get_bugs():
-            if len(bug_data["duplicates"]) == 0:
+            if (
+                bug_data["creator"] in REPORTERS_TO_IGNORE
+                or len(bug_data["duplicates"]) == 0
+                or "dupeme" in bug_data["keywords"]
+            ):
                 continue
 
             duplicate_ids.append(bug_data["id"])
