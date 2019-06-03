@@ -553,6 +553,10 @@ def rollback(bug, when=None, do_assert=False):
                     obj = bug
 
                 if change["added"]:
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["added"].startswith(", "):
+                        change["added"] = change["added"][2:]
+
                     for to_remove in change["added"].split(", "):
                         if any(
                             to_remove.startswith(s)
@@ -597,6 +601,10 @@ def rollback(bug, when=None, do_assert=False):
                     if bug["id"] == 1_342_178:
                         continue
 
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["removed"].startswith(", "):
+                        change["removed"] = change["removed"][2:]
+
                     for to_add in change["removed"].split(", "):
                         name, status, requestee = parse_flag_change(to_add)
 
@@ -616,8 +624,12 @@ def rollback(bug, when=None, do_assert=False):
 
             if field in bug and isinstance(bug[field], list):
                 if change["added"]:
-                    if field == "see_also" and change["added"].endswith(", "):
-                        change["added"] = change["added"][:-2]
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if field in ["cc", "see_also"]:
+                        if change["added"].endswith(", "):
+                            change["added"] = change["added"][:-2]
+                        if change["added"].startswith(", "):
+                            change["added"] = change["added"][2:]
 
                     for to_remove in change["added"].split(", "):
                         if field in FIELD_TYPES:
@@ -633,6 +645,10 @@ def rollback(bug, when=None, do_assert=False):
                             )
 
                 if change["removed"]:
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if field == "depends_on" and change["removed"].startswith(", "):
+                        change["removed"] = change["removed"][2:]
+
                     for to_add in change["removed"].split(", "):
                         if field in FIELD_TYPES:
                             to_add = FIELD_TYPES[field](to_add)
