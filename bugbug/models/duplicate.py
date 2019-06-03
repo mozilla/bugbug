@@ -80,33 +80,27 @@ class DuplicateModel(BugCoupleModel):
 
         duplicates_num = 0
         for bug_data in bugzilla.get_bugs():
-            if len(bug_data["duplicates"]) == 0:
-                continue
-
             bug_id = bug_data["id"]
             if bug_id not in all_ids:
                 continue
 
-            duplicate_ids.append(bug_id)
+            if bug_data["dupe_of"] or len(bug_data["duplicates"]) > 0:
+                duplicate_ids.append(bug_id)
 
             for duplicate_bug_id in bug_data["duplicates"]:
                 if duplicate_bug_id not in all_ids:
                     continue
 
                 duplicate_ids.append(duplicate_bug_id)
-                classes[(bug_id, duplicate_bug_id)] = 1
 
+                if duplicates_num < NUM_DUPLICATES:
+                    classes[(bug_id, duplicate_bug_id)] = 1
                 duplicates_num += 1
-                if duplicates_num == NUM_DUPLICATES:
-                    break
-
-            if duplicates_num == NUM_DUPLICATES:
-                break
 
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        print(f"Number of duplicate labels is: {duplicates_num}")
+        print(f"Number of duplicate labels is: {NUM_DUPLICATES}")
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
@@ -121,7 +115,7 @@ class DuplicateModel(BugCoupleModel):
             if dup_nondup_num == NUM_DUP_NONDUPS:
                 break
 
-        print(f"Number of hybrid labels is: {dup_nondup_num}")
+        print(f"Number of hybrid labels is: {NUM_DUP_NONDUPS}")
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
@@ -139,7 +133,7 @@ class DuplicateModel(BugCoupleModel):
             if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
                 break
 
-        print(f"Number of purely non-duplicate labels is: {nondup_nondup_num}")
+        print(f"Number of purely non-duplicate labels is: {NUM_NONDUPS_NONDUPS}")
 
         return classes, [0, 1]
 
