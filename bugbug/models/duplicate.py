@@ -70,9 +70,11 @@ class DuplicateModel(BugCoupleModel):
                 or "dupeme" in bug_data["keywords"]
             ):
                 continue
+
             bugs.append(bug_data["id"])
 
         classes = {}
+
         # Only store ids of bugs that have duplicates or are duplicates
         duplicate_ids = []
 
@@ -80,62 +82,70 @@ class DuplicateModel(BugCoupleModel):
         non_duplicate_ids = []
 
         duplicates_num = 0
-
         for bug_data in bugzilla.get_bugs():
-            if (
-                bug_data["creator"] in REPORTERS_TO_IGNORE
-                or len(bug_data["duplicates"]) == 0
-                or "dupeme" in bug_data["keywords"]
-            ):
+            if len(bug_data["duplicates"]) == 0:
                 continue
 
-            duplicate_ids.append(bug_data["id"])
-            for duplicate_bug in bug_data["duplicates"]:
-                if duplicate_bug in bugs:
-                    duplicate_ids.append(duplicate_bug)
-                    classes[(bug_data["id"], duplicate_bug)] = 1
-                    duplicates_num += 1
+            bug_id = bug_data["id"]
+            if bug_id not in bugs:
+                continue
+
+            duplicate_ids.append(bug_id)
+
+            for duplicate_bug_id in bug_data["duplicates"]:
+                if duplicate_bug_id not in bugs:
+                    continue
+
+                duplicate_ids.append(duplicate_bug_id)
+                classes[(bug_id, duplicate_bug_id)] = 1
+
+                duplicates_num += 1
                 if duplicates_num == NUM_DUPLICATES:
                     break
+
             if duplicates_num == NUM_DUPLICATES:
                 break
 
         duplicate_ids_set = set(duplicate_ids)
 
-        for bug in bugs:
-            if bug not in duplicate_ids_set:
-                non_duplicate_ids.append(bug)
+        for bug_id in bugs:
+            if bug_id not in duplicate_ids_set:
+                non_duplicate_ids.append(bug_id)
 
-        print(f"Number of purely duplicate labels are: {duplicates_num}")
+        print(f"Number of duplicate labels are: {duplicates_num}")
 
-        # When the bug has no duplicates, we create dup-nondup labels = 0
+        # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
-        for key in duplicate_ids:
-            for key2 in non_duplicate_ids:
-                classes[(key, key2)] = 0
+        for bug_id1 in duplicate_ids:
+            for bug_id2 in non_duplicate_ids:
+                classes[(bug_id1, bug_id2)] = 0
+
                 dup_nondup_num += 1
                 if dup_nondup_num == NUM_DUP_NONDUPS:
                     break
+
             if dup_nondup_num == NUM_DUP_NONDUPS:
                 break
 
-        print(f"Number of purely non-duplicate labels are {dup_nondup_num}")
+        print(f"Number of hybrid labels are {dup_nondup_num}")
 
-        # Non we map non-dup to non-dup bug.
+        # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
-        for key in non_duplicate_ids:
-            for key2 in non_duplicate_ids:
-                if key != key2:
-                    classes[(key, key2)] = 0
-                    nondup_nondup_num += 1
+        for bug_id1 in non_duplicate_ids:
+            for bug_id2 in non_duplicate_ids:
+                if bug_id1 == bug_id2:
+                    continue
 
+                classes[(bug_id1, bug_id2)] = 0
+
+                nondup_nondup_num += 1
                 if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
                     break
 
             if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
                 break
 
-        print(f"Number of hybrid labels are {nondup_nondup_num}")
+        print(f"Number of purely non-duplicate labels are {nondup_nondup_num}")
 
         return classes, [0, 1]
 
