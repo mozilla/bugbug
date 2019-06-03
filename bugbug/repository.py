@@ -10,6 +10,7 @@ import itertools
 import json
 import multiprocessing
 import os
+import pickle
 import re
 import sys
 from collections import deque
@@ -17,7 +18,6 @@ from datetime import datetime
 
 import hglib
 import requests
-from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import db
@@ -390,13 +390,6 @@ class exp_queue:
 def calculate_experiences(commits, commits_to_ignore):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    last_commit = {
-        "author": {},
-        "reviewer": {},
-        "file": {},
-        "directory": {},
-        "component": {},
-    }
     first_commit_time = {}
 
     for commit in tqdm(commits):
@@ -407,33 +400,17 @@ def calculate_experiences(commits, commits_to_ignore):
             time_lapse = commit.pushdate - first_commit_time[commit.author]
             commit.seniority_author = time_lapse.days
 
-        if commit not in commits_to_ignore:
-            last_commit["author"][commit.author] = commit
-            for reviewer in commit.reviewers:
-                last_commit["reviewer"][reviewer] = commit
-            for path in commit.files:
-                last_commit["file"][path] = commit
-            for directory in get_directories(commit.files):
-                last_commit["directory"][directory] = commit
-
-            components = list(
-                set(
-                    path_to_component[path]
-                    for path in commit.files
-                    if path in path_to_component
-                )
-            )
-
-            for component in components:
-                last_commit["component"][component] = commit
-
     first_pushdate = commits[0].pushdate
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    experiences = {}
+    try:
+        with open("data/commit_experiences.pickle", "rb") as f:
+            experiences = pickle.load(f)
+    except FileNotFoundError:
+        experiences = {}
 
     def get_experience(exp_type, commit_type, item, day, default):
         if exp_type not in experiences:
@@ -448,13 +425,6 @@ def calculate_experiences(commits, commits_to_ignore):
             )
 
         return experiences[exp_type][commit_type][item][day]
-
-    def del_experience(exp_type, items):
-        for item in items:
-            if last_commit[exp_type][item] is commit:
-                del last_commit[exp_type][item]
-                del experiences[exp_type][""][item]
-                del experiences[exp_type]["backout"][item]
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -501,8 +471,6 @@ def calculate_experiences(commits, commits_to_ignore):
                     experiences[experience_type][commit_type][item][day] = (
                         total_exps[i] + 1
                     )
-
-        del_experience(experience_type, items)
 
     def update_complex_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -577,9 +545,7 @@ def calculate_experiences(commits, commits_to_ignore):
                         day
                     ] = all_commit_lists[i] + (commit.node,)
 
-        del_experience(experience_type, items)
-
-    for commit in tqdm(commits):
+    for i, commit in enumerate(tqdm(commits)):
         day = (commit.pushdate - first_pushdate).days
         assert day >= 0
 
@@ -645,6 +611,9 @@ def calculate_experiences(commits, commits_to_ignore):
 
             update_complex_experiences("component", day, components)
 
+    with open("data/commit_experiences.pickle", "wb") as f:
+        pickle.dump(experiences, f, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 def get_commits_to_ignore(repo_dir, commits):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
@@ -700,10 +669,10 @@ def download_component_mapping():
     }
 
 
-def download_commits(repo_dir, date_from):
+def download_commits(repo_dir, rev_start=0):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg)
+    revs = get_revs(hg, rev_start)
 
     assert (
         len(revs) > 0
@@ -737,9 +706,6 @@ def download_commits(repo_dir, date_from):
     # Exclude commits to ignore.
     commits = [commit for commit in commits if commit not in commits_to_ignore]
 
-    # Exclude commits outside the range we care about.
-    commits = [commit for commit in commits if commit.pushdate > date_from]
-
     commits_num = len(commits)
 
     print(f"Mining {commits_num} commits using {processes} processes...")
@@ -752,7 +718,7 @@ def download_commits(repo_dir, date_from):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
-        db.write(COMMITS_DB, commits)
+        db.append(COMMITS_DB, commits)
 
 
 def get_commit_map():
@@ -775,8 +741,9 @@ def get_commit_map():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repository_dir", help="Path to the repository", action="store")
+    parser.add_argument(
+        "rev_start", help="Which revision to start with", action="store"
+    )
     args = parser.parse_args()
 
-    two_years_and_six_months_ago = datetime.utcnow() - relativedelta(years=2, months=6)
-
-    download_commits(args.repository_dir, two_years_and_six_months_ago)
+    download_commits(args.repository_dir, args.rev_start)
