@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from itertools import islice
-
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
@@ -64,7 +62,7 @@ class DuplicateModel(BugCoupleModel):
     def get_labels(self):
         bugs = []
 
-        for bug_data in islice(bugzilla.get_bugs(), 0, NUM_DUPLICATES):
+        for bug_data in bugzilla.get_bugs():
             if (
                 bug_data["creator"] in REPORTERS_TO_IGNORE
                 or "dupeme" in bug_data["keywords"]
