@@ -57,6 +57,7 @@ class Retriever(object):
         logger.info("commit data extracted from repository")
 
         self.compress_file("data/commits.json")
+        self.compress_file("data/commit_experiences.pickle")
 
     def compress_file(self, path):
         with open(path, "rb") as input_f:
