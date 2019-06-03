@@ -97,6 +97,9 @@ class DuplicateModel(BugCoupleModel):
                     classes[(bug_id, duplicate_bug_id)] = 1
                 duplicates_num += 1
 
+        # Remove duplicate IDs.
+        duplicate_ids = list(set(duplicate_ids))
+
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
