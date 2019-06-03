@@ -18,13 +18,24 @@ import zstandard
 DATABASES = {}
 
 
-def register(path, url):
-    DATABASES[path] = {"url": url}
+def register(path, url, version):
+    DATABASES[path] = {"url": url, "version": version}
 
     # Create DB parent directory.
     parent_dir = os.path.dirname(path)
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir, exist_ok=True)
+
+    if not os.path.exists(f"{path}.version"):
+        with open(f"{path}.version", "w") as f:
+            f.write(str(version))
+
+
+def is_old_version(path):
+    with open(f"{path}.version", "r") as f:
+        prev_version = int(f.read())
+
+    return DATABASES[path]["version"] > prev_version
 
 
 # Download and extract databases.

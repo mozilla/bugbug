@@ -269,7 +269,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local, datetime(1970, 1, 1))
+    repository.download_commits(local)
     commits = list(repository.get_commits())
     assert len(commits) == 0
 
@@ -278,21 +278,24 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local, datetime(1970, 1, 1))
+    repository.download_commits(local)
     commits = list(repository.get_commits())
     assert len(commits) == 1
     assert commits[0]["node"] == revision2
+    assert commits[0]["touched_prev_total_author_sum"] == 0
 
     add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
     revision3 = commit(hg, "Bug 456 - Prova. r=moz")
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local, datetime(1970, 1, 1))
+    repository.download_commits(local, revision3)
     commits = list(repository.get_commits())
     assert len(commits) == 2
     assert commits[0]["node"] == revision2
+    assert commits[0]["touched_prev_total_author_sum"] == 0
     assert commits[1]["node"] == revision3
+    assert commits[1]["touched_prev_total_author_sum"] == 1
 
 
 def test_get_directories():
