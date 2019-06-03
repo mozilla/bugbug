@@ -658,8 +658,12 @@ def download_component_mapping():
     if old_etag != new_etag:
         r = requests.get(component_mapping_url)
         r.raise_for_status()
+
         with open("data/component_mapping.json", "w") as f:
             f.write(r.text)
+
+        with open(f"data/component_mapping.etag", "w") as f:
+            f.write(new_etag)
 
     with open("data/component_mapping.json", "r") as f:
         path_to_component = json.load(f)
