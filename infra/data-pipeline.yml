@@ -17,8 +17,8 @@ tasks:
         public/commits.json.version:
           path: /data/commits.json.version
           type: file
-        public/commits_experiences.pickle.xz:
-          path: /data/commits_experiences.pickle.xz
+        public/commit_experiences.pickle.xz:
+          path: /data/commit_experiences.pickle.xz
           type: file
       cache:
         bugbug-mercurial-repository: /cache
