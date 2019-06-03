@@ -108,7 +108,7 @@ class DuplicateModel(BugCoupleModel):
 
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        print(f"Number of duplicate labels are: {duplicates_num}")
+        print(f"Number of duplicate labels is: {duplicates_num}")
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
@@ -123,7 +123,7 @@ class DuplicateModel(BugCoupleModel):
             if dup_nondup_num == NUM_DUP_NONDUPS:
                 break
 
-        print(f"Number of hybrid labels are {dup_nondup_num}")
+        print(f"Number of hybrid labels is: {dup_nondup_num}")
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
@@ -141,7 +141,7 @@ class DuplicateModel(BugCoupleModel):
             if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
                 break
 
-        print(f"Number of purely non-duplicate labels are {nondup_nondup_num}")
+        print(f"Number of purely non-duplicate labels is: {nondup_nondup_num}")
 
         return classes, [0, 1]
 
