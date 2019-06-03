@@ -68,6 +68,12 @@ services:
       dockerfile: infra/dockerfile.train_regressionrange
     image: mozilla/bugbug-train-regressionrange
 
+  bugbug-train-regressor:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regressor
+    image: mozilla/bugbug-train-regressor
+
   bugbug-train-stepstoreproduce:
     build:
       context: .
