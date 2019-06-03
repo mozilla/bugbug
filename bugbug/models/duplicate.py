@@ -78,9 +78,6 @@ class DuplicateModel(BugCoupleModel):
         # Only store ids of bugs that have duplicates or are duplicates
         duplicate_ids = []
 
-        # Store all remaining ids
-        non_duplicate_ids = []
-
         duplicates_num = 0
         for bug_data in bugzilla.get_bugs():
             if len(bug_data["duplicates"]) == 0:
@@ -106,6 +103,7 @@ class DuplicateModel(BugCoupleModel):
             if duplicates_num == NUM_DUPLICATES:
                 break
 
+        # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
         print(f"Number of duplicate labels is: {duplicates_num}")
