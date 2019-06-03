@@ -13,9 +13,9 @@ from sklearn.svm import LinearSVC
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugCoupleModel
 
-NUM_DUPLICATES = 3000
-NUM_DUP_NONDUPS = 2000
-NUM_NONDUPS_NONDUPS = 2000
+NUM_DUPLICATES = 7000
+NUM_DUP_NONDUPS = 3500
+NUM_NONDUPS_NONDUPS = 3500
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
