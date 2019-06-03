@@ -713,14 +713,14 @@ def get_inconsistencies():
 
 if __name__ == "__main__":
     import argparse
+    from tqdm import tqdm
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", help="Verbose mode", action="store_true")
     args = parser.parse_args()
 
-    for i, bug in enumerate(bugzilla.get_bugs()):
+    for bug in tqdm(bugzilla.get_bugs()):
         if args.verbose:
             print(bug["id"])
-            print(i)
 
         rollback(bug, do_assert=True)
