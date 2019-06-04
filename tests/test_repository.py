@@ -5,6 +5,7 @@
 
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 
 import hglib
@@ -283,6 +284,10 @@ def test_download_commits(fake_hg_repo):
     assert len(commits) == 1
     assert commits[0]["node"] == revision2
     assert commits[0]["touched_prev_total_author_sum"] == 0
+    assert commits[0]["seniority_author"] > 0
+
+    # Wait one second, to have a different pushdate.
+    time.sleep(1)
 
     add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
     revision3 = commit(hg, "Bug 456 - Prova. r=moz")
@@ -294,8 +299,10 @@ def test_download_commits(fake_hg_repo):
     assert len(commits) == 2
     assert commits[0]["node"] == revision2
     assert commits[0]["touched_prev_total_author_sum"] == 0
+    assert commits[0]["seniority_author"] > 0
     assert commits[1]["node"] == revision3
     assert commits[1]["touched_prev_total_author_sum"] == 1
+    assert commits[1]["seniority_author"] > commits[0]["seniority_author"]
 
 
 def test_get_directories():
@@ -555,9 +562,9 @@ def test_calculate_experiences():
     assert commits["commitbackedout"].seniority_author == 0
     assert commits["commit2"].seniority_author == 0
     assert commits["commit3"].seniority_author == 0
-    assert commits["commit4"].seniority_author == 365
+    assert commits["commit4"].seniority_author == 86400.0 * 365
     assert commits["commit5"].seniority_author == 0
-    assert commits["commit6"].seniority_author == 1
+    assert commits["commit6"].seniority_author == 86400.0
 
     assert commits["commit1"].touched_prev_total_author_sum == 0
     assert commits["commit2"].touched_prev_total_author_sum == 0
