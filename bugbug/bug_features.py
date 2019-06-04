@@ -501,9 +501,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             if isinstance(bug, dict):
                 results.append(apply_transform(bug))
             elif isinstance(bug, tuple):
+                result1 = apply_transform(bug[0])
+                result2 = apply_transform(bug[1])
                 if self.merge_data:
-                    result1 = apply_transform(bug[0])
-                    result2 = apply_transform(bug[1])
                     results.append(
                         {
                             "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}'
