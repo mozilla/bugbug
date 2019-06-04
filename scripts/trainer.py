@@ -43,7 +43,9 @@ class Trainer(object):
 
         model_class = get_model_class(model_name)
 
-        if issubclass(model_class, model.BugModel):
+        if issubclass(model_class, model.BugModel) or issubclass(
+            model_class, model.BugCoupleModel
+        ):
             self.download_db("bugs")
 
         if issubclass(model_class, model.CommitModel):

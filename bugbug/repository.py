@@ -388,10 +388,15 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits, commits_to_ignore):
+def calculate_experiences(commits, commits_to_ignore, first_pushdate):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    first_commit_time = {}
+    try:
+        with open("data/commit_experiences.pickle", "rb") as f:
+            experiences, first_commit_time = pickle.load(f)
+    except FileNotFoundError:
+        experiences = {}
+        first_commit_time = {}
 
     for commit in tqdm(commits):
         if commit.author not in first_commit_time:
@@ -399,7 +404,7 @@ def calculate_experiences(commits, commits_to_ignore):
             commit.seniority_author = 0
         else:
             time_lapse = commit.pushdate - first_commit_time[commit.author]
-            commit.seniority_author = time_lapse.days
+            commit.seniority_author = time_lapse.total_seconds()
 
     first_pushdate = commits[0].pushdate
 
@@ -407,11 +412,6 @@ def calculate_experiences(commits, commits_to_ignore):
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    try:
-        with open("data/commit_experiences.pickle", "rb") as f:
-            experiences = pickle.load(f)
-    except FileNotFoundError:
-        experiences = {}
 
     def get_experience(exp_type, commit_type, item, day, default):
         if exp_type not in experiences:
@@ -613,7 +613,9 @@ def calculate_experiences(commits, commits_to_ignore):
             update_complex_experiences("component", day, components)
 
     with open("data/commit_experiences.pickle", "wb") as f:
-        pickle.dump(experiences, f, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(
+            (experiences, first_commit_time), f, protocol=pickle.HIGHEST_PROTOCOL
+        )
 
 
 def get_commits_to_ignore(repo_dir, commits):
@@ -683,6 +685,8 @@ def download_commits(repo_dir, rev_start=0):
         len(revs) > 0
     ), "There should definitely be more than 0 commits, something is wrong"
 
+    first_pushdate = hg_log(hg, [b"0"])[0].pushdate
+
     hg.close()
 
     processes = multiprocessing.cpu_count()
@@ -706,7 +710,7 @@ def download_commits(repo_dir, rev_start=0):
     commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
     print(f"{len(commits_to_ignore)} commits to ignore")
 
-    calculate_experiences(commits, commits_to_ignore)
+    calculate_experiences(commits, commits_to_ignore, first_pushdate)
 
     # Exclude commits to ignore.
     commits = [commit for commit in commits if commit not in commits_to_ignore]

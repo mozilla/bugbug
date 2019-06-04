@@ -107,7 +107,7 @@ class author_experience(object):
             f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
             ],
-            "seniority_author": commit["seniority_author"],
+            "seniority_author": commit["seniority_author"] / 86400,
         }
 
 
