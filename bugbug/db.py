@@ -38,6 +38,28 @@ def is_old_version(path):
     return DATABASES[path]["version"] > prev_version
 
 
+def extract_file(path):
+    with open(path, "wb") as output_f:
+        with lzma.open(f"{path}.xz") as input_f:
+            shutil.copyfileobj(input_f, output_f)
+
+
+def download_support_file(path, file_name):
+    url = f"{os.path.dirname(DATABASES[path]['url'])}/{file_name}"
+    path = os.path.join(os.path.dirname(path), file_name)
+
+    print(f"Downloading {url} to {path}")
+    urlretrieve(url, path)
+
+    if path.endswith(".xz"):
+        extract_file(path[:-3])
+
+
+def download_version():
+    for path, info in DATABASES.items():
+        download_support_file(path, f"{os.path.basename(path)}.version")
+
+
 # Download and extract databases.
 def download():
     for path, info in DATABASES.items():
@@ -48,11 +70,11 @@ def download():
 
         # Only download if the xz file is not there yet.
         if not os.path.exists(xz_path):
-            urlretrieve(DATABASES[path]["url"], xz_path)
+            url = DATABASES[path]["url"]
+            print(f"Downloading {url} to {xz_path}")
+            urlretrieve(url, xz_path)
 
-        with open(path, "wb") as output_f:
-            with lzma.open(xz_path) as input_f:
-                shutil.copyfileobj(input_f, output_f)
+        extract_file(path)
 
 
 class Store:
