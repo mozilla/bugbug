@@ -274,6 +274,9 @@ def test_download_commits(fake_hg_repo):
     commits = list(repository.get_commits())
     assert len(commits) == 0
 
+    # Wait one second, to have a different pushdate.
+    time.sleep(1)
+
     add_file(hg, local, "file2", "1\n2\n3\n4\n5\n6\n7\n")
     revision2 = commit(hg, "Bug 123 - Prova. r=moz,rev2")
     hg.push(dest=bytes(remote, "ascii"))
