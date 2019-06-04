@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import random
+
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
@@ -60,6 +62,9 @@ class DuplicateModel(BugCoupleModel):
         self.clf = LinearSVCWithLabelEncoding(LinearSVC())
 
     def get_labels(self):
+
+        random.seed(4)
+
         all_ids = set(
             bug["id"]
             for bug in bugzilla.get_bugs()
@@ -101,34 +106,23 @@ class DuplicateModel(BugCoupleModel):
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
-        for bug_id1 in duplicate_ids:
-            for bug_id2 in non_duplicate_ids:
-                classes[(bug_id1, bug_id2)] = 0
+        while dup_nondup_num < NUM_DUP_NONDUPS:
+            bug_id1 = random.choice(duplicate_ids)
+            bug_id2 = random.choice(non_duplicate_ids)
 
-                dup_nondup_num += 1
-                if dup_nondup_num == NUM_DUP_NONDUPS:
-                    break
-
-            if dup_nondup_num == NUM_DUP_NONDUPS:
-                break
+            classes[(bug_id1, bug_id2)] = 0
+            dup_nondup_num += 1
 
         print(f"Number of hybrid labels is: {NUM_DUP_NONDUPS}")
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
-        for bug_id1 in non_duplicate_ids:
-            for bug_id2 in non_duplicate_ids:
-                if bug_id1 == bug_id2:
-                    continue
-
+        while nondup_nondup_num < NUM_DUP_NONDUPS:
+            bug_id1 = random.choice(non_duplicate_ids)
+            bug_id2 = random.choice(non_duplicate_ids)
+            if bug_id1 != bug_id2:
                 classes[(bug_id1, bug_id2)] = 0
-
                 nondup_nondup_num += 1
-                if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
-                    break
-
-            if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
-                break
 
         print(f"Number of purely non-duplicate labels is: {NUM_NONDUPS_NONDUPS}")
 
