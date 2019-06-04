@@ -442,11 +442,14 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         reporter_experience_map = defaultdict(int)
         author_ids = get_author_ids() if self.commit_map else None
 
+        already_rollbacked = set()
+
         def apply_transform(bug):
             bug_id = bug["id"]
 
-            if self.rollback:
+            if self.rollback and bug_id not in already_rollbacked:
                 bug = bug_snapshot.rollback(bug, self.rollback_when)
+                already_rollbacked.add(bug_id)
 
             data = {}
 
