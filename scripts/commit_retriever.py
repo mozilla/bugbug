@@ -8,7 +8,7 @@ from logging import INFO, basicConfig, getLogger
 
 import hglib
 
-from bugbug import repository
+from bugbug import db, repository
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -52,7 +52,21 @@ class Retriever(object):
         hg.pull(update=True)
         hg.close()
 
-        repository.download_commits(self.repo_dir)
+        db.download_version()
+        if not db.is_old_version(repository.COMMITS_DB):
+            db.download()
+            db.download_support_file(
+                repository.COMMITS_DB, "commit_experiences.pickle.xz"
+            )
+
+            for commit in repository.get_commits():
+                pass
+
+            rev_start = f"children({commit['node']})"
+        else:
+            rev_start = 0
+
+        repository.download_commits(self.repo_dir, rev_start)
 
         logger.info("commit data extracted from repository")
 
