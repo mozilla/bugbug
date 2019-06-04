@@ -7,6 +7,7 @@ import collections
 import os
 
 import numpy as np
+import requests
 import taskcluster
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -110,3 +111,24 @@ def get_secret(secret_id):
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
+
+
+def download_check_etag(url, path):
+    r = requests.head(url, allow_redirects=True)
+    new_etag = r.headers["ETag"]
+
+    try:
+        with open(f"{path}.etag", "r") as f:
+            old_etag = f.read()
+    except IOError:
+        old_etag = None
+
+    if old_etag != new_etag:
+        r = requests.get(url)
+        r.raise_for_status()
+
+        with open(path, "w") as f:
+            f.write(r.text)
+
+        with open(f"{path}.etag", "w") as f:
+            f.write(new_etag)

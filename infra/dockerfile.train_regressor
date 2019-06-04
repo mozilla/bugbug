@@ -1,5 +1,3 @@
 FROM mozilla/bugbug-base:latest
 
-ADD https://github.com/marco-c/mozilla-central-regressors/raw/master/regressor.csv /usr/local/lib/python3.7/site-packages/bugbug/labels/regressor.csv
-
 CMD bugbug-train regressor

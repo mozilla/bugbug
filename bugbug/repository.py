@@ -17,10 +17,9 @@ from collections import deque
 from datetime import datetime
 
 import hglib
-import requests
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -647,26 +646,10 @@ def get_commits_to_ignore(repo_dir, commits):
 def download_component_mapping():
     global path_to_component
 
-    component_mapping_url = "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
-
-    r = requests.head(component_mapping_url, allow_redirects=True)
-    new_etag = r.headers["ETag"]
-
-    try:
-        with open(f"data/component_mapping.etag", "r") as f:
-            old_etag = f.read()
-    except IOError:
-        old_etag = None
-
-    if old_etag != new_etag:
-        r = requests.get(component_mapping_url)
-        r.raise_for_status()
-
-        with open("data/component_mapping.json", "w") as f:
-            f.write(r.text)
-
-        with open(f"data/component_mapping.etag", "w") as f:
-            f.write(new_etag)
+    utils.download_check_etag(
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "data/component_mapping.json",
+    )
 
     with open("data/component_mapping.json", "r") as f:
         path_to_component = json.load(f)
