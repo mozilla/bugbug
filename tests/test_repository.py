@@ -555,7 +555,7 @@ def test_calculate_experiences():
     }
 
     repository.calculate_experiences(
-        list(commits.values()), {commits["commit2refactoring"]}
+        list(commits.values()), {commits["commit2refactoring"]}, datetime(2019, 1, 1)
     )
 
     assert commits["commit1"].seniority_author == 0

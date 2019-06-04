@@ -388,7 +388,7 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits, commits_to_ignore):
+def calculate_experiences(commits, commits_to_ignore, first_pushdate):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
     try:
@@ -685,6 +685,8 @@ def download_commits(repo_dir, rev_start=0):
         len(revs) > 0
     ), "There should definitely be more than 0 commits, something is wrong"
 
+    first_pushdate = hg_log(hg, [b"0"])[0].pushdate
+
     hg.close()
 
     processes = multiprocessing.cpu_count()
@@ -708,7 +710,7 @@ def download_commits(repo_dir, rev_start=0):
     commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
     print(f"{len(commits_to_ignore)} commits to ignore")
 
-    calculate_experiences(commits, commits_to_ignore)
+    calculate_experiences(commits, commits_to_ignore, first_pushdate)
 
     # Exclude commits to ignore.
     commits = [commit for commit in commits if commit not in commits_to_ignore]
