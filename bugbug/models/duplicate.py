@@ -5,7 +5,6 @@
 
 import random
 
-from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -36,7 +35,6 @@ class DuplicateModel(BugCoupleModel):
     def __init__(self, lemmatization=False):
         BugCoupleModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
 
         cleanup_functions = [
