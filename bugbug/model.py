@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import defaultdict
+
 import numpy as np
 import shap
 from imblearn.metrics import classification_report_imbalanced
@@ -218,19 +220,73 @@ class Model:
 
 
 class BugModel(Model):
+    def __init__(self, lemmatization=False, commit_data=False):
+        Model.__init__(self, lemmatization)
+        self.commit_data = commit_data
+
     def items_gen(self, classes):
+        if not self.commit_data:
+            commit_map = None
+        else:
+            commit_map = defaultdict(list)
+
+            for commit in repository.get_commits():
+                bug_id = commit["bug_id"]
+                if not bug_id:
+                    continue
+
+                commit_map[bug_id].append(commit)
+
+            assert len(commit_map) > 0
+
         for bug in bugzilla.get_bugs():
-            if bug["id"] not in classes:
+            bug_id = bug["id"]
+            if bug_id not in classes:
                 continue
 
-            yield bug, classes[bug["id"]]
+            if self.commit_data:
+                if bug_id in commit_map:
+                    bug["commits"] = commit_map[bug_id]
+                else:
+                    bug["commits"] = []
+
+            yield bug, classes[bug_id]
 
 
 class CommitModel(Model):
+    def __init__(self, lemmatization=False, bug_data=False):
+        Model.__init__(self, lemmatization)
+        self.bug_data = bug_data
+
     def items_gen(self, classes):
+        if not self.bug_data:
+            bug_map = None
+        else:
+            all_bug_ids = set(
+                commit["bug_id"]
+                for commit in repository.get_commits()
+                if commit["node"] in classes
+            )
+
+            bug_map = {}
+
+            for bug in bugzilla.get_bugs():
+                if bug["id"] not in all_bug_ids:
+                    continue
+
+                bug_map[bug["id"]] = bug
+
+            assert len(bug_map) > 0
+
         for commit in repository.get_commits():
             if commit["node"] not in classes:
                 continue
+
+            if self.bug_data:
+                if commit["bug_id"] in bug_map:
+                    commit["bug"] = bug_map[commit["bug_id"]]
+                else:
+                    commit["bug"] = {}
 
             yield commit, classes[commit["node"]]
 
