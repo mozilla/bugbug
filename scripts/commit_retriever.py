@@ -52,12 +52,9 @@ class Retriever(object):
         hg.pull(update=True)
         hg.close()
 
-        db.download_version()
+        db.download_version(repository.COMMITS_DB)
         if not db.is_old_version(repository.COMMITS_DB):
-            db.download()
-            db.download_support_file(
-                repository.COMMITS_DB, "commit_experiences.pickle.xz"
-            )
+            db.download(repository.COMMITS_DB, support_files_too=True)
 
             for commit in repository.get_commits():
                 pass
