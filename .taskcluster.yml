@@ -158,40 +158,6 @@ tasks:
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
-          dependencies:
-            - {$eval: as_slugid("lint_task")}
-            - {$eval: as_slugid("tests_task")}
-            - {$eval: as_slugid("packaging_test_task")}
-            - {$eval: as_slugid("version_check_task")}
-          scopes:
-            - secrets:get:project/relman/bugbug/deploy
-          created: {$fromNow: ''}
-          deadline: {$fromNow: '1 hour'}
-          provisionerId: aws-provisioner-v1
-          workerType: github-worker
-          payload:
-            features:
-              taskclusterProxy:
-                true
-            maxRunTime: 3600
-            image: python
-            command:
-              - "/bin/bash"
-              - "-lcx"
-              - "git clone ${repository} &&
-                 cd bugbug &&
-                 git checkout ${head_rev} &&
-                 python setup.py sdist bdist_wheel &&
-                 pip install twine &&
-                 python infra/pypi.py"
-          metadata:
-            name: bugbug PyPI release
-            description: bugbug PyPI release
-            owner: ${user}@users.noreply.github.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
           taskId: {$eval: as_slugid("update_hook_data_pipeline")}
           dependencies:
             - {$eval: as_slugid("docker_push")}
