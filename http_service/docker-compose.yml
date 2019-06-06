@@ -30,7 +30,7 @@ services:
   bugbug-http-service-rq-dasboard:
     build:
       context: .
-      dockerfile: Dockerfile.bg_worker
+      dockerfile: Dockerfile
     image: mozilla/bugbug-http-service-bg-worker
     command:
       - rq-dashboard

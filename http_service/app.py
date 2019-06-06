@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
 
-def get_job_id(model_name, bug_id):
+def get_job_id():
     return uuid.uuid4().hex
 
 
@@ -41,7 +41,7 @@ def schedule_bug_classification(model_name, bug_ids):
     """ Schedule the classification of a bug_id list
     """
 
-    job_id = get_job_id(model_name, bug_ids)
+    job_id = get_job_id()
 
     print("Scheduling", bug_ids)
 
@@ -69,7 +69,7 @@ def is_running(model_name, bug_id):
 
     job_status = job.get_status()
     if job_status in ("running", "started", "queued"):
-        print("Bug already running", model_name, bug_id)
+        print("Bug classification already running", model_name, bug_id)
         return True
 
     return False
@@ -101,7 +101,8 @@ def model_prediction(model_name, bug_id):
     data = get_bug_classification(model_name, bug_id)
 
     if not data:
-        schedule_bug_classification(model_name, [bug_id])
+        if not is_running(model_name, bug_id):
+            schedule_bug_classification(model_name, [bug_id])
         status_code = 202
         data = {"ready": False}
 
