@@ -110,20 +110,26 @@ def main():
         # Override the Docker image tag if needed
         if docker_tag:
             base_image = payload["payload"]["image"]
-            splitted_image = base_image.rsplit(":", 1)
 
-            # If we have already a Docker tag
-            if len(splitted_image) > 1:
-                docker_tag = splitted_image
+            if base_image.startswith("mozilla/bugbug"):
+                splitted_image = base_image.rsplit(":", 1)
 
-                if docker_tag != "latest":
-                    msg = "Don't update image {} for task {} as its already has a tag"
-                    print(msg.format(base_image, task_internal_id))
+                # If we have already a Docker tag
+                if len(splitted_image) > 1:
+                    docker_tag = splitted_image
 
-            tagless_image = splitted_image[0]
+                    if docker_tag != "latest":
+                        msg = (
+                            "Don't update image {} for task {} as it already has a tag"
+                        )
+                        print(msg.format(base_image, task_internal_id))
 
-            new_image = "{}:{}".format(tagless_image, docker_tag)
-            payload["payload"]["image"] = new_image
+                tagless_image = splitted_image[0]
+
+                new_image = "{}:{}".format(tagless_image, docker_tag)
+                msg = "Updating image for task {} to {}"
+                print(msg.format(task_internal_id, new_image))
+                payload["payload"]["image"] = new_image
 
         tasks.append((task_id, payload))
 
