@@ -11,9 +11,10 @@ import os
 import pickle
 import shutil
 from contextlib import contextmanager
-from urllib.request import urlretrieve
 
 import zstandard
+
+from bugbug import utils
 
 DATABASES = {}
 
@@ -49,7 +50,7 @@ def download_support_file(path, file_name):
     path = os.path.join(os.path.dirname(path), file_name)
 
     print(f"Downloading {url} to {path}")
-    urlretrieve(url, path)
+    utils.download_check_etag(url, path)
 
     if path.endswith(".xz"):
         extract_file(path[:-3])
@@ -72,7 +73,7 @@ def download():
         if not os.path.exists(xz_path):
             url = DATABASES[path]["url"]
             print(f"Downloading {url} to {xz_path}")
-            urlretrieve(url, xz_path)
+            utils.download_check_etag(url, xz_path)
 
         extract_file(path)
 

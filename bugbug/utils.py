@@ -124,11 +124,12 @@ def download_check_etag(url, path):
         old_etag = None
 
     if old_etag != new_etag:
-        r = requests.get(url)
+        r = requests.get(url, stream=True)
         r.raise_for_status()
 
-        with open(path, "w") as f:
-            f.write(r.text)
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=4096):
+                f.write(chunk)
 
         with open(f"{path}.etag", "w") as f:
             f.write(new_etag)
