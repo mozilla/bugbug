@@ -69,6 +69,8 @@ def main():
 
     id_mapping = {}
 
+    docker_tag = os.getenv("TAG", None)
+
     # First pass, do the template rendering and dependencies resolution
     tasks = []
 
@@ -104,6 +106,20 @@ def main():
             new_dependencies.append(decision_task_id)
 
         payload["dependencies"] = new_dependencies
+
+        # Override the Docker image tag if needed
+        if docker_tag:
+            base_image = payload["payload"]["image"]
+            splitted_image = base_image.rsplit(":", 1)
+
+            if len(splitted_image) > 1:
+                err_msg = "Docker tag should be None or 'latest', not {!r}"
+                assert splitted_image[1] == "latest", err_msg.format(splitted_image[1])
+
+            tagless_image = splitted_image[0]
+
+            new_image = "{}:{}".format(tagless_image, docker_tag)
+            payload["payload"]["image"] = new_image
 
         tasks.append((task_id, payload))
 
