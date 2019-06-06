@@ -192,40 +192,6 @@ tasks:
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
-          dependencies:
-            - {$eval: as_slugid("docker_build")}
-            - {$eval: as_slugid("lint_task")}
-            - {$eval: as_slugid("version_check_task")}
-            - {$eval: as_slugid("tests_task")}
-            - {$eval: as_slugid("packaging_test_task")}
-          scopes:
-            - secrets:get:project/relman/bugbug/deploy
-          taskId: {$eval: as_slugid("docker_push")}
-          created: {$fromNow: ''}
-          deadline: {$fromNow: '4 hours'}
-          provisionerId: aws-provisioner-v1
-          workerType: github-worker
-          payload:
-            features:
-              taskclusterProxy:
-                true
-            maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
-            env:
-              TASKCLUSTER_SECRET: project/relman/bugbug/deploy
-            command:
-              - taskboot
-              - push-artifact
-              - --exclude-filter
-              - "*http-service*"
-          metadata:
-            name: bugbug docker push
-            description: bugbug docker push
-            owner: ${user}@users.noreply.github.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
           taskId: {$eval: as_slugid("update_hook_data_pipeline")}
           dependencies:
             - {$eval: as_slugid("docker_push")}
