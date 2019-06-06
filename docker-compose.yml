@@ -32,6 +32,12 @@ services:
         volume:
           nocopy: true
 
+  bugbug-train-backout:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_backout
+    image: mozilla/bugbug-train-backout
+
   bugbug-train-component:
     build:
       context: .
@@ -44,11 +50,35 @@ services:
       dockerfile: infra/dockerfile.train_defectenhancementtask
     image: mozilla/bugbug-train-defectenhancementtask
 
+  bugbug-train-duplicate:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_duplicate
+    image: mozilla/bugbug-train-duplicate
+
   bugbug-train-regression:
     build:
       context: .
       dockerfile: infra/dockerfile.train_regression
     image: mozilla/bugbug-train-regression
+
+  bugbug-train-regressionrange:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regressionrange
+    image: mozilla/bugbug-train-regressionrange
+
+  bugbug-train-regressor:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regressor
+    image: mozilla/bugbug-train-regressor
+
+  bugbug-train-stepstoreproduce:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_stepstoreproduce
+    image: mozilla/bugbug-train-stepstoreproduce
 
   bugbug-train-tracking:
     build:
@@ -62,7 +92,7 @@ services:
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
-    network_mode: 'host'
+      - PORT=8000
     ports:
       - target: 8000
         published: 8000

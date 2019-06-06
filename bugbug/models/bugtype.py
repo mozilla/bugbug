@@ -102,7 +102,8 @@ class BugTypeModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             target = np.zeros(len(keyword_list))
             for keyword in bug_data["keywords"]:
-                target[keyword_list.index(keyword_dict[keyword])] = 1
+                if keyword in keyword_dict:
+                    target[keyword_list.index(keyword_dict[keyword])] = 1
 
             classes[int(bug_data["id"])] = target
 

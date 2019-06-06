@@ -14,22 +14,20 @@ import requests
 from redis import Redis
 
 from bugbug import bugzilla
-from bugbug.models import get_model_class
+from bugbug.models import load_model as bugbug_load_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
+MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
-MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
 
 
-def load_model(model_name):
-    model_file_path = os.path.join(MODELS_DIR, f"{model_name}model")
-    LOGGER.info(f"Lookup model in {model_file_path}")
-    model = get_model_class(model_name).load(model_file_path)
-    return model
+def load_model(model):
+    # TODO: Do not crash when the asked model is not one of the trained models
+    return bugbug_load_model(model, MODELS_DIR)
 
 
 def retrieve_model(name):

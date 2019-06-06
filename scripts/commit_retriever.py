@@ -4,11 +4,9 @@ import argparse
 import lzma
 import os
 import shutil
-from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import hglib
-from dateutil.relativedelta import relativedelta
 
 from bugbug import repository
 
@@ -54,14 +52,12 @@ class Retriever(object):
         hg.pull(update=True)
         hg.close()
 
-        two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
-            years=2, months=6
-        )
-        repository.download_commits(self.repo_dir, two_years_and_six_months_ago)
+        repository.download_commits(self.repo_dir)
 
         logger.info("commit data extracted from repository")
 
         self.compress_file("data/commits.json")
+        self.compress_file("data/commit_experiences.pickle")
 
     def compress_file(self, path):
         with open(path, "rb") as input_f:

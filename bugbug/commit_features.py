@@ -15,6 +15,16 @@ class files_modified_num(object):
         return commit["files_modified_num"]
 
 
+class file_size(object):
+    def __call__(self, commit, **kwargs):
+        return {
+            "sum": commit["total_file_size"],
+            "avg": commit["average_file_size"],
+            "max": commit["maximum_file_size"],
+            "min": commit["minimum_file_size"],
+        }
+
+
 class added(object):
     def __call__(self, commit, **kwargs):
         return commit["added"]
@@ -35,11 +45,6 @@ class test_deleted(object):
         return commit["test_deleted"]
 
 
-class author_experience_90_days(object):
-    def __call__(self, commit, **kwargs):
-        return commit["author_experience_90_days"]
-
-
 def get_exps(exp_type, commit):
     items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
     items_num = len(commit[items_key])
@@ -50,6 +55,12 @@ def get_exps(exp_type, commit):
         "max": commit[f"touched_prev_total_{exp_type}_max"],
         "min": commit[f"touched_prev_total_{exp_type}_min"],
         "avg": commit[f"touched_prev_total_{exp_type}_sum"] / items_num
+        if items_num > 0
+        else 0,
+        "sum_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"],
+        "max_backout": commit[f"touched_prev_total_{exp_type}_backout_max"],
+        "min_backout": commit[f"touched_prev_total_{exp_type}_backout_min"],
+        "avg_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"] / items_num
         if items_num > 0
         else 0,
         f"sum_{EXPERIENCE_TIMESPAN_TEXT}": commit[
@@ -67,6 +78,21 @@ def get_exps(exp_type, commit):
         / items_num
         if items_num > 0
         else 0,
+        f"sum_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
+        ],
+        f"max_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_max"
+        ],
+        f"min_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_min"
+        ],
+        f"avg_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
+        ]
+        / items_num
+        if items_num > 0
+        else 0,
     }
 
 
@@ -77,6 +103,11 @@ class author_experience(object):
             EXPERIENCE_TIMESPAN_TEXT: commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_sum"
             ],
+            "total_backout": commit["touched_prev_total_author_backout_sum"],
+            f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+                f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
+            ],
+            "seniority_author": commit["seniority_author"] / 86400,
         }
 
 
@@ -90,6 +121,11 @@ class components(object):
         return commit["components"]
 
 
+class components_modified_num(object):
+    def __call__(self, commit, **kwargs):
+        return len(commit["components"])
+
+
 class component_touched_prev(object):
     def __call__(self, commit, **kwargs):
         return get_exps("component", commit)
@@ -100,9 +136,19 @@ class directories(object):
         return commit["directories"]
 
 
+class directories_modified_num(object):
+    def __call__(self, commit, **kwargs):
+        return len(commit["directories"])
+
+
 class directory_touched_prev(object):
     def __call__(self, commit, **kwargs):
         return get_exps("directory", commit)
+
+
+class files(object):
+    def __call__(self, commit, **kwargs):
+        return commit["files"]
 
 
 class file_touched_prev(object):

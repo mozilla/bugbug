@@ -132,8 +132,8 @@ def batch_prediction(model_name):
         data[str(bug)] = get_bug_classification(model_name, bug)
         if not data[str(bug)]:
             if not is_running(model_name, bug):
-                status_code = 202
                 missing_bugs.append(bug)
+            status_code = 202
             data[str(bug)] = {"ready": False}
 
     if missing_bugs:

@@ -143,7 +143,17 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
     # TODO: Remove the Graveyard case when https://bugzilla.mozilla.org/show_bug.cgi?id=1541926 is fixed.
     return (
         (field.startswith("cf_") and last_product == "Firefox for Android Graveyard")
-        or (field == "cf_tracking_firefox59" and bug_id in [1_443_367, 1_443_630])
+        or (
+            field == "cf_status_firefox57"
+            and bug_id
+            in (1382577, 1382605, 1382606, 1382607, 1382609, 1394996, 1406290, 1407347)
+        )
+        or (field == "cf_status_firefox58" and bug_id in (1328936, 1394996))
+        or (field == "cf_status_firefox59" and bug_id in (1328936, 1394996))
+        or (
+            field == "cf_tracking_firefox59"
+            and bug_id in (1328936, 1394996, 1_443_367, 1_443_630)
+        )
         or (
             field == "cf_status_firefox60"
             and bug_id
@@ -171,13 +181,27 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
     )
 
 
-def is_expected_inconsistent_change_field(field, bug_id, new_value):
+def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_exp):
     # The 'enhancement' severity has been removed, but it doesn't show up in the history.
     # See https://bugzilla.mozilla.org/show_bug.cgi?id=1541362.
     return (
         (field in ["status", "resolution", "cf_last_resolved"] and bug_id == 1_312_722)
         or (field == "cf_last_resolved" and bug_id == 1_321_567)
-        or (field == "url" and bug_id == 740_223)
+        or (
+            field == "url"
+            and bug_id
+            in (
+                740_223,
+                1326518,
+                1335350,
+                1340490,
+                1378065,
+                1381475,
+                1389540,
+                1395484,
+                1403353,
+            )
+        )
         or (field == "severity" and new_value == "enhancement")
         or (
             field == "cf_status_firefox_esr52"
@@ -306,6 +330,46 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value):
         or (
             field == "type" and bug_id == 1257155
         )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550129 is fixed.
+        or (bug_id == 1370035 and field in ("cf_has_str", "cf_has_regression_range"))
+        or (bug_id == 1400540 and field in ("target_milestone", "status", "resolution"))
+        or (bug_id == 1402929 and field == "priority")
+        or (
+            field in ["summary", "whiteboard"]
+            and new_value.lower() == new_value_exp.lower()
+        )  # https://bugzilla.mozilla.org/show_bug.cgi?id=1556320
+        or (field == "whiteboard" and new_value.rstrip() == new_value_exp.rstrip())
+        or (
+            field == "summary"
+            and bug_id
+            in (
+                1326589,
+                1350800,
+                1368617,
+                1396657,
+                1399203,
+                1405388,
+                1405496,
+                1438422,
+                1440635,
+                1447653,
+                1452217,
+                1453584,
+                1462986,
+                1467331,
+                1478399,
+                1482142,
+                1495267,
+                1500185,
+                1510849,
+                1531130,
+            )
+        )  # https://bugzilla.mozilla.org/show_bug.cgi?id=1556319
+        or (field == "whiteboard" and bug_id in (1385923, 1340867))
+        or (
+            field == "url"
+            and bug_id
+            in (1362789, 1364792, 1431604, 1437528, 1445898, 1446685, 1460828, 1494587)
+        )
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -353,7 +417,11 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
             in [8880381, 8879995, 8872652, 8871000, 8870452, 8870505, 8864140, 8868787]
         )
         or (flag == "checkin-" and obj_id == 8924974)
-        or (flag == "webcompat?" and obj_id in [1_360_579, 1_364_598])
+        or (
+            flag == "webcompat?"
+            and obj_id in (1_360_579, 1356114, 1_364_598, 1375319, 1382724, 1405744)
+        )
+        or (flag == "webcompat+" and obj_id in (1294490, 1443958, 1455894, 1456313))
         or (
             flag == "qe-verify-"
             and obj_id
@@ -485,6 +553,12 @@ def rollback(bug, when=None, do_assert=False):
                     obj = bug
 
                 if change["added"]:
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["added"].startswith(", "):
+                        change["added"] = change["added"][2:]
+                    if change["added"].endswith(", "):
+                        change["added"] = change["added"][:-2]
+
                     for to_remove in change["added"].split(", "):
                         if any(
                             to_remove.startswith(s)
@@ -529,6 +603,12 @@ def rollback(bug, when=None, do_assert=False):
                     if bug["id"] == 1_342_178:
                         continue
 
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["removed"].startswith(", "):
+                        change["removed"] = change["removed"][2:]
+                    if change["removed"].endswith(", "):
+                        change["removed"] = change["removed"][:-2]
+
                     for to_add in change["removed"].split(", "):
                         name, status, requestee = parse_flag_change(to_add)
 
@@ -548,7 +628,10 @@ def rollback(bug, when=None, do_assert=False):
 
             if field in bug and isinstance(bug[field], list):
                 if change["added"]:
-                    if field == "see_also" and change["added"].endswith(", "):
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["added"].startswith(", "):
+                        change["added"] = change["added"][2:]
+                    if change["added"].endswith(", "):
                         change["added"] = change["added"][:-2]
 
                     for to_remove in change["added"].split(", "):
@@ -565,6 +648,12 @@ def rollback(bug, when=None, do_assert=False):
                             )
 
                 if change["removed"]:
+                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
+                    if change["removed"].startswith(", "):
+                        change["removed"] = change["removed"][2:]
+                    if change["removed"].endswith(", "):
+                        change["removed"] = change["removed"][:-2]
+
                     for to_add in change["removed"].split(", "):
                         if field in FIELD_TYPES:
                             to_add = FIELD_TYPES[field](to_add)
@@ -581,7 +670,7 @@ def rollback(bug, when=None, do_assert=False):
                     field in bug
                     and bug[field] != new_value
                     and not is_expected_inconsistent_change_field(
-                        field, bug["id"], new_value
+                        field, bug["id"], new_value, bug[field]
                     )
                 ):
                     assert_or_log(
@@ -645,14 +734,14 @@ def get_inconsistencies():
 
 if __name__ == "__main__":
     import argparse
+    from tqdm import tqdm
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", help="Verbose mode", action="store_true")
     args = parser.parse_args()
 
-    for i, bug in enumerate(bugzilla.get_bugs()):
+    for bug in tqdm(bugzilla.get_bugs()):
         if args.verbose:
             print(bug["id"])
-            print(i)
 
         rollback(bug, do_assert=True)

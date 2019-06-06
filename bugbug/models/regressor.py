@@ -3,17 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from datetime import datetime
+
+import dateutil.parser
 import xgboost
+from dateutil.relativedelta import relativedelta
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import commit_features, feature_cleanup, repository
+from bugbug import commit_features, feature_cleanup, labels, repository
 from bugbug.model import CommitModel
 
 
-class BackoutModel(CommitModel):
+class RegressorModel(CommitModel):
     def __init__(self, lemmatization=False):
         CommitModel.__init__(self, lemmatization)
 
@@ -22,7 +26,6 @@ class BackoutModel(CommitModel):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            commit_features.files_modified_num(),
             commit_features.file_size(),
             commit_features.test_added(),
             commit_features.added(),
@@ -35,8 +38,11 @@ class BackoutModel(CommitModel):
             commit_features.file_touched_prev(),
             commit_features.types(),
             commit_features.components(),
+            commit_features.components_modified_num(),
             commit_features.directories(),
+            commit_features.directories_modified_num(),
             commit_features.files(),
+            commit_features.files_modified_num(),
         ]
 
         cleanup_functions = [
@@ -71,16 +77,37 @@ class BackoutModel(CommitModel):
     def get_labels(self):
         classes = {}
 
+        regressors = set(r[0] for r in labels.get_labels("regressor"))
+
         for commit_data in repository.get_commits():
-            classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
+            if commit_data["ever_backedout"]:
+                continue
+
+            node = commit_data["node"]
+            if node in regressors:
+                classes[node] = 1
+            else:
+                push_date = dateutil.parser.parse(commit_data["pushdate"])
+
+                # The labels we have are only from 2016-11-01.
+                # TODO: Automate collection of labels and somehow remove this check.
+                if push_date < datetime(2016, 11, 1):
+                    continue
+
+                # We remove the last 6 months, as there could be regressions which haven't been filed yet.
+                if push_date > datetime.utcnow() - relativedelta(months=6):
+                    continue
+
+                classes[node] = 0
 
         print(
-            "{} commits were backed out".format(
+            "{} commits caused regressions".format(
                 sum(1 for label in classes.values() if label == 1)
             )
         )
+
         print(
-            "{} commits were not backed out".format(
+            "{} commits did not cause regressions".format(
                 sum(1 for label in classes.values() if label == 0)
             )
         )
