@@ -270,7 +270,8 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local)
+    commits = repository.download_commits(local, ret=True)
+    assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
 
@@ -282,7 +283,8 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local)
+    commits = repository.download_commits(local, ret=True)
+    assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
     assert commits[0]["node"] == revision2
@@ -297,7 +299,8 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    repository.download_commits(local, revision3)
+    commits = repository.download_commits(local, revision3, ret=True)
+    assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
     assert commits[0]["node"] == revision2
@@ -306,6 +309,18 @@ def test_download_commits(fake_hg_repo):
     assert commits[1]["node"] == revision3
     assert commits[1]["touched_prev_total_author_sum"] == 1
     assert commits[1]["seniority_author"] > commits[0]["seniority_author"]
+
+    os.remove("data/commits.json")
+    os.remove("data/commit_experiences.pickle")
+    commits = repository.download_commits(local, f"children({revision2})", ret=True)
+    assert len(commits) == 1
+    assert len(list(repository.get_commits())) == 1
+
+    os.remove("data/commits.json")
+    os.remove("data/commit_experiences.pickle")
+    commits = repository.download_commits(local, ret=False)
+    assert commits is None
+    assert len(list(repository.get_commits())) == 2
 
 
 def test_get_directories():
