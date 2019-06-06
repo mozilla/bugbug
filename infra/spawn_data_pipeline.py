@@ -112,9 +112,13 @@ def main():
             base_image = payload["payload"]["image"]
             splitted_image = base_image.rsplit(":", 1)
 
+            # If we have already a Docker tag
             if len(splitted_image) > 1:
-                err_msg = "Docker tag should be None or 'latest', not {!r}"
-                assert splitted_image[1] == "latest", err_msg.format(splitted_image[1])
+                docker_tag = splitted_image
+
+                if docker_tag != "latest":
+                    msg = "Don't update image {} for task {} as its already has a tag"
+                    print(msg.format(base_image, task_internal_id))
 
             tagless_image = splitted_image[0]
 
