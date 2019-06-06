@@ -90,7 +90,7 @@ def main():
         task_internal_id = payload.pop("ID")
 
         if task_internal_id in id_mapping:
-            raise ValueError("Conflicting IDs {}".format(task_internal_id))
+            raise ValueError(f"Conflicting IDs {task_internal_id}")
 
         id_mapping[task_internal_id] = task_id
 
@@ -119,16 +119,14 @@ def main():
                     docker_tag = splitted_image
 
                     if docker_tag != "latest":
-                        msg = (
-                            "Don't update image {} for task {} as it already has a tag"
+                        print(
+                            f"Don't update image {base_image} for task {task_internal_id} as it already has a tag"
                         )
-                        print(msg.format(base_image, task_internal_id))
 
                 tagless_image = splitted_image[0]
 
                 new_image = "{}:{}".format(tagless_image, docker_tag)
-                msg = "Updating image for task {} to {}"
-                print(msg.format(task_internal_id, new_image))
+                print(f"Updating image for task {task_internal_id} to {new_image}")
                 payload["payload"]["image"] = new_image
 
         tasks.append((task_id, payload))
@@ -139,9 +137,9 @@ def main():
         for task_id, task_payload in tasks:
             queue.createTask(task_id, task_payload)
 
-        print("https://tools.taskcluster.net/task-group-inspector/#/" + task_group_id)
+        print(f"https://tools.taskcluster.net/task-group-inspector/#/{task_group_id}")
     except taskcluster.exceptions.TaskclusterAuthFailure as e:
-        print("TaskclusterAuthFailure: {}".format(e.body), file=sys.stderr)
+        print(f"TaskclusterAuthFailure: {e.body}", file=sys.stderr)
         raise
 
 
