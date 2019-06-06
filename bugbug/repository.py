@@ -26,6 +26,7 @@ db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz",
     1,
+    ["commit_experiences.pickle.xz"],
 )
 
 path_to_component = {}
@@ -657,7 +658,7 @@ def download_component_mapping():
     }
 
 
-def download_commits(repo_dir, rev_start=0):
+def download_commits(repo_dir, rev_start=0, ret=False):
     hg = hglib.open(repo_dir)
 
     revs = get_revs(hg, rev_start)
@@ -708,7 +709,11 @@ def download_commits(repo_dir, rev_start=0):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
+        if ret:
+            commits = list(commits)
         db.append(COMMITS_DB, commits)
+        if ret:
+            return commits
 
 
 def get_commit_map():

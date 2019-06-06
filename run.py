@@ -10,8 +10,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-from bugbug import repository  # noqa
-from bugbug import bugzilla, db
+from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
 
 if __name__ == "__main__":
@@ -60,7 +59,8 @@ if __name__ == "__main__":
     model_class = get_model_class(model_class_name)
 
     if args.train:
-        db.download()
+        db.download(bugzilla.BUGS_DB)
+        db.download(repository.COMMITS_DB)
 
         if args.historical:
             model = model_class(args.lemmatization, args.historical)
