@@ -368,7 +368,7 @@ tasks:
         - "git clone https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service"
+           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version}"
       artifacts:
         public/bugbug:
           expires: {$fromNow: '2 weeks'}
