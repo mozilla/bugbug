@@ -13,7 +13,7 @@ from urllib.request import urlretrieve
 import requests
 from redis import Redis
 
-from bugbug import bugzilla
+from bugbug import bugzilla, get_bugbug_version
 from bugbug.models import load_model as bugbug_load_model
 
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +36,7 @@ def retrieve_model(name):
     file_name = f"{name}model"
     file_path = os.path.join(MODELS_DIR, file_name)
 
-    base_model_url = BASE_URL.format(name)
+    base_model_url = BASE_URL.format(name, f"v{get_bugbug_version()}")
     model_url = f"{base_model_url}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
 

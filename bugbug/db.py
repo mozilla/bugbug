@@ -11,6 +11,7 @@ import os
 import pickle
 import shutil
 from contextlib import contextmanager
+from urllib.parse import urljoin
 
 import zstandard
 
@@ -19,8 +20,8 @@ from bugbug import utils
 DATABASES = {}
 
 
-def register(path, url, version):
-    DATABASES[path] = {"url": url, "version": version}
+def register(path, url, version, support_files=[]):
+    DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
     # Create DB parent directory.
     parent_dir = os.path.dirname(path)
@@ -46,7 +47,7 @@ def extract_file(path):
 
 
 def download_support_file(path, file_name):
-    url = f"{os.path.dirname(DATABASES[path]['url'])}/{file_name}"
+    url = urljoin(DATABASES[path]["url"], file_name)
     path = os.path.join(os.path.dirname(path), file_name)
 
     print(f"Downloading {url} to {path}")
@@ -56,26 +57,28 @@ def download_support_file(path, file_name):
         extract_file(path[:-3])
 
 
-def download_version():
-    for path, info in DATABASES.items():
-        download_support_file(path, f"{os.path.basename(path)}.version")
+def download_version(path):
+    download_support_file(path, f"{os.path.basename(path)}.version")
 
 
 # Download and extract databases.
-def download():
-    for path, info in DATABASES.items():
-        if os.path.exists(path):
-            continue
+def download(path, force=False, support_files_too=False):
+    if os.path.exists(path) and not force:
+        return
 
-        xz_path = f"{path}.xz"
+    xz_path = f"{path}.xz"
 
-        # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path):
-            url = DATABASES[path]["url"]
-            print(f"Downloading {url} to {xz_path}")
-            utils.download_check_etag(url, xz_path)
+    # Only download if the xz file is not there yet.
+    if not os.path.exists(xz_path) or force:
+        url = DATABASES[path]["url"]
+        print(f"Downloading {url} to {xz_path}")
+        utils.download_check_etag(url, xz_path)
 
-        extract_file(path)
+    extract_file(path)
+
+    if support_files_too:
+        for support_file in DATABASES[path]["support_files"]:
+            download_support_file(path, support_file)
 
 
 class Store:

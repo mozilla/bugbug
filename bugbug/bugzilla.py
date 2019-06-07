@@ -107,7 +107,7 @@ def _download(ids_or_query):
     return new_bugs
 
 
-def download_bugs_between(date_from, date_to, security=False):
+def download_bugs_between(date_from, date_to, security=False, store=True):
     products = {
         "Add-on SDK",
         "Android Background Services",
@@ -169,10 +169,15 @@ def download_bugs_between(date_from, date_to, security=False):
 
             all_bugs += [bug for bug in new_bugs.values()]
 
-            db.append(
-                BUGS_DB,
-                (bug for bug_id, bug in new_bugs.items() if bug_id not in old_bug_ids),
-            )
+            if store:
+                db.append(
+                    BUGS_DB,
+                    (
+                        bug
+                        for bug_id, bug in new_bugs.items()
+                        if bug_id not in old_bug_ids
+                    ),
+                )
 
     return all_bugs
 

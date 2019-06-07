@@ -137,14 +137,20 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.3
+          image: mozilla/taskboot:0.1.5
+          env:
+            REGISTRY: registry.hub.docker.com
+            VERSION:
+              $if: 'head_branch[:10] == "refs/tags/"'
+              then: {$eval: 'head_branch[10:]' }
+              else: "latest"
           command:
             - "/bin/sh"
             - "-lcxe"
             - "git clone ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
-               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --build-arg CHECK_MODELS=0"
+               taskboot --cache /cache --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
@@ -215,7 +221,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
+            image: mozilla/taskboot:0.1.5
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -247,16 +253,19 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
+            image: mozilla/taskboot:0.1.5
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
+              VERSION: {$eval: 'head_branch[10:]'}
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-pipeline-start.json
-              - project-relman
-              - bugbug
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone ${repository} &&
+                 cd bugbug &&
+                 git checkout ${head_rev} &&
+                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
@@ -282,16 +291,19 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
+            image: mozilla/taskboot:0.1.5
             env:
               GIT_REPOSITORY: ${repository}
               GIT_REVISION: ${head_rev}
+              VERSION: {$eval: 'head_branch[10:]'}
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-check-models-start.json
-              - project-relman
-              - bugbug-checks
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone ${repository} &&
+                 cd bugbug &&
+                 git checkout ${head_rev} &&
+                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
             description: bugbug update check hook
