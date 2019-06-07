@@ -18,7 +18,7 @@ try:
         test_bugs = json.load(f)
 except FileNotFoundError:
     test_bugs = bugzilla.download_bugs_between(
-        datetime.now() - timedelta(days=1), datetime.now(), store=False
+        datetime.now() - timedelta(days=21), datetime.now(), store=False
     )
     test_bugs = [bug for bug in test_bugs if not bug["creator"] in REPORTERS_TO_IGNORE]
     with open("duplicate_test_bugs.json", "w") as f:
