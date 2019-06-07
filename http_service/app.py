@@ -19,7 +19,7 @@ from .models import classify_bug
 API_TOKEN = "X-Api-Key"
 
 application = Flask(__name__)
-redis_url = os.environ.get("REDISTOGO_URL", "redis://localhost/0")
+redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)  # no args implies the default queue
 

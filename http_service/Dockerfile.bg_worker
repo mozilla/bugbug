@@ -16,4 +16,4 @@ ENV CHECK_MODELS="${CHECK_MODELS}"
 
 RUN bash /code/bugbug_http_service/ensure_models.sh
 
-CMD rq worker high default low -u $REDISTOGO_URL
+CMD rq worker high default low -u $REDIS_URL
