@@ -368,7 +368,8 @@ tasks:
         - "git clone https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --build-arg BUGBUG_VERSION=${version}"
+           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --build-arg BUGBUG_VERSION=${version} &&
+           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --build-arg BUGBUG_VERSION=${version}"
       artifacts:
         public/bugbug:
           expires: {$fromNow: '2 weeks'}
@@ -436,12 +437,10 @@ tasks:
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
-        - taskboot
-        - deploy-heroku
-        - --artifact-filter
-        - public/bugbug/bugbug-http-service.tar
-        - --heroku-app
-        - bugbug
+        - "/bin/sh"
+        - "-lcxe"
+        - "taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service.tar --heroku-app bugbug &&
+           taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service-bg-worker.tar --heroku-app bugbug --heroku-dyno-type worker"
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
