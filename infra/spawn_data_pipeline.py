@@ -69,7 +69,7 @@ def main():
 
     id_mapping = {}
 
-    docker_tag = os.getenv("TAG", None)
+    docker_tag = os.getenv("TAG", "latest")
 
     # First pass, do the template rendering and dependencies resolution
     tasks = []
@@ -79,7 +79,7 @@ def main():
 
     for task in raw_tasks["tasks"]:
         # Try render the task template
-        context = {}
+        context = {"version": docker_tag}
         payload = jsone.render(task, context)
 
         # We need to generate new unique task ids for taskcluster to be happy
@@ -106,28 +106,6 @@ def main():
             new_dependencies.append(decision_task_id)
 
         payload["dependencies"] = new_dependencies
-
-        # Override the Docker image tag if needed
-        if docker_tag:
-            base_image = payload["payload"]["image"]
-
-            if base_image.startswith("mozilla/bugbug"):
-                splitted_image = base_image.rsplit(":", 1)
-
-                # If we have already a Docker tag
-                if len(splitted_image) > 1:
-                    docker_tag = splitted_image
-
-                    if docker_tag != "latest":
-                        print(
-                            f"Don't update image {base_image} for task {task_internal_id} as it already has a tag"
-                        )
-
-                tagless_image = splitted_image[0]
-
-                new_image = "{}:{}".format(tagless_image, docker_tag)
-                print(f"Updating image for task {task_internal_id} to {new_image}")
-                payload["payload"]["image"] = new_image
 
         tasks.append((task_id, payload))
 

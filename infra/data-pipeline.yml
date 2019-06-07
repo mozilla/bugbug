@@ -8,7 +8,7 @@ tasks:
     workerType: releng-svc-compute
     payload:
       maxRunTime: 86400
-      image: mozilla/bugbug-commit-retrieval
+      image: mozilla/bugbug-commit-retrieval:${version}
 
       artifacts:
         public/commits.json.xz:
@@ -27,7 +27,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.data_commits.latest
+      - index.project.relman.bugbug.data_commits.${version}
     metadata:
       name: bugbug commit retrieval
       description: bugbug commit retrieval
@@ -44,7 +44,7 @@ tasks:
       env:
         TC_SECRET_ID: project/relman/bugbug/production
       maxRunTime: 86400
-      image: mozilla/bugbug-bugs-retrieval
+      image: mozilla/bugbug-bugs-retrieval:${version}
 
       artifacts:
         public/bugs.json.xz:
@@ -59,7 +59,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.data_bugs.latest
+      - index.project.relman.bugbug.data_bugs.${version}
     metadata:
       name: bugbug bugs retrieval
       description: bugbug bugs retrieval
@@ -76,7 +76,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 3600
-      image: mozilla/bugbug-base
+      image: mozilla/bugbug-base:${version}
       command:
         - "/bin/bash"
         - "-lcx"
@@ -101,7 +101,7 @@ tasks:
       - commit-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-backout
+      image: mozilla/bugbug-train-backout:${version}
 
       artifacts:
         public/backoutmodel.xz:
@@ -111,7 +111,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_backout.latest
+      - index.project.relman.bugbug.train_backout.${version}
     metadata:
       name: bugbug train backout model
       description: bugbug train backout model
@@ -128,7 +128,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-component
+      image: mozilla/bugbug-train-component:${version}
 
       artifacts:
         public/componentmodel.xz:
@@ -138,7 +138,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_component.latest
+      - index.project.relman.bugbug.train_component.${version}
     metadata:
       name: bugbug train component model
       description: bugbug train component model
@@ -155,7 +155,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-defectenhancementtask
+      image: mozilla/bugbug-train-defectenhancementtask:${version}
 
       artifacts:
         public/defectenhancementtaskmodel.xz:
@@ -165,7 +165,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_defectenhancementtask.latest
+      - index.project.relman.bugbug.train_defectenhancementtask.${version}
     metadata:
       name: bugbug train defect/enhancement/task model
       description: bugbug train defect/enhancement/task model
@@ -182,7 +182,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-regression
+      image: mozilla/bugbug-train-regression:${version}
 
       artifacts:
         public/regressionmodel.xz:
@@ -192,7 +192,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_regression.latest
+      - index.project.relman.bugbug.train_regression.${version}
     metadata:
       name: bugbug train regression model
       description: bugbug train regression model
@@ -209,7 +209,7 @@ tasks:
       - commit-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-regressor
+      image: mozilla/bugbug-train-regressor:${version}
 
       artifacts:
         public/regressormodel.xz:
@@ -219,7 +219,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_regressor.latest
+      - index.project.relman.bugbug.train_regressor.${version}
     metadata:
       name: bugbug train regressor model
       description: bugbug train regressor model
@@ -236,7 +236,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-tracking
+      image: mozilla/bugbug-train-tracking:${version}
 
       artifacts:
         public/trackingmodel.xz:
@@ -246,7 +246,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_tracking.latest
+      - index.project.relman.bugbug.train_tracking.${version}
     metadata:
       name: bugbug train tracking model
       description: bugbug train tracking model
@@ -263,7 +263,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-regressionrange
+      image: mozilla/bugbug-train-regressionrange:${version}
 
       artifacts:
         public/regressionrangemodel.xz:
@@ -273,7 +273,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_regressionrange.latest
+      - index.project.relman.bugbug.train_regressionrange.${version}
     metadata:
       name: bugbug train regressionrange model
       description: bugbug train regressionrange model
@@ -290,7 +290,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-stepstoreproduce
+      image: mozilla/bugbug-train-stepstoreproduce:${version}
 
       artifacts:
         public/stepstoreproducemodel.xz:
@@ -300,7 +300,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_stepstoreproduce.latest
+      - index.project.relman.bugbug.train_stepstoreproduce.${version}
     metadata:
       name: bugbug train stepstoreproduce model
       description: bugbug train stepstoreproduce model
@@ -317,7 +317,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-duplicate
+      image: mozilla/bugbug-train-duplicate:${version}
 
       artifacts:
         public/duplicatemodel.xz:
@@ -327,7 +327,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
-      - index.project.relman.bugbug.train_duplicate.latest
+      - index.project.relman.bugbug.train_duplicate.${version}
     metadata:
       name: bugbug train duplicate model
       description: bugbug train duplicate model
