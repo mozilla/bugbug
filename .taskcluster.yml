@@ -255,8 +255,6 @@ tasks:
             maxRunTime: 3600
             image: mozilla/taskboot:0.1.5
             env:
-              GIT_REPOSITORY: ${repository}
-              GIT_REVISION: ${head_rev}
               VERSION: {$eval: 'head_branch[10:]'}
             command:
               - "/bin/sh"
@@ -293,8 +291,6 @@ tasks:
             maxRunTime: 3600
             image: mozilla/taskboot:0.1.5
             env:
-              GIT_REPOSITORY: ${repository}
-              GIT_REVISION: ${head_rev}
               VERSION: {$eval: 'head_branch[10:]'}
             command:
               - "/bin/sh"
