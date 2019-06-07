@@ -137,7 +137,7 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.5
+          image: mozilla/taskboot:0.1.6
           env:
             REGISTRY: registry.hub.docker.com
             VERSION:
@@ -221,7 +221,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.5
+            image: mozilla/taskboot:0.1.6
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -253,7 +253,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.5
+            image: mozilla/taskboot:0.1.6
             env:
               VERSION: {$eval: 'head_branch[10:]'}
             command:
@@ -289,7 +289,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.5
+            image: mozilla/taskboot:0.1.6
             env:
               VERSION: {$eval: 'head_branch[10:]'}
             command:
