@@ -11,6 +11,7 @@ from urllib.request import urlretrieve
 
 import requests
 
+from bugbug import get_bugbug_version
 from bugbug.models import load_model as bugbug_load_model
 
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +19,7 @@ LOGGER = logging.getLogger()
 
 MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
-BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
+BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.{}/artifacts/public"
 
 
 def load_model(model):
@@ -32,8 +33,8 @@ def retrieve_model(name):
     file_name = f"{name}model"
     file_path = os.path.join(MODELS_DIR, file_name)
 
-    base_url = BASE_URL.format(name)
-    model_url = f"{base_url}/{file_name}.xz"
+    base_model_url = BASE_URL.format(name, f"v{get_bugbug_version()}")
+    model_url = f"{base_model_url}/{file_name}.xz"
     LOGGER.info(f"Checking ETAG of {model_url}")
     r = requests.head(model_url, allow_redirects=True)
     r.raise_for_status()
