@@ -73,7 +73,7 @@ def main():
     tasks = []
 
     with open(args.data_pipeline_json) as pipeline_file:
-        raw_tasks = yaml.load(pipeline_file.read())
+        raw_tasks = yaml.safe_load(pipeline_file.read())
 
     for task in raw_tasks["tasks"]:
         # Try render the task template
