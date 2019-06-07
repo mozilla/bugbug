@@ -7,13 +7,13 @@ import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
-from bugbug import model
+from bugbug import get_bugbug_version, model
 from bugbug.models import get_model_class
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.latest/artifacts/public"
+BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.{}/artifacts/public"
 
 
 class Trainer(object):
@@ -30,7 +30,8 @@ class Trainer(object):
 
     def download_db(self, db_type):
         path = f"data/{db_type}.json"
-        url = f"{BASE_URL.format(db_type)}/{db_type}.json.xz"
+        formatted_base_url = BASE_URL.format(db_type, f"v{get_bugbug_version()}")
+        url = f"{formatted_base_url}/{db_type}.json.xz"
         logger.info(f"Downloading {db_type} database from {url} to {path}.xz")
         urlretrieve(url, f"{path}.xz")
         assert os.path.exists(f"{path}.xz"), "Downloaded file exists"
