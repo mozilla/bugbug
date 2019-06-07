@@ -1,4 +1,6 @@
-FROM mozilla/bugbug-base:latest
+ARG BUGBUG_VERSION=latest
+
+FROM mozilla/bugbug-base:$BUGBUG_VERSION
 
 RUN env
 
