@@ -12,3 +12,4 @@ def test_get_labels():
     classes, _ = model.get_labels()
     assert classes[1488310]
     assert not classes[1372243]
+    assert 1319973 not in classes
