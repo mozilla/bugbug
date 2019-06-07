@@ -69,8 +69,6 @@ def main():
 
     id_mapping = {}
 
-    docker_tag = os.getenv("TAG", "latest")
-
     # First pass, do the template rendering and dependencies resolution
     tasks = []
 
@@ -79,7 +77,7 @@ def main():
 
     for task in raw_tasks["tasks"]:
         # Try render the task template
-        context = {"version": docker_tag}
+        context = {"version": os.getenv("TAG", "latest")}
         payload = jsone.render(task, context)
 
         # We need to generate new unique task ids for taskcluster to be happy

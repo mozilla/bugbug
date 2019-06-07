@@ -28,6 +28,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.data_commits.${version}
+      - index.project.relman.bugbug.data_commits.latest
     metadata:
       name: bugbug commit retrieval
       description: bugbug commit retrieval
@@ -60,6 +61,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.data_bugs.${version}
+      - index.project.relman.bugbug.data_bugs.latest
     metadata:
       name: bugbug bugs retrieval
       description: bugbug bugs retrieval
@@ -112,6 +114,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_backout.${version}
+      - index.project.relman.bugbug.train_backout.latest
     metadata:
       name: bugbug train backout model
       description: bugbug train backout model
@@ -139,6 +142,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_component.${version}
+      - index.project.relman.bugbug.train_component.latest
     metadata:
       name: bugbug train component model
       description: bugbug train component model
@@ -166,6 +170,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_defectenhancementtask.${version}
+      - index.project.relman.bugbug.train_defectenhancementtask.latest
     metadata:
       name: bugbug train defect/enhancement/task model
       description: bugbug train defect/enhancement/task model
@@ -193,6 +198,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_regression.${version}
+      - index.project.relman.bugbug.train_regression.latest
     metadata:
       name: bugbug train regression model
       description: bugbug train regression model
@@ -220,6 +226,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_regressor.${version}
+      - index.project.relman.bugbug.train_regressor.latest
     metadata:
       name: bugbug train regressor model
       description: bugbug train regressor model
@@ -247,6 +254,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_tracking.${version}
+      - index.project.relman.bugbug.train_tracking.latest
     metadata:
       name: bugbug train tracking model
       description: bugbug train tracking model
@@ -274,6 +282,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_regressionrange.${version}
+      - index.project.relman.bugbug.train_regressionrange.latest
     metadata:
       name: bugbug train regressionrange model
       description: bugbug train regressionrange model
@@ -301,6 +310,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_stepstoreproduce.${version}
+      - index.project.relman.bugbug.train_stepstoreproduce.latest
     metadata:
       name: bugbug train stepstoreproduce model
       description: bugbug train stepstoreproduce model
@@ -328,6 +338,7 @@ tasks:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
       - index.project.relman.bugbug.train_duplicate.${version}
+      - index.project.relman.bugbug.train_duplicate.latest
     metadata:
       name: bugbug train duplicate model
       description: bugbug train duplicate model
