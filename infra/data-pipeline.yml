@@ -7,12 +7,18 @@ tasks:
     provisionerId: aws-provisioner-v1
     workerType: releng-svc-compute
     payload:
-      maxRunTime: 43200
+      maxRunTime: 86400
       image: mozilla/bugbug-commit-retrieval
 
       artifacts:
         public/commits.json.xz:
           path: /data/commits.json.xz
+          type: file
+        public/commits.json.version:
+          path: /data/commits.json.version
+          type: file
+        public/commit_experiences.pickle.xz:
+          path: /data/commit_experiences.pickle.xz
           type: file
       cache:
         bugbug-mercurial-repository: /cache
@@ -75,13 +81,40 @@ tasks:
         - "/bin/bash"
         - "-lcx"
         - "python -c 'from bugbug import bugzilla, db; db.download()' &&
-           python -m bugbug.bug_snapshot"
+           python -m bugbug.bug_snapshot --verbose"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug rollback test
       description: bugbug rollback test
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-backout
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-backout
+
+      artifacts:
+        public/backoutmodel.xz:
+          path: /backoutmodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_backout.latest
+    metadata:
+      name: bugbug train backout model
+      description: bugbug train backout model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -166,6 +199,33 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: train-regressor
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-regressor
+
+      artifacts:
+        public/regressormodel.xz:
+          path: /regressormodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regressor.latest
+    metadata:
+      name: bugbug train regressor model
+      description: bugbug train regressor model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: train-tracking
     created: {$fromNow: ''}
     deadline: {$fromNow: '118 hours'}
@@ -247,6 +307,33 @@ tasks:
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+  - ID: train-duplicate
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-duplicate
+
+      artifacts:
+        public/duplicatemodel.xz:
+          path: /duplicatemodel.xz
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_duplicate.latest
+    metadata:
+      name: bugbug train duplicate model
+      description: bugbug train duplicate model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
   - ID: docker-build
     created: {$fromNow: ''}
     deadline: {$fromNow: '119 hours'}
@@ -270,7 +357,6 @@ tasks:
         - "git clone https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           python http_service/download_models.py &&
            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service"
       artifacts:
         public/bugbug:

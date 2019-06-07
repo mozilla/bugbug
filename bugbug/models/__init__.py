@@ -16,12 +16,14 @@ MODELS = {
     "defect": "bugbug.models.defect.DefectModel",
     "defectenhancementtask": "bugbug.models.defect_enhancement_task.DefectEnhancementTaskModel",
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
+    "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "regression": "bugbug.models.regression.RegressionModel",
+    "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
+    "regressor": "bugbug.models.regressor.RegressorModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
-    "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
 }
 
 

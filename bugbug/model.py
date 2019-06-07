@@ -14,6 +14,7 @@ from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
+from bugbug.utils import split_tuple_iterator
 
 
 class Model:
@@ -65,15 +66,14 @@ class Model:
         classes, class_names = self.get_labels()
         class_names = sorted(list(class_names), reverse=True)
 
-        # Get items, filtering out those for which we have no labels.
-        def trainable_items_gen():
-            return (item for item in self.items_gen() if self.get_id(item) in classes)
-
-        # Calculate labels.
-        y = np.array([classes[self.get_id(item)] for item in trainable_items_gen()])
+        # Get items and labels, filtering out those for which we have no labels.
+        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(trainable_items_gen())
+        X = self.extraction_pipeline.fit_transform(X_iter)
+
+        # Calculate labels.
+        y = np.array(y_iter)
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -110,7 +110,6 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
-        # Evaluate results on the test set.
         feature_names = self.get_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
@@ -130,6 +129,7 @@ class Model:
                     f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                 )
 
+        # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
@@ -186,7 +186,7 @@ class Model:
         if not isinstance(items, list):
             items = [items]
 
-        assert isinstance(items[0], dict)
+        assert isinstance(items[0], dict) or isinstance(items[0], tuple)
 
         X = self.extraction_pipeline.transform(items)
         if probabilities:
@@ -218,16 +218,28 @@ class Model:
 
 
 class BugModel(Model):
-    def get_id(self, bug):
-        return bug["id"]
+    def items_gen(self, classes):
+        for bug in bugzilla.get_bugs():
+            if bug["id"] not in classes:
+                continue
 
-    def items_gen(self):
-        return (bug for bug in bugzilla.get_bugs())
+            yield bug, classes[bug["id"]]
 
 
 class CommitModel(Model):
-    def get_id(self, commit):
-        return commit["node"]
+    def items_gen(self, classes):
+        for commit in repository.get_commits():
+            if commit["node"] not in classes:
+                continue
 
-    def items_gen(self):
-        return (commit for commit in repository.get_commits())
+            yield commit, classes[commit["node"]]
+
+
+class BugCoupleModel(Model):
+    def items_gen(self, classes):
+        bugs = {}
+        for bug in bugzilla.get_bugs():
+            bugs[bug["id"]] = bug
+
+        for (bug_id1, bug_id2), label in classes.items():
+            yield (bugs[bug_id1], bugs[bug_id2]), label

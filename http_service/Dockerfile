@@ -16,6 +16,6 @@ COPY ./models /code/models
 ARG CHECK_MODELS
 ENV CHECK_MODELS="${CHECK_MODELS}"
 
-RUN python /code/bugbug_http_service/check_models.py
+RUN bash /code/bugbug_http_service/ensure_models.sh
 
 CMD gunicorn -b 0.0.0.0:$PORT bugbug_http_service.app --preload --timeout 30 -w 3

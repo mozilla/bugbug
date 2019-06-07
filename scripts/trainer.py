@@ -7,6 +7,7 @@ import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
+from bugbug import model
 from bugbug.models import get_model_class
 
 basicConfig(level=INFO)
@@ -20,28 +21,40 @@ class Trainer(object):
         with lzma.open(f"{path}.xz", "rb") as input_f:
             with open(path, "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
+        assert os.path.exists(path), "Decompressed file exists"
 
     def compress_file(self, path):
         with open(path, "rb") as input_f:
             with lzma.open(f"{path}.xz", "wb") as output_f:
                 shutil.copyfileobj(input_f, output_f)
 
+    def download_db(self, db_type):
+        path = f"data/{db_type}.json"
+        url = f"{BASE_URL.format(db_type)}/{db_type}.json.xz"
+        logger.info(f"Downloading {db_type} database from {url} to {path}.xz")
+        urlretrieve(url, f"{path}.xz")
+        assert os.path.exists(f"{path}.xz"), "Downloaded file exists"
+        logger.info(f"Decompressing {db_type} database")
+        self.decompress_file(path)
+
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
         os.makedirs("data", exist_ok=True)
 
-        # Bugs.json
-        logger.info("Downloading bugs database")
-        bugs_url = BASE_URL.format("bugs")
-        urlretrieve(f"{bugs_url}/bugs.json.xz", "data/bugs.json.xz")
-        logger.info("Decompressing bugs database")
-        self.decompress_file("data/bugs.json")
+        model_class = get_model_class(model_name)
+
+        if issubclass(model_class, model.BugModel) or issubclass(
+            model_class, model.BugCoupleModel
+        ):
+            self.download_db("bugs")
+
+        if issubclass(model_class, model.CommitModel):
+            self.download_db("commits")
 
         logger.info(f"Training *{model_name}* model")
 
-        model_class = get_model_class(model_name)
-        model = model_class()
-        model.train()
+        model_obj = model_class()
+        model_obj.train()
 
         logger.info(f"Training done")
 
