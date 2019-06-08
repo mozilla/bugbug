@@ -33,12 +33,10 @@
 
 - **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
 
+
 ## Setup
 
 Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
-
-If you update the bugs database, run `xz -v9 -k data/bugs.json`.
-If you update the commits database, run `xz -v9 -k data/commits.json`.
 
 
 ## Usage
