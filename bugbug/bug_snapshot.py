@@ -650,7 +650,12 @@ def rollback(bug, when=None, do_assert=False):
 
                     for to_remove in change["added"].split(", "):
                         if field in FIELD_TYPES:
-                            to_remove = FIELD_TYPES[field](to_remove)
+                            try:
+                                to_remove = FIELD_TYPES[field](to_remove)
+                            except Exception:
+                                assert_or_log(
+                                    f"Exception while transforming {to_remove} from {bug[field]} (field {field})"
+                                )
 
                         if to_remove in bug[field]:
                             bug[field].remove(to_remove)
@@ -670,12 +675,27 @@ def rollback(bug, when=None, do_assert=False):
 
                     for to_add in change["removed"].split(", "):
                         if field in FIELD_TYPES:
-                            to_add = FIELD_TYPES[field](to_add)
+                            try:
+                                to_add = FIELD_TYPES[field](to_add)
+                            except Exception:
+                                assert_or_log(
+                                    f"Exception while transforming {to_add} from {bug[field]} (field {field})"
+                                )
                         bug[field].append(to_add)
             else:
                 if field in FIELD_TYPES:
-                    old_value = FIELD_TYPES[field](change["removed"])
-                    new_value = FIELD_TYPES[field](change["added"])
+                    try:
+                        old_value = FIELD_TYPES[field](change["removed"])
+                    except Exception:
+                        assert_or_log(
+                            f"Exception while transforming {change['removed']} from {bug[field]} (field {field})"
+                        )
+                    try:
+                        new_value = FIELD_TYPES[field](change["added"])
+                    except Exception:
+                        assert_or_log(
+                            f"Exception while transforming {change['added']} from {bug[field]} (field {field})"
+                        )
                 else:
                     old_value = change["removed"]
                     new_value = change["added"]
