@@ -81,6 +81,8 @@ tasks:
         payload:
           maxRunTime: 3600
           image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
@@ -96,7 +98,8 @@ tasks:
                pip install --quiet -r extra-nlp-requirements.txt &&
                pip install --quiet -r extra-nn-requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
-               python -m pytest --cov=./ tests/test_*.py"
+               python -m pytest --cov=./ tests/test_*.py &&
+               bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug tests
           description: bugbug tests
