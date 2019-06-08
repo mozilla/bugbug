@@ -370,6 +370,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             and bug_id
             in (1362789, 1364792, 1431604, 1437528, 1445898, 1446685, 1460828, 1494587)
         )
+        or (field in ("platform", "op_sys") and bug_id == 568516)
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -419,9 +420,22 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
         or (flag == "checkin-" and obj_id == 8924974)
         or (
             flag == "webcompat?"
-            and obj_id in (1_360_579, 1356114, 1_364_598, 1375319, 1382724, 1405744)
+            and obj_id
+            in (
+                1360579,
+                1326028,
+                1356114,
+                1360238,
+                1364598,
+                1375319,
+                1382724,
+                1397981,
+                1405744,
+                1416728,
+            )
         )
         or (flag == "webcompat+" and obj_id in (1294490, 1443958, 1455894, 1456313))
+        or (flag == "webcompat-" and obj_id == 1419848)
         or (
             flag == "qe-verify-"
             and obj_id
