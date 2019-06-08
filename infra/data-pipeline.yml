@@ -82,7 +82,7 @@ tasks:
       command:
         - "/bin/bash"
         - "-lcx"
-        - "python -c 'from bugbug import bugzilla, db; db.download()' &&
+        - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
            python -m bugbug.bug_snapshot --verbose"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
