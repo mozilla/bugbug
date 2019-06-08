@@ -31,4 +31,8 @@ repos:
     hooks:
     -   id: codespell
         exclude_types: [json]
+-   repo: meta
+    hooks:
+    -   id: check-hooks-apply
+    -   id: check-useless-excludes
 python_version: python3.6
