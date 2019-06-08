@@ -12,8 +12,20 @@ RUNPY = os.path.join(os.path.dirname(os.path.dirname(__file__)), "run.py")
 
 def test_run():
     # Test running the training for the bug model.
-    print([sys.executable, RUNPY, "--train", "--goal", "defect"])
-    subprocess.run([sys.executable, RUNPY, "--train", "--goal", "defect"], check=True)
+    cmd = [
+        sys.executable,
+        "-m",
+        "coverage",
+        "run",
+        RUNPY,
+        "--train",
+        "--goal",
+        "defect",
+    ]
+    print(cmd)
+    subprocess.run(cmd, check=True)
 
     # Test loading the trained model.
-    subprocess.run([sys.executable, RUNPY, "--goal", "defect"], check=True)
+    cmd = [sys.executable, "-m", "coverage", "run", RUNPY, "--goal", "defect"]
+    print(cmd)
+    subprocess.run(cmd, check=True)
