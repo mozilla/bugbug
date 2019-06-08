@@ -3,8 +3,6 @@ policy:
   pullRequests: public
 tasks:
   $let:
-    decision_task_id: {$eval: as_slugid("decision_task")}
-    expires_in: {$fromNow: '1 year'}
     user: ${event.sender.login}
 
     head_branch:
