@@ -96,7 +96,7 @@ tasks:
                pip install --quiet -r extra-nlp-requirements.txt &&
                pip install --quiet -r extra-nn-requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
-               python -m pytest tests/test_*.py"
+               python -m pytest --cov=./ tests/test_*.py"
         metadata:
           name: bugbug tests
           description: bugbug tests
