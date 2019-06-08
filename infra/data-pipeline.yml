@@ -365,7 +365,7 @@ tasks:
       command:
         - "/bin/sh"
         - "-lcxe"
-        - "git clone https://github.com/mozilla/bugbug /code &&
+        - "git clone --quiet https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --build-arg BUGBUG_VERSION=${version} &&

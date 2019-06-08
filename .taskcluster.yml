@@ -41,7 +41,7 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "git clone --quiet ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
@@ -65,7 +65,7 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  python infra/version_check.py"
@@ -89,8 +89,8 @@ tasks:
             - "apt-get update &&
                apt-get install -y python-pip &&
                python2 -m pip install --quiet mercurial==4.8 &&
-               git clone https://github.com/mozilla/version-control-tools.git &&
-               git clone ${repository} &&
+               git clone --quiet https://github.com/mozilla/version-control-tools.git &&
+               git clone --quiet ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
                cp infra/hgrc /root/.hgrc &&
@@ -116,7 +116,7 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "git clone --quiet ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
                pip install --quiet -r requirements.txt &&
@@ -147,7 +147,7 @@ tasks:
           command:
             - "/bin/sh"
             - "-lcxe"
-            - "git clone ${repository} /code &&
+            - "git clone --quiet ${repository} /code &&
                cd /code &&
                git checkout ${head_rev} &&
                taskboot --cache /cache --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
@@ -189,7 +189,7 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  python setup.py sdist bdist_wheel &&
@@ -259,7 +259,7 @@ tasks:
             command:
               - "/bin/sh"
               - "-lcxe"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
@@ -295,7 +295,7 @@ tasks:
             command:
               - "/bin/sh"
               - "-lcxe"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
