@@ -1,5 +1,7 @@
 # bugbug
 
+[![Task Status](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)
+
 ## Classifiers
 - **bug vs feature** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
 
