@@ -114,15 +114,18 @@ tasks:
         payload:
           maxRunTime: 3600
           image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
             - "git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --quiet -r requirements.txt &&
-               python setup.py sdist &&
-               pip install dist/bugbug-$(cat VERSION).tar.gz"
+               pip install --quiet -r test-requirements.txt &&
+               python -m coverage run setup.py sdist &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz &&
+               bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
           description: bugbug packaging test
