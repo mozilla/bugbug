@@ -43,7 +43,7 @@ tasks:
             - "-lcx"
             - "git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
                pre-commit run -a" # TODO Be smarter and run only on modified files
         metadata:
@@ -67,7 +67,7 @@ tasks:
               - "-lcx"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/version_check.py"
           metadata:
             name: bugbug tag version check
@@ -92,7 +92,7 @@ tasks:
                git clone --quiet https://github.com/mozilla/version-control-tools.git &&
                git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /root/.hgrc &&
                pip install --quiet -r requirements.txt &&
                pip install --quiet -r extra-nlp-requirements.txt &&
@@ -118,7 +118,7 @@ tasks:
             - "-lcx"
             - "git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r requirements.txt &&
                python setup.py sdist &&
                pip install dist/bugbug-$(cat VERSION).tar.gz"
@@ -149,7 +149,7 @@ tasks:
             - "-lcxe"
             - "git clone --quiet ${repository} /code &&
                cd /code &&
-               git checkout ${head_rev} &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
                taskboot --cache /cache --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
           artifacts:
             public/bugbug:
@@ -191,7 +191,7 @@ tasks:
               - "-lcx"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python setup.py sdist bdist_wheel &&
                  pip install --quiet twine &&
                  python infra/pypi.py"
@@ -261,7 +261,7 @@ tasks:
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
@@ -297,7 +297,7 @@ tasks:
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
