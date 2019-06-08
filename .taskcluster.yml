@@ -44,7 +44,7 @@ tasks:
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
-               pip install -r test-requirements.txt &&
+               pip install --quiet -r test-requirements.txt &&
                pre-commit run -a" # TODO Be smarter and run only on modified files
         metadata:
           name: bugbug lint
@@ -88,16 +88,16 @@ tasks:
             - "-lcx"
             - "apt-get update &&
                apt-get install -y python-pip &&
-               python2 -m pip install mercurial==4.8 &&
+               python2 -m pip install --quiet mercurial==4.8 &&
                git clone https://github.com/mozilla/version-control-tools.git &&
                git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
                cp infra/hgrc /root/.hgrc &&
-               pip install -r requirements.txt &&
-               pip install -r extra-nlp-requirements.txt &&
-               pip install -r extra-nn-requirements.txt &&
-               pip install -r test-requirements.txt &&
+               pip install --quiet -r requirements.txt &&
+               pip install --quiet -r extra-nlp-requirements.txt &&
+               pip install --quiet -r extra-nn-requirements.txt &&
+               pip install --quiet -r test-requirements.txt &&
                python -m pytest tests/test_*.py"
         metadata:
           name: bugbug tests
@@ -119,7 +119,7 @@ tasks:
             - "git clone ${repository} &&
                cd bugbug &&
                git checkout ${head_rev} &&
-               pip install -r requirements.txt &&
+               pip install --quiet -r requirements.txt &&
                python setup.py sdist &&
                pip install dist/bugbug-$(cat VERSION).tar.gz"
         metadata:
@@ -193,7 +193,7 @@ tasks:
                  cd bugbug &&
                  git checkout ${head_rev} &&
                  python setup.py sdist bdist_wheel &&
-                 pip install twine &&
+                 pip install --quiet twine &&
                  python infra/pypi.py"
           metadata:
             name: bugbug PyPI release
