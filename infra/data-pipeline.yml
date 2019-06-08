@@ -51,6 +51,9 @@ tasks:
         public/bugs.json.xz:
           path: /data/bugs.json.xz
           type: file
+        public/bugs.json.version:
+          path: /data/bugs.json.version
+          type: file
 
       features:
         taskclusterProxy:
