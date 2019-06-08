@@ -81,6 +81,10 @@ def download(path, force=False, support_files_too=False):
             download_support_file(path, support_file)
 
 
+def last_modified(path):
+    return utils.get_last_modified(DATABASES[path]["url"])
+
+
 class Store:
     def __init__(self, fh):
         self.fh = fh

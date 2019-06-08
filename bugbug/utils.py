@@ -6,6 +6,7 @@
 import collections
 import os
 
+import dateutil.parser
 import numpy as np
 import requests
 import taskcluster
@@ -133,3 +134,8 @@ def download_check_etag(url, path):
 
         with open(f"{path}.etag", "w") as f:
             f.write(new_etag)
+
+
+def get_last_modified(url):
+    r = requests.head(url, allow_redirects=True)
+    return dateutil.parser.parse(r.headers["Last-Modified"])
