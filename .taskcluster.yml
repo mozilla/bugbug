@@ -125,6 +125,8 @@ tasks:
                pip install --quiet -r test-requirements.txt &&
                python -m coverage run setup.py sdist &&
                pip install dist/bugbug-$(cat VERSION).tar.gz &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz[nn] &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
