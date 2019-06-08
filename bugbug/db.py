@@ -13,6 +13,7 @@ import shutil
 from contextlib import contextmanager
 from urllib.parse import urljoin
 
+import requests
 import zstandard
 
 from bugbug import utils
@@ -47,14 +48,17 @@ def extract_file(path):
 
 
 def download_support_file(path, file_name):
-    url = urljoin(DATABASES[path]["url"], file_name)
-    path = os.path.join(os.path.dirname(path), file_name)
+    try:
+        url = urljoin(DATABASES[path]["url"], file_name)
+        path = os.path.join(os.path.dirname(path), file_name)
 
-    print(f"Downloading {url} to {path}")
-    utils.download_check_etag(url, path)
+        print(f"Downloading {url} to {path}")
+        utils.download_check_etag(url, path)
 
-    if path.endswith(".xz"):
-        extract_file(path[:-3])
+        if path.endswith(".xz"):
+            extract_file(path[:-3])
+    except requests.exceptions.HTTPError:
+        print(f"{file_name} is not yet available to download for {path}")
 
 
 def download_version(path):
