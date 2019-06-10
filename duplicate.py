@@ -6,6 +6,7 @@
 # Using latent semantic indexing and similarity matrix
 
 import logging
+from collections import defaultdict
 
 import nltk
 from gensim import models, similarities
@@ -20,6 +21,22 @@ logging.basicConfig(
 )
 
 nltk.download("stopwords")
+
+# A map from bug id to its duplicate ids
+all_ids = defaultdict(int)
+duplicates = defaultdict(set)
+
+for bug in bugzilla.get_bugs():
+    all_ids[bug["id"]] = 1
+
+for bug in bugzilla.get_bugs():
+    dupes = set([bugs for bugs in bug["duplicates"] if all_ids[bugs] != 0])
+    if all_ids[bug["dupe_of"]] != 0:
+        dupes.add(bug["dupe_of"])
+
+    duplicates[bug["id"]] |= dupes
+    for dupe in dupes:
+        duplicates[dupe].add(bug["id"])
 
 
 class SimilarityLsi:
@@ -62,7 +79,7 @@ class SimilarityLsi:
             output_prefix="simdata.shdat", corpus=corpus_lsi, num_features=300
         )
 
-    def get_similar_bugs(self, query, duplicate_of, default=10):
+    def get_similar_bugs(self, query, default=10):
 
         # transforming the query to latent 300-D space
         for bug_id, summary in self.corpus:
@@ -82,19 +99,14 @@ class SimilarityLsi:
 
         # bug_id of the k most similar summaries
         sim_bug_ids = []
-        master_present = False
         for i, j in enumerate(sims):
-            if duplicate_of == self.corpus[j[0]][0]:
-                master_present = True
             if i >= 1 and i <= default:  # since i = 0 returns the query itself
                 sim_bug_ids.append(self.corpus[j[0]][0])
-            if i == 2000:
+                continue
+            if i > default:
                 break
 
-        if master_present:
-            return sim_bug_ids
-
-        return False
+        return sim_bug_ids
 
 
 def recall_rate():
@@ -102,11 +114,11 @@ def recall_rate():
     total_bugs = 0
     hits = 0
     for bug in bugzilla.get_bugs():
-        if bug["dupe_of"]:
-            similar_bugs = similarity.get_similar_bugs(bug["id"], bug["dupe_of"])
-            if similar_bugs:
+        if duplicates[bug["id"]]:
+            similar_bugs = similarity.get_similar_bugs(bug["id"])
+            for item in duplicates[bug["id"]]:
                 total_bugs += 1
-                if bug["dupe_of"] in similar_bugs:
+                if item in similar_bugs:
                     hits += 1
 
     print(f"The recall rate is {hits/total_bugs * 100} %")
