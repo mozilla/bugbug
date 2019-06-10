@@ -2,6 +2,10 @@
 
 [![Task Status](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)
 
+Bugbug aims at leveraging machine learning approaches to help with bug and quality managements.
+
+More information on the Mozilla hacks blog:
+https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 ## Classifiers
 - **assignee** - The aim of this classifier is to suggest an appropriate assignee for a bug.
