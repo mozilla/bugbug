@@ -6,6 +6,7 @@
 import argparse
 import csv
 import os
+import sys
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -13,7 +14,8 @@ import numpy as np
 from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
 
-if __name__ == "__main__":
+
+def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--lemmatization",
@@ -40,8 +42,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--historical", help="Analyze historical bugs", action="store_true"
     )
-    args = parser.parse_args()
+    return parser.parse_args(args)
 
+
+def main(args):
     model_file_name = "{}{}model".format(
         args.goal, "" if args.classifier == "default" else args.classifier
     )
@@ -129,3 +133,7 @@ if __name__ == "__main__":
         ) as f:
             writer = csv.writer(f)
             writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main(parse_args(sys.argv[1:]))
