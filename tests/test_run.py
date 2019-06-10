@@ -3,29 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import os
-import subprocess
-import sys
-
-RUNPY = os.path.join(os.path.dirname(os.path.dirname(__file__)), "run.py")
+import run
 
 
 def test_run():
     # Test running the training for the bug model.
-    cmd = [
-        sys.executable,
-        "-m",
-        "coverage",
-        "run",
-        RUNPY,
-        "--train",
-        "--goal",
-        "defect",
-    ]
-    print(cmd)
-    subprocess.run(cmd, check=True)
+    run.main(run.parse_args(["--train", "--goal", "defect"]))
 
     # Test loading the trained model.
-    cmd = [sys.executable, "-m", "coverage", "run", RUNPY, "--goal", "defect"]
-    print(cmd)
-    subprocess.run(cmd, check=True)
+    run.main(run.parse_args(["--goal", "defect"]))
