@@ -27,7 +27,7 @@ repos:
     -   id: check-json
         exclude: ^tests/fixtures/
 -   repo: https://github.com/codespell-project/codespell
-    rev: bcb5b06d0202cc9b3ea7600c9e4dfa868dc7dba1
+    rev: v1.15.0
     hooks:
     -   id: codespell
         exclude_types: [json]
