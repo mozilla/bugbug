@@ -442,8 +442,8 @@ tasks:
       command:
         - "/bin/sh"
         - "-lcxe"
-        - "taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service.tar --heroku-app bugbug &&
-           taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service-bg-worker.tar --heroku-app bugbug --heroku-dyno-type worker"
+        - "taskboot deploy-heroku --artifact-filter public/bugbug/registry.hub.docker.com_mozilla_bugbug-http-service_${version}.tar --heroku-app bugbug &&
+           taskboot deploy-heroku --artifact-filter public/bugbug/registry.hub.docker.com_mozilla_bugbug-http-service-bg-worker_${version}.tar --heroku-app bugbug --heroku-dyno-type worker"
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
