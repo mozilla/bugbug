@@ -109,20 +109,32 @@ class SimilarityLsi:
         return sim_bug_ids
 
 
-def recall_rate():
+def evaluation():
     similarity = SimilarityLsi()
-    total_bugs = 0
-    hits = 0
+    total_r = 0
+    hits_r = 0
+    total_p = 0
+    hits_p = 0
+
     for bug in bugzilla.get_bugs():
         if duplicates[bug["id"]]:
             similar_bugs = similarity.get_similar_bugs(bug["id"])
-            for item in duplicates[bug["id"]]:
-                total_bugs += 1
-                if item in similar_bugs:
-                    hits += 1
 
-    print(f"The recall rate is {hits/total_bugs * 100} %")
+            # Recall
+            for item in duplicates[bug["id"]]:
+                total_r += 1
+                if item in similar_bugs:
+                    hits_r += 1
+
+            # Precision
+            for element in similar_bugs:
+                total_p += 1
+                if element in duplicates[bug["id"]]:
+                    hits_p += 1
+
+    print(f"Recall: {hits_r/total_r * 100} %")
+    print(f"Precision: {hits_p/total_p * 100} %")
 
 
 if __name__ == "__main__":
-    recall_rate()
+    evaluation()
