@@ -6,6 +6,7 @@
 # Using latent semantic indexing and similarity matrix
 
 import logging
+import re
 from collections import defaultdict
 
 import nltk
@@ -14,7 +15,7 @@ from gensim.corpora import Dictionary
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 
-from bugbug import bugzilla
+from bugbug import bugzilla, feature_cleanup
 
 logging.basicConfig(
     format="%(asctime)s : %(levelname)s : %(message)s", level=logging.INFO
@@ -22,19 +23,32 @@ logging.basicConfig(
 
 nltk.download("stopwords")
 
+REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
+
+cleanup_functions = [
+    feature_cleanup.responses(),
+    feature_cleanup.hex(),
+    feature_cleanup.dll(),
+    feature_cleanup.fileref(),
+    feature_cleanup.url(),
+    feature_cleanup.synonyms(),
+    feature_cleanup.crash(),
+]
+
 # A map from bug id to its duplicate ids
-all_ids = defaultdict(int)
 duplicates = defaultdict(set)
+all_ids = set(
+    bug["id"]
+    for bug in bugzilla.get_bugs()
+    if bug["creator"] not in REPORTERS_TO_IGNORE and "dupeme" not in bug["keywords"]
+)
 
 for bug in bugzilla.get_bugs():
-    all_ids[bug["id"]] = 1
+    dupes = [entry for entry in bug["duplicates"] if entry in all_ids]
+    if bug["dupe_of"] in all_ids:
+        dupes.append(bug["dupe_of"])
 
-for bug in bugzilla.get_bugs():
-    dupes = set([bugs for bugs in bug["duplicates"] if all_ids[bugs] != 0])
-    if all_ids[bug["dupe_of"]] != 0:
-        dupes.add(bug["dupe_of"])
-
-    duplicates[bug["id"]] |= dupes
+    duplicates[bug["id"]].update(dupes)
     for dupe in dupes:
         duplicates[dupe].add(bug["id"])
 
@@ -43,20 +57,26 @@ class SimilarityLsi:
     def __init__(self):
 
         self.corpus = []
+        texts = []
+        self.ps = PorterStemmer()
 
         for bug in bugzilla.get_bugs():
-            self.corpus.append([bug["id"], bug["summary"]])
+            textual_features = bug["summary"] + " " + bug["comments"][0]["text"]
+            for func in cleanup_functions:
+                textual_features = func(textual_features)
 
-        # cleaning the text
-        self.ps = PorterStemmer()
-        texts = [
-            [
-                self.ps.stem(word)
-                for word in summary.lower().split()
-                if word not in set(stopwords.words("english"))
-            ]
-            for bug_id, summary in self.corpus
-        ]
+            # cleaning the texts
+            textual_features = re.sub("[^a-zA-Z0-9]", " ", textual_features)
+            self.corpus.append([bug["id"], textual_features])
+
+            # create bag of words
+            texts.append(
+                [
+                    self.ps.stem(word)
+                    for word in textual_features.lower().split()
+                    if word not in set(stopwords.words("english")) and len(word) > 1
+                ]
+            )
 
         # Assigning unique integer ids to all words
         self.dictionary = Dictionary(texts)
@@ -81,15 +101,20 @@ class SimilarityLsi:
 
     def get_similar_bugs(self, query, default=10):
 
+        # consider first comment too
+        query_summary = query["summary"] + " " + query["comments"][0]["text"]
+        for func in cleanup_functions:
+            query_summary = func(query_summary)
+
+        # cleaning the texts
+        query_summary = re.sub("[^a-zA-Z0-9]", " ", query_summary)
+        query_summary = [
+            self.ps.stem(word)
+            for word in query_summary.lower().split()
+            if word not in set(stopwords.words("english")) and len(word) > 1
+        ]
+
         # transforming the query to latent 300-D space
-        for bug_id, summary in self.corpus:
-            if bug_id == query:
-                query_summary = [
-                    self.ps.stem(word)
-                    for word in summary.lower().split()
-                    if word not in set(stopwords.words("english"))
-                ]
-                break
         vec_bow = self.dictionary.doc2bow(query_summary)
         vec_lsi = self.lsi[vec_bow]
 
@@ -118,7 +143,7 @@ def evaluation():
 
     for bug in bugzilla.get_bugs():
         if duplicates[bug["id"]]:
-            similar_bugs = similarity.get_similar_bugs(bug["id"])
+            similar_bugs = similarity.get_similar_bugs(bug)
 
             # Recall
             for item in duplicates[bug["id"]]:
