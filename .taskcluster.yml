@@ -35,7 +35,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python
+          image: python:3.6
           command:
             - "/bin/bash"
             - "-lcx"
