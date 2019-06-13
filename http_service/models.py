@@ -19,7 +19,7 @@ from bugbug.models import load_model as bugbug_load_model
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
+MODELS_NAMES = ["defectenhancementtask", "component", "regression", "stepstoreproduce"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
