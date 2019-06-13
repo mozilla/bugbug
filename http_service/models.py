@@ -109,9 +109,9 @@ def classify_bug(
 
     for i, bug_id in enumerate(bugs.keys()):
         data = {
-            "probs": probs_list[i],
-            "indexes": indexes_list[i],
-            "suggestions": suggestions_list[i],
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "suggestion": suggestions_list[i],
         }
 
         encoded_data = json.dumps(data)
