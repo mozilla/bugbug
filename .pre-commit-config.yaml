@@ -35,4 +35,5 @@ repos:
     hooks:
     -   id: check-hooks-apply
     -   id: check-useless-excludes
-python_version: python3.6
+default_language_version:
+    python: python3.7

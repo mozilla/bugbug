@@ -19,7 +19,7 @@ from bugbug.models import load_model as bugbug_load_model
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
+MODELS_NAMES = ["defectenhancementtask", "component", "regression", "stepstoreproduce"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -74,7 +74,7 @@ def classify_bug(
     # the token here
     bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla._download(bug_ids)
+    bugs = bugzilla.get(bug_ids)
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
     redis = Redis.from_url(redis_url)
@@ -109,9 +109,9 @@ def classify_bug(
 
     for i, bug_id in enumerate(bugs.keys()):
         data = {
-            "probs": probs_list[i],
-            "indexes": indexes_list[i],
-            "suggestions": suggestions_list[i],
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "suggestion": suggestions_list[i],
         }
 
         encoded_data = json.dumps(data)
