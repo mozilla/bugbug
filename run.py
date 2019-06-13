@@ -28,7 +28,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--classifier",
-        help="Type of the classifier",
+        help="Type of the classifier. Only used for component classification.",
         choices=["default", "nn"],
         default="default",
     )
@@ -50,8 +50,6 @@ def main(args):
         args.goal, "" if args.classifier == "default" else args.classifier
     )
 
-    model_class_name = args.goal
-
     if args.goal == "component":
         if args.classifier == "default":
             model_class_name = "component"
@@ -59,6 +57,8 @@ def main(args):
             model_class_name = "component_nn"
         else:
             raise ValueError(f"Unknown value {args.classifier}")
+    else:
+        model_class_name = args.goal
 
     model_class = get_model_class(model_class_name)
 
