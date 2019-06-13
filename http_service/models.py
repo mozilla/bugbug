@@ -74,7 +74,7 @@ def classify_bug(
     # the token here
     bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla._download(bug_ids)
+    bugs = bugzilla.get(bug_ids)
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
     redis = Redis.from_url(redis_url)
