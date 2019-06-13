@@ -1,3 +1,5 @@
-pytest==4.6.2
+pytest==4.6.3
+pytest-cov==2.7.1
+coverage==4.5.3
 pre-commit==1.17.0
 responses==0.10.6

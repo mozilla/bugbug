@@ -51,6 +51,9 @@ tasks:
         public/bugs.json.xz:
           path: /data/bugs.json.xz
           type: file
+        public/bugs.json.version:
+          path: /data/bugs.json.version
+          type: file
 
       features:
         taskclusterProxy:
@@ -82,7 +85,7 @@ tasks:
       command:
         - "/bin/bash"
         - "-lcx"
-        - "python -c 'from bugbug import bugzilla, db; db.download()' &&
+        - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
            python -m bugbug.bug_snapshot --verbose"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -361,15 +364,15 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.5
+      image: mozilla/taskboot:0.1.7
       command:
         - "/bin/sh"
         - "-lcxe"
-        - "git clone https://github.com/mozilla/bugbug /code &&
+        - "git clone --quiet https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --build-arg BUGBUG_VERSION=${version} &&
-           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --build-arg BUGBUG_VERSION=${version}"
+           taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
+           taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
       artifacts:
         public/bugbug:
           expires: {$fromNow: '2 weeks'}
@@ -402,7 +405,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.5
+      image: mozilla/taskboot:0.1.7
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
@@ -433,7 +436,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.5
+      image: mozilla/taskboot:0.1.7
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:

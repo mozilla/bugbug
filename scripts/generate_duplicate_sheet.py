@@ -17,10 +17,13 @@ try:
     with open("duplicate_test_bugs.json", "r") as f:
         test_bugs = json.load(f)
 except FileNotFoundError:
-    test_bugs = bugzilla.download_bugs_between(
-        datetime.now() - timedelta(days=21), datetime.now(), store=False
+    test_bug_ids = bugzilla.get_ids_between(
+        datetime.now() - timedelta(days=21), datetime.now()
     )
-    test_bugs = [bug for bug in test_bugs if not bug["creator"] in REPORTERS_TO_IGNORE]
+    test_bugs = bugzilla.get(test_bug_ids)
+    test_bugs = [
+        bug for bug in test_bugs.values() if not bug["creator"] in REPORTERS_TO_IGNORE
+    ]
     with open("duplicate_test_bugs.json", "w") as f:
         json.dump(test_bugs, f)
 

@@ -176,12 +176,18 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
             data = {}
 
             for feature_extractor in self.feature_extractors:
-                res = feature_extractor(commit)
+                if "bug_features" in feature_extractor.__module__:
+                    if not commit["bug"]:
+                        continue
 
-                feature_extractor_name = feature_extractor.__class__.__name__
+                    res = feature_extractor(commit["bug"])
+                else:
+                    res = feature_extractor(commit)
 
                 if res is None:
                     continue
+
+                feature_extractor_name = feature_extractor.__class__.__name__
 
                 if isinstance(res, dict):
                     for key, value in res.items():

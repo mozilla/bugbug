@@ -22,6 +22,30 @@ db.register(
     1,
 )
 
+PRODUCTS = (
+    "Add-on SDK",
+    "Android Background Services",
+    "Core",
+    "Core Graveyard",
+    "DevTools",
+    "DevTools Graveyard",
+    "External Software Affecting Firefox",
+    "Firefox",
+    "Firefox Graveyard",
+    "Firefox Build System",
+    "Firefox for Android",
+    "Firefox for Android Graveyard",
+    # 'Firefox for iOS',
+    "Firefox Health Report",
+    # 'Focus',
+    # 'Hello (Loop)',
+    "NSPR",
+    "NSS",
+    "Toolkit",
+    "Toolkit Graveyard",
+    "WebExtensions",
+)
+
 ATTACHMENT_INCLUDE_FIELDS = [
     "id",
     "is_obsolete",
@@ -59,7 +83,28 @@ def set_token(token):
     Bugzilla.TOKEN = token
 
 
-def _download(ids_or_query):
+def get_ids(params):
+    assert "include_fields" not in params or params["include_fields"] == "id"
+
+    old_CHUNK_SIZE = Bugzilla.BUGZILLA_CHUNK_SIZE
+    try:
+        Bugzilla.BUGZILLA_CHUNK_SIZE = 7000
+
+        all_ids = []
+
+        def bughandler(bug):
+            all_ids.append(bug["id"])
+
+        params["include_fields"] = "id"
+
+        Bugzilla(params, bughandler=bughandler).get_data().wait()
+    finally:
+        Bugzilla.BUGZILLA_CHUNK_SIZE = old_CHUNK_SIZE
+
+    return all_ids
+
+
+def get(ids_or_query):
     new_bugs = {}
 
     def bughandler(bug):
@@ -107,31 +152,7 @@ def _download(ids_or_query):
     return new_bugs
 
 
-def download_bugs_between(date_from, date_to, security=False, store=True):
-    products = {
-        "Add-on SDK",
-        "Android Background Services",
-        "Core",
-        "Core Graveyard",
-        "DevTools",
-        "DevTools Graveyard",
-        "External Software Affecting Firefox",
-        "Firefox",
-        "Firefox Graveyard",
-        "Firefox Build System",
-        "Firefox for Android",
-        "Firefox for Android Graveyard",
-        # 'Firefox for iOS',
-        "Firefox Health Report",
-        # 'Focus',
-        # 'Hello (Loop)',
-        "NSPR",
-        "NSS",
-        "Toolkit",
-        "Toolkit Graveyard",
-        "WebExtensions",
-    }
-
+def get_ids_between(date_from, date_to, security=False):
     params = {
         "f1": "creation_ts",
         "o1": "greaterthan",
@@ -139,57 +160,22 @@ def download_bugs_between(date_from, date_to, security=False, store=True):
         "f2": "creation_ts",
         "o2": "lessthan",
         "v2": date_to.strftime("%Y-%m-%d"),
-        "product": products,
+        "product": PRODUCTS,
     }
 
     if not security:
         params["f3"] = "bug_group"
         params["o3"] = "isempty"
 
-    params["count_only"] = 1
-    r = requests.get("https://bugzilla.mozilla.org/rest/bug", params=params)
-    r.raise_for_status()
-    count = r.json()["bug_count"]
-    del params["count_only"]
-
-    params["limit"] = 100
-    params["order"] = "bug_id"
-
-    old_bug_ids = set(bug["id"] for bug in get_bugs())
-
-    all_bugs = []
-
-    with tqdm(total=count) as progress_bar:
-        for offset in range(0, count, Bugzilla.BUGZILLA_CHUNK_SIZE):
-            params["offset"] = offset
-
-            new_bugs = _download(params)
-
-            progress_bar.update(Bugzilla.BUGZILLA_CHUNK_SIZE)
-
-            all_bugs += [bug for bug in new_bugs.values()]
-
-            if store:
-                db.append(
-                    BUGS_DB,
-                    (
-                        bug
-                        for bug_id, bug in new_bugs.items()
-                        if bug_id not in old_bug_ids
-                    ),
-                )
-
-    return all_bugs
+    return get_ids(params)
 
 
 def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
-    old_bugs = []
     new_bug_ids = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs():
         old_bug_count += 1
         if int(bug["id"]) in new_bug_ids:
-            old_bugs.append(bug)
             new_bug_ids.remove(bug["id"])
 
     print(f"Loaded {old_bug_count} bugs.")
@@ -204,7 +190,7 @@ def download_bugs(bug_ids, products=None, security=False):
     )
     with tqdm(total=len(new_bug_ids)) as progress_bar:
         for chunk in chunks:
-            new_bugs = _download(chunk)
+            new_bugs = get(chunk)
 
             progress_bar.update(len(chunk))
 
@@ -225,8 +211,8 @@ def download_bugs(bug_ids, products=None, security=False):
             db.append(BUGS_DB, new_bugs.values())
 
 
-def delete_bugs(bug_ids):
-    db.delete(BUGS_DB, lambda bug: bug["id"] in set(bug_ids))
+def delete_bugs(match):
+    db.delete(BUGS_DB, match)
 
 
 def count_bugs(bug_query_params):

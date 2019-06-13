@@ -716,23 +716,6 @@ def download_commits(repo_dir, rev_start=0, ret=False):
             return commits
 
 
-def get_commit_map():
-    commit_map = {}
-
-    for commit in get_commits():
-        bug_id = commit["bug_id"]
-
-        if not bug_id:
-            continue
-
-        if bug_id not in commit_map:
-            commit_map[bug_id] = []
-
-        commit_map[bug_id].append(commit)
-
-    return commit_map
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repository_dir", help="Path to the repository", action="store")

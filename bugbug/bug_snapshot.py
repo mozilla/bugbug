@@ -370,6 +370,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             and bug_id
             in (1362789, 1364792, 1431604, 1437528, 1445898, 1446685, 1460828, 1494587)
         )
+        or (field in ("platform", "op_sys") and bug_id == 568516)
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -419,9 +420,22 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
         or (flag == "checkin-" and obj_id == 8924974)
         or (
             flag == "webcompat?"
-            and obj_id in (1_360_579, 1356114, 1_364_598, 1375319, 1382724, 1405744)
+            and obj_id
+            in (
+                1360579,
+                1326028,
+                1356114,
+                1360238,
+                1364598,
+                1375319,
+                1382724,
+                1397981,
+                1405744,
+                1416728,
+            )
         )
         or (flag == "webcompat+" and obj_id in (1294490, 1443958, 1455894, 1456313))
+        or (flag == "webcompat-" and obj_id == 1419848)
         or (
             flag == "qe-verify-"
             and obj_id
@@ -636,7 +650,12 @@ def rollback(bug, when=None, do_assert=False):
 
                     for to_remove in change["added"].split(", "):
                         if field in FIELD_TYPES:
-                            to_remove = FIELD_TYPES[field](to_remove)
+                            try:
+                                to_remove = FIELD_TYPES[field](to_remove)
+                            except Exception:
+                                assert_or_log(
+                                    f"Exception while transforming {to_remove} from {bug[field]} (field {field})"
+                                )
 
                         if to_remove in bug[field]:
                             bug[field].remove(to_remove)
@@ -656,12 +675,27 @@ def rollback(bug, when=None, do_assert=False):
 
                     for to_add in change["removed"].split(", "):
                         if field in FIELD_TYPES:
-                            to_add = FIELD_TYPES[field](to_add)
+                            try:
+                                to_add = FIELD_TYPES[field](to_add)
+                            except Exception:
+                                assert_or_log(
+                                    f"Exception while transforming {to_add} from {bug[field]} (field {field})"
+                                )
                         bug[field].append(to_add)
             else:
                 if field in FIELD_TYPES:
-                    old_value = FIELD_TYPES[field](change["removed"])
-                    new_value = FIELD_TYPES[field](change["added"])
+                    try:
+                        old_value = FIELD_TYPES[field](change["removed"])
+                    except Exception:
+                        assert_or_log(
+                            f"Exception while transforming {change['removed']} from {bug[field]} (field {field})"
+                        )
+                    try:
+                        new_value = FIELD_TYPES[field](change["added"])
+                    except Exception:
+                        assert_or_log(
+                            f"Exception while transforming {change['added']} from {bug[field]} (field {field})"
+                        )
                 else:
                     old_value = change["removed"]
                     new_value = change["added"]
