@@ -12,3 +12,25 @@ class RegressionModel(DefectModel):
 
     def get_labels(self):
         return self.get_bugbug_labels("regression"), [0, 1]
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            regression_keyword_removed = False
+            for history in bug["history"]:
+                for change in history["changes"]:
+                    if change["field_name"] == "keywords":
+                        if "regression" in [
+                            k.strip() for k in change["removed"].split(",")
+                        ]:
+                            regression_keyword_removed = True
+                        elif "regression" in [
+                            k.strip() for k in change["added"].split(",")
+                        ]:
+                            regression_keyword_removed = False
+
+            if regression_keyword_removed:
+                classes[i] = 0 if not probabilities else [1.0, 0.0]
+
+        super().overwrite_classes(bugs, classes, probabilities)
+
+        return classes
