@@ -31,6 +31,10 @@ repos:
     hooks:
     -   id: codespell
         exclude_types: [json]
+-   repo: https://github.com/marco-c/taskcluster_yml_validator
+    rev: a7dcfc08db8467b07b87bf790e2ae9361895ec8a
+    hooks:
+    -   id: taskcluster_yml
 -   repo: meta
     hooks:
     -   id: check-hooks-apply
