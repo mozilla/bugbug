@@ -53,30 +53,34 @@ for bug in bugzilla.get_bugs():
         duplicates[dupe].add(bug["id"])
 
 
-class SimilarityLsi:
+def text_preprocess(text):
+
+    ps = PorterStemmer()
+    for func in cleanup_functions:
+        text = func(text)
+
+    text = re.sub("[^a-zA-Z0-9]", " ", text)
+    text = [
+        ps.stem(word)
+        for word in text.lower().split()
+        if word not in set(stopwords.words("english")) and len(word) > 1
+    ]
+    return text
+
+
+class TextualSimilarity:
     def __init__(self):
 
         self.corpus = []
         texts = []
-        self.ps = PorterStemmer()
 
         for bug in bugzilla.get_bugs():
             textual_features = bug["summary"] + " " + bug["comments"][0]["text"]
-            for func in cleanup_functions:
-                textual_features = func(textual_features)
-
-            # cleaning the texts
-            textual_features = re.sub("[^a-zA-Z0-9]", " ", textual_features)
+            textual_features = text_preprocess(textual_features)
             self.corpus.append([bug["id"], textual_features])
 
             # create bag of words
-            texts.append(
-                [
-                    self.ps.stem(word)
-                    for word in textual_features.lower().split()
-                    if word not in set(stopwords.words("english")) and len(word) > 1
-                ]
-            )
+            texts.append(textual_features)
 
         # Assigning unique integer ids to all words
         self.dictionary = Dictionary(texts)
@@ -101,18 +105,9 @@ class SimilarityLsi:
 
     def get_similar_bugs(self, query, default=10):
 
-        # consider first comment too
+        # consider both summary and first comment
         query_summary = query["summary"] + " " + query["comments"][0]["text"]
-        for func in cleanup_functions:
-            query_summary = func(query_summary)
-
-        # cleaning the texts
-        query_summary = re.sub("[^a-zA-Z0-9]", " ", query_summary)
-        query_summary = [
-            self.ps.stem(word)
-            for word in query_summary.lower().split()
-            if word not in set(stopwords.words("english")) and len(word) > 1
-        ]
+        query_summary = text_preprocess(query_summary)
 
         # transforming the query to latent 300-D space
         vec_bow = self.dictionary.doc2bow(query_summary)
@@ -135,7 +130,7 @@ class SimilarityLsi:
 
 
 def evaluation():
-    similarity = SimilarityLsi()
+    similarity = TextualSimilarity()
     total_r = 0
     hits_r = 0
     total_p = 0
