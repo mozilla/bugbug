@@ -40,7 +40,10 @@ def parse_args(args):
     )
     parser.add_argument("--token", help="Bugzilla token", action="store")
     parser.add_argument(
-        "--historical", help="Analyze historical bugs", action="store_true"
+        "--historical",
+        help="""Analyze historical bugs. Only used for defect, bugtype,
+                defectenhancementtask and regression tasks.""",
+        action="store_true",
     )
     return parser.parse_args(args)
 
@@ -53,10 +56,8 @@ def main(args):
     if args.goal == "component":
         if args.classifier == "default":
             model_class_name = "component"
-        elif args.classifier == "nn":
-            model_class_name = "component_nn"
         else:
-            raise ValueError(f"Unknown value {args.classifier}")
+            model_class_name = "component_nn"
     else:
         model_class_name = args.goal
 
@@ -66,7 +67,14 @@ def main(args):
         db.download(bugzilla.BUGS_DB)
         db.download(repository.COMMITS_DB)
 
-        if args.historical:
+        historical_supported_tasks = [
+            "defect",
+            "bugtype",
+            "defectenhancementtask",
+            "regression",
+        ]
+
+        if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
         else:
             model = model_class(args.lemmatization)
