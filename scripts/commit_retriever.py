@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import zstandard
 import os
 import shutil
 from logging import INFO, basicConfig, getLogger
 
 import hglib
+import zstandard
 
 from bugbug import db, repository
 

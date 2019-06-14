@@ -5,11 +5,11 @@
 
 import json
 import logging
-import zstandard
 import os
 from urllib.request import urlretrieve
 
 import requests
+import zstandard
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version

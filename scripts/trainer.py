@@ -4,6 +4,7 @@ import argparse
 import os
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
+
 import zstandard
 
 from bugbug import get_bugbug_version, model
