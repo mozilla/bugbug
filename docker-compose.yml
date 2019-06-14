@@ -107,14 +107,8 @@ services:
     environment:
       - BUGBUG_BUGZILLA_TOKEN
 
-  bugbug-spawn-data-pipeline:
+  bugbug-spawn-pipeline:
     build:
       context: infra/
-      dockerfile: dockerfile.spawn_data_pipeline
-    image: mozilla/bugbug-spawn-data-pipeline
-
-  bugbug-spawn-check-pipeline:
-    build:
-      context: infra/
-      dockerfile: dockerfile.spawn_check_pipeline
-    image: mozilla/bugbug-spawn-check-pipeline
+      dockerfile: dockerfile.spawn_pipeline
+    image: mozilla/bugbug-spawn-pipeline

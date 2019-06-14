@@ -38,7 +38,12 @@
             "features": {
                 "taskclusterProxy": true
             },
-            "image": "mozilla/bugbug-spawn-data-pipeline",
+            "command": [
+                "/usr/local/bin/python3",
+                "/code/spawn_data_pipeline.py",
+                "/code/data-pipeline.yml"
+            ],
+            "image": "mozilla/bugbug-spawn-pipeline",
             "maxRunTime": 7200
         },
         "priority": "normal",
