@@ -218,6 +218,13 @@ class Model:
         """
         return True
 
+    def get_extra_data(self):
+        """ Returns a dict that can be used for customers who need static
+        extra data for a given model. Must return a dict and JSON-encodable
+        types.
+        """
+        return {}
+
 
 class BugModel(Model):
     def __init__(self, lemmatization=False, commit_data=False):

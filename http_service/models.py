@@ -97,6 +97,8 @@ def classify_bug(
     # worker is forking before starting
     model = load_model(model_name)
 
+    model_extra_data = model.get_extra_data()
+
     # TODO: Classify could choke on a single bug which could make the whole
     # job to fails. What should we do here?
     probs = model.classify(list(bugs.values()), True)
@@ -112,6 +114,7 @@ def classify_bug(
             "prob": probs_list[i],
             "index": indexes_list[i],
             "suggestion": suggestions_list[i],
+            "extra_data": model_extra_data,
         }
 
         encoded_data = json.dumps(data)
