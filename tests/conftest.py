@@ -13,7 +13,7 @@ from bugbug import bugzilla, repository
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def mock_data(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("")
     os.mkdir(tmp_path / "data")

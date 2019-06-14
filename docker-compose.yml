@@ -50,6 +50,12 @@ services:
       dockerfile: infra/dockerfile.train_defectenhancementtask
     image: mozilla/bugbug-train-defectenhancementtask
 
+  bugbug-train-duplicate:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_duplicate
+    image: mozilla/bugbug-train-duplicate
+
   bugbug-train-regression:
     build:
       context: .
@@ -61,6 +67,12 @@ services:
       context: .
       dockerfile: infra/dockerfile.train_regressionrange
     image: mozilla/bugbug-train-regressionrange
+
+  bugbug-train-regressor:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.train_regressor
+    image: mozilla/bugbug-train-regressor
 
   bugbug-train-stepstoreproduce:
     build:
@@ -86,6 +98,14 @@ services:
         published: 8000
         protocol: tcp
         mode: host
+
+  bugbug-http-service-bg-worker:
+    build:
+      context: http_service
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
 
   bugbug-spawn-data-pipeline:
     build:

@@ -429,9 +429,8 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         self.cleanup_functions = cleanup_functions
         self.rollback = rollback
         self.rollback_when = rollback_when
-        self.commit_map = repository.get_commit_map() if commit_data else None
+        self.commit_data = commit_data
         self.merge_data = merge_data
-        assert self.commit_map is None or len(self.commit_map) > 0
 
     def fit(self, x, y=None):
         return self
@@ -440,21 +439,18 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         results = []
 
         reporter_experience_map = defaultdict(int)
-        author_ids = get_author_ids() if self.commit_map else None
+        author_ids = get_author_ids() if self.commit_data else None
+
+        already_rollbacked = set()
 
         def apply_transform(bug):
             bug_id = bug["id"]
 
-            if self.rollback:
+            if self.rollback and bug_id not in already_rollbacked:
                 bug = bug_snapshot.rollback(bug, self.rollback_when)
+                already_rollbacked.add(bug_id)
 
             data = {}
-
-            if self.commit_map is not None:
-                if bug_id in self.commit_map:
-                    bug["commits"] = self.commit_map[bug_id]
-                else:
-                    bug["commits"] = []
 
             for feature_extractor in self.feature_extractors:
                 res = feature_extractor(
@@ -498,9 +494,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             if isinstance(bug, dict):
                 results.append(apply_transform(bug))
             elif isinstance(bug, tuple):
+                result1 = apply_transform(bug[0])
+                result2 = apply_transform(bug[1])
                 if self.merge_data:
-                    result1 = apply_transform(bug[0])
-                    result2 = apply_transform(bug[1])
                     results.append(
                         {
                             "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}'

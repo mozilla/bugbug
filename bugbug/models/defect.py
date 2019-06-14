@@ -197,9 +197,13 @@ class DefectModel(BugModel):
                 for history in bug["history"]:
                     for change in history["changes"]:
                         if change["field_name"] == "keywords":
-                            if "regression" in change["removed"].split(","):
+                            if "regression" in [
+                                k.strip() for k in change["removed"].split(",")
+                            ]:
                                 classes[bug_id] = 0
-                            elif "regression" in change["added"].split(","):
+                            elif "regression" in [
+                                k.strip() for k in change["added"].split(",")
+                            ]:
                                 classes[bug_id] = 1
 
             # The conditions to use the 'defect' type are more restricted.

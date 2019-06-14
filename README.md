@@ -1,23 +1,43 @@
 # bugbug
 
-## Classifiers
-- **bug vs feature** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
+[![Task Status](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)
 
-- **defect vs feature vs task** - Extension of the previous classifier to detect differences also between feature requests and development tasks.
+Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks.
+
+More information on the Mozilla hacks blog:
+https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
+
+## Classifiers
+- **assignee** - The aim of this classifier is to suggest an appropriate assignee for a bug.
+
+- **backout** - The aim of this classifier is to detect patches that might be more likely to be backed-out (because of build or test failures). It could be used for test prioritization/scheduling purposes.
+
+- **bugtype** - The aim of this classifier is to classify bugs according to their type.
 
 - **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
 
+- **defect vs enhancement vs task** - Extension of the **defect** classifier to detect differences also between feature requests and development tasks.
+
+- **defect** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
+
+- **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
+
+- **duplicate** - The aim of this classifier is to detect duplicate bugs.
+
+- **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
+
 - **regression vs non-regression** - Bugzilla has a `regression` keyword to identify bugs that are regressions. Unfortunately it isn't used consistently. The aim of this classifier is to detect bugs that are regressions.
+
+- **regressionrange** - The aim of this classifier is to detect regression bugs that have a regression range vs those that don't.
+
+- **regressor** - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
+
+- **stepstoreproduce** - The aim of this classifier is to detect bugs that have steps to reproduce vs those that don't.
 
 - **tracking** - The aim of this classifier is to detect bugs to track.
 
 - **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
 
-- **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
-
-- **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
-
-- **bugtype** - The aim of this classifier is to classify bugs according to their type.
 
 ## Setup
 
@@ -26,11 +46,16 @@ Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 If you update the bugs database, run `zstd data/bugs.json`.
 If you update the commits database, run `zstd data/commits.json`.
 
+### Auto-formatting
+
+This project is using [pre-commit](https://pre-commit.com/). Please run `pre-commit install` to install the git pre-commit hooks on your clone.
+
+Every time you will try to commit, pre-commit will run checks on your files to make sure they follow our style standards and they aren't affected by some simple issues. If the checks fail, pre-commit won't let you commit.
+
 
 ## Usage
 
 Run the `run.py` script to perform training / classification. The first time `run.py` is executed, the `--train` argument should be used to automatically download databases containing bugs and commits data.
-
 
 ### Running the repository mining script
 
@@ -61,9 +86,3 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/nlp` contains utility functions for NLP;
 - `bugbug/labels.py` contains utility functions for handling labels;
 - `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
-
-## Auto-formatting setup
-
-This project is using [pre-commit](https://pre-commit.com/). Please run `pre-commit install` to install the git pre-commit hooks on your clone.
-
-Then every time you will try to commit, it will check that the files are correctly formatted before letting you commit.

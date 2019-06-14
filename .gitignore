@@ -6,6 +6,7 @@ sheets/
 
 .pytest_cache/
 *.pyc
+.coverage
 
 # Distribution / packaging
 .Python

@@ -6,15 +6,16 @@
 import argparse
 import csv
 import os
+import sys
 from datetime import datetime, timedelta
 
 import numpy as np
 
-from bugbug import repository  # noqa
-from bugbug import bugzilla, db
+from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
 
-if __name__ == "__main__":
+
+def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--lemmatization",
@@ -27,7 +28,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--classifier",
-        help="Type of the classifier",
+        help="Type of the classifier. Only used for component classification.",
         choices=["default", "nn"],
         default="default",
     )
@@ -39,30 +40,41 @@ if __name__ == "__main__":
     )
     parser.add_argument("--token", help="Bugzilla token", action="store")
     parser.add_argument(
-        "--historical", help="Analyze historical bugs", action="store_true"
+        "--historical",
+        help="""Analyze historical bugs. Only used for defect, bugtype,
+                defectenhancementtask and regression tasks.""",
+        action="store_true",
     )
-    args = parser.parse_args()
+    return parser.parse_args(args)
 
+
+def main(args):
     model_file_name = "{}{}model".format(
         args.goal, "" if args.classifier == "default" else args.classifier
     )
 
-    model_class_name = args.goal
-
     if args.goal == "component":
         if args.classifier == "default":
             model_class_name = "component"
-        elif args.classifier == "nn":
-            model_class_name = "component_nn"
         else:
-            raise ValueError(f"Unknown value {args.classifier}")
+            model_class_name = "component_nn"
+    else:
+        model_class_name = args.goal
 
     model_class = get_model_class(model_class_name)
 
     if args.train:
-        db.download()
+        db.download(bugzilla.BUGS_DB)
+        db.download(repository.COMMITS_DB)
 
-        if args.historical:
+        historical_supported_tasks = [
+            "defect",
+            "bugtype",
+            "defectenhancementtask",
+            "regression",
+        ]
+
+        if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
         else:
             model = model_class(args.lemmatization)
@@ -129,3 +141,7 @@ if __name__ == "__main__":
         ) as f:
             writer = csv.writer(f)
             writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main(parse_args(sys.argv[1:]))

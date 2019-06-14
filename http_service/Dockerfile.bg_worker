@@ -11,4 +11,9 @@ COPY . /code/bugbug_http_service/
 # Load the models
 WORKDIR /code/
 
-CMD gunicorn -b 0.0.0.0:$PORT bugbug_http_service.app --preload --timeout 30 -w 3
+ARG CHECK_MODELS
+ENV CHECK_MODELS="${CHECK_MODELS}"
+
+RUN bash /code/bugbug_http_service/ensure_models.sh
+
+CMD rq worker high default low -u $REDIS_URL

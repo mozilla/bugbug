@@ -73,11 +73,11 @@ def main():
     tasks = []
 
     with open(args.data_pipeline_json) as pipeline_file:
-        raw_tasks = yaml.load(pipeline_file.read())
+        raw_tasks = yaml.safe_load(pipeline_file.read())
 
     for task in raw_tasks["tasks"]:
         # Try render the task template
-        context = {}
+        context = {"version": os.getenv("TAG", "latest")}
         payload = jsone.render(task, context)
 
         # We need to generate new unique task ids for taskcluster to be happy
@@ -88,7 +88,7 @@ def main():
         task_internal_id = payload.pop("ID")
 
         if task_internal_id in id_mapping:
-            raise ValueError("Conflicting IDs {}".format(task_internal_id))
+            raise ValueError(f"Conflicting IDs {task_internal_id}")
 
         id_mapping[task_internal_id] = task_id
 
@@ -113,9 +113,9 @@ def main():
         for task_id, task_payload in tasks:
             queue.createTask(task_id, task_payload)
 
-        print("https://tools.taskcluster.net/task-group-inspector/#/" + task_group_id)
+        print(f"https://tools.taskcluster.net/task-group-inspector/#/{task_group_id}")
     except taskcluster.exceptions.TaskclusterAuthFailure as e:
-        print("TaskclusterAuthFailure: {}".format(e.body), file=sys.stderr)
+        print(f"TaskclusterAuthFailure: {e.body}", file=sys.stderr)
         raise
 
 

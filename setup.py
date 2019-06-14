@@ -11,27 +11,11 @@ here = os.path.dirname(__file__)
 
 
 def read_requirements(file_):
-    requires = []
-    links = []
     with open(os.path.join(here, file_)) as f:
-        for line in f.readlines():
-            line = line.strip()
-
-            if line.startswith("https://"):
-                links.append(line + "-1.0.0")
-                extras = ""
-                if "[" in line:
-                    extras = "[" + line.split("[")[1].split("]")[0] + "]"
-                line = line.split("#")[1].split("egg=")[1] + extras
-            elif line == "" or line.startswith("#") or line.startswith("-"):
-                continue
-            line = line.split("#")[0].strip()
-            requires.append(line)
-
-    return sorted(list(set(requires))), links
+        return sorted(list(set(line.split("#")[0].strip() for line in f)))
 
 
-install_requires, dependency_links = read_requirements("requirements.txt")
+install_requires = read_requirements("requirements.txt")
 
 
 with open(os.path.join(here, "VERSION")) as f:
@@ -43,12 +27,7 @@ extras = ["nlp", "nn"]
 extras_require = {}
 
 for extra in extras:
-    extras_install, extra_links = read_requirements("extra-%s-requirements.txt" % extra)
-
-    # Merge the dependency links
-    dependency_links.extend(extra_links)
-
-    extras_require[extra] = extras_install
+    extras_require[extra] = read_requirements("extra-%s-requirements.txt" % extra)
 
 
 setup(
@@ -59,7 +38,6 @@ setup(
     author_email="mcastelluccio@mozilla.com",
     install_requires=install_requires,
     extras_require=extras_require,
-    dependency_links=dependency_links,
     packages=find_packages(exclude=["contrib", "docs", "tests"]),
     include_package_data=True,
     license="MPL2",
@@ -72,7 +50,7 @@ setup(
         ]
     },
     classifiers=[
-        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3 :: Only",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     ],

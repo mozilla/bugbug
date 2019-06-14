@@ -3,21 +3,25 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import logging
+import zstandard
 import os
 from urllib.request import urlretrieve
 
 import requests
-import zstandard
+from redis import Redis
 
+from bugbug import bugzilla, get_bugbug_version
 from bugbug.models import load_model as bugbug_load_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
 
-MODELS_NAMES = ["defectenhancementtask", "component", "regression"]
+MODELS_NAMES = ["defectenhancementtask", "component", "regression", "stepstoreproduce"]
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
+DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
 def load_model(model):
@@ -31,9 +35,10 @@ def retrieve_model(name):
     file_name = f"{name}model"
     file_path = os.path.join(MODELS_DIR, file_name)
 
-    base_url = BASE_URL.format(name)
-    model_url = f"{base_url}/{file_name}.zst"
+    base_model_url = BASE_URL.format(name, f"v{get_bugbug_version()}")
+    model_url = f"{base_model_url}/{file_name}.zst"
     LOGGER.info(f"Checking ETAG of {model_url}")
+
     r = requests.head(model_url, allow_redirects=True)
     r.raise_for_status()
     new_etag = r.headers["ETag"]
@@ -60,3 +65,60 @@ def retrieve_model(name):
         LOGGER.info(f"ETAG for {model_url} is ok")
 
     return file_path
+
+
+def classify_bug(
+    model_name, bug_ids, bugzilla_token, expiration=DEFAULT_EXPIRATION_TTL
+):
+    # This should be called in a process worker so it should be safe to set
+    # the token here
+    bug_ids_set = set(map(int, bug_ids))
+    bugzilla.set_token(bugzilla_token)
+    bugs = bugzilla.get(bug_ids)
+
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
+    redis = Redis.from_url(redis_url)
+
+    missing_bugs = bug_ids_set.difference(bugs.keys())
+
+    for bug_id in missing_bugs:
+        redis_key = f"result_{model_name}_{bug_id}"
+
+        # TODO: Find a better error format
+        encoded_data = json.dumps({"available": False})
+
+        redis.set(redis_key, encoded_data)
+        redis.expire(redis_key, expiration)
+
+    if not bugs:
+        return "NOK"
+
+    # TODO: Cache the model in the process memory, it's quite hard as the RQ
+    # worker is forking before starting
+    model = load_model(model_name)
+
+    # TODO: Classify could choke on a single bug which could make the whole
+    # job to fails. What should we do here?
+    probs = model.classify(list(bugs.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.clf._le.inverse_transform(indexes)
+
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
+
+    for i, bug_id in enumerate(bugs.keys()):
+        data = {
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "suggestion": suggestions_list[i],
+        }
+
+        encoded_data = json.dumps(data)
+
+        redis_key = f"result_{model_name}_{bug_id}"
+
+        redis.set(redis_key, encoded_data)
+        redis.expire(redis_key, expiration)
+
+    return "OK"

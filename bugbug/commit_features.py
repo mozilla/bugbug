@@ -107,7 +107,7 @@ class author_experience(object):
             f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
             ],
-            "seniority_author": commit["seniority_author"],
+            "seniority_author": commit["seniority_author"] / 86400,
         }
 
 
@@ -176,12 +176,18 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
             data = {}
 
             for feature_extractor in self.feature_extractors:
-                res = feature_extractor(commit)
+                if "bug_features" in feature_extractor.__module__:
+                    if not commit["bug"]:
+                        continue
 
-                feature_extractor_name = feature_extractor.__class__.__name__
+                    res = feature_extractor(commit["bug"])
+                else:
+                    res = feature_extractor(commit)
 
                 if res is None:
                     continue
+
+                feature_extractor_name = feature_extractor.__class__.__name__
 
                 if isinstance(res, dict):
                     for key, value in res.items():

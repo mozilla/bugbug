@@ -8,11 +8,17 @@ tasks:
     workerType: releng-svc-compute
     payload:
       maxRunTime: 86400
-      image: mozilla/bugbug-commit-retrieval
+      image: mozilla/bugbug-commit-retrieval:${version}
 
       artifacts:
         public/commits.json.zst:
           path: /data/commits.json.zst
+          type: file
+        public/commits.json.version:
+          path: /data/commits.json.version
+          type: file
+        public/commit_experiences.pickle.zst:
+          path: /data/commit_experiences.pickle.zst
           type: file
       cache:
         bugbug-mercurial-repository: /cache
@@ -21,6 +27,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_commits.${version}
       - index.project.relman.bugbug.data_commits.latest
     metadata:
       name: bugbug commit retrieval
@@ -38,11 +45,14 @@ tasks:
       env:
         TC_SECRET_ID: project/relman/bugbug/production
       maxRunTime: 86400
-      image: mozilla/bugbug-bugs-retrieval
+      image: mozilla/bugbug-bugs-retrieval:${version}
 
       artifacts:
         public/bugs.json.zst:
           path: /data/bugs.json.zst
+          type: file
+        public/bugs.json.version:
+          path: /data/bugs.json.version
           type: file
 
       features:
@@ -53,6 +63,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.data_bugs.${version}
       - index.project.relman.bugbug.data_bugs.latest
     metadata:
       name: bugbug bugs retrieval
@@ -70,12 +81,12 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 3600
-      image: mozilla/bugbug-base
+      image: mozilla/bugbug-base:${version}
       command:
         - "/bin/bash"
         - "-lcx"
-        - "python -c 'from bugbug import bugzilla, db; db.download()' &&
-           python -m bugbug.bug_snapshot"
+        - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
+           python -m bugbug.bug_snapshot --verbose"
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
@@ -95,7 +106,7 @@ tasks:
       - commit-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-backout
+      image: mozilla/bugbug-train-backout:${version}
 
       artifacts:
         public/backoutmodel.zst:
@@ -105,6 +116,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_backout.${version}
       - index.project.relman.bugbug.train_backout.latest
     metadata:
       name: bugbug train backout model
@@ -122,7 +134,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-component
+      image: mozilla/bugbug-train-component:${version}
 
       artifacts:
         public/componentmodel.zst:
@@ -132,6 +144,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_component.${version}
       - index.project.relman.bugbug.train_component.latest
     metadata:
       name: bugbug train component model
@@ -149,7 +162,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-defectenhancementtask
+      image: mozilla/bugbug-train-defectenhancementtask:${version}
 
       artifacts:
         public/defectenhancementtaskmodel.zst:
@@ -159,6 +172,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_defectenhancementtask.${version}
       - index.project.relman.bugbug.train_defectenhancementtask.latest
     metadata:
       name: bugbug train defect/enhancement/task model
@@ -176,7 +190,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-regression
+      image: mozilla/bugbug-train-regression:${version}
 
       artifacts:
         public/regressionmodel.zst:
@@ -186,10 +200,39 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regression.${version}
       - index.project.relman.bugbug.train_regression.latest
     metadata:
       name: bugbug train regression model
       description: bugbug train regression model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-regressor
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - commit-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-regressor:${version}
+
+      artifacts:
+        public/regressormodel.zst:
+          path: /regressormodel.zst
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regressor.${version}
+      - index.project.relman.bugbug.train_regressor.latest
+    metadata:
+      name: bugbug train regressor model
+      description: bugbug train regressor model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -203,7 +246,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-tracking
+      image: mozilla/bugbug-train-tracking:${version}
 
       artifacts:
         public/trackingmodel.zst:
@@ -213,6 +256,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_tracking.${version}
       - index.project.relman.bugbug.train_tracking.latest
     metadata:
       name: bugbug train tracking model
@@ -230,7 +274,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-regressionrange
+      image: mozilla/bugbug-train-regressionrange:${version}
 
       artifacts:
         public/regressionrangemodel.zst:
@@ -240,6 +284,7 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_regressionrange.${version}
       - index.project.relman.bugbug.train_regressionrange.latest
     metadata:
       name: bugbug train regressionrange model
@@ -257,7 +302,7 @@ tasks:
       - bugs-retrieval
     payload:
       maxRunTime: 25200
-      image: mozilla/bugbug-train-stepstoreproduce
+      image: mozilla/bugbug-train-stepstoreproduce:${version}
 
       artifacts:
         public/stepstoreproducemodel.zst:
@@ -267,10 +312,39 @@ tasks:
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
       - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_stepstoreproduce.${version}
       - index.project.relman.bugbug.train_stepstoreproduce.latest
     metadata:
       name: bugbug train stepstoreproduce model
       description: bugbug train stepstoreproduce model
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+  - ID: train-duplicate
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '118 hours'}
+    expires: {$fromNow: '1 month'}
+    provisionerId: aws-provisioner-v1
+    workerType: releng-svc-compute
+    dependencies:
+      - bugs-retrieval
+    payload:
+      maxRunTime: 25200
+      image: mozilla/bugbug-train-duplicate:${version}
+
+      artifacts:
+        public/duplicatemodel.zst:
+          path: /duplicatemodel.zst
+          type: file
+
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.relman.bugbug.train_duplicate.${version}
+      - index.project.relman.bugbug.train_duplicate.latest
+    metadata:
+      name: bugbug train duplicate model
+      description: bugbug train duplicate model
       owner: release-mgmt-analysis@mozilla.com
       source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -290,14 +364,15 @@ tasks:
       capabilities:
         privileged: true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.3
+      image: mozilla/taskboot:0.1.7
       command:
         - "/bin/sh"
         - "-lcxe"
-        - "git clone https://github.com/mozilla/bugbug /code &&
+        - "git clone --quiet https://github.com/mozilla/bugbug /code &&
            cd /code &&
            git checkout master &&
-           taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service"
+           taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
+           taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
       artifacts:
         public/bugbug:
           expires: {$fromNow: '2 weeks'}
@@ -330,7 +405,7 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.3
+      image: mozilla/taskboot:0.1.7
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
@@ -361,16 +436,14 @@ tasks:
         taskclusterProxy:
           true
       maxRunTime: 3600
-      image: mozilla/taskboot:0.1.3
+      image: mozilla/taskboot:0.1.7
       env:
         TASKCLUSTER_SECRET: project/relman/bugbug/deploy
       command:
-        - taskboot
-        - deploy-heroku
-        - --artifact-filter
-        - public/bugbug/bugbug-http-service.tar
-        - --heroku-app
-        - bugbug
+        - "/bin/sh"
+        - "-lcxe"
+        - "taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service.tar --heroku-app bugbug &&
+           taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service-bg-worker.tar --heroku-app bugbug --heroku-dyno-type worker"
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
