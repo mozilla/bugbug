@@ -41,7 +41,7 @@ def is_old_version(path):
 
 def extract_file(path):
     dctx = zstandard.ZstdDecompressor()
-    open(path, "wb") as output_f:
+    with open(path, "wb") as output_f:
         with open(f"{path}.zst", "rb") as input_f:
             dctx.copy_stream(input_f, output_f)
 
