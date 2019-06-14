@@ -337,3 +337,6 @@ class ComponentModel(BugModel):
             success = False
 
         return success
+
+    def get_extra_data(self):
+        return {"conflated_components_mapping": self.CONFLATED_COMPONENTS_MAPPING}
