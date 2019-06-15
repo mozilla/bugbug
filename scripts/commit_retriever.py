@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 
 import hglib
