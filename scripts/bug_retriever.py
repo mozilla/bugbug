@@ -67,7 +67,7 @@ class Retriever(object):
             else:
                 inconsistent_bugs_set = inconsistent_bugs
             inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs_set)
-            bug_ids = set(inconsistent_bugs_set)
+            bug_ids = set(inconsistent_bugs)
 
             if len(bug_ids) == 0:
                 break
