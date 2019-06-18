@@ -59,15 +59,15 @@ class Retriever(object):
         bugzilla.download_bugs(timespan_ids + labelled_bug_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
-        previously_inconsistent_bugs = []
         for i in range(3):
+            # We look for inconsistencies in all bugs first, then, on following passes,
+            # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
             if i == 0:
-                bugs = bugzilla.get_bugs()
-                previously_inconsistent_bugs = bug_snapshot.get_inconsistencies(bugs)
+                inconsistent_bugs_set = bugzilla.get_bugs()
             else:
-                bugs = previously_inconsistent_bugs
-                previously_inconsistent_bugs = bug_snapshot.get_inconsistencies(bugs)
-            bug_ids = set(previously_inconsistent_bugs)
+                inconsistent_bugs_set = inconsistent_bugs
+            inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs_set)
+            bug_ids = set(inconsistent_bugs_set)
 
             if len(bug_ids) == 0:
                 break
