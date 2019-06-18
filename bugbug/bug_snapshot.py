@@ -761,7 +761,7 @@ def get_inconsistencies(bugs):
         except Exception as e:
             print(bug["id"])
             print(e)
-            inconsistencies.append(bug["id"])
+            inconsistencies.append(bug)
 
     return inconsistencies
 
