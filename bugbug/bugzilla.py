@@ -115,6 +115,23 @@ def get(ids_or_query):
 
         new_bugs[bug_id].update(bug)
 
+        new_bugs[bug_id].update(bug)
+
+        request_url = "https://bugzilla.mozilla.org/rest/bug/{}?include_fields=history,comments,attachments".format(
+            bug_id
+        )
+
+        bugs_json = requests.get(request_url, params=None).json()
+
+        # Printing bugs json to check values
+        print(bugs_json)
+
+        # # new_bugs[bug_id]["comments"] = bugs_json["bugs"]["comments"]
+        #
+        # new_bugs[bug_id]["history"] = bugs_json["bugs"]["history"]
+        #
+        # new_bugs[bug_id]["attachments"] = bugs_json["bugs"]["attachments"]
+
     def commenthandler(bug, bug_id):
         bug_id = int(bug_id)
 
