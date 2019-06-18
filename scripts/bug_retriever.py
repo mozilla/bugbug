@@ -59,23 +59,21 @@ class Retriever(object):
         bugzilla.download_bugs(timespan_ids + labelled_bug_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
+        inconsistent_bugs = bugzilla.get_bugs()
         for i in range(3):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
-            if i == 0:
-                inconsistent_bugs = bug_snapshot.get_inconsistencies(bugzilla.get_bugs())
-            else:
-                inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs)
-            inconsistent_bugs_ids = set(list(map(lambda bug: bug["id"], inconsistent_bugs)))
+            inconsistent_bugs = bug_snapshot.get_inconsistencies(inconsistent_bugs)
+            inconsistent_bug_ids = set(bug["id"] for bug in inconsistent_bugs)
 
-            if len(inconsistent_bugs_ids) == 0:
+            if len(inconsistent_bug_ids) == 0:
                 break
 
             logger.info(
-                f"Re-downloading {len(inconsistent_bugs_ids)} bugs, as they were inconsistent"
+                f"Re-downloading {len(inconsistent_bug_ids)} bugs, as they were inconsistent"
             )
-            bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bugs_ids)
-            bugzilla.download_bugs(inconsistent_bugs_ids)
+            bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
+            bugzilla.download_bugs(inconsistent_bug_ids)
 
         self.compress_file("data/bugs.json")
 
