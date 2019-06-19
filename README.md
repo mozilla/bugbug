@@ -43,8 +43,6 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 
-If you update the bugs database, run `zstd data/bugs.json`.
-If you update the commits database, run `zstd data/commits.json`.
 
 ### Auto-formatting
 
