@@ -43,7 +43,6 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
 
-
 ### Auto-formatting
 
 This project is using [pre-commit](https://pre-commit.com/). Please run `pre-commit install` to install the git pre-commit hooks on your clone.
