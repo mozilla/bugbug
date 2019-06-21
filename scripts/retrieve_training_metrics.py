@@ -7,7 +7,7 @@ from os.path import abspath
 import requests
 
 LATEST_URI = "train_{}.latest"
-VERSIONNED_URI = "train_{}.{}"
+VERSIONED_URI = "train_{}.{}"
 DATED_VERSIONED_URI = "train_{}.{}.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.{}/artifacts/public/metrics.json"
 
@@ -41,7 +41,7 @@ def main():
     if not args.version:
         index_uri = LATEST_URI.format(args.model)
     elif not args.date:
-        index_uri = VERSIONNED_URI.format(args.model, args.version)
+        index_uri = VERSIONED_URI.format(args.model, args.version)
     else:
         index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
 
