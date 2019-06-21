@@ -138,6 +138,7 @@ class Model:
 
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
+
         print(f"No confidence threshold - {len(y_test)} classified")
         print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
