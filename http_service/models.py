@@ -14,7 +14,7 @@ import requests
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version
-from bugbug.models import load_model as bugbug_load_model
+from bugbug.models import load_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -25,9 +25,23 @@ BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{}
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
-def load_model(model):
-    # TODO: Do not crash when the asked model is not one of the trained models
-    return bugbug_load_model(model, MODELS_DIR)
+MODEL_CACHE = {}
+
+
+def get_model(model_name):
+    if model_name not in MODEL_CACHE:
+        print("Recreating the model in cache")
+        model = load_model(model_name, MODELS_DIR)
+
+        MODEL_CACHE[model_name] = model
+        return model
+
+    return MODEL_CACHE[model_name]
+
+
+def preload_models():
+    for model in MODELS_NAMES:
+        get_model(model)
 
 
 def retrieve_model(name):
@@ -93,9 +107,7 @@ def classify_bug(
     if not bugs:
         return "NOK"
 
-    # TODO: Cache the model in the process memory, it's quite hard as the RQ
-    # worker is forking before starting
-    model = load_model(model_name)
+    model = get_model(model_name)
 
     model_extra_data = model.get_extra_data()
 
