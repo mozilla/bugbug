@@ -115,56 +115,18 @@ def get(ids_or_query):
 
         new_bugs[bug_id].update(bug)
 
-        new_bugs[bug_id].update(bug)
-
         request_url = "https://bugzilla.mozilla.org/rest/bug/{}?include_fields=history,comments,attachments".format(
             bug_id
         )
-
         bugs_json = requests.get(request_url, params=None).json()
 
-        # Printing bugs json to check values
-        print(bugs_json)
+        new_bugs[bug_id]["comments"] = bugs_json["bugs"][0]["comments"]
 
-        # # new_bugs[bug_id]["comments"] = bugs_json["bugs"]["comments"]
-        #
-        # new_bugs[bug_id]["history"] = bugs_json["bugs"]["history"]
-        #
-        # new_bugs[bug_id]["attachments"] = bugs_json["bugs"]["attachments"]
+        new_bugs[bug_id]["history"] = bugs_json["bugs"][0]["history"]
 
-    def commenthandler(bug, bug_id):
-        bug_id = int(bug_id)
+        new_bugs[bug_id]["attachments"] = bugs_json["bugs"][0]["attachments"]
 
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["comments"] = bug["comments"]
-
-    def attachmenthandler(bug, bug_id):
-        bug_id = int(bug_id)
-
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["attachments"] = bug
-
-    def historyhandler(bug):
-        bug_id = int(bug["id"])
-
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["history"] = bug["history"]
-
-    Bugzilla(
-        ids_or_query,
-        bughandler=bughandler,
-        commenthandler=commenthandler,
-        comment_include_fields=COMMENT_INCLUDE_FIELDS,
-        attachmenthandler=attachmenthandler,
-        attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
-        historyhandler=historyhandler,
-    ).get_data().wait()
+    Bugzilla(ids_or_query, bughandler=bughandler).get_data().wait()
 
     return new_bugs
 
