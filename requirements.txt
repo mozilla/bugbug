@@ -7,10 +7,10 @@ xgboost==0.90
 requests==2.22.0
 imbalanced-learn==0.4.3
 python-hglib==2.6.1
-shap==0.29.1
+shap==0.29.2
 pandas==0.24.2
 rs_parsepatch==0.2.2
-tqdm==4.32.1
+tqdm==4.32.2
 python-dateutil==2.8.0
 zstandard==0.11.1
 taskcluster==7.0.1

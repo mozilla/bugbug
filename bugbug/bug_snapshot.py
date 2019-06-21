@@ -752,16 +752,16 @@ def rollback(bug, when=None, do_assert=False):
     return bug
 
 
-def get_inconsistencies():
+def get_inconsistencies(bugs):
     inconsistencies = []
 
-    for bug in bugzilla.get_bugs():
+    for bug in bugs:
         try:
             rollback(bug, do_assert=True)
         except Exception as e:
             print(bug["id"])
             print(e)
-            inconsistencies.append(bug["id"])
+            inconsistencies.append(bug)
 
     return inconsistencies
 
