@@ -8,7 +8,7 @@ import requests
 
 LATEST_URI = "train_{}.latest"
 VERSIONNED_URI = "train_{}.{}"
-DATED_VERSIONNED_URI = "train_{}.{}.{}"
+DATED_VERSIONED_URI = "train_{}.{}.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.{}/artifacts/public/metrics.json"
 
 
@@ -43,7 +43,7 @@ def main():
     elif not args.date:
         index_uri = VERSIONNED_URI.format(args.model, args.version)
     else:
-        index_uri = DATED_VERSIONNED_URI.format(args.model, args.version, args.date)
+        index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
 
     index_url = BASE_URL.format(index_uri)
     r = requests.get(index_url)
