@@ -112,6 +112,9 @@ tasks:
         public/backoutmodel.xz:
           path: /backoutmodel.xz
           type: file
+        public/metrics.json:
+          path: /metrics.json
+          type: file
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -139,6 +142,9 @@ tasks:
       artifacts:
         public/componentmodel.xz:
           path: /componentmodel.xz
+          type: file
+        public/metrics.json:
+          path: /metrics.json
           type: file
 
     routes:
@@ -168,6 +174,9 @@ tasks:
         public/defectenhancementtaskmodel.xz:
           path: /defectenhancementtaskmodel.xz
           type: file
+        public/metrics.json:
+          path: /metrics.json
+          type: file
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -195,6 +204,9 @@ tasks:
       artifacts:
         public/regressionmodel.xz:
           path: /regressionmodel.xz
+          type: file
+        public/metrics.json:
+          path: /metrics.json
           type: file
 
     routes:
@@ -224,6 +236,9 @@ tasks:
         public/regressormodel.xz:
           path: /regressormodel.xz
           type: file
+        public/metrics.json:
+          path: /metrics.json
+          type: file
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -251,6 +266,9 @@ tasks:
       artifacts:
         public/trackingmodel.xz:
           path: /trackingmodel.xz
+          type: file
+        public/metrics.json:
+          path: /metrics.json
           type: file
 
     routes:
@@ -280,6 +298,9 @@ tasks:
         public/regressionrangemodel.xz:
           path: /regressionrangemodel.xz
           type: file
+        public/metrics.json:
+          path: /metrics.json
+          type: file
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -308,6 +329,9 @@ tasks:
         public/stepstoreproducemodel.xz:
           path: /stepstoreproducemodel.xz
           type: file
+        public/metrics.json:
+          path: /metrics.json
+          type: file
 
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
@@ -335,6 +359,9 @@ tasks:
       artifacts:
         public/duplicatemodel.xz:
           path: /duplicatemodel.xz
+          type: file
+        public/metrics.json:
+          path: /metrics.json
           type: file
 
     routes:
