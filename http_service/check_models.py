@@ -8,7 +8,7 @@ import os
 import sys
 
 # Non-relative imports might be brittle
-from models import MODELS_NAMES, load_model
+from models import MODELS_NAMES, get_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -17,7 +17,7 @@ LOGGER = logging.getLogger()
 def check_models():
     for model_name in MODELS_NAMES:
         # Try loading the model
-        load_model(model_name)
+        get_model(model_name)
 
 
 if __name__ == "__main__":

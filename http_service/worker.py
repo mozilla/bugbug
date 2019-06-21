@@ -6,16 +6,21 @@
 
 import os
 import sys
-from os.path import dirname, join
+from os.path import abspath, dirname, join
 
 from redis import Redis
 from rq import Connection, Worker
 
-import http_service.models  # Need to import at with the same name
+sys.path.insert(0, abspath(join(dirname(__file__), "..")))
+
+# We need to make sure that the models.py file is imported with the same name
+# than in the HTTP docker container or the cache will not match. If we import
+# it as models, the cache will be located at
+# `sys.modules['models'].MODEL_CACHE` while the job will look the models in
+# `sys.modules['http_service.models'].MODEL_CACHE`
+import http_service.models  # noqa: E402 isort:skip
 
 # Preload libraries
-sys.path.insert(0, dirname(join(__file__, "..")))
-
 http_service.models.preload_models()
 
 # Provide queue names to listen to as arguments to this script,
