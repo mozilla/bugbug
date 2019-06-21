@@ -140,7 +140,10 @@ class Model:
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
-        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
+        print(confusion_matrix)
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
         # Evaluate results on the test set for some confidence thresholds.
