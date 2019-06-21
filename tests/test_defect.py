@@ -10,4 +10,4 @@ def test_get_defect_labels():
     model = DefectModel()
     classes, _ = model.get_labels()
     assert classes[1042414] == 1
-    assert not classes[1049816] == 1
+    assert classes[1049816] != 1
