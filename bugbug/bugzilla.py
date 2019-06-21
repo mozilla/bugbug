@@ -127,7 +127,6 @@ def get(ids_or_query):
         new_bugs[bug_id]["attachments"] = bugs_json["bugs"][0]["attachments"]
 
     Bugzilla(ids_or_query, bughandler=bughandler).get_data().wait()
-
     return new_bugs
 
 
