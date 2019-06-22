@@ -370,7 +370,7 @@ tasks:
         - "-lcxe"
         - "git clone --quiet https://github.com/mozilla/bugbug /code &&
            cd /code &&
-           git checkout master &&
+           git checkout ${version} &&
            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
       artifacts:

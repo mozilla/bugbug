@@ -2,11 +2,11 @@ ARG BUGBUG_VERSION=latest
 
 FROM mozilla/bugbug-base:$BUGBUG_VERSION
 
-COPY requirements.txt /code/bugbug_http_service/
+COPY requirements.txt /code/http_service/
 
-RUN pip install -r /code/bugbug_http_service/requirements.txt
+RUN pip install -r /code/http_service/requirements.txt
 
-COPY . /code/bugbug_http_service/
+COPY . /code/http_service/
 
 # Load the models
 WORKDIR /code/
@@ -14,6 +14,6 @@ WORKDIR /code/
 ARG CHECK_MODELS
 ENV CHECK_MODELS="${CHECK_MODELS}"
 
-RUN bash /code/bugbug_http_service/ensure_models.sh
+RUN bash /code/http_service/ensure_models.sh
 
-CMD rq worker high default low -u $REDIS_URL
+CMD python /code/http_service/worker.py high default low
