@@ -306,7 +306,8 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     )
     assert os.path.exists(
         os.path.join(
-            os.path.dirname(db_path), os.path.splitext(support_filename)[0] + ".zst.etag"
+            os.path.dirname(db_path),
+            os.path.splitext(support_filename)[0] + ".zst.etag",
         )
     )
 
