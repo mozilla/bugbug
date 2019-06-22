@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import json
+import lzma
+import zstandard
 import os
+import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
-
-import zstandard
 
 from bugbug import get_bugbug_version, model
 from bugbug.models import get_model_class
@@ -57,7 +59,12 @@ class Trainer(object):
         logger.info(f"Training *{model_name}* model")
 
         model_obj = model_class()
-        model_obj.train()
+        metrics = model_obj.train()
+
+        # Save the metrics as a file that can be uploaded as an artifact.
+        metric_file_path = "metrics.json"
+        with open(metric_file_path, "w") as metric_file:
+            json.dump(metrics, metric_file)
 
         logger.info(f"Training done")
 
