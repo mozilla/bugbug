@@ -22,6 +22,13 @@ def parse_args(args):
         help="Perform lemmatization (using spaCy)",
         action="store_true",
     )
+    parser.add_argument(
+        "--trainsize",
+        nargs="?",
+        default=14000,
+        type=int,
+        help="size of training set of duplicate model",
+    )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
         "--goal", help="Goal of the classifier", choices=MODELS.keys(), default="defect"
@@ -45,6 +52,7 @@ def parse_args(args):
                 defectenhancementtask and regression tasks.""",
         action="store_true",
     )
+
     return parser.parse_args(args)
 
 
@@ -76,6 +84,8 @@ def main(args):
 
         if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
+        elif args.goal == "duplicate":
+            model = model_class(args.trainsize, args.lemmatization)
         else:
             model = model_class(args.lemmatization)
         model.train()
