@@ -9,13 +9,13 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import commit_features, feature_cleanup, repository
+from bugbug import bug_features, commit_features, feature_cleanup, repository
 from bugbug.model import CommitModel
 
 
 class BackoutModel(CommitModel):
     def __init__(self, lemmatization=False):
-        CommitModel.__init__(self, lemmatization)
+        CommitModel.__init__(self, lemmatization, bug_data=True)
 
         self.calculate_importance = False
 
@@ -37,6 +37,16 @@ class BackoutModel(CommitModel):
             commit_features.components(),
             commit_features.directories(),
             commit_features.files(),
+            bug_features.product(),
+            bug_features.component(),
+            bug_features.severity(),
+            bug_features.priority(),
+            bug_features.has_crash_signature(),
+            bug_features.has_regression_range(),
+            bug_features.whiteboard(),
+            bug_features.keywords(),
+            bug_features.number_of_bug_dependencies(),
+            bug_features.blocked_bugs_number(),
         ]
 
         cleanup_functions = [
