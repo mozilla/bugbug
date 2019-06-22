@@ -102,10 +102,23 @@ def download(path, force=False, support_files_too=False):
             path_compressed = zst_path
             print(f"Downloading {url} to {path_compressed}")
             utils.download_check_etag(url, path_compressed)
+
         except requests.exceptions.HTTPError:
+            try:
+                url_xz = f"{os.path.splitext(url)[0]}.xz"
+                path_compressed = xz_path
+                print(f"Downloading {url_xz} to {path_compressed} instead")
+                utils.download_check_etag(url_xz, path_compressed)
+
+            except requests.exceptions.HTTPError:
+                print(f"{url} is not yet available to download")
+                raise
+
+    else:
+        if os.path.exists(zst_path) or not os.path.exists(xz_path):
+            path_compressed = zst_path
+        else:
             path_compressed = xz_path
-            print(f"Downloading {url} to {path_compressed} instead")
-            utils.download_check_etag(url, path_compressed)
 
     extract_file(path_compressed)
 
