@@ -58,8 +58,7 @@ class Trainer(object):
         model_obj = model_class()
         metrics = model_obj.train()
 
-        # Save the metrics as a file that could marked as an artifact by
-        # taskcluster
+        # Save the metrics as a file that can be uploaded as an artifact.
         metric_file_path = "metrics.json"
         with open(metric_file_path, "w") as metric_file:
             json.dump(metrics, metric_file)
