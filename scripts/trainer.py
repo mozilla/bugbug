@@ -2,12 +2,11 @@
 
 import argparse
 import json
-import lzma
-import zstandard
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
+
+import zstandard
 
 from bugbug import get_bugbug_version, model
 from bugbug.models import get_model_class
