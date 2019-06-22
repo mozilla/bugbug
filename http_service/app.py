@@ -8,15 +8,28 @@ import logging
 import os
 import uuid
 
+from apispec import APISpec
+from apispec.ext.marshmallow import MarshmallowPlugin
+from apispec_webframeworks.flask import FlaskPlugin
 from flask import Flask, jsonify, request
+from flask_cors import cross_origin
+from marshmallow import Schema, fields
 from redis import Redis
 from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
-from .models import classify_bug
+from .models import MODELS_NAMES, classify_bug
 
 API_TOKEN = "X-Api-Key"
+
+spec = APISpec(
+    title="Bugbug",
+    version="1.0.0",
+    openapi_version="3.0.2",
+    info=dict(description="Bugbug API"),
+    plugins=[FlaskPlugin(), MarshmallowPlugin()],
+)
 
 application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
@@ -27,6 +40,28 @@ BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
+
+
+class BugPrediction(Schema):
+    prob = fields.List(fields.Float())
+    index = fields.Integer()
+    suggestion = fields.Str()
+    extra_data = fields.Dict()
+
+
+class BugPredictionNotAvailableYet(Schema):
+    ready = fields.Boolean(enum=[False])
+
+
+class ModelName(Schema):
+    model_name = fields.Str(enum=MODELS_NAMES)
+
+
+spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
+spec.components.schema(
+    BugPredictionNotAvailableYet.__name__, schema=BugPredictionNotAvailableYet
+)
+spec.components.schema(ModelName.__name__, schema=ModelName)
 
 
 def get_job_id():
@@ -85,8 +120,44 @@ def get_bug_classification(model_name, bug_id):
     return None
 
 
-@application.route("/<model_name>/predict/<bug_id>")
+@application.route("/<model_name>/predict/<int:bug_id>")
+@cross_origin()
 def model_prediction(model_name, bug_id):
+    """
+    ---
+    get:
+      description: Classify a single bug using given model, answer either 200 if the bug is processed or 202 if at least the bug is being processed
+      parameters:
+      - name: model_name
+        in: path
+        schema: ModelName
+      - name: bug_id
+        in: path
+        schema:
+          type: integer
+          example: 123456
+      - in: header
+        name: X-Api-Key
+        schema:
+          type: string
+        required: true
+      responses:
+        200:
+          description: A single bug prediction
+          content:
+            application/json:
+              schema: BugPrediction
+        202:
+          description: A temporary answer for bug being processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                    enum: [False]
+    """
     headers = request.headers
     redis_conn.ping()
 
@@ -110,7 +181,70 @@ def model_prediction(model_name, bug_id):
 
 
 @application.route("/<model_name>/predict/batch", methods=["POST"])
+@cross_origin()
 def batch_prediction(model_name):
+    """
+    ---
+    post:
+      description: Post a batch of bug ids to classify, answer either 200 if all bugs are process or 202 if at least one bug is not processed
+      parameters:
+      - name: model_name
+        in: path
+        schema: ModelName
+      - in: header
+        name: X-Api-Key
+        schema:
+          type: string
+        required: true
+      requestBody:
+        description: The list of bugs to classify
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bugs:
+                  type: array
+                  items:
+                    type: integer
+            examples:
+              cat:
+                summary: An example of payload
+                value:
+                  bugs:
+                    [123456, 789012]
+      responses:
+        200:
+          description: A list of results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                example:
+                  123456: {}
+                  789012: {}
+        202:
+          description: A temporary answer for bug being processed
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                        enum: [False]
+                example:
+                  123456:
+                    extra_data: {}
+                    index: 0
+                    prob: [0]
+                    suggestion: string
+                  789012: {ready: False}
+
+    """
     headers = request.headers
 
     auth = headers.get(API_TOKEN)
@@ -144,4 +278,13 @@ def batch_prediction(model_name):
         # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
-    return jsonify(**data), status_code
+    return jsonify({"bugs": data}), status_code
+
+
+@application.route("/swagger")
+@cross_origin()
+def swagger():
+    for name, rule in application.view_functions.items():
+        spec.path(view=rule)
+
+    return jsonify(spec.to_dict())

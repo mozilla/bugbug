@@ -109,7 +109,8 @@ def classify_bug(
 
     model = get_model(model_name)
 
-    model_extra_data = model.get_extra_data()
+    # model_extra_data = model.get_extra_data()
+    model_extra_data = {}
 
     # TODO: Classify could choke on a single bug which could make the whole
     # job to fails. What should we do here?
