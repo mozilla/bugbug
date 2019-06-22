@@ -56,7 +56,7 @@ def extract_file(path):
                 shutil.copyfileobj(input_f, output_f)
 
         else:
-            assert False, f'Unexpected compression type: {compression_type}'
+            assert False, f"Unexpected compression type: {compression_type}"
 
 
 def download_support_file(path, file_name):
