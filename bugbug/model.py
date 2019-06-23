@@ -88,6 +88,8 @@ class Model:
         else:
             pipeline = self.clf
 
+        tracking_metrics = {}
+
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ["accuracy"]
@@ -99,6 +101,10 @@ class Model:
             print("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
+                tracking_metrics[f"test_{scoring}"] = {
+                    "mean": score.mean(),
+                    "std": score.std() * 2,
+                }
                 print(
                     f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
                 )
@@ -135,7 +141,10 @@ class Model:
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
-        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
+        print(confusion_matrix)
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
 
         # Evaluate results on the test set for some confidence thresholds.
@@ -169,6 +178,8 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+
+        return tracking_metrics
 
     @staticmethod
     def load(model_file_name):
