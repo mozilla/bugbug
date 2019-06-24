@@ -23,11 +23,11 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
-        "--trainsize",
+        "--training_set_size",
         nargs="?",
         default=14000,
         type=int,
-        help="size of training set of duplicate model",
+        help="The size of the training set for the duplicate model",
     )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
@@ -52,7 +52,6 @@ def parse_args(args):
                 defectenhancementtask and regression tasks.""",
         action="store_true",
     )
-
     return parser.parse_args(args)
 
 
@@ -85,7 +84,7 @@ def main(args):
         if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
         elif args.goal == "duplicate":
-            model = model_class(args.trainsize, args.lemmatization)
+            model = model_class(args.training_set_size, args.lemmatization)
         else:
             model = model_class(args.lemmatization)
         model.train()

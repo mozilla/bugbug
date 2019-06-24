@@ -29,8 +29,8 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
 
 class DuplicateModel(BugCoupleModel):
     def __init__(self, training_size, lemmatization=False):
-        self.NUM_DUPLICATES = training_size // 2
-        self.NUM_NONDUPS_NONDUPS = self.NUM_DUP_NONDUPS = training_size // 4
+        self.num_duplicates = training_size // 2
+        self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
         BugCoupleModel.__init__(self, lemmatization)
 
@@ -89,7 +89,7 @@ class DuplicateModel(BugCoupleModel):
 
                 duplicate_ids.append(duplicate_bug_id)
 
-                if duplicates_num < self.NUM_DUPLICATES:
+                if duplicates_num < self.num_duplicates:
                     classes[(bug_id, duplicate_bug_id)] = 1
                 duplicates_num += 1
 
@@ -99,29 +99,29 @@ class DuplicateModel(BugCoupleModel):
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        print(f"Number of duplicate labels is: {self.NUM_DUPLICATES}")
+        print(f"Number of duplicate labels is: {self.num_duplicates}")
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
-        while dup_nondup_num < self.NUM_DUP_NONDUPS:
+        while dup_nondup_num < self.num_dup_nondups:
             bug_id1 = random.choice(duplicate_ids)
             bug_id2 = random.choice(non_duplicate_ids)
 
             classes[(bug_id1, bug_id2)] = 0
             dup_nondup_num += 1
 
-        print(f"Number of hybrid labels is: {self.NUM_DUP_NONDUPS}")
+        print(f"Number of hybrid labels is: {self.num_dup_nondups}")
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
-        while nondup_nondup_num < self.NUM_DUP_NONDUPS:
+        while nondup_nondup_num < self.num_nondups_nondups:
             bug_id1 = random.choice(non_duplicate_ids)
             bug_id2 = random.choice(non_duplicate_ids)
             if bug_id1 != bug_id2:
                 classes[(bug_id1, bug_id2)] = 0
                 nondup_nondup_num += 1
 
-        print(f"Number of purely non-duplicate labels is: {self.NUM_NONDUPS_NONDUPS}")
+        print(f"Number of purely non-duplicate labels is: {self.num_nondups_nondups}")
 
         return classes, [0, 1]
 
