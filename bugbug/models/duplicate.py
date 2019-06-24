@@ -28,7 +28,7 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
 
 
 class DuplicateModel(BugCoupleModel):
-    def __init__(self, training_size, lemmatization=False):
+    def __init__(self, training_size=14000, lemmatization=False):
         self.num_duplicates = training_size // 2
         self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
