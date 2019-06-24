@@ -178,12 +178,11 @@ def test_download_zst(tmp_path, mock_zst):
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
 
-    mock_zst(db_path.with_suffix(db_path.suffix + ".zst"))
+    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    mock_zst(tmp_zst_path)
 
-    with open(db_path.with_suffix(db_path.suffix + ".zst"), "rb") as content:
+    with open(tmp_zst_path, "rb") as content:
         responses.add(responses.GET, url, status=200, body=content.read())
-
-    os.remove(db_path.with_suffix(db_path.suffix + ".zst"))
 
     db.download(db_path)
 
@@ -221,12 +220,11 @@ def test_download_xz(tmp_path, mock_xz):
         headers={"ETag": "123", "Accept-Encoding": "xz"},
     )
 
-    mock_xz(db_path.with_suffix(db_path.suffix + ".xz"))
+    tmp_xz_path = tmp_path / "prova_tmp.xz"
+    mock_xz(tmp_xz_path)
 
-    with open(db_path.with_suffix(db_path.suffix + ".xz"), "rb") as content:
+    with open(tmp_xz_path, "rb") as content:
         responses.add(responses.GET, url_xz, status=200, body=content.read())
-
-    os.remove(db_path.with_suffix(db_path.suffix + ".xz"))
 
     db.download(db_path)
 
@@ -236,7 +234,7 @@ def test_download_xz(tmp_path, mock_xz):
 
 
 @responses.activate
-def test_download_bad_format(tmp_path):
+def test_download_missing(tmp_path):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
 
@@ -291,12 +289,11 @@ def test_download_support_file_zst(tmp_path, mock_zst):
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
 
-    mock_zst(db_path.with_suffix(db_path.suffix + ".zst"))
+    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    mock_zst(tmp_zst_path)
 
-    with open(db_path.with_suffix(db_path.suffix + ".zst"), "rb") as content:
+    with open(tmp_zst_path, "rb") as content:
         responses.add(responses.GET, url, status=200, body=content.read())
-
-    os.remove(db_path.with_suffix(db_path.suffix + ".zst"))
 
     db.download_support_file(db_path, support_filename)
 
@@ -346,12 +343,11 @@ def test_download_support_file_xz(tmp_path, mock_xz):
         headers={"ETag": "123", "Accept-Encoding": "xz"},
     )
 
-    mock_xz(db_path.with_suffix(db_path.suffix + ".xz"))
+    tmp_xz_path = tmp_path / "prova_tmp.xz"
+    mock_xz(tmp_xz_path)
 
-    with open(db_path.with_suffix(db_path.suffix + ".xz"), "rb") as content:
+    with open(tmp_xz_path, "rb") as content:
         responses.add(responses.GET, url_xz_support, status=200, body=content.read())
-
-    os.remove(db_path.with_suffix(db_path.suffix + ".xz"))
 
     db.download_support_file(db_path, support_filename)
 
@@ -371,7 +367,7 @@ def test_download_support_file_xz(tmp_path, mock_xz):
 
 
 @responses.activate
-def test_download_support_file_bad_format(tmp_path, capfd):
+def test_download_support_file_missing(tmp_path, capfd):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
 
