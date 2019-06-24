@@ -23,7 +23,7 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
-        "--training_set_size",
+        "--training-set-size",
         nargs="?",
         default=14000,
         type=int,
