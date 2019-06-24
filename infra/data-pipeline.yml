@@ -19,14 +19,14 @@ tasks:
         image: mozilla/bugbug-commit-retrieval:${version}
 
         artifacts:
-          public/commits.json.xz:
-            path: /data/commits.json.xz
+          public/commits.json.zst:
+            path: /data/commits.json.zst
             type: file
           public/commits.json.version:
             path: /data/commits.json.version
             type: file
-          public/commit_experiences.pickle.xz:
-            path: /data/commit_experiences.pickle.xz
+          public/commit_experiences.pickle.zst:
+            path: /data/commit_experiences.pickle.zst
             type: file
         cache:
           bugbug-mercurial-repository: /cache
@@ -56,8 +56,8 @@ tasks:
         image: mozilla/bugbug-bugs-retrieval:${version}
 
         artifacts:
-          public/bugs.json.xz:
-            path: /data/bugs.json.xz
+          public/bugs.json.zst:
+            path: /data/bugs.json.zst
             type: file
           public/bugs.json.version:
             path: /data/bugs.json.version
@@ -117,8 +117,8 @@ tasks:
         image: mozilla/bugbug-train-backout:${version}
 
         artifacts:
-          public/backoutmodel.xz:
-            path: /backoutmodel.xz
+          public/backoutmodel.zst:
+            path: /backoutmodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -149,8 +149,8 @@ tasks:
         image: mozilla/bugbug-train-component:${version}
 
         artifacts:
-          public/componentmodel.xz:
-            path: /componentmodel.xz
+          public/componentmodel.zst:
+            path: /componentmodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -181,8 +181,8 @@ tasks:
         image: mozilla/bugbug-train-defectenhancementtask:${version}
 
         artifacts:
-          public/defectenhancementtaskmodel.xz:
-            path: /defectenhancementtaskmodel.xz
+          public/defectenhancementtaskmodel.zst:
+            path: /defectenhancementtaskmodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -213,8 +213,8 @@ tasks:
         image: mozilla/bugbug-train-regression:${version}
 
         artifacts:
-          public/regressionmodel.xz:
-            path: /regressionmodel.xz
+          public/regressionmodel.zst:
+            path: /regressionmodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -245,8 +245,8 @@ tasks:
         image: mozilla/bugbug-train-regressor:${version}
 
         artifacts:
-          public/regressormodel.xz:
-            path: /regressormodel.xz
+          public/regressormodel.zst:
+            path: /regressormodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -277,8 +277,8 @@ tasks:
         image: mozilla/bugbug-train-tracking:${version}
 
         artifacts:
-          public/trackingmodel.xz:
-            path: /trackingmodel.xz
+          public/trackingmodel.zst:
+            path: /trackingmodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -309,8 +309,8 @@ tasks:
         image: mozilla/bugbug-train-regressionrange:${version}
 
         artifacts:
-          public/regressionrangemodel.xz:
-            path: /regressionrangemodel.xz
+          public/regressionrangemodel.zst:
+            path: /regressionrangemodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -341,8 +341,8 @@ tasks:
         image: mozilla/bugbug-train-stepstoreproduce:${version}
 
         artifacts:
-          public/stepstoreproducemodel.xz:
-            path: /stepstoreproducemodel.xz
+          public/stepstoreproducemodel.zst:
+            path: /stepstoreproducemodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
@@ -373,8 +373,8 @@ tasks:
         image: mozilla/bugbug-train-duplicate:${version}
 
         artifacts:
-          public/duplicatemodel.xz:
-            path: /duplicatemodel.xz
+          public/duplicatemodel.zst:
+            path: /duplicatemodel.zst
             type: file
           public/metrics.json:
             path: /metrics.json
