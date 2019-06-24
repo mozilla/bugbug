@@ -284,26 +284,7 @@ def test_download_component_mapping():
         responses.HEAD,
         "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
-        headers={"ETag": "102"},
-    )
-
-    responses.add(
-        responses.GET,
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-        status=200,
-        json={"README.txt": ["Core", "General"]},
-    )
-
-    repository.download_component_mapping()
-    assert len(repository.path_to_component) == 1
-    assert repository.path_to_component["README.txt"] == "Core::General"
-
-    responses.reset()
-    responses.add(
-        responses.HEAD,
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-        status=200,
-        headers={"ETag": "102"},
+        headers={"ETag": "101"},
     )
 
     responses.add(
@@ -314,8 +295,9 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
-    assert len(repository.path_to_component) == 1
-    assert repository.path_to_component["README.txt"] == "Core::General"
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
 
 @responses.activate
