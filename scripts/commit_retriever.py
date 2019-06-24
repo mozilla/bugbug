@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import lzma
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 
 import hglib
+import zstandard
 
 from bugbug import db, repository
 
@@ -71,9 +70,10 @@ class Retriever(object):
         self.compress_file("data/commit_experiences.pickle")
 
     def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
-            with lzma.open(f"{path}.xz", "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def main():

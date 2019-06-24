@@ -5,12 +5,11 @@
 
 import json
 import logging
-import lzma
 import os
-import shutil
 from urllib.request import urlretrieve
 
 import requests
+import zstandard
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version
@@ -51,7 +50,7 @@ def retrieve_model(name):
     file_path = os.path.join(MODELS_DIR, file_name)
 
     base_model_url = BASE_URL.format(name, f"v{get_bugbug_version()}")
-    model_url = f"{base_model_url}/{file_name}.xz"
+    model_url = f"{base_model_url}/{file_name}.zst"
     LOGGER.info(f"Checking ETAG of {model_url}")
 
     r = requests.head(model_url, allow_redirects=True)
@@ -66,11 +65,12 @@ def retrieve_model(name):
 
     if old_etag != new_etag:
         LOGGER.info(f"Downloading the model from {model_url}")
-        urlretrieve(model_url, f"{file_path}.xz")
+        urlretrieve(model_url, f"{file_path}.zst")
 
-        with lzma.open(f"{file_path}.xz", "rb") as input_f:
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{file_path}.zst", "rb") as input_f:
             with open(file_path, "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+                dctx.copy_stream(input_f, output_f)
                 LOGGER.info(f"Written model in {file_path}")
 
         with open(f"{file_path}.etag", "w") as f:
