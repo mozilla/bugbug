@@ -7,6 +7,7 @@ import json
 import lzma
 import os
 import pickle
+from datetime import datetime
 from urllib.parse import urljoin
 
 import pytest
@@ -175,7 +176,11 @@ def test_download_zst(tmp_path, mock_zst):
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+        headers={
+            "ETag": "123",
+            "Accept-Encoding": "zstd",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     tmp_zst_path = tmp_path / "prova_tmp.zst"
@@ -185,6 +190,8 @@ def test_download_zst(tmp_path, mock_zst):
         responses.add(responses.GET, url, status=200, body=content.read())
 
     db.download(db_path)
+
+    assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert os.path.exists(db_path)
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
@@ -217,7 +224,7 @@ def test_download_xz(tmp_path, mock_xz):
         responses.HEAD,
         url_xz,
         status=200,
-        headers={"ETag": "123", "Accept-Encoding": "xz"},
+        headers={"ETag": "123", "Accept-Encoding": "xz", "Last-Modified": "2019-04-16"},
     )
 
     tmp_xz_path = tmp_path / "prova_tmp.xz"
@@ -227,6 +234,8 @@ def test_download_xz(tmp_path, mock_xz):
         responses.add(responses.GET, url_xz, status=200, body=content.read())
 
     db.download(db_path)
+
+    assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert os.path.exists(db_path)
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".xz"))
@@ -271,6 +280,9 @@ def test_download_missing(tmp_path):
 
     with pytest.raises(requests.exceptions.HTTPError):
         db.download(db_path)
+
+    with pytest.raises(Exception, match="Last-Modified is not available"):
+        db.last_modified(db_path)
 
 
 @responses.activate

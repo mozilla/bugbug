@@ -138,4 +138,7 @@ def download_check_etag(url, path):
 
 def get_last_modified(url):
     r = requests.head(url, allow_redirects=True)
+    if "Last-Modified" not in r.headers:
+        return None
+
     return dateutil.parser.parse(r.headers["Last-Modified"])
