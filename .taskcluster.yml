@@ -244,6 +244,40 @@ tasks:
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
+          taskId: {$eval: as_slugid("update_hook_annotate_pipeline")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-annotate
+            - assume:hook-id:project-relman/bugbug-annotate
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:0.1.7
+            env:
+              VERSION: {$eval: 'head_branch[10:]'}
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-annotate.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
+          metadata:
+            name: bugbug update annotate hook
+            description: bugbug update annotate hook
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
           taskId: {$eval: as_slugid("update_hook_data_pipeline")}
           dependencies:
             - {$eval: as_slugid("docker_push")}

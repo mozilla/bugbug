@@ -1,0 +1,36 @@
+version: 1
+tasks:
+  $let:
+    year: {$eval: 'now[0:4]'}
+    month: {$eval: 'now[5:7]'}
+    day: {$eval: 'now[8:10]'}
+    hour: {$eval: 'now[11:13]'}
+    minute: {$eval: 'now[14:16]'}
+    second: {$eval: 'now[17:19]'}
+  in:
+    - ID: microannotate-generate
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '72 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command: bugbug-microannotate-generate /cache/
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate repository generator
+        description: bugbug microannotate repository generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
