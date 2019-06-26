@@ -4,17 +4,73 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import random
+from itertools import islice
 
+import numpy as np
+from scipy import sparse
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import LinearSVC
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugCoupleModel
+from bugbug.utils import StructuredColumnTransformer
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
+
+
+class titletransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, vocab):
+        self.vectorizer = TfidfVectorizer()
+        self.vocab = vocab
+
+    def transform(self, df, y=None):
+        return self.vectorizer.transform(df)
+
+    def fit(self, X, y=None):
+        self.vectorizer.fit(self.vocab)
+        return self
+
+
+class similarity_calculator(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        pass
+
+    def transform(self, df, y=None):
+        similarity_title = np.expand_dims(
+            np.diagonal(
+                cosine_similarity(np.squeeze(df["title1"]), np.squeeze(df["title2"]))
+            ),
+            axis=1,
+        )
+        similarity_comment = np.expand_dims(
+            np.diagonal(
+                cosine_similarity(
+                    np.squeeze(df["first_comment1"]), np.squeeze(df["first_comment2"])
+                )
+            ),
+            axis=1,
+        )
+        return sparse.csr_matrix(
+            np.concatenate(
+                [
+                    np.squeeze(df["title1"]),
+                    np.squeeze(df["title2"]),
+                    np.squeeze(df["first_comment1"]),
+                    np.squeeze(df["first_comment2"]),
+                    similarity_title,
+                    similarity_comment,
+                ],
+                axis=1,
+            )
+        )
+
+    def fit(self, X, y=None):
+        return self
 
 
 class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
@@ -34,6 +90,12 @@ class DuplicateModel(BugCoupleModel):
 
         BugCoupleModel.__init__(self, lemmatization)
 
+        vocabulary = {"title": [], "first_comment": []}
+
+        for bug in islice(bugzilla.get_bugs(), 5000):
+            vocabulary["title"].append(bug["summary"])
+            vocabulary["first_comment"].append(bug["comments"][0]["text"])
+
         self.calculate_importance = False
 
         cleanup_functions = [
@@ -48,11 +110,30 @@ class DuplicateModel(BugCoupleModel):
 
         self.extraction_pipeline = Pipeline(
             [
-                ("bug_extractor", bug_features.BugExtractor([], cleanup_functions)),
                 (
-                    "union",
-                    ColumnTransformer([("text", self.text_vectorizer(), "text")]),
+                    "bug_extractor",
+                    bug_features.BugExtractor([], cleanup_functions, merge_data=False),
                 ),
+                (
+                    "structuredtransformer",
+                    StructuredColumnTransformer(
+                        [
+                            ("title1", titletransformer(vocabulary["title"]), "title1"),
+                            ("title2", titletransformer(vocabulary["title"]), "title2"),
+                            (
+                                "first_comment1",
+                                titletransformer(vocabulary["first_comment"]),
+                                "first_comment1",
+                            ),
+                            (
+                                "first_comment2",
+                                titletransformer(vocabulary["first_comment"]),
+                                "first_comment2",
+                            ),
+                        ]
+                    ),
+                ),
+                ("add_similarity_and_concat", similarity_calculator()),
             ]
         )
 
