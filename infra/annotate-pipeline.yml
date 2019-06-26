@@ -15,6 +15,8 @@ tasks:
       provisionerId: aws-provisioner-v1
       workerType: releng-svc
       payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
