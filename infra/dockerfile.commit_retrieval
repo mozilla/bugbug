@@ -1,7 +1,7 @@
 FROM mozilla/bugbug-base:latest
 
 # Mercurial need Python2 :(
-RUN apt-get update && apt-get install -y python-pip
+RUN apt-get update && apt-get install -y python-pip && rm -rf /var/lib/apt/lists/*
 
 RUN python2 -m pip install mercurial==4.8
 
