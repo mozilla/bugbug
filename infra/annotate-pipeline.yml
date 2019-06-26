@@ -18,7 +18,7 @@ tasks:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
         maxRunTime: 86400
-        image: mozilla/bugbug-base:${version}
+        image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
           - /cache/
