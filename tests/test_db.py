@@ -367,6 +367,30 @@ def test_download_support_file_xz(tmp_path, mock_xz):
 
 
 @responses.activate
+def test_download_version(tmp_path):
+    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, url_zst, 1, support_files=[])
+
+    responses.add(responses.HEAD, url_version, status=200, headers={"ETag": "123"})
+
+    responses.add(responses.GET, url_version, status=200, body="42")
+
+    db.download_version(db_path)
+
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version.etag"))
+
+    assert not db.is_old_version(db_path)
+
+    db.register(db_path, url_zst, 43, support_files=[])
+
+    assert db.is_old_version(db_path)
+
+
+@responses.activate
 def test_download_support_file_missing(tmp_path, capfd):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"

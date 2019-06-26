@@ -45,7 +45,6 @@ def extract_file(path):
     path, compression_type = os.path.splitext(path)
 
     with open(path, "wb") as output_f:
-
         if compression_type == ".zst":
             dctx = zstandard.ZstdDecompressor()
             with open(f"{path}.zst", "rb") as input_f:
@@ -67,8 +66,8 @@ def download_support_file(path, file_name):
         print(f"Downloading {url} to {path}")
         utils.download_check_etag(url, path)
 
-        extract_file(path)
-
+        if path.endswith(".zst") or path.endswith(".xz"):
+            extract_file(path)
     except requests.exceptions.HTTPError:
         try:
             url = f"{os.path.splitext(url)[0]}.xz"
