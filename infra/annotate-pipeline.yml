@@ -18,7 +18,8 @@ tasks:
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
-          - bugbug-microannotate-generate /cache/
+          - bugbug-microannotate-generate
+          - /cache/
         cache:
           bugbug-mercurial-repository: /cache
         features:
