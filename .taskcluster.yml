@@ -97,6 +97,7 @@ tasks:
                pip install --quiet -r requirements.txt &&
                pip install --quiet -r extra-nlp-requirements.txt &&
                pip install --quiet -r extra-nn-requirements.txt &&
+               pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
