@@ -159,7 +159,7 @@ def retry(operation, retries=5, wait_between_retries=30):
 
 
 class CustomJsonEncoder(json.JSONEncoder):
-    """ A custom Json Encoder to supports Numpy types
+    """ A custom Json Encoder to support Numpy types
     """
 
     def default(self, obj):
