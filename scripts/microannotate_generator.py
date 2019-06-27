@@ -45,15 +45,24 @@ class MicroannotateGenerator(object):
         git_user = get_secret("GIT_USER")
         git_password = get_secret("GIT_PASSWORD")
 
-        repo_url = (
+        repo_url = "https://github.com/marco-c/gecko-dev-wordified"
+        repo_push_url = (
             f"https://{git_user}:{git_password}@github.com/marco-c/gecko-dev-wordified"
         )
         git_repo_path = os.path.basename(repo_url)
 
         subprocess.run(["git", "clone", repo_url, git_repo_path], check=True)
-        subprocess.run(
-            ["git", "pull", repo_url, "master"], cwd=git_repo_path, check=True
-        )
+        try:
+            subprocess.run(
+                ["git", "pull", repo_url, "master"],
+                cwd=git_repo_path,
+                capture_output=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            # When the repo is empty.
+            if b"Couldn't find remote ref master" in e.stdout:
+                pass
 
         generator.generate(self.repo_dir, git_repo_path, limit=10000)
 
@@ -61,7 +70,7 @@ class MicroannotateGenerator(object):
             ["git", "config", "--global", "http.postBuffer", "12M"], check=True
         )
         subprocess.run(
-            ["git", "push", repo_url, "master"], cwd=git_repo_path, check=True
+            ["git", "push", repo_push_url, "master"], cwd=git_repo_path, check=True
         )
 
 
