@@ -15,6 +15,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla, repository
+from bugbug._classification import classification_report_imbalanced_values
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_iterator
 
@@ -98,7 +99,6 @@ class Model:
 
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
-            print("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
                 tracking_metrics[f"test_{scoring}"] = {
@@ -146,6 +146,11 @@ class Model:
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+        report = classification_report_imbalanced_values(
+            y_test, y_pred, labels=class_names
+        )
+
+        tracking_metrics["report"] = report
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:

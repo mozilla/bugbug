@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import json
 import os
 import time
 
@@ -155,3 +156,16 @@ def retry(operation, retries=5, wait_between_retries=30):
                 raise
 
             time.sleep(wait_between_retries)
+
+
+class CustomJsonEncoder(json.JSONEncoder):
+    """ A custom Json Encoder to supports Numpy types
+    """
+
+    def default(self, obj):
+        try:
+            return np.asscalar(obj)
+        except (ValueError, IndexError, AttributeError, TypeError):
+            pass
+
+        return super().default(self, obj)
