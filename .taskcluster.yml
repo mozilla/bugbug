@@ -268,7 +268,7 @@ tasks:
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-annotate.json &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-annotate.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
           metadata:
             name: bugbug update annotate hook
@@ -303,7 +303,7 @@ tasks:
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
@@ -339,7 +339,7 @@ tasks:
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-check-models-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
