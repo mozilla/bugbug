@@ -269,6 +269,7 @@ tasks:
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-annotate.json &&
+                 python infra/set_docker_image_version.py 'mozilla/bugbug-spawn-pipeline' $VERSION infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
           metadata:
             name: bugbug update annotate hook
@@ -304,6 +305,7 @@ tasks:
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
+                 python infra/set_docker_image_version.py 'mozilla/bugbug-spawn-pipeline' $VERSION infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
@@ -340,6 +342,7 @@ tasks:
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
+                 python infra/set_docker_image_version.py 'mozilla/bugbug-spawn-pipeline' $VERSION infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
