@@ -24,8 +24,6 @@ def classification_report_imbalanced_values(
 ):
     """Reimplementation of imblearn.metrics.classification_report_imbalanced
     to have access to the raw values. Copied from version 0.4.3"""
-    print("LOCALS", locals())
-
     if labels is None:
         labels = unique_labels(y_true, y_pred)
     else:

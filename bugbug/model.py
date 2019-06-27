@@ -99,6 +99,7 @@ class Model:
 
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
 
+            print("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
                 tracking_metrics[f"test_{scoring}"] = {
@@ -137,6 +138,7 @@ class Model:
                     f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                 )
 
+        print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
