@@ -11,7 +11,7 @@ import uuid
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields
 from redis import Redis
@@ -19,15 +19,31 @@ from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
+from bugbug import get_bugbug_version
+
 from .models import MODELS_NAMES, classify_bug
 
 API_TOKEN = "X-Api-Key"
 
+API_DESCRIPTION = """
+This is the documentation for the BubBug http service, the platform for Bugzilla Machine Learning project.
+
+# Introduction
+
+This service can be used to classify a given bug using one of pre-trained model.
+You can classify a single bug or a batch of bugs.
+The classification happens on background so you need to call back the service for getting the results.
+
+# Authentication
+
+Usage of this service needs an API-KEY, provided as a custom header named `X-API-Key`.
+"""
+
 spec = APISpec(
     title="Bugbug",
-    version="1.0.0",
+    version=get_bugbug_version(),
     openapi_version="3.0.2",
-    info=dict(description="Bugbug API"),
+    info=dict(description=API_DESCRIPTION),
     plugins=[FlaskPlugin(), MarshmallowPlugin()],
 )
 
@@ -127,6 +143,7 @@ def model_prediction(model_name, bug_id):
     ---
     get:
       description: Classify a single bug using given model, answer either 200 if the bug is processed or 202 if at least the bug is being processed
+      summary: Classify a single bug id
       parameters:
       - name: model_name
         in: path
@@ -187,6 +204,7 @@ def batch_prediction(model_name):
     ---
     post:
       description: Post a batch of bug ids to classify, answer either 200 if all bugs are process or 202 if at least one bug is not processed
+      summary: Classify a batch of bugs id
       parameters:
       - name: model_name
         in: path
@@ -222,8 +240,16 @@ def batch_prediction(model_name):
                 type: object
                 additionalProperties: true
                 example:
-                  123456: {}
-                  789012: {}
+                  123456:
+                    extra_data: {}
+                    index: 0
+                    prob: [0]
+                    suggestion: string
+                  789012:
+                    extra_data: {}
+                    index: 0
+                    prob: [0]
+                    suggestion: string
         202:
           description: A temporary answer for bug being processed
           content:
@@ -285,6 +311,14 @@ def batch_prediction(model_name):
 @cross_origin()
 def swagger():
     for name, rule in application.view_functions.items():
+        # Ignore static endpoint as it isn't documented with OpenAPI
+        if name == "static":
+            continue
         spec.path(view=rule)
 
     return jsonify(spec.to_dict())
+
+
+@application.route("/doc")
+def doc():
+    return render_template("doc.html")
