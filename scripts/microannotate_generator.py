@@ -8,7 +8,7 @@ from logging import INFO, basicConfig, getLogger
 import hglib
 from microannotate import generator
 
-from bugbug.utils import get_secret
+from bugbug.utils import get_secret, retry
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -51,13 +51,20 @@ class MicroannotateGenerator(object):
         )
         git_repo_path = os.path.basename(repo_url)
 
-        subprocess.run(["git", "clone", repo_url, git_repo_path], check=True)
+        retry(
+            lambda: subprocess.run(
+                ["git", "clone", repo_url, git_repo_path], check=True
+            )
+        )
+
         try:
-            subprocess.run(
-                ["git", "pull", repo_url, "master"],
-                cwd=git_repo_path,
-                capture_output=True,
-                check=True,
+            retry(
+                lambda: subprocess.run(
+                    ["git", "pull", repo_url, "master"],
+                    cwd=git_repo_path,
+                    capture_output=True,
+                    check=True,
+                )
             )
         except subprocess.CalledProcessError as e:
             # When the repo is empty.
@@ -66,11 +73,15 @@ class MicroannotateGenerator(object):
 
         generator.generate(self.repo_dir, git_repo_path, limit=10000)
 
-        subprocess.run(
-            ["git", "config", "--global", "http.postBuffer", "12M"], check=True
+        retry(
+            lambda: subprocess.run(
+                ["git", "config", "--global", "http.postBuffer", "12M"], check=True
+            )
         )
-        subprocess.run(
-            ["git", "push", repo_push_url, "master"], cwd=git_repo_path, check=True
+        retry(
+            lambda: subprocess.run(
+                ["git", "push", repo_push_url, "master"], cwd=git_repo_path, check=True
+            )
         )
 
 

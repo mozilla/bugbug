@@ -5,6 +5,7 @@
 
 import collections
 import os
+import time
 
 import dateutil.parser
 import numpy as np
@@ -142,3 +143,15 @@ def get_last_modified(url):
         return None
 
     return dateutil.parser.parse(r.headers["Last-Modified"])
+
+
+def retry(operation, retries=5, wait_between_retries=30):
+    while True:
+        try:
+            return operation()
+        except Exception:
+            retries -= 1
+            if retries == 0:
+                raise
+
+            time.sleep(wait_between_retries)
