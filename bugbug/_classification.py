@@ -29,22 +29,8 @@ def classification_report_imbalanced_values(
     else:
         labels = np.asarray(labels)
 
-    last_line_heading = "avg / total"
-
     if target_names is None:
         target_names = ["%s" % l for l in labels]
-    name_width = max(len(cn) for cn in target_names)
-    width = max(name_width, len(last_line_heading), digits)
-
-    headers = ["pre", "rec", "spe", "f1", "geo", "iba", "sup"]
-    fmt = "%% %ds" % width  # first column: class name
-    fmt += "  "
-    fmt += " ".join(["% 9s" for _ in headers])
-    fmt += "\n"
-
-    headers = [""] + headers
-    report = fmt % tuple(headers)
-    report += "\n"
 
     # Compute the different metrics
     # Precision/recall/f1
