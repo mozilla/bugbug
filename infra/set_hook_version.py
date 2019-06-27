@@ -11,13 +11,10 @@ import sys
 def main(raw_args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "docker_image",
-        metavar="docker-image",
+        "version",
+        metavar="version",
         type=str,
-        help="The name of the docker image to set version for",
-    )
-    parser.add_argument(
-        "version", metavar="version", type=str, help="The docker image version to set"
+        help="The version to set in the hook definition",
     )
     parser.add_argument(
         "hook_file",
@@ -35,8 +32,13 @@ def main(raw_args):
 
     task_image = task_payload.get("image")
 
-    if task_image and task_image.split(":", 1)[0] == args.docker_image:
-        task_payload["image"] = f"{args.docker_image}:{args.version}"
+    # 1) Insert or replace the environment variable
+    hook_env = task_payload["env"]
+    hook_env["TAG"] = args.version
+
+    # 2) Set the version for the hook docker image
+    if task_image and task_image.split(":", 1)[0] == "mozilla/bugbug-spawn-pipeline":
+        task_payload["image"] = f"mozilla/bugbug-spawn-pipeline:{args.version}"
 
     with open(args.hook_file, "w") as hook_file:
         json.dump(
