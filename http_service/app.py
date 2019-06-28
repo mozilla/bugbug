@@ -33,10 +33,6 @@ This is the documentation for the BubBug http service, the platform for Bugzilla
 This service can be used to classify a given bug using one of pre-trained model.
 You can classify a single bug or a batch of bugs.
 The classification happens on background so you need to call back the service for getting the results.
-
-# Authentication
-
-Usage of this service needs an API-KEY, provided as a custom header named `X-API-Key`.
 """
 
 spec = APISpec(
@@ -45,6 +41,7 @@ spec = APISpec(
     openapi_version="3.0.2",
     info=dict(description=API_DESCRIPTION),
     plugins=[FlaskPlugin(), MarshmallowPlugin()],
+    security=[{"api_key": []}],
 )
 
 application = Flask(__name__)
@@ -70,7 +67,11 @@ class BugPredictionNotAvailableYet(Schema):
 
 
 class ModelName(Schema):
-    model_name = fields.Str(enum=MODELS_NAMES)
+    model_name = fields.Str(enum=MODELS_NAMES, example="component")
+
+
+class UnauthorizedError(Schema):
+    message = fields.Str(default="Error, missing X-API-KEY")
 
 
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
@@ -78,6 +79,11 @@ spec.components.schema(
     BugPredictionNotAvailableYet.__name__, schema=BugPredictionNotAvailableYet
 )
 spec.components.schema(ModelName.__name__, schema=ModelName)
+spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
+
+
+api_key_scheme = {"type": "apiKey", "in": "header", "name": "X-API-Key"}
+spec.components.security_scheme("api_key", api_key_scheme)
 
 
 def get_job_id():
@@ -153,11 +159,6 @@ def model_prediction(model_name, bug_id):
         schema:
           type: integer
           example: 123456
-      - in: header
-        name: X-Api-Key
-        schema:
-          type: string
-        required: true
       responses:
         200:
           description: A single bug prediction
@@ -174,6 +175,11 @@ def model_prediction(model_name, bug_id):
                   ready:
                     type: boolean
                     enum: [False]
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
     """
     headers = request.headers
     redis_conn.ping()
@@ -181,7 +187,7 @@ def model_prediction(model_name, bug_id):
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify({"message": "Error, missing X-API-KEY"}), 401
+        return jsonify(UnauthorizedError().dump({}).data), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
@@ -209,11 +215,6 @@ def batch_prediction(model_name):
       - name: model_name
         in: path
         schema: ModelName
-      - in: header
-        name: X-Api-Key
-        schema:
-          type: string
-        required: true
       requestBody:
         description: The list of bugs to classify
         content:
@@ -269,14 +270,18 @@ def batch_prediction(model_name):
                     prob: [0]
                     suggestion: string
                   789012: {ready: False}
-
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
     """
     headers = request.headers
 
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify({"message": "Error, missing X-API-KEY"}), 401
+        return jsonify(UnauthorizedError().dump({}).data), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
