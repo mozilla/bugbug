@@ -634,6 +634,10 @@ def rollback(bug, when=None, do_assert=False):
 
                 continue
 
+            # We don't support comment tags yet.
+            if field == "comment_tag":
+                continue
+
             if change["added"] != "---":
                 if field not in bug and not is_expected_inconsistent_field(
                     field, last_product, bug["id"]
