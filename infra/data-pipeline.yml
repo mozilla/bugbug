@@ -408,7 +408,7 @@ tasks:
         capabilities:
           privileged: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         command:
           - "/bin/sh"
           - "-lcxe"
@@ -449,7 +449,7 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
@@ -480,14 +480,13 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
           - "/bin/sh"
           - "-lcxe"
-          - "taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service.tar --heroku-app bugbug &&
-             taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service-bg-worker.tar --heroku-app bugbug --heroku-dyno-type worker"
+          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar'"
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
