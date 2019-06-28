@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import json
-import lzma
 import os
 import pickle
 from datetime import datetime
@@ -120,32 +119,10 @@ def mock_zst():
     return create_zst_file
 
 
-@pytest.fixture
-def mock_xz():
-    def create_xz_file(db_path):
-        with lzma.open(db_path, "wb") as output_f:
-            output_f.write(b'{"Hello": "World"}')
-
-    return create_xz_file
-
-
 def test_extract_db_zst(tmp_path, mock_zst):
     db_path = tmp_path / f"prova.zst"
 
     mock_zst(db_path)
-
-    db.extract_file(db_path)
-
-    with open(f"{os.path.splitext(db_path)[0]}", "rb") as f:
-        file_decomp = json.load(f)
-
-    assert file_decomp == {"Hello": "World"}
-
-
-def test_extract_db_xz(tmp_path, mock_xz):
-    db_path = tmp_path / f"prova.xz"
-
-    mock_xz(db_path)
 
     db.extract_file(db_path)
 
@@ -199,83 +176,21 @@ def test_download_zst(tmp_path, mock_zst):
 
 
 @responses.activate
-def test_download_xz(tmp_path, mock_xz):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
-    url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
-
-    db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1)
-
-    responses.add(
-        responses.HEAD,
-        url_zst,
-        status=404,
-        headers={"ETag": "123", "Accept-Encoding": "zstd"},
-    )
-
-    responses.add(
-        responses.GET,
-        url_zst,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
-    )
-
-    responses.add(
-        responses.HEAD,
-        url_xz,
-        status=200,
-        headers={"ETag": "123", "Accept-Encoding": "xz", "Last-Modified": "2019-04-16"},
-    )
-
-    tmp_xz_path = tmp_path / "prova_tmp.xz"
-    mock_xz(tmp_xz_path)
-
-    with open(tmp_xz_path, "rb") as content:
-        responses.add(responses.GET, url_xz, status=200, body=content.read())
-
-    db.download(db_path)
-
-    assert db.last_modified(db_path) == datetime(2019, 4, 16)
-
-    assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".xz"))
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".xz.etag"))
-
-
-@responses.activate
 def test_download_missing(tmp_path):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
-    url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
+    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
     db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1)
+    db.register(db_path, url, 1)
 
     responses.add(
         responses.HEAD,
-        url_zst,
+        url,
         status=404,
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
 
     responses.add(
-        responses.GET,
-        url_zst,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
-    )
-
-    responses.add(
-        responses.HEAD,
-        url_xz,
-        status=404,
-        headers={"ETag": "123", "Accept-Encoding": "xz"},
-    )
-
-    responses.add(
-        responses.GET,
-        url_xz,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
+        responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
     with pytest.raises(requests.exceptions.HTTPError):
@@ -287,16 +202,16 @@ def test_download_missing(tmp_path):
 
 @responses.activate
 def test_download_support_file_zst(tmp_path, mock_zst):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support.zst"
-    url = urljoin(url_zst, support_filename)
+    url_support = urljoin(url, support_filename)
 
     db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1, support_files=[support_filename])
+    db.register(db_path, url, 1, support_files=[support_filename])
 
     responses.add(
         responses.HEAD,
-        url,
+        url_support,
         status=200,
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
@@ -305,7 +220,7 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     mock_zst(tmp_zst_path)
 
     with open(tmp_zst_path, "rb") as content:
-        responses.add(responses.GET, url, status=200, body=content.read())
+        responses.add(responses.GET, url_support, status=200, body=content.read())
 
     db.download_support_file(db_path, support_filename)
 
@@ -317,63 +232,6 @@ def test_download_support_file_zst(tmp_path, mock_zst):
         os.path.join(
             os.path.dirname(db_path),
             os.path.splitext(support_filename)[0] + ".zst.etag",
-        )
-    )
-
-
-@responses.activate
-def test_download_support_file_xz(tmp_path, mock_xz):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
-    url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
-
-    support_filename = "support_mock.zst"
-
-    url_zst_support = urljoin(url_zst, support_filename)
-    url_xz_support = urljoin(url_xz, f"{os.path.splitext(support_filename)[0]}.xz")
-
-    db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1, support_files=[support_filename])
-
-    responses.add(
-        responses.HEAD,
-        url_zst_support,
-        status=404,
-        headers={"ETag": "123", "Accept-Encoding": "zstd"},
-    )
-
-    responses.add(
-        responses.GET,
-        url_zst_support,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
-    )
-
-    responses.add(
-        responses.HEAD,
-        url_xz_support,
-        status=200,
-        headers={"ETag": "123", "Accept-Encoding": "xz"},
-    )
-
-    tmp_xz_path = tmp_path / "prova_tmp.xz"
-    mock_xz(tmp_xz_path)
-
-    with open(tmp_xz_path, "rb") as content:
-        responses.add(responses.GET, url_xz_support, status=200, body=content.read())
-
-    db.download_support_file(db_path, support_filename)
-
-    assert os.path.exists(
-        os.path.join(
-            os.path.dirname(db_path), f"{os.path.splitext(support_filename)[0]}.xz"
-        )
-    )
-    assert os.path.exists(
-        os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
-    )
-    assert os.path.exists(
-        os.path.join(
-            os.path.dirname(db_path), os.path.splitext(support_filename)[0] + ".xz.etag"
         )
     )
 
@@ -404,41 +262,23 @@ def test_download_version(tmp_path):
 
 @responses.activate
 def test_download_support_file_missing(tmp_path, capfd):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
-    url_xz = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz"
-
+    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support_mock.zst"
-
-    url_zst_support = urljoin(url_zst, support_filename)
-    url_xz_support = urljoin(url_xz, f"{os.path.splitext(support_filename)[0]}.xz")
+    url_support = urljoin(url, support_filename)
 
     db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1, support_files=[support_filename])
+    db.register(db_path, url, 1, support_files=[support_filename])
 
     responses.add(
         responses.HEAD,
-        url_zst_support,
+        url_support,
         status=404,
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
 
     responses.add(
         responses.GET,
-        url_zst_support,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
-    )
-
-    responses.add(
-        responses.HEAD,
-        url_xz_support,
-        status=404,
-        headers={"ETag": "123", "Accept-Encoding": "xz"},
-    )
-
-    responses.add(
-        responses.GET,
-        url_xz_support,
+        url_support,
         status=404,
         body=requests.exceptions.HTTPError("HTTP error"),
     )
@@ -447,7 +287,7 @@ def test_download_support_file_missing(tmp_path, capfd):
 
     out, err = capfd.readouterr()
     path = os.path.join(
-        os.path.dirname(db_path), f"{os.path.splitext(support_filename)[0]}.xz"
+        os.path.dirname(db_path), f"{os.path.splitext(support_filename)[0]}.zst"
     )
     assert (
         out.split("\n")[-2]
