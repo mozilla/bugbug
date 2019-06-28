@@ -6,6 +6,8 @@
 import argparse
 import sys
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 from bugbug.similarity import LSISimilarity, NeighborsSimilarity
 
 
@@ -20,8 +22,10 @@ def parse_args(args):
 def main(args):
     if args.algorithm == "lsi":
         model = LSISimilarity()
-    elif args.algorithm == "neighbors":
+    elif args.algorithm == "neighbors_tfidf":
         model = NeighborsSimilarity()
+    elif args.algorithm == "neighbors_tfidf_bigrams":
+        model = NeighborsSimilarity(vectorizer=TfidfVectorizer(ngram_range=(1, 2)))
 
     model.evaluation()
 

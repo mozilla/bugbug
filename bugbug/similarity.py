@@ -154,8 +154,8 @@ class LSISimilarity(BaseSimilarity):
 
 
 class NeighborsSimilarity(BaseSimilarity):
-    def __init__(self, k=10, vectorizer=TfidfVectorizer):
-        self.vectorizer = TfidfVectorizer()
+    def __init__(self, k=10, vectorizer=TfidfVectorizer()):
+        self.vectorizer = vectorizer
         self.similarity_calculator = NearestNeighbors(n_neighbors=k)
         text = []
         self.bug_ids = []
@@ -172,4 +172,6 @@ class NeighborsSimilarity(BaseSimilarity):
         processed_query = self.vectorizer.transform([get_text(query)])
         _, indices = self.similarity_calculator.kneighbors(processed_query)
 
-        return [self.bug_ids[ind] for ind in indices[0]]
+        return [
+            self.bug_ids[ind] for ind in indices[0] if self.bug_ids[ind] != query["id"]
+        ]
