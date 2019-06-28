@@ -209,7 +209,45 @@ def batch_prediction(model_name):
     """
     ---
     post:
-      description: Post a batch of bug ids to classify, answer either 200 if all bugs are process or 202 if at least one bug is not processed
+      description: >
+        Post a batch of bug ids to classify, answer either 200 if all bugs are
+        processed or 202 if at least one bug is not processed.
+        <br/><br/>
+        Starts by sending a batch of bugs ids like this:<br/>
+        ```
+        {"bugs": [123, 456]}
+        ```<br/><br>
+
+        You will likely get a 202 answer that indicates that no result is
+        available yet for any of the bug id you provided with the following
+        body:<br/>
+
+        ```
+        {"bugs": {"123": {ready: False}, "456": {ready: False}}}
+        ```<br/><br/>
+
+        Call back the same endpoint with the same bug ids a bit later, and you
+        will get the results.<br/><br/>
+
+        You might get the following output if some bugs are not available:
+        <br/>
+
+        ```
+        {"bugs": {"123": {"available": False}}}
+        ```<br/><br/>
+
+        And you will get the following output once the bugs are available:
+        <br/>
+        ```
+        {"bugs": {"456": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
+        ```<br/><br/>
+
+        Please be aware that the results might be interleaved, so the
+        following output is valid:
+        <br/>
+        ```
+        {"bugs": {"123": {"available": False}, "456": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
+        ```
       summary: Classify a batch of bugs id
       parameters:
       - name: model_name
@@ -241,16 +279,17 @@ def batch_prediction(model_name):
                 type: object
                 additionalProperties: true
                 example:
-                  123456:
-                    extra_data: {}
-                    index: 0
-                    prob: [0]
-                    suggestion: string
-                  789012:
-                    extra_data: {}
-                    index: 0
-                    prob: [0]
-                    suggestion: string
+                  bugs:
+                    123456:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
+                    789012:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
         202:
           description: A temporary answer for bug being processed
           content:
@@ -264,12 +303,13 @@ def batch_prediction(model_name):
                         type: boolean
                         enum: [False]
                 example:
-                  123456:
-                    extra_data: {}
-                    index: 0
-                    prob: [0]
-                    suggestion: string
-                  789012: {ready: False}
+                  bugs:
+                    123456:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
+                    789012: {ready: False}
         401:
           description: API key is missing
           content:
