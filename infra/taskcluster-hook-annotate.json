@@ -1,0 +1,62 @@
+{
+    "schedule": [
+        "0 0 0 * * *"
+    ],
+    "metadata": {
+        "description": "",
+        "name": "BugBug annotate pipeline",
+        "owner": "mcastelluccio@mozilla.com"
+    },
+    "task": {
+        "created": {
+            "$fromNow": "0 seconds"
+        },
+        "deadline": {
+            "$fromNow": "2 hours"
+        },
+        "expires": {
+            "$fromNow": "1 month"
+        },
+        "extra": {},
+        "metadata": {
+            "description": "",
+            "name": "BugBug annotate pipeline",
+            "owner": "mcastelluccio@mozilla.com",
+            "source": "https://github.com/mozilla/bugbug"
+        },
+        "payload": {
+            "artifacts": {},
+            "cache": {},
+            "capabilities": {},
+            "env": {},
+            "features": {
+                "taskclusterProxy": true
+            },
+            "command": [
+                "/usr/local/bin/python3",
+                "/code/spawn_data_pipeline.py",
+                "/code/annotate-pipeline.yml"
+            ],
+            "image": "mozilla/bugbug-spawn-pipeline",
+            "maxRunTime": 7200
+        },
+        "priority": "normal",
+        "provisionerId": "aws-provisioner-v1",
+        "retries": 5,
+        "routes": [
+            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
+            "notify.irc-channel.#bugbug.on-failed"
+        ],
+        "schedulerId": "-",
+        "scopes": [
+            "assume:hook-id:project-relman/bugbug-annotate",
+            "secrets:get:project/relman/bugbug/production"
+        ],
+        "tags": {},
+        "workerType": "taskcluster-generic"
+    },
+    "triggerSchema": {
+        "additionalProperties": true,
+        "type": "object"
+    }
+}

@@ -47,9 +47,8 @@ class Retriever(object):
             logger.info("pushlog database doesn't exist")
 
         # Pull and update, to make sure the pushlog is generated.
-        hg = hglib.open(self.repo_dir)
-        hg.pull(update=True)
-        hg.close()
+        with hglib.open(self.repo_dir) as hg:
+            hg.pull(update=True)
 
         db.download_version(repository.COMMITS_DB)
         if not db.is_old_version(repository.COMMITS_DB):

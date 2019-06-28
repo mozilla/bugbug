@@ -4,7 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import json
 import os
+import time
 
 import dateutil.parser
 import numpy as np
@@ -138,4 +140,32 @@ def download_check_etag(url, path):
 
 def get_last_modified(url):
     r = requests.head(url, allow_redirects=True)
+    if "Last-Modified" not in r.headers:
+        return None
+
     return dateutil.parser.parse(r.headers["Last-Modified"])
+
+
+def retry(operation, retries=5, wait_between_retries=30):
+    while True:
+        try:
+            return operation()
+        except Exception:
+            retries -= 1
+            if retries == 0:
+                raise
+
+            time.sleep(wait_between_retries)
+
+
+class CustomJsonEncoder(json.JSONEncoder):
+    """ A custom Json Encoder to support Numpy types
+    """
+
+    def default(self, obj):
+        try:
+            return np.asscalar(obj)
+        except (ValueError, IndexError, AttributeError, TypeError):
+            pass
+
+        return super().default(self, obj)
