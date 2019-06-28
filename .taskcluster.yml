@@ -295,15 +295,13 @@ tasks:
                 true
             maxRunTime: 3600
             image: mozilla/taskboot:0.1.8
-            env:
-              VERSION: {$eval: 'head_branch[10:]'}
             command:
               - "/bin/sh"
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-pipeline-start.json &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
@@ -331,15 +329,13 @@ tasks:
                 true
             maxRunTime: 3600
             image: mozilla/taskboot:0.1.8
-            env:
-              VERSION: {$eval: 'head_branch[10:]'}
             command:
               - "/bin/sh"
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-check-models-start.json &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-check-models-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
