@@ -399,7 +399,6 @@ tasks:
       provisionerId: aws-provisioner-v1
       workerType: releng-svc
       dependencies:
-        - rollback-test-task
         - train-tracking
         - train-regression
         - train-defectenhancementtask
