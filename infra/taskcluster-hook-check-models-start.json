@@ -34,7 +34,7 @@
             },
             "command": [
                 "/usr/local/bin/python3",
-                "/code/spawn_data_pipeline.py",
+                "/code/spawn_pipeline.py",
                 "/code/check-pipeline.yml"
             ],
             "image": "mozilla/bugbug-spawn-pipeline",
