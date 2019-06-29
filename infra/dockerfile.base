@@ -1,4 +1,4 @@
-FROM python:3.7.3-slim
+FROM python:3.7.3-alpine
 
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
