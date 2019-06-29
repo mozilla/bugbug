@@ -99,10 +99,6 @@ def last_modified(path):
     last_modified = utils.get_last_modified(url)
 
     if last_modified is None:
-        base_url = os.path.splitext(url)[0]
-        last_modified = utils.get_last_modified(f"{base_url}.zst")
-
-    if last_modified is None:
         raise Exception("Last-Modified is not available")
 
     return last_modified
