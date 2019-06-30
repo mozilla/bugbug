@@ -6,6 +6,9 @@
 import re
 from collections import defaultdict
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
+
 from bugbug import bugzilla, feature_cleanup
 
 OPT_MSG_MISSING = (
@@ -53,7 +56,11 @@ for bug in bugzilla.get_bugs():
         duplicates[dupe].add(bug["id"])
 
 
-def text_preprocess(text):
+def get_text(bug):
+    return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
+
+
+def text_preprocess(text, join=False):
     for func in cleanup_functions:
         text = func(text)
 
@@ -65,18 +72,48 @@ def text_preprocess(text):
         for word in text.lower().split()
         if word not in set(stopwords.words("english")) and len(word) > 1
     ]
+    if join:
+        return " ".join(word for word in text)
     return text
 
 
-class TextualSimilarity:
+class BaseSimilarity:
+    def __init__(self):
+        pass
+
+    def evaluation(self):
+        total_r = 0
+        hits_r = 0
+        total_p = 0
+        hits_p = 0
+
+        for bug in bugzilla.get_bugs():
+            if duplicates[bug["id"]]:
+                similar_bugs = self.get_similar_bugs(bug)
+
+                # Recall
+                for item in duplicates[bug["id"]]:
+                    total_r += 1
+                    if item in similar_bugs:
+                        hits_r += 1
+
+                # Precision
+                for element in similar_bugs:
+                    total_p += 1
+                    if element in duplicates[bug["id"]]:
+                        hits_p += 1
+
+        print(f"Recall: {hits_r/total_r * 100}%")
+        print(f"Precision: {hits_p/total_p * 100}%")
+
+
+class LSISimilarity(BaseSimilarity):
     def __init__(self):
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
-            textual_features = "{} {}".format(
-                bug["summary"], bug["comments"][0]["text"]
-            )
-            textual_features = text_preprocess(textual_features)
+
+            textual_features = text_preprocess(get_text(bug))
             self.corpus.append([bug["id"], textual_features])
 
         # Assigning unique integer ids to all words
@@ -116,32 +153,23 @@ class TextualSimilarity:
         return [self.corpus[j[0]][0] for j in sims[:k]]
 
 
-def evaluation():
-    similarity = TextualSimilarity()
-    total_r = 0
-    hits_r = 0
-    total_p = 0
-    hits_p = 0
+class NeighborsSimilarity(BaseSimilarity):
+    def __init__(self, k=10, vectorizer=TfidfVectorizer):
+        self.vectorizer = TfidfVectorizer()
+        self.similarity_calculator = NearestNeighbors(n_neighbors=k)
+        text = []
+        self.bug_ids = []
 
-    for bug in bugzilla.get_bugs():
-        if duplicates[bug["id"]]:
-            similar_bugs = similarity.get_similar_bugs(bug)
+        for bug in bugzilla.get_bugs():
+            text.append(text_preprocess(get_text(bug), join=True))
+            self.bug_ids.append(bug["id"])
 
-            # Recall
-            for item in duplicates[bug["id"]]:
-                total_r += 1
-                if item in similar_bugs:
-                    hits_r += 1
+        self.vectorizer.fit(text)
+        self.similarity_calculator.fit(self.vectorizer.transform(text))
 
-            # Precision
-            for element in similar_bugs:
-                total_p += 1
-                if element in duplicates[bug["id"]]:
-                    hits_p += 1
+    def get_similar_bugs(self, query):
 
-    print(f"Recall: {hits_r/total_r * 100}%")
-    print(f"Precision: {hits_p/total_p * 100}%")
+        processed_query = self.vectorizer.transform([get_text(query)])
+        _, indices = self.similarity_calculator.kneighbors(processed_query)
 
-
-if __name__ == "__main__":
-    evaluation()
+        return [self.bug_ids[ind] for ind in indices[0]]

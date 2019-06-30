@@ -634,6 +634,32 @@ def rollback(bug, when=None, do_assert=False):
 
                 continue
 
+            # We don't support comment tags yet.
+            if field == "comment_tag":
+                continue
+
+            if field == "comment_revision":
+                obj = None
+                for comment in bug["comments"]:
+                    if comment["id"] == change["comment_id"]:
+                        obj = comment
+                        break
+
+                if obj is None:
+                    assert_or_log(f'Comment {change["comment_id"]} not found')
+                    continue
+
+                if obj["count"] != change["comment_count"]:
+                    assert_or_log("Wrong comment count")
+
+                # TODO: It should actually be applied on "raw_text".
+                # if obj["text"] != change["added"]:
+                #     assert_or_log(f"Current value for comment: ({obj['text']}) is different from previous value: ({change['added']}")
+
+                obj["text"] = change["removed"]
+
+                continue
+
             if change["added"] != "---":
                 if field not in bug and not is_expected_inconsistent_field(
                     field, last_product, bug["id"]

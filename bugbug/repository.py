@@ -24,9 +24,9 @@ from bugbug import db, utils
 COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz",
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
     1,
-    ["commit_experiences.pickle.xz"],
+    ["commit_experiences.pickle.zst"],
 )
 
 path_to_component = {}
@@ -388,7 +388,7 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits, commits_to_ignore, first_pushdate):
+def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
     try:
@@ -610,10 +610,11 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate):
 
             update_complex_experiences("component", day, components)
 
-    with open("data/commit_experiences.pickle", "wb") as f:
-        pickle.dump(
-            (experiences, first_commit_time), f, protocol=pickle.HIGHEST_PROTOCOL
-        )
+    if save:
+        with open("data/commit_experiences.pickle", "wb") as f:
+            pickle.dump(
+                (experiences, first_commit_time), f, protocol=pickle.HIGHEST_PROTOCOL
+            )
 
 
 def get_commits_to_ignore(repo_dir, commits):
@@ -658,7 +659,7 @@ def download_component_mapping():
     }
 
 
-def download_commits(repo_dir, rev_start=0, ret=False):
+def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     hg = hglib.open(repo_dir)
 
     revs = get_revs(hg, rev_start)
@@ -692,7 +693,7 @@ def download_commits(repo_dir, rev_start=0, ret=False):
     commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
     print(f"{len(commits_to_ignore)} commits to ignore")
 
-    calculate_experiences(commits, commits_to_ignore, first_pushdate)
+    calculate_experiences(commits, commits_to_ignore, first_pushdate, save)
 
     # Exclude commits to ignore.
     commits = [commit for commit in commits if commit not in commits_to_ignore]
@@ -709,9 +710,13 @@ def download_commits(repo_dir, rev_start=0, ret=False):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
+
         if ret:
             commits = list(commits)
-        db.append(COMMITS_DB, commits)
+
+        if save:
+            db.append(COMMITS_DB, commits)
+
         if ret:
             return commits
 

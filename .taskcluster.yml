@@ -97,6 +97,7 @@ tasks:
                pip install --quiet -r requirements.txt &&
                pip install --quiet -r extra-nlp-requirements.txt &&
                pip install --quiet -r extra-nn-requirements.txt &&
+               pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
@@ -143,7 +144,7 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.7
+          image: mozilla/taskboot:0.1.8
           env:
             REGISTRY: registry.hub.docker.com
             VERSION:
@@ -227,7 +228,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.7
+            image: mozilla/taskboot:0.1.8
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -238,6 +239,40 @@ tasks:
           metadata:
             name: bugbug docker push
             description: bugbug docker push
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("update_hook_annotate_pipeline")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-annotate
+            - assume:hook-id:project-relman/bugbug-annotate
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:0.1.8
+            env:
+              VERSION: {$eval: 'head_branch[10:]'}
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-annotate.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
+          metadata:
+            name: bugbug update annotate hook
+            description: bugbug update annotate hook
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
@@ -259,16 +294,14 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.7
-            env:
-              VERSION: {$eval: 'head_branch[10:]'}
+            image: mozilla/taskboot:0.1.8
             command:
               - "/bin/sh"
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-pipeline-start.json &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-pipeline-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
@@ -295,16 +328,14 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.7
-            env:
-              VERSION: {$eval: 'head_branch[10:]'}
+            image: mozilla/taskboot:0.1.8
             command:
               - "/bin/sh"
               - "-lcxe"
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_env_var.py TAG $VERSION infra/taskcluster-hook-check-models-start.json &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-check-models-start.json &&
                  taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook

@@ -18,7 +18,7 @@ from bugbug import db
 BUGS_DB = "data/bugs.json"
 db.register(
     BUGS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.xz",
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
     1,
 )
 

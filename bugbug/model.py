@@ -7,16 +7,85 @@ from collections import defaultdict
 
 import numpy as np
 import shap
-from imblearn.metrics import classification_report_imbalanced
+from imblearn.metrics import (
+    classification_report_imbalanced,
+    geometric_mean_score,
+    make_index_balanced_accuracy,
+    specificity_score,
+)
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_iterator
+
+
+def classification_report_imbalanced_values(
+    y_true, y_pred, labels, target_names=None, sample_weight=None, digits=2, alpha=0.1
+):
+    """Copy of imblearn.metrics.classification_report_imbalanced to have
+    access to the raw values. The code is mostly the same except the
+    formatting code and generation of the report which haven removed. Copied
+    from version 0.4.3. The original code is living here:
+    https://github.com/scikit-learn-contrib/imbalanced-learn/blob/master/imblearn/metrics/_classification.py#L750
+
+
+    """
+    labels = np.asarray(labels)
+
+    if target_names is None:
+        target_names = ["%s" % l for l in labels]
+
+    # Compute the different metrics
+    # Precision/recall/f1
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Specificity
+    specificity = specificity_score(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Geometric mean
+    geo_mean = geometric_mean_score(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Index balanced accuracy
+    iba_gmean = make_index_balanced_accuracy(alpha=alpha, squared=True)(
+        geometric_mean_score
+    )
+    iba = iba_gmean(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+
+    result = {"targets": {}}
+
+    for i, label in enumerate(labels):
+        result["targets"][target_names[i]] = {
+            "precision": precision[i],
+            "recall": recall[i],
+            "specificity": specificity[i],
+            "f1": f1[i],
+            "geo_mean": geo_mean[i],
+            "iba": iba[i],
+            "support": support[i],
+        }
+
+    result["average"] = {
+        "precision": np.average(precision, weights=support),
+        "recall": np.average(recall, weights=support),
+        "specificity": np.average(specificity, weights=support),
+        "f1": np.average(f1, weights=support),
+        "geo_mean": np.average(geo_mean, weights=support),
+        "iba": np.average(iba, weights=support),
+        "support": np.sum(support),
+    }
+
+    return result
 
 
 class Model:
@@ -88,6 +157,8 @@ class Model:
         else:
             pipeline = self.clf
 
+        tracking_metrics = {}
+
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ["accuracy"]
@@ -99,6 +170,10 @@ class Model:
             print("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
+                tracking_metrics[f"test_{scoring}"] = {
+                    "mean": score.mean(),
+                    "std": score.std() * 2,
+                }
                 print(
                     f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
                 )
@@ -131,12 +206,21 @@ class Model:
                     f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                 )
 
+        print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
-        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
+        print(confusion_matrix)
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+        report = classification_report_imbalanced_values(
+            y_test, y_pred, labels=class_names
+        )
+
+        tracking_metrics["report"] = report
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -169,6 +253,8 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+
+        return tracking_metrics
 
     @staticmethod
     def load(model_file_name):
