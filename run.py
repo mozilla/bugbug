@@ -98,12 +98,14 @@ def main(args):
             )
 
             if model.calculate_importance:
-                probas, importances = model.classify(
+                probas, importance = model.classify(
                     bug, probabilities=True, importances=True
                 )
 
                 feature_names = model.get_feature_names()
-                for i, (importance, index, is_positive) in enumerate(importances):
+                for i, (importance, index, is_positive) in enumerate(
+                    importance["importances"]
+                ):
                     print(
                         f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                     )
