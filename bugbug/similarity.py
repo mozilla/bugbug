@@ -6,6 +6,8 @@
 import re
 from collections import defaultdict
 
+from gensim.models import Word2Vec
+from gensim.similarities import WmdSimilarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 
@@ -175,3 +177,18 @@ class NeighborsSimilarity(BaseSimilarity):
         return [
             self.bug_ids[ind] for ind in indices[0] if self.bug_ids[ind] != query["id"]
         ]
+
+
+class Word2VecWmdSimilarity(BaseSimilarity):
+    def __init__(self):
+        corpus = []
+        self.bug_ids = []
+        for bug in bugzilla.get_bugs():
+            corpus.append(text_preprocess(get_text(bug)))
+            self.bug_ids.append(bug["id"])
+        self.w2vmodel = Word2Vec(corpus, size=100, min_count=1)
+        self.similarity = WmdSimilarity(corpus, self.w2vmodel, num_best=5)
+
+    def get_similar_bugs(self, query):
+        distances = self.similarity[text_preprocess(get_text(query))]
+        return [self.bug_ids[ind[0]] for ind in distances]
