@@ -251,18 +251,40 @@ class Model:
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
             # TODO: Actually implement feature importance visualization for multiclass problems.
+            new_shap_values = 0
             if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
+                new_shap_values = np.sum(np.abs(shap_values), axis=0)
+            else:
+                new_shap_values = shap_values
 
             important_features = self.get_important_features(
-                importance_cutoff, shap_values
+                importance_cutoff, new_shap_values
             )
 
-            print(f"\nTop {len(important_features)} Features:")
-            for i, [importance, index, is_positive] in enumerate(important_features):
-                print(
-                    f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
-                )
+            if not isinstance(shap_values, list):
+                print(f"\nTop {len(important_features)} Features:")
+                for i, [importance, index, is_positive] in enumerate(
+                    important_features
+                ):
+                    print(
+                        f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
+                    )
+            else:
+                print("{:<}".format("classes"), end="   ")
+                for importance, index, is_pos in important_features:
+                    print("{:>}".format(feature_names[int(index)]), end="  ")
+                print("\n")
+                for class_num, item in enumerate(shap_values):
+                    print("class {}".format(class_num), end="   ")
+                    features = item.sum(0)
+                    for importance, index, is_pos in important_features:
+                        print(
+                            "{:>{}.4f}".format(
+                                features[int(index)], len(feature_names[int(index)])
+                            ),
+                            end="  ",
+                        )
+                    print("")
 
         print("Test Set scores:")
         # Evaluate results on the test set.
