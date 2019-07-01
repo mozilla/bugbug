@@ -5,6 +5,7 @@
 
 from collections import defaultdict
 
+import matplotlib
 import numpy as np
 import shap
 from imblearn.metrics import (
@@ -191,6 +192,16 @@ class Model:
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
+
+            shap.summary_plot(
+                shap_values,
+                X_train,
+                feature_names=feature_names,
+                class_names=class_names,
+                show=False,
+            )
+
+            matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
             # TODO: Actually implement feature importance visualization for multiclass problems.
             if isinstance(shap_values, list):
