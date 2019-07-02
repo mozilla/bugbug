@@ -3,8 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import io
 from collections import defaultdict
 
+import matplotlib
 import numpy as np
 import shap
 from imblearn.metrics import (
@@ -192,6 +194,16 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
+            shap.summary_plot(
+                shap_values,
+                X_train,
+                feature_names=feature_names,
+                class_names=class_names,
+                show=False,
+            )
+
+            matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
+
             # TODO: Actually implement feature importance visualization for multiclass problems.
             if isinstance(shap_values, list):
                 shap_values = np.sum(np.abs(shap_values), axis=0)
@@ -288,13 +300,30 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
+            with io.StringIO() as out:
+                p = shap.force_plot(
+                    explainer.expected_value,
+                    shap_values,
+                    X.toarray(),
+                    feature_names=self.get_feature_names(),
+                    matplotlib=False,
+                    show=False,
+                )
+
+                # TODO: use full_html=False
+                shap.save_html(out, p)
+
+                html = out.getvalue()
+
             # TODO: Actually implement feature importance visualization for multiclass problems.
             if isinstance(shap_values, list):
                 shap_values = np.sum(np.abs(shap_values), axis=0)
 
-            importances = self.get_important_features(importance_cutoff, shap_values)
+            top_importances = self.get_important_features(
+                importance_cutoff, shap_values
+            )
 
-            return classes, importances
+            return classes, {"importances": top_importances, "html": html}
 
         return classes
 
