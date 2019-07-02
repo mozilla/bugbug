@@ -8,7 +8,31 @@ import json
 import sys
 
 
-def main(raw_args):
+def set_hook(hook_path, version):
+    with open(hook_path, "r") as hook_file:
+        hook_data = json.load(hook_file)
+
+    task_payload = hook_data["task"]["payload"]
+
+    task_image = task_payload.get("image")
+
+    # 1) Insert or replace the environment variable
+    if task_payload["env"]:
+        task_payload["env"] = {"$merge": [{"TAG": version}, task_payload["env"]]}
+    else:
+        task_payload["env"]["TAG"] = version
+
+    # 2) Set the version for the hook docker image
+    if task_image and task_image.split(":", 1)[0] == "mozilla/bugbug-spawn-pipeline":
+        task_payload["image"] = f"mozilla/bugbug-spawn-pipeline:{version}"
+
+    with open(hook_path, "w") as hook_file:
+        json.dump(
+            hook_data, hook_file, sort_keys=True, indent=4, separators=(",", ": ")
+        )
+
+
+def parse_args(raw_args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "version",
@@ -23,28 +47,9 @@ def main(raw_args):
         help="The hook definition file to update in-place",
     )
 
-    args = parser.parse_args(raw_args)
-
-    with open(args.hook_file, "r") as hook_file:
-        hook_data = json.load(hook_file)
-
-    task_payload = hook_data["task"]["payload"]
-
-    task_image = task_payload.get("image")
-
-    # 1) Insert or replace the environment variable
-    hook_env = task_payload["env"]
-    hook_env["TAG"] = args.version
-
-    # 2) Set the version for the hook docker image
-    if task_image and task_image.split(":", 1)[0] == "mozilla/bugbug-spawn-pipeline":
-        task_payload["image"] = f"mozilla/bugbug-spawn-pipeline:{args.version}"
-
-    with open(args.hook_file, "w") as hook_file:
-        json.dump(
-            hook_data, hook_file, sort_keys=True, indent=4, separators=(",", ": ")
-        )
+    return parser.parse_args(raw_args)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
+    set_hook(args.hook_file, args.version)
