@@ -114,7 +114,8 @@ tasks:
         - commit-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-backout:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train backout"
 
         artifacts:
           public/backoutmodel.zst:
@@ -146,7 +147,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-component:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train component"
 
         artifacts:
           public/componentmodel.zst:
@@ -178,7 +180,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-defectenhancementtask:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train defectenhancementtask"
 
         artifacts:
           public/defectenhancementtaskmodel.zst:
@@ -210,7 +213,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-regression:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train regression"
 
         artifacts:
           public/regressionmodel.zst:
@@ -218,6 +222,9 @@ tasks:
             type: file
           public/metrics.json:
             path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            path: /feature_importance.png
             type: file
 
       routes:
@@ -242,7 +249,8 @@ tasks:
         - commit-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-regressor:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train regressor"
 
         artifacts:
           public/regressormodel.zst:
@@ -274,7 +282,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-tracking:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train tracking"
 
         artifacts:
           public/trackingmodel.zst:
@@ -306,7 +315,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-regressionrange:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train regressionrange"
 
         artifacts:
           public/regressionrangemodel.zst:
@@ -314,6 +324,9 @@ tasks:
             type: file
           public/metrics.json:
             path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            path: /feature_importance.png
             type: file
 
       routes:
@@ -338,7 +351,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-stepstoreproduce:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train stepstoreproduce"
 
         artifacts:
           public/stepstoreproducemodel.zst:
@@ -346,6 +360,9 @@ tasks:
             type: file
           public/metrics.json:
             path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            path: /feature_importance.png
             type: file
 
       routes:
@@ -370,7 +387,8 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-train-duplicate:${version}
+        image: mozilla/bugbug-base:${version}
+        command: "bugbug-train duplicate"
 
         artifacts:
           public/duplicatemodel.zst:
@@ -399,7 +417,6 @@ tasks:
       provisionerId: aws-provisioner-v1
       workerType: releng-svc
       dependencies:
-        - rollback-test-task
         - train-tracking
         - train-regression
         - train-defectenhancementtask
@@ -408,7 +425,7 @@ tasks:
         capabilities:
           privileged: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         command:
           - "/bin/sh"
           - "-lcxe"
@@ -449,7 +466,7 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
@@ -480,14 +497,13 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.7
+        image: mozilla/taskboot:0.1.8
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
           - "/bin/sh"
           - "-lcxe"
-          - "taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service.tar --heroku-app bugbug &&
-             taskboot deploy-heroku --artifact-filter public/bugbug/bugbug-http-service-bg-worker.tar --heroku-app bugbug --heroku-dyno-type worker"
+          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar'"
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"

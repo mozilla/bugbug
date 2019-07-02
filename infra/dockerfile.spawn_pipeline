@@ -9,5 +9,6 @@ ADD spawn_data_pipeline.py /code
 
 ADD data-pipeline.yml /code
 ADD check-pipeline.yml /code
+ADD annotate-pipeline.yml /code
 
 CMD python /code/spawn_data_pipeline.py

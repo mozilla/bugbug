@@ -6,10 +6,8 @@
 import gzip
 import io
 import json
-import lzma
 import os
 import pickle
-import shutil
 from contextlib import contextmanager
 from urllib.parse import urljoin
 
@@ -45,16 +43,10 @@ def extract_file(path):
     path, compression_type = os.path.splitext(path)
 
     with open(path, "wb") as output_f:
-
         if compression_type == ".zst":
             dctx = zstandard.ZstdDecompressor()
             with open(f"{path}.zst", "rb") as input_f:
                 dctx.copy_stream(input_f, output_f)
-
-        elif compression_type == ".xz":
-            with lzma.open(f"{path}.xz") as input_f:
-                shutil.copyfileobj(input_f, output_f)
-
         else:
             assert False, f"Unexpected compression type: {compression_type}"
 
@@ -67,20 +59,10 @@ def download_support_file(path, file_name):
         print(f"Downloading {url} to {path}")
         utils.download_check_etag(url, path)
 
-        extract_file(path)
-
-    except requests.exceptions.HTTPError:
-        try:
-            url = f"{os.path.splitext(url)[0]}.xz"
-            path = f"{os.path.splitext(path)[0]}.xz"
-
-            print(f"Downloading {url} to {path}")
-            utils.download_check_etag(url, path)
-
+        if path.endswith(".zst"):
             extract_file(path)
-
-        except requests.exceptions.HTTPError:
-            print(f"{file_name} is not yet available to download for {path}")
+    except requests.exceptions.HTTPError:
+        print(f"{file_name} is not yet available to download for {path}")
 
 
 def download_version(path):
@@ -93,34 +75,19 @@ def download(path, force=False, support_files_too=False):
         return
 
     zst_path = f"{path}.zst"
-    xz_path = f"{path}.xz"
 
     # Only download if the file is not there yet.
-    if (not os.path.exists(zst_path) and not os.path.exists(xz_path)) or force:
+    if not os.path.exists(zst_path) or force:
         url = DATABASES[path]["url"]
         try:
-            path_compressed = zst_path
-            print(f"Downloading {url} to {path_compressed}")
-            utils.download_check_etag(url, path_compressed)
+            print(f"Downloading {url} to {zst_path}")
+            utils.download_check_etag(url, zst_path)
 
         except requests.exceptions.HTTPError:
-            try:
-                url_xz = f"{os.path.splitext(url)[0]}.xz"
-                path_compressed = xz_path
-                print(f"Downloading {url_xz} to {path_compressed} instead")
-                utils.download_check_etag(url_xz, path_compressed)
+            print(f"{url} is not yet available to download")
+            raise
 
-            except requests.exceptions.HTTPError:
-                print(f"{url} is not yet available to download")
-                raise
-
-    else:
-        if os.path.exists(zst_path) or not os.path.exists(xz_path):
-            path_compressed = zst_path
-        else:
-            path_compressed = xz_path
-
-    extract_file(path_compressed)
+    extract_file(zst_path)
 
     if support_files_too:
         for support_file in DATABASES[path]["support_files"]:
@@ -128,7 +95,13 @@ def download(path, force=False, support_files_too=False):
 
 
 def last_modified(path):
-    return utils.get_last_modified(DATABASES[path]["url"])
+    url = DATABASES[path]["url"]
+    last_modified = utils.get_last_modified(url)
+
+    if last_modified is None:
+        raise Exception("Last-Modified is not available")
+
+    return last_modified
 
 
 class Store:

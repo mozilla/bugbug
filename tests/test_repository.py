@@ -238,6 +238,62 @@ def test_hg_log(fake_hg_repo):
 
 
 @responses.activate
+def test_download_component_mapping():
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "100"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        json={},
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 0
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        json={
+            "AUTHORS": ["mozilla.org", "Licensing"],
+            "Cargo.lock": ["Firefox Build System", "General"],
+        },
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+
+
+@responses.activate
 def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
