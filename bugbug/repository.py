@@ -669,10 +669,9 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     hg = hglib.open(repo_dir)
 
     revs = get_revs(hg, rev_start)
-
-    assert (
-        len(revs) > 0
-    ), "There should definitely be more than 0 commits, something is wrong"
+    if len(revs) == 0:
+        print("No commits to analyze")
+        return []
 
     first_pushdate = hg_log(hg, [b"0"])[0].pushdate
 
