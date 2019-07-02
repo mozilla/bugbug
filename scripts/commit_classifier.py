@@ -7,14 +7,17 @@ import os
 from logging import INFO, basicConfig, getLogger
 
 import hglib
+import zstandard
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
-from bugbug.utils import get_secret
+from bugbug.utils import download_check_etag, get_secret
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
+
+URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/regressormodel.zst"
 
 
 class CommitClassifier(object):
@@ -23,6 +26,14 @@ class CommitClassifier(object):
 
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
+
+        if not os.path.exists("regressormodel"):
+            download_check_etag(URL, "regressormodel.zst")
+            dctx = zstandard.ZstdDecompressor()
+            with open("regressormodel.zst", "rb") as input_f:
+                with open("regressormodel", "wb") as output_f:
+                    dctx.copy_stream(input_f, output_f)
+            assert os.path.exists("regressormodel"), "Decompressed file exists"
 
         self.model = RegressorModel.load("regressormodel")
 
