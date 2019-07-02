@@ -286,7 +286,11 @@ def hg_log(hg, revs):
         date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
         assert b" " in rev[9]
-        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b" ", 1)[0]))
+        pushdate_timestamp = rev[9].split(b" ", 1)[0]
+        if pushdate_timestamp != b"0":
+            pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
+        else:
+            pushdate = datetime.utcnow()
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
