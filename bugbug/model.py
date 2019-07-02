@@ -249,16 +249,15 @@ class Model:
             )
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
-
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            new_shap_values = 0
+            
+            avg_shap_values = 0
             if isinstance(shap_values, list):
-                new_shap_values = np.sum(np.abs(shap_values), axis=0)
+                avg_shap_values = np.sum(np.abs(shap_values), axis=0)
             else:
-                new_shap_values = shap_values
+                avg_shap_values = shap_values
 
             important_features = self.get_important_features(
-                importance_cutoff, new_shap_values
+                importance_cutoff, avg_shap_values
             )
 
             if not isinstance(shap_values, list):
@@ -270,12 +269,17 @@ class Model:
                         f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                     )
             else:
-                print("{:<}".format("classes"), end="   ")
+                print("{:<12}".format("classes"), end="   ")
                 for importance, index, is_pos in important_features:
                     print("{:>}".format(feature_names[int(index)]), end="  ")
                 print("\n")
                 for class_num, item in enumerate(shap_values):
-                    print("class {}".format(class_num), end="   ")
+                    print(
+                        "{:<12.12}".format(
+                            class_names[len(class_names) - class_num - 1]
+                        ),
+                        end="   ",
+                    )
                     features = item.sum(0)
                     for importance, index, is_pos in important_features:
                         print(
