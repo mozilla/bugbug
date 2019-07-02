@@ -23,8 +23,10 @@ def set_hook(hook_path, version):
         task_payload["env"]["TAG"] = version
 
     # 2) Set the version for the hook docker image
-    if task_image and task_image.split(":", 1)[0] == "mozilla/bugbug-spawn-pipeline":
-        task_payload["image"] = f"mozilla/bugbug-spawn-pipeline:{version}"
+    if task_image:
+        image_name = task_image.split(":", 1)[0]
+        if image_name.startswith("mozilla/bugbug-"):
+            task_payload["image"] = f"{image_name}:{version}"
 
     with open(hook_path, "w") as hook_file:
         json.dump(
