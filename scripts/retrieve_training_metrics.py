@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import logging
 import sys
 from os.path import abspath
 
@@ -10,6 +11,10 @@ LATEST_URI = "train_{}.latest"
 VERSIONED_URI = "train_{}.{}"
 DATED_VERSIONED_URI = "train_{}.{}.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.{}/artifacts/public/metrics.json"
+
+LOGGER = logging.getLogger(__name__)
+
+logging.basicConfig(level=logging.INFO)
 
 
 def main():
@@ -33,7 +38,7 @@ def main():
         "--output",
         "-o",
         help="Where to output the metrics.json file. Default to printing its content",
-        default="/dev/stdout",
+        default=None,
     )
 
     args = parser.parse_args()
@@ -46,12 +51,11 @@ def main():
         index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
 
     index_url = BASE_URL.format(index_uri)
+    LOGGER.info(f"Retrieving metrics from {index_url}")
     r = requests.get(index_url)
 
     if r.status_code == 404:
-        print(
-            f"File not found for URL {index_url}, check your arguments", file=sys.stderr
-        )
+        LOGGER.error(f"File not found for URL {index_url}, check your arguments")
         sys.exit(1)
 
     r.raise_for_status()
@@ -60,7 +64,7 @@ def main():
         file_path = abspath(args.output)
         with open(file_path, "w") as output_file:
             output_file.write(r.text)
-        print(f"Metrics saved to {file_path!r}")
+        LOGGER.info(f"Metrics saved to {file_path!r}")
     else:
         print(r.text)
 
