@@ -43,9 +43,9 @@
                 "taskclusterProxy": true
             },
             "command": [
-                "bugbug-classify-commit",
-                "/cache/",
-                "$DIFF_ID"
+                "/bin/bash",
+                "-c",
+                "bugbug-classify-commit /cache/ $DIFF_ID"
             ],
             "image": "mozilla/bugbug-base",
             "maxRunTime": 7200
