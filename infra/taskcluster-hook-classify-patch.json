@@ -1,0 +1,72 @@
+{
+    "metadata": {
+        "description": "",
+        "name": "BugBug classify patch",
+        "owner": "mcastelluccio@mozilla.com"
+    },
+    "task": {
+        "created": {
+            "$fromNow": "0 seconds"
+        },
+        "deadline": {
+            "$fromNow": "2 hours"
+        },
+        "expires": {
+            "$fromNow": "1 month"
+        },
+        "extra": {},
+        "metadata": {
+            "description": "",
+            "name": "BugBug classify patch",
+            "owner": "mcastelluccio@mozilla.com",
+            "source": "https://github.com/mozilla/bugbug"
+        },
+        "payload": {
+            "artifacts": {
+                "public/probs,json": {
+                    "path": "/probs.json",
+                    "type": "file"
+                },
+                "public/importance.html": {
+                    "path": "/importance.html",
+                    "type": "file"
+                }
+            },
+            "cache": {
+                "bugbug-mercurial-repository": "/cache"
+            },
+            "capabilities": {},
+            "env": {
+                "$eval": "payload"
+            },
+            "features": {
+                "taskclusterProxy": true
+            },
+            "command": [
+                "bugbug-classify-commit",
+                "/cache/",
+                "$DIFF_ID"
+            ],
+            "image": "mozilla/bugbug-base",
+            "maxRunTime": 7200
+        },
+        "priority": "normal",
+        "provisionerId": "aws-provisioner-v1",
+        "retries": 5,
+        "routes": [
+            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
+            "notify.irc-channel.#bugbug.on-failed"
+        ],
+        "schedulerId": "-",
+        "scopes": [
+            "assume:hook-id:project-relman/bugbug-classify-patch",
+            "secrets:get:project/relman/bugbug/production"
+        ],
+        "tags": {},
+        "workerType": "taskcluster-generic"
+    },
+    "triggerSchema": {
+        "additionalProperties": true,
+        "type": "object"
+    }
+}

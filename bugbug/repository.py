@@ -751,6 +751,7 @@ def clean(repo_dir):
 
 def clone(repo_dir):
     if os.path.exists(repo_dir):
+        clean(repo_dir)
         return
 
     cmd = hglib.util.cmdbuilder(
