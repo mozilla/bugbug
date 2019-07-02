@@ -8,6 +8,7 @@ import concurrent.futures
 import copy
 import itertools
 import json
+import logging
 import multiprocessing
 import os
 import pickle
@@ -20,6 +21,9 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
+
+logger = logging.getLogger(__name__)
+
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -724,6 +728,58 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
         if ret:
             return commits
+
+
+def clean(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        hg.revert(repo_dir.encode("utf-8"), all=True)
+
+        try:
+            cmd = hglib.util.cmdbuilder(
+                b"strip", rev=b"roots(outgoing())", force=True, backup=False
+            )
+            hg.rawcommand(cmd)
+        except hglib.error.CommandError as e:
+            if b"abort: empty revision set" not in e.err:
+                raise
+
+        # Pull and update.
+        logger.info("Pulling and updating mozilla-central")
+        hg.pull(update=True)
+        logger.info("mozilla-central pulled and updated")
+
+
+def clone(repo_dir):
+    if os.path.exists(repo_dir):
+        return
+
+    cmd = hglib.util.cmdbuilder(
+        "robustcheckout",
+        "https://hg.mozilla.org/mozilla-central",
+        repo_dir,
+        purge=True,
+        sharebase=repo_dir + "-shared",
+        networkattempts=7,
+        branch=b"tip",
+    )
+
+    cmd.insert(0, hglib.HGPATH)
+
+    proc = hglib.util.popen(cmd)
+    out, err = proc.communicate()
+    if proc.returncode:
+        raise hglib.error.CommandError(cmd, proc.returncode, out, err)
+
+    logger.info("mozilla-central cloned")
+
+    # Remove pushlog DB to make sure it's regenerated.
+    try:
+        os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
+    except FileNotFoundError:
+        logger.info("pushlog database doesn't exist")
+
+    # Pull and update, to make sure the pushlog is generated.
+    clean(repo_dir)
 
 
 if __name__ == "__main__":
