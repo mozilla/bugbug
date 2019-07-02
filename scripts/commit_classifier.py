@@ -2,13 +2,16 @@
 
 import argparse
 import io
+import json
 import os
 from logging import INFO, basicConfig, getLogger
 
 import hglib
+from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
+from bugbug.utils import get_secret
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -39,18 +42,50 @@ class CommitClassifier(object):
 
         repository.download_commits(self.repo_dir, rev_start)
 
-    def classify(self, message, patch):
-        self.update_commit_db()
+    def apply_phab(self, hg, diff_id):
+        phabricator_api = PhabricatorAPI(
+            api_key=get_secret("PHABRICATOR_TOKEN"), url=get_secret("PHABRICATOR_URL")
+        )
 
-        with hglib.open(self.repo_dir) as hg:
-            # Apply patch.
+        diffs = phabricator_api.search_diffs(diff_id=diff_id)
+        assert len(diffs) == 1, "No diff available for {}".format(diff_id)
+        diff = diffs[0]
+
+        # Get the stack of patches
+        base, patches = phabricator_api.load_patches_stack(hg, diff)
+        assert len(patches) > 0, "No patches to apply"
+
+        # Load all the diffs details with commits messages
+        diffs = phabricator_api.search_diffs(
+            diff_phid=[p[0] for p in patches], attachments={"commits": True}
+        )
+        commits = {
+            diff["phid"]: diff["attachments"]["commits"].get("commits", [])
+            for diff in diffs
+        }
+
+        # First apply patches on local repo
+        for diff_phid, patch in patches:
+            commit = commits.get(diff_phid)
+
+            message = ""
+            if commit:
+                message += "{}\n".format(commit[0]["message"])
+
+            logger.info(f"Applying {diff_phid}")
             hg.import_(
                 patches=io.BytesIO(patch.encode("utf-8")),
                 message=message,
                 user="bugbug",
             )
 
-            patch_rev = hg.log(limit=1)[0].node
+    def classify(self, diff_id):
+        self.update_commit_db()
+
+        with hglib.open(self.repo_dir) as hg:
+            self.apply_phab(hg, diff_id)
+
+            patch_rev = hg.log(revrange="not public()")[0].node
 
             # Analyze patch.
             commits = repository.download_commits(
@@ -58,7 +93,7 @@ class CommitClassifier(object):
             )
 
         probs, importance = self.model.classify(
-            commits[0], probabilities=True, importances=True
+            commits[-1], probabilities=True, importances=True
         )
 
         feature_names = self.model.get_feature_names()
@@ -75,23 +110,21 @@ class CommitClassifier(object):
                 ]
             )
 
-        print(probs)
-        print(features)
+        with open("probs.json", "w") as f:
+            json.dump(probs[0].tolist(), f)
+
+        with open("importance.html", "w") as f:
+            f.write(importance["html"])
 
 
-if __name__ == "__main__":
+def main():
     description = "Classify a commit"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("cache-root", help="Cache for repository clones.")
-    parser.add_argument("patch", help="Patch to analyze.")
+    parser.add_argument("diff_id", help="diff ID to analyze.", type=int)
 
     args = parser.parse_args()
 
     classifier = CommitClassifier(getattr(args, "cache-root"))
-
-    with open(args.patch) as f:
-        patch = f.read()
-
-    # TODO: Use commit message from the patch.
-    classifier.classify("Bug 1 - Test", patch)
+    classifier.classify(args.diff_id)
