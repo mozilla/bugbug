@@ -29,6 +29,7 @@ tasks:
     $let:
       default_task_definition:
         provisionerId: aws-provisioner-v1
+        workerType: github-worker
         metadata:
           owner: ${user}@users.noreply.github.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
@@ -40,7 +41,6 @@ tasks:
           - taskId: {$eval: as_slugid("lint_task")}
             created: {$fromNow: ''}
             deadline: {$fromNow: '1 hour'}
-            workerType: github-worker
             payload:
               maxRunTime: 3600
               image: python:3.7
@@ -63,7 +63,6 @@ tasks:
                 - taskId: {$eval: as_slugid("version_check_task")}
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '1 hour'}
-                  workerType: github-worker
                   payload:
                     maxRunTime: 3600
                     image: python
@@ -81,6 +80,7 @@ tasks:
           - taskId: {$eval: as_slugid("tests_task")}
             created: {$fromNow: ''}
             deadline: {$fromNow: '1 hour'}
+            provisionerId: aws-provisioner-v1
             workerType: github-worker
             payload:
               maxRunTime: 3600
@@ -108,6 +108,8 @@ tasks:
             metadata:
               name: bugbug tests
               description: bugbug tests
+              owner: ${user}@users.noreply.github.com
+              source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
           - taskId: {$eval: as_slugid("packaging_test_task")}
             created: {$fromNow: ''}
@@ -189,7 +191,6 @@ tasks:
                     - secrets:get:project/relman/bugbug/deploy
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '1 hour'}
-                  workerType: github-worker
                   payload:
                     features:
                       taskclusterProxy:
@@ -224,7 +225,6 @@ tasks:
                   taskId: {$eval: as_slugid("docker_push")}
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '4 hours'}
-                  workerType: github-worker
                   payload:
                     features:
                       taskclusterProxy:
@@ -254,7 +254,6 @@ tasks:
                     - assume:hook-id:project-relman/bugbug-annotate
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '5 hours'}
-                  workerType: github-worker
                   payload:
                     features:
                       taskclusterProxy:
@@ -288,7 +287,6 @@ tasks:
                     - queue:route:project.relman.bugbug.deploy_ending.*
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '5 hours'}
-                  workerType: github-worker
                   payload:
                     features:
                       taskclusterProxy:
@@ -321,7 +319,6 @@ tasks:
                     - assume:hook-id:project-relman/bugbug-checks
                   created: {$fromNow: ''}
                   deadline: {$fromNow: '5 hours'}
-                  workerType: github-worker
                   payload:
                     features:
                       taskclusterProxy:
