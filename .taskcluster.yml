@@ -56,60 +56,58 @@ tasks:
               name: bugbug lint
               description: bugbug lint
 
-        $if: 'tasks_for == "github-push"'
-        then:
-          $mergeDeep:
-            - {$eval: 'default_task_definition'}
-            - taskId: {$eval: as_slugid("version_check_task")}
-              created: {$fromNow: ''}
-              deadline: {$fromNow: '1 hour'}
-              workerType: github-worker
-              payload:
-                maxRunTime: 3600
-                image: python
-                command:
-                  - "/bin/bash"
-                  - "-lcx"
-                  - "git clone --quiet ${repository} &&
-                     cd bugbug &&
-                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                     python infra/version_check.py"
-              metadata:
-                name: bugbug tag version check
-                description: bugbug tag version check
-
-          $mergeDeep:
-            - {$eval: 'default_task_definition'}
-            - taskId: {$eval: as_slugid("tests_task")}
-              created: {$fromNow: ''}
-              deadline: {$fromNow: '1 hour'}
-              workerType: github-worker
-              payload:
-                maxRunTime: 3600
-                image: python
-                env:
-                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-                command:
-                  - "/bin/bash"
-                  - "-lcx"
-                  - "apt-get -qq update &&
-                     apt-get -qq install -y python-pip &&
-                     python2 -m pip install --quiet mercurial==4.8 &&
-                     git clone --quiet https://github.com/mozilla/version-control-tools.git &&
-                     git clone --quiet ${repository} &&
-                     cd bugbug &&
-                     git -c advice.detachedHead=false checkout ${head_rev} &&
-                     cp infra/hgrc /root/.hgrc &&
-                     pip install --quiet -r requirements.txt &&
-                     pip install --quiet -r extra-nlp-requirements.txt &&
-                     pip install --quiet -r extra-nn-requirements.txt &&
-                     pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
-                     pip install --quiet -r test-requirements.txt &&
-                     python -m pytest --cov=./ tests/test_*.py &&
-                     bash <(curl -s https://codecov.io/bash)"
-              metadata:
-                name: bugbug tests
-                description: bugbug tests
+          - $if: 'tasks_for == "github-push"'
+            then:
+              $mergeDeep:
+                - {$eval: 'default_task_definition'}
+                - taskId: {$eval: as_slugid("version_check_task")}
+                  created: {$fromNow: ''}
+                  deadline: {$fromNow: '1 hour'}
+                  workerType: github-worker
+                  payload:
+                    maxRunTime: 3600
+                    image: python
+                    command:
+                      - "/bin/bash"
+                      - "-lcx"
+                      - "git clone --quiet ${repository} &&
+                         cd bugbug &&
+                         git -c advice.detachedHead=false checkout ${head_rev} &&
+                         python infra/version_check.py"
+                  metadata:
+                    name: bugbug tag version check
+                    description: bugbug tag version check
+                    
+          - taskId: {$eval: as_slugid("tests_task")}
+            created: {$fromNow: ''}
+            deadline: {$fromNow: '1 hour'}
+            workerType: github-worker
+            payload:
+              maxRunTime: 3600
+              image: python
+              env:
+                CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+              command:
+                - "/bin/bash"
+                - "-lcx"
+                - "apt-get -qq update &&
+                   apt-get -qq install -y python-pip &&
+                   python2 -m pip install --quiet mercurial==4.8 &&
+                   git clone --quiet https://github.com/mozilla/version-control-tools.git &&
+                   git clone --quiet ${repository} &&
+                   cd bugbug &&
+                   git -c advice.detachedHead=false checkout ${head_rev} &&
+                   cp infra/hgrc /root/.hgrc &&
+                   pip install --quiet -r requirements.txt &&
+                   pip install --quiet -r extra-nlp-requirements.txt &&
+                   pip install --quiet -r extra-nn-requirements.txt &&
+                   pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
+                   pip install --quiet -r test-requirements.txt &&
+                   python -m pytest --cov=./ tests/test_*.py &&
+                   bash <(curl -s https://codecov.io/bash)"
+            metadata:
+              name: bugbug tests
+              description: bugbug tests
 
           - taskId: {$eval: as_slugid("packaging_test_task")}
             created: {$fromNow: ''}
