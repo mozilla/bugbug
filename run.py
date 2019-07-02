@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, timedelta
 
 import numpy as np
+from tabulate import tabulate
 
 from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
@@ -112,12 +113,29 @@ def main(args):
                 )
 
                 feature_names = model.get_human_readable_feature_names()
-                for i, (importance, index, is_positive) in enumerate(
-                    importance["importances"]
-                ):
-                    print(
-                        f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
+
+                top_indexes = list(
+                    int(index)
+                    for importance, index, is_pos in importance["importances"]
+                )
+
+                table = []
+                for num, item in enumerate(importance["shap_values"]):
+                    abs_sums = np.abs(item).sum(0)
+                    rel_sums = abs_sums / abs_sums.sum()
+                    is_positive = ["+" if col >= 0 else "-" for col in item.sum(0)]
+                    table.append(
+                        [f"class {num}"]
+                        + [is_positive[x] + str(rel_sums[x]) for x in top_indexes]
                     )
+
+                print(
+                    tabulate(
+                        table,
+                        headers=["classes"] + [feature_names[x] for x in top_indexes],
+                    )
+                )
+
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)
 

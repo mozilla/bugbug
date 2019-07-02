@@ -249,46 +249,40 @@ class Model:
             )
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
-            
+
             avg_shap_values = 0
             if isinstance(shap_values, list):
                 avg_shap_values = np.sum(np.abs(shap_values), axis=0)
             else:
                 avg_shap_values = shap_values
+                shap_values = [shap_values]
 
             important_features = self.get_important_features(
                 importance_cutoff, avg_shap_values
             )
 
-            if not isinstance(shap_values, list):
-                print(f"\nTop {len(important_features)} Features:")
-                for i, [importance, index, is_positive] in enumerate(
-                    important_features
-                ):
-                    print(
-                        f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
-                    )
-            else:
-                print("{:<12}".format("classes"), end="   ")
-                for importance, index, is_pos in important_features:
-                    print("{:>}".format(feature_names[int(index)]), end="  ")
-                print("\n")
-                for class_num, item in enumerate(shap_values):
-                    print(
-                        "{:<12.12}".format(
-                            class_names[len(class_names) - class_num - 1]
-                        ),
-                        end="   ",
-                    )
-                    features = item.sum(0)
-                    for importance, index, is_pos in important_features:
-                        print(
-                            "{:>{}.4f}".format(
-                                features[int(index)], len(feature_names[int(index)])
-                            ),
-                            end="  ",
-                        )
-                    print("")
+            print(f"\nTop {len(important_features)} Features:")
+            top_indexes = list(
+                int(index) for importance, index, is_pos in important_features
+            )
+
+            table = []
+            for num, item in enumerate(shap_values):
+                abs_sums = np.abs(item).sum(0)
+                rel_sums = abs_sums / abs_sums.sum()
+                is_positive = [
+                    "+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)
+                ]
+                table.append(
+                    [class_names[len(class_names) - num - 1]]
+                    + [is_positive[x] + str(rel_sums[x]) for x in top_indexes]
+                )
+
+            print(
+                tabulate(
+                    table, headers=["classes"] + [feature_names[x] for x in top_indexes]
+                )
+            )
 
         print("Test Set scores:")
         # Evaluate results on the test set.
@@ -408,10 +402,21 @@ class Model:
 
                 html = out.getvalue()
 
+            avg_shap_values = 0
+            if isinstance(shap_values, list):
+                avg_shap_values = np.sum(np.abs(shap_values), axis=0)
+            else:
+                avg_shap_values = shap_values
+                shap_values = [shap_values]
+
+            important_features = self.get_important_features(
+                importance_cutoff, avg_shap_values
+            )
+
             return (
                 classes,
                 {
-                    "importances": top_importances,
+                    "importances": important_features,
                     "html": html,
                     "feature_legend": feature_legend,
                 },
