@@ -35,6 +35,8 @@ class BugTypeModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
         feature_extractors = [
             bug_features.has_str(),
             bug_features.severity(),
