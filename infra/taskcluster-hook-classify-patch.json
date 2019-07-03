@@ -37,22 +37,15 @@
             },
             "capabilities": {},
             "env": {
-                "$merge": [
-                    {
-                      "TC_SECRET_ID": "project/relman/bugbug/production"
-                    },
-                    {
-                      "$eval": "payload"
-                    }
-                ]
+                "TC_SECRET_ID": "project/relman/bugbug/production"
             },
             "features": {
                 "taskclusterProxy": true
             },
             "command": [
-                "/bin/bash",
-                "-c",
-                "bugbug-classify-commit /cache/ $DIFF_ID"
+                "bugbug-classify-commit",
+                "/cache",
+                "${payload['DIFF_ID']}"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
