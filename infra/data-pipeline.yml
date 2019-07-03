@@ -115,7 +115,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train backout"
+        command:
+          - bugbug-train
+          - backout
 
         artifacts:
           public/backoutmodel.zst:
@@ -148,7 +150,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train component"
+        command:
+          - bugbug-train
+          - component
 
         artifacts:
           public/componentmodel.zst:
@@ -181,7 +185,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train defectenhancementtask"
+        command:
+          - bugbug-train
+          - defectenhancementtask
 
         artifacts:
           public/defectenhancementtaskmodel.zst:
@@ -214,7 +220,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train regression"
+        command:
+          - bugbug-train
+          - regression
 
         artifacts:
           public/regressionmodel.zst:
@@ -250,7 +258,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train regressor"
+        command:
+          - bugbug-train
+          - regressor
 
         artifacts:
           public/regressormodel.zst:
@@ -283,7 +293,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train tracking"
+        command:
+          - bugbug-train
+          - tracking
 
         artifacts:
           public/trackingmodel.zst:
@@ -316,7 +328,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train regressionrange"
+        command:
+          - bugbug-train
+          - regressionrange
 
         artifacts:
           public/regressionrangemodel.zst:
@@ -352,7 +366,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train stepstoreproduce"
+        command:
+          - bugbug-train
+          - stepstoreproduce
 
         artifacts:
           public/stepstoreproducemodel.zst:
@@ -388,7 +404,9 @@ tasks:
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
-        command: "bugbug-train duplicate"
+        command:
+          - bugbug-train
+          - duplicate
 
         artifacts:
           public/duplicatemodel.zst:

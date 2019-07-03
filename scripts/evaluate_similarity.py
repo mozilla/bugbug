@@ -14,7 +14,9 @@ from bugbug.similarity import LSISimilarity, NeighborsSimilarity
 def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--algorithm", help="Similarity algorithm to use", choices=["lsi", "neighbors"]
+        "--algorithm",
+        help="Similarity algorithm to use",
+        choices=["lsi", "neighbors_tfidf", "neighbors_tfidf_bigrams"],
     )
     return parser.parse_args(args)
 

@@ -336,3 +336,33 @@ tasks:
                   metadata:
                     name: bugbug update check hook
                     description: bugbug update check hook
+
+          - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+            then:
+              $mergeDeep:
+                - {$eval: 'default_task_definition'}
+                  taskId: {$eval: as_slugid("update_hook_classify_patch")}
+                  dependencies:
+                    - {$eval: as_slugid("docker_push")}
+                  scopes:
+                    - hooks:modify-hook:project-relman/bugbug-classify-patch
+                    - assume:hook-id:project-relman/bugbug-classify-patch
+                  created: {$fromNow: ''}
+                  deadline: {$fromNow: '5 hours'}
+                  payload:
+                    features:
+                      taskclusterProxy:
+                        true
+                    maxRunTime: 3600
+                    image: mozilla/taskboot:0.1.8
+                    command:
+                      - "/bin/sh"
+                      - "-lcxe"
+                      - "git clone --quiet ${repository} &&
+                         cd bugbug &&
+                         git -c advice.detachedHead=false checkout ${head_rev} &&
+                         python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-classify-patch.json &&
+                         taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-relman bugbug-classify-patch"
+                  metadata:
+                    name: bugbug update classify patch hook
+                    description: bugbug update classify patch hook
