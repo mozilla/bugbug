@@ -37,7 +37,14 @@
             },
             "capabilities": {},
             "env": {
-                "$eval": "payload"
+                "$merge": [
+                    {
+                      "TC_SECRET_ID": "project/relman/bugbug/production"
+                    },
+                    {
+                      "$eval": "payload"
+                    }
+                ]
             },
             "features": {
                 "taskclusterProxy": true
