@@ -18,7 +18,10 @@ def set_hook(hook_path, version):
 
     # 1) Insert or replace the environment variable
     if task_payload["env"]:
-        task_payload["env"] = {"$merge": [{"TAG": version}, task_payload["env"]]}
+        if "$merge" not in task_payload["env"]:
+            task_payload["env"] = {"$merge": [task_payload["env"]]}
+
+        task_payload["env"]["$merge"].append({"TAG": version})
     else:
         task_payload["env"]["TAG"] = version
 
