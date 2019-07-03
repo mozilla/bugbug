@@ -14,7 +14,7 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
 
-keyword_dict = {
+KEYWORD_DICT = {
     "sec-critical": "security",
     "sec-high": "security",
     "sec-moderate": "security",
@@ -29,7 +29,7 @@ keyword_dict = {
     "crashreportid": "crash",
     "perf": "performance",
 }
-keyword_list = list(set(keyword_dict.values()))
+KEYWORD_LIST = list(set(KEYWORD_DICT.values()))
 
 
 class BugTypeModel(BugModel):
@@ -43,7 +43,7 @@ class BugTypeModel(BugModel):
             bug_features.severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords(set(keyword_dict.keys())),
+            bug_features.keywords(set(KEYWORD_DICT.keys())),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),
@@ -100,14 +100,14 @@ class BugTypeModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            target = np.zeros(len(keyword_list))
+            target = np.zeros(len(KEYWORD_LIST))
             for keyword in bug_data["keywords"]:
-                if keyword in keyword_dict:
-                    target[keyword_list.index(keyword_dict[keyword])] = 1
+                if keyword in KEYWORD_DICT:
+                    target[KEYWORD_LIST.index(KEYWORD_DICT[keyword])] = 1
 
             classes[int(bug_data["id"])] = target
 
-        return classes, keyword_list
+        return classes, KEYWORD_LIST
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
@@ -115,10 +115,10 @@ class BugTypeModel(BugModel):
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
             for keyword in bug["keywords"]:
-                if keyword in keyword_list:
+                if keyword in KEYWORD_LIST:
                     if probabilities:
-                        classes[i][keyword_list.index(keyword)] = 1.0
+                        classes[i][KEYWORD_LIST.index(keyword)] = 1.0
                     else:
-                        classes[i][keyword_list.index(keyword)] = 1
+                        classes[i][KEYWORD_LIST.index(keyword)] = 1
 
         return classes
