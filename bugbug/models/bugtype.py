@@ -5,7 +5,6 @@
 
 import numpy as np
 import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
@@ -35,8 +34,6 @@ KEYWORD_LIST = list(set(KEYWORD_DICT.values()))
 class BugTypeModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
             bug_features.has_str(),
