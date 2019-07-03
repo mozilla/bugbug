@@ -341,7 +341,7 @@ tasks:
             then:
               $mergeDeep:
                 - {$eval: 'default_task_definition'}
-                  taskId: {$eval: as_slugid("update_hook_classify_patch")}
+                - taskId: {$eval: as_slugid("update_hook_classify_patch")}
                   dependencies:
                     - {$eval: as_slugid("docker_push")}
                   scopes:
