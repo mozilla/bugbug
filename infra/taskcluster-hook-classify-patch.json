@@ -68,7 +68,15 @@
         "workerType": "taskcluster-generic"
     },
     "triggerSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
+        "properties": {
+            "DIFF_ID": {
+                "type": "number"
+            }
+        },
+        "required": [
+            "DIFF_ID"
+        ],
         "type": "object"
     }
 }
