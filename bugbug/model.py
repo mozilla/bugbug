@@ -308,7 +308,11 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items():
                     table.append([class_name] + imp_values[1][i : i + 8])
                 print(
-                    tabulate(table, headers=["classes"] + top_feature_names[i : i + 8]),
+                    tabulate(
+                        table,
+                        headers=["classes"] + top_feature_names[i : i + 8],
+                        tablefmt="grid",
+                    ),
                     end="\n\n",
                 )
 
