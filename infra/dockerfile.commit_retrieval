@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y python-pip git && rm -rf /var/lib/apt/l
 
 RUN python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8
 
+#clean pip
+RUN python2 pip uninstall pip
+
 # Robustcheckout setup
 RUN hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/
 
