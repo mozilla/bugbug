@@ -125,7 +125,7 @@ def classify_bug(
         data = {
             "prob": probs_list[i],
             "index": indexes_list[i],
-            "suggestion": suggestions_list[i],
+            "class": suggestions_list[i],
             "extra_data": model_extra_data,
         }
 
