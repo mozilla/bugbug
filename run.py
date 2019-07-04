@@ -114,27 +114,31 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
-                top_indexes = list(
-                    int(index)
-                    for importance, index, is_pos in importance["importances"]
-                )
+                for class_name, imp_values in importance["importances"][
+                    "classes"
+                ].items():
+                    shap_val = []
+                    header_names = []
+                    for importance, index, is_positive in imp_values[0]:
+                        if is_positive:
+                            shap_val.append("+" + str(importance))
+                        else:
+                            shap_val.append("-" + str(importance))
 
-                table = []
-                for num, item in enumerate(importance["shap_values"]):
-                    abs_sums = np.abs(item).sum(0)
-                    rel_sums = abs_sums / abs_sums.sum()
-                    is_positive = ["+" if col >= 0 else "-" for col in item.sum(0)]
-                    table.append(
-                        [f"class {num}"]
-                        + [is_positive[x] + str(rel_sums[x]) for x in top_indexes]
+                        header_names.append(feature_names[int(index)])
+                    print(
+                        "Top {} features for {} :".format(len(header_names), class_name)
                     )
 
-                print(
-                    tabulate(
-                        table,
-                        headers=["classes"] + [feature_names[x] for x in top_indexes],
-                    )
-                )
+                    # allow maximum of 8 columns in a row to fit the page better
+                    for i in range(0, len(header_names), 8):
+                        print(
+                            tabulate(
+                                [[class_name] + shap_val[i : i + 8]],
+                                headers=["classes"] + header_names[i : i + 8],
+                            ),
+                            end="\n\n",
+                        )
 
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)

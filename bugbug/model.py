@@ -156,11 +156,14 @@ class Model:
 
         return cleaned_feature_names
 
-    def get_important_features(self, cutoff, shap_values):
+    def get_important_features(
+        self, cutoff, avg_shap_values, shap_values, class_names=False
+    ):
         # Calculate the values that represent the fraction of the model output variability attributable
         # to each feature across the whole dataset.
-        shap_sums = shap_values.sum(0)
-        abs_shap_sums = np.abs(shap_values).sum(0)
+
+        shap_sums = avg_shap_values.sum(0)
+        abs_shap_sums = np.abs(avg_shap_values).sum(0)
         rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
 
         cut_off_value = cutoff * np.amax(rel_shap_sums)
@@ -176,7 +179,40 @@ class Model:
         # Sort the array (in decreasing order of importance values)
         top_features = top_features[top_features[:, 0].argsort()][::-1]
 
-        return top_features
+        if isinstance(shap_values, list):
+            important_features = {}
+            important_features["classes"] = {}
+            important_features["average"] = list(
+                int(index) for importance, index, is_pos in top_features
+            )
+            for num, item in enumerate(shap_values):
+                # top features in shap values for that class
+                top_item_features = self.get_important_features(
+                    cutoff, item, item, class_names
+                )
+
+                # top features in average shap values for that class
+                top_avg = []
+                abs_sums = np.abs(item).sum(0)
+                rel_sums = abs_sums / abs_sums.sum()
+                is_pos = ["+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)]
+                for index in important_features["average"]:
+                    top_avg.append(is_pos[index] + str(rel_sums[index]))
+
+                if class_names:
+                    important_features["classes"][
+                        class_names[len(class_names) - num - 1]
+                    ] = (top_item_features, top_avg)
+                else:
+                    important_features["classes"][f"class {num}"] = (
+                        top_item_features,
+                        top_avg,
+                    )
+
+            return important_features
+
+        else:
+            return top_features
 
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
@@ -258,31 +294,23 @@ class Model:
                 shap_values = [shap_values]
 
             important_features = self.get_important_features(
-                importance_cutoff, avg_shap_values
+                importance_cutoff, avg_shap_values, shap_values, class_names
             )
 
-            print(f"\nTop {len(important_features)} Features:")
-            top_indexes = list(
-                int(index) for importance, index, is_pos in important_features
-            )
+            print("Top {} features:".format(len(important_features["average"])))
+            top_feature_names = [
+                feature_names[index] for index in important_features["average"]
+            ]
 
-            table = []
-            for num, item in enumerate(shap_values):
-                abs_sums = np.abs(item).sum(0)
-                rel_sums = abs_sums / abs_sums.sum()
-                is_positive = [
-                    "+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)
-                ]
-                table.append(
-                    [class_names[len(class_names) - num - 1]]
-                    + [is_positive[x] + str(rel_sums[x]) for x in top_indexes]
+            # allow maximum of 8 columns in a row to fit the page better
+            for i in range(0, len(important_features["average"]), 8):
+                table = []
+                for class_name, imp_values in important_features["classes"].items():
+                    table.append([class_name] + imp_values[1][i : i + 8])
+                print(
+                    tabulate(table, headers=["classes"] + top_feature_names[i : i + 8]),
+                    end="\n\n",
                 )
-
-            print(
-                tabulate(
-                    table, headers=["classes"] + [feature_names[x] for x in top_indexes]
-                )
-            )
 
         print("Test Set scores:")
         # Evaluate results on the test set.
@@ -410,7 +438,7 @@ class Model:
                 shap_values = [shap_values]
 
             important_features = self.get_important_features(
-                importance_cutoff, avg_shap_values
+                importance_cutoff, avg_shap_values, shap_values
             )
 
             return (
