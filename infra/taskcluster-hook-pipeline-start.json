@@ -63,7 +63,7 @@
         "workerType": "taskcluster-generic"
     },
     "triggerSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "type": "object"
     }
 }

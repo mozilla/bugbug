@@ -8,6 +8,7 @@ import concurrent.futures
 import copy
 import itertools
 import json
+import logging
 import multiprocessing
 import os
 import pickle
@@ -20,6 +21,9 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
+
+logger = logging.getLogger(__name__)
+
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -286,7 +290,11 @@ def hg_log(hg, revs):
         date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
         assert b" " in rev[9]
-        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b" ", 1)[0]))
+        pushdate_timestamp = rev[9].split(b" ", 1)[0]
+        if pushdate_timestamp != b"0":
+            pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
+        else:
+            pushdate = datetime.utcnow()
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
@@ -358,7 +366,9 @@ class exp_queue:
         return self.start_day + (self.list.maxlen - 1)
 
     def __getitem__(self, day):
-        assert day >= self.start_day, "Can't get a day from earlier than start day"
+        assert (
+            day >= self.start_day
+        ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
 
         if day < 0:
             return self.default
@@ -663,10 +673,9 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     hg = hglib.open(repo_dir)
 
     revs = get_revs(hg, rev_start)
-
-    assert (
-        len(revs) > 0
-    ), "There should definitely be more than 0 commits, something is wrong"
+    if len(revs) == 0:
+        print("No commits to analyze")
+        return []
 
     first_pushdate = hg_log(hg, [b"0"])[0].pushdate
 
@@ -719,6 +728,59 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
         if ret:
             return commits
+
+
+def clean(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        hg.revert(repo_dir.encode("utf-8"), all=True)
+
+        try:
+            cmd = hglib.util.cmdbuilder(
+                b"strip", rev=b"roots(outgoing())", force=True, backup=False
+            )
+            hg.rawcommand(cmd)
+        except hglib.error.CommandError as e:
+            if b"abort: empty revision set" not in e.err:
+                raise
+
+        # Pull and update.
+        logger.info("Pulling and updating mozilla-central")
+        hg.pull(update=True)
+        logger.info("mozilla-central pulled and updated")
+
+
+def clone(repo_dir):
+    if os.path.exists(repo_dir):
+        clean(repo_dir)
+        return
+
+    cmd = hglib.util.cmdbuilder(
+        "robustcheckout",
+        "https://hg.mozilla.org/mozilla-central",
+        repo_dir,
+        purge=True,
+        sharebase=repo_dir + "-shared",
+        networkattempts=7,
+        branch=b"tip",
+    )
+
+    cmd.insert(0, hglib.HGPATH)
+
+    proc = hglib.util.popen(cmd)
+    out, err = proc.communicate()
+    if proc.returncode:
+        raise hglib.error.CommandError(cmd, proc.returncode, out, err)
+
+    logger.info("mozilla-central cloned")
+
+    # Remove pushlog DB to make sure it's regenerated.
+    try:
+        os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
+    except FileNotFoundError:
+        logger.info("pushlog database doesn't exist")
+
+    # Pull and update, to make sure the pushlog is generated.
+    clean(repo_dir)
 
 
 if __name__ == "__main__":

@@ -300,12 +300,26 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
+            # TODO: Actually implement feature importance visualization for multiclass problems.
+            if isinstance(shap_values, list):
+                shap_values = np.sum(np.abs(shap_values), axis=0)
+
+            top_importances = self.get_important_features(
+                importance_cutoff, shap_values
+            )
+
+            top_indexes = [
+                int(index) for importance, index, is_positive in top_importances
+            ]
+
+            feature_names = self.get_feature_names()
+
             with io.StringIO() as out:
                 p = shap.force_plot(
                     explainer.expected_value,
-                    shap_values,
-                    X.toarray(),
-                    feature_names=self.get_feature_names(),
+                    shap_values[:, top_indexes],
+                    X.toarray()[:, top_indexes],
+                    feature_names=[feature_names[i] for i in top_indexes],
                     matplotlib=False,
                     show=False,
                 )
@@ -314,14 +328,6 @@ class Model:
                 shap.save_html(out, p)
 
                 html = out.getvalue()
-
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
-
-            top_importances = self.get_important_features(
-                importance_cutoff, shap_values
-            )
 
             return classes, {"importances": top_importances, "html": html}
 
