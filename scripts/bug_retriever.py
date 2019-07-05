@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import lzma
-import shutil
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
+import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bug_snapshot, bugzilla, db, labels
@@ -78,9 +77,10 @@ class Retriever(object):
         self.compress_file("data/bugs.json")
 
     def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
-            with lzma.open(f"{path}.xz", "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def main():

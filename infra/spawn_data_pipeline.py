@@ -75,17 +75,16 @@ def main():
     with open(args.data_pipeline_json) as pipeline_file:
         raw_tasks = yaml.safe_load(pipeline_file.read())
 
-    for task in raw_tasks["tasks"]:
-        # Try render the task template
-        context = {"version": os.getenv("TAG", "latest")}
-        payload = jsone.render(task, context)
+    context = {"version": os.getenv("TAG", "latest")}
+    rendered = jsone.render(raw_tasks, context)
 
+    for task in rendered["tasks"]:
         # We need to generate new unique task ids for taskcluster to be happy
         # but need to identify dependencies across tasks. So we create a
         # mapping between an internal ID and the generate ID
 
         task_id = taskcluster.utils.slugId()
-        task_internal_id = payload.pop("ID")
+        task_internal_id = task.pop("ID")
 
         if task_internal_id in id_mapping:
             raise ValueError(f"Conflicting IDs {task_internal_id}")
@@ -93,19 +92,19 @@ def main():
         id_mapping[task_internal_id] = task_id
 
         for key, value in keys.items():
-            payload[key] = value
+            task[key] = value
 
         # Process the dependencies
         new_dependencies = []
-        for dependency in payload.get("dependencies", []):
+        for dependency in task.get("dependencies", []):
             new_dependencies.append(id_mapping[dependency])
 
         if add_self:
             new_dependencies.append(decision_task_id)
 
-        payload["dependencies"] = new_dependencies
+        task["dependencies"] = new_dependencies
 
-        tasks.append((task_id, payload))
+        tasks.append((task_id, task))
 
     # Now sends them
     queue = taskcluster.Queue(options)

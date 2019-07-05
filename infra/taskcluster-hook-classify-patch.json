@@ -1,16 +1,7 @@
 {
-    "bindings": [
-        {
-            "exchange": "exchange/taskcluster-queue/v1/task-completed",
-            "routingKeyPattern": "route.project.relman.bugbug.deploy_ending"
-        }
-    ],
-    "schedule": [
-        "0 0 1,16 * *"
-    ],
     "metadata": {
         "description": "",
-        "name": "BugBug data pipeline",
+        "name": "BugBug classify patch",
         "owner": "mcastelluccio@mozilla.com"
     },
     "task": {
@@ -26,24 +17,37 @@
         "extra": {},
         "metadata": {
             "description": "",
-            "name": "BugBug data pipeline",
+            "name": "BugBug classify patch",
             "owner": "mcastelluccio@mozilla.com",
             "source": "https://github.com/mozilla/bugbug"
         },
         "payload": {
-            "artifacts": {},
-            "cache": {},
+            "artifacts": {
+                "public/probs,json": {
+                    "path": "/probs.json",
+                    "type": "file"
+                },
+                "public/importance.html": {
+                    "path": "/importance.html",
+                    "type": "file"
+                }
+            },
+            "cache": {
+                "bugbug-mercurial-repository": "/cache"
+            },
             "capabilities": {},
-            "env": {},
+            "env": {
+                "TC_SECRET_ID": "project/relman/bugbug/production"
+            },
             "features": {
                 "taskclusterProxy": true
             },
             "command": [
-                "/usr/local/bin/python3",
-                "/code/spawn_data_pipeline.py",
-                "/code/data-pipeline.yml"
+                "bugbug-classify-commit",
+                "/cache",
+                "${payload['DIFF_ID']}"
             ],
-            "image": "mozilla/bugbug-spawn-pipeline",
+            "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
         },
         "priority": "normal",
@@ -52,11 +56,12 @@
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed",
-            "index.project.relman.bugbug.data-pipeline-start"
+            "index.project.relman.bugbug.classify_patch.latest",
+            "index.project.relman.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug",
+            "assume:hook-id:project-relman/bugbug-classify-patch",
             "secrets:get:project/relman/bugbug/production"
         ],
         "tags": {},
@@ -64,6 +69,14 @@
     },
     "triggerSchema": {
         "additionalProperties": false,
+        "properties": {
+            "DIFF_ID": {
+                "type": "number"
+            }
+        },
+        "required": [
+            "DIFF_ID"
+        ],
         "type": "object"
     }
 }

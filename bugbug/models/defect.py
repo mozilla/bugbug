@@ -33,8 +33,6 @@ class DefectModel(BugModel):
             bug_features.has_w3c_url(),
             bug_features.has_github_url(),
             bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
             bug_features.title(),
             bug_features.blocked_bugs_number(),
             bug_features.ever_affected(),
@@ -44,7 +42,11 @@ class DefectModel(BugModel):
         ]
 
         if historical:
-            feature_extractors.append(bug_features.had_severity_enhancement())
+            feature_extractors += [
+                bug_features.had_severity_enhancement(),
+                bug_features.patches(),
+                bug_features.landings(),
+            ]
 
         cleanup_functions = [
             feature_cleanup.url(),

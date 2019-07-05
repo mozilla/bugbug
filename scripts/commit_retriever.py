@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import lzma
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 
-import hglib
+import zstandard
 
 from bugbug import db, repository
 
@@ -22,35 +20,7 @@ class Retriever(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def retrieve_commits(self):
-        shared_dir = self.repo_dir + "-shared"
-        cmd = hglib.util.cmdbuilder(
-            "robustcheckout",
-            "https://hg.mozilla.org/mozilla-central",
-            self.repo_dir,
-            purge=True,
-            sharebase=shared_dir,
-            networkattempts=7,
-            branch=b"tip",
-        )
-
-        cmd.insert(0, hglib.HGPATH)
-
-        proc = hglib.util.popen(cmd)
-        out, err = proc.communicate()
-        if proc.returncode:
-            raise hglib.error.CommandError(cmd, proc.returncode, out, err)
-
-        logger.info("mozilla-central cloned")
-
-        try:
-            os.remove(os.path.join(self.repo_dir, ".hg", "pushlog2.db"))
-        except FileNotFoundError:
-            logger.info("pushlog database doesn't exist")
-
-        # Pull and update, to make sure the pushlog is generated.
-        hg = hglib.open(self.repo_dir)
-        hg.pull(update=True)
-        hg.close()
+        repository.clone(self.repo_dir)
 
         db.download_version(repository.COMMITS_DB)
         if not db.is_old_version(repository.COMMITS_DB):
@@ -71,9 +41,10 @@ class Retriever(object):
         self.compress_file("data/commit_experiences.pickle")
 
     def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
-            with lzma.open(f"{path}.xz", "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def main():

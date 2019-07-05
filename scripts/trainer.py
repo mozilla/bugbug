@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import lzma
+import json
 import os
-import shutil
 from logging import INFO, basicConfig, getLogger
 from urllib.request import urlretrieve
 
+import zstandard
+
 from bugbug import get_bugbug_version, model
 from bugbug.models import get_model_class
+from bugbug.utils import CustomJsonEncoder
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -18,23 +20,25 @@ BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.
 
 class Trainer(object):
     def decompress_file(self, path):
-        with lzma.open(f"{path}.xz", "rb") as input_f:
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{path}.zst", "rb") as input_f:
             with open(path, "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+                dctx.copy_stream(input_f, output_f)
         assert os.path.exists(path), "Decompressed file exists"
 
     def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
-            with lzma.open(f"{path}.xz", "wb") as output_f:
-                shutil.copyfileobj(input_f, output_f)
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
     def download_db(self, db_type):
         path = f"data/{db_type}.json"
         formatted_base_url = BASE_URL.format(db_type, f"v{get_bugbug_version()}")
-        url = f"{formatted_base_url}/{db_type}.json.xz"
-        logger.info(f"Downloading {db_type} database from {url} to {path}.xz")
-        urlretrieve(url, f"{path}.xz")
-        assert os.path.exists(f"{path}.xz"), "Downloaded file exists"
+        url = f"{formatted_base_url}/{db_type}.json.zst"
+        logger.info(f"Downloading {db_type} database from {url} to {path}.zst")
+        urlretrieve(url, f"{path}.zst")
+        assert os.path.exists(f"{path}.zst"), "Downloaded file exists"
         logger.info(f"Decompressing {db_type} database")
         self.decompress_file(path)
 
@@ -55,7 +59,12 @@ class Trainer(object):
         logger.info(f"Training *{model_name}* model")
 
         model_obj = model_class()
-        model_obj.train()
+        metrics = model_obj.train()
+
+        # Save the metrics as a file that can be uploaded as an artifact.
+        metric_file_path = "metrics.json"
+        with open(metric_file_path, "w") as metric_file:
+            json.dump(metrics, metric_file, cls=CustomJsonEncoder)
 
         logger.info(f"Training done")
 

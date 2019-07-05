@@ -140,15 +140,26 @@ def test_hg_log(fake_hg_repo):
     )
     revision5 = hg.log(limit=1)[0][1].decode("ascii")
 
+    # Wait one second, to have a different pushdate.
+    time.sleep(1)
+
     second_push_date = datetime.utcnow()
     hg.push(dest=bytes(remote, "ascii"))
+
+    add_file(hg, local, "file3", "1\n2\n3\n4\n5\n6\n7\n")
+    revision6 = commit(hg)
 
     copy_pushlog_database(remote, local)
 
     revs = repository.get_revs(hg)
 
+    # Wait one second, to have a different pushdate.
+    time.sleep(1)
+
+    hg_log_date = datetime.utcnow()
+
     commits = repository.hg_log(hg, revs)
-    assert len(commits) == 5, "hg log should return five commits"
+    assert len(commits) == 6, "hg log should return six commits"
 
     assert commits[0].node == revision1
     assert commits[0].author == "Moz Illa <milla@mozilla.org>"
@@ -230,11 +241,83 @@ def test_hg_log(fake_hg_repo):
     assert commits[4].file_copies == {"file2copymove": "file2copy"}
     assert commits[4].reviewers == tuple()
 
+    assert commits[5].node == revision6
+    assert commits[5].author == "Moz Illa <milla@mozilla.org>"
+    assert commits[5].desc == "Commit A file3"
+    assert commits[5].date == datetime(2019, 4, 16)
+    assert (
+        hg_log_date - relativedelta(seconds=1)
+        <= commits[5].pushdate
+        <= hg_log_date + relativedelta(seconds=1)
+    )
+    assert commits[5].bug == b""
+    assert commits[5].backedoutby == ""
+    assert commits[5].author_email == b"milla@mozilla.org"
+    assert commits[5].files == ["file3"]
+    assert commits[5].file_copies == {}
+    assert commits[5].reviewers == tuple()
+
     commits = repository.hg_log(hg, [revs[1], revs[3]])
     assert len(commits) == 3, "hg log should return three commits"
     assert commits[0].node == revision2
     assert commits[1].node == revision3
     assert commits[2].node == revision4
+
+
+@responses.activate
+def test_download_component_mapping():
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "100"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        json={},
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 0
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        json={
+            "AUTHORS": ["mozilla.org", "Licensing"],
+            "Cargo.lock": ["Firefox Build System", "General"],
+        },
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
 
 @responses.activate

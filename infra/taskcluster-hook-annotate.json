@@ -1,16 +1,10 @@
 {
-    "bindings": [
-        {
-            "exchange": "exchange/taskcluster-queue/v1/task-completed",
-            "routingKeyPattern": "route.project.relman.bugbug.deploy_ending"
-        }
-    ],
     "schedule": [
-        "0 0 1,16 * *"
+        "0 0 0 * * *"
     ],
     "metadata": {
         "description": "",
-        "name": "BugBug data pipeline",
+        "name": "BugBug annotate pipeline",
         "owner": "mcastelluccio@mozilla.com"
     },
     "task": {
@@ -26,7 +20,7 @@
         "extra": {},
         "metadata": {
             "description": "",
-            "name": "BugBug data pipeline",
+            "name": "BugBug annotate pipeline",
             "owner": "mcastelluccio@mozilla.com",
             "source": "https://github.com/mozilla/bugbug"
         },
@@ -41,7 +35,7 @@
             "command": [
                 "/usr/local/bin/python3",
                 "/code/spawn_data_pipeline.py",
-                "/code/data-pipeline.yml"
+                "/code/annotate-pipeline.yml"
             ],
             "image": "mozilla/bugbug-spawn-pipeline",
             "maxRunTime": 7200
@@ -51,12 +45,11 @@
         "retries": 5,
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed",
-            "index.project.relman.bugbug.data-pipeline-start"
+            "notify.irc-channel.#bugbug.on-failed"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug",
+            "assume:hook-id:project-relman/bugbug-annotate",
             "secrets:get:project/relman/bugbug/production"
         ],
         "tags": {},
