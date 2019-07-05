@@ -10,7 +10,6 @@ import sys
 from datetime import datetime, timedelta
 
 import numpy as np
-from tabulate import tabulate
 
 from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
@@ -114,35 +113,12 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
+                # shap values of top features for the predicted class
                 pred_class_index = int(np.where(probas == np.amax(probas))[1])
-                imp_values = importance["importances"]["classes"][
-                    f"class {pred_class_index}"
-                ]
-                shap_val = []
-                header_names = []
-                for importance, index, is_positive in imp_values[0]:
-                    if is_positive:
-                        shap_val.append("+" + str(importance))
-                    else:
-                        shap_val.append("-" + str(importance))
 
-                    header_names.append(feature_names[int(index)])
-                print(
-                    "Top {} features for class {} :".format(
-                        len(header_names), pred_class_index
-                    )
+                model.print_feature_importances(
+                    importance["importances"], feature_names, pred_class_index
                 )
-
-                # allow maximum of 8 columns in a row to fit the page better
-                for i in range(0, len(header_names), 8):
-                    print(
-                        tabulate(
-                            [[f"class {pred_class_index}"] + shap_val[i : i + 8]],
-                            headers=["classes"] + header_names[i : i + 8],
-                            tablefmt="grid",
-                        ),
-                        end="\n\n",
-                    )
 
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)

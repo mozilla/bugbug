@@ -156,11 +156,14 @@ class Model:
 
         return cleaned_feature_names
 
-    def get_important_features(
-        self, cutoff, avg_shap_values, shap_values, class_names=False
-    ):
+    def get_important_features(self, cutoff, shap_values, class_names=False):
         # Calculate the values that represent the fraction of the model output variability attributable
         # to each feature across the whole dataset.
+        avg_shap_values = 0
+        if isinstance(shap_values, list):
+            avg_shap_values = np.sum(np.abs(shap_values), axis=0)
+        else:
+            avg_shap_values = shap_values
 
         shap_sums = avg_shap_values.sum(0)
         abs_shap_sums = np.abs(avg_shap_values).sum(0)
@@ -182,22 +185,21 @@ class Model:
         if isinstance(shap_values, list):
             important_features = {}
             important_features["classes"] = {}
-            important_features["average"] = list(
-                int(index) for importance, index, is_pos in top_features
-            )
+            important_features["average"] = top_features
             for num, item in enumerate(shap_values):
-                # top features in shap values for that class
+                # top features for that class
                 top_item_features = self.get_important_features(
-                    cutoff, item, item, class_names
+                    cutoff, item, class_names
                 )
 
-                # top features in average shap values for that class
-                top_avg = []
+                # shap values of top average features for that class
                 abs_sums = np.abs(item).sum(0)
                 rel_sums = abs_sums / abs_sums.sum()
                 is_pos = ["+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)]
-                for index in important_features["average"]:
-                    top_avg.append(is_pos[index] + str(rel_sums[index]))
+                top_avg = [
+                    is_pos[int(index)] + str(rel_sums[int(index)])
+                    for importance, index, is_positive in important_features["average"]
+                ]
 
                 if class_names:
                     important_features["classes"][
@@ -213,6 +215,51 @@ class Model:
 
         else:
             return top_features
+
+    def print_feature_importances(
+        self, important_features, feature_names, pred_class=False
+    ):
+        # extract importance values from the top features for the predicted class
+        # when classsifying
+        if pred_class:
+            imp_values = important_features["classes"][f"class {pred_class}"][0]
+            shap_val = []
+            top_feature_names = []
+            for importance, index, is_positive in imp_values:
+                if is_positive:
+                    shap_val.append("+" + str(importance))
+                else:
+                    shap_val.append("-" + str(importance))
+
+                top_feature_names.append(feature_names[int(index)])
+            shap_val = [[f"class {pred_class}"] + shap_val]
+
+        # extract importance values from the top features for all the classes
+        # when training
+        else:
+            top_feature_names = [
+                feature_names[int(index)]
+                for importance, index, is_pos in important_features["average"]
+            ]
+            shap_val = [
+                [class_name] + imp_values[1]
+                for class_name, imp_values in important_features["classes"].items()
+            ]
+
+        # allow maximum of 8 columns in a row to fit the page better
+        print("Top {} features:".format(len(top_feature_names)))
+        for i in range(0, len(top_feature_names), 8):
+            table = []
+            for item in shap_val:
+                table.append(item[i : i + 8])
+            print(
+                tabulate(
+                    table,
+                    headers=(["classes"] + top_feature_names)[i : i + 8],
+                    tablefmt="grid",
+                ),
+                end="\n\n",
+            )
 
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
@@ -286,35 +333,14 @@ class Model:
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
-            avg_shap_values = 0
-            if isinstance(shap_values, list):
-                avg_shap_values = np.sum(np.abs(shap_values), axis=0)
-            else:
-                avg_shap_values = shap_values
+            if not isinstance(shap_values, list):
                 shap_values = [shap_values]
 
             important_features = self.get_important_features(
-                importance_cutoff, avg_shap_values, shap_values, class_names
+                importance_cutoff, shap_values, self.class_names
             )
 
-            print("Top {} features:".format(len(important_features["average"])))
-            top_feature_names = [
-                feature_names[index] for index in important_features["average"]
-            ]
-
-            # allow maximum of 8 columns in a row to fit the page better
-            for i in range(0, len(important_features["average"]), 8):
-                table = []
-                for class_name, imp_values in important_features["classes"].items():
-                    table.append([class_name] + imp_values[1][i : i + 8])
-                print(
-                    tabulate(
-                        table,
-                        headers=["classes"] + top_feature_names[i : i + 8],
-                        tablefmt="grid",
-                    ),
-                    end="\n\n",
-                )
+            self.print_feature_importances(important_features, feature_names)
 
         print("Test Set scores:")
         # Evaluate results on the test set.
@@ -403,16 +429,19 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
+            if not isinstance(shap_values, list):
+                shap_values = [shap_values]
 
-            top_importances = self.get_important_features(
+            important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
 
+            # TODO: pred class index
             top_indexes = [
-                int(index) for importance, index, is_positive in top_importances
+                int(index)
+                for importance, index, is_positive in important_features["classes"][
+                    "class 0"
+                ][0]
             ]
 
             feature_names = self.get_human_readable_feature_names()
@@ -433,17 +462,6 @@ class Model:
                 shap.save_html(out, p)
 
                 html = out.getvalue()
-
-            avg_shap_values = 0
-            if isinstance(shap_values, list):
-                avg_shap_values = np.sum(np.abs(shap_values), axis=0)
-            else:
-                avg_shap_values = shap_values
-                shap_values = [shap_values]
-
-            important_features = self.get_important_features(
-                importance_cutoff, avg_shap_values, shap_values
-            )
 
             return (
                 classes,
