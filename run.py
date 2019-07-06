@@ -113,11 +113,10 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
-                # shap values of top features for the predicted class
-                pred_class_index = int(np.where(probas == np.amax(probas))[1])
-
                 model.print_feature_importances(
-                    importance["importances"], feature_names, pred_class_index
+                    importance["importances"],
+                    feature_names,
+                    pred_class=importance["predicted_class"],
                 )
 
             else:

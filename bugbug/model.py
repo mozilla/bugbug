@@ -221,7 +221,7 @@ class Model:
     ):
         # extract importance values from the top features for the predicted class
         # when classsifying
-        if pred_class:
+        if pred_class is not False:
             imp_values = important_features["classes"][f"class {pred_class}"][0]
             shap_val = []
             top_feature_names = []
@@ -436,11 +436,17 @@ class Model:
                 importance_cutoff, shap_values
             )
 
-            # TODO: pred class index
+            # Workaround: handle multi class case for force_plot to work correctly
+            if not len(classes[0]) == 2:
+                pred_class_index = classes.argmax(axis=-1)[0]
+                explainer.expected_value = explainer.expected_value[0]
+            else:
+                pred_class_index = 0
+
             top_indexes = [
                 int(index)
                 for importance, index, is_positive in important_features["classes"][
-                    "class 0"
+                    f"class {pred_class_index}"
                 ][0]
             ]
 
@@ -451,7 +457,7 @@ class Model:
             with io.StringIO() as out:
                 p = shap.force_plot(
                     explainer.expected_value,
-                    shap_values[:, top_indexes],
+                    shap_values[0][:, top_indexes],
                     X.toarray()[:, top_indexes],
                     feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
