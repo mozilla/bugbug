@@ -6,7 +6,7 @@ RUN apt-get update && \
     apt-get install -y python-pip git && \
     python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
     hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
-    apt-get purge -y python-pip && apt-get autoremove -y && \
+    apt-get purge -y python-pip && \
     rm -rf /var/lib/apt/lists/*
 
 COPY infra/hgrc /root/.hgrc
