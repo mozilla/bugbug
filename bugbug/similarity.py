@@ -265,7 +265,10 @@ class Word2VecWmdSimilarity(BaseSimilarity):
         )
         distances = []
         for i in range(len(self.corpus)):
-            indexes = [self.w2vmodel.wv.vocab[word].index for word in self.corpus[i]]
+            cleaned_corpus = [
+                word for word in self.corpus[i] if word in self.w2vmodel.wv.vocab
+            ]
+            indexes = [self.w2vmodel.wv.vocab[word].index for word in cleaned_corpus]
             if len(indexes) != 0:
                 word_dists = all_distances[indexes]
                 rwmd = max(
@@ -288,7 +291,11 @@ class Word2VecWmdSimilarity(BaseSimilarity):
             ):
                 break
 
-            doc_words_clean = self.corpus[self.bug_ids.index(doc_id)]
+            doc_words_clean = [
+                word
+                for word in self.corpus[self.bug_ids.index(doc_id)]
+                if word in self.w2vmodel.wv.vocab
+            ]
             wmd = self.wmdistance(words, doc_words_clean, all_distances)
 
             j = bisect.bisect(confirmed_distances, wmd)
@@ -297,4 +304,8 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
         similarities = zip(confirmed_distances_ids, confirmed_distances)
 
-        return [similar[0] for similar in sorted(similarities, key=lambda v: v[1])[:10]]
+        return [
+            similar[0]
+            for similar in sorted(similarities, key=lambda v: v[1])[:10]
+            if similar[0] != query["id"]
+        ]
