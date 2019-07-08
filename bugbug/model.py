@@ -560,6 +560,15 @@ class BugModel(Model):
 
             assert len(commit_map) > 0
 
+        if "to_rollback" in classes:
+            for bug in bugzilla.get_bugs():
+                bug_id = bug["id"]
+
+                if bug_id not in classes["to_rollback"]:
+                    continue
+
+                yield bug, classes["to_rollback"][bug_id]
+
         for bug in bugzilla.get_bugs():
             bug_id = bug["id"]
             if bug_id not in classes:

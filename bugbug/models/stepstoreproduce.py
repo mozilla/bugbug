@@ -43,7 +43,12 @@ class StepsToReproduceModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
                 ),
                 (
                     "union",
@@ -61,8 +66,17 @@ class StepsToReproduceModel(BugModel):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor="cpu_predictor")
 
+    def rollback(self, change):
+        return (
+            change["field_name"] == "cf_has_str" and change["removed"].startswith("no")
+        ) or (
+            change["field_name"] == "keywords"
+            and change["removed"].startswith("stepswanted")
+        )
+
     def get_labels(self):
         classes = {}
+        classes["to_rollback"] = {}
 
         for bug_data in bugzilla.get_bugs():
             if "cf_has_str" in bug_data:
@@ -70,6 +84,10 @@ class StepsToReproduceModel(BugModel):
                     classes[int(bug_data["id"])] = 0
                 elif bug_data["cf_has_str"] == "yes":
                     classes[int(bug_data["id"])] = 1
+                    for entry in bug_data["history"]:
+                        for change in entry["changes"]:
+                            if self.rollback(change):
+                                classes["to_rollback"][int(bug_data["id"])] = 0
             elif "stepswanted" in bug_data["keywords"]:
                 classes[int(bug_data["id"])] = 0
             else:
@@ -77,6 +95,7 @@ class StepsToReproduceModel(BugModel):
                     for change in entry["changes"]:
                         if change["removed"].startswith("stepswanted"):
                             classes[int(bug_data["id"])] = 1
+                            classes["to_rollback"][int(bug_data["id"])] = 0
 
         print(
             "{} bugs have no steps to reproduce".format(
