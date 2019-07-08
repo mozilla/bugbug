@@ -7,7 +7,7 @@ import csv
 import os
 import sys
 
-from bugbug import utils
+from bugbug import repository, utils
 
 LABELS_URLS = {
     "regressor": "https://github.com/marco-c/mozilla-central-regressors/raw/master/regressor.csv"
@@ -41,5 +41,7 @@ def get_all_bug_ids():
                 continue
 
             bug_ids.update([int(row["bug_id"]) for row in reader])
+
+    bug_ids.update(commit["bug_id"] for commit in repository.get_commits())
 
     return list(bug_ids)

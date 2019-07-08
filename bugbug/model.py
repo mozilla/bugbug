@@ -286,8 +286,6 @@ class CommitModel(Model):
                 if commit["node"] in classes
             )
 
-            bugzilla.download_bugs(all_bug_ids)
-
             bug_map = {}
 
             for bug in bugzilla.get_bugs():

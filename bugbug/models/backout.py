@@ -14,8 +14,8 @@ from bugbug.model import CommitModel
 
 
 class BackoutModel(CommitModel):
-    def __init__(self, lemmatization=False):
-        CommitModel.__init__(self, lemmatization, bug_data=True)
+    def __init__(self, lemmatization=False, bug_data=False):
+        CommitModel.__init__(self, lemmatization, bug_data)
 
         self.calculate_importance = False
 
