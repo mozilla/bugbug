@@ -113,10 +113,16 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
+                # Workaround: handle multi class case for force_plot to work correctly
+                if len(probas[0]) != 2:
+                    pred_class_index = probas.argmax(axis=-1)[0]
+                else:
+                    pred_class_index = 0
+
                 model.print_feature_importances(
                     importance["importances"],
                     feature_names,
-                    pred_class=importance["predicted_class"],
+                    predicted_class=pred_class_index,
                 )
 
             else:

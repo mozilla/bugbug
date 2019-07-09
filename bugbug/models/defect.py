@@ -245,7 +245,11 @@ class DefectModel(BugModel):
                         classes[int(bug_id)] = "defect"
 
         # Remove labels which belong to bugs for which we have no data.
-        return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
+        return {
+            bug_id: label
+            for bug_id, label in itertools.islice(classes.items(), 2000)
+            if bug_id in bug_ids
+        }
 
     def get_labels(self):
         return (self.get_bugbug_labels("bug"), [0, 1])

@@ -157,72 +157,72 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values, class_names=False):
-        # Calculate the values that represent the fraction of the model output variability attributable
-        # to each feature across the whole dataset.
-        avg_shap_values = 0
-        if isinstance(shap_values, list):
-            avg_shap_values = np.sum(np.abs(shap_values), axis=0)
-        else:
-            avg_shap_values = shap_values
 
-        shap_sums = avg_shap_values.sum(0)
-        abs_shap_sums = np.abs(avg_shap_values).sum(0)
-        rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
+        if not isinstance(shap_values, list):
+            shap_values = [shap_values]
 
-        cut_off_value = cutoff * np.amax(rel_shap_sums)
+        # returns top features for a shap_value matrix
+        def get_top_features(cutoff, shap_values):
+            # Calculate the values that represent the fraction of the model output variability attributable
+            # to each feature across the whole dataset.
+            shap_sums = shap_values.sum(0)
+            abs_shap_sums = np.abs(shap_values).sum(0)
+            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
 
-        # Get indices of features that pass the cut off value
-        top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
-        # Get the importance values of the top features from their indices
-        top_features = np.take(rel_shap_sums, top_feature_indices)
-        # Gets the sign of the importance from shap_sums as boolean
-        is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
-        # Stack the importance, indices and shap_sums in a 2D array
-        top_features = np.column_stack((top_features, top_feature_indices, is_positive))
-        # Sort the array (in decreasing order of importance values)
-        top_features = top_features[top_features[:, 0].argsort()][::-1]
+            cut_off_value = cutoff * np.amax(rel_shap_sums)
 
-        if isinstance(shap_values, list):
-            important_features = {}
-            important_features["classes"] = {}
-            important_features["average"] = top_features
-            for num, item in enumerate(shap_values):
-                # top features for that class
-                top_item_features = self.get_important_features(
-                    cutoff, item, class_names
-                )
+            # Get indices of features that pass the cut off value
+            top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
+            # Get the importance values of the top features from their indices
+            top_features = np.take(rel_shap_sums, top_feature_indices)
+            # Gets the sign of the importance from shap_sums as boolean
+            is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
+            # Stack the importance, indices and shap_sums in a 2D array
+            top_features = np.column_stack(
+                (top_features, top_feature_indices, is_positive)
+            )
+            # Sort the array (in decreasing order of importance values)
+            top_features = top_features[top_features[:, 0].argsort()][::-1]
 
-                # shap values of top average features for that class
-                abs_sums = np.abs(item).sum(0)
-                rel_sums = abs_sums / abs_sums.sum()
-                is_pos = ["+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)]
-                top_avg = [
-                    is_pos[int(index)] + str(rel_sums[int(index)])
-                    for importance, index, is_positive in important_features["average"]
-                ]
-
-                if class_names:
-                    important_features["classes"][
-                        class_names[len(class_names) - num - 1]
-                    ] = (top_item_features, top_avg)
-                else:
-                    important_features["classes"][f"class {num}"] = (
-                        top_item_features,
-                        top_avg,
-                    )
-
-            return important_features
-
-        else:
             return top_features
 
+        important_features = {}
+        important_features["classes"] = {}
+        important_features["average"] = get_top_features(
+            cutoff, np.sum(np.abs(shap_values), axis=0)
+        )
+        for num, item in enumerate(shap_values):
+            # top features for that class
+            top_item_features = get_top_features(cutoff, item)
+
+            # shap values of top average features for that class
+            abs_sums = np.abs(item).sum(0)
+            rel_sums = abs_sums / abs_sums.sum()
+            is_pos = ["+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)]
+            top_avg = [
+                is_pos[int(index)] + str(rel_sums[int(index)])
+                for importance, index, is_positive in important_features["average"]
+            ]
+
+            if class_names:
+                important_features["classes"][
+                    class_names[len(class_names) - num - 1]
+                ] = (top_item_features, top_avg)
+            else:
+                important_features["classes"][f"class {num}"] = (
+                    top_item_features,
+                    top_avg,
+                )
+
+        return important_features
+
     def print_feature_importances(
-        self, important_features, feature_names, pred_class=False
+        self, important_features, feature_names, predicted_class=False
     ):
         # extract importance values from the top features for the predicted class
         # when classsifying
-        if pred_class is not False:
-            imp_values = important_features["classes"][f"class {pred_class}"][0]
+        if predicted_class is not False:
+            imp_values = important_features["classes"][f"class {predicted_class}"][0]
             shap_val = []
             top_feature_names = []
             for importance, index, is_positive in imp_values:
@@ -232,7 +232,7 @@ class Model:
                     shap_val.append("-" + str(importance))
 
                 top_feature_names.append(feature_names[int(index)])
-            shap_val = [[f"class {pred_class}"] + shap_val]
+            shap_val = [[f"class {predicted_class}"] + shap_val]
 
         # extract importance values from the top features for all the classes
         # when training
@@ -333,9 +333,6 @@ class Model:
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
-            if not isinstance(shap_values, list):
-                shap_values = [shap_values]
-
             important_features = self.get_important_features(
                 importance_cutoff, shap_values, self.class_names
             )
@@ -429,17 +426,15 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
-            if not isinstance(shap_values, list):
-                shap_values = [shap_values]
-
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
 
             # Workaround: handle multi class case for force_plot to work correctly
-            if not len(classes[0]) == 2:
+            if len(classes[0]) > 2:
                 pred_class_index = classes.argmax(axis=-1)[0]
-                explainer.expected_value = explainer.expected_value[0]
+                explainer.expected_value = explainer.expected_value[pred_class_index]
+                shap_values = shap_values[pred_class_index]
             else:
                 pred_class_index = 0
 
@@ -457,7 +452,7 @@ class Model:
             with io.StringIO() as out:
                 p = shap.force_plot(
                     explainer.expected_value,
-                    shap_values[0][:, top_indexes],
+                    shap_values[:, top_indexes],
                     X.toarray()[:, top_indexes],
                     feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
