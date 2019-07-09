@@ -128,6 +128,8 @@ class Model:
                 feature_name = f"First comment contains '{feature_name}'"
             elif type_ == "comments":
                 feature_name = f"Comments contain '{feature_name}'"
+            elif type_ == "text":
+                feature_name = f"Combined text contains '{feature_name}'"
             elif type_ == "data":
                 if " in " in feature_name and feature_name.endswith("=True"):
                     feature_name = feature_name[: len(feature_name) - len("=True")]
