@@ -37,17 +37,17 @@
             },
             "capabilities": {},
             "env": {
-                "$eval": "payload"
+                "TC_SECRET_ID": "project/relman/bugbug/production"
             },
             "features": {
                 "taskclusterProxy": true
             },
             "command": [
-                "/bin/bash",
-                "-c",
-                "bugbug-classify-commit /cache/ $DIFF_ID"
+                "bugbug-classify-commit",
+                "/cache",
+                "${payload['DIFF_ID']}"
             ],
-            "image": "mozilla/bugbug-base",
+            "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
         },
         "priority": "normal",
@@ -55,7 +55,9 @@
         "retries": 5,
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed"
+            "notify.irc-channel.#bugbug.on-failed",
+            "index.project.relman.bugbug.classify_patch.latest",
+            "index.project.relman.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
         ],
         "schedulerId": "-",
         "scopes": [
@@ -66,7 +68,15 @@
         "workerType": "taskcluster-generic"
     },
     "triggerSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
+        "properties": {
+            "DIFF_ID": {
+                "type": "number"
+            }
+        },
+        "required": [
+            "DIFF_ID"
+        ],
         "type": "object"
     }
 }

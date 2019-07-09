@@ -8,6 +8,7 @@ import os
 import shutil
 
 import jsone
+import jsonschema
 import pytest
 
 from infra.set_hook_version import set_hook
@@ -42,5 +43,7 @@ def test_jsone_validates(tmp_path, hook_file, payload):
 
     with open(tmp_hook_file, "r") as f:
         hook_content = json.load(f)
+
+    jsonschema.validate(instance=payload, schema=hook_content["triggerSchema"])
 
     jsone.render(hook_content, context={"payload": payload})

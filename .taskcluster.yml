@@ -138,7 +138,7 @@ tasks:
               description: bugbug packaging test
               owner: ${user}@users.noreply.github.com
               source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
+              
           - taskId: {$eval: as_slugid("docker_build")}
             created: {$fromNow: ''}
             deadline: {$fromNow: '3 hours'}
@@ -209,7 +209,7 @@ tasks:
                   metadata:
                     name: bugbug PyPI release
                     description: bugbug PyPI release
-
+                    
           - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
             then:
               $mergeDeep:
