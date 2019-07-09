@@ -34,27 +34,27 @@ tasks:
           owner: ${user}@users.noreply.github.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
     in:
-      $if: 'tasks_for in ["github-pull-request", "github-push"]'
-      then:
-        $mergeDeep:
-          - {$eval: 'default_task_definition'}
-          - taskId: {$eval: as_slugid("lint_task")}
-            created: {$fromNow: ''}
-            deadline: {$fromNow: '1 hour'}
-            payload:
-              maxRunTime: 3600
-              image: python:3.7
-              command:
-                - "/bin/bash"
-                - "-lcx"
-                - "git clone --quiet ${repository} &&
-                   cd bugbug &&
-                   git -c advice.detachedHead=false checkout ${head_rev} &&
-                   pip install --quiet -r test-requirements.txt &&
-                   pre-commit run -a" # TODO Be smarter and run only on modified files
-            metadata:
-              name: bugbug lint
-              description: bugbug lint
+      - $if: 'tasks_for in ["github-pull-request", "github-push"]'
+        then:
+          $mergeDeep:
+            - {$eval: 'default_task_definition'}
+            - taskId: {$eval: as_slugid("lint_task")}
+              created: {$fromNow: ''}
+              deadline: {$fromNow: '1 hour'}
+              payload:
+                maxRunTime: 3600
+                image: python:3.7
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "git clone --quiet ${repository} &&
+                     cd bugbug &&
+                     git -c advice.detachedHead=false checkout ${head_rev} &&
+                     pip install --quiet -r test-requirements.txt &&
+                     pre-commit run -a" # TODO Be smarter and run only on modified files
+              metadata:
+                name: bugbug lint
+                description: bugbug lint
 
           - $if: 'tasks_for == "github-push"'
             then:
