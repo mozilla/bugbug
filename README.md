@@ -1,4 +1,4 @@
-# bugbug
+# bugbug-mozilla
 
 [![Task Status](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)
 
