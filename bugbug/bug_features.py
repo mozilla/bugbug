@@ -22,16 +22,22 @@ def field(bug, field):
 
 
 class has_str(object):
+    name = "Has STR"
+
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_str")
 
 
 class has_regression_range(object):
+    name = "Has Regression Range"
+
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_regression_range")
 
 
 class has_crash_signature(object):
+    name = "Crash signature present"
+
     def __call__(self, bug, **kwargs):
         return "cf_crash_signature" in bug and bug["cf_crash_signature"] != ""
 
@@ -62,11 +68,15 @@ class severity(object):
 
 
 class number_of_bug_dependencies(object):
+    name = "# of bug dependencies"
+
     def __call__(self, bug, **kwargs):
         return len(bug["depends_on"])
 
 
 class is_coverity_issue(object):
+    name = "Is Coverity issue"
+
     def __call__(self, bug, **kwargs):
         return (
             re.search("[CID ?[0-9]+]", bug["summary"]) is not None
@@ -75,16 +85,22 @@ class is_coverity_issue(object):
 
 
 class has_url(object):
+    name = "Has a URL"
+
     def __call__(self, bug, **kwargs):
         return bug["url"] != ""
 
 
 class has_w3c_url(object):
+    name = "Has a w3c URL"
+
     def __call__(self, bug, **kwargs):
         return "w3c" in bug["url"]
 
 
 class has_github_url(object):
+    name = "Has a GitHub URL"
+
     def __call__(self, bug, **kwargs):
         return "github" in bug["url"]
 
@@ -114,6 +130,8 @@ class whiteboard(object):
 
 
 class patches(object):
+    name = "# of patches"
+
     def __call__(self, bug, **kwargs):
         return sum(
             1
@@ -125,6 +143,8 @@ class patches(object):
 
 
 class landings(object):
+    name = "# of landing comments"
+
     def __call__(self, bug, **kwargs):
         return sum(1 for c in bug["comments"] if "://hg.mozilla.org/" in c["text"])
 
@@ -152,6 +172,8 @@ class component(object):
 
 
 class is_mozillian(object):
+    name = "Reporter has a @mozilla email"
+
     def __call__(self, bug, **kwargs):
         return any(
             bug["creator_detail"]["email"].endswith(domain)
@@ -160,11 +182,15 @@ class is_mozillian(object):
 
 
 class bug_reporter(object):
+    name = "Bug reporter"
+
     def __call__(self, bug, **kwargs):
         return bug["creator_detail"]["email"]
 
 
 class delta_request_merge(object):
+    name = "Timespan between uplift request and following merge"
+
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
@@ -182,6 +208,8 @@ class delta_request_merge(object):
 
 
 class blocked_bugs_number(object):
+    name = "# of blocked bugs"
+
     def __call__(self, bug, **kwargs):
         return len(bug["blocks"])
 
@@ -192,26 +220,36 @@ class priority(object):
 
 
 class has_cve_in_alias(object):
+    name = "CVE in alias"
+
     def __call__(self, bug, **kwargs):
         return bug["alias"] is not None and "CVE" in bug["alias"]
 
 
 class comment_count(object):
+    name = "# of comments"
+
     def __call__(self, bug, **kwargs):
         return field(bug, "comment_count")
 
 
 class comment_length(object):
+    name = "Length of comments"
+
     def __call__(self, bug, **kwargs):
         return sum(len(x["text"]) for x in bug["comments"])
 
 
 class reporter_experience(object):
+    name = "# of bugs previously opened by the reporter"
+
     def __call__(self, bug, reporter_experience, **kwargs):
         return reporter_experience
 
 
 class ever_affected(object):
+    name = "status has ever been set to 'affected'"
+
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
@@ -225,6 +263,8 @@ class ever_affected(object):
 
 
 class affected_then_unaffected(object):
+    name = "status has ever been set to 'affected' and 'unaffected'"
+
     def __call__(self, bug, **kwargs):
         unaffected = []
         affected = []
@@ -259,6 +299,8 @@ class affected_then_unaffected(object):
 
 
 class has_image_attachment_at_bug_creation(object):
+    name = "Image attachment present at bug creation"
+
     def __call__(self, bug, **kwargs):
         return any(
             "image" in attachment["content_type"]
@@ -268,6 +310,8 @@ class has_image_attachment_at_bug_creation(object):
 
 
 class has_image_attachment(object):
+    name = "Image attachment present"
+
     def __call__(self, bug, **kwargs):
         return any(
             "image" in attachment["content_type"] for attachment in bug["attachments"]
@@ -459,14 +503,17 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     author_ids=author_ids,
                 )
 
-                feature_extractor_name = feature_extractor.__class__.__name__
+                if hasattr(feature_extractor, "name"):
+                    feature_extractor_name = feature_extractor.name
+                else:
+                    feature_extractor_name = feature_extractor.__class__.__name__
 
                 if res is None:
                     continue
 
                 if isinstance(res, list):
                     for item in res:
-                        data[f"{feature_extractor_name}-{item}"] = "True"
+                        data[f"{item} in {feature_extractor_name}"] = "True"
                     continue
 
                 if isinstance(res, bool):

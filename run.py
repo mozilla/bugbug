@@ -102,7 +102,7 @@ def main(args):
                     bug, probabilities=True, importances=True
                 )
 
-                feature_names = model.get_feature_names()
+                feature_names = model.get_human_readable_feature_names()
                 for i, (importance, index, is_positive) in enumerate(
                     importance["importances"]
                 ):

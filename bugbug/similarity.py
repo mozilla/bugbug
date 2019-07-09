@@ -184,9 +184,10 @@ class NeighborsSimilarity(BaseSimilarity):
 
 
 class Word2VecWmdSimilarity(BaseSimilarity):
-    def __init__(self):
+    def __init__(self, cut_off=0.2):
         self.corpus = []
         self.bug_ids = []
+        self.cut_off = cut_off
         for bug in bugzilla.get_bugs():
             self.corpus.append(text_preprocess(get_text(bug)))
             self.bug_ids.append(bug["id"])
@@ -307,5 +308,5 @@ class Word2VecWmdSimilarity(BaseSimilarity):
         return [
             similar[0]
             for similar in sorted(similarities, key=lambda v: v[1])[:10]
-            if similar[0] != query["id"]
+            if similar[0] != query["id"] and similar[1] < self.cut_off
         ]

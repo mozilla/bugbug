@@ -113,6 +113,31 @@ class Model:
     def get_feature_names(self):
         return []
 
+    def get_human_readable_feature_names(self):
+        feature_names = self.get_feature_names()
+
+        cleaned_feature_names = []
+        for full_feature_name in feature_names:
+            type_, feature_name = full_feature_name.split("__", 1)
+
+            if type_ == "desc":
+                feature_name = f"Description contains '{feature_name}'"
+            elif type_ == "title":
+                feature_name = f"Title contains '{feature_name}'"
+            elif type_ == "first_comment":
+                feature_name = f"First comment contains '{feature_name}'"
+            elif type_ == "comments":
+                feature_name = f"Comments contain '{feature_name}'"
+            elif type_ == "data":
+                if " in " in feature_name and feature_name.endswith("=True"):
+                    feature_name = feature_name[: len(feature_name) - len("=True")]
+            else:
+                raise Exception(f"Unexpected feature type for: {full_feature_name}")
+
+            cleaned_feature_names.append(feature_name)
+
+        return cleaned_feature_names
+
     def get_important_features(self, cutoff, shap_values):
         # Calculate the values that represent the fraction of the model output variability attributable
         # to each feature across the whole dataset.
@@ -189,7 +214,7 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
-        feature_names = self.get_feature_names()
+        feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)

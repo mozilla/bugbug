@@ -8,14 +8,19 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+EXPERIENCE_TIMESPAN_TEXT_USER = f"{EXPERIENCE_TIMESPAN} days"
 
 
 class files_modified_num(object):
+    name = "# of modified files"
+
     def __call__(self, commit, **kwargs):
         return commit["files_modified_num"]
 
 
 class file_size(object):
+    name = "File size"
+
     def __call__(self, commit, **kwargs):
         return {
             "sum": commit["total_file_size"],
@@ -26,21 +31,29 @@ class file_size(object):
 
 
 class added(object):
+    name = "# of lines added"
+
     def __call__(self, commit, **kwargs):
         return commit["added"]
 
 
 class test_added(object):
+    name = "# of lines added in tests"
+
     def __call__(self, commit, **kwargs):
         return commit["test_added"]
 
 
 class deleted(object):
+    name = "# of lines deleted"
+
     def __call__(self, commit, **kwargs):
         return commit["deleted"]
 
 
 class test_deleted(object):
+    name = "# of lines deleted in tests"
+
     def __call__(self, commit, **kwargs):
         return commit["test_deleted"]
 
@@ -50,44 +63,43 @@ def get_exps(exp_type, commit):
     items_num = len(commit[items_key])
 
     return {
-        "num": items_num,
         "sum": commit[f"touched_prev_total_{exp_type}_sum"],
         "max": commit[f"touched_prev_total_{exp_type}_max"],
         "min": commit[f"touched_prev_total_{exp_type}_min"],
         "avg": commit[f"touched_prev_total_{exp_type}_sum"] / items_num
         if items_num > 0
         else 0,
-        "sum_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"],
-        "max_backout": commit[f"touched_prev_total_{exp_type}_backout_max"],
-        "min_backout": commit[f"touched_prev_total_{exp_type}_backout_min"],
-        "avg_backout": commit[f"touched_prev_total_{exp_type}_backout_sum"] / items_num
+        "sum backout": commit[f"touched_prev_total_{exp_type}_backout_sum"],
+        "max backout": commit[f"touched_prev_total_{exp_type}_backout_max"],
+        "min backout": commit[f"touched_prev_total_{exp_type}_backout_min"],
+        "avg backout": commit[f"touched_prev_total_{exp_type}_backout_sum"] / items_num
         if items_num > 0
         else 0,
-        f"sum_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+        f"sum {EXPERIENCE_TIMESPAN_TEXT_USER}": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
         ],
-        f"max_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+        f"max {EXPERIENCE_TIMESPAN_TEXT_USER}": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_max"
         ],
-        f"min_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+        f"min {EXPERIENCE_TIMESPAN_TEXT_USER}": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_min"
         ],
-        f"avg_{EXPERIENCE_TIMESPAN_TEXT}": commit[
+        f"avg {EXPERIENCE_TIMESPAN_TEXT_USER}": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_sum"
         ]
         / items_num
         if items_num > 0
         else 0,
-        f"sum_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+        f"sum {EXPERIENCE_TIMESPAN_TEXT_USER} backout": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
         ],
-        f"max_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+        f"max {EXPERIENCE_TIMESPAN_TEXT_USER} backout": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_max"
         ],
-        f"min_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+        f"min {EXPERIENCE_TIMESPAN_TEXT_USER} backout": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_min"
         ],
-        f"avg_{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+        f"avg {EXPERIENCE_TIMESPAN_TEXT_USER} backout": commit[
             f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_{exp_type}_backout_sum"
         ]
         / items_num
@@ -97,23 +109,34 @@ def get_exps(exp_type, commit):
 
 
 class author_experience(object):
+    name = "Author experience"
+
     def __call__(self, commit, **kwargs):
         return {
             "total": commit["touched_prev_total_author_sum"],
-            EXPERIENCE_TIMESPAN_TEXT: commit[
+            EXPERIENCE_TIMESPAN_TEXT_USER: commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_sum"
             ],
-            "total_backout": commit["touched_prev_total_author_backout_sum"],
-            f"{EXPERIENCE_TIMESPAN_TEXT}_backout": commit[
+            "total backouts": commit["touched_prev_total_author_backout_sum"],
+            f"{EXPERIENCE_TIMESPAN_TEXT_USER} backouts": commit[
                 f"touched_prev_{EXPERIENCE_TIMESPAN_TEXT}_author_backout_sum"
             ],
-            "seniority_author": commit["seniority_author"] / 86400,
+            "seniority": commit["seniority_author"] / 86400,
         }
 
 
 class reviewer_experience(object):
+    name = "Reviewer experience"
+
     def __call__(self, commit, **kwargs):
         return get_exps("reviewer", commit)
+
+
+class reviewers_num(object):
+    name = "# of reviewers"
+
+    def __call__(self, commit, **kwargs):
+        return len(commit["reviewer"])
 
 
 class components(object):
@@ -122,11 +145,15 @@ class components(object):
 
 
 class components_modified_num(object):
+    name = "# of components modified"
+
     def __call__(self, commit, **kwargs):
         return len(commit["components"])
 
 
 class component_touched_prev(object):
+    name = "# of times the components were touched before"
+
     def __call__(self, commit, **kwargs):
         return get_exps("component", commit)
 
@@ -137,11 +164,15 @@ class directories(object):
 
 
 class directories_modified_num(object):
+    name = "# of directories modified"
+
     def __call__(self, commit, **kwargs):
         return len(commit["directories"])
 
 
 class directory_touched_prev(object):
+    name = "# of times the directories were touched before"
+
     def __call__(self, commit, **kwargs):
         return get_exps("directory", commit)
 
@@ -152,11 +183,15 @@ class files(object):
 
 
 class file_touched_prev(object):
+    name = "# of times the files were touched before"
+
     def __call__(self, commit, **kwargs):
         return get_exps("file", commit)
 
 
 class types(object):
+    name = "file types"
+
     def __call__(self, commit, **kwargs):
         return commit["types"]
 
@@ -187,16 +222,19 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                 if res is None:
                     continue
 
-                feature_extractor_name = feature_extractor.__class__.__name__
+                if hasattr(feature_extractor, "name"):
+                    feature_extractor_name = feature_extractor.name
+                else:
+                    feature_extractor_name = feature_extractor.__class__.__name__
 
                 if isinstance(res, dict):
                     for key, value in res.items():
-                        data[f"{feature_extractor_name}_{key}"] = value
+                        data[f"{feature_extractor_name} ({key})"] = value
                     continue
 
                 if isinstance(res, list):
                     for item in res:
-                        data[f"{feature_extractor_name}-{item}"] = "True"
+                        data[f"{item} in {feature_extractor_name}"] = "True"
                     continue
 
                 if isinstance(res, bool):

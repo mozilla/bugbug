@@ -33,6 +33,7 @@ class RegressorModel(CommitModel):
             commit_features.test_deleted(),
             commit_features.author_experience(),
             commit_features.reviewer_experience(),
+            commit_features.reviewers_num(),
             commit_features.component_touched_prev(),
             commit_features.directory_touched_prev(),
             commit_features.file_touched_prev(),
