@@ -337,7 +337,7 @@ class Model:
                 int(index) for importance, index, is_positive in top_importances
             ]
 
-            feature_names = self.get_feature_names()
+            feature_names = self.get_human_readable_feature_names()
 
             with io.StringIO() as out:
                 p = shap.force_plot(

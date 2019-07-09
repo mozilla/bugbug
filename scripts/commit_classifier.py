@@ -107,7 +107,7 @@ class CommitClassifier(object):
             commits[-1], probabilities=True, importances=True
         )
 
-        feature_names = self.model.get_feature_names()
+        feature_names = self.model.get_human_readable_feature_names()
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
