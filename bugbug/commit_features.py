@@ -136,7 +136,7 @@ class reviewers_num(object):
     name = "# of reviewers"
 
     def __call__(self, commit, **kwargs):
-        return len(commit["reviewer"])
+        return len(commit["reviewers"])
 
 
 class components(object):
