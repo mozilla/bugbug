@@ -248,14 +248,14 @@ class Model:
 
         # allow maximum of 8 columns in a row to fit the page better
         print("Top {} features:".format(len(top_feature_names)))
-        for i in range(0, len(top_feature_names), 8):
+        for i in range(0, len(top_feature_names), 6):
             table = []
             for item in shap_val:
-                table.append(item[i : i + 8])
+                table.append(item[i : i + 6])
             print(
                 tabulate(
                     table,
-                    headers=(["classes"] + top_feature_names)[i : i + 8],
+                    headers=(["classes"] + top_feature_names)[i : i + 6],
                     tablefmt="grid",
                 ),
                 end="\n\n",
