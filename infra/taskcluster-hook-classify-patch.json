@@ -27,6 +27,10 @@
                     "path": "/probs.json",
                     "type": "file"
                 },
+                "public/importances.json": {
+                    "path": "/importances.json",
+                    "type": "file"
+                },
                 "public/importance.html": {
                     "path": "/importance.html",
                     "type": "file"
