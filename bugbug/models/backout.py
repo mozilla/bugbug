@@ -3,7 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from datetime import datetime
+
+import dateutil.parser
 import xgboost
+from dateutil.relativedelta import relativedelta
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -14,7 +18,7 @@ from bugbug.model import CommitModel
 
 
 class BackoutModel(CommitModel):
-    def __init__(self, lemmatization=False, bug_data=False):
+    def __init__(self, lemmatization=False, bug_data=True):
         CommitModel.__init__(self, lemmatization, bug_data)
 
         self.calculate_importance = False
@@ -85,7 +89,17 @@ class BackoutModel(CommitModel):
     def get_labels(self):
         classes = {}
 
+        six_months_ago = datetime.utcnow() - relativedelta(months=6)
+        two_years_and_six_months_ago = six_months_ago - relativedelta(years=2)
+
         for commit_data in repository.get_commits():
+            if self.bug_data:
+                pushdate = dateutil.parser.parse(commit_data["pushdate"])
+                if not (
+                    pushdate >= two_years_and_six_months_ago
+                    and pushdate <= six_months_ago
+                ):
+                    continue
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
 
         print(
