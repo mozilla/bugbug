@@ -6,6 +6,10 @@
 import csv
 import os
 import sys
+from datetime import datetime
+
+import dateutil.parser
+from dateutil.relativedelta import relativedelta
 
 from bugbug import repository, utils
 
@@ -42,6 +46,11 @@ def get_all_bug_ids():
 
             bug_ids.update([int(row["bug_id"]) for row in reader])
 
-    bug_ids.update(commit["bug_id"] for commit in repository.get_commits())
+    start_date = datetime.now() - relativedelta(years=2, months=6)
+    bug_ids.update(
+        commit["bug_id"]
+        for commit in repository.get_commits()
+        if commit["bug_id"] and dateutil.parser.parse(commit["pushdate"]) >= start_date
+    )
 
     return list(bug_ids)

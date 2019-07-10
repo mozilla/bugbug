@@ -37,17 +37,21 @@ class BackoutModel(CommitModel):
             commit_features.components(),
             commit_features.directories(),
             commit_features.files(),
-            bug_features.product(),
-            bug_features.component(),
-            bug_features.severity(),
-            bug_features.priority(),
-            bug_features.has_crash_signature(),
-            bug_features.has_regression_range(),
-            bug_features.whiteboard(),
-            bug_features.keywords(),
-            bug_features.number_of_bug_dependencies(),
-            bug_features.blocked_bugs_number(),
         ]
+
+        if bug_data:
+            feature_extractors += [
+                bug_features.product(),
+                bug_features.component(),
+                bug_features.severity(),
+                bug_features.priority(),
+                bug_features.has_crash_signature(),
+                bug_features.has_regression_range(),
+                bug_features.whiteboard(),
+                bug_features.keywords(),
+                bug_features.number_of_bug_dependencies(),
+                bug_features.blocked_bugs_number(),
+            ]
 
         cleanup_functions = [
             feature_cleanup.fileref(),
