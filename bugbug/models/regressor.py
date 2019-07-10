@@ -42,7 +42,6 @@ class RegressorModel(CommitModel):
             commit_features.components_modified_num(),
             commit_features.directories(),
             commit_features.directories_modified_num(),
-            commit_features.files(),
             commit_features.files_modified_num(),
         ]
 
