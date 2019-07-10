@@ -226,6 +226,7 @@ class Model:
                 X_train.toarray(),
                 feature_names=feature_names,
                 class_names=class_names,
+                plot_type="layered_violin",
                 show=False,
             )
 
