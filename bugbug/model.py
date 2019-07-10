@@ -223,7 +223,7 @@ class Model:
 
             shap.summary_plot(
                 shap_values,
-                X_train,
+                X_train.toarray(),
                 feature_names=feature_names,
                 class_names=class_names,
                 show=False,
