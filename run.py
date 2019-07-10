@@ -113,7 +113,7 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
-                # Workaround: handle multi class case for force_plot to work correctly
+                # shap_values are stored in class 0 for binary classification
                 if len(probas[0]) != 2:
                     pred_class_index = probas.argmax(axis=-1)[0]
                 else:
