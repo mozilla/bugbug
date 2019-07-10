@@ -124,6 +124,9 @@ class CommitClassifier(object):
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
 
+        with open("importances.json", "w") as f:
+            json.dump(features, f)
+
         with open("importance.html", "w") as f:
             f.write(importance["html"])
 
