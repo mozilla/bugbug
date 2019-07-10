@@ -64,7 +64,7 @@ class RegressorModel(CommitModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("desc", self.text_vectorizer(), "desc"),
+                            ("desc", self.text_vectorizer(min_df=0.0001), "desc"),
                         ]
                     ),
                 ),
