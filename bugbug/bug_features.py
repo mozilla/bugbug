@@ -149,18 +149,6 @@ class landings(object):
         return sum(1 for c in bug["comments"] if "://hg.mozilla.org/" in c["text"])
 
 
-class title(object):
-    def __call__(self, bug, **kwargs):
-        ret = []
-
-        keywords = ["fail"]
-        for keyword in keywords:
-            if keyword in bug["summary"].lower():
-                ret.append(keyword)
-
-        return ret
-
-
 class product(object):
     def __call__(self, bug, **kwargs):
         return bug["product"]

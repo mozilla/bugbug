@@ -44,7 +44,6 @@ class AssigneeModel(BugModel):
             bug_features.whiteboard(),
             bug_features.patches(),
             bug_features.landings(),
-            bug_features.title(),
         ]
 
         cleanup_functions = [
