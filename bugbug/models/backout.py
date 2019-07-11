@@ -97,7 +97,7 @@ class BackoutModel(CommitModel):
         for commit_data in repository.get_commits():
             if self.bug_data:
                 pushdate = dateutil.parser.parse(commit_data["pushdate"])
-                if not pushdate >= two_years_and_six_months_ago:
+                if pushdate < two_years_and_six_months_ago:
                     continue
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
 
