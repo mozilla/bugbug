@@ -9,5 +9,5 @@ from bugbug.models.backout import BackoutModel
 def test_get_backout_labels():
     model = BackoutModel()
     classes, _ = model.get_labels()
-    assert classes["e2a02b08089b0bd0c18ceac0b2eb1e3888d56dc2"] == 1
+    assert classes["c2b5cf7bde83db072fc206c24d1cab72354be727"] == 1
     assert classes["9d576871fd33bed006dcdccfba880a4ed591f870"] != 1
