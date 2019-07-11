@@ -34,7 +34,6 @@ class DevDocNeededModel(BugModel):
             bug_features.whiteboard(),
             bug_features.patches(),
             bug_features.landings(),
-            bug_features.title(),
             bug_features.product(),
             bug_features.component(),
             bug_features.commit_added(),
