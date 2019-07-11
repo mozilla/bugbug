@@ -226,7 +226,9 @@ class Model:
                 X_train.toarray(),
                 feature_names=feature_names,
                 class_names=class_names,
-                plot_type="layered_violin",
+                plot_type="layered_violin"
+                if not isinstance(shap_values, list)
+                else None,
                 show=False,
             )
 
