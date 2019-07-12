@@ -47,18 +47,19 @@ class Trainer(object):
         os.makedirs("data", exist_ok=True)
 
         model_class = get_model_class(model_name)
+        model_obj = model_class()
 
-        if issubclass(model_class, model.BugModel) or issubclass(
-            model_class, model.BugCoupleModel
+        if (
+            isinstance(model_obj, model.BugModel)
+            or isinstance(model_obj, model.BugCoupleModel)
+            or (hasattr(model_obj, "bug_data") and model_obj.bug_data)
         ):
             self.download_db("bugs")
 
-        if issubclass(model_class, model.CommitModel):
+        if isinstance(model_obj, model.CommitModel):
             self.download_db("commits")
 
         logger.info(f"Training *{model_name}* model")
-
-        model_obj = model_class()
         metrics = model_obj.train()
 
         # Save the metrics as a file that can be uploaded as an artifact.
