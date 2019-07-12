@@ -36,6 +36,8 @@ class DuplicateModel(BugCoupleModel):
 
         self.calculate_importance = False
 
+        feature_extractors = [bug_features.is_same_product()]
+
         cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
@@ -48,7 +50,10 @@ class DuplicateModel(BugCoupleModel):
 
         self.extraction_pipeline = Pipeline(
             [
-                ("bug_extractor", bug_features.BugExtractor([], cleanup_functions)),
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                ),
                 (
                     "union",
                     ColumnTransformer([("text", self.text_vectorizer(), "text")]),
