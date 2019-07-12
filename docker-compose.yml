@@ -18,20 +18,6 @@ services:
         volume:
           nocopy: true
 
-  bugbug-bugs-retrieval:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.bugs_retrieval
-    image: mozilla/bugbug-bugs-retrieval
-    environment:
-      - BUGBUG_BUGZILLA_TOKEN
-    volumes:
-      - type: bind
-        source: ./cache/
-        target: /cache/
-        volume:
-          nocopy: true
-
   bugbug-http-service:
     build:
       context: http_service
