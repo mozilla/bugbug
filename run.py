@@ -125,13 +125,14 @@ def main(args):
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
         bugzilla.set_token(args.token)
-        bugs = bugzilla.download_bugs_between(a_week_ago, today)
+        bug_ids = bugzilla.get_ids_between(a_week_ago, today)
+        bugs = bugzilla.get(bug_ids)
 
         print(f"Classifying {len(bugs)} bugs...")
 
         rows = [["Bug", f"{args.goal}(model)", args.goal, "Title"]]
 
-        for bug in bugs:
+        for bug in bugs.values():
             p = model.classify(bug, probabilities=True)
             rows.append(
                 [
