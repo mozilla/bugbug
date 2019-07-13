@@ -3,8 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import defaultdict
+
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from bugbug import repository
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
@@ -178,8 +182,21 @@ class directory_touched_prev(object):
 
 
 class files(object):
+    def __init__(self, min_freq=0.00003):
+        self.min_freq = min_freq
+        self.count = defaultdict(int)
+
+        for commit in repository.get_commits():
+            for file in commit["files"]:
+                self.count[file] += 1
+        self.total_files = sum(self.count.values())
+
     def __call__(self, commit, **kwargs):
-        return commit["files"]
+        return [
+            file
+            for file in commit["files"]
+            if (self.count[file] / self.total_files) > self.min_freq
+        ]
 
 
 class file_touched_prev(object):
