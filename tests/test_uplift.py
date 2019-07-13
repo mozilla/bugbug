@@ -9,5 +9,4 @@ from bugbug.models.uplift import UpliftModel
 def test_get_uplift_labels():
     model = UpliftModel()
     classes, _ = model.get_labels()
-    assert classes[1388990] == 1
-    assert classes[1488307] != 1
+    assert classes[1350663] != 1
