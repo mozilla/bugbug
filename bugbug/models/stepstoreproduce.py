@@ -64,10 +64,7 @@ class StepsToReproduceModel(BugModel):
         self.clf.set_params(predictor="cpu_predictor")
 
     def rollback_when(self, change):
-        if change == self.rollback_change:
-            return True
-        else:
-            return False
+        return change == self.rollback_change
 
     def get_labels(self):
         classes = {}
