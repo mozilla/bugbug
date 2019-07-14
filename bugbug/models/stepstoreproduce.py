@@ -3,13 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import defaultdict
+
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bug_snapshot, bugzilla, feature_cleanup
 from bugbug.model import BugModel
 
 
@@ -43,12 +45,7 @@ class StepsToReproduceModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors,
-                        cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
-                    ),
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
                 (
                     "union",
@@ -67,16 +64,14 @@ class StepsToReproduceModel(BugModel):
         self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
-        return (
-            change["field_name"] == "cf_has_str" and change["removed"].startswith("no")
-        ) or (
-            change["field_name"] == "keywords"
-            and change["removed"].startswith("stepswanted")
-        )
+        if change == self.rollback_change:
+            return True
+        else:
+            return False
 
     def get_labels(self):
         classes = {}
-        classes["to_rollback"] = {}
+        classes["to_rollback"] = defaultdict(list)
 
         for bug_data in bugzilla.get_bugs():
             if "cf_has_str" in bug_data:
@@ -86,8 +81,12 @@ class StepsToReproduceModel(BugModel):
                     classes[int(bug_data["id"])] = 1
                     for entry in bug_data["history"]:
                         for change in entry["changes"]:
-                            if self.rollback(change):
-                                classes["to_rollback"][int(bug_data["id"])] = 0
+                            if change["field_name"] == "cf_has_str" and change[
+                                "removed"
+                            ].startswith("no"):
+                                classes["to_rollback"][int(bug_data["id"])].append(
+                                    change
+                                )
             elif "stepswanted" in bug_data["keywords"]:
                 classes[int(bug_data["id"])] = 0
             else:
@@ -95,7 +94,7 @@ class StepsToReproduceModel(BugModel):
                     for change in entry["changes"]:
                         if change["removed"].startswith("stepswanted"):
                             classes[int(bug_data["id"])] = 1
-                            classes["to_rollback"][int(bug_data["id"])] = 0
+                            classes["to_rollback"][int(bug_data["id"])].append(change)
 
         print(
             "{} bugs have no steps to reproduce".format(
@@ -109,6 +108,15 @@ class StepsToReproduceModel(BugModel):
         )
 
         return classes, [0, 1]
+
+    def rollback_gen(self, bug, classes):
+        for change in classes["to_rollback"][int(bug["id"])]:
+            self.rollback_change = change
+            rollbacked = bug_snapshot.rollback(bug, self.rollback)
+            if change["field_name"] == "cf_has_str" and change["removed"].startswith(
+                "no"
+            ):
+                return rollbacked, 0
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
