@@ -156,7 +156,7 @@ tasks:
                     then: {$eval: 'head_branch[10:]' }
                     else: "latest"
                 command:
-                  - "/bin/sh"
+                  - "/bin/bash"
                   - "-lcxe"
                   - "git clone --quiet ${repository} /code &&
                      cd /code &&
