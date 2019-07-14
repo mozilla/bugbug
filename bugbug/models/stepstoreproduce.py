@@ -63,7 +63,7 @@ class StepsToReproduceModel(BugModel):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor="cpu_predictor")
 
-    def rollback(self, change):
+    def rollback_when(self, change):
         if change == self.rollback_change:
             return True
         else:
@@ -81,9 +81,10 @@ class StepsToReproduceModel(BugModel):
                     classes[int(bug_data["id"])] = 1
                     for entry in bug_data["history"]:
                         for change in entry["changes"]:
-                            if change["field_name"] == "cf_has_str" and change[
-                                "removed"
-                            ].startswith("no"):
+                            if (
+                                change["field_name"] == "cf_has_str"
+                                and change["removed"] == "no"
+                            ):
                                 classes["to_rollback"][int(bug_data["id"])].append(
                                     change
                                 )
@@ -112,11 +113,11 @@ class StepsToReproduceModel(BugModel):
     def rollback_gen(self, bug, classes):
         for change in classes["to_rollback"][int(bug["id"])]:
             self.rollback_change = change
-            rollbacked = bug_snapshot.rollback(bug, self.rollback)
-            if change["field_name"] == "cf_has_str" and change["removed"].startswith(
-                "no"
-            ):
-                return rollbacked, 0
+            rollbacked_bug = bug_snapshot.rollback(bug, self.rollback_when)
+            if change["field_name"] == "cf_has_str" and change["removed"] == "no":
+                return rollbacked_bug, 0
+            elif change["removed"].startswith("stepswanted"):
+                return rollbacked_bug, 0
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

@@ -579,8 +579,8 @@ class BugModel(Model):
                 if bug_id not in classes["to_rollback"]:
                     continue
 
-                rollback_bug, rollback_label = self.rollback_gen(bug, classes)
-                yield rollback_bug, rollback_label
+                rollbacked_bug, rollbacked_label = self.rollback_gen(bug, classes)
+                yield rollbacked_bug, rollbacked_label
 
 
 class CommitModel(Model):
