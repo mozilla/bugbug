@@ -83,7 +83,7 @@ class StepsToReproduceModel(BugModel):
                                 and change["removed"] == "no"
                             ):
                                 classes["to_rollback"][int(bug_data["id"])].append(
-                                    change
+                                    (change, 0)
                                 )
             elif "stepswanted" in bug_data["keywords"]:
                 classes[int(bug_data["id"])] = 0
@@ -92,7 +92,9 @@ class StepsToReproduceModel(BugModel):
                     for change in entry["changes"]:
                         if change["removed"].startswith("stepswanted"):
                             classes[int(bug_data["id"])] = 1
-                            classes["to_rollback"][int(bug_data["id"])].append(change)
+                            classes["to_rollback"][int(bug_data["id"])].append(
+                                (change, 0)
+                            )
 
         print(
             "{} bugs have no steps to reproduce".format(
@@ -108,13 +110,10 @@ class StepsToReproduceModel(BugModel):
         return classes, [0, 1]
 
     def rollback_gen(self, bug, classes):
-        for change in classes["to_rollback"][int(bug["id"])]:
+        for change, label in classes["to_rollback"][int(bug["id"])]:
             self.rollback_change = change
             rollbacked_bug = bug_snapshot.rollback(bug, self.rollback_when)
-            if change["field_name"] == "cf_has_str" and change["removed"] == "no":
-                return rollbacked_bug, 0
-            elif change["removed"].startswith("stepswanted"):
-                return rollbacked_bug, 0
+            return rollbacked_bug, label
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
