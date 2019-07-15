@@ -8,8 +8,6 @@ from collections import defaultdict
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import repository
-
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 EXPERIENCE_TIMESPAN_TEXT_USER = f"{EXPERIENCE_TIMESPAN} days"
@@ -182,21 +180,24 @@ class directory_touched_prev(object):
 
 
 class files(object):
-    def __init__(self, min_freq=0.00003):
+    def __init__(self, min_freq=0.00003, commits=[]):
+        self.commits = commits
         self.min_freq = min_freq
         self.count = defaultdict(int)
 
-        for commit in repository.get_commits():
+        for commit in self.commits:
             for file in commit["files"]:
                 self.count[file] += 1
         self.total_files = sum(self.count.values())
 
     def __call__(self, commit, **kwargs):
-        return [
-            file
-            for file in commit["files"]
-            if (self.count[file] / self.total_files) > self.min_freq
-        ]
+        if self.commits:
+            return [
+                file
+                for file in commit["files"]
+                if (self.count[file] / self.total_files) > self.min_freq
+            ]
+        return commit["files"]
 
 
 class file_touched_prev(object):
