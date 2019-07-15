@@ -283,11 +283,12 @@ class Model:
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
-            print(
-                metrics.confusion_matrix(
-                    y_test_filter, y_pred_filter, labels=class_names
+            if len(y_test_filter)!=0:
+                print(
+                    metrics.confusion_matrix(
+                        y_test_filter, y_pred_filter, labels=class_names
+                    )
                 )
-            )
             print(
                 classification_report_imbalanced(
                     y_test_filter, y_pred_filter, labels=class_names
