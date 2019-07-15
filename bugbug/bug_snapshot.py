@@ -91,7 +91,7 @@ def target_milestone(target_milestone):
     if target_milestone.startswith("Seamonkey"):
         return target_milestone.lower()
 
-    mapping = {"6.2.2": "6.2.2.1"}
+    mapping = {"6.2.2": "6.2.2.1", "Firefox 3.7": "Firefox 4.0"}
 
     return (
         mapping[target_milestone] if target_milestone in mapping else target_milestone
