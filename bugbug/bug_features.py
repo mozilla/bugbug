@@ -453,6 +453,14 @@ class is_same_product(couple_bug_feature):
         return bugs[0]["product"] == bugs[1]["product"]
 
 
+class is_same_component(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return (
+            bugs[0]["product"] == bugs[1]["product"]
+            and bugs[0]["component"] == bugs[1]["component"]
+        )
+
+
 def get_author_ids():
     author_ids = set()
     for commit in repository.get_commits():
