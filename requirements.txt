@@ -14,4 +14,4 @@ tqdm==4.32.2
 python-dateutil==2.8.0
 zstandard==0.11.1
 taskcluster==7.0.1
-microannotate==0.0.1
+microannotate==0.0.2

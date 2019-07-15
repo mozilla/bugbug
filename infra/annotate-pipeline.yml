@@ -22,6 +22,10 @@ tasks:
         command:
           - bugbug-microannotate-generate
           - /cache/
+        artifacts:
+          public/done:
+            path: /done
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
         features:
@@ -36,5 +40,30 @@ tasks:
       metadata:
         name: bugbug microannotate repository generator
         description: bugbug microannotate repository generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: run-again
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '73 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: taskcluster-generic
+      dependencies:
+        - microannotate-generate
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-spawn-pipeline:${version}
+        command:
+          - python
+          - /code/trigger_again.py
+          - project-relman
+          - bugbug-annotate
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug annotate pipeline rerunner
+        description: bugbug annotate pipeline rerunner
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml

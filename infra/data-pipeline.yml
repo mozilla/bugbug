@@ -198,9 +198,6 @@ tasks:
           public/metrics.json:
             path: /metrics.json
             type: file
-          public/feature_importance.png:
-            path: /feature_importance.png
-            type: file
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
