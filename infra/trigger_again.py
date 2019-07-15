@@ -41,16 +41,18 @@ def get_taskcluster_options():
 
 
 def download_artifacts(queue, task_ids):
-    artifact = "done"
+    artifact = "public/done"
 
     for task_id in task_ids:
-        logger.info("Download from {}".format(task_id))
+        logger.info(f"Download from {task_id}")
 
         # Build artifact url
         try:
             url = queue.buildSignedUrl("getLatestArtifact", task_id, artifact)
         except taskcluster.exceptions.TaskclusterAuthFailure:
             url = queue.buildUrl("getLatestArtifact", task_id, artifact)
+
+        logger.info(f"Downloading {url}")
 
         urlretrieve(url, task_id)
 
