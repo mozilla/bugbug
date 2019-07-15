@@ -74,7 +74,7 @@ class MicroannotateGenerator(object):
         done = generator.generate(self.repo_dir, git_repo_path, limit=10000)
 
         with open("done", "w") as f:
-            f.write(1 if done else 0)
+            f.write(str(1 if done else 0))
 
         retry(
             lambda: subprocess.run(
