@@ -71,7 +71,10 @@ class MicroannotateGenerator(object):
             if b"Couldn't find remote ref master" in e.stdout:
                 pass
 
-        generator.generate(self.repo_dir, git_repo_path, limit=10000)
+        done = generator.generate(self.repo_dir, git_repo_path, limit=10000)
+
+        with open("done", "w") as f:
+            f.write(1 if done else 0)
 
         retry(
             lambda: subprocess.run(
