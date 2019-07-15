@@ -59,6 +59,11 @@ tasks:
           - /code/trigger_again.py
           - project-relman
           - bugbug-annotate
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - hooks:trigger-hook:project-relman/bugbug-annotate
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed

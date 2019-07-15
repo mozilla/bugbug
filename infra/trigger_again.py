@@ -8,6 +8,7 @@ import argparse
 import logging
 import os
 import sys
+import urllib
 from urllib.request import urlretrieve
 
 import requests.packages.urllib3
@@ -41,10 +42,10 @@ def get_taskcluster_options():
 
 
 def download_artifacts(queue, task_ids):
-    artifact = "done"
+    artifact = "public/done"
 
     for task_id in task_ids:
-        logger.info("Download from {}".format(task_id))
+        logger.info(f"Download from {task_id}")
 
         # Build artifact url
         try:
@@ -52,7 +53,14 @@ def download_artifacts(queue, task_ids):
         except taskcluster.exceptions.TaskclusterAuthFailure:
             url = queue.buildUrl("getLatestArtifact", task_id, artifact)
 
-        urlretrieve(url, task_id)
+        logger.info(f"Downloading {url}")
+
+        try:
+            urlretrieve(url, task_id)
+            yield task_id
+        except urllib.error.HTTPError as e:
+            if e.getcode() == 404:
+                pass
 
 
 def parse_args(args):
@@ -70,14 +78,14 @@ def main(args):
     task = queue.task(os.environ["TASK_ID"])
     assert len(task["dependencies"]) > 0, "No task dependencies"
 
-    download_artifacts(queue, task["dependencies"])
+    artifacts = download_artifacts(queue, task["dependencies"])
 
     should_trigger = False
-    for task_id in task["dependencies"]:
-        with open(task_id, "r") as f:
+    for artifact in artifacts:
+        with open(artifact, "r") as f:
             done = int(f.read()) == 1
 
-        if done:
+        if not done:
             should_trigger = True
             break
 
