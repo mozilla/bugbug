@@ -85,7 +85,7 @@ def main(args):
         with open(artifact, "r") as f:
             done = int(f.read()) == 1
 
-        if done:
+        if not done:
             should_trigger = True
             break
 
