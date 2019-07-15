@@ -22,6 +22,10 @@ tasks:
         command:
           - bugbug-microannotate-generate
           - /cache/
+        artifacts:
+          public/done:
+            path: /done
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
         features:
