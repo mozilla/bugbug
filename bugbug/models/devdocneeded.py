@@ -15,7 +15,9 @@ from bugbug.model import BugModel
 
 class DevDocNeededModel(BugModel):
     def __init__(self, lemmatization=False):
-        BugModel.__init__(self, lemmatization)
+        BugModel.__init__(self, lemmatization, commit_data=True)
+
+        self.cross_validation_enabled = False
 
         self.sampler = RandomUnderSampler(random_state=0)
 
@@ -32,7 +34,6 @@ class DevDocNeededModel(BugModel):
             bug_features.whiteboard(),
             bug_features.patches(),
             bug_features.landings(),
-            bug_features.title(),
             bug_features.product(),
             bug_features.component(),
             bug_features.commit_added(),

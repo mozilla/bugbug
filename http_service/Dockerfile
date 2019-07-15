@@ -1,21 +1,14 @@
-FROM mozilla/bugbug-base:latest
+ARG BUGBUG_VERSION=latest
 
-RUN env
+FROM mozilla/bugbug-base:$BUGBUG_VERSION
 
-COPY requirements.txt /code/bugbug_http_service/
+COPY requirements.txt /code/http_service/
 
-RUN pip install -r /code/bugbug_http_service/requirements.txt
+RUN pip install -r /code/http_service/requirements.txt
 
-COPY . /code/bugbug_http_service/
+COPY . /code/http_service/
 
 # Load the models
 WORKDIR /code/
 
-COPY ./models /code/models
-
-ARG CHECK_MODELS
-ENV CHECK_MODELS="${CHECK_MODELS}"
-
-RUN bash /code/bugbug_http_service/ensure_models.sh
-
-CMD gunicorn -b 0.0.0.0:$PORT bugbug_http_service.app --preload --timeout 30 -w 3
+CMD gunicorn -b 0.0.0.0:$PORT http_service.app --preload --timeout 30 -w 3

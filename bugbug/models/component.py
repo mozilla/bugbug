@@ -37,7 +37,6 @@ class ComponentModel(BugModel):
         "Core::Networking",
         "Core::Print",
         "Core::WebRTC",
-        "Firefox::Activity Streams",
         "Toolkit::Password Manager",
         "DevTools",
         "External Software Affecting Firefox",
@@ -49,7 +48,6 @@ class ComponentModel(BugModel):
         "Core::DOM": "Core::DOM: Core & HTML",
         "Core::JavaScript": "Core::JavaScript Engine",
         "Core::Print": "Core::Printing: Output",
-        "Firefox::Activity Streams": "Firefox::Activity Streams: Newtab",
         "DevTools": "DevTools::General",
         "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
         "WebExtensions": "WebExtensions::Untriaged",
@@ -74,7 +72,6 @@ class ComponentModel(BugModel):
             bug_features.whiteboard(),
             bug_features.patches(),
             bug_features.landings(),
-            bug_features.title(),
         ]
 
         cleanup_functions = [
@@ -337,3 +334,6 @@ class ComponentModel(BugModel):
             success = False
 
         return success
+
+    def get_extra_data(self):
+        return {"conflated_components_mapping": self.CONFLATED_COMPONENTS_MAPPING}

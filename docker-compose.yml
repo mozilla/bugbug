@@ -18,68 +18,6 @@ services:
         volume:
           nocopy: true
 
-  bugbug-bugs-retrieval:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.bugs_retrieval
-    image: mozilla/bugbug-bugs-retrieval
-    environment:
-      - BUGBUG_BUGZILLA_TOKEN
-    volumes:
-      - type: bind
-        source: ./cache/
-        target: /cache/
-        volume:
-          nocopy: true
-
-  bugbug-train-backout:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_backout
-    image: mozilla/bugbug-train-backout
-
-  bugbug-train-component:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_component
-    image: mozilla/bugbug-train-component
-
-  bugbug-train-defectenhancementtask:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_defectenhancementtask
-    image: mozilla/bugbug-train-defectenhancementtask
-
-  bugbug-train-duplicate:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_duplicate
-    image: mozilla/bugbug-train-duplicate
-
-  bugbug-train-regression:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_regression
-    image: mozilla/bugbug-train-regression
-
-  bugbug-train-regressionrange:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_regressionrange
-    image: mozilla/bugbug-train-regressionrange
-
-  bugbug-train-stepstoreproduce:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_stepstoreproduce
-    image: mozilla/bugbug-train-stepstoreproduce
-
-  bugbug-train-tracking:
-    build:
-      context: .
-      dockerfile: infra/dockerfile.train_tracking
-    image: mozilla/bugbug-train-tracking
-
   bugbug-http-service:
     build:
       context: http_service
@@ -93,14 +31,16 @@ services:
         protocol: tcp
         mode: host
 
-  bugbug-spawn-data-pipeline:
+  bugbug-http-service-bg-worker:
     build:
-      context: infra/
-      dockerfile: dockerfile.spawn_data_pipeline
-    image: mozilla/bugbug-spawn-data-pipeline
+      context: http_service
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
 
-  bugbug-spawn-check-pipeline:
+  bugbug-spawn-pipeline:
     build:
       context: infra/
-      dockerfile: dockerfile.spawn_check_pipeline
-    image: mozilla/bugbug-spawn-check-pipeline
+      dockerfile: dockerfile.spawn_pipeline
+    image: mozilla/bugbug-spawn-pipeline

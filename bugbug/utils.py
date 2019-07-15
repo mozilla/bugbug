@@ -3,15 +3,31 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
+import json
 import os
+import time
 
+import dateutil.parser
 import numpy as np
+import requests
 import taskcluster
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
 TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
+
+
+def split_tuple_iterator(iterable):
+    q = collections.deque()
+
+    def first_iter():
+        for first, second in iterable:
+            yield first
+            q.append(second)
+
+    return first_iter(), q
 
 
 def numpy_to_dict(array):
@@ -98,3 +114,58 @@ def get_secret(secret_id):
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
+
+
+def download_check_etag(url, path):
+    r = requests.head(url, allow_redirects=True)
+    new_etag = r.headers["ETag"]
+
+    try:
+        with open(f"{path}.etag", "r") as f:
+            old_etag = f.read()
+    except IOError:
+        old_etag = None
+
+    if old_etag != new_etag:
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=4096):
+                f.write(chunk)
+
+        with open(f"{path}.etag", "w") as f:
+            f.write(new_etag)
+
+
+def get_last_modified(url):
+    r = requests.head(url, allow_redirects=True)
+    if "Last-Modified" not in r.headers:
+        return None
+
+    return dateutil.parser.parse(r.headers["Last-Modified"])
+
+
+def retry(operation, retries=5, wait_between_retries=30):
+    while True:
+        try:
+            return operation()
+        except Exception:
+            retries -= 1
+            if retries == 0:
+                raise
+
+            time.sleep(wait_between_retries)
+
+
+class CustomJsonEncoder(json.JSONEncoder):
+    """ A custom Json Encoder to support Numpy types
+    """
+
+    def default(self, obj):
+        try:
+            return np.asscalar(obj)
+        except (ValueError, IndexError, AttributeError, TypeError):
+            pass
+
+        return super().default(self, obj)

@@ -3,8 +3,6 @@ policy:
   pullRequests: public
 tasks:
   $let:
-    decision_task_id: {$eval: as_slugid("decision_task")}
-    expires_in: {$fromNow: '1 year'}
     user: ${event.sender.login}
 
     head_branch:
@@ -37,14 +35,14 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python
+          image: python:3.7
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
-               pip install -r test-requirements.txt &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               pip install --quiet -r test-requirements.txt &&
                pre-commit run -a" # TODO Be smarter and run only on modified files
         metadata:
           name: bugbug lint
@@ -65,9 +63,9 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/version_check.py"
           metadata:
             name: bugbug tag version check
@@ -83,17 +81,26 @@ tasks:
         payload:
           maxRunTime: 3600
           image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "apt-get -qq update &&
+               apt-get -qq install -y python-pip &&
+               python2 -m pip install --quiet mercurial==4.8 &&
+               git clone --quiet https://github.com/mozilla/version-control-tools.git &&
+               git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
-               pip install -r requirements.txt &&
-               pip install -r extra-nlp-requirements.txt &&
-               pip install -r extra-nn-requirements.txt &&
-               pip install -r test-requirements.txt &&
-               python -m pytest tests/test_*.py"
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               cp infra/hgrc /root/.hgrc &&
+               pip install --quiet -r requirements.txt &&
+               pip install --quiet -r extra-nlp-requirements.txt &&
+               pip install --quiet -r extra-nn-requirements.txt &&
+               pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
+               pip install --quiet -r test-requirements.txt &&
+               python -m pytest --cov=./ tests/test_*.py &&
+               bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug tests
           description: bugbug tests
@@ -108,15 +115,20 @@ tasks:
         payload:
           maxRunTime: 3600
           image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone ${repository} &&
+            - "git clone --quiet ${repository} &&
                cd bugbug &&
-               git checkout ${head_rev} &&
-               pip install -r requirements.txt &&
-               python setup.py sdist &&
-               pip install dist/bugbug-$(cat VERSION).tar.gz"
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               pip install --quiet -r test-requirements.txt &&
+               python -m coverage run setup.py sdist &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+               pip install dist/bugbug-$(cat VERSION).tar.gz[nn] &&
+               bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
           description: bugbug packaging test
@@ -132,14 +144,20 @@ tasks:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.3
+          image: mozilla/taskboot:0.1.9
+          env:
+            REGISTRY: registry.hub.docker.com
+            VERSION:
+              $if: 'head_branch[:10] == "refs/tags/"'
+              then: {$eval: 'head_branch[10:]' }
+              else: "latest"
           command:
             - "/bin/sh"
             - "-lcxe"
-            - "git clone ${repository} /code &&
+            - "git clone --quiet ${repository} /code &&
                cd /code &&
-               git checkout ${head_rev} &&
-               taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --build-arg CHECK_MODELS=0"
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               taskboot --cache /cache --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
@@ -178,11 +196,11 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "git clone ${repository} &&
+              - "git clone --quiet ${repository} &&
                  cd bugbug &&
-                 git checkout ${head_rev} &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
                  python setup.py sdist bdist_wheel &&
-                 pip install twine &&
+                 pip install --quiet twine &&
                  python infra/pypi.py"
           metadata:
             name: bugbug PyPI release
@@ -210,7 +228,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
+            image: mozilla/taskboot:0.1.9
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -221,6 +239,40 @@ tasks:
           metadata:
             name: bugbug docker push
             description: bugbug docker push
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("update_hook_annotate_pipeline")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-annotate
+            - assume:hook-id:project-relman/bugbug-annotate
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:0.1.9
+            env:
+              VERSION: {$eval: 'head_branch[10:]'}
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-annotate.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
+          metadata:
+            name: bugbug update annotate hook
+            description: bugbug update annotate hook
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
@@ -242,16 +294,15 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
-            env:
-              GIT_REPOSITORY: ${repository}
-              GIT_REVISION: ${head_rev}
+            image: mozilla/taskboot:0.1.9
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-pipeline-start.json
-              - project-relman
-              - bugbug
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-pipeline-start.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
@@ -277,18 +328,49 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.3
-            env:
-              GIT_REPOSITORY: ${repository}
-              GIT_REVISION: ${head_rev}
+            image: mozilla/taskboot:0.1.9
             command:
-              - taskboot
-              - build-hook
-              - infra/taskcluster-hook-check-models-start.json
-              - project-relman
-              - bugbug-checks
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-check-models-start.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
           metadata:
             name: bugbug update check hook
             description: bugbug update check hook
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("update_hook_classify_patch")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-classify-patch
+            - assume:hook-id:project-relman/bugbug-classify-patch
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: aws-provisioner-v1
+          workerType: github-worker
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: mozilla/taskboot:0.1.9
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-classify-patch.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-relman bugbug-classify-patch"
+          metadata:
+            name: bugbug update classify patch hook
+            description: bugbug update classify patch hook
             owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml

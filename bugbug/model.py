@@ -3,17 +3,91 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import io
+from collections import defaultdict
+
+import matplotlib
 import numpy as np
 import shap
-from imblearn.metrics import classification_report_imbalanced
+from imblearn.metrics import (
+    classification_report_imbalanced,
+    geometric_mean_score,
+    make_index_balanced_accuracy,
+    specificity_score,
+)
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
+from bugbug.utils import split_tuple_iterator
+
+
+def classification_report_imbalanced_values(
+    y_true, y_pred, labels, target_names=None, sample_weight=None, digits=2, alpha=0.1
+):
+    """Copy of imblearn.metrics.classification_report_imbalanced to have
+    access to the raw values. The code is mostly the same except the
+    formatting code and generation of the report which haven removed. Copied
+    from version 0.4.3. The original code is living here:
+    https://github.com/scikit-learn-contrib/imbalanced-learn/blob/master/imblearn/metrics/_classification.py#L750
+
+
+    """
+    labels = np.asarray(labels)
+
+    if target_names is None:
+        target_names = ["%s" % l for l in labels]
+
+    # Compute the different metrics
+    # Precision/recall/f1
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Specificity
+    specificity = specificity_score(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Geometric mean
+    geo_mean = geometric_mean_score(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+    # Index balanced accuracy
+    iba_gmean = make_index_balanced_accuracy(alpha=alpha, squared=True)(
+        geometric_mean_score
+    )
+    iba = iba_gmean(
+        y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
+    )
+
+    result = {"targets": {}}
+
+    for i, label in enumerate(labels):
+        result["targets"][target_names[i]] = {
+            "precision": precision[i],
+            "recall": recall[i],
+            "specificity": specificity[i],
+            "f1": f1[i],
+            "geo_mean": geo_mean[i],
+            "iba": iba[i],
+            "support": support[i],
+        }
+
+    result["average"] = {
+        "precision": np.average(precision, weights=support),
+        "recall": np.average(recall, weights=support),
+        "specificity": np.average(specificity, weights=support),
+        "f1": np.average(f1, weights=support),
+        "geo_mean": np.average(geo_mean, weights=support),
+        "iba": np.average(iba, weights=support),
+        "support": np.sum(support),
+    }
+
+    return result
 
 
 class Model:
@@ -38,6 +112,33 @@ class Model:
 
     def get_feature_names(self):
         return []
+
+    def get_human_readable_feature_names(self):
+        feature_names = self.get_feature_names()
+
+        cleaned_feature_names = []
+        for full_feature_name in feature_names:
+            type_, feature_name = full_feature_name.split("__", 1)
+
+            if type_ == "desc":
+                feature_name = f"Description contains '{feature_name}'"
+            elif type_ == "title":
+                feature_name = f"Title contains '{feature_name}'"
+            elif type_ == "first_comment":
+                feature_name = f"First comment contains '{feature_name}'"
+            elif type_ == "comments":
+                feature_name = f"Comments contain '{feature_name}'"
+            elif type_ == "text":
+                feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "data":
+                if " in " in feature_name and feature_name.endswith("=True"):
+                    feature_name = feature_name[: len(feature_name) - len("=True")]
+            else:
+                raise Exception(f"Unexpected feature type for: {full_feature_name}")
+
+            cleaned_feature_names.append(feature_name)
+
+        return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
         # Calculate the values that represent the fraction of the model output variability attributable
@@ -65,17 +166,14 @@ class Model:
         classes, class_names = self.get_labels()
         class_names = sorted(list(class_names), reverse=True)
 
-        # Get items, filtering out those for which we have no labels.
-        def trainable_items_gen():
-            return (
-                item for item in self.items_gen(classes) if self.get_id(item) in classes
-            )
-
-        # Calculate labels.
-        y = np.array([classes[self.get_id(item)] for item in trainable_items_gen()])
+        # Get items and labels, filtering out those for which we have no labels.
+        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(trainable_items_gen())
+        X = self.extraction_pipeline.fit_transform(X_iter)
+
+        # Calculate labels.
+        y = np.array(y_iter)
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -88,6 +186,8 @@ class Model:
         else:
             pipeline = self.clf
 
+        tracking_metrics = {}
+
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ["accuracy"]
@@ -99,6 +199,10 @@ class Model:
             print("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
+                tracking_metrics[f"test_{scoring}"] = {
+                    "mean": score.mean(),
+                    "std": score.std() * 2,
+                }
                 print(
                     f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
                 )
@@ -112,10 +216,23 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
-        feature_names = self.get_feature_names()
+        feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
+
+            shap.summary_plot(
+                shap_values,
+                X_train.toarray(),
+                feature_names=feature_names,
+                class_names=class_names,
+                plot_type="layered_violin"
+                if not isinstance(shap_values, list)
+                else None,
+                show=False,
+            )
+
+            matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
             # TODO: Actually implement feature importance visualization for multiclass problems.
             if isinstance(shap_values, list):
@@ -131,12 +248,21 @@ class Model:
                     f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                 )
 
+        print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
-        print(metrics.confusion_matrix(y_test, y_pred, labels=class_names))
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
+        print(confusion_matrix)
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+        report = classification_report_imbalanced_values(
+            y_test, y_pred, labels=class_names
+        )
+
+        tracking_metrics["report"] = report
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -169,6 +295,8 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+
+        return tracking_metrics
 
     @staticmethod
     def load(model_file_name):
@@ -206,9 +334,32 @@ class Model:
             if isinstance(shap_values, list):
                 shap_values = np.sum(np.abs(shap_values), axis=0)
 
-            importances = self.get_important_features(importance_cutoff, shap_values)
+            top_importances = self.get_important_features(
+                importance_cutoff, shap_values
+            )
 
-            return classes, importances
+            top_indexes = [
+                int(index) for importance, index, is_positive in top_importances
+            ]
+
+            feature_names = self.get_human_readable_feature_names()
+
+            with io.StringIO() as out:
+                p = shap.force_plot(
+                    explainer.expected_value,
+                    shap_values[:, top_indexes],
+                    X.toarray()[:, top_indexes],
+                    feature_names=[feature_names[i] for i in top_indexes],
+                    matplotlib=False,
+                    show=False,
+                )
+
+                # TODO: use full_html=False
+                shap.save_html(out, p)
+
+                html = out.getvalue()
+
+            return classes, {"importances": top_importances, "html": html}
 
         return classes
 
@@ -218,30 +369,91 @@ class Model:
         """
         return True
 
+    def get_extra_data(self):
+        """ Returns a dict that can be used for customers who need static
+        extra data for a given model. Must return a dict and JSON-encodable
+        types.
+        """
+        return {}
+
 
 class BugModel(Model):
-    def get_id(self, bug):
-        return bug["id"]
+    def __init__(self, lemmatization=False, commit_data=False):
+        Model.__init__(self, lemmatization)
+        self.commit_data = commit_data
 
     def items_gen(self, classes):
-        return (bug for bug in bugzilla.get_bugs())
+        if not self.commit_data:
+            commit_map = None
+        else:
+            commit_map = defaultdict(list)
+
+            for commit in repository.get_commits():
+                bug_id = commit["bug_id"]
+                if not bug_id:
+                    continue
+
+                commit_map[bug_id].append(commit)
+
+            assert len(commit_map) > 0
+
+        for bug in bugzilla.get_bugs():
+            bug_id = bug["id"]
+            if bug_id not in classes:
+                continue
+
+            if self.commit_data:
+                if bug_id in commit_map:
+                    bug["commits"] = commit_map[bug_id]
+                else:
+                    bug["commits"] = []
+
+            yield bug, classes[bug_id]
 
 
 class CommitModel(Model):
-    def get_id(self, commit):
-        return commit["node"]
+    def __init__(self, lemmatization=False, bug_data=False):
+        Model.__init__(self, lemmatization)
+        self.bug_data = bug_data
 
     def items_gen(self, classes):
-        return (commit for commit in repository.get_commits())
+        if not self.bug_data:
+            bug_map = None
+        else:
+            all_bug_ids = set(
+                commit["bug_id"]
+                for commit in repository.get_commits()
+                if commit["node"] in classes
+            )
+
+            bug_map = {}
+
+            for bug in bugzilla.get_bugs():
+                if bug["id"] not in all_bug_ids:
+                    continue
+
+                bug_map[bug["id"]] = bug
+
+            assert len(bug_map) > 0
+
+        for commit in repository.get_commits():
+            if commit["node"] not in classes:
+                continue
+
+            if self.bug_data:
+                if commit["bug_id"] in bug_map:
+                    commit["bug"] = bug_map[commit["bug_id"]]
+                else:
+                    commit["bug"] = {}
+
+            yield commit, classes[commit["node"]]
 
 
 class BugCoupleModel(Model):
-    def get_id(self, bug):
-        return bug[0]["id"], bug[1]["id"]
-
     def items_gen(self, classes):
         bugs = {}
         for bug in bugzilla.get_bugs():
             bugs[bug["id"]] = bug
 
-        return ((bugs[bug_id1], bugs[bug_id2]) for bug_id1, bug_id2 in classes)
+        for (bug_id1, bug_id2), label in classes.items():
+            yield (bugs[bug_id1], bugs[bug_id2]), label

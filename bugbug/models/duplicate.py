@@ -3,9 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from itertools import islice
+import random
 
-from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -15,9 +14,7 @@ from sklearn.svm import LinearSVC
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugCoupleModel
 
-NUM_DUPLICATES = 3000
-NUM_DUP_NONDUPS = 2000
-NUM_NONDUPS_NONDUPS = 2000
+REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
 
 class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
@@ -31,11 +28,15 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
 
 
 class DuplicateModel(BugCoupleModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, training_size=14000, lemmatization=False):
+        self.num_duplicates = training_size // 2
+        self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
+
         BugCoupleModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
+
+        feature_extractors = [bug_features.is_same_product()]
 
         cleanup_functions = [
             feature_cleanup.responses(),
@@ -49,7 +50,10 @@ class DuplicateModel(BugCoupleModel):
 
         self.extraction_pipeline = Pipeline(
             [
-                ("bug_extractor", bug_features.BugExtractor([], cleanup_functions)),
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                ),
                 (
                     "union",
                     ColumnTransformer([("text", self.text_vectorizer(), "text")]),
@@ -60,71 +64,69 @@ class DuplicateModel(BugCoupleModel):
         self.clf = LinearSVCWithLabelEncoding(LinearSVC())
 
     def get_labels(self):
-        bugs = []
 
-        for bug_data in islice(bugzilla.get_bugs(), 0, NUM_DUPLICATES):
-            bugs.append(bug_data["id"])
+        random.seed(4)
+
+        all_ids = set(
+            bug["id"]
+            for bug in bugzilla.get_bugs()
+            if bug["creator"] not in REPORTERS_TO_IGNORE
+            and "dupeme" not in bug["keywords"]
+        )
 
         classes = {}
+
         # Only store ids of bugs that have duplicates or are duplicates
         duplicate_ids = []
 
-        # Store all remaining ids
-        non_duplicate_ids = []
-
         duplicates_num = 0
-
         for bug_data in bugzilla.get_bugs():
-            if len(bug_data["duplicates"]) == 0:
+            bug_id = bug_data["id"]
+            if bug_id not in all_ids:
                 continue
 
-            duplicate_ids.append(bug_data["id"])
-            for duplicate_bug in bug_data["duplicates"]:
-                if duplicate_bug in bugs:
-                    duplicate_ids.append(duplicate_bug)
-                    classes[(bug_data["id"], duplicate_bug)] = 1
-                    duplicates_num += 1
-                if duplicates_num == NUM_DUPLICATES:
-                    break
-            if duplicates_num == NUM_DUPLICATES:
-                break
+            if bug_data["dupe_of"] or len(bug_data["duplicates"]) > 0:
+                duplicate_ids.append(bug_id)
 
-        duplicate_ids_set = set(duplicate_ids)
+            for duplicate_bug_id in bug_data["duplicates"]:
+                if duplicate_bug_id not in all_ids:
+                    continue
 
-        for bug in bugs:
-            if bug not in duplicate_ids_set:
-                non_duplicate_ids.append(bug)
+                duplicate_ids.append(duplicate_bug_id)
 
-        print(f"Number of purely duplicate labels are: {duplicates_num}")
+                if duplicates_num < self.num_duplicates:
+                    classes[(bug_id, duplicate_bug_id)] = 1
+                duplicates_num += 1
 
-        # When the bug has no duplicates, we create dup-nondup labels = 0
+        # Remove duplicate duplicate IDs.
+        duplicate_ids = list(set(duplicate_ids))
+
+        # Store all remaining ids
+        non_duplicate_ids = list(all_ids - set(duplicate_ids))
+
+        print(f"Number of duplicate labels is: {self.num_duplicates}")
+
+        # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
-        for key in duplicate_ids:
-            for key2 in non_duplicate_ids:
-                classes[(key, key2)] = 0
-                dup_nondup_num += 1
-                if dup_nondup_num == NUM_DUP_NONDUPS:
-                    break
-            if dup_nondup_num == NUM_DUP_NONDUPS:
-                break
+        while dup_nondup_num < self.num_dup_nondups:
+            bug_id1 = random.choice(duplicate_ids)
+            bug_id2 = random.choice(non_duplicate_ids)
 
-        print(f"Number of purely non-duplicate labels are {dup_nondup_num}")
+            classes[(bug_id1, bug_id2)] = 0
+            dup_nondup_num += 1
 
-        # Non we map non-dup to non-dup bug.
+        print(f"Number of hybrid labels is: {self.num_dup_nondups}")
+
+        # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
-        for key in non_duplicate_ids:
-            for key2 in non_duplicate_ids:
-                if key != key2:
-                    classes[(key, key2)] = 0
-                    nondup_nondup_num += 1
+        while nondup_nondup_num < self.num_nondups_nondups:
+            bug_id1 = random.choice(non_duplicate_ids)
+            bug_id2 = random.choice(non_duplicate_ids)
+            if bug_id1 != bug_id2:
+                classes[(bug_id1, bug_id2)] = 0
+                nondup_nondup_num += 1
 
-                if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
-                    break
-
-            if nondup_nondup_num == NUM_NONDUPS_NONDUPS:
-                break
-
-        print(f"Number of hybrid labels are {nondup_nondup_num}")
+        print(f"Number of purely non-duplicate labels is: {self.num_nondups_nondups}")
 
         return classes, [0, 1]
 

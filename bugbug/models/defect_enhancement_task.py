@@ -49,3 +49,10 @@ class DefectEnhancementTaskModel(DefectModel):
                 classes[i] = "enhancement" if not probabilities else [0.0, 1.0, 0.0]
 
         return classes
+
+    def get_extra_data(self):
+
+        labels = self.clf._le.inverse_transform([0, 1, 2])
+        labels_map = {label: index for label, index in zip(labels, [0, 1, 2])}
+
+        return {"labels_map": labels_map}

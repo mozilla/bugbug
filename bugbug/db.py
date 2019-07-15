@@ -6,42 +6,102 @@
 import gzip
 import io
 import json
-import lzma
 import os
 import pickle
-import shutil
 from contextlib import contextmanager
-from urllib.request import urlretrieve
+from urllib.parse import urljoin
 
+import requests
 import zstandard
+
+from bugbug import utils
 
 DATABASES = {}
 
 
-def register(path, url):
-    DATABASES[path] = {"url": url}
+def register(path, url, version, support_files=[]):
+    DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
     # Create DB parent directory.
     parent_dir = os.path.dirname(path)
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir, exist_ok=True)
 
+    if not os.path.exists(f"{path}.version"):
+        with open(f"{path}.version", "w") as f:
+            f.write(str(version))
+
+
+def is_old_version(path):
+    with open(f"{path}.version", "r") as f:
+        prev_version = int(f.read())
+
+    return DATABASES[path]["version"] > prev_version
+
+
+def extract_file(path):
+    path, compression_type = os.path.splitext(path)
+
+    with open(path, "wb") as output_f:
+        if compression_type == ".zst":
+            dctx = zstandard.ZstdDecompressor()
+            with open(f"{path}.zst", "rb") as input_f:
+                dctx.copy_stream(input_f, output_f)
+        else:
+            assert False, f"Unexpected compression type: {compression_type}"
+
+
+def download_support_file(path, file_name):
+    try:
+        url = urljoin(DATABASES[path]["url"], file_name)
+        path = os.path.join(os.path.dirname(path), file_name)
+
+        print(f"Downloading {url} to {path}")
+        utils.download_check_etag(url, path)
+
+        if path.endswith(".zst"):
+            extract_file(path)
+    except requests.exceptions.HTTPError:
+        print(f"{file_name} is not yet available to download for {path}")
+
+
+def download_version(path):
+    download_support_file(path, f"{os.path.basename(path)}.version")
+
 
 # Download and extract databases.
-def download():
-    for path, info in DATABASES.items():
-        if os.path.exists(path):
-            continue
+def download(path, force=False, support_files_too=False):
+    if os.path.exists(path) and not force:
+        return
 
-        xz_path = f"{path}.xz"
+    zst_path = f"{path}.zst"
 
-        # Only download if the xz file is not there yet.
-        if not os.path.exists(xz_path):
-            urlretrieve(DATABASES[path]["url"], xz_path)
+    # Only download if the file is not there yet.
+    if not os.path.exists(zst_path) or force:
+        url = DATABASES[path]["url"]
+        try:
+            print(f"Downloading {url} to {zst_path}")
+            utils.download_check_etag(url, zst_path)
 
-        with open(path, "wb") as output_f:
-            with lzma.open(xz_path) as input_f:
-                shutil.copyfileobj(input_f, output_f)
+        except requests.exceptions.HTTPError:
+            print(f"{url} is not yet available to download")
+            raise
+
+    extract_file(zst_path)
+
+    if support_files_too:
+        for support_file in DATABASES[path]["support_files"]:
+            download_support_file(path, support_file)
+
+
+def last_modified(path):
+    url = DATABASES[path]["url"]
+    last_modified = utils.get_last_modified(url)
+
+    if last_modified is None:
+        raise Exception("Last-Modified is not available")
+
+    return last_modified
 
 
 class Store:

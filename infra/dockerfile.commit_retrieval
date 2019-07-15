@@ -1,12 +1,13 @@
 FROM mozilla/bugbug-base:latest
 
 # Mercurial need Python2 :(
-RUN apt-get update && apt-get install -y python-pip
-
-RUN python2 -m pip install mercurial==4.8
-
-# Robustcheckout setup
-RUN hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/
+# git is required by the annotate pipeline.
+RUN apt-get update && \
+    apt-get install -y python python-pip git && \
+    python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
+    hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    apt-get purge -y python-pip && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY infra/hgrc /root/.hgrc
 

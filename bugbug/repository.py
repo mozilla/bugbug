@@ -7,24 +7,30 @@ import argparse
 import concurrent.futures
 import copy
 import itertools
+import json
+import logging
 import multiprocessing
 import os
+import pickle
 import re
 import sys
 from collections import deque
 from datetime import datetime
 
 import hglib
-import requests
-from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
+
+logger = logging.getLogger(__name__)
+
 
 COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.xz",
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
+    1,
+    ["commit_experiences.pickle.zst"],
 )
 
 path_to_component = {}
@@ -284,7 +290,11 @@ def hg_log(hg, revs):
         date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
         assert b" " in rev[9]
-        pushdate = datetime.utcfromtimestamp(float(rev[9].split(b" ", 1)[0]))
+        pushdate_timestamp = rev[9].split(b" ", 1)[0]
+        if pushdate_timestamp != b"0":
+            pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
+        else:
+            pushdate = datetime.utcnow()
 
         file_copies = {}
         for file_copy in rev[8].decode("utf-8").split("|"):
@@ -321,11 +331,15 @@ def _hg_log(revs):
     return hg_log(HG, revs)
 
 
-def get_revs(hg):
-    print(f"Getting revs from 0 to tip...")
+def get_revs(hg, rev_start=0):
+    print(f"Getting revs from {rev_start} to tip...")
 
     args = hglib.util.cmdbuilder(
-        b"log", template="{node}\n", no_merges=True, branch="central", rev=f"0:tip"
+        b"log",
+        template="{node}\n",
+        no_merges=True,
+        branch="central",
+        rev=f"{rev_start}:tip",
     )
     x = hg.rawcommand(args)
     return x.splitlines()
@@ -352,7 +366,9 @@ class exp_queue:
         return self.start_day + (self.list.maxlen - 1)
 
     def __getitem__(self, day):
-        assert day >= self.start_day, "Can't get a day from earlier than start day"
+        assert (
+            day >= self.start_day
+        ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
 
         if day < 0:
             return self.default
@@ -382,17 +398,15 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits, commits_to_ignore):
+def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    last_commit = {
-        "author": {},
-        "reviewer": {},
-        "file": {},
-        "directory": {},
-        "component": {},
-    }
-    first_commit_time = {}
+    try:
+        with open("data/commit_experiences.pickle", "rb") as f:
+            experiences, first_commit_time = pickle.load(f)
+    except FileNotFoundError:
+        experiences = {}
+        first_commit_time = {}
 
     for commit in tqdm(commits):
         if commit.author not in first_commit_time:
@@ -400,35 +414,12 @@ def calculate_experiences(commits, commits_to_ignore):
             commit.seniority_author = 0
         else:
             time_lapse = commit.pushdate - first_commit_time[commit.author]
-            commit.seniority_author = time_lapse.days
-
-        if commit not in commits_to_ignore:
-            last_commit["author"][commit.author] = commit
-            for reviewer in commit.reviewers:
-                last_commit["reviewer"][reviewer] = commit
-            for path in commit.files:
-                last_commit["file"][path] = commit
-            for directory in get_directories(commit.files):
-                last_commit["directory"][directory] = commit
-
-            components = list(
-                set(
-                    path_to_component[path]
-                    for path in commit.files
-                    if path in path_to_component
-                )
-            )
-
-            for component in components:
-                last_commit["component"][component] = commit
-
-    first_pushdate = commits[0].pushdate
+            commit.seniority_author = time_lapse.total_seconds()
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
-    experiences = {}
 
     def get_experience(exp_type, commit_type, item, day, default):
         if exp_type not in experiences:
@@ -443,13 +434,6 @@ def calculate_experiences(commits, commits_to_ignore):
             )
 
         return experiences[exp_type][commit_type][item][day]
-
-    def del_experience(exp_type, items):
-        for item in items:
-            if last_commit[exp_type][item] is commit:
-                del last_commit[exp_type][item]
-                del experiences[exp_type][""][item]
-                del experiences[exp_type]["backout"][item]
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -495,8 +479,6 @@ def calculate_experiences(commits, commits_to_ignore):
                 exps = experiences[experience_type][commit_type]
                 for i, item in enumerate(items):
                     exps[item][day] = total_exps[i] + 1
-
-        del_experience(experience_type, items)
 
     def update_complex_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -570,9 +552,7 @@ def calculate_experiences(commits, commits_to_ignore):
                 for i, item in enumerate(items):
                     exps[item][day] = all_commit_lists[i] + (commit.node,)
 
-        del_experience(experience_type, items)
-
-    for commit in tqdm(commits):
+    for i, commit in enumerate(tqdm(commits)):
         day = (commit.pushdate - first_pushdate).days
         assert day >= 0
 
@@ -637,6 +617,12 @@ def calculate_experiences(commits, commits_to_ignore):
 
             update_complex_experiences("component", day, components)
 
+    if save:
+        with open("data/commit_experiences.pickle", "wb") as f:
+            pickle.dump(
+                (experiences, first_commit_time), f, protocol=pickle.HIGHEST_PROTOCOL
+            )
+
 
 def get_commits_to_ignore(repo_dir, commits):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
@@ -664,14 +650,31 @@ def get_commits_to_ignore(repo_dir, commits):
     return set(commit for commit in commits if should_ignore(commit))
 
 
-def download_commits(repo_dir, date_from):
+def download_component_mapping():
+    global path_to_component
+
+    utils.download_check_etag(
+        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "data/component_mapping.json",
+    )
+
+    with open("data/component_mapping.json", "r") as f:
+        path_to_component = json.load(f)
+
+    path_to_component = {
+        path: "::".join(component) for path, component in path_to_component.items()
+    }
+
+
+def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     hg = hglib.open(repo_dir)
 
-    revs = get_revs(hg)
+    revs = get_revs(hg, rev_start)
+    if len(revs) == 0:
+        print("No commits to analyze")
+        return []
 
-    assert (
-        len(revs) > 0
-    ), "There should definitely be more than 0 commits, something is wrong"
+    first_pushdate = hg_log(hg, [b"0"])[0].pushdate
 
     hg.close()
 
@@ -691,26 +694,15 @@ def download_commits(repo_dir, date_from):
 
     print("Downloading file->component mapping...")
 
-    global path_to_component
-    r = requests.get(
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json"
-    )
-    r.raise_for_status()
-    path_to_component = r.json()
-    path_to_component = {
-        path: "::".join(component) for path, component in path_to_component.items()
-    }
+    download_component_mapping()
 
     commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
     print(f"{len(commits_to_ignore)} commits to ignore")
 
-    calculate_experiences(commits, commits_to_ignore)
+    calculate_experiences(commits, commits_to_ignore, first_pushdate, save)
 
     # Exclude commits to ignore.
     commits = [commit for commit in commits if commit not in commits_to_ignore]
-
-    # Exclude commits outside the range we care about.
-    commits = [commit for commit in commits if commit.pushdate > date_from]
 
     commits_num = len(commits)
 
@@ -724,31 +716,76 @@ def download_commits(repo_dir, date_from):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
-        db.write(COMMITS_DB, commits)
+
+        if ret:
+            commits = list(commits)
+
+        if save:
+            db.append(COMMITS_DB, commits)
+
+        if ret:
+            return commits
 
 
-def get_commit_map():
-    commit_map = {}
+def clean(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        hg.revert(repo_dir.encode("utf-8"), all=True)
 
-    for commit in get_commits():
-        bug_id = commit["bug_id"]
+        try:
+            cmd = hglib.util.cmdbuilder(
+                b"strip", rev=b"roots(outgoing())", force=True, backup=False
+            )
+            hg.rawcommand(cmd)
+        except hglib.error.CommandError as e:
+            if b"abort: empty revision set" not in e.err:
+                raise
 
-        if not bug_id:
-            continue
+        # Pull and update.
+        logger.info("Pulling and updating mozilla-central")
+        hg.pull(update=True)
+        logger.info("mozilla-central pulled and updated")
 
-        if bug_id not in commit_map:
-            commit_map[bug_id] = []
 
-        commit_map[bug_id].append(commit)
+def clone(repo_dir):
+    if os.path.exists(repo_dir):
+        clean(repo_dir)
+        return
 
-    return commit_map
+    cmd = hglib.util.cmdbuilder(
+        "robustcheckout",
+        "https://hg.mozilla.org/mozilla-central",
+        repo_dir,
+        purge=True,
+        sharebase=repo_dir + "-shared",
+        networkattempts=7,
+        branch=b"tip",
+    )
+
+    cmd.insert(0, hglib.HGPATH)
+
+    proc = hglib.util.popen(cmd)
+    out, err = proc.communicate()
+    if proc.returncode:
+        raise hglib.error.CommandError(cmd, proc.returncode, out, err)
+
+    logger.info("mozilla-central cloned")
+
+    # Remove pushlog DB to make sure it's regenerated.
+    try:
+        os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
+    except FileNotFoundError:
+        logger.info("pushlog database doesn't exist")
+
+    # Pull and update, to make sure the pushlog is generated.
+    clean(repo_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repository_dir", help="Path to the repository", action="store")
+    parser.add_argument(
+        "rev_start", help="Which revision to start with", action="store"
+    )
     args = parser.parse_args()
 
-    two_years_and_six_months_ago = datetime.utcnow() - relativedelta(years=2, months=6)
-
-    download_commits(args.repository_dir, two_years_and_six_months_ago)
+    download_commits(args.repository_dir, args.rev_start)

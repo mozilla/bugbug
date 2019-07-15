@@ -6,20 +6,28 @@
 import argparse
 import csv
 import os
+import sys
 from datetime import datetime, timedelta
 
 import numpy as np
 
-from bugbug import repository  # noqa
-from bugbug import bugzilla, db
+from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
 
-if __name__ == "__main__":
+
+def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--lemmatization",
         help="Perform lemmatization (using spaCy)",
         action="store_true",
+    )
+    parser.add_argument(
+        "--training-set-size",
+        nargs="?",
+        default=14000,
+        type=int,
+        help="The size of the training set for the duplicate model",
     )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
@@ -27,7 +35,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--classifier",
-        help="Type of the classifier",
+        help="Type of the classifier. Only used for component classification.",
         choices=["default", "nn"],
         default="default",
     )
@@ -39,31 +47,44 @@ if __name__ == "__main__":
     )
     parser.add_argument("--token", help="Bugzilla token", action="store")
     parser.add_argument(
-        "--historical", help="Analyze historical bugs", action="store_true"
+        "--historical",
+        help="""Analyze historical bugs. Only used for defect, bugtype,
+                defectenhancementtask and regression tasks.""",
+        action="store_true",
     )
-    args = parser.parse_args()
+    return parser.parse_args(args)
 
+
+def main(args):
     model_file_name = "{}{}model".format(
         args.goal, "" if args.classifier == "default" else args.classifier
     )
 
-    model_class_name = args.goal
-
     if args.goal == "component":
         if args.classifier == "default":
             model_class_name = "component"
-        elif args.classifier == "nn":
-            model_class_name = "component_nn"
         else:
-            raise ValueError(f"Unknown value {args.classifier}")
+            model_class_name = "component_nn"
+    else:
+        model_class_name = args.goal
 
     model_class = get_model_class(model_class_name)
 
     if args.train:
-        db.download()
+        db.download(bugzilla.BUGS_DB)
+        db.download(repository.COMMITS_DB)
 
-        if args.historical:
+        historical_supported_tasks = [
+            "defect",
+            "bugtype",
+            "defectenhancementtask",
+            "regression",
+        ]
+
+        if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
+        elif args.goal == "duplicate":
+            model = model_class(args.training_set_size, args.lemmatization)
         else:
             model = model_class(args.lemmatization)
         model.train()
@@ -77,12 +98,14 @@ if __name__ == "__main__":
             )
 
             if model.calculate_importance:
-                probas, importances = model.classify(
+                probas, importance = model.classify(
                     bug, probabilities=True, importances=True
                 )
 
-                feature_names = model.get_feature_names()
-                for i, (importance, index, is_positive) in enumerate(importances):
+                feature_names = model.get_human_readable_feature_names()
+                for i, (importance, index, is_positive) in enumerate(
+                    importance["importances"]
+                ):
                     print(
                         f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
                     )
@@ -102,13 +125,14 @@ if __name__ == "__main__":
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
         bugzilla.set_token(args.token)
-        bugs = bugzilla.download_bugs_between(a_week_ago, today)
+        bug_ids = bugzilla.get_ids_between(a_week_ago, today)
+        bugs = bugzilla.get(bug_ids)
 
         print(f"Classifying {len(bugs)} bugs...")
 
         rows = [["Bug", f"{args.goal}(model)", args.goal, "Title"]]
 
-        for bug in bugs:
+        for bug in bugs.values():
             p = model.classify(bug, probabilities=True)
             rows.append(
                 [
@@ -129,3 +153,7 @@ if __name__ == "__main__":
         ) as f:
             writer = csv.writer(f)
             writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    main(parse_args(sys.argv[1:]))

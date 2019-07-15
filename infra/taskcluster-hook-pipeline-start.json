@@ -38,7 +38,12 @@
             "features": {
                 "taskclusterProxy": true
             },
-            "image": "mozilla/bugbug-spawn-data-pipeline",
+            "command": [
+                "/usr/local/bin/python3",
+                "/code/spawn_data_pipeline.py",
+                "/code/data-pipeline.yml"
+            ],
+            "image": "mozilla/bugbug-spawn-pipeline",
             "maxRunTime": 7200
         },
         "priority": "normal",
@@ -46,7 +51,8 @@
         "retries": 5,
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed"
+            "notify.irc-channel.#bugbug.on-failed",
+            "index.project.relman.bugbug.data-pipeline-start"
         ],
         "schedulerId": "-",
         "scopes": [
@@ -57,7 +63,7 @@
         "workerType": "taskcluster-generic"
     },
     "triggerSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "type": "object"
     }
 }

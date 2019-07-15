@@ -22,15 +22,12 @@ def fetch_untriaged(args):
 
     # Set bugzilla token and download bugs
     bugzilla.set_token(args.token)
-    bug_ids = bugzilla.download_bugs_between(three_months_ago, today)
+    bug_ids = bugzilla.get_ids_between(three_months_ago, today)
+    bugs = bugzilla.get(bug_ids)
 
     # Get untriaged bugs
-    bugs = bugzilla.get_bugs()
     untriaged_bugs = []
-    for bug in bugs:
-        if bug["id"] not in bug_ids:
-            continue
-
+    for bug in bugs.values():
         for history in bug["history"]:
             for change in history["changes"]:
                 if (

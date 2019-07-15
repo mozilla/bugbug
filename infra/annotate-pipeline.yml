@@ -1,0 +1,69 @@
+version: 1
+tasks:
+  $let:
+    year: {$eval: 'now[0:4]'}
+    month: {$eval: 'now[5:7]'}
+    day: {$eval: 'now[8:10]'}
+    hour: {$eval: 'now[11:13]'}
+    minute: {$eval: 'now[14:16]'}
+    second: {$eval: 'now[17:19]'}
+  in:
+    - ID: microannotate-generate
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '72 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+        artifacts:
+          public/done:
+            path: /done
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate repository generator
+        description: bugbug microannotate repository generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: run-again
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '73 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: taskcluster-generic
+      dependencies:
+        - microannotate-generate
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-spawn-pipeline:${version}
+        command:
+          - python
+          - /code/trigger_again.py
+          - project-relman
+          - bugbug-annotate
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug annotate pipeline rerunner
+        description: bugbug annotate pipeline rerunner
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
