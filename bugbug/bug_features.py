@@ -21,28 +21,36 @@ def field(bug, field):
     return None
 
 
-class has_str(object):
+class single_bug_feature(object):
+    pass
+
+
+class couple_bug_feature(object):
+    pass
+
+
+class has_str(single_bug_feature):
     name = "Has STR"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_str")
 
 
-class has_regression_range(object):
+class has_regression_range(single_bug_feature):
     name = "Has Regression Range"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_regression_range")
 
 
-class has_crash_signature(object):
+class has_crash_signature(single_bug_feature):
     name = "Crash signature present"
 
     def __call__(self, bug, **kwargs):
         return "cf_crash_signature" in bug and bug["cf_crash_signature"] != ""
 
 
-class keywords(object):
+class keywords(single_bug_feature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
@@ -62,19 +70,19 @@ class keywords(object):
         return keywords + subkeywords
 
 
-class severity(object):
+class severity(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return field(bug, "severity")
 
 
-class number_of_bug_dependencies(object):
+class number_of_bug_dependencies(single_bug_feature):
     name = "# of bug dependencies"
 
     def __call__(self, bug, **kwargs):
         return len(bug["depends_on"])
 
 
-class is_coverity_issue(object):
+class is_coverity_issue(single_bug_feature):
     name = "Is Coverity issue"
 
     def __call__(self, bug, **kwargs):
@@ -84,28 +92,28 @@ class is_coverity_issue(object):
         )
 
 
-class has_url(object):
+class has_url(single_bug_feature):
     name = "Has a URL"
 
     def __call__(self, bug, **kwargs):
         return bug["url"] != ""
 
 
-class has_w3c_url(object):
+class has_w3c_url(single_bug_feature):
     name = "Has a w3c URL"
 
     def __call__(self, bug, **kwargs):
         return "w3c" in bug["url"]
 
 
-class has_github_url(object):
+class has_github_url(single_bug_feature):
     name = "Has a GitHub URL"
 
     def __call__(self, bug, **kwargs):
         return "github" in bug["url"]
 
 
-class whiteboard(object):
+class whiteboard(single_bug_feature):
     def __call__(self, bug, **kwargs):
 
         # Split by '['
@@ -129,7 +137,7 @@ class whiteboard(object):
         return splits
 
 
-class patches(object):
+class patches(single_bug_feature):
     name = "# of patches"
 
     def __call__(self, bug, **kwargs):
@@ -142,24 +150,24 @@ class patches(object):
         )
 
 
-class landings(object):
+class landings(single_bug_feature):
     name = "# of landing comments"
 
     def __call__(self, bug, **kwargs):
         return sum(1 for c in bug["comments"] if "://hg.mozilla.org/" in c["text"])
 
 
-class product(object):
+class product(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return bug["product"]
 
 
-class component(object):
+class component(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return bug["component"]
 
 
-class is_mozillian(object):
+class is_mozillian(single_bug_feature):
     name = "Reporter has a @mozilla email"
 
     def __call__(self, bug, **kwargs):
@@ -169,14 +177,14 @@ class is_mozillian(object):
         )
 
 
-class bug_reporter(object):
+class bug_reporter(single_bug_feature):
     name = "Bug reporter"
 
     def __call__(self, bug, **kwargs):
         return bug["creator_detail"]["email"]
 
 
-class delta_request_merge(object):
+class delta_request_merge(single_bug_feature):
     name = "Timespan between uplift request and following merge"
 
     def __call__(self, bug, **kwargs):
@@ -195,47 +203,47 @@ class delta_request_merge(object):
         return None
 
 
-class blocked_bugs_number(object):
+class blocked_bugs_number(single_bug_feature):
     name = "# of blocked bugs"
 
     def __call__(self, bug, **kwargs):
         return len(bug["blocks"])
 
 
-class priority(object):
+class priority(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return bug["priority"]
 
 
-class has_cve_in_alias(object):
+class has_cve_in_alias(single_bug_feature):
     name = "CVE in alias"
 
     def __call__(self, bug, **kwargs):
         return bug["alias"] is not None and "CVE" in bug["alias"]
 
 
-class comment_count(object):
+class comment_count(single_bug_feature):
     name = "# of comments"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "comment_count")
 
 
-class comment_length(object):
+class comment_length(single_bug_feature):
     name = "Length of comments"
 
     def __call__(self, bug, **kwargs):
         return sum(len(x["text"]) for x in bug["comments"])
 
 
-class reporter_experience(object):
+class reporter_experience(single_bug_feature):
     name = "# of bugs previously opened by the reporter"
 
     def __call__(self, bug, reporter_experience, **kwargs):
         return reporter_experience
 
 
-class ever_affected(object):
+class ever_affected(single_bug_feature):
     name = "status has ever been set to 'affected'"
 
     def __call__(self, bug, **kwargs):
@@ -250,7 +258,7 @@ class ever_affected(object):
         return False
 
 
-class affected_then_unaffected(object):
+class affected_then_unaffected(single_bug_feature):
     name = "status has ever been set to 'affected' and 'unaffected'"
 
     def __call__(self, bug, **kwargs):
@@ -286,7 +294,7 @@ class affected_then_unaffected(object):
         )
 
 
-class has_image_attachment_at_bug_creation(object):
+class has_image_attachment_at_bug_creation(single_bug_feature):
     name = "Image attachment present at bug creation"
 
     def __call__(self, bug, **kwargs):
@@ -297,7 +305,7 @@ class has_image_attachment_at_bug_creation(object):
         )
 
 
-class has_image_attachment(object):
+class has_image_attachment(single_bug_feature):
     name = "Image attachment present"
 
     def __call__(self, bug, **kwargs):
@@ -306,14 +314,14 @@ class has_image_attachment(object):
         )
 
 
-class commit_added(object):
+class commit_added(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["added"] for commit in bug["commits"] if not commit["ever_backedout"]
         )
 
 
-class commit_deleted(object):
+class commit_deleted(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["deleted"]
@@ -322,7 +330,7 @@ class commit_deleted(object):
         )
 
 
-class commit_types(object):
+class commit_types(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
             (
@@ -334,7 +342,7 @@ class commit_types(object):
         )
 
 
-class commit_files_modified_num(object):
+class commit_files_modified_num(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["files_modified_num"]
@@ -343,7 +351,7 @@ class commit_files_modified_num(object):
         )
 
 
-class commit_author_experience(object):
+class commit_author_experience(single_bug_feature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["author_experience"]
@@ -353,7 +361,7 @@ class commit_author_experience(object):
         return sum(res) / len(res)
 
 
-class commit_author_experience_90_days(object):
+class commit_author_experience_90_days(single_bug_feature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["author_experience_90_days"]
@@ -363,7 +371,7 @@ class commit_author_experience_90_days(object):
         return sum(res) / len(res)
 
 
-class commit_reviewer_experience(object):
+class commit_reviewer_experience(single_bug_feature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["reviewer_experience"]
@@ -373,7 +381,7 @@ class commit_reviewer_experience(object):
         return sum(res) / len(res)
 
 
-class commit_reviewer_experience_90_days(object):
+class commit_reviewer_experience_90_days(single_bug_feature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["reviewer_experience_90_days"]
@@ -383,12 +391,12 @@ class commit_reviewer_experience_90_days(object):
         return sum(res) / len(res)
 
 
-class commit_no_of_backouts(object):
+class commit_no_of_backouts(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(1 for commit in bug["commits"] if commit["ever_backedout"])
 
 
-class components_touched(object):
+class components_touched(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return list(
             set(
@@ -400,7 +408,7 @@ class components_touched(object):
         )
 
 
-class components_touched_num(object):
+class components_touched_num(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return len(
             set(
@@ -412,22 +420,22 @@ class components_touched_num(object):
         )
 
 
-class platform(object):
+class platform(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return bug["platform"]
 
 
-class op_sys(object):
+class op_sys(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return bug["op_sys"]
 
 
-class is_reporter_a_developer(object):
+class is_reporter_a_developer(single_bug_feature):
     def __call__(self, bug, author_ids, **kwargs):
         return bug_reporter()(bug).strip() in author_ids
 
 
-class had_severity_enhancement(object):
+class had_severity_enhancement(single_bug_feature):
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
@@ -438,6 +446,11 @@ class had_severity_enhancement(object):
                     return True
 
         return False
+
+
+class is_same_product(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["product"] == bugs[1]["product"]
 
 
 def get_author_ids():
@@ -476,20 +489,41 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         already_rollbacked = set()
 
         def apply_transform(bug):
-            bug_id = bug["id"]
 
-            if self.rollback and bug_id not in already_rollbacked:
-                bug = bug_snapshot.rollback(bug, self.rollback_when)
-                already_rollbacked.add(bug_id)
+            is_couple = isinstance(bug, tuple)
+
+            if not is_couple:
+                bug_id = bug["id"]
+
+                if self.rollback and bug_id not in already_rollbacked:
+                    bug = bug_snapshot.rollback(bug, self.rollback_when)
+                    already_rollbacked.add(bug_id)
+
+            else:
+                bug1_id = bug[0]["id"]
+                bug2_id = bug[1]["id"]
+
+                if self.rollback:
+                    if bug1_id not in already_rollbacked:
+                        bug[0] = bug_snapshot.rollback(bug[0], self.rollback_when)
+                        already_rollbacked.add(bug1_id)
+                    if bug2_id not in already_rollbacked:
+                        bug[1] = bug_snapshot.rollback(bug[1], self.rollback_when)
+                        already_rollbacked.add(bug2_id)
 
             data = {}
 
             for feature_extractor in self.feature_extractors:
-                res = feature_extractor(
-                    bug,
-                    reporter_experience=reporter_experience_map[bug["creator"]],
-                    author_ids=author_ids,
-                )
+                res = None
+                if isinstance(feature_extractor, single_bug_feature) and not is_couple:
+                    res = feature_extractor(
+                        bug,
+                        reporter_experience=reporter_experience_map[bug["creator"]],
+                        author_ids=author_ids,
+                    )
+
+                elif isinstance(feature_extractor, couple_bug_feature) and is_couple:
+                    res = feature_extractor(bug)
 
                 if hasattr(feature_extractor, "name"):
                     feature_extractor_name = feature_extractor.name
@@ -509,21 +543,28 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
                 data[feature_extractor_name] = res
 
-            reporter_experience_map[bug["creator"]] += 1
+            if is_couple:
+                reporter_experience_map[bug[0]["creator"]] += 1
+                reporter_experience_map[bug[1]["creator"]] += 1
 
-            # TODO: Try simply using all possible fields instead of extracting features manually.
+                return {"data": data}
 
-            for cleanup_function in self.cleanup_functions:
-                bug["summary"] = cleanup_function(bug["summary"])
-                for c in bug["comments"]:
-                    c["text"] = cleanup_function(c["text"])
+            else:
+                reporter_experience_map[bug["creator"]] += 1
 
-            return {
-                "data": data,
-                "title": bug["summary"],
-                "first_comment": bug["comments"][0]["text"],
-                "comments": " ".join([c["text"] for c in bug["comments"]]),
-            }
+                # TODO: Try simply using all possible fields instead of extracting features manually.
+
+                for cleanup_function in self.cleanup_functions:
+                    bug["summary"] = cleanup_function(bug["summary"])
+                    for c in bug["comments"]:
+                        c["text"] = cleanup_function(c["text"])
+
+                return {
+                    "data": data,
+                    "title": bug["summary"],
+                    "first_comment": bug["comments"][0]["text"],
+                    "comments": " ".join([c["text"] for c in bug["comments"]]),
+                }
 
         for bug in bugs:
             if isinstance(bug, dict):
@@ -531,10 +572,14 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             elif isinstance(bug, tuple):
                 result1 = apply_transform(bug[0])
                 result2 = apply_transform(bug[1])
+
+                result = apply_transform(bug)
+
                 if self.merge_data:
                     results.append(
                         {
-                            "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}'
+                            "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}',
+                            "couple_data": result["data"],
                         }
                     )
                 else:
@@ -542,6 +587,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                         {
                             "data1": result1["data"],
                             "data2": result2["data"],
+                            "couple_data": result["data"],
                             "title1": result1["title"],
                             "title2": result2["title"],
                             "first_comment1": result1["first_comment"],
