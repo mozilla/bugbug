@@ -23,7 +23,7 @@ class RegressorModel(CommitModel):
 
         self.sampler = RandomUnderSampler(random_state=0)
 
-        self.feature_extractors = [
+        feature_extractors = [
             commit_features.file_size(),
             commit_features.test_added(),
             commit_features.added(),
@@ -36,6 +36,7 @@ class RegressorModel(CommitModel):
             commit_features.directory_touched_prev(),
             commit_features.file_touched_prev(),
             commit_features.types(),
+            commit_features.files(),
             commit_features.components(),
             commit_features.components_modified_num(),
             commit_features.directories(),
@@ -54,7 +55,7 @@ class RegressorModel(CommitModel):
                 (
                     "commit_extractor",
                     commit_features.CommitExtractor(
-                        self.feature_extractors, cleanup_functions
+                        feature_extractors, cleanup_functions
                     ),
                 ),
                 (
@@ -110,15 +111,6 @@ class RegressorModel(CommitModel):
             )
         )
 
-        self.feature_extractors += [
-            commit_features.files(
-                commits=[
-                    commit
-                    for commit in repository.get_commits()
-                    if commit["node"] in classes
-                ]
-            )
-        ]
         return classes, [0, 1]
 
     def get_feature_names(self):

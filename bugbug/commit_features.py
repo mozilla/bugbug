@@ -180,24 +180,21 @@ class directory_touched_prev(object):
 
 
 class files(object):
-    def __init__(self, min_freq=0.00003, commits=[]):
-        self.commits = commits
+    def fit(self, commits, min_freq=0.00003):
         self.min_freq = min_freq
         self.count = defaultdict(int)
 
-        for commit in self.commits:
+        for commit in commits:
             for file in commit["files"]:
                 self.count[file] += 1
         self.total_files = sum(self.count.values())
 
     def __call__(self, commit, **kwargs):
-        if self.commits:
-            return [
-                file
-                for file in commit["files"]
-                if (self.count[file] / self.total_files) > self.min_freq
-            ]
-        return commit["files"]
+        return [
+            file
+            for file in commit["files"]
+            if (self.count[file] / self.total_files) > self.min_freq
+        ]
 
 
 class file_touched_prev(object):
@@ -220,6 +217,10 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
         self.cleanup_functions = cleanup_functions
 
     def fit(self, x, y=None):
+        for item in self.feature_extractors:
+            if item.__class__ == files:
+                item.fit(x)
+
         return self
 
     def transform(self, commits):
