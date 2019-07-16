@@ -258,7 +258,7 @@ class Model:
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
         for i in range(len(tracking_metrics["confusion_matrix"])):
             tracking_metrics["confusion_matrix"][i].insert(0, class_names[i])
-        headers_for_visualisation = class_names
+        headers_for_visualisation = class_names.copy()
         headers_for_visualisation.insert(0, "True/False")
         print(
             tabulate(
