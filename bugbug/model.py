@@ -256,17 +256,16 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-        confusion_matrix_reformatted = tracking_metrics["confusion_matrix"].copy()
-        class_names_string = [str(item) for item in class_names]
-        for i in range(len(confusion_matrix_reformatted)):
-            confusion_matrix_reformatted[i].insert(
-                0, str(class_names_string[i]) + " (Actual)"
-            )
-        headers_for_cm = [s + " (Predicted)" for s in class_names_string]
+        confusion_matrix_table = confusion_matrix.tolist()
+        confusion_matrix_header = []
+        for i in range(len(confusion_matrix_table)):
+            confusion_matrix_header.append(f"{class_names[i]} (Predicted)")
+        for i in range(len(confusion_matrix_table)):
+            confusion_matrix_table[i].insert(0, f"{class_names[i]} (Actual)")
         print(
             tabulate(
-                confusion_matrix_reformatted,
-                headers=headers_for_cm,
+                confusion_matrix_table,
+                headers=confusion_matrix_header,
                 tablefmt="fancy_grid",
             )
         )
@@ -301,15 +300,18 @@ class Model:
                 confusion_matrix = metrics.confusion_matrix(
                     y_test_filter, y_pred_filter, labels=class_names
                 )
-                confusion_matrix_reformatted = confusion_matrix.tolist()
-                for i in range(len(confusion_matrix_reformatted)):
-                    confusion_matrix_reformatted[i].insert(
-                        0, class_names_string[i] + " (Actual)"
+                confusion_matrix_table = confusion_matrix.tolist()
+                confusion_matrix_header = []
+                for i in range(len(confusion_matrix_table)):
+                    confusion_matrix_header.append(f"{class_names[i]} (Predicted)")
+                for i in range(len(confusion_matrix_table)):
+                    confusion_matrix_table[i].insert(
+                        0, f"{class_names[i]}" + " (Actual)"
                     )
                 print(
                     tabulate(
-                        confusion_matrix_reformatted,
-                        headers=headers_for_cm,
+                        confusion_matrix_table,
+                        headers=confusion_matrix_header,
                         tablefmt="fancy_grid",
                     )
                 )
