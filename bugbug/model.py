@@ -21,6 +21,7 @@ from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
@@ -254,8 +255,18 @@ class Model:
 
         print(f"No confidence threshold - {len(y_test)} classified")
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
-        print(confusion_matrix)
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+        for i in range(len(tracking_metrics["confusion_matrix"])):
+            tracking_metrics["confusion_matrix"][i].insert(0, class_names[i])
+        headers_for_visualisation = class_names
+        headers_for_visualisation.insert(0, "True/False")
+        print(
+            tabulate(
+                tracking_metrics["confusion_matrix"],
+                headers=headers_for_visualisation,
+                format="fancy_grid",
+            )
+        )
 
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
         report = classification_report_imbalanced_values(
