@@ -186,7 +186,7 @@ class Model:
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_iter)
+        X = self.extraction_pipeline.fit_transform([item for item in X_iter])
 
         # Calculate labels.
         y = np.array(y_iter)
