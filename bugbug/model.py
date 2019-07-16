@@ -256,14 +256,17 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-        for i in range(len(tracking_metrics["confusion_matrix"])):
-            tracking_metrics["confusion_matrix"][i].insert(0, class_names[i])
-        headers_for_visualisation = class_names.copy()
-        headers_for_visualisation.insert(0, "True/False")
+        confusion_matrix_reformatted = tracking_metrics["confusion_matrix"].copy()
+        class_names_string = [str(item) for item in class_names]
+        for i in range(len(confusion_matrix_reformatted)):
+            confusion_matrix_reformatted[i].insert(
+                0, str(class_names_string[i]) + " (Actual)"
+            )
+        headers_for_cm = [s + " (Predicted)" for s in class_names_string]
         print(
             tabulate(
-                tracking_metrics["confusion_matrix"],
-                headers=headers_for_visualisation,
+                confusion_matrix_reformatted,
+                headers=headers_for_cm,
                 tablefmt="fancy_grid",
             )
         )
@@ -295,9 +298,19 @@ class Model:
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
             if len(y_test_filter) != 0:
+                confusion_matrix = metrics.confusion_matrix(
+                    y_test_filter, y_pred_filter, labels=class_names
+                )
+                confusion_matrix_reformatted = confusion_matrix.tolist()
+                for i in range(len(confusion_matrix_reformatted)):
+                    confusion_matrix_reformatted[i].insert(
+                        0, class_names_string[i] + " (Actual)"
+                    )
                 print(
-                    metrics.confusion_matrix(
-                        y_test_filter, y_pred_filter, labels=class_names
+                    tabulate(
+                        confusion_matrix_reformatted,
+                        headers=headers_for_cm,
+                        tablefmt="fancy_grid",
                     )
                 )
                 print(
