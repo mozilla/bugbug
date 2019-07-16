@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from collections import defaultdict
+
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -178,8 +180,23 @@ class directory_touched_prev(object):
 
 
 class files(object):
+    def __init__(self, min_freq=0.00003):
+        self.min_freq = min_freq
+
+    def fit(self, commits):
+        self.count = defaultdict(int)
+
+        for commit in commits:
+            for f in commit["files"]:
+                self.count[f] += 1
+        self.total_files = sum(self.count.values())
+
     def __call__(self, commit, **kwargs):
-        return commit["files"]
+        return [
+            f
+            for f in commit["files"]
+            if (self.count[f] / self.total_files) > self.min_freq
+        ]
 
 
 class file_touched_prev(object):
@@ -202,6 +219,10 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
         self.cleanup_functions = cleanup_functions
 
     def fit(self, x, y=None):
+        for feature in self.feature_extractors:
+            if hasattr(feature, "fit"):
+                feature.fit(x)
+
         return self
 
     def transform(self, commits):
