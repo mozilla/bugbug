@@ -10,4 +10,4 @@ RUN apt-get update && \
 		rm -rf /var/lib/apt/lists/*
 
 COPY . /tmp/bugbug
-RUN pip install /tmp/bugbug
+RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
