@@ -461,6 +461,11 @@ class is_same_component(couple_bug_feature):
         )
 
 
+class is_same_platform(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["platform"] == bugs[1]["platform"]
+
+
 def get_author_ids():
     author_ids = set()
     for commit in repository.get_commits():
