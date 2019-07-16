@@ -36,6 +36,7 @@ class RegressorModel(CommitModel):
             commit_features.directory_touched_prev(),
             commit_features.file_touched_prev(),
             commit_features.types(),
+            commit_features.files(),
             commit_features.components(),
             commit_features.components_modified_num(),
             commit_features.directories(),
