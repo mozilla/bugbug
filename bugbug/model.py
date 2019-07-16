@@ -91,6 +91,21 @@ def classification_report_imbalanced_values(
     return result
 
 
+def get_labeled_confusion_matrix(y_test, y_pred, labels):
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
+    confusion_matrix_table = confusion_matrix.tolist()
+    confusion_matrix_header = []
+    for i in range(len(confusion_matrix_table)):
+        confusion_matrix_header.append(f"{labels[i]} (Predicted)")
+    for i in range(len(confusion_matrix_table)):
+        confusion_matrix_table[i].insert(0, f"{labels[i]} (Actual)")
+    labeled_confusion_matrix = tabulate(
+        confusion_matrix_table, headers=confusion_matrix_header, tablefmt="fancy_grid"
+    )
+
+    return labeled_confusion_matrix
+
+
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
@@ -256,19 +271,10 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-        confusion_matrix_table = confusion_matrix.tolist()
-        confusion_matrix_header = []
-        for i in range(len(confusion_matrix_table)):
-            confusion_matrix_header.append(f"{class_names[i]} (Predicted)")
-        for i in range(len(confusion_matrix_table)):
-            confusion_matrix_table[i].insert(0, f"{class_names[i]} (Actual)")
-        print(
-            tabulate(
-                confusion_matrix_table,
-                headers=confusion_matrix_header,
-                tablefmt="fancy_grid",
-            )
+        labeled_confusion_matrix = get_labeled_confusion_matrix(
+            y_test, y_pred, class_names
         )
+        print(labeled_confusion_matrix)
 
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
         report = classification_report_imbalanced_values(
@@ -297,24 +303,10 @@ class Model:
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
             if len(y_test_filter) != 0:
-                confusion_matrix = metrics.confusion_matrix(
-                    y_test_filter, y_pred_filter, labels=class_names
+                labeled_confusion_matrix = get_labeled_confusion_matrix(
+                    y_test_filter, y_pred_filter, class_names
                 )
-                confusion_matrix_table = confusion_matrix.tolist()
-                confusion_matrix_header = []
-                for i in range(len(confusion_matrix_table)):
-                    confusion_matrix_header.append(f"{class_names[i]} (Predicted)")
-                for i in range(len(confusion_matrix_table)):
-                    confusion_matrix_table[i].insert(
-                        0, f"{class_names[i]}" + " (Actual)"
-                    )
-                print(
-                    tabulate(
-                        confusion_matrix_table,
-                        headers=confusion_matrix_header,
-                        tablefmt="fancy_grid",
-                    )
-                )
+                print(labeled_confusion_matrix)
                 print(
                     classification_report_imbalanced(
                         y_test_filter, y_pred_filter, labels=class_names
