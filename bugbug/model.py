@@ -264,7 +264,7 @@ class Model:
             tabulate(
                 tracking_metrics["confusion_matrix"],
                 headers=headers_for_visualisation,
-                format="fancy_grid",
+                tablefmt="fancy_grid",
             )
         )
 
