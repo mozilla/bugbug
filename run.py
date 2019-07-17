@@ -30,7 +30,7 @@ def parse_args(args):
         help="The size of the training set for the duplicate model",
     )
     parser.add_argument(
-        "--dont-cleanup-urls",
+        "--disable-url-cleanup",
         help="Don't cleanup urls when training the duplicate model",
         dest="cleanup_urls",
         default=True,
