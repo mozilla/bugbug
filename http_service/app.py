@@ -26,13 +26,13 @@ from .models import MODELS_NAMES, classify_bug
 API_TOKEN = "X-Api-Key"
 
 API_DESCRIPTION = """
-This is the documentation for the BubBug http service, the platform for Bugzilla Machine Learning project.
+This is the documentation for the BubBug http service, the platform for Bugzilla Machine Learning projects.
 
 # Introduction
 
-This service can be used to classify a given bug using one of pre-trained model.
+This service can be used to classify a given bug using a pre-trained model.
 You can classify a single bug or a batch of bugs.
-The classification happens on background so you need to call back the service for getting the results.
+The classification happens in the background so you need to call back the service for getting the results.
 """
 
 spec = APISpec(
@@ -148,8 +148,8 @@ def model_prediction(model_name, bug_id):
     """
     ---
     get:
-      description: Classify a single bug using given model, answer either 200 if the bug is processed or 202 if at least the bug is being processed
-      summary: Classify a single bug id
+      description: Classify a single bug using given model, answer either 200 if the bug is processed or 202 if the bug is being processed
+      summary: Classify a single bug
       parameters:
       - name: model_name
         in: path
@@ -166,7 +166,7 @@ def model_prediction(model_name, bug_id):
             application/json:
               schema: BugPrediction
         202:
-          description: A temporary answer for bug being processed
+          description: A temporary answer for the bug being processed
           content:
             application/json:
               schema:
@@ -248,7 +248,7 @@ def batch_prediction(model_name):
         ```
         {"bugs": {"123": {"available": False}, "456": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
         ```
-      summary: Classify a batch of bugs id
+      summary: Classify a batch of bugs
       parameters:
       - name: model_name
         in: path
@@ -291,7 +291,7 @@ def batch_prediction(model_name):
                       prob: [0]
                       suggestion: string
         202:
-          description: A temporary answer for bug being processed
+          description: A temporary answer for bugs being processed
           content:
             application/json:
               schema:
