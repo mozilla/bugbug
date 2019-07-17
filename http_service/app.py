@@ -242,8 +242,9 @@ def batch_prediction(model_name):
         {"bugs": {"456": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
         ```<br/><br/>
 
-        Please be aware that the results might be interleaved, so the
-        following output is valid:
+        Please be aware that each bug could be in a different state, so the
+        following output, where a bug is returned and another one is still
+        being processed, is valid:
         <br/>
         ```
         {"bugs": {"123": {"available": False}, "456": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
