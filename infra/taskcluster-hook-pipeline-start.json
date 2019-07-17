@@ -56,8 +56,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug",
-            "secrets:get:project/relman/bugbug/production"
+            "assume:hook-id:project-relman/bugbug"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"

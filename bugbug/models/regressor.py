@@ -21,8 +21,6 @@ class RegressorModel(CommitModel):
     def __init__(self, lemmatization=False):
         CommitModel.__init__(self, lemmatization)
 
-        self.calculate_importance = False
-
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
@@ -33,15 +31,16 @@ class RegressorModel(CommitModel):
             commit_features.test_deleted(),
             commit_features.author_experience(),
             commit_features.reviewer_experience(),
+            commit_features.reviewers_num(),
             commit_features.component_touched_prev(),
             commit_features.directory_touched_prev(),
             commit_features.file_touched_prev(),
             commit_features.types(),
+            commit_features.files(),
             commit_features.components(),
             commit_features.components_modified_num(),
             commit_features.directories(),
             commit_features.directories_modified_num(),
-            commit_features.files(),
             commit_features.files_modified_num(),
         ]
 
@@ -64,7 +63,7 @@ class RegressorModel(CommitModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("desc", self.text_vectorizer(), "desc"),
+                            ("desc", self.text_vectorizer(min_df=0.0001), "desc"),
                         ]
                     ),
                 ),

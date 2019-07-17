@@ -107,7 +107,7 @@ class CommitClassifier(object):
             commits[-1], probabilities=True, importances=True
         )
 
-        feature_names = self.model.get_feature_names()
+        feature_names = self.model.get_human_readable_feature_names()
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
@@ -123,6 +123,9 @@ class CommitClassifier(object):
 
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
+
+        with open("importances.json", "w") as f:
+            json.dump(features, f)
 
         with open("importance.html", "w") as f:
             f.write(importance["html"])

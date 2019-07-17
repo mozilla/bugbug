@@ -28,7 +28,6 @@ from bugbug.bug_features import (
     patches,
     product,
     severity,
-    title,
     whiteboard,
 )
 
@@ -115,10 +114,6 @@ def test_patches(read):
 
 def test_landings(read):
     read("landings.json", landings, [2, 1])
-
-
-def test_title(read):
-    read("title.json", title, [["fail"], []])
 
 
 def test_product(read):

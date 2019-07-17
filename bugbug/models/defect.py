@@ -33,7 +33,6 @@ class DefectModel(BugModel):
             bug_features.has_w3c_url(),
             bug_features.has_github_url(),
             bug_features.whiteboard(),
-            bug_features.title(),
             bug_features.blocked_bugs_number(),
             bug_features.ever_affected(),
             bug_features.affected_then_unaffected(),

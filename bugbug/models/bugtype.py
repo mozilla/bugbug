@@ -51,7 +51,6 @@ class BugTypeModel(BugModel):
             bug_features.whiteboard(),
             bug_features.patches(),
             bug_features.landings(),
-            bug_features.title(),
             bug_features.blocked_bugs_number(),
             bug_features.ever_affected(),
             bug_features.affected_then_unaffected(),

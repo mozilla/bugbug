@@ -29,6 +29,13 @@ def parse_args(args):
         type=int,
         help="The size of the training set for the duplicate model",
     )
+    parser.add_argument(
+        "--disable-url-cleanup",
+        help="Don't cleanup urls when training the duplicate model",
+        dest="cleanup_urls",
+        default=True,
+        action="store_false",
+    )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
         "--goal", help="Goal of the classifier", choices=MODELS.keys(), default="defect"
@@ -84,7 +91,9 @@ def main(args):
         if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
         elif args.goal == "duplicate":
-            model = model_class(args.training_set_size, args.lemmatization)
+            model = model_class(
+                args.training_set_size, args.lemmatization, args.cleanup_urls
+            )
         else:
             model = model_class(args.lemmatization)
         model.train()
@@ -102,7 +111,7 @@ def main(args):
                     bug, probabilities=True, importances=True
                 )
 
-                feature_names = model.get_feature_names()
+                feature_names = model.get_human_readable_feature_names()
                 for i, (importance, index, is_positive) in enumerate(
                     importance["importances"]
                 ):
@@ -125,13 +134,14 @@ def main(args):
         today = datetime.utcnow()
         a_week_ago = today - timedelta(7)
         bugzilla.set_token(args.token)
-        bugs = bugzilla.download_bugs_between(a_week_ago, today)
+        bug_ids = bugzilla.get_ids_between(a_week_ago, today)
+        bugs = bugzilla.get(bug_ids)
 
         print(f"Classifying {len(bugs)} bugs...")
 
         rows = [["Bug", f"{args.goal}(model)", args.goal, "Title"]]
 
-        for bug in bugs:
+        for bug in bugs.values():
             p = model.classify(bug, probabilities=True)
             rows.append(
                 [

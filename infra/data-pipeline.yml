@@ -53,7 +53,9 @@ tasks:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
         maxRunTime: 86400
-        image: mozilla/bugbug-bugs-retrieval:${version}
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "bugbug-data-bugzilla"
 
         artifacts:
           public/bugs.json.zst:
@@ -268,6 +270,9 @@ tasks:
             type: file
           public/metrics.json:
             path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            path: /feature_importance.png
             type: file
 
       routes:

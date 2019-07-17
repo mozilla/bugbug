@@ -28,7 +28,7 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
 
 
 class DuplicateModel(BugCoupleModel):
-    def __init__(self, training_size=14000, lemmatization=False):
+    def __init__(self, training_size=14000, lemmatization=False, cleanup_urls=True):
         self.num_duplicates = training_size // 2
         self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
@@ -36,19 +36,26 @@ class DuplicateModel(BugCoupleModel):
 
         self.calculate_importance = False
 
+        feature_extractors = [bug_features.is_same_product()]
+
         cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
             feature_cleanup.dll(),
             feature_cleanup.fileref(),
-            feature_cleanup.url(),
             feature_cleanup.synonyms(),
             feature_cleanup.crash(),
         ]
 
+        if cleanup_urls:
+            cleanup_functions.append(feature_cleanup.url())
+
         self.extraction_pipeline = Pipeline(
             [
-                ("bug_extractor", bug_features.BugExtractor([], cleanup_functions)),
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                ),
                 (
                     "union",
                     ColumnTransformer([("text", self.text_vectorizer(), "text")]),

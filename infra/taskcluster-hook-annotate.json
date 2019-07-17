@@ -49,8 +49,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-annotate",
-            "secrets:get:project/relman/bugbug/production"
+            "assume:hook-id:project-relman/bugbug-annotate"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"

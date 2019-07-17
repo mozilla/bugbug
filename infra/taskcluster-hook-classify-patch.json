@@ -23,8 +23,12 @@
         },
         "payload": {
             "artifacts": {
-                "public/probs,json": {
+                "public/probs.json": {
                     "path": "/probs.json",
+                    "type": "file"
+                },
+                "public/importances.json": {
+                    "path": "/importances.json",
                     "type": "file"
                 },
                 "public/importance.html": {
@@ -61,8 +65,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-classify-patch",
-            "secrets:get:project/relman/bugbug/production"
+            "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"

@@ -21,6 +21,7 @@ from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
@@ -90,6 +91,21 @@ def classification_report_imbalanced_values(
     return result
 
 
+def get_labeled_confusion_matrix(y_test, y_pred, labels):
+    confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
+    confusion_matrix_table = confusion_matrix.tolist()
+    confusion_matrix_header = []
+    for i in range(len(confusion_matrix_table)):
+        confusion_matrix_header.append(f"{labels[i]} (Predicted)")
+    for i in range(len(confusion_matrix_table)):
+        confusion_matrix_table[i].insert(0, f"{labels[i]} (Actual)")
+    labeled_confusion_matrix = tabulate(
+        confusion_matrix_table, headers=confusion_matrix_header, tablefmt="fancy_grid"
+    )
+
+    return labeled_confusion_matrix
+
+
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
@@ -112,6 +128,33 @@ class Model:
 
     def get_feature_names(self):
         return []
+
+    def get_human_readable_feature_names(self):
+        feature_names = self.get_feature_names()
+
+        cleaned_feature_names = []
+        for full_feature_name in feature_names:
+            type_, feature_name = full_feature_name.split("__", 1)
+
+            if type_ == "desc":
+                feature_name = f"Description contains '{feature_name}'"
+            elif type_ == "title":
+                feature_name = f"Title contains '{feature_name}'"
+            elif type_ == "first_comment":
+                feature_name = f"First comment contains '{feature_name}'"
+            elif type_ == "comments":
+                feature_name = f"Comments contain '{feature_name}'"
+            elif type_ == "text":
+                feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "data":
+                if " in " in feature_name and feature_name.endswith("=True"):
+                    feature_name = feature_name[: len(feature_name) - len("=True")]
+            else:
+                raise Exception(f"Unexpected feature type for: {full_feature_name}")
+
+            cleaned_feature_names.append(feature_name)
+
+        return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
         # Calculate the values that represent the fraction of the model output variability attributable
@@ -143,7 +186,7 @@ class Model:
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_iter)
+        X = self.extraction_pipeline.fit_transform([item for item in X_iter])
 
         # Calculate labels.
         y = np.array(y_iter)
@@ -189,16 +232,19 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
-        feature_names = self.get_feature_names()
+        feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
             shap.summary_plot(
                 shap_values,
-                X_train,
+                X_train.toarray(),
                 feature_names=feature_names,
                 class_names=class_names,
+                plot_type="layered_violin"
+                if not isinstance(shap_values, list)
+                else None,
                 show=False,
             )
 
@@ -224,8 +270,11 @@ class Model:
 
         print(f"No confidence threshold - {len(y_test)} classified")
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
-        print(confusion_matrix)
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+        labeled_confusion_matrix = get_labeled_confusion_matrix(
+            y_test, y_pred, class_names
+        )
+        print(labeled_confusion_matrix)
 
         print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
         report = classification_report_imbalanced_values(
@@ -253,16 +302,16 @@ class Model:
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
-            print(
-                metrics.confusion_matrix(
-                    y_test_filter, y_pred_filter, labels=class_names
+            if len(y_test_filter) != 0:
+                labeled_confusion_matrix = get_labeled_confusion_matrix(
+                    y_test_filter, y_pred_filter, class_names
                 )
-            )
-            print(
-                classification_report_imbalanced(
-                    y_test_filter, y_pred_filter, labels=class_names
+                print(labeled_confusion_matrix)
+                print(
+                    classification_report_imbalanced(
+                        y_test_filter, y_pred_filter, labels=class_names
+                    )
                 )
-            )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
@@ -312,7 +361,7 @@ class Model:
                 int(index) for importance, index, is_positive in top_importances
             ]
 
-            feature_names = self.get_feature_names()
+            feature_names = self.get_human_readable_feature_names()
 
             with io.StringIO() as out:
                 p = shap.force_plot(
