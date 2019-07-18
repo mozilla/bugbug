@@ -96,5 +96,6 @@ venv/
 
 # Project-specific stuff
 cache/
+**/cache/
 data/
 http_service/
