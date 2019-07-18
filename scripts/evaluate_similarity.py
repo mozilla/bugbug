@@ -29,7 +29,6 @@ def parse_args(args):
 
 
 def main(args):
-
     if args.algorithm == "lsi":
         model = LSISimilarity(cleanup_urls=args.cleanup_urls)
     elif args.algorithm == "neighbors_tfidf":
