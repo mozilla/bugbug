@@ -18,18 +18,29 @@ def parse_args(args):
         help="Similarity algorithm to use",
         choices=["lsi", "neighbors_tfidf", "neighbors_tfidf_bigrams", "word2vec_wmd"],
     )
+    parser.add_argument(
+        "--disable-url-cleanup",
+        help="Don't cleanup urls when training the similarity model",
+        dest="cleanup_urls",
+        default=True,
+        action="store_false",
+    )
     return parser.parse_args(args)
 
 
 def main(args):
+
     if args.algorithm == "lsi":
-        model = LSISimilarity()
+        model = LSISimilarity(cleanup_urls=args.cleanup_urls)
     elif args.algorithm == "neighbors_tfidf":
-        model = NeighborsSimilarity()
+        model = NeighborsSimilarity(cleanup_urls=args.cleanup_urls)
     elif args.algorithm == "neighbors_tfidf_bigrams":
-        model = NeighborsSimilarity(vectorizer=TfidfVectorizer(ngram_range=(1, 2)))
+        model = NeighborsSimilarity(
+            vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
+            cleanup_urls=args.cleanup_urls,
+        )
     elif args.algorithm == "word2vec_wmd":
-        model = Word2VecWmdSimilarity()
+        model = Word2VecWmdSimilarity(cleanup_urls=args.cleanup_urls)
 
     model.evaluation()
 
