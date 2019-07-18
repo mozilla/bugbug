@@ -34,16 +34,6 @@ nltk.download("stopwords")
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
-cleanup_functions = [
-    feature_cleanup.responses(),
-    feature_cleanup.hex(),
-    feature_cleanup.dll(),
-    feature_cleanup.fileref(),
-    feature_cleanup.url(),
-    feature_cleanup.synonyms(),
-    feature_cleanup.crash(),
-]
-
 # A map from bug ID to its duplicate IDs
 duplicates = defaultdict(set)
 all_ids = set(
@@ -62,30 +52,38 @@ for bug in bugzilla.get_bugs():
         duplicates[dupe].add(bug["id"])
 
 
-def get_text(bug):
-    return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
-
-
-def text_preprocess(text, join=False):
-    for func in cleanup_functions:
-        text = func(text)
-
-    text = re.sub("[^a-zA-Z0-9]", " ", text)
-
-    ps = PorterStemmer()
-    text = [
-        ps.stem(word)
-        for word in text.lower().split()
-        if word not in set(stopwords.words("english")) and len(word) > 1
-    ]
-    if join:
-        return " ".join(word for word in text)
-    return text
-
-
 class BaseSimilarity:
     def __init__(self):
         pass
+
+    def get_text(self, bug):
+        return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
+
+    def text_preprocess(self, text, join=False):
+        cleanup_functions = [
+            feature_cleanup.responses(),
+            feature_cleanup.hex(),
+            feature_cleanup.dll(),
+            feature_cleanup.fileref(),
+            feature_cleanup.url(),
+            feature_cleanup.synonyms(),
+            feature_cleanup.crash(),
+        ]
+
+        for func in cleanup_functions:
+            text = func(text)
+
+        text = re.sub("[^a-zA-Z0-9]", " ", text)
+
+        ps = PorterStemmer()
+        text = [
+            ps.stem(word)
+            for word in text.lower().split()
+            if word not in set(stopwords.words("english")) and len(word) > 1
+        ]
+        if join:
+            return " ".join(word for word in text)
+        return text
 
     def evaluation(self):
         total_r = 0
@@ -119,7 +117,7 @@ class LSISimilarity(BaseSimilarity):
 
         for bug in bugzilla.get_bugs():
 
-            textual_features = text_preprocess(get_text(bug))
+            textual_features = self.text_preprocess(self.get_text(bug))
             self.corpus.append([bug["id"], textual_features])
 
         # Assigning unique integer ids to all words
@@ -145,7 +143,7 @@ class LSISimilarity(BaseSimilarity):
 
     def get_similar_bugs(self, query, k=10):
         query_summary = "{} {}".format(query["summary"], query["comments"][0]["text"])
-        query_summary = text_preprocess(query_summary)
+        query_summary = self.text_preprocess(query_summary)
 
         # Transforming the query to latent 300-D space
         vec_bow = self.dictionary.doc2bow(query_summary)
@@ -167,7 +165,7 @@ class NeighborsSimilarity(BaseSimilarity):
         self.bug_ids = []
 
         for bug in bugzilla.get_bugs():
-            text.append(text_preprocess(get_text(bug), join=True))
+            text.append(self.text_preprocess(self.get_text(bug), join=True))
             self.bug_ids.append(bug["id"])
 
         self.vectorizer.fit(text)
@@ -175,7 +173,7 @@ class NeighborsSimilarity(BaseSimilarity):
 
     def get_similar_bugs(self, query):
 
-        processed_query = self.vectorizer.transform([get_text(query)])
+        processed_query = self.vectorizer.transform([self.get_text(query)])
         _, indices = self.similarity_calculator.kneighbors(processed_query)
 
         return [
@@ -189,7 +187,7 @@ class Word2VecWmdSimilarity(BaseSimilarity):
         self.bug_ids = []
         self.cut_off = cut_off
         for bug in bugzilla.get_bugs():
-            self.corpus.append(text_preprocess(get_text(bug)))
+            self.corpus.append(self.text_preprocess(self.get_text(bug)))
             self.bug_ids.append(bug["id"])
 
         indexes = list(range(len(self.corpus)))
@@ -251,7 +249,7 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
     def get_similar_bugs(self, query):
 
-        words = text_preprocess(get_text(query))
+        words = self.text_preprocess(self.get_text(query))
         words = [word for word in words if word in self.w2vmodel.wv.vocab]
 
         all_distances = np.array(
