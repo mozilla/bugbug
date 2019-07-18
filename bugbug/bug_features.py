@@ -476,6 +476,11 @@ class is_same_os(couple_bug_feature):
         return bugs[0]["op_sys"] == bugs[1]["op_sys"]
 
 
+class is_same_target_milestone(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
+
+
 def get_author_ids():
     author_ids = set()
     for commit in repository.get_commits():
