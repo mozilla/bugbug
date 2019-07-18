@@ -17,6 +17,27 @@ LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
+def get_single_task_metrics(model, version=None, date=None):
+    if not version:
+        index_uri = LATEST_URI.format(model)
+    elif not date:
+        index_uri = VERSIONED_URI.format(model, version)
+    else:
+        index_uri = DATED_VERSIONED_URI.format(model, version, date)
+
+    index_url = BASE_URL.format(index_uri)
+    LOGGER.info(f"Retrieving metrics from {index_url}")
+    r = requests.get(index_url)
+
+    if r.status_code == 404:
+        LOGGER.error(f"File not found for URL {index_url}, check your arguments")
+        sys.exit(1)
+
+    r.raise_for_status()
+
+    return r
+
+
 def main():
     description = "Retrieve a model training metrics"
     parser = argparse.ArgumentParser(description=description)
@@ -43,22 +64,7 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.version:
-        index_uri = LATEST_URI.format(args.model)
-    elif not args.date:
-        index_uri = VERSIONED_URI.format(args.model, args.version)
-    else:
-        index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
-
-    index_url = BASE_URL.format(index_uri)
-    LOGGER.info(f"Retrieving metrics from {index_url}")
-    r = requests.get(index_url)
-
-    if r.status_code == 404:
-        LOGGER.error(f"File not found for URL {index_url}, check your arguments")
-        sys.exit(1)
-
-    r.raise_for_status()
+    r = get_single_task_metrics(args.model, args.version, args.date)
 
     if args.output:
         file_path = abspath(args.output)
