@@ -206,7 +206,7 @@ class Model:
                 for importance, index, is_positive in important_features["average"]
             ]
 
-            important_features["classes"][f"class {class_names[num]}"] = (
+            important_features["classes"][class_names[num]] = (
                 top_item_features,
                 top_avg,
             )
@@ -214,18 +214,18 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, predicted_class=False
+        self, important_features, feature_names, classes=False
     ):
         # extract importance values from the top features for the predicted class
         # when classsifying
-        if predicted_class is not False:
+        if classes is not False:
             # shap_values are stored in class 0 for binary classification
-            if len(predicted_class[0]) != 2:
-                predicted_class = predicted_class.argmax(axis=-1)[0]
+            if len(classes[0]) != 2:
+                predicted_class = classes.argmax(axis=-1)[0]
             else:
                 predicted_class = 0
 
-            imp_values = important_features["classes"][f"class {predicted_class}"][0]
+            imp_values = important_features["classes"][predicted_class][0]
             shap_val = []
             top_feature_names = []
             for importance, index, is_positive in imp_values:
@@ -235,7 +235,7 @@ class Model:
                     shap_val.append("-" + str(importance))
 
                 top_feature_names.append(feature_names[int(index)])
-            shap_val = [[f"class {predicted_class}"] + shap_val]
+            shap_val = [[predicted_class] + shap_val]
 
         # extract importance values from the top features for all the classes
         # when training
@@ -444,7 +444,7 @@ class Model:
             top_indexes = [
                 int(index)
                 for importance, index, is_positive in important_features["classes"][
-                    f"class {pred_class_index}"
+                    pred_class_index
                 ][0]
             ]
 

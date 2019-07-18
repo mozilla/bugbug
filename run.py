@@ -114,7 +114,7 @@ def main(args):
                 feature_names = model.get_human_readable_feature_names()
 
                 model.print_feature_importances(
-                    importance["importances"], feature_names, predicted_class=probas
+                    importance["importances"], feature_names, classes=probas
                 )
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)
