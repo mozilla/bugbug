@@ -53,8 +53,8 @@ for bug in bugzilla.get_bugs():
 
 
 class BaseSimilarity:
-    def __init__(self):
-        pass
+    def __init__(self, cleanup_urls=True):
+        self.cleanup_urls = cleanup_urls
 
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
@@ -65,10 +65,12 @@ class BaseSimilarity:
             feature_cleanup.hex(),
             feature_cleanup.dll(),
             feature_cleanup.fileref(),
-            feature_cleanup.url(),
             feature_cleanup.synonyms(),
             feature_cleanup.crash(),
         ]
+
+        if self.cleanup_urls:
+            cleanup_functions.append(feature_cleanup.url())
 
         for func in cleanup_functions:
             text = func(text)
@@ -112,7 +114,8 @@ class BaseSimilarity:
 
 
 class LSISimilarity(BaseSimilarity):
-    def __init__(self):
+    def __init__(self, cleanup_urls=True):
+        super().__init__(cleanup_urls)
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
@@ -158,7 +161,8 @@ class LSISimilarity(BaseSimilarity):
 
 
 class NeighborsSimilarity(BaseSimilarity):
-    def __init__(self, k=10, vectorizer=TfidfVectorizer()):
+    def __init__(self, k=10, vectorizer=TfidfVectorizer(), cleanup_urls=True):
+        super().__init__(cleanup_urls)
         self.vectorizer = vectorizer
         self.similarity_calculator = NearestNeighbors(n_neighbors=k)
         text = []
@@ -182,7 +186,8 @@ class NeighborsSimilarity(BaseSimilarity):
 
 
 class Word2VecWmdSimilarity(BaseSimilarity):
-    def __init__(self, cut_off=0.2):
+    def __init__(self, cut_off=0.2, cleanup_urls=True):
+        super().__init__(cleanup_urls)
         self.corpus = []
         self.bug_ids = []
         self.cut_off = cut_off
