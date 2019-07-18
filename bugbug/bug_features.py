@@ -466,6 +466,11 @@ class is_same_platform(couple_bug_feature):
         return bugs[0]["platform"] == bugs[1]["platform"]
 
 
+class is_same_version(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["version"] == bugs[1]["version"]
+
+
 class is_same_os(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["op_sys"] == bugs[1]["op_sys"]
