@@ -156,10 +156,12 @@ class Model:
 
         return cleaned_feature_names
 
-    def get_important_features(self, cutoff, shap_values, class_names=False):
+    def get_important_features(self, cutoff, shap_values, class_names):
 
         if not isinstance(shap_values, list):
             shap_values = [shap_values]
+
+        class_names = sorted(list(class_names))
 
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
@@ -204,15 +206,10 @@ class Model:
                 for importance, index, is_positive in important_features["average"]
             ]
 
-            if class_names:
-                important_features["classes"][
-                    class_names[len(class_names) - num - 1]
-                ] = (top_item_features, top_avg)
-            else:
-                important_features["classes"][f"class {num}"] = (
-                    top_item_features,
-                    top_avg,
-                )
+            important_features["classes"][f"class {class_names[num]}"] = (
+                top_item_features,
+                top_avg,
+            )
 
         return important_features
 
@@ -222,6 +219,12 @@ class Model:
         # extract importance values from the top features for the predicted class
         # when classsifying
         if predicted_class is not False:
+            # shap_values are stored in class 0 for binary classification
+            if len(predicted_class[0]) != 2:
+                predicted_class = predicted_class.argmax(axis=-1)[0]
+            else:
+                predicted_class = 0
+
             imp_values = important_features["classes"][f"class {predicted_class}"][0]
             shap_val = []
             top_feature_names = []
@@ -246,7 +249,7 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items()
             ]
 
-        # allow maximum of 8 columns in a row to fit the page better
+        # allow maximum of 6 columns in a row to fit the page better
         print("Top {} features:".format(len(top_feature_names)))
         for i in range(0, len(top_feature_names), 6):
             table = []
@@ -427,7 +430,7 @@ class Model:
             shap_values = explainer.shap_values(X)
 
             important_features = self.get_important_features(
-                importance_cutoff, shap_values
+                importance_cutoff, shap_values, class_names=range(len(classes[0]))
             )
 
             # Workaround: handle multi class case for force_plot to work correctly

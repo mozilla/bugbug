@@ -113,18 +113,9 @@ def main(args):
 
                 feature_names = model.get_human_readable_feature_names()
 
-                # shap_values are stored in class 0 for binary classification
-                if len(probas[0]) != 2:
-                    pred_class_index = probas.argmax(axis=-1)[0]
-                else:
-                    pred_class_index = 0
-
                 model.print_feature_importances(
-                    importance["importances"],
-                    feature_names,
-                    predicted_class=pred_class_index,
+                    importance["importances"], feature_names, predicted_class=probas
                 )
-
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)
 
