@@ -106,6 +106,15 @@ def get_labeled_confusion_matrix(y_test, y_pred, labels):
     return labeled_confusion_matrix
 
 
+def sort_class_names(class_names):
+    if len(class_names) == 2:
+        class_names = sorted(list(class_names), reverse=True)
+    else:
+        class_names = sorted(list(class_names))
+
+    return class_names
+
+
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
@@ -160,8 +169,6 @@ class Model:
 
         if not isinstance(shap_values, list):
             shap_values = [shap_values]
-
-        class_names = sorted(list(class_names))
 
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
@@ -219,11 +226,11 @@ class Model:
         # extract importance values from the top features for the predicted class
         # when classsifying
         if classes is not False:
-            # shap_values are stored in class 0 for binary classification
+            # shap_values are stored in class 1 for binary classification
             if len(classes[0]) != 2:
                 predicted_class = classes.argmax(axis=-1)[0]
             else:
-                predicted_class = 0
+                predicted_class = 1
 
             imp_values = important_features["classes"][predicted_class][0]
             shap_val = []
@@ -266,7 +273,7 @@ class Model:
 
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
-        self.class_names = sorted(list(self.class_names), reverse=True)
+        self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
@@ -439,7 +446,7 @@ class Model:
                 explainer.expected_value = explainer.expected_value[pred_class_index]
                 shap_values = shap_values[pred_class_index]
             else:
-                pred_class_index = 0
+                pred_class_index = 1
 
             top_indexes = [
                 int(index)
