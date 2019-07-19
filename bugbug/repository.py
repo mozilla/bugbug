@@ -686,7 +686,7 @@ def hg_log_multi(repo_dir, revs):
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, max_workers=multiprocessing.cpu_count() + 1
     ) as executor:
-        commits = executor.map(_hg_log, revs_groups, chunksize=20)
+        commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
