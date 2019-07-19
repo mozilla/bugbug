@@ -402,6 +402,8 @@ class BugModel(Model):
         self.commit_data = commit_data
 
     def items_gen(self, classes):
+        self.class_names = set(classes.values())
+
         if not self.commit_data:
             commit_map = None
         else:
