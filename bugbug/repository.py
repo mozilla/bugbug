@@ -14,6 +14,7 @@ import os
 import pickle
 import re
 import sys
+import threading
 from collections import deque
 from datetime import datetime
 
@@ -24,6 +25,8 @@ from bugbug import db, utils
 
 logger = logging.getLogger(__name__)
 
+
+thread_local = threading.local()
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -148,6 +151,11 @@ def _init(repo_dir):
     global HG
     os.chdir(repo_dir)
     HG = hglib.open(".")
+
+
+def _init_thread(repo_dir):
+    os.chdir(repo_dir)
+    thread_local.hg = hglib.open(".")
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
@@ -328,7 +336,7 @@ def hg_log(hg, revs):
 
 
 def _hg_log(revs):
-    return hg_log(HG, revs)
+    return hg_log(thread_local.hg, revs)
 
 
 def get_revs(hg, rev_start=0):
@@ -669,6 +677,20 @@ def download_component_mapping():
     }
 
 
+def hg_log_multi(repo_dir, revs):
+    CHUNK_SIZE = 256
+    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
+
+    with concurrent.futures.ThreadPoolExecutor(
+        initializer=_init_thread,
+        initargs=(repo_dir,),
+        max_workers=multiprocessing.cpu_count() + 1,
+    ) as executor:
+        commits = executor.map(_hg_log, revs_groups, chunksize=20)
+        commits = tqdm(commits, total=len(revs_groups))
+        return list(itertools.chain.from_iterable(commits))
+
+
 def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     hg = hglib.open(repo_dir)
 
@@ -685,15 +707,7 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
     print(f"Mining {len(revs)} commits using {processes} processes...")
 
-    CHUNK_SIZE = 256
-    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
-
-    with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init, initargs=(repo_dir,)
-    ) as executor:
-        commits = executor.map(_hg_log, revs_groups, chunksize=20)
-        commits = tqdm(commits, total=len(revs_groups))
-        commits = list(itertools.chain.from_iterable(commits))
+    commits = hg_log_multi(repo_dir, revs)
 
     print("Downloading file->component mapping...")
 
