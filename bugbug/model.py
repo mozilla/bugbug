@@ -179,8 +179,8 @@ class Model:
         return top_features
 
     def train(self, importance_cutoff=0.15):
-        classes, class_names = self.get_labels()
-        class_names = sorted(list(class_names), reverse=True)
+        classes, self.class_names = self.get_labels()
+        self.class_names = sorted(list(self.class_names), reverse=True)
 
         # Get items and labels, filtering out those for which we have no labels.
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
@@ -207,7 +207,7 @@ class Model:
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ["accuracy"]
-            if len(class_names) == 2:
+            if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
@@ -241,7 +241,7 @@ class Model:
                 shap_values,
                 X_train.toarray(),
                 feature_names=feature_names,
-                class_names=class_names,
+                class_names=self.class_names,
                 plot_type="layered_violin"
                 if not isinstance(shap_values, list)
                 else None,
@@ -269,16 +269,18 @@ class Model:
         y_pred = self.clf.predict(X_test)
 
         print(f"No confidence threshold - {len(y_test)} classified")
-        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
+        confusion_matrix = metrics.confusion_matrix(
+            y_test, y_pred, labels=self.class_names
+        )
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
         labeled_confusion_matrix = get_labeled_confusion_matrix(
-            y_test, y_pred, class_names
+            y_test, y_pred, self.class_names
         )
         print(labeled_confusion_matrix)
 
-        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
+        print(classification_report_imbalanced(y_test, y_pred, labels=self.class_names))
         report = classification_report_imbalanced_values(
-            y_test, y_pred, labels=class_names
+            y_test, y_pred, labels=self.class_names
         )
 
         tracking_metrics["report"] = report
@@ -304,12 +306,12 @@ class Model:
             )
             if len(y_test_filter) != 0:
                 labeled_confusion_matrix = get_labeled_confusion_matrix(
-                    y_test_filter, y_pred_filter, class_names
+                    y_test_filter, y_pred_filter, self.class_names
                 )
                 print(labeled_confusion_matrix)
                 print(
                     classification_report_imbalanced(
-                        y_test_filter, y_pred_filter, labels=class_names
+                        y_test_filter, y_pred_filter, labels=self.class_names
                     )
                 )
 
