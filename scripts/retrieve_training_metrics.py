@@ -13,7 +13,8 @@ from bugbug.utils import get_taskcluster_options
 LATEST_URI = "train_{}.latest"
 VERSIONED_URI = "train_{}.{}"
 DATED_VERSIONED_URI = "train_{}.{}.{}"
-BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.{}/artifacts/public/metrics.json"
+PROJECT_PREFIX = "project.relman.bugbug.{}"
+BASE_URL = "https://index.taskcluster.net/v1/task/{}/artifacts/public/metrics.json"
 NAMESPACE_URI = "project.relman.bugbug.{}"
 
 LOGGER = logging.getLogger(__name__)
@@ -21,14 +22,7 @@ LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def get_single_task_metrics(model, version=None, date=None):
-    if not version:
-        index_uri = LATEST_URI.format(model)
-    elif not date:
-        index_uri = VERSIONED_URI.format(model, version)
-    else:
-        index_uri = DATED_VERSIONED_URI.format(model, version, date)
-
+def get_task_metrics_from_uri(index_uri):
     index_url = BASE_URL.format(index_uri)
     LOGGER.info(f"Retrieving metrics from {index_url}")
     r = requests.get(index_url)
@@ -42,34 +36,10 @@ def get_single_task_metrics(model, version=None, date=None):
     return r
 
 
-def get_namespaces(index, model, version, date):
-    namespaces = []
+def get_namespaces(index, index_uri):
+    index_namespaces = index.listNamespaces(index_uri)
 
-    # Temporary workaround
-    versions = [
-        "v0.0.52",
-        "v0.0.55",
-        "v0.0.56",
-        "v0.0.57",
-        "v0.0.60",
-        "v0.0.62",
-        "v0.0.64",
-        "v0.0.65",
-        "v0.0.66",
-        "v0.0.67",
-        "v0.0.68",
-        "v0.0.69",
-    ]
-
-    for version in versions:
-        index_uri = DATED_VERSIONED_URI.format(model, version, date)
-        index_uri = NAMESPACE_URI.format(index_uri)
-
-        index_namespaces = index.listNamespaces(index_uri)
-
-        namespaces.extend(index_namespaces["namespaces"])
-
-    return namespaces
+    return index_namespaces["namespaces"]
 
 
 def is_later_or_equal(partial_date, from_date):
@@ -95,27 +65,45 @@ def get_task_metrics_from_date(model, version, date):
     from_date = date.split(".")
 
     uris = []
-    # Start at the top level
-    uris.append([from_date[0]])
+
+    # Start at the version level
+    uris.append([])
 
     # Recursively list all namespaces greater or equals than the given date
     while uris:
         uri = uris.pop(0)
 
-        for namespace in get_namespaces(index, model, version, ".".join(uri)):
+        # Handle version level namespaces
+        if not uri:
+            index_uri = VERSIONED_URI.format(model, version)
+        else:
+            uri_date = ".".join(uri)
+            index_uri = DATED_VERSIONED_URI.format(model, version, uri_date)
+
+        index_uri = NAMESPACE_URI.format(index_uri)
+
+        tasks = index.listTasks(index_uri)
+        for task in tasks["tasks"]:
+            task_uri = task["namespace"]
+            r = get_task_metrics_from_uri(task_uri)
+
+            # Write the file on disk
+            file_path = f"metric_{task_uri}.json"
+            with open(file_path, "w") as metric_file:
+                metric_file.write(r.text)
+            LOGGER.info(f"Metrics saved to {file_path!r}")
+
+        for namespace in get_namespaces(index, index_uri):
             new_uri = uri.copy()
             new_uri.append(namespace["name"])
 
             if not is_later_or_equal(new_uri, from_date):
-                print("NEW URI is before from_date", new_uri, from_date)
+                LOGGER.debug("NEW URI %s is before %s", new_uri, from_date)
                 continue
 
             # Temp
             if new_uri not in uris:
                 uris.append(new_uri)
-            print("NAMESPACE", namespace)
-
-        print("URIS", uris)
 
 
 def main():
@@ -144,18 +132,26 @@ def main():
 
     args = parser.parse_args()
 
-    if False:
-        r = get_single_task_metrics(args.model, args.version, args.date)
-    else:
-        r = get_task_metrics_from_date(args.model, args.version, args.date)
+    if True:
+        if not args.version:
+            index_uri = LATEST_URI.format(args.model)
+        elif not args.date:
+            index_uri = VERSIONED_URI.format(args.model, args.version)
+        else:
+            index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
 
-    if args.output:
-        file_path = abspath(args.output)
-        with open(file_path, "w") as output_file:
-            output_file.write(r.text)
-        LOGGER.info(f"Metrics saved to {file_path!r}")
+        r = get_task_metrics_from_uri(PROJECT_PREFIX.format(index_uri))
+
+        if args.output:
+            file_path = abspath(args.output)
+            with open(file_path, "w") as output_file:
+                output_file.write(r.text)
+            LOGGER.info(f"Metrics saved to {file_path!r}")
+        else:
+            print(r.text)
+
     else:
-        print(r.text)
+        get_task_metrics_from_date(args.model, args.version, args.date)
 
 
 if __name__ == "__main__":
