@@ -153,8 +153,7 @@ def _init(repo_dir):
     HG = hglib.open(".")
 
 
-def _init_thread(repo_dir):
-    os.chdir(repo_dir)
+def _init_thread():
     thread_local.hg = hglib.open(".")
 
 
@@ -678,17 +677,21 @@ def download_component_mapping():
 
 
 def hg_log_multi(repo_dir, revs):
+    cwd = os.getcwd()
+    os.chdir(repo_dir)
+
     CHUNK_SIZE = 256
     revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread,
-        initargs=(repo_dir,),
-        max_workers=multiprocessing.cpu_count() + 1,
+        initializer=_init_thread, max_workers=multiprocessing.cpu_count() + 1
     ) as executor:
         commits = executor.map(_hg_log, revs_groups, chunksize=20)
         commits = tqdm(commits, total=len(revs_groups))
-        return list(itertools.chain.from_iterable(commits))
+        commits = list(itertools.chain.from_iterable(commits))
+
+    os.chdir(cwd)
+    return commits
 
 
 def download_commits(repo_dir, rev_start=0, ret=False, save=True):
