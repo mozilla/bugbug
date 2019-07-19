@@ -132,7 +132,7 @@ def main():
 
     args = parser.parse_args()
 
-    if True:
+    if False:
         if not args.version:
             index_uri = LATEST_URI.format(args.model)
         elif not args.date:
