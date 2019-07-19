@@ -4,11 +4,10 @@ import argparse
 import json
 import os
 from logging import INFO, basicConfig, getLogger
-from urllib.request import urlretrieve
 
 import zstandard
 
-from bugbug import get_bugbug_version, model
+from bugbug import db, get_bugbug_version, model
 from bugbug.models import get_model_class
 from bugbug.utils import CustomJsonEncoder
 
@@ -19,13 +18,6 @@ BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.
 
 
 class Trainer(object):
-    def decompress_file(self, path):
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{path}.zst", "rb") as input_f:
-            with open(path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
-        assert os.path.exists(path), "Decompressed file exists"
-
     def compress_file(self, path):
         cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
@@ -36,11 +28,8 @@ class Trainer(object):
         path = f"data/{db_type}.json"
         formatted_base_url = BASE_URL.format(db_type, f"v{get_bugbug_version()}")
         url = f"{formatted_base_url}/{db_type}.json.zst"
-        logger.info(f"Downloading {db_type} database from {url} to {path}.zst")
-        urlretrieve(url, f"{path}.zst")
-        assert os.path.exists(f"{path}.zst"), "Downloaded file exists"
-        logger.info(f"Decompressing {db_type} database")
-        self.decompress_file(path)
+        db.register(path, url, get_bugbug_version())
+        db.download(path, force=True, support_files_too=True)
 
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
