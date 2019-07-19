@@ -5,9 +5,9 @@ import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
 
-import hglib
 from microannotate import generator
 
+from bugbug import repository
 from bugbug.utils import get_secret, retry
 
 basicConfig(level=INFO)
@@ -22,23 +22,7 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
-        shared_dir = self.repo_dir + "-shared"
-        cmd = hglib.util.cmdbuilder(
-            "robustcheckout",
-            "https://hg.mozilla.org/mozilla-central",
-            self.repo_dir,
-            purge=True,
-            sharebase=shared_dir,
-            networkattempts=7,
-            branch=b"tip",
-        )
-
-        cmd.insert(0, hglib.HGPATH)
-
-        proc = hglib.util.popen(cmd)
-        out, err = proc.communicate()
-        if proc.returncode:
-            raise hglib.error.CommandError(cmd, proc.returncode, out, err)
+        repository.clone(self.repo_dir)
 
         logger.info("mozilla-central cloned")
 
