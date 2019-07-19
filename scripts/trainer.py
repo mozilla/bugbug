@@ -7,7 +7,7 @@ from logging import INFO, basicConfig, getLogger
 
 import zstandard
 
-from bugbug import db, get_bugbug_version, model
+from bugbug import db, model
 from bugbug.models import get_model_class
 from bugbug.utils import CustomJsonEncoder
 
@@ -26,10 +26,7 @@ class Trainer(object):
 
     def download_db(self, db_type):
         path = f"data/{db_type}.json"
-        formatted_base_url = BASE_URL.format(db_type, f"v{get_bugbug_version()}")
-        url = f"{formatted_base_url}/{db_type}.json.zst"
-        db.register(path, url, get_bugbug_version())
-        db.download(path, force=True, support_files_too=True)
+        db.download(path, force=True, support_files_too=False)
 
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
