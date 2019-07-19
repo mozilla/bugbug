@@ -221,17 +221,18 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, classes=False
+        self, important_features, feature_names, classify=False
     ):
         # extract importance values from the top features for the predicted class
         # when classsifying
-        if classes is not False:
+        if classify is not False:
             # shap_values are stored in class 1 for binary classification
-            if len(classes[0]) != 2:
-                predicted_class = classes.argmax(axis=-1)[0]
+            if len(classify[0]) != 2:
+                predicted_class_index = classify.argmax(axis=-1)[0]
             else:
-                predicted_class = 1
+                predicted_class_index = 0
 
+            predicted_class = self.class_names[predicted_class_index]
             imp_values = important_features["classes"][predicted_class][0]
             shap_val = []
             top_feature_names = []
@@ -437,7 +438,7 @@ class Model:
             shap_values = explainer.shap_values(X)
 
             important_features = self.get_important_features(
-                importance_cutoff, shap_values, class_names=range(len(classes[0]))
+                importance_cutoff, shap_values, class_names=self.class_names
             )
 
             # Workaround: handle multi class case for force_plot to work correctly
@@ -446,12 +447,13 @@ class Model:
                 explainer.expected_value = explainer.expected_value[pred_class_index]
                 shap_values = shap_values[pred_class_index]
             else:
-                pred_class_index = 1
+                pred_class_index = 0
 
+            pred_class = self.class_names[pred_class_index]
             top_indexes = [
                 int(index)
                 for importance, index, is_positive in important_features["classes"][
-                    pred_class_index
+                    pred_class
                 ][0]
             ]
 
