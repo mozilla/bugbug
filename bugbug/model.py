@@ -377,12 +377,16 @@ class Model:
         else:
             print_labeled_confusion_matrix(y_test, y_pred, self.class_names)
 
-        print(classification_report_imbalanced(y_test, y_pred, labels=self.class_names))
-        report = classification_report_imbalanced_values(
-            y_test, y_pred, labels=self.class_names
-        )
+            print(
+                classification_report_imbalanced(
+                    y_test, y_pred, labels=self.class_names
+                )
+            )
+            report = classification_report_imbalanced_values(
+                y_test, y_pred, labels=self.class_names
+            )
 
-        tracking_metrics["report"] = report
+            tracking_metrics["report"] = report
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
