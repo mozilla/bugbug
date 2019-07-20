@@ -407,10 +407,14 @@ class Model:
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
+
             if len(y_test_filter) != 0:
                 if is_multilabel:
                     print_labeled_confusion_matrix(
-                        y_test_filter, y_pred_filter, [1, 0], multilabel=True
+                        np.asarray(y_test_filter),
+                        np.asarray(y_pred_filter),
+                        [1, 0],
+                        multilabel=True,
                     )
                 else:
                     print_labeled_confusion_matrix(
