@@ -380,17 +380,13 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
-        else:
-            confusion_matrix = metrics.confusion_matrix(
-                y_test, y_pred, labels=self.class_names
-            )
-        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-
-        if is_multilabel:
             print_labeled_confusion_matrix(
                 y_test, y_pred, self.class_names, multilabel=True
             )
         else:
+            confusion_matrix = metrics.confusion_matrix(
+                y_test, y_pred, labels=self.class_names
+            )
             print_labeled_confusion_matrix(y_test, y_pred, self.class_names)
 
             print(
@@ -403,6 +399,8 @@ class Model:
             )
 
             tracking_metrics["report"] = report
+
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
