@@ -93,13 +93,18 @@ def classification_report_imbalanced_values(
 
 def print_labeled_confusion_matrix(y_test, y_pred, labels, multilabel=False):
     if multilabel:
+        class_names = labels
         confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         confusion_matrix_table = confusion_matrix.tolist()
     else:
         confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
         confusion_matrix_table = [confusion_matrix.tolist()]
 
-    for table in confusion_matrix_table:
+    for num, table in enumerate(confusion_matrix_table):
+        if multilabel:
+            print(f"label: {class_names[num]}")
+            labels = [1, 0]
+
         confusion_matrix_header = []
         for i in range(len(table)):
             confusion_matrix_header.append(f"{labels[i]} (Predicted)")
@@ -293,6 +298,13 @@ class Model:
 
         print(f"X: {X.shape}, y: {y.shape}")
 
+        if isinstance(y[0], np.ndarray):
+            is_multilabel = True
+
+        # Don't sort class_names for multilabel models as we'll lose information for predictions
+        if not is_multilabel:
+            self.class_names = sort_class_names(self.class_names)
+
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.1, random_state=0
@@ -360,8 +372,10 @@ class Model:
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
-        if isinstance(y_pred[0], np.ndarray):
-            is_multilabel = True
+        if is_multilabel:
+            assert isinstance(
+                y_pred[0], np.ndarray
+            ), "Looks like the predictions aren't multilabel"
 
         print(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
@@ -373,7 +387,9 @@ class Model:
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
         if is_multilabel:
-            print_labeled_confusion_matrix(y_test, y_pred, [1, 0], multilabel=True)
+            print_labeled_confusion_matrix(
+                y_test, y_pred, self.class_names, multilabel=True
+            )
         else:
             print_labeled_confusion_matrix(y_test, y_pred, self.class_names)
 
@@ -417,7 +433,7 @@ class Model:
                     print_labeled_confusion_matrix(
                         np.asarray(y_test_filter),
                         np.asarray(y_pred_filter),
-                        [1, 0],
+                        self.class_names,
                         multilabel=True,
                     )
                 else:
