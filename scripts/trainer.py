@@ -7,14 +7,12 @@ from logging import INFO, basicConfig, getLogger
 
 import zstandard
 
-from bugbug import db, model
+from bugbug import bugzilla, db, model, repository
 from bugbug.models import get_model_class
 from bugbug.utils import CustomJsonEncoder
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_{}.{}/artifacts/public"
 
 
 class Trainer(object):
@@ -23,10 +21,6 @@ class Trainer(object):
         with open(path, "rb") as input_f:
             with open(f"{path}.zst", "wb") as output_f:
                 cctx.copy_stream(input_f, output_f)
-
-    def download_db(self, db_type):
-        path = f"data/{db_type}.json"
-        db.download(path, force=True, support_files_too=False)
 
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
@@ -40,10 +34,10 @@ class Trainer(object):
             or isinstance(model_obj, model.BugCoupleModel)
             or (hasattr(model_obj, "bug_data") and model_obj.bug_data)
         ):
-            self.download_db("bugs")
+            db.download(bugzilla.BUGS_DB, force=True)
 
         if isinstance(model_obj, model.CommitModel):
-            self.download_db("commits")
+            db.download(repository.COMMITS_DB, force=True)
 
         logger.info(f"Training *{model_name}* model")
         metrics = model_obj.train()
