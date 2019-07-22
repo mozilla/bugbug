@@ -1,7 +1,7 @@
 apispec-webframeworks==0.4.0
 apispec[yaml]==2.0.0
 flask-apispec==0.8.0
-flask-cors
+flask-cors==3.0.8
 Flask==1.0.3
 gunicorn==19.9.0
 marshmallow==2.19.5
