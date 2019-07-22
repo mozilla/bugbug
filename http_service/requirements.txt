@@ -1,5 +1,5 @@
 apispec-webframeworks==0.4.0
-apispec[yaml]==2.0.0
+apispec[yaml]==2.0.2
 flask-apispec==0.8.0
 flask-cors
 Flask==1.0.3
