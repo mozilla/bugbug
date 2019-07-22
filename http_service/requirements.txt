@@ -5,5 +5,5 @@ flask-cors
 Flask==1.0.3
 gunicorn==19.9.0
 marshmallow==2.19.5
-rq-dashboard==0.5.1
+rq-dashboard==0.5.2
 rq==1.1.0
