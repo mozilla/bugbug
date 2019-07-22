@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import csv
 import itertools
-import multiprocessing
 import os
 import subprocess
 from collections import defaultdict
@@ -265,9 +264,7 @@ def find_bug_introducing_commits(cache_dir, git_repo_dir):
         return bug_introducing_commits
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init,
-        initargs=(git_repo_dir,),
-        max_workers=multiprocessing.cpu_count() + 1,
+        initializer=_init, initargs=(git_repo_dir,), max_workers=os.cpu_count() + 1
     ) as executor:
         results = executor.map(find_bic, fix_commits)
         results = tqdm(results, total=len(fix_commits))
