@@ -165,7 +165,7 @@ class Model:
 
         return cleaned_feature_names
 
-    def get_important_features(self, cutoff, shap_values, class_names):
+    def get_important_features(self, cutoff, shap_values):
 
         if not isinstance(shap_values, list):
             shap_values = [shap_values]
@@ -213,7 +213,7 @@ class Model:
                 for importance, index, is_positive in important_features["average"]
             ]
 
-            important_features["classes"][class_names[num]] = (
+            important_features["classes"][self.class_names[num]] = (
                 top_item_features,
                 top_avg,
             )
@@ -221,14 +221,14 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, classify=False
+        self, important_features, feature_names, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
         # when classsifying
-        if classify is not False:
+        if class_probabilities is not None:
             # shap_values are stored in class 1 for binary classification
-            if len(classify[0]) != 2:
-                predicted_class_index = classify.argmax(axis=-1)[0]
+            if len(class_probabilities[0]) != 2:
+                predicted_class_index = class_probabilities.argmax(axis=-1)[0]
             else:
                 predicted_class_index = 0
 
@@ -345,7 +345,7 @@ class Model:
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
             important_features = self.get_important_features(
-                importance_cutoff, shap_values, self.class_names
+                importance_cutoff, shap_values
             )
 
             self.print_feature_importances(important_features, feature_names)
@@ -438,7 +438,7 @@ class Model:
             shap_values = explainer.shap_values(X)
 
             important_features = self.get_important_features(
-                importance_cutoff, shap_values, class_names=self.class_names
+                importance_cutoff, shap_values
             )
 
             # Workaround: handle multi class case for force_plot to work correctly
