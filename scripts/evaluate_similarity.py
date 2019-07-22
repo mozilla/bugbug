@@ -30,17 +30,21 @@ def parse_args(args):
 
 def main(args):
     if args.algorithm == "lsi":
-        model = LSISimilarity(cleanup_urls=args.cleanup_urls)
+        model_creator = LSISimilarity
     elif args.algorithm == "neighbors_tfidf":
-        model = NeighborsSimilarity(cleanup_urls=args.cleanup_urls)
+        model_creator = NeighborsSimilarity
     elif args.algorithm == "neighbors_tfidf_bigrams":
-        model = NeighborsSimilarity(
+        model_creator = NeighborsSimilarity
+    elif args.algorithm == "word2vec_wmd":
+        model_creator = Word2VecWmdSimilarity
+
+    if args.algorithm == "neighbors_tfidf_bigrams":
+        model = model_creator(
             vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
             cleanup_urls=args.cleanup_urls,
         )
-    elif args.algorithm == "word2vec_wmd":
-        model = Word2VecWmdSimilarity(cleanup_urls=args.cleanup_urls)
-
+    else:
+        model = model_creator(cleanup_urls=args.cleanup_urls)
     model.evaluation()
 
 
