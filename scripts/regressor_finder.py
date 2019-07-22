@@ -237,6 +237,8 @@ def find_bug_introducing_commits(cache_dir, git_repo_dir):
         GIT_REPO = GitRepository(git_repo_dir)
 
     def find_bic(fix_commit):
+        logger.info("Analyzing {}...".format(fix_commit["git_rev"]))
+
         commit = GIT_REPO.get_commit(fix_commit["git_rev"])
 
         # Skip huge changes, we'll likely be wrong with them.
@@ -246,7 +248,7 @@ def find_bug_introducing_commits(cache_dir, git_repo_dir):
         bug_introducing_modifications = GIT_REPO.get_commits_last_modified_lines(
             commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
         )
-        print(bug_introducing_modifications)
+        logger.info(bug_introducing_modifications)
         bug_introducing_commits = []
         for bug_introducing_hashes in bug_introducing_modifications.values():
             for bug_introducing_hash in bug_introducing_hashes:
