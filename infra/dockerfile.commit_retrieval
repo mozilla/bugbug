@@ -1,14 +1,18 @@
 FROM mozilla/bugbug-base:latest
 
 # Mercurial need Python2 :(
-# git is required by the annotate pipeline.
+# git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
 RUN apt-get update && \
     apt-get install -y python python-pip git && \
     python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
     hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     apt-get purge -y python-pip && apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/* && \
-    rm -rf /version-control-tools/.hg
+    rm -r /var/lib/apt/lists/* && \
+    rm -r /version-control-tools/.hg && \
+    git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
+    rm -r /depot_tools/.git /depot_tools/tests
+
+ENV PATH="/depot_tools:${PATH}"
 
 COPY infra/hgrc /root/.hgrc
 
