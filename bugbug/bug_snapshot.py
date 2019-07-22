@@ -2,11 +2,30 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+import logging
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bugzilla
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# create console handler and set level to INFO
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# create formatter
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# add formatter to console_handler
+console_handler.setFormatter(formatter)
+
+# add console_handler to logger
+logger.addHandler(console_handler)
+
+# Don't call the root logger
+logger.propagate = False
 
 
 def bool_str(val):
@@ -141,7 +160,7 @@ def parse_flag_change(change):
 
 def is_expected_inconsistent_field(field, last_product, bug_id):
     # TODO: Remove the Graveyard case when https://bugzilla.mozilla.org/show_bug.cgi?id=1541926 is fixed.
-    return (
+    if (
         (field.startswith("cf_") and last_product == "Firefox for Android Graveyard")
         or (
             field == "cf_status_firefox57"
@@ -178,13 +197,17 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
         or (
             field == "cf_has_str" and bug_id == 1462571
         )  # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1550104 is fixed
-    )
+    ):
+        return True
+    else:
+        logger.info("Inconsistent field was expected but did not happen.")
+        return False
 
 
 def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_exp):
     # The 'enhancement' severity has been removed, but it doesn't show up in the history.
     # See https://bugzilla.mozilla.org/show_bug.cgi?id=1541362.
-    return (
+    if (
         (field in ["status", "resolution", "cf_last_resolved"] and bug_id == 1_312_722)
         or (field == "cf_last_resolved" and bug_id == 1_321_567)
         or (
@@ -374,11 +397,15 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
-    )
+    ):
+        return True
+    else:
+        logger.info("Inconsistent change_field was expected but did not happen.")
+        return False
 
 
 def is_expected_inconsistent_change_list_field(field, bug_id, value):
-    return (
+    if (
         (
             field == "keywords"
             and value == "checkin-needed"
@@ -399,12 +426,16 @@ def is_expected_inconsistent_change_list_field(field, bug_id, value):
         or is_email(
             value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
-    )
+    ):
+        return True
+    else:
+        logger.info("Inconsistent change_list_field was expected but did not happen.")
+        return False
 
 
 def is_expected_inconsistent_change_flag(flag, obj_id):
     # TODO: always assert here, once https://bugzilla.mozilla.org/show_bug.cgi?id=1514415 is fixed.
-    return (
+    if (
         obj_id in [1_052_536, 1_201_115, 1_213_517, 794_863]
         or (
             flag == "in-testsuite+"
@@ -454,7 +485,11 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
         )
         or (flag == "approval-comm-beta+" and obj_id == 8972248)
         or (flag in ["platform-rel?", "blocking0.3-"])  # These flags have been removed.
-    )
+    ):
+        return True
+    else:
+        logger.info("Inconsistent change_flag was expected but did not happen.")
+        return False
 
 
 def rollback(bug, when=None, do_assert=False):
