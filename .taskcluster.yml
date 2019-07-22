@@ -47,7 +47,7 @@ tasks:
         metadata:
           name: bugbug lint
           description: bugbug lint
-          owner: ${user}@users.noreply.github.com
+          owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push"'
@@ -70,7 +70,7 @@ tasks:
           metadata:
             name: bugbug tag version check
             description: bugbug tag version check
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("tests_task")}
@@ -104,7 +104,7 @@ tasks:
         metadata:
           name: bugbug tests
           description: bugbug tests
-          owner: ${user}@users.noreply.github.com
+          owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("packaging_test_task")}
@@ -132,7 +132,7 @@ tasks:
         metadata:
           name: bugbug packaging test
           description: bugbug packaging test
-          owner: ${user}@users.noreply.github.com
+          owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: {$eval: as_slugid("docker_build")}
@@ -171,7 +171,7 @@ tasks:
         metadata:
           name: bugbug docker build
           description: bugbug docker build
-          owner: ${user}@users.noreply.github.com
+          owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -205,7 +205,7 @@ tasks:
           metadata:
             name: bugbug PyPI release
             description: bugbug PyPI release
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -239,7 +239,7 @@ tasks:
           metadata:
             name: bugbug docker push
             description: bugbug docker push
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -273,7 +273,7 @@ tasks:
           metadata:
             name: bugbug update annotate hook
             description: bugbug update annotate hook
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -308,7 +308,7 @@ tasks:
           metadata:
             name: bugbug update data hook
             description: bugbug update data hook
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -340,7 +340,7 @@ tasks:
           metadata:
             name: bugbug update check hook
             description: bugbug update check hook
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
@@ -372,5 +372,5 @@ tasks:
           metadata:
             name: bugbug update classify patch hook
             description: bugbug update classify patch hook
-            owner: ${user}@users.noreply.github.com
+            owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
