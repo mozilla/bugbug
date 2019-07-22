@@ -365,12 +365,14 @@ class Model:
 
             feature_names = self.get_human_readable_feature_names()
 
+            feature_legend = {str(i + 1): feature_names[i] for i in top_indexes}
+
             with io.StringIO() as out:
                 p = shap.force_plot(
                     explainer.expected_value,
                     shap_values[:, top_indexes],
                     X.toarray()[:, top_indexes],
-                    feature_names=[feature_names[i] for i in top_indexes],
+                    feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
                     show=False,
                 )
@@ -380,7 +382,14 @@ class Model:
 
                 html = out.getvalue()
 
-            return classes, {"importances": top_importances, "html": html}
+            return (
+                classes,
+                {
+                    "importances": top_importances,
+                    "html": html,
+                    "feature_legend": feature_legend,
+                },
+            )
 
         return classes
 
