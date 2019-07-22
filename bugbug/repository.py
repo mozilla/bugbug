@@ -696,7 +696,8 @@ def hg_log_multi(repo_dir, revs):
 
     os.chdir(cwd)
 
-    for hg_server in hg_servers:
+    while len(hg_servers) > 0:
+        hg_server = hg_servers.pop()
         hg_server.close()
 
     return commits
