@@ -25,6 +25,8 @@ from bugbug import db, utils
 logger = logging.getLogger(__name__)
 
 
+hg_servers = list()
+hg_servers_lock = threading.Lock()
 thread_local = threading.local()
 
 COMMITS_DB = "data/commits.json"
@@ -153,7 +155,10 @@ def _init(repo_dir):
 
 
 def _init_thread():
-    thread_local.hg = hglib.open(".")
+    hg_server = hglib.open(".")
+    thread_local.hg = hg_server
+    with hg_servers_lock:
+        hg_servers.append(hg_server)
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
@@ -690,6 +695,10 @@ def hg_log_multi(repo_dir, revs):
         commits = list(itertools.chain.from_iterable(commits))
 
     os.chdir(cwd)
+
+    for hg_server in hg_servers:
+        hg_server.close()
+
     return commits
 
 
