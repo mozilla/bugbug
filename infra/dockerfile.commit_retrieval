@@ -12,7 +12,7 @@ RUN apt-get update && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     rm -r /depot_tools/.git /depot_tools/tests
 
-ENV PATH="/depot_tools:${PATH}"
+ENV PATH="${PATH}:/depot_tools"
 
 COPY infra/hgrc /root/.hgrc
 
