@@ -13,6 +13,9 @@ RUN apt-get update && \
     cd /depot_tools && git checkout 73065b2067bc1516728a1e6251df751db98f0fba && cd .. && \
     rm -r /depot_tools/.git /depot_tools/tests
 
+# Force git hyper-blame to use python2.
+RUN sed -i 's|#!/usr/bin/env python|#!/usr/bin/env python2|' /depot_tools/git_hyper_blame.py
+
 ENV PATH="${PATH}:/depot_tools"
 
 COPY infra/hgrc /root/.hgrc
