@@ -210,7 +210,7 @@ def find_bug_introducing_commits(cache_dir, git_repo_dir):
     logger.info(f"Cloning mercurial repository to {mercurial_repo_dir}...")
     repository.clone(mercurial_repo_dir)
 
-    logger.info("Cloning git repository to {git_repo_dir}...")
+    logger.info(f"Cloning git repository to {git_repo_dir}...")
     clone_gecko_dev(git_repo_dir)
 
     fix_commits = find_fix_commits()
