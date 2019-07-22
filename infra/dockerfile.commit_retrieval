@@ -10,6 +10,7 @@ RUN apt-get update && \
     rm -r /var/lib/apt/lists/* && \
     rm -r /version-control-tools/.hg && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
+    cd /depot_tools && git checkout 73065b2067bc1516728a1e6251df751db98f0fba && cd .. && \
     rm -r /depot_tools/.git /depot_tools/tests
 
 ENV PATH="${PATH}:/depot_tools"
