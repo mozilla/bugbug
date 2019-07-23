@@ -459,7 +459,10 @@ class Model:
 
             feature_names = self.get_human_readable_feature_names()
 
-            feature_legend = {str(i + 1): feature_names[i] for i in top_indexes}
+            feature_legend = {
+                str(i + 1): feature_names[feature_i]
+                for i, feature_i in enumerate(top_indexes)
+            }
 
             with io.StringIO() as out:
                 p = shap.force_plot(
