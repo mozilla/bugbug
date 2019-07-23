@@ -167,7 +167,9 @@ tasks:
       provisionerId: aws-provisioner-v1
       workerType: taskcluster-generic
       dependencies:
-        - microannotate-generate
+        - microannotate-generate-tokenize
+        - microannotate-generate-remove-comments
+        - microannotate-generate-tokenize-and-remove-comments
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-spawn-pipeline:${version}
