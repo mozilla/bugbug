@@ -109,15 +109,9 @@ class CommitClassifier(object):
 
         feature_names = self.model.get_human_readable_feature_names()
 
-        if len(probs[0]) > 2:
-            pred_class_index = probs.argmax(axis=-1)[0]
-        else:
-            pred_class_index = 0
-
-        pred_class = self.model.class_names[pred_class_index]
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]["classes"][pred_class][0]
+            importance["importances"]["classes"][1][0]
         ):
             features.append(
                 [
@@ -126,10 +120,6 @@ class CommitClassifier(object):
                     f'({"+" if (is_positive) else "-"}{val})',
                 ]
             )
-
-        self.model.print_feature_importances(
-            importance["importances"], feature_names, class_probabilities=probs
-        )
 
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
