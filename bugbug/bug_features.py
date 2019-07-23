@@ -258,35 +258,40 @@ class ever_affected(single_bug_feature):
         return False
 
 
+def get_versions_statuses(bug):
+    unaffected = []
+    affected = []
+    for key, value in bug.items():
+        version = None
+        if key.startswith("cf_status_firefox_esr"):
+            version = key[len("cf_status_firefox_esr") :]
+        elif key.startswith("cf_status_firefox"):
+            version = key[len("cf_status_firefox") :]
+
+        if version is None:
+            continue
+
+        if value == "unaffected":
+            unaffected.append(version)
+        elif value in [
+            "affected",
+            "fixed",
+            "wontfix",
+            "fix-optional",
+            "verified",
+            "disabled",
+            "verified disabled",
+        ]:
+            affected.append(version)
+
+    return unaffected, affected
+
+
 class affected_then_unaffected(single_bug_feature):
     name = "status has ever been set to 'affected' and 'unaffected'"
 
     def __call__(self, bug, **kwargs):
-        unaffected = []
-        affected = []
-        for key, value in bug.items():
-            version = None
-            if key.startswith("cf_status_firefox_esr"):
-                version = key[len("cf_status_firefox_esr") :]
-            elif key.startswith("cf_status_firefox"):
-                version = key[len("cf_status_firefox") :]
-
-            if version is None:
-                continue
-
-            if value == "unaffected":
-                unaffected.append(version)
-            elif value in [
-                "affected",
-                "fixed",
-                "wontfix",
-                "fix-optional",
-                "verified",
-                "disabled",
-                "verified disabled",
-            ]:
-                affected.append(version)
-
+        unaffected, affected = get_versions_statuses(bug)
         return any(
             unaffected_ver < affected_ver
             for unaffected_ver in unaffected
@@ -479,6 +484,13 @@ class is_same_os(couple_bug_feature):
 class is_same_target_milestone(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
+
+
+class is_first_affected_same(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return min(get_versions_statuses(bugs[0])[1]) == min(
+            get_versions_statuses(bugs[1])[1]
+        )
 
 
 def get_author_ids():
