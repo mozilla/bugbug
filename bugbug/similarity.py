@@ -54,7 +54,6 @@ for bug in bugzilla.get_bugs():
 
 class BaseSimilarity:
     def __init__(self, cleanup_urls=True):
-        self.cleanup_urls = cleanup_urls
         self.cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
@@ -63,14 +62,13 @@ class BaseSimilarity:
             feature_cleanup.synonyms(),
             feature_cleanup.crash(),
         ]
+        if cleanup_urls:
+            self.cleanup_functions.append(feature_cleanup.url())
 
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
 
     def text_preprocess(self, text, join=False):
-        if self.cleanup_urls:
-            self.cleanup_functions.append(feature_cleanup.url())
-
         for func in self.cleanup_functions:
             text = func(text)
 

@@ -34,17 +34,17 @@ def main(args):
     elif args.algorithm == "neighbors_tfidf":
         model_creator = NeighborsSimilarity
     elif args.algorithm == "neighbors_tfidf_bigrams":
-        model_creator = NeighborsSimilarity
+
+        def model_creator(cleanup_urls):
+            return NeighborsSimilarity(
+                vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
+                cleanup_urls=cleanup_urls,
+            )
+
     elif args.algorithm == "word2vec_wmd":
         model_creator = Word2VecWmdSimilarity
 
-    if args.algorithm == "neighbors_tfidf_bigrams":
-        model = model_creator(
-            vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
-            cleanup_urls=args.cleanup_urls,
-        )
-    else:
-        model = model_creator(cleanup_urls=args.cleanup_urls)
+    model = model_creator(cleanup_urls=args.cleanup_urls)
     model.evaluation()
 
 
