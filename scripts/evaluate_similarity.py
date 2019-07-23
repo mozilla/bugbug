@@ -35,10 +35,10 @@ def main(args):
         model_creator = NeighborsSimilarity
     elif args.algorithm == "neighbors_tfidf_bigrams":
 
-        def model_creator(cleanup_urls):
+        def model_creator(**kwargs):
             return NeighborsSimilarity(
                 vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
-                cleanup_urls=cleanup_urls,
+                cleanup_urls=kwargs.pop("cleanup_urls"),
             )
 
     elif args.algorithm == "word2vec_wmd":
