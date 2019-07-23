@@ -8,7 +8,7 @@ tasks:
     minute: {$eval: 'now[14:16]'}
     second: {$eval: 'now[17:19]'}
   in:
-    - ID: microannotate-generate
+    - ID: microannotate-generate-tokenize
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
@@ -22,6 +22,8 @@ tasks:
         command:
           - bugbug-microannotate-generate
           - /cache/
+          - https://github.com/marco-c/gecko-dev-wordified
+          - --tokenize
         artifacts:
           public/done:
             path: /done
@@ -38,11 +40,10 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
       metadata:
-        name: bugbug microannotate repository generator
-        description: bugbug microannotate repository generator
+        name: bugbug microannotate tokenized repository generator
+        description: bugbug microannotate tokenized repository generator
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
-
 
     - ID: regressor-finder
       created: {$fromNow: ''}
