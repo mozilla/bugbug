@@ -61,11 +61,11 @@ tasks:
           public/commits_to_ignore.csv:
             path: /commits_to_ignore.csv
             type: file
-          public/fix_commits.csv:
-            path: /fix_commits.csv
+          public/bug_fixing_commits.json.zst:
+            path: /bug_fixing_commits.json.zst
             type: file
-          public/bug_introducing_commits.csv:
-            path: /bug_introducing_commits.csv
+          public/bug_introducing_commits.json.zst:
+            path: /bug_introducing_commits.json.zst
             type: file
         cache:
           bugbug-mercurial-repository: /cache
@@ -77,6 +77,7 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder.latest
       metadata:
         name: bugbug regressor finder
         description: bugbug regressor finder
