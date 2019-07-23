@@ -136,7 +136,7 @@ tasks:
         command:
           - bugbug-microannotate-generate
           - /cache/
-          - https://github.com/marco-c/gecko-dev-comments-removed
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
           - --tokenize
           - --remove-comments
         artifacts:
