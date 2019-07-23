@@ -111,7 +111,7 @@ class CommitClassifier(object):
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]
+            importance["importances"]["classes"][1][0]
         ):
             features.append(
                 [
