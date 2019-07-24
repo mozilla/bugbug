@@ -12,6 +12,7 @@ import numpy as np
 from pyemd import emd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
 
 from bugbug import bugzilla, feature_cleanup
 
@@ -93,24 +94,62 @@ class BaseSimilarity:
         total_p = 0
         hits_p = 0
 
-        for bug in bugzilla.get_bugs():
+        recall_rate_1 = 0
+        recall_rate_5 = 0
+        recall_rate_10 = 0
+        precision_rate_1 = 0
+        precision_rate_5 = 0
+        precision_rate_10 = 0
+
+        queries = 0
+        apk = []
+        for bug in tqdm(bugzilla.get_bugs()):
             if duplicates[bug["id"]]:
-                similar_bugs = self.get_similar_bugs(bug)
+                score = 0
+                num_hits = 0
+                queries += 1
+                similar_bugs = self.get_similar_bugs(bug)[:10]
 
                 # Recall
-                for item in duplicates[bug["id"]]:
+                for idx, item in enumerate(duplicates[bug["id"]]):
                     total_r += 1
                     if item in similar_bugs:
                         hits_r += 1
+                        if idx == 0:
+                            recall_rate_1 += 1
+                        if idx < 5:
+                            recall_rate_5 += 1
+                        if idx < 10:
+                            recall_rate_10 += 1
 
                 # Precision
-                for element in similar_bugs:
+                for idx, element in enumerate(similar_bugs):
                     total_p += 1
                     if element in duplicates[bug["id"]]:
                         hits_p += 1
+                        if idx == 0:
+                            precision_rate_1 += 1
 
+                        if idx < 5:
+                            precision_rate_5 += 1 / 5
+
+                        if idx < 10:
+                            precision_rate_10 += 1 / 10
+
+                        num_hits += 1
+                        score += num_hits / (idx + 1)
+
+                apk.append(score / min(len(duplicates[bug["id"]]), 10))
+
+        print(f"Recall @ 1: {recall_rate_1/total_r * 100}%")
+        print(f"Recall @ 5: {recall_rate_5/total_r * 100}%")
+        print(f"Recall @ 10: {recall_rate_10/total_r * 100}%")
+        print(f"Precision @ 1: {precision_rate_1/queries * 100}%")
+        print(f"Precision @ 5: {precision_rate_5/queries * 100}%")
+        print(f"Precision @ 10: {precision_rate_10/queries * 100}%")
         print(f"Recall: {hits_r/total_r * 100}%")
         print(f"Precision: {hits_p/total_p * 100}%")
+        print(f"MAP@k : {np.mean(apk) * 100}%")
 
 
 class LSISimilarity(BaseSimilarity):

@@ -29,6 +29,13 @@ def parse_args(args):
         type=int,
         help="The size of the training set for the duplicate model",
     )
+    parser.add_argument(
+        "--disable-url-cleanup",
+        help="Don't cleanup urls when training the duplicate model",
+        dest="cleanup_urls",
+        default=True,
+        action="store_false",
+    )
     parser.add_argument("--train", help="Perform training", action="store_true")
     parser.add_argument(
         "--goal", help="Goal of the classifier", choices=MODELS.keys(), default="defect"
@@ -84,7 +91,9 @@ def main(args):
         if args.goal in historical_supported_tasks:
             model = model_class(args.lemmatization, args.historical)
         elif args.goal == "duplicate":
-            model = model_class(args.training_set_size, args.lemmatization)
+            model = model_class(
+                args.training_set_size, args.lemmatization, args.cleanup_urls
+            )
         else:
             model = model_class(args.lemmatization)
         model.train()
@@ -103,12 +112,10 @@ def main(args):
                 )
 
                 feature_names = model.get_human_readable_feature_names()
-                for i, (importance, index, is_positive) in enumerate(
-                    importance["importances"]
-                ):
-                    print(
-                        f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
-                    )
+
+                model.print_feature_importances(
+                    importance["importances"], feature_names, class_probabilities=probas
+                )
             else:
                 probas = model.classify(bug, probabilities=True, importances=False)
 

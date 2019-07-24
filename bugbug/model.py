@@ -21,6 +21,7 @@ from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
@@ -90,6 +91,38 @@ def classification_report_imbalanced_values(
     return result
 
 
+def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
+    confusion_matrix_table = confusion_matrix.tolist()
+    if not is_multilabel:
+        confusion_matrix_table = [confusion_matrix_table]
+
+    for num, table in enumerate(confusion_matrix_table):
+        if is_multilabel:
+            print(f"label: {labels[num]}")
+            table_labels = [1, 0]
+        else:
+            table_labels = labels
+
+        confusion_matrix_header = []
+        for i in range(len(table)):
+            confusion_matrix_header.append(f"{table_labels[i]} (Predicted)")
+        for i in range(len(table)):
+            table[i].insert(0, f"{table_labels[i]} (Actual)")
+        print(
+            tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),
+            end="\n\n",
+        )
+
+
+def sort_class_names(class_names):
+    if len(class_names) == 2:
+        class_names = sorted(list(class_names), reverse=True)
+    else:
+        class_names = sorted(list(class_names))
+
+    return class_names
+
+
 class Model:
     def __init__(self, lemmatization=False):
         if lemmatization:
@@ -141,41 +174,128 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
-        # Calculate the values that represent the fraction of the model output variability attributable
-        # to each feature across the whole dataset.
-        shap_sums = shap_values.sum(0)
-        abs_shap_sums = np.abs(shap_values).sum(0)
-        rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
 
-        cut_off_value = cutoff * np.amax(rel_shap_sums)
+        if not isinstance(shap_values, list):
+            shap_values = [shap_values]
 
-        # Get indices of features that pass the cut off value
-        top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
-        # Get the importance values of the top features from their indices
-        top_features = np.take(rel_shap_sums, top_feature_indices)
-        # Gets the sign of the importance from shap_sums as boolean
-        is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
-        # Stack the importance, indices and shap_sums in a 2D array
-        top_features = np.column_stack((top_features, top_feature_indices, is_positive))
-        # Sort the array (in decreasing order of importance values)
-        top_features = top_features[top_features[:, 0].argsort()][::-1]
+        # returns top features for a shap_value matrix
+        def get_top_features(cutoff, shap_values):
+            # Calculate the values that represent the fraction of the model output variability attributable
+            # to each feature across the whole dataset.
+            shap_sums = shap_values.sum(0)
+            abs_shap_sums = np.abs(shap_values).sum(0)
+            rel_shap_sums = abs_shap_sums / abs_shap_sums.sum()
 
-        return top_features
+            cut_off_value = cutoff * np.amax(rel_shap_sums)
+
+            # Get indices of features that pass the cut off value
+            top_feature_indices = np.where(rel_shap_sums >= cut_off_value)[0]
+            # Get the importance values of the top features from their indices
+            top_features = np.take(rel_shap_sums, top_feature_indices)
+            # Gets the sign of the importance from shap_sums as boolean
+            is_positive = (np.take(shap_sums, top_feature_indices)) >= 0
+            # Stack the importance, indices and shap_sums in a 2D array
+            top_features = np.column_stack(
+                (top_features, top_feature_indices, is_positive)
+            )
+            # Sort the array (in decreasing order of importance values)
+            top_features = top_features[top_features[:, 0].argsort()][::-1]
+
+            return top_features
+
+        important_features = {}
+        important_features["classes"] = {}
+        important_features["average"] = get_top_features(
+            cutoff, np.sum(np.abs(shap_values), axis=0)
+        )
+        for num, item in enumerate(shap_values):
+            # top features for that class
+            top_item_features = get_top_features(cutoff, item)
+
+            # shap values of top average features for that class
+            abs_sums = np.abs(item).sum(0)
+            rel_sums = abs_sums / abs_sums.sum()
+            is_pos = ["+" if shap_sum >= 0 else "-" for shap_sum in item.sum(0)]
+            top_avg = [
+                is_pos[int(index)] + str(rel_sums[int(index)])
+                for importance, index, is_positive in important_features["average"]
+            ]
+
+            important_features["classes"][self.class_names[num]] = (
+                top_item_features,
+                top_avg,
+            )
+
+        return important_features
+
+    def print_feature_importances(
+        self, important_features, feature_names, class_probabilities=None
+    ):
+        # extract importance values from the top features for the predicted class
+        # when classsifying
+        if class_probabilities is not None:
+            # shap_values are stored in class 1 for binary classification
+            if len(class_probabilities[0]) != 2:
+                predicted_class_index = class_probabilities.argmax(axis=-1)[0]
+            else:
+                predicted_class_index = 0
+
+            predicted_class = self.class_names[predicted_class_index]
+            imp_values = important_features["classes"][predicted_class][0]
+            shap_val = []
+            top_feature_names = []
+            for importance, index, is_positive in imp_values:
+                if is_positive:
+                    shap_val.append("+" + str(importance))
+                else:
+                    shap_val.append("-" + str(importance))
+
+                top_feature_names.append(feature_names[int(index)])
+            shap_val = [[predicted_class] + shap_val]
+
+        # extract importance values from the top features for all the classes
+        # when training
+        else:
+            top_feature_names = [
+                feature_names[int(index)]
+                for importance, index, is_pos in important_features["average"]
+            ]
+            shap_val = [
+                [class_name] + imp_values[1]
+                for class_name, imp_values in important_features["classes"].items()
+            ]
+
+        # allow maximum of 6 columns in a row to fit the page better
+        print("Top {} features:".format(len(top_feature_names)))
+        for i in range(0, len(top_feature_names), 6):
+            table = []
+            for item in shap_val:
+                table.append(item[i : i + 6])
+            print(
+                tabulate(
+                    table,
+                    headers=(["classes"] + top_feature_names)[i : i + 6],
+                    tablefmt="grid",
+                ),
+                end="\n\n",
+            )
 
     def train(self, importance_cutoff=0.15):
-        classes, class_names = self.get_labels()
-        class_names = sorted(list(class_names), reverse=True)
+        classes, self.class_names = self.get_labels()
+        self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_iter)
+        X = self.extraction_pipeline.fit_transform([item for item in X_iter])
 
         # Calculate labels.
         y = np.array(y_iter)
 
         print(f"X: {X.shape}, y: {y.shape}")
+
+        is_multilabel = isinstance(y[0], np.ndarray)
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(
@@ -191,7 +311,7 @@ class Model:
         # Use k-fold cross validation to evaluate results.
         if self.cross_validation_enabled:
             scorings = ["accuracy"]
-            if len(class_names) == 2:
+            if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
             scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
@@ -225,7 +345,7 @@ class Model:
                 shap_values,
                 X_train.toarray(),
                 feature_names=feature_names,
-                class_names=class_names,
+                class_names=self.class_names,
                 plot_type="layered_violin"
                 if not isinstance(shap_values, list)
                 else None,
@@ -234,35 +354,45 @@ class Model:
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
 
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
-
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
 
-            print(f"\nTop {len(important_features)} Features:")
-            for i, [importance, index, is_positive] in enumerate(important_features):
-                print(
-                    f'{i + 1}. \'{feature_names[int(index)]}\' ({"+" if (is_positive) else "-"}{importance})'
-                )
+            self.print_feature_importances(important_features, feature_names)
 
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
-        print(f"No confidence threshold - {len(y_test)} classified")
-        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=class_names)
-        print(confusion_matrix)
-        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
+        if is_multilabel:
+            assert isinstance(
+                y_pred[0], np.ndarray
+            ), "The predictions should be multilabel"
 
-        print(classification_report_imbalanced(y_test, y_pred, labels=class_names))
-        report = classification_report_imbalanced_values(
-            y_test, y_pred, labels=class_names
+        print(f"No confidence threshold - {len(y_test)} classified")
+        if is_multilabel:
+            confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
+        else:
+            confusion_matrix = metrics.confusion_matrix(
+                y_test, y_pred, labels=self.class_names
+            )
+
+            print(
+                classification_report_imbalanced(
+                    y_test, y_pred, labels=self.class_names
+                )
+            )
+            report = classification_report_imbalanced_values(
+                y_test, y_pred, labels=self.class_names
+            )
+
+            tracking_metrics["report"] = report
+
+        print_labeled_confusion_matrix(
+            confusion_matrix, self.class_names, is_multilabel=is_multilabel
         )
 
-        tracking_metrics["report"] = report
+        tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -276,23 +406,36 @@ class Model:
                     continue
 
                 y_test_filter.append(y_test[i])
-                y_pred_filter.append(argmax)
+                if is_multilabel:
+                    y_pred_filter.append(y_pred[i])
+                else:
+                    y_pred_filter.append(argmax)
 
-            y_pred_filter = self.le.inverse_transform(y_pred_filter)
+            if not is_multilabel:
+                y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
-            print(
-                metrics.confusion_matrix(
-                    y_test_filter, y_pred_filter, labels=class_names
+            if len(y_test_filter) != 0:
+                if is_multilabel:
+                    confusion_matrix = metrics.multilabel_confusion_matrix(
+                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
+                    )
+                else:
+                    confusion_matrix = metrics.confusion_matrix(
+                        np.asarray(y_test_filter),
+                        np.asarray(y_pred_filter),
+                        labels=self.class_names,
+                    )
+                    print(
+                        classification_report_imbalanced(
+                            y_test_filter, y_pred_filter, labels=self.class_names
+                        )
+                    )
+                print_labeled_confusion_matrix(
+                    confusion_matrix, self.class_names, is_multilabel=is_multilabel
                 )
-            )
-            print(
-                classification_report_imbalanced(
-                    y_test_filter, y_pred_filter, labels=class_names
-                )
-            )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
@@ -330,26 +473,39 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X)
 
-            # TODO: Actually implement feature importance visualization for multiclass problems.
-            if isinstance(shap_values, list):
-                shap_values = np.sum(np.abs(shap_values), axis=0)
-
-            top_importances = self.get_important_features(
+            important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
 
+            # Workaround: handle multi class case for force_plot to work correctly
+            if len(classes[0]) > 2:
+                pred_class_index = classes.argmax(axis=-1)[0]
+                explainer.expected_value = explainer.expected_value[pred_class_index]
+                shap_values = shap_values[pred_class_index]
+            else:
+                pred_class_index = 0
+
+            pred_class = self.class_names[pred_class_index]
             top_indexes = [
-                int(index) for importance, index, is_positive in top_importances
+                int(index)
+                for importance, index, is_positive in important_features["classes"][
+                    pred_class
+                ][0]
             ]
 
             feature_names = self.get_human_readable_feature_names()
+
+            feature_legend = {
+                str(i + 1): feature_names[feature_i]
+                for i, feature_i in enumerate(top_indexes)
+            }
 
             with io.StringIO() as out:
                 p = shap.force_plot(
                     explainer.expected_value,
                     shap_values[:, top_indexes],
                     X.toarray()[:, top_indexes],
-                    feature_names=[feature_names[i] for i in top_indexes],
+                    feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
                     show=False,
                 )
@@ -359,7 +515,14 @@ class Model:
 
                 html = out.getvalue()
 
-            return classes, {"importances": top_importances, "html": html}
+            return (
+                classes,
+                {
+                    "importances": important_features,
+                    "html": html,
+                    "feature_legend": feature_legend,
+                },
+            )
 
         return classes
 

@@ -65,8 +65,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-classify-patch",
-            "secrets:get:project/relman/bugbug/production"
+            "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
         "workerType": "taskcluster-generic"

@@ -113,28 +113,31 @@ class has_github_url(single_bug_feature):
         return "github" in bug["url"]
 
 
+def whiteboard_keywords(bug):
+    # Split by '['
+    paren_splits = bug["whiteboard"].lower().split("[")
+
+    # Split splits by space if they weren't in [ and ].
+    splits = []
+    for paren_split in paren_splits:
+        if "]" in paren_split:
+            paren_split = paren_split.split("]")
+            splits += paren_split
+        else:
+            splits += paren_split.split(" ")
+
+    # Remove empty splits and strip
+    splits = [split.strip() for split in splits if split.strip() != ""]
+
+    # For splits which contain ':', return both the whole string and the string before ':'.
+    splits += [split.split(":", 1)[0] for split in splits if ":" in split]
+
+    return splits
+
+
 class whiteboard(single_bug_feature):
     def __call__(self, bug, **kwargs):
-
-        # Split by '['
-        paren_splits = bug["whiteboard"].lower().split("[")
-
-        # Split splits by space if they weren't in [ and ].
-        splits = []
-        for paren_split in paren_splits:
-            if "]" in paren_split:
-                paren_split = paren_split.split("]")
-                splits += paren_split
-            else:
-                splits += paren_split.split(" ")
-
-        # Remove empty splits and strip
-        splits = [split.strip() for split in splits if split.strip() != ""]
-
-        # For splits which contain ':', return both the whole string and the string before ':'.
-        splits += [split.split(":", 1)[0] for split in splits if ":" in split]
-
-        return splits
+        return whiteboard_keywords(bug)
 
 
 class patches(single_bug_feature):
@@ -258,35 +261,40 @@ class ever_affected(single_bug_feature):
         return False
 
 
+def get_versions_statuses(bug):
+    unaffected = []
+    affected = []
+    for key, value in bug.items():
+        version = None
+        if key.startswith("cf_status_firefox_esr"):
+            version = key[len("cf_status_firefox_esr") :]
+        elif key.startswith("cf_status_firefox"):
+            version = key[len("cf_status_firefox") :]
+
+        if version is None:
+            continue
+
+        if value == "unaffected":
+            unaffected.append(version)
+        elif value in [
+            "affected",
+            "fixed",
+            "wontfix",
+            "fix-optional",
+            "verified",
+            "disabled",
+            "verified disabled",
+        ]:
+            affected.append(version)
+
+    return unaffected, affected
+
+
 class affected_then_unaffected(single_bug_feature):
     name = "status has ever been set to 'affected' and 'unaffected'"
 
     def __call__(self, bug, **kwargs):
-        unaffected = []
-        affected = []
-        for key, value in bug.items():
-            version = None
-            if key.startswith("cf_status_firefox_esr"):
-                version = key[len("cf_status_firefox_esr") :]
-            elif key.startswith("cf_status_firefox"):
-                version = key[len("cf_status_firefox") :]
-
-            if version is None:
-                continue
-
-            if value == "unaffected":
-                unaffected.append(version)
-            elif value in [
-                "affected",
-                "fixed",
-                "wontfix",
-                "fix-optional",
-                "verified",
-                "disabled",
-                "verified disabled",
-            ]:
-                affected.append(version)
-
+        unaffected, affected = get_versions_statuses(bug)
         return any(
             unaffected_ver < affected_ver
             for unaffected_ver in unaffected
@@ -448,9 +456,65 @@ class had_severity_enhancement(single_bug_feature):
         return False
 
 
+class couple_common_whiteboard_keywords(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return [
+            keyword
+            for keyword in whiteboard_keywords(bugs[0])
+            if keyword in whiteboard_keywords(bugs[1])
+        ]
+
+
 class is_same_product(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["product"] == bugs[1]["product"]
+
+
+class is_same_component(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return (
+            bugs[0]["product"] == bugs[1]["product"]
+            and bugs[0]["component"] == bugs[1]["component"]
+        )
+
+
+class is_same_platform(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["platform"] == bugs[1]["platform"]
+
+
+class is_same_version(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["version"] == bugs[1]["version"]
+
+
+class is_same_os(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["op_sys"] == bugs[1]["op_sys"]
+
+
+class is_same_target_milestone(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
+
+
+class is_first_affected_same(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return min(get_versions_statuses(bugs[0])[1]) == min(
+            get_versions_statuses(bugs[1])[1]
+        )
+
+
+class couple_common_keywords(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs, **kwargs):
+        return [
+            keyword
+            for keyword in bugs[0]["keywords"]
+            if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
+        ]
 
 
 def get_author_ids():
