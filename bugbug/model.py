@@ -91,25 +91,30 @@ def classification_report_imbalanced_values(
     return result
 
 
-def print_labeled_confusion_matrix(y_test, y_pred, labels, is_multilabel=False):
+def print_labeled_confusion_matrix(
+    y_test, y_pred, labels, confusion_matrix=None, is_multilabel=False
+):
     if is_multilabel:
-        class_names = labels
-        confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
+        if confusion_matrix is None:
+            confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         confusion_matrix_table = confusion_matrix.tolist()
     else:
-        confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
+        if confusion_matrix is None:
+            confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
         confusion_matrix_table = [confusion_matrix.tolist()]
 
     for num, table in enumerate(confusion_matrix_table):
         if is_multilabel:
-            print(f"label: {class_names[num]}")
-            labels = [1, 0]
+            print(f"label: {labels[num]}")
+            table_labels = [1, 0]
+        else:
+            table_labels = labels
 
         confusion_matrix_header = []
         for i in range(len(table)):
-            confusion_matrix_header.append(f"{labels[i]} (Predicted)")
+            confusion_matrix_header.append(f"{table_labels[i]} (Predicted)")
         for i in range(len(table)):
-            table[i].insert(0, f"{labels[i]} (Actual)")
+            table[i].insert(0, f"{table_labels[i]} (Actual)")
         print(
             tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),
             end="\n\n",
@@ -285,7 +290,6 @@ class Model:
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
-        is_multilabel = False
 
         # Get items and labels, filtering out those for which we have no labels.
         X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
@@ -298,8 +302,7 @@ class Model:
 
         print(f"X: {X.shape}, y: {y.shape}")
 
-        if isinstance(y[0], np.ndarray):
-            is_multilabel = True
+        is_multilabel = isinstance(y[0], np.ndarray)
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(
@@ -374,10 +377,6 @@ class Model:
             ), "The predictions should be multilabel"
 
         print(f"No confidence threshold - {len(y_test)} classified")
-
-        print_labeled_confusion_matrix(
-            y_test, y_pred, self.class_names, is_multilabel=is_multilabel
-        )
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -395,6 +394,14 @@ class Model:
             )
 
             tracking_metrics["report"] = report
+
+        print_labeled_confusion_matrix(
+            y_test,
+            y_pred,
+            self.class_names,
+            confusion_matrix=confusion_matrix,
+            is_multilabel=is_multilabel,
+        )
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
@@ -423,18 +430,18 @@ class Model:
             )
 
             if len(y_test_filter) != 0:
-                print_labeled_confusion_matrix(
-                    np.asarray(y_test_filter),
-                    np.asarray(y_pred_filter),
-                    self.class_names,
-                    is_multilabel=is_multilabel,
-                )
                 if not is_multilabel:
                     print(
                         classification_report_imbalanced(
                             y_test_filter, y_pred_filter, labels=self.class_names
                         )
                     )
+                print_labeled_confusion_matrix(
+                    np.asarray(y_test_filter),
+                    np.asarray(y_pred_filter),
+                    self.class_names,
+                    is_multilabel=is_multilabel,
+                )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
