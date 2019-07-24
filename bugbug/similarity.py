@@ -12,6 +12,7 @@ import numpy as np
 from pyemd import emd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
 
 from bugbug import bugzilla, feature_cleanup
 
@@ -102,7 +103,7 @@ class BaseSimilarity:
 
         queries = 0
         apk = []
-        for bug in bugzilla.get_bugs():
+        for bug in tqdm(bugzilla.get_bugs()):
             if duplicates[bug["id"]]:
                 score = 0
                 num_hits = 0
