@@ -142,32 +142,7 @@ class RegressorFinder(object):
 
         def append_commits_to_ignore(commits, type_):
             for commit in commits:
-                try:
-                    git_rev = vcs_map.mercurial_to_git(commit.node)
-                except Exception as e:
-                    if (
-                        str(e)
-                        == f"Missing mercurial commit in the VCS map: {commit.node}"
-                    ):
-                        logger.info(e)
-                        git_rev = ""
-                    else:
-                        raise
-
-                tokenized_git_rev = (
-                    self.mercurial_to_tokenized_git[commit.node]
-                    if commit.node in self.mercurial_to_tokenized_git
-                    else ""
-                )
-
-                commits_to_ignore.append(
-                    {
-                        "mercurial_rev": commit.node,
-                        "git_rev": git_rev,
-                        "tokenized_git_rev": tokenized_git_rev,
-                        "type": type_,
-                    }
-                )
+                commits_to_ignore.append({"rev": commit.node, "type": type_})
 
         append_commits_to_ignore(
             list(repository.get_commits_to_ignore(self.mercurial_repo_dir, commits)), ""
@@ -186,9 +161,7 @@ class RegressorFinder(object):
         )
 
         with open("commits_to_ignore.csv", "w") as f:
-            writer = csv.DictWriter(
-                f, fieldnames=["mercurial_rev", "git_rev", "tokenized_git_rev", "type"]
-            )
+            writer = csv.DictWriter(f, fieldnames=["rev", "type"])
             writer.writeheader()
             writer.writerows(commits_to_ignore)
 
@@ -217,8 +190,7 @@ class RegressorFinder(object):
         logger.info("Get previously classified commits...")
         prev_bug_fixing_commits = list(db.read(BUG_FIXING_COMMITS_DB))
         prev_bug_fixing_commits_nodes = set(
-            bug_fixing_commit["mercurial_rev"]
-            for bug_fixing_commit in prev_bug_fixing_commits
+            bug_fixing_commit["rev"] for bug_fixing_commit in prev_bug_fixing_commits
         )
         logger.info(f"Already classified {len(prev_bug_fixing_commits)} commits...")
 
@@ -267,20 +239,7 @@ class RegressorFinder(object):
 
         def append_bug_fixing_commits(bug_id, type_):
             for commit in commit_map[bug_id]:
-                tokenized_git_rev = (
-                    self.mercurial_to_tokenized_git[commit["node"]]
-                    if commit["node"] in self.mercurial_to_tokenized_git
-                    else ""
-                )
-
-                bug_fixing_commits.append(
-                    {
-                        "mercurial_rev": commit["node"],
-                        "git_rev": vcs_map.mercurial_to_git(commit["node"]),
-                        "tokenized_git_rev": tokenized_git_rev,
-                        "type": type_,
-                    }
-                )
+                bug_fixing_commits.append({"rev": commit["node"], "type": type_})
 
         for bug in tqdm(get_relevant_bugs(), total=bug_count):
             # Ignore bugs which are not linked to the commits we care about.
@@ -326,17 +285,25 @@ class RegressorFinder(object):
         if tokenized:
             db_path = TOKENIZED_BUG_INTRODUCING_COMMITS_DB
             repo_dir = self.tokenized_git_repo_dir
-            git_rev_key = "tokenized_git_rev"
         else:
             db_path = BUG_INTRODUCING_COMMITS_DB
             repo_dir = self.git_repo_dir
-            git_rev_key = "git_rev"
 
         def git_to_mercurial(rev):
             if tokenized:
                 return self.tokenized_git_to_mercurial[rev]
             else:
                 return vcs_map.git_to_mercurial(rev)
+
+        def mercurial_to_git(rev):
+            if tokenized:
+                return (
+                    self.mercurial_to_tokenized_git[rev]
+                    if rev in self.mercurial_to_tokenized_git
+                    else ""
+                )
+            else:
+                return vcs_map.mercurial_to_git(rev)
 
         logger.info("Download previously found bug-introducing commits...")
         db.download_version(db_path)
@@ -346,18 +313,20 @@ class RegressorFinder(object):
         logger.info("Get previously found bug-introducing commits...")
         prev_bug_introducing_commits = list(db.read(db_path))
         prev_bug_introducing_commits_nodes = set(
-            bug_introducing_commit["bug_fixing_mercurial_rev"]
+            bug_introducing_commit["bug_fixing_rev"]
             for bug_introducing_commit in prev_bug_introducing_commits
         )
         logger.info(
             f"Already classified {len(prev_bug_introducing_commits)} commits..."
         )
 
-        hashes_to_ignore = set(commit["mercurial_rev"] for commit in commits_to_ignore)
+        hashes_to_ignore = set(commit["rev"] for commit in commits_to_ignore)
 
         with open("git_hashes_to_ignore", "w") as f:
             f.writelines(
-                "{}\n".format(commit[git_rev_key]) for commit in commits_to_ignore
+                "{}\n".format(mercurial_to_git(commit["rev"]))
+                for commit in commits_to_ignore
+                if mercurial_to_git(commit["rev"]) != ""
             )
 
         logger.info(f"{len(bug_fixing_commits)} commits to analyze")
@@ -366,8 +335,7 @@ class RegressorFinder(object):
         bug_fixing_commits = [
             bug_fixing_commit
             for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["mercurial_rev"]
-            not in prev_bug_introducing_commits_nodes
+            if bug_fixing_commit["rev"] not in prev_bug_introducing_commits_nodes
         ]
 
         logger.info(
@@ -377,7 +345,7 @@ class RegressorFinder(object):
         bug_fixing_commits = [
             bug_fixing_commit
             for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["mercurial_rev"] not in hashes_to_ignore
+            if bug_fixing_commit["rev"] not in hashes_to_ignore
         ]
         logger.info(
             f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones in the ignore list"
@@ -386,7 +354,7 @@ class RegressorFinder(object):
         bug_fixing_commits = [
             bug_fixing_commit
             for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit[git_rev_key] != ""
+            if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
         ]
         logger.info(
             f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
@@ -397,9 +365,11 @@ class RegressorFinder(object):
             GIT_REPO = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
-            logger.info("Analyzing {}...".format(bug_fixing_commit[git_rev_key]))
+            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
 
-            commit = GIT_REPO.get_commit(bug_fixing_commit[git_rev_key])
+            logger.info(f"Analyzing {git_fix_revision}...")
+
+            commit = GIT_REPO.get_commit(git_fix_revision)
 
             # Skip huge changes, we'll likely be wrong with them.
             if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
@@ -415,14 +385,10 @@ class RegressorFinder(object):
                 for bug_introducing_hash in bug_introducing_hashes:
                     bug_introducing_commits.append(
                         {
-                            "bug_fixing_mercurial_rev": bug_fixing_commit[
-                                "mercurial_rev"
-                            ],
-                            "bug_fixing_git_rev": bug_fixing_commit[git_rev_key],
-                            "bug_introducing_mercurial_rev": git_to_mercurial(
+                            "bug_fixing_rev": bug_fixing_commit["rev"],
+                            "bug_introducing_rev": git_to_mercurial(
                                 bug_introducing_hash
                             ),
-                            "bug_introducing_git_rev": bug_introducing_hash,
                         }
                     )
 
@@ -430,10 +396,8 @@ class RegressorFinder(object):
             if len(bug_introducing_commits) == 0:
                 bug_introducing_commits.append(
                     {
-                        "bug_fixing_mercurial_rev": bug_fixing_commit["mercurial_rev"],
-                        "bug_fixing_git_rev": bug_fixing_commit[git_rev_key],
-                        "bug_introducing_mercurial_rev": "",
-                        "bug_introducing_git_rev": "",
+                        "bug_fixing_rev": bug_fixing_commit["rev"],
+                        "bug_introducing_rev": "",
                     }
                 )
 
