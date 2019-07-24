@@ -18,6 +18,7 @@ import hglib
 import zstandard
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
+from microannotate import utils as microannotate_utils
 from pydriller import GitRepository
 from tqdm import tqdm
 
@@ -40,13 +41,20 @@ BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
     BUG_FIXING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
-    1,
+    2,
 )
 
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
 db.register(
     BUG_INTRODUCING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
+    1,
+)
+
+TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
+db.register(
+    TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
     1,
 )
 
@@ -74,10 +82,27 @@ def download_model(model_name):
 
 
 class RegressorFinder(object):
-    def __init__(self, cache_root, git_repo_url, git_repo_dir):
+    def __init__(
+        self,
+        cache_root,
+        git_repo_url,
+        git_repo_dir,
+        tokenized_git_repo_url,
+        tokenized_git_repo_dir,
+    ):
         self.mercurial_repo_dir = os.path.join(cache_root, "mozilla-central")
         self.git_repo_url = git_repo_url
         self.git_repo_dir = git_repo_dir
+        self.tokenized_git_repo_url = tokenized_git_repo_url
+        self.tokenized_git_repo_dir = tokenized_git_repo_dir
+
+        logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
+        repository.clone(self.mercurial_repo_dir)
+
+        logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
+        self.clone_git_repo()
+        logger.info(f"Initializing mapping between git and mercurial commits...")
+        self.init_mapping()
 
     def clone_git_repo(self):
         if not os.path.exists(self.git_repo_dir):
@@ -94,6 +119,14 @@ class RegressorFinder(object):
                 capture_output=True,
                 check=True,
             )
+        )
+
+    def init_mapping(self):
+        logger.info("Downloading Mercurial <-> git mapping file...")
+        vcs_map.download_mapfile()
+
+        self.tokenized_git_to_mercurial, self.mercurial_to_tokenized_git = microannotate_utils.get_commit_mapping(
+            self.tokenized_git_repo_dir
         )
 
     def get_commits_to_ignore(self):
@@ -121,8 +154,19 @@ class RegressorFinder(object):
                     else:
                         raise
 
+                tokenized_git_rev = (
+                    self.mercurial_to_tokenized_git[commit.node]
+                    if commit.node in self.mercurial_to_tokenized_git
+                    else ""
+                )
+
                 commits_to_ignore.append(
-                    {"mercurial_rev": commit.node, "git_rev": git_rev, "type": type_}
+                    {
+                        "mercurial_rev": commit.node,
+                        "git_rev": git_rev,
+                        "tokenized_git_rev": tokenized_git_rev,
+                        "type": type_,
+                    }
                 )
 
         append_commits_to_ignore(
@@ -142,7 +186,9 @@ class RegressorFinder(object):
         )
 
         with open("commits_to_ignore.csv", "w") as f:
-            writer = csv.DictWriter(f, fieldnames=["mercurial_rev", "git_rev", "type"])
+            writer = csv.DictWriter(
+                f, fieldnames=["mercurial_rev", "git_rev", "tokenized_git_rev", "type"]
+            )
             writer.writeheader()
             writer.writerows(commits_to_ignore)
 
@@ -221,10 +267,17 @@ class RegressorFinder(object):
 
         def append_bug_fixing_commits(bug_id, type_):
             for commit in commit_map[bug_id]:
+                tokenized_git_rev = (
+                    self.mercurial_to_tokenized_git[commit["node"]]
+                    if commit["node"] in self.mercurial_to_tokenized_git
+                    else ""
+                )
+
                 bug_fixing_commits.append(
                     {
                         "mercurial_rev": commit["node"],
                         "git_rev": vcs_map.mercurial_to_git(commit["node"]),
+                        "tokenized_git_rev": tokenized_git_rev,
                         "type": type_,
                     }
                 )
@@ -267,25 +320,31 @@ class RegressorFinder(object):
             if bug_fixing_commit["type"] in ["r", "d"]
         ]
 
-    def find_bug_introducing_commits(self):
-        logger.info("Downloading Mercurial <-> git mapping file...")
-        vcs_map.download_mapfile()
+    def find_bug_introducing_commits(
+        self, bug_fixing_commits, commits_to_ignore, tokenized
+    ):
+        if tokenized:
+            db_path = TOKENIZED_BUG_INTRODUCING_COMMITS_DB
+            repo_dir = self.tokenized_git_repo_dir
+            git_rev_key = "tokenized_git_rev"
+        else:
+            db_path = BUG_INTRODUCING_COMMITS_DB
+            repo_dir = self.git_repo_dir
+            git_rev_key = "git_rev"
 
-        logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
-        repository.clone(self.mercurial_repo_dir)
-
-        logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
-        self.clone_git_repo()
+        def git_to_mercurial(rev):
+            if tokenized:
+                return self.tokenized_git_to_mercurial[rev]
+            else:
+                return vcs_map.git_to_mercurial(rev)
 
         logger.info("Download previously found bug-introducing commits...")
-        db.download_version(BUG_INTRODUCING_COMMITS_DB)
-        if db.is_old_version(BUG_INTRODUCING_COMMITS_DB) or not os.path.exists(
-            BUG_INTRODUCING_COMMITS_DB
-        ):
-            db.download(BUG_INTRODUCING_COMMITS_DB, force=True)
+        db.download_version(db_path)
+        if db.is_old_version(db_path) or not os.path.exists(db_path):
+            db.download(db_path, force=True)
 
         logger.info("Get previously found bug-introducing commits...")
-        prev_bug_introducing_commits = list(db.read(BUG_INTRODUCING_COMMITS_DB))
+        prev_bug_introducing_commits = list(db.read(db_path))
         prev_bug_introducing_commits_nodes = set(
             bug_introducing_commit["bug_fixing_mercurial_rev"]
             for bug_introducing_commit in prev_bug_introducing_commits
@@ -294,14 +353,12 @@ class RegressorFinder(object):
             f"Already classified {len(prev_bug_introducing_commits)} commits..."
         )
 
-        commits_to_ignore = self.get_commits_to_ignore()
-
-        git_hashes_to_ignore = set(commit["git_rev"] for commit in commits_to_ignore)
+        hashes_to_ignore = set(commit["mercurial_rev"] for commit in commits_to_ignore)
 
         with open("git_hashes_to_ignore", "w") as f:
-            f.writelines(f"{git_hash}\n" for git_hash in git_hashes_to_ignore)
-
-        bug_fixing_commits = self.find_bug_fixing_commits()
+            f.writelines(
+                "{}\n".format(commit[git_rev_key]) for commit in commits_to_ignore
+            )
 
         logger.info(f"{len(bug_fixing_commits)} commits to analyze")
 
@@ -320,10 +377,19 @@ class RegressorFinder(object):
         bug_fixing_commits = [
             bug_fixing_commit
             for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["git_rev"] not in git_hashes_to_ignore
+            if bug_fixing_commit["mercurial_rev"] not in hashes_to_ignore
         ]
         logger.info(
             f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones in the ignore list"
+        )
+
+        bug_fixing_commits = [
+            bug_fixing_commit
+            for bug_fixing_commit in bug_fixing_commits
+            if bug_fixing_commit[git_rev_key] != ""
+        ]
+        logger.info(
+            f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
         )
 
         def _init(git_repo_dir):
@@ -331,9 +397,9 @@ class RegressorFinder(object):
             GIT_REPO = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
-            logger.info("Analyzing {}...".format(bug_fixing_commit["git_rev"]))
+            logger.info("Analyzing {}...".format(bug_fixing_commit[git_rev_key]))
 
-            commit = GIT_REPO.get_commit(bug_fixing_commit["git_rev"])
+            commit = GIT_REPO.get_commit(bug_fixing_commit[git_rev_key])
 
             # Skip huge changes, we'll likely be wrong with them.
             if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
@@ -352,8 +418,8 @@ class RegressorFinder(object):
                             "bug_fixing_mercurial_rev": bug_fixing_commit[
                                 "mercurial_rev"
                             ],
-                            "bug_fixing_git_rev": bug_fixing_commit["git_rev"],
-                            "bug_introducing_mercurial_rev": vcs_map.git_to_mercurial(
+                            "bug_fixing_git_rev": bug_fixing_commit[git_rev_key],
+                            "bug_introducing_mercurial_rev": git_to_mercurial(
                                 bug_introducing_hash
                             ),
                             "bug_introducing_git_rev": bug_introducing_hash,
@@ -365,7 +431,7 @@ class RegressorFinder(object):
                 bug_introducing_commits.append(
                     {
                         "bug_fixing_mercurial_rev": bug_fixing_commit["mercurial_rev"],
-                        "bug_fixing_git_rev": bug_fixing_commit["git_rev"],
+                        "bug_fixing_git_rev": bug_fixing_commit[git_rev_key],
                         "bug_introducing_mercurial_rev": "",
                         "bug_introducing_git_rev": "",
                     }
@@ -374,9 +440,7 @@ class RegressorFinder(object):
             return bug_introducing_commits
 
         with concurrent.futures.ThreadPoolExecutor(
-            initializer=_init,
-            initargs=(self.git_repo_dir,),
-            max_workers=os.cpu_count() + 1,
+            initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
             bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)
             bug_introducing_commits = tqdm(
@@ -392,8 +456,8 @@ class RegressorFinder(object):
             f"Skipped {total_results_num - len(bug_introducing_commits)} commits as they were too big"
         )
 
-        db.append(BUG_INTRODUCING_COMMITS_DB, bug_introducing_commits)
-        compress_file(BUG_INTRODUCING_COMMITS_DB)
+        db.append(db_path, bug_introducing_commits)
+        compress_file(db_path)
 
 
 def main():
@@ -407,10 +471,34 @@ def main():
     parser.add_argument(
         "git_repo_dir", help="Path where the git repository will be cloned."
     )
+    parser.add_argument(
+        "tokenized_git_repo_url",
+        help="URL to the tokenized git repository on which to run SZZ.",
+    )
+    parser.add_argument(
+        "tokenized_git_repo_dir",
+        help="Path where the tokenized git repository will be cloned.",
+    )
 
     args = parser.parse_args()
 
     # TODO: Figure out how to use wordified repository or wordified-comment-removed repository.
-    RegressorFinder(
-        args.cache_root, args.git_repo_url, args.git_repo_dir
-    ).find_bug_introducing_commits()
+    regressor_finder = RegressorFinder(
+        args.cache_root,
+        args.git_repo_url,
+        args.git_repo_dir,
+        args.tokenized_git_repo_url,
+        args.tokenized_git_repo_dir,
+    )
+
+    commits_to_ignore = regressor_finder.get_commits_to_ignore()
+
+    bug_fixing_commits = regressor_finder.find_bug_fixing_commits()
+
+    regressor_finder.find_bug_introducing_commits(
+        bug_fixing_commits, commits_to_ignore, True
+    )
+
+    regressor_finder.find_bug_introducing_commits(
+        bug_fixing_commits, commits_to_ignore, False
+    )

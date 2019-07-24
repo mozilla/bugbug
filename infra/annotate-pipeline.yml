@@ -134,6 +134,8 @@ tasks:
           - /cache/
           - https://github.com/mozilla/gecko-dev
           - gecko-dev
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - gecko-dev-wordified-and-comments-removed
         artifacts:
           public/commits_to_ignore.csv:
             path: /commits_to_ignore.csv
