@@ -5,9 +5,10 @@
 
 import re
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+from dateutil import parser
 from libmozdata import versions
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -503,6 +504,14 @@ class is_first_affected_same(couple_bug_feature):
         return min(get_versions_statuses(bugs[0])[1]) == min(
             get_versions_statuses(bugs[1])[1]
         )
+
+
+class couple_delta_creation_date(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        delta = parser.parse(bugs[0]["creation_time"]) - parser.parse(
+            bugs[1]["creation_time"]
+        )
+        return delta / timedelta(days=1)
 
 
 class couple_common_keywords(couple_bug_feature):
