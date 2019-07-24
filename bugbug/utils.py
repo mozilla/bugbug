@@ -7,7 +7,7 @@ import collections
 import json
 import os
 import time
-
+import zstandard
 import dateutil.parser
 import numpy as np
 import requests
@@ -33,6 +33,17 @@ def split_tuple_iterator(iterable):
 def numpy_to_dict(array):
     return {name: array[name].squeeze(axis=1) for name in array.dtype.names}
 
+def compress(path):
+        cctx = zstandard.ZstdCompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
+                                 
+def decompress(path):
+        dctx = zstandard.ZstdDecompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                dctx.copy_stream(input_f, output_f)
 
 class StructuredColumnTransformer(ColumnTransformer):
     def _hstack(self, Xs):
