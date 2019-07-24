@@ -170,6 +170,7 @@ tasks:
         - microannotate-generate-tokenize
         - microannotate-generate-remove-comments
         - microannotate-generate-tokenize-and-remove-comments
+        - regressor-finder
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-spawn-pipeline:${version}
