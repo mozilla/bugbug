@@ -74,23 +74,22 @@ def download_model(model_name):
 
 
 class RegressorFinder(object):
-    def __init__(self, cache_root, git_repo_dir):
+    def __init__(self, cache_root, git_repo_url, git_repo_dir):
         self.mercurial_repo_dir = os.path.join(cache_root, "mozilla-central")
+        self.git_repo_url = git_repo_url
         self.git_repo_dir = git_repo_dir
 
-    def clone_gecko_dev(self):
-        repo_url = "https://github.com/mozilla/gecko-dev"
-
+    def clone_git_repo(self):
         if not os.path.exists(self.git_repo_dir):
             retry(
                 lambda: subprocess.run(
-                    ["git", "clone", repo_url, self.git_repo_dir], check=True
+                    ["git", "clone", self.git_repo_url, self.git_repo_dir], check=True
                 )
             )
 
         retry(
             lambda: subprocess.run(
-                ["git", "pull", repo_url, "master"],
+                ["git", "pull", self.git_repo_url, "master"],
                 cwd=self.git_repo_dir,
                 capture_output=True,
                 check=True,
@@ -275,8 +274,8 @@ class RegressorFinder(object):
         logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
         repository.clone(self.mercurial_repo_dir)
 
-        logger.info(f"Cloning git repository to {self.git_repo_dir}...")
-        self.clone_gecko_dev()
+        logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
+        self.clone_git_repo()
 
         logger.info("Download previously found bug-introducing commits...")
         db.download_version(BUG_INTRODUCING_COMMITS_DB)
@@ -402,9 +401,16 @@ def main():
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("cache_root", help="Cache for repository clones.")
-    parser.add_argument("git_repo", help="Path to the gecko-dev repository.")
+    parser.add_argument(
+        "git_repo_url", help="URL to the git repository on which to run SZZ."
+    )
+    parser.add_argument(
+        "git_repo_dir", help="Path where the git repository will be cloned."
+    )
 
     args = parser.parse_args()
 
     # TODO: Figure out how to use wordified repository or wordified-comment-removed repository.
-    RegressorFinder(args.cache_root, args.git_repo).find_bug_introducing_commits()
+    RegressorFinder(
+        args.cache_root, args.git_repo_url, args.git_repo_dir
+    ).find_bug_introducing_commits()

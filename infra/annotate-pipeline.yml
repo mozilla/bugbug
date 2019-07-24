@@ -132,6 +132,7 @@ tasks:
         command:
           - bugbug-regressor-finder
           - /cache/
+          - https://github.com/mozilla/gecko-dev
           - gecko-dev
         artifacts:
           public/commits_to_ignore.csv:
