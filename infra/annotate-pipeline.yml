@@ -45,46 +45,6 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
 
-    - ID: regressor-finder
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
-      payload:
-        maxRunTime: 86400
-        image: mozilla/bugbug-commit-retrieval:${version}
-        command:
-          - bugbug-regressor-finder
-          - /cache/
-          - gecko-dev
-        artifacts:
-          public/commits_to_ignore.csv:
-            path: /commits_to_ignore.csv
-            type: file
-          public/bug_fixing_commits.json.zst:
-            path: /bug_fixing_commits.json.zst
-            type: file
-          public/bug_introducing_commits.json.zst:
-            path: /bug_introducing_commits.json.zst
-            type: file
-        cache:
-          bugbug-mercurial-repository: /cache
-        features:
-          taskclusterProxy:
-            true
-      scopes:
-        - "docker-worker:cache:bugbug-mercurial-repository"
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder.latest
-      metadata:
-        name: bugbug regressor finder
-        description: bugbug regressor finder
-        owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
-
     - ID: microannotate-generate-remove-comments
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
@@ -157,6 +117,46 @@ tasks:
       metadata:
         name: bugbug microannotate tokenized repository with comments removed generator
         description: bugbug microannotate tokenized repository with comments removed generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: regressor-finder
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc-compute
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-regressor-finder
+          - /cache/
+          - gecko-dev
+        artifacts:
+          public/commits_to_ignore.csv:
+            path: /commits_to_ignore.csv
+            type: file
+          public/bug_fixing_commits.json.zst:
+            path: /bug_fixing_commits.json.zst
+            type: file
+          public/bug_introducing_commits.json.zst:
+            path: /bug_introducing_commits.json.zst
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder.latest
+      metadata:
+        name: bugbug regressor finder
+        description: bugbug regressor finder
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
 
