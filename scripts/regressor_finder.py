@@ -446,7 +446,6 @@ def main():
 
     args = parser.parse_args()
 
-    # TODO: Figure out how to use wordified repository or wordified-comment-removed repository.
     regressor_finder = RegressorFinder(
         args.cache_root,
         args.git_repo_url,
