@@ -113,28 +113,31 @@ class has_github_url(single_bug_feature):
         return "github" in bug["url"]
 
 
+def whiteboard_keywords(bug):
+    # Split by '['
+    paren_splits = bug["whiteboard"].lower().split("[")
+
+    # Split splits by space if they weren't in [ and ].
+    splits = []
+    for paren_split in paren_splits:
+        if "]" in paren_split:
+            paren_split = paren_split.split("]")
+            splits += paren_split
+        else:
+            splits += paren_split.split(" ")
+
+    # Remove empty splits and strip
+    splits = [split.strip() for split in splits if split.strip() != ""]
+
+    # For splits which contain ':', return both the whole string and the string before ':'.
+    splits += [split.split(":", 1)[0] for split in splits if ":" in split]
+
+    return splits
+
+
 class whiteboard(single_bug_feature):
     def __call__(self, bug, **kwargs):
-
-        # Split by '['
-        paren_splits = bug["whiteboard"].lower().split("[")
-
-        # Split splits by space if they weren't in [ and ].
-        splits = []
-        for paren_split in paren_splits:
-            if "]" in paren_split:
-                paren_split = paren_split.split("]")
-                splits += paren_split
-            else:
-                splits += paren_split.split(" ")
-
-        # Remove empty splits and strip
-        splits = [split.strip() for split in splits if split.strip() != ""]
-
-        # For splits which contain ':', return both the whole string and the string before ':'.
-        splits += [split.split(":", 1)[0] for split in splits if ":" in split]
-
-        return splits
+        return whiteboard_keywords(bug)
 
 
 class patches(single_bug_feature):
@@ -451,6 +454,15 @@ class had_severity_enhancement(single_bug_feature):
                     return True
 
         return False
+
+
+class couple_common_whiteboard_keywords(couple_bug_feature):
+    def __call__(self, bugs, **kwargs):
+        return [
+            keyword
+            for keyword in whiteboard_keywords(bugs[0])
+            if keyword in whiteboard_keywords(bugs[1])
+        ]
 
 
 class is_same_product(couple_bug_feature):
