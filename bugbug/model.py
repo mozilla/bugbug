@@ -91,17 +91,10 @@ def classification_report_imbalanced_values(
     return result
 
 
-def print_labeled_confusion_matrix(
-    y_test, y_pred, labels, confusion_matrix=None, is_multilabel=False
-):
-    if is_multilabel:
-        if confusion_matrix is None:
-            confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
-        confusion_matrix_table = confusion_matrix.tolist()
-    else:
-        if confusion_matrix is None:
-            confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
-        confusion_matrix_table = [confusion_matrix.tolist()]
+def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
+    confusion_matrix_table = confusion_matrix.tolist()
+    if not is_multilabel:
+        confusion_matrix_table = [confusion_matrix_table]
 
     for num, table in enumerate(confusion_matrix_table):
         if is_multilabel:
@@ -396,11 +389,7 @@ class Model:
             tracking_metrics["report"] = report
 
         print_labeled_confusion_matrix(
-            y_test,
-            y_pred,
-            self.class_names,
-            confusion_matrix=confusion_matrix,
-            is_multilabel=is_multilabel,
+            confusion_matrix, self.class_names, is_multilabel=is_multilabel
         )
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
@@ -429,17 +418,23 @@ class Model:
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
             if len(y_test_filter) != 0:
-                if not is_multilabel:
+                if is_multilabel:
+                    confusion_matrix = metrics.multilabel_confusion_matrix(
+                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
+                    )
+                else:
+                    confusion_matrix = metrics.confusion_matrix(
+                        np.asarray(y_test_filter),
+                        np.asarray(y_pred_filter),
+                        labels=self.class_names,
+                    )
                     print(
                         classification_report_imbalanced(
                             y_test_filter, y_pred_filter, labels=self.class_names
                         )
                     )
                 print_labeled_confusion_matrix(
-                    np.asarray(y_test_filter),
-                    np.asarray(y_pred_filter),
-                    self.class_names,
-                    is_multilabel=is_multilabel,
+                    confusion_matrix, self.class_names, is_multilabel=is_multilabel
                 )
 
         joblib.dump(self, self.__class__.__name__.lower())
