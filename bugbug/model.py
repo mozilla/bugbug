@@ -428,7 +428,6 @@ class Model:
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
-
             if len(y_test_filter) != 0:
                 if not is_multilabel:
                     print(
