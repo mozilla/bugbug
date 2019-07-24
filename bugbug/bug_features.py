@@ -493,6 +493,18 @@ class is_first_affected_same(couple_bug_feature):
         )
 
 
+class couple_common_keywords(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs, **kwargs):
+        return [
+            keyword
+            for keyword in bugs[0]["keywords"]
+            if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
+        ]
+
+
 def get_author_ids():
     author_ids = set()
     for commit in repository.get_commits():
