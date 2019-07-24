@@ -91,19 +91,27 @@ def classification_report_imbalanced_values(
     return result
 
 
-def get_labeled_confusion_matrix(y_test, y_pred, labels):
-    confusion_matrix = metrics.confusion_matrix(y_test, y_pred, labels=labels)
+def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
     confusion_matrix_table = confusion_matrix.tolist()
-    confusion_matrix_header = []
-    for i in range(len(confusion_matrix_table)):
-        confusion_matrix_header.append(f"{labels[i]} (Predicted)")
-    for i in range(len(confusion_matrix_table)):
-        confusion_matrix_table[i].insert(0, f"{labels[i]} (Actual)")
-    labeled_confusion_matrix = tabulate(
-        confusion_matrix_table, headers=confusion_matrix_header, tablefmt="fancy_grid"
-    )
+    if not is_multilabel:
+        confusion_matrix_table = [confusion_matrix_table]
 
-    return labeled_confusion_matrix
+    for num, table in enumerate(confusion_matrix_table):
+        if is_multilabel:
+            print(f"label: {labels[num]}")
+            table_labels = [1, 0]
+        else:
+            table_labels = labels
+
+        confusion_matrix_header = []
+        for i in range(len(table)):
+            confusion_matrix_header.append(f"{table_labels[i]} (Predicted)")
+        for i in range(len(table)):
+            table[i].insert(0, f"{table_labels[i]} (Actual)")
+        print(
+            tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),
+            end="\n\n",
+        )
 
 
 def sort_class_names(class_names):
@@ -287,6 +295,8 @@ class Model:
 
         print(f"X: {X.shape}, y: {y.shape}")
 
+        is_multilabel = isinstance(y[0], np.ndarray)
+
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.1, random_state=0
@@ -354,22 +364,35 @@ class Model:
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
+        if is_multilabel:
+            assert isinstance(
+                y_pred[0], np.ndarray
+            ), "The predictions should be multilabel"
+
         print(f"No confidence threshold - {len(y_test)} classified")
-        confusion_matrix = metrics.confusion_matrix(
-            y_test, y_pred, labels=self.class_names
+        if is_multilabel:
+            confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
+        else:
+            confusion_matrix = metrics.confusion_matrix(
+                y_test, y_pred, labels=self.class_names
+            )
+
+            print(
+                classification_report_imbalanced(
+                    y_test, y_pred, labels=self.class_names
+                )
+            )
+            report = classification_report_imbalanced_values(
+                y_test, y_pred, labels=self.class_names
+            )
+
+            tracking_metrics["report"] = report
+
+        print_labeled_confusion_matrix(
+            confusion_matrix, self.class_names, is_multilabel=is_multilabel
         )
+
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-        labeled_confusion_matrix = get_labeled_confusion_matrix(
-            y_test, y_pred, self.class_names
-        )
-        print(labeled_confusion_matrix)
-
-        print(classification_report_imbalanced(y_test, y_pred, labels=self.class_names))
-        report = classification_report_imbalanced_values(
-            y_test, y_pred, labels=self.class_names
-        )
-
-        tracking_metrics["report"] = report
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
@@ -383,22 +406,35 @@ class Model:
                     continue
 
                 y_test_filter.append(y_test[i])
-                y_pred_filter.append(argmax)
+                if is_multilabel:
+                    y_pred_filter.append(y_pred[i])
+                else:
+                    y_pred_filter.append(argmax)
 
-            y_pred_filter = self.le.inverse_transform(y_pred_filter)
+            if not is_multilabel:
+                y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
             )
             if len(y_test_filter) != 0:
-                labeled_confusion_matrix = get_labeled_confusion_matrix(
-                    y_test_filter, y_pred_filter, self.class_names
-                )
-                print(labeled_confusion_matrix)
-                print(
-                    classification_report_imbalanced(
-                        y_test_filter, y_pred_filter, labels=self.class_names
+                if is_multilabel:
+                    confusion_matrix = metrics.multilabel_confusion_matrix(
+                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
                     )
+                else:
+                    confusion_matrix = metrics.confusion_matrix(
+                        np.asarray(y_test_filter),
+                        np.asarray(y_pred_filter),
+                        labels=self.class_names,
+                    )
+                    print(
+                        classification_report_imbalanced(
+                            y_test_filter, y_pred_filter, labels=self.class_names
+                        )
+                    )
+                print_labeled_confusion_matrix(
+                    confusion_matrix, self.class_names, is_multilabel=is_multilabel
                 )
 
         joblib.dump(self, self.__class__.__name__.lower())
