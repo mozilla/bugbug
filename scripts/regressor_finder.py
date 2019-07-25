@@ -100,22 +100,24 @@ class RegressorFinder(object):
         repository.clone(self.mercurial_repo_dir)
 
         logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
-        self.clone_git_repo()
+        self.clone_git_repo(self.git_repo_url, self.git_repo_dir)
+        logger.info(
+            f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
+        )
+        self.clone_git_repo(self.tokenized_git_repo_url, self.tokenized_git_repo_dir)
         logger.info(f"Initializing mapping between git and mercurial commits...")
         self.init_mapping()
 
-    def clone_git_repo(self):
-        if not os.path.exists(self.git_repo_dir):
+    def clone_git_repo(self, repo_url, repo_dir):
+        if not os.path.exists(repo_dir):
             retry(
-                lambda: subprocess.run(
-                    ["git", "clone", self.git_repo_url, self.git_repo_dir], check=True
-                )
+                lambda: subprocess.run(["git", "clone", repo_url, repo_dir], check=True)
             )
 
         retry(
             lambda: subprocess.run(
-                ["git", "pull", self.git_repo_url, "master"],
-                cwd=self.git_repo_dir,
+                ["git", "pull", repo_url, "master"],
+                cwd=repo_dir,
                 capture_output=True,
                 check=True,
             )
