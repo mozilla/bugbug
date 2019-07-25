@@ -1,0 +1,46 @@
+version: '3.2'
+services:
+  bugbug-base:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.base
+    image: mozilla/bugbug-base
+
+  bugbug-commit-retrieval:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.commit_retrieval
+    image: mozilla/bugbug-commit-retrieval
+    volumes:
+      - type: bind
+        source: ./cache/
+        target: /cache/
+        volume:
+          nocopy: true
+
+  bugbug-http-service:
+    build:
+      context: http_service
+    image: mozilla/bugbug-http-service
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+      - PORT=8000
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: host
+
+  bugbug-http-service-bg-worker:
+    build:
+      context: http_service
+      dockerfile: Dockerfile.bg_worker
+    image: mozilla/bugbug-http-service-bg-worker
+    environment:
+      - BUGBUG_BUGZILLA_TOKEN
+
+  bugbug-spawn-pipeline:
+    build:
+      context: infra/
+      dockerfile: dockerfile.spawn_pipeline
+    image: mozilla/bugbug-spawn-pipeline

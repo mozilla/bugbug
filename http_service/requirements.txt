@@ -1,0 +1,9 @@
+apispec-webframeworks==0.4.0
+apispec[yaml]==2.0.2
+flask-apispec==0.8.1
+flask-cors==3.0.8
+Flask==1.1.1
+gunicorn==19.9.0
+marshmallow==2.19.5
+rq-dashboard==0.5.2
+rq==1.1.0

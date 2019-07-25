@@ -1,0 +1,209 @@
+version: 1
+tasks:
+  $let:
+    year: {$eval: 'now[0:4]'}
+    month: {$eval: 'now[5:7]'}
+    day: {$eval: 'now[8:10]'}
+    hour: {$eval: 'now[11:13]'}
+    minute: {$eval: 'now[14:16]'}
+    second: {$eval: 'now[17:19]'}
+  in:
+    - ID: microannotate-generate-tokenize
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '72 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-wordified
+          - --tokenize
+        artifacts:
+          public/done:
+            path: /done
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate tokenized repository generator
+        description: bugbug microannotate tokenized repository generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: microannotate-generate-remove-comments
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '72 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-comments-removed
+          - --remove-comments
+        artifacts:
+          public/done:
+            path: /done
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate repository with comments removed generator
+        description: bugbug microannotate repository with comments removed generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: microannotate-generate-tokenize-and-remove-comments
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '72 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - --tokenize
+          - --remove-comments
+        artifacts:
+          public/done:
+            path: /done
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate tokenized repository with comments removed generator
+        description: bugbug microannotate tokenized repository with comments removed generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: regressor-finder
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svc-compute
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-regressor-finder
+          - /cache/
+          - https://github.com/mozilla/gecko-dev
+          - gecko-dev
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - gecko-dev-wordified-and-comments-removed
+        artifacts:
+          public/commits_to_ignore.csv:
+            path: /commits_to_ignore.csv
+            type: file
+          public/bug_fixing_commits.json.zst:
+            path: /bug_fixing_commits.json.zst
+            type: file
+          public/bug_fixing_commits.json.version:
+            path: /data/bug_fixing_commits.json.version
+            type: file
+          public/bug_introducing_commits.json.zst:
+            path: /bug_introducing_commits.json.zst
+            type: file
+          public/bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
+            type: file
+          public/tokenized_bug_introducing_commits.json.zst:
+            path: /bug_introducing_commits.json.zst
+            type: file
+          public/tokenized_bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder.latest
+      metadata:
+        name: bugbug regressor finder
+        description: bugbug regressor finder
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+
+    - ID: run-again
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '73 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: taskcluster-generic
+      dependencies:
+        - microannotate-generate-tokenize
+        - microannotate-generate-remove-comments
+        - microannotate-generate-tokenize-and-remove-comments
+        - regressor-finder
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-spawn-pipeline:${version}
+        command:
+          - python
+          - /code/trigger_again.py
+          - project-relman
+          - bugbug-annotate
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - hooks:trigger-hook:project-relman/bugbug-annotate
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug annotate pipeline rerunner
+        description: bugbug annotate pipeline rerunner
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml

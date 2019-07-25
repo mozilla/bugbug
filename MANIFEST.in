@@ -1,0 +1,10 @@
+include VERSION
+include requirements.txt
+include extra-nlp-requirements.txt
+include extra-nn-requirements.txt
+recursive-include bugbug/labels *
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude tests *
+recursive-exclude data *

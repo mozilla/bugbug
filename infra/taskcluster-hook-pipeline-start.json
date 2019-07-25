@@ -1,0 +1,68 @@
+{
+    "bindings": [
+        {
+            "exchange": "exchange/taskcluster-queue/v1/task-completed",
+            "routingKeyPattern": "route.project.relman.bugbug.deploy_ending"
+        }
+    ],
+    "schedule": [
+        "0 0 1,16 * *"
+    ],
+    "metadata": {
+        "description": "",
+        "name": "BugBug data pipeline",
+        "owner": "mcastelluccio@mozilla.com"
+    },
+    "task": {
+        "created": {
+            "$fromNow": "0 seconds"
+        },
+        "deadline": {
+            "$fromNow": "2 hours"
+        },
+        "expires": {
+            "$fromNow": "1 month"
+        },
+        "extra": {},
+        "metadata": {
+            "description": "",
+            "name": "BugBug data pipeline",
+            "owner": "mcastelluccio@mozilla.com",
+            "source": "https://github.com/mozilla/bugbug"
+        },
+        "payload": {
+            "artifacts": {},
+            "cache": {},
+            "capabilities": {},
+            "env": {},
+            "features": {
+                "taskclusterProxy": true
+            },
+            "command": [
+                "/usr/local/bin/python3",
+                "/code/spawn_data_pipeline.py",
+                "/code/data-pipeline.yml"
+            ],
+            "image": "mozilla/bugbug-spawn-pipeline",
+            "maxRunTime": 7200
+        },
+        "priority": "normal",
+        "provisionerId": "aws-provisioner-v1",
+        "retries": 5,
+        "routes": [
+            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
+            "notify.irc-channel.#bugbug.on-failed",
+            "index.project.relman.bugbug.data-pipeline-start"
+        ],
+        "schedulerId": "-",
+        "scopes": [
+            "assume:hook-id:project-relman/bugbug"
+        ],
+        "tags": {},
+        "workerType": "taskcluster-generic"
+    },
+    "triggerSchema": {
+        "additionalProperties": false,
+        "type": "object"
+    }
+}
