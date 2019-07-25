@@ -830,7 +830,6 @@ import copy
 import itertools
 import json
 import logging
-import multiprocessing
 import os
 import pickle
 import re
@@ -847,6 +846,8 @@ from bugbug import db, utils
 logger = logging.getLogger(__name__)
 
 
+hg_servers = list()
+hg_servers_lock = threading.Lock()
 thread_local = threading.local()
 
 COMMITS_DB = "data/commits.json"
@@ -975,7 +976,10 @@ def _init(repo_dir):
 
 
 def _init_thread():
-    thread_local.hg = hglib.open(".")
+    hg_server = hglib.open(".")
+    thread_local.hg = hg_server
+    with hg_servers_lock:
+        hg_servers.append(hg_server)
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
@@ -1505,13 +1509,18 @@ def hg_log_multi(repo_dir, revs):
     revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread, max_workers=multiprocessing.cpu_count() + 1
+        initializer=_init_thread, max_workers=os.cpu_count() + 1
     ) as executor:
         commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
 
     os.chdir(cwd)
+
+    while len(hg_servers) > 0:
+        hg_server = hg_servers.pop()
+        hg_server.close()
+
     return commits
 
 
@@ -1527,9 +1536,7 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
     hg.close()
 
-    processes = multiprocessing.cpu_count()
-
-    print(f"Mining {len(revs)} commits using {processes} processes...")
+    print(f"Mining {len(revs)} commits using {os.cpu_count()} processes...")
 
     commits = hg_log_multi(repo_dir, revs)
 
@@ -1547,7 +1554,7 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
     commits_num = len(commits)
 
-    print(f"Mining {commits_num} commits using {processes} processes...")
+    print(f"Mining {commits_num} commits using {os.cpu_count()} processes...")
 
     global rs_parsepatch
     import rs_parsepatch

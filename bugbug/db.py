@@ -295,7 +295,7 @@ def download(path, force=False, support_files_too=False):
 
         except requests.exceptions.HTTPError:
             print(f"{url} is not yet available to download")
-            raise
+            return
 
     extract_file(zst_path)
 

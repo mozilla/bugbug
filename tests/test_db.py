@@ -491,8 +491,8 @@ def test_download_missing(tmp_path):
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
-    with pytest.raises(requests.exceptions.HTTPError):
-        db.download(db_path)
+    db.download(db_path)
+    assert not os.path.exists(db_path)
 
     with pytest.raises(Exception, match="Last-Modified is not available"):
         db.last_modified(db_path)

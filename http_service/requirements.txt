@@ -11,12 +11,20 @@ rq==1.1.0
 ||||||| merged common ancestors
 =======
 apispec-webframeworks==0.4.0
-apispec[yaml]==2.0.0
-flask-apispec==0.8.0
-flask-cors
-Flask==1.0.3
+apispec[yaml]==2.0.2
+flask-apispec==0.8.1
+flask-cors==3.0.8
+Flask==1.1.1
 gunicorn==19.9.0
 marshmallow==2.19.5
+<<<<<<< HEAD
 rq-dashboard==0.5.1
 rq==1.0
 >>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a
+||||||| merged common ancestors
+rq-dashboard==0.5.1
+rq==1.0
+=======
+rq-dashboard==0.5.2
+rq==1.1.0
+>>>>>>> c42b1cc7bb1b7ae810cd8a02e5d76fe59bbbbdf7

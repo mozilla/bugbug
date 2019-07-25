@@ -248,16 +248,14 @@ class CommitClassifier(object):
             commits[-1], probabilities=True, importances=True
         )
 
-        feature_names = self.model.get_human_readable_feature_names()
-
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]
+            importance["importances"]["classes"][1][0]
         ):
             features.append(
                 [
                     i + 1,
-                    feature_names[int(feature_index)],
+                    importance["feature_legend"][str(i + 1)],
                     f'({"+" if (is_positive) else "-"}{val})',
                 ]
             )

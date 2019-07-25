@@ -30,12 +30,17 @@ requests==2.22.0
 imbalanced-learn==0.5.0
 python-hglib==2.6.1
 shap==0.29.3
-pandas==0.24.2
+pandas==0.25.0
 rs_parsepatch==0.2.2
 tqdm==4.32.2
 python-dateutil==2.8.0
 zstandard==0.11.1
-taskcluster==7.0.1
-microannotate==0.0.3
+taskcluster==15.0.0
+microannotate==0.0.10
 tabulate==0.8.3
+<<<<<<< HEAD
 >>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a
+||||||| merged common ancestors
+=======
+pydriller==1.9.1
+>>>>>>> c42b1cc7bb1b7ae810cd8a02e5d76fe59bbbbdf7

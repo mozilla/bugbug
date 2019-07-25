@@ -123,8 +123,11 @@ logger = getLogger(__name__)
 
 
 class MicroannotateGenerator(object):
-    def __init__(self, cache_root):
+    def __init__(self, cache_root, repo_url, tokenize, remove_comments):
         self.cache_root = cache_root
+        self.repo_url = repo_url
+        self.tokenize = tokenize
+        self.remove_comments = remove_comments
 
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
@@ -137,22 +140,21 @@ class MicroannotateGenerator(object):
         git_user = get_secret("GIT_USER")
         git_password = get_secret("GIT_PASSWORD")
 
-        repo_url = "https://github.com/marco-c/gecko-dev-wordified"
-        repo_push_url = (
-            f"https://{git_user}:{git_password}@github.com/marco-c/gecko-dev-wordified"
+        repo_push_url = self.repo_url.replace(
+            "https://", f"https://{git_user}:{git_password}@"
         )
-        git_repo_path = os.path.basename(repo_url)
+        git_repo_path = os.path.basename(self.repo_url)
 
         retry(
             lambda: subprocess.run(
-                ["git", "clone", repo_url, git_repo_path], check=True
+                ["git", "clone", self.repo_url, git_repo_path], check=True
             )
         )
 
         try:
             retry(
                 lambda: subprocess.run(
-                    ["git", "pull", repo_url, "master"],
+                    ["git", "pull", self.repo_url, "master"],
                     cwd=git_repo_path,
                     capture_output=True,
                     check=True,
@@ -163,7 +165,13 @@ class MicroannotateGenerator(object):
             if b"Couldn't find remote ref master" in e.stdout:
                 pass
 
-        done = generator.generate(self.repo_dir, git_repo_path, limit=10000)
+        done = generator.generate(
+            self.repo_dir,
+            git_repo_path,
+            limit=20000,
+            tokenize=self.tokenize,
+            remove_comments=self.remove_comments,
+        )
 
         with open("done", "w") as f:
             f.write(str(1 if done else 0))
@@ -185,10 +193,22 @@ def main():
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("cache-root", help="Cache for repository clones.")
+    parser.add_argument("repo-url", help="Mirror repository URL.")
+    parser.add_argument(
+        "--tokenize", help="Enable word-level tokenization.", action="store_true"
+    )
+    parser.add_argument(
+        "--remove-comments", help="Enable comment removal.", action="store_true"
+    )
 
     args = parser.parse_args()
 
-    generator = MicroannotateGenerator(getattr(args, "cache-root"))
+    generator = MicroannotateGenerator(
+        getattr(args, "cache-root"),
+        getattr(args, "repo-url"),
+        args.tokenize,
+        args.remove_comments,
+    )
 
     generator.generate()
 >>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a
