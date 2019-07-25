@@ -851,11 +851,7 @@ class RegressorFinder(object):
 
         def mercurial_to_git(rev):
             if tokenized:
-                return (
-                    self.mercurial_to_tokenized_git[rev]
-                    if rev in self.mercurial_to_tokenized_git
-                    else ""
-                )
+                return self.mercurial_to_tokenized_git[rev]
             else:
                 return vcs_map.mercurial_to_git(rev)
 
@@ -880,7 +876,7 @@ class RegressorFinder(object):
             f.writelines(
                 "{}\n".format(mercurial_to_git(commit["rev"]))
                 for commit in commits_to_ignore
-                if mercurial_to_git(commit["rev"]) != ""
+                if not tokenized or commit["rev"] in self.mercurial_to_tokenized_git
             )
 
         logger.info(f"{len(bug_fixing_commits)} commits to analyze")
@@ -905,14 +901,15 @@ class RegressorFinder(object):
             f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones in the ignore list"
         )
 
-        bug_fixing_commits = [
-            bug_fixing_commit
-            for bug_fixing_commit in bug_fixing_commits
-            if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
-        ]
-        logger.info(
-            f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
-        )
+        if tokenized:
+            bug_fixing_commits = [
+                bug_fixing_commit
+                for bug_fixing_commit in bug_fixing_commits
+                if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
+            ]
+            logger.info(
+                f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
+            )
 
         def _init(git_repo_dir):
             global GIT_REPO
