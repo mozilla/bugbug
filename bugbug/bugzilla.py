@@ -104,7 +104,9 @@ def get_ids(params):
     return all_ids
 
 
-def get(ids_or_query):
+def get(
+    ids_or_query, download_comment=True, download_attachment=True, download_history=True
+):
     new_bugs = {}
 
     def bughandler(bug):
@@ -142,11 +144,11 @@ def get(ids_or_query):
     Bugzilla(
         ids_or_query,
         bughandler=bughandler,
-        commenthandler=commenthandler,
+        commenthandler=download_comment and commenthandler or None,
         comment_include_fields=COMMENT_INCLUDE_FIELDS,
-        attachmenthandler=attachmenthandler,
+        attachmenthandler=download_attachment and attachmenthandler or None,
         attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
-        historyhandler=historyhandler,
+        historyhandler=download_history and historyhandler or None,
     ).get_data().wait()
 
     return new_bugs
