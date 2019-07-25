@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 taskcluster==15.0.0
 json-e==3.0.0
 requests==2.22.0
 pyyaml==5.1.1
+||||||| merged common ancestors
+=======
+taskcluster==7.0.1
+json-e==3.0.0
+requests==2.22.0
+pyyaml==5.1.1
+>>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a

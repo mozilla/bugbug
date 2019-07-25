@@ -1,6 +1,16 @@
+<<<<<<< HEAD
 pytest==5.0.1
 pytest-cov==2.7.1
 coverage==4.5.3
 pre-commit==1.17.0
 responses==0.10.6
 jsonschema==3.0.1
+||||||| merged common ancestors
+=======
+pytest==5.0.0
+pytest-cov==2.7.1
+coverage==4.5.3
+pre-commit==1.17.0
+responses==0.10.6
+jsonschema==3.0.1
+>>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a

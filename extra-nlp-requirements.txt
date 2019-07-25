@@ -1,3 +1,10 @@
+<<<<<<< HEAD
 spacy==2.1.6
 gensim==3.8.0
 nltk==3.4.4
+||||||| merged common ancestors
+=======
+spacy==2.1.4
+gensim==3.7.3
+nltk==3.4.4
+>>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a

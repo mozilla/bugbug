@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 FROM mozilla/bugbug-base:latest
 
 COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
@@ -25,3 +26,21 @@ ENV PATH="${PATH}:/depot_tools"
 COPY infra/hgrc /root/.hgrc
 
 CMD bugbug-data-commits /cache/
+||||||| merged common ancestors
+=======
+FROM mozilla/bugbug-base:latest
+
+# Mercurial need Python2 :(
+# git is required by the annotate pipeline.
+RUN apt-get update && \
+    apt-get install -y python python-pip git && \
+    python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
+    hg clone -r 6cd994e30bb1 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    apt-get purge -y python-pip && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /version-control-tools/.hg
+
+COPY infra/hgrc /root/.hgrc
+
+CMD bugbug-data-commits /cache/
+>>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a
