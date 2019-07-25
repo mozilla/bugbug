@@ -898,8 +898,8 @@ def product(product):
         "Firefox OS": "Firefox OS Graveyard",
         "Add-on SDK": "Add-on SDK Graveyard",
         "Connected Devices": "Connected Devices Graveyard",
-        "Seamonkey": "Mozilla Application Suite",
-        "SeaMonkey": "Mozilla Application Suite",
+        "Seamonkey": "SeaMonkey",
+        "Mozilla Application Suite": "SeaMonkey",
     }
 
     return mapping[product] if product in mapping else product
@@ -944,17 +944,6 @@ FIELD_TYPES = {
 
 def is_email(val):
     return isinstance(val, str) and "@" in val
-
-
-def parse_flag_change(change):
-    parts = change.split("(")
-    assert len(parts) == 1 or len(parts) == 2, f"Too many parts for {change}"
-    name_and_status = parts[0]
-    name = name_and_status[:-1]
-    status = name_and_status[-1]
-    assert status in ["?", "+", "-"], f"unexpected status: {status}"
-    requestee = None if len(parts) != 2 else parts[1][:-1]
-    return name, status, requestee
 
 
 def is_expected_inconsistent_field(field, last_product, bug_id):
@@ -1283,6 +1272,22 @@ def rollback(bug, when=None, do_assert=False):
         else:
             print(msg)
 
+    def parse_flag_change(change):
+        parts = change.split("(")
+        if len(parts) != 1 and len(parts) != 2:
+            assert_or_log(f"Too many parts for {change}")
+            return None, None, None
+
+        name_and_status = parts[0]
+        name = name_and_status[:-1]
+        status = name_and_status[-1]
+        if status not in ["?", "+", "-"]:
+            assert_or_log(f"unexpected status: {status}")
+            return None, None, None
+
+        requestee = None if len(parts) != 2 else parts[1][:-1]
+        return name, status, requestee
+
     last_product = bug["product"]
 
     change_to_return = None
@@ -1416,9 +1421,12 @@ def rollback(bug, when=None, do_assert=False):
                                 and (requestee is None or f["requestee"] == requestee)
                             ):
                                 if found_flag is not None:
-                                    assert_or_log(
-                                        f'{f["name"]}{f["status"]}{f["requestee"]} found twice!'
-                                    )
+                                    flag_text = "{}{}".format(f["name"], f["status"])
+                                    if "requestee" in f:
+                                        flag_text = "{}{}".format(
+                                            flag_text, f["requestee"]
+                                        )
+                                    assert_or_log(f"{flag_text} found twice!")
                                 found_flag = f
 
                         if found_flag is not None:

@@ -54,12 +54,8 @@ def get_all_bug_ids():
 import csv
 import os
 import sys
-from datetime import datetime
 
-import dateutil.parser
-from dateutil.relativedelta import relativedelta
-
-from bugbug import repository, utils
+from bugbug import utils
 
 LABELS_URLS = {
     "regressor": "https://github.com/marco-c/mozilla-central-regressors/raw/master/regressor.csv"
@@ -93,13 +89,6 @@ def get_all_bug_ids():
                 continue
 
             bug_ids.update([int(row["bug_id"]) for row in reader])
-
-    start_date = datetime.now() - relativedelta(years=2, months=6)
-    bug_ids.update(
-        commit["bug_id"]
-        for commit in repository.get_commits()
-        if commit["bug_id"] and dateutil.parser.parse(commit["pushdate"]) >= start_date
-    )
 
     return list(bug_ids)
 >>>>>>> 331aa50f1fa5e142bd0870ede25721c8bda6a54a
