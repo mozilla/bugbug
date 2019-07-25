@@ -1,0 +1,30 @@
+diff --git a/git_hyper_blame.py b/git_hyper_blame.py
+index 3e085134..612a0bb5 100755
+--- a/git_hyper_blame.py
++++ b/git_hyper_blame.py
+@@ -143,7 +143,7 @@ def pretty_print(parsedblame, show_filenames=False, out=sys.stdout):
+   for line in parsedblame:
+     author_time = git_dates.timestamp_offset_to_datetime(
+         line.commit.author_time, line.commit.author_tz)
+-    row = [line.commit.commithash[:8],
++    row = [line.commit.commithash,
+            '(' + line.commit.author,
+            git_dates.datetime_string(author_time),
+            str(line.lineno_now) + ('*' if line.modified else '') + ')',
+@@ -381,13 +381,13 @@ def main(args, stdout=sys.stdout, stderr=sys.stderr):
+   if args.ignore_file:
+     ignored_list.extend(parse_ignore_file(args.ignore_file))
+
+-  ignored = set()
+-  for c in ignored_list:
++  ignored = set(ignored_list)
++  '''for c in ignored_list:
+     try:
+       ignored.add(git_common.hash_one(c))
+     except subprocess2.CalledProcessError as e:
+       # Custom warning string (the message from git-rev-parse is inappropriate).
+-      stderr.write('warning: unknown revision \'%s\'.\n' % c)
++      stderr.write('warning: unknown revision \'%s\'.\n' % c)'''
+
+   return hyper_blame(ignored, filename, args.revision, out=stdout, err=stderr)
+

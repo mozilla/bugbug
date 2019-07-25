@@ -132,7 +132,10 @@ tasks:
         command:
           - bugbug-regressor-finder
           - /cache/
+          - https://github.com/mozilla/gecko-dev
           - gecko-dev
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - gecko-dev-wordified-and-comments-removed
         artifacts:
           public/commits_to_ignore.csv:
             path: /commits_to_ignore.csv
@@ -140,8 +143,20 @@ tasks:
           public/bug_fixing_commits.json.zst:
             path: /bug_fixing_commits.json.zst
             type: file
+          public/bug_fixing_commits.json.version:
+            path: /data/bug_fixing_commits.json.version
+            type: file
           public/bug_introducing_commits.json.zst:
             path: /bug_introducing_commits.json.zst
+            type: file
+          public/bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
+            type: file
+          public/tokenized_bug_introducing_commits.json.zst:
+            path: /bug_introducing_commits.json.zst
+            type: file
+          public/tokenized_bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
             type: file
         cache:
           bugbug-mercurial-repository: /cache
