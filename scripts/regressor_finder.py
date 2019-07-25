@@ -41,21 +41,21 @@ BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
     BUG_FIXING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
-    3,
+    2,
 )
 
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
 db.register(
     BUG_INTRODUCING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
-    3,
+    1,
 )
 
 TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
 db.register(
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
-    3,
+    1,
 )
 
 
