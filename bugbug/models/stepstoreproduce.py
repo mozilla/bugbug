@@ -66,7 +66,7 @@ class StepsToReproduceModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in itertools.islice(bugzilla.get_bugs(), 50000):
+        for bug_data in itertools.islice(bugzilla.get_bugs(), 100000):
             classes[int(bug_data["id"])] = 0
             for entry in bug_data["history"]:
                 for change in entry["changes"]:
