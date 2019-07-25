@@ -398,7 +398,7 @@ class Model:
         )
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-
+        return
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)

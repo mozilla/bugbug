@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import xgboost
+import itertools
+
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -11,6 +12,7 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
+from bugbug.pulearning import PUClassifier
 
 
 class StepsToReproduceModel(BugModel):
@@ -18,6 +20,7 @@ class StepsToReproduceModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         self.sampler = RandomUnderSampler(random_state=0)
+        self.calculate_importance = False
 
         feature_extractors = [
             bug_features.has_regression_range(),
@@ -58,25 +61,20 @@ class StepsToReproduceModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor="cpu_predictor")
+        self.clf = PUClassifier(n_jobs=-1)
 
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
+        for bug_data in itertools.islice(bugzilla.get_bugs(), 50000):
+            classes[int(bug_data["id"])] = 0
+            for entry in bug_data["history"]:
+                for change in entry["changes"]:
+                    if change["removed"].startswith("stepswanted"):
+                        classes[int(bug_data["id"])] = 1
             if "cf_has_str" in bug_data:
-                if bug_data["cf_has_str"] == "no":
-                    classes[int(bug_data["id"])] = 0
-                elif bug_data["cf_has_str"] == "yes":
+                if bug_data["cf_has_str"] == "yes":
                     classes[int(bug_data["id"])] = 1
-            elif "stepswanted" in bug_data["keywords"]:
-                classes[int(bug_data["id"])] = 0
-            else:
-                for entry in bug_data["history"]:
-                    for change in entry["changes"]:
-                        if change["removed"].startswith("stepswanted"):
-                            classes[int(bug_data["id"])] = 1
 
         print(
             "{} bugs have no steps to reproduce".format(
