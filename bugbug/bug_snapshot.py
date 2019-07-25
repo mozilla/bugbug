@@ -603,9 +603,12 @@ def rollback(bug, when=None, do_assert=False):
                                 and (requestee is None or f["requestee"] == requestee)
                             ):
                                 if found_flag is not None:
-                                    assert_or_log(
-                                        f'{f["name"]}{f["status"]}{f["requestee"]} found twice!'
-                                    )
+                                    flag_text = "{}{}".format(f["name"], f["status"])
+                                    if "requestee" in f:
+                                        flag_text = "{}{}".format(
+                                            flag_text, f["requestee"]
+                                        )
+                                    assert_or_log(f"{flag_text} found twice!")
                                 found_flag = f
 
                         if found_flag is not None:
