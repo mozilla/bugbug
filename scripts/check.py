@@ -9,7 +9,7 @@ from urllib.request import urlretrieve
 import zstandard
 
 from bugbug.models import load_model
-
+from bugbug.utils import decompress
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
@@ -18,11 +18,8 @@ def download_model(model_url, file_path):
     logger.info(f"Downloading model from {model_url!r} and save it in {file_path!r}")
     urlretrieve(model_url, f"{file_path}.zst")
 
-    dctx = zstandard.ZstdDecompressor()
-    with open(f"{file_path}.zst", "rb") as input_f:
-        with open(file_path, "wb") as output_f:
-            dctx.copy_stream(input_f, output_f)
-            logger.info(f"Written model in {file_path}")
+    decompress(file_path)
+    logger.info(f"Written model in {file_path}")
 
 
 class ModelChecker:
@@ -31,7 +28,7 @@ class ModelChecker:
         download_url = os.getenv("MODEL_DOWNLOAD_URL")
 
         if should_download_model and download_url:
-            download_url = download_model(download_url, f"{model_name}model")
+            download_model(download_url, f"{model_name}model")
 
         # Load the model
         model = load_model(model_name)

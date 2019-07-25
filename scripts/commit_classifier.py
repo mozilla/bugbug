@@ -12,7 +12,7 @@ from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
-from bugbug.utils import download_check_etag, get_secret
+from bugbug.utils import download_check_etag, get_secret, decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -29,10 +29,7 @@ class CommitClassifier(object):
 
         if not os.path.exists("regressormodel"):
             download_check_etag(URL, "regressormodel.zst")
-            dctx = zstandard.ZstdDecompressor()
-            with open("regressormodel.zst", "rb") as input_f:
-                with open("regressormodel", "wb") as output_f:
-                    dctx.copy_stream(input_f, output_f)
+            decompress("regressormodel.zst")
             assert os.path.exists("regressormodel"), "Decompressed file exists"
 
         self.model = RegressorModel.load("regressormodel")

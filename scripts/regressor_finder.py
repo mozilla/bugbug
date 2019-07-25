@@ -25,7 +25,7 @@ from tqdm import tqdm
 from bugbug import bugzilla, db, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
-from bugbug.utils import download_check_etag, retry
+from bugbug.utils import download_check_etag, retry, compress, decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -62,11 +62,7 @@ db.register(
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_name}model.zst"
 
 
-def compress_file(path):
-    cctx = zstandard.ZstdCompressor()
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
+
 
 
 def download_model(model_name):
@@ -74,10 +70,7 @@ def download_model(model_name):
         url = BASE_URL.format(model_name=model_name)
         logger.info(f"Downloading {url}...")
         download_check_etag(url, f"{model_name}model.zst")
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{model_name}model.zst", "rb") as input_f:
-            with open(f"{model_name}model", "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
+        decompress(f"{model_name}model.zst")
         assert os.path.exists(f"{model_name}model"), "Decompressed file exists"
 
 
@@ -272,7 +265,7 @@ class RegressorFinder(object):
                 append_bug_fixing_commits(bug["id"], "e")
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
-        compress_file(BUG_FIXING_COMMITS_DB)
+        compress(BUG_FIXING_COMMITS_DB)
 
         bug_fixing_commits = prev_bug_fixing_commits + bug_fixing_commits
         return [
@@ -402,9 +395,7 @@ class RegressorFinder(object):
 
             return bug_introducing_commits
 
-        with concurrent.futures.ThreadPoolExecutor(
-            initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
-        ) as executor:
+        with concurrent.futures.ThreadPoolExecutor(initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1) as executor:
             bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)
             bug_introducing_commits = tqdm(
                 bug_introducing_commits, total=len(bug_fixing_commits)
@@ -420,7 +411,7 @@ class RegressorFinder(object):
         )
 
         db.append(db_path, bug_introducing_commits)
-        compress_file(db_path)
+        compress(db_path)
 
 
 def evaluate(bug_fixing_commits, bug_introducing_commits):
