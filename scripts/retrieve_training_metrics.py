@@ -3,7 +3,6 @@
 import argparse
 import logging
 import sys
-from os.path import abspath
 
 import requests
 import taskcluster
@@ -88,7 +87,7 @@ def get_task_metrics_from_date(model, version, date):
             r = get_task_metrics_from_uri(task_uri)
 
             # Write the file on disk
-            file_path = f"metric_{task_uri}.json"
+            file_path = f"metric_{'_'.join(task_uri.split('.'))}.json"
             with open(file_path, "w") as metric_file:
                 metric_file.write(r.text)
             LOGGER.info(f"Metrics saved to {file_path!r}")
@@ -115,43 +114,16 @@ def main():
         "version",
         nargs="?",
         help="Which bugbug version should we retrieve training metrics from.",
-        default=None,
     )
     parser.add_argument(
         "date",
         nargs="?",
         help="Which date should we retrieve training metrics from. Default to latest",
-        default=None,
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        help="Where to output the metrics.json file. Default to printing its content",
-        default=None,
     )
 
     args = parser.parse_args()
 
-    if False:
-        if not args.version:
-            index_uri = LATEST_URI.format(args.model)
-        elif not args.date:
-            index_uri = VERSIONED_URI.format(args.model, args.version)
-        else:
-            index_uri = DATED_VERSIONED_URI.format(args.model, args.version, args.date)
-
-        r = get_task_metrics_from_uri(PROJECT_PREFIX.format(index_uri))
-
-        if args.output:
-            file_path = abspath(args.output)
-            with open(file_path, "w") as output_file:
-                output_file.write(r.text)
-            LOGGER.info(f"Metrics saved to {file_path!r}")
-        else:
-            print(r.text)
-
-    else:
-        get_task_metrics_from_date(args.model, args.version, args.date)
+    get_task_metrics_from_date(args.model, args.version, args.date)
 
 
 if __name__ == "__main__":
