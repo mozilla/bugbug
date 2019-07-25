@@ -80,8 +80,8 @@ def product(product):
         "Firefox OS": "Firefox OS Graveyard",
         "Add-on SDK": "Add-on SDK Graveyard",
         "Connected Devices": "Connected Devices Graveyard",
-        "Seamonkey": "Mozilla Application Suite",
-        "SeaMonkey": "Mozilla Application Suite",
+        "Seamonkey": "SeaMonkey",
+        "Mozilla Application Suite": "SeaMonkey",
     }
 
     return mapping[product] if product in mapping else product
