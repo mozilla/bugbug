@@ -19,9 +19,10 @@ from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
-from bugbug import bugzilla, get_bugbug_version
+from bugbug import get_bugbug_version
 
 from .models import MODELS_NAMES, change_time_key, classify_bug, result_key
+from .utils import get_bugzilla_http_client
 
 API_TOKEN = "X-Api-Key"
 
@@ -50,6 +51,9 @@ redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)  # no args implies the default queue
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
+
+# Keep an HTTP client around for persistent connections
+HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -124,22 +128,30 @@ def is_running(model_name, bug_id):
 
     job_status = job.get_status()
     if job_status in ("running", "started", "queued"):
-        print("Bug classification already running", model_name, bug_id)
         return True
 
     return False
 
 
-def get_bug_ids_last_change_time(bug_ids):
+def get_bugs_last_change_time(bug_ids):
     query = {"id": bug_ids, "include_fields": ["last_change_time", "id"]}
-    bug = bugzilla.get(
-        query, download_comment=False, download_attachment=False, download_history=False
+    header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
+    response = HTTP_CLIENT.get(
+        BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
     )
+    response.raise_for_status()
 
-    return bug
+    raw_bugs = response.json()
+
+    bugs = {}
+
+    for bug in raw_bugs["bugs"]:
+        bugs[bug["id"]] = bug["last_change_time"]
+
+    return bugs
 
 
-def check_bug_updated_since_last_cached(model_name, bug_id, change_time):
+def is_prediction_invalidated(model_name, bug_id, change_time):
     # First get the saved change time
     change_key = change_time_key(model_name, bug_id)
 
@@ -156,11 +168,12 @@ def check_bug_updated_since_last_cached(model_name, bug_id, change_time):
     return saved_change_time.decode("utf-8") != change_time
 
 
-def check_bug_updated_and_clean(model_name, bug_id, change_time):
-    if check_bug_updated_since_last_cached(model_name, bug_id, change_time):
-        # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-        redis_conn.delete(result_key(model_name, bug_id))
-        redis_conn.delete(change_time_key(model_name, bug_id))
+def clean_prediction_cache(model_name, bug_id):
+    # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
+    LOGGER.debug("Cleaning results for bug id %d and model %s", bug_id, model_name)
+
+    redis_conn.delete(result_key(model_name, bug_id))
+    redis_conn.delete(change_time_key(model_name, bug_id))
 
 
 def get_bug_classification(model_name, bug_id):
@@ -223,9 +236,10 @@ def model_prediction(model_name, bug_id):
         LOGGER.info("Request with API TOKEN %r", auth)
 
     # Get the latest change from Bugzilla for the bug
-    bug = get_bug_ids_last_change_time([bug_id])
+    bug = get_bugs_last_change_time([bug_id], auth)
 
-    check_bug_updated_and_clean(model_name, bug_id, bug[bug_id]["last_change_time"])
+    if is_prediction_invalidated(model_name, bug_id, bug[bug_id]):
+        clean_prediction_cache(model_name, bug_id)
 
     status_code = 200
     data = get_bug_classification(model_name, bug_id)
@@ -371,16 +385,14 @@ def batch_prediction(model_name):
     data = {}
     missing_bugs = []
 
-    bug_change_dates = get_bug_ids_last_change_time(bugs)
+    bug_change_dates = get_bugs_last_change_time(bugs)
 
     for bug_id in bugs:
 
         change_time = bug_change_dates.get(int(bug_id), None)
         # Change time could be None if it's a security bug
-        if change_time:
-            check_bug_updated_and_clean(
-                model_name, bug_id, change_time["last_change_time"]
-            )
+        if change_time and is_prediction_invalidated(model_name, bug_id, change_time):
+            clean_prediction_cache(model_name, bug_id)
 
         data[str(bug_id)] = get_bug_classification(model_name, bug_id)
         if not data[str(bug_id)]:
@@ -390,7 +402,6 @@ def batch_prediction(model_name):
             data[str(bug_id)] = {"ready": False}
 
     if missing_bugs:
-        print("Scheduling call for missing bugs")
         # TODO: We should probably schedule chunks of bugs to avoid jobs that
         # are running for too long and reduce pressure on bugzilla, it mights
         # not like getting 1 million bug at a time
