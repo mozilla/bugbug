@@ -27,8 +27,11 @@ def keyword_mapping(keyword):
         "ateam-marionette-server": "pi-marionette-server",
         "ateam-marionette-client": "pi-marionette-client",
         "ateam-marionette-intermittent": "pi-marionette-intermittent",
+        "ateam-marionette-harness-tests": "pi-marionette-harness-tests",
+        "ateam-marionette-spec": "pi-marionette-spec",
         "csec-dos": "csectype-dos",
         "csec-oom": "csectype-oom",
+        "csec-bounds": "csectype-bounds",
         "bug-quality": "bmo-bug-quality",
     }
 
@@ -66,6 +69,8 @@ def op_sys(op_sys):
 def platform(platform):
     if platform == "Macintosh":
         return "PowerPC"
+    elif platform == "PC":
+        return "x86"
 
     return platform
 
@@ -82,6 +87,8 @@ def product(product):
         "Connected Devices": "Connected Devices Graveyard",
         "Seamonkey": "SeaMonkey",
         "Mozilla Application Suite": "SeaMonkey",
+        "Mozilla Services": "Cloud Services",
+        "Browser": "Core",
     }
 
     return mapping[product] if product in mapping else product
@@ -132,13 +139,14 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
     # TODO: Remove the Graveyard case when https://bugzilla.mozilla.org/show_bug.cgi?id=1541926 is fixed.
     return (
         (field.startswith("cf_") and last_product == "Firefox for Android Graveyard")
+        or (field == "cf_status_firefox_esr52" and bug_id == 1280099)
         or (
             field == "cf_status_firefox57"
             and bug_id
             in (1382577, 1382605, 1382606, 1382607, 1382609, 1394996, 1406290, 1407347)
         )
-        or (field == "cf_status_firefox58" and bug_id in (1328936, 1394996))
-        or (field == "cf_status_firefox59" and bug_id in (1328936, 1394996))
+        or (field == "cf_status_firefox58" and bug_id in {1280099, 1328936, 1394996})
+        or (field == "cf_status_firefox59" and bug_id in {1280099, 1328936, 1394996})
         or (
             field == "cf_tracking_firefox59"
             and bug_id in (1328936, 1394996, 1_443_367, 1_443_630)
@@ -160,6 +168,7 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
                 1_443_615,
                 1_443_617,
                 1_443_644,
+                1443466,
             ]
         )
         or (field in ["cf_has_str", "cf_has_regression_range"] and bug_id == 1_440_338)
@@ -180,6 +189,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             field == "url"
             and bug_id
             in (
+                380637,
                 740_223,
                 1326518,
                 1335350,
@@ -192,6 +202,10 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             )
         )
         or (field == "severity" and new_value == "enhancement")
+        or (field == "cf_blocking_20" and bug_id == 380637)
+        or (field == "cf_blocking_191" and bug_id == 607222)
+        or (field == "cf_blocking_192" and bug_id == 607222)
+        or (field == "cf_status_firefox_esr45" and bug_id == 1292534)
         or (
             field == "cf_status_firefox_esr52"
             and bug_id in [1_436_341, 1_443_518, 1_443_637]
@@ -266,6 +280,8 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             field == "cf_status_firefox60"
             and bug_id
             in [
+                851471,
+                1280099,
                 1_362_303,
                 1_363_862,
                 1_375_913,
@@ -306,10 +322,14 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
                 1_443_650,
                 1_443_651,
                 1_443_664,
+                1442543,
+                1443180,
+                1443446,
+                1443522,
             ]
         )
         or (field == "cf_tracking_firefox60" and bug_id in [1_375_913, 1_439_875])
-        or (field == "priority" and bug_id == 1_337_747)
+        or (field == "priority" and bug_id in {1215089, 1_337_747})
         or (
             field == "type" and bug_id == 1540796
         )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550120 is fixed.
@@ -360,6 +380,10 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             in (1362789, 1364792, 1431604, 1437528, 1445898, 1446685, 1460828, 1494587)
         )
         or (field in ("platform", "op_sys") and bug_id == 568516)
+        or (
+            field == "target_milestone"
+            and bug_id in {19462, 106327, 107264, 144795, 306730}
+        )
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -379,10 +403,18 @@ def is_expected_inconsistent_change_list_field(field, bug_id, value):
             in [
                 "patch",
                 "nsbeta1",
+                "nsbeta1+",
+                "nsbeta3",
                 "mozilla1.1",
                 "mozilla1.0",
                 "4xp",
                 "sec-review-complete",
+                "beta1",
+                "beta2",
+                "mozilla0.9",
+                "verified1.0.1",
+                "fixed1.9.0.10",
+                "adt1.0.1+",
             ]
         )  # These keywords don't exist anymore.
         or is_email(
@@ -400,11 +432,34 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
             and obj_id
             in [1_318_438, 1_312_852, 1_332_255, 1_344_690, 1_362_387, 1_380_306]
         )
-        or (flag == "in-testsuite-" and obj_id in [1321444, 1342431, 1370129])
+        or (flag == "in-testsuite-" and obj_id in {906177, 1321444, 1342431, 1370129})
         or (
             flag == "checkin+"
             and obj_id
-            in [8880381, 8879995, 8872652, 8871000, 8870452, 8870505, 8864140, 8868787]
+            in {
+                8795236,
+                8795632,
+                8791622,
+                8794855,
+                8795623,
+                8792801,
+                8791937,
+                8795246,
+                8795282,
+                8786330,
+                8786345,
+                8787093,
+                8795228,
+                8795333,
+                8880381,
+                8879995,
+                8872652,
+                8871000,
+                8870452,
+                8870505,
+                8864140,
+                8868787,
+            }
         )
         or (flag == "checkin-" and obj_id == 8924974)
         or (
@@ -429,6 +484,7 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
             flag == "qe-verify-"
             and obj_id
             in [
+                1282408,
                 1322685,
                 1336510,
                 1363358,
@@ -442,7 +498,20 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
             ]
         )
         or (flag == "approval-comm-beta+" and obj_id == 8972248)
-        or (flag in ["platform-rel?", "blocking0.3-"])  # These flags have been removed.
+        or (
+            flag
+            in [
+                "platform-rel?",
+                "blocking0.3-",
+                "blocking-aviary1.0RC1-",
+                "blocking-firefox3.1-",
+                "blocking1.9+",
+                "blocking1.9.0.3?",
+                "blocking1.9.0.10+",
+                "wanted-firefox3.1?",
+                "approval1.9.0.10+",
+            ]
+        )  # These flags have been removed.
     )
 
 
@@ -579,7 +648,8 @@ def rollback(bug, when=None, do_assert=False):
                         change["added"] = change["added"][:-2]
 
                     for to_remove in change["added"].split(", "):
-                        if any(
+                        # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
+                        is_question_flag = any(
                             to_remove.startswith(s)
                             for s in [
                                 "needinfo",
@@ -588,10 +658,10 @@ def rollback(bug, when=None, do_assert=False):
                                 "ui-review",
                                 "sec-approval",
                                 "sec-review",
+                                "data-review",
+                                "approval-mozilla-",
                             ]
-                        ):
-                            # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
-                            continue
+                        )
 
                         name, status, requestee = parse_flag_change(to_remove)
 
@@ -600,9 +670,14 @@ def rollback(bug, when=None, do_assert=False):
                             if (
                                 f["name"] == name
                                 and f["status"] == status
-                                and (requestee is None or f["requestee"] == requestee)
+                                and (
+                                    requestee is None
+                                    or (
+                                        "requestee" in f and f["requestee"] == requestee
+                                    )
+                                )
                             ):
-                                if found_flag is not None:
+                                if found_flag is not None and not is_question_flag:
                                     flag_text = "{}{}".format(f["name"], f["status"])
                                     if "requestee" in f:
                                         flag_text = "{}{}".format(
@@ -613,16 +688,19 @@ def rollback(bug, when=None, do_assert=False):
 
                         if found_flag is not None:
                             obj["flags"].remove(found_flag)
-                        elif not is_expected_inconsistent_change_flag(
-                            to_remove, obj["id"]
+                        elif (
+                            not is_expected_inconsistent_change_flag(
+                                to_remove, obj["id"]
+                            )
+                            and not is_question_flag
                         ):
                             assert_or_log(
                                 f"flag {to_remove} not found, in obj {obj['id']}"
                             )
 
                 if change["removed"]:
-                    # Inconsistent review flag.
-                    if bug["id"] == 1_342_178:
+                    # Inconsistent review and needinfo flags.
+                    if bug["id"] in [785931, 1_342_178]:
                         continue
 
                     # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
