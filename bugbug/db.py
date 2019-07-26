@@ -23,9 +23,7 @@ def register(path, url, version, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
     # Create DB parent directory.
-    parent_dir = os.path.dirname(path)
-    if not os.path.exists(parent_dir):
-        os.makedirs(parent_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
     if not os.path.exists(f"{path}.version"):
         with open(f"{path}.version", "w") as f:
