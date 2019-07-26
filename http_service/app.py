@@ -160,7 +160,7 @@ def is_prediction_invalidated(model_name, bug_id, change_time):
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.get(result_key(model_name, bug_id)):
+        if redis_conn.exists(result_key(model_name, bug_id)):
             return True
 
         return False
@@ -170,7 +170,7 @@ def is_prediction_invalidated(model_name, bug_id, change_time):
 
 def clean_prediction_cache(model_name, bug_id):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-    LOGGER.debug("Cleaning results for bug id %d and model %s", bug_id, model_name)
+    LOGGER.debug("Cleaning results for bug id %s and model %s", bug_id, model_name)
 
     redis_conn.delete(result_key(model_name, bug_id))
     redis_conn.delete(change_time_key(model_name, bug_id))
