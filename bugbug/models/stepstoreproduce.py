@@ -3,9 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import itertools
-
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -19,7 +16,6 @@ class StepsToReproduceModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = RandomUnderSampler(random_state=0)
         self.calculate_importance = False
 
         feature_extractors = [
@@ -66,7 +62,7 @@ class StepsToReproduceModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in itertools.islice(bugzilla.get_bugs(), 100000):
+        for bug_data in bugzilla.get_bugs():
             classes[int(bug_data["id"])] = 0
             for entry in bug_data["history"]:
                 for change in entry["changes"]:
