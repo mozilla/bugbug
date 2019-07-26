@@ -27,7 +27,7 @@ def zstd_compress(path):
     with open(path, 'rb') as fh:
         with cctx.stream_reader(fh) as reader:
             while True:
-                chunk = reader.read(16384)
+                chunk = reader.read()
                 if not chunk:
                     break
                 with open(path,'wb') as f:
@@ -38,7 +38,7 @@ def zstd_decompress(path):
         dctx = zstandard.ZstdDecompressor()
         reader = dctx.stream_reader(fh)
         while True:
-            chunk = reader.read(16384)
+            chunk = reader.read()
             if not chunk:
                 break
             with open(path,'wb') as f:
