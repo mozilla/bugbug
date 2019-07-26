@@ -648,7 +648,8 @@ def rollback(bug, when=None, do_assert=False):
                         change["added"] = change["added"][:-2]
 
                     for to_remove in change["added"].split(", "):
-                        if any(
+                        # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
+                        is_question_flag = any(
                             to_remove.startswith(s)
                             for s in [
                                 "needinfo",
@@ -660,9 +661,7 @@ def rollback(bug, when=None, do_assert=False):
                                 "data-review",
                                 "approval-mozilla-",
                             ]
-                        ):
-                            # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
-                            continue
+                        )
 
                         name, status, requestee = parse_flag_change(to_remove)
 
@@ -671,9 +670,14 @@ def rollback(bug, when=None, do_assert=False):
                             if (
                                 f["name"] == name
                                 and f["status"] == status
-                                and (requestee is None or f["requestee"] == requestee)
+                                and (
+                                    requestee is None
+                                    or (
+                                        "requestee" in f and f["requestee"] == requestee
+                                    )
+                                )
                             ):
-                                if found_flag is not None:
+                                if found_flag is not None and not is_question_flag:
                                     flag_text = "{}{}".format(f["name"], f["status"])
                                     if "requestee" in f:
                                         flag_text = "{}{}".format(
@@ -684,8 +688,11 @@ def rollback(bug, when=None, do_assert=False):
 
                         if found_flag is not None:
                             obj["flags"].remove(found_flag)
-                        elif not is_expected_inconsistent_change_flag(
-                            to_remove, obj["id"]
+                        elif (
+                            not is_expected_inconsistent_change_flag(
+                                to_remove, obj["id"]
+                            )
+                            and not is_question_flag
                         ):
                             assert_or_log(
                                 f"flag {to_remove} not found, in obj {obj['id']}"
