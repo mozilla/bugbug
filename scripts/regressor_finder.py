@@ -5,7 +5,6 @@
 
 import argparse
 import concurrent.futures
-import csv
 import itertools
 import os
 import subprocess
@@ -43,11 +42,18 @@ RELATIVE_START_DATE = relativedelta(days=49)
 # Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=3)
 
+IGNORED_COMMITS_DB = "data/ignored_commits.json"
+db.register(
+    IGNORED_COMMITS_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/ignored_commits.json.zst",
+    1,
+)
+
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
     BUG_FIXING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
-    2,
+    1,
 )
 
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
@@ -139,43 +145,53 @@ class RegressorFinder(object):
             self.tokenized_git_repo_dir
         )
 
+    # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
     def get_commits_to_ignore(self):
-        commits_to_ignore = []
+        logger.info("Download previous commits to ignore...")
+        db.download_version(IGNORED_COMMITS_DB)
+        if db.is_old_version(IGNORED_COMMITS_DB) or not os.path.exists(
+            IGNORED_COMMITS_DB
+        ):
+            db.download(IGNORED_COMMITS_DB, force=True)
 
-        # TODO: Make repository analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
+        logger.info("Get previously classified commits...")
+        prev_commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
+        logger.info(f"Already found {len(prev_commits_to_ignore)} commits to ignore...")
+
+        if len(prev_commits_to_ignore) > 0:
+            rev_start = "children({})".format(prev_commits_to_ignore[-1]["rev"])
+        else:
+            rev_start = 0
+
         with hglib.open(self.mercurial_repo_dir) as hg:
-            revs = repository.get_revs(hg, -10000)
+            revs = repository.get_revs(hg, rev_start)
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
+        ignore_set = repository.get_commits_to_ignore(self.mercurial_repo_dir, commits)
         commits_to_ignore = []
 
-        def append_commits_to_ignore(commits, type_):
-            for commit in commits:
-                commits_to_ignore.append({"rev": commit.node, "type": type_})
+        for commit in commits:
+            if commit in ignore_set or commit.backedoutby:
+                commits_to_ignore.append(
+                    {
+                        "rev": commit.node,
+                        "type": "backedout" if commit.backedoutby else "",
+                    }
+                )
 
-        append_commits_to_ignore(
-            list(repository.get_commits_to_ignore(self.mercurial_repo_dir, commits)), ""
-        )
-
-        logger.info(
-            f"{len(commits_to_ignore)} commits to ignore (excluding backed-out commits)"
-        )
-
-        append_commits_to_ignore(
-            (commit for commit in commits if commit.backedoutby), "backedout"
-        )
+        logger.info(f"{len(commits_to_ignore)} new commits to ignore...")
 
         logger.info(
-            f"{len(commits_to_ignore)} commits to ignore (including backed-out commits)"
+            "...of which {} are backed-out".format(
+                sum(1 for commit in commits_to_ignore if commit["type"] == "backedout")
+            )
         )
 
-        with open("commits_to_ignore.csv", "w") as f:
-            writer = csv.DictWriter(f, fieldnames=["rev", "type"])
-            writer.writeheader()
-            writer.writerows(commits_to_ignore)
+        db.append(IGNORED_COMMITS_DB, commits_to_ignore)
+        compress_file(IGNORED_COMMITS_DB)
 
-        return commits_to_ignore
+        return prev_commits_to_ignore + commits_to_ignore
 
     def find_bug_fixing_commits(self):
         logger.info("Downloading commits database...")
@@ -396,14 +412,19 @@ class RegressorFinder(object):
             bug_introducing_commits = []
             for bug_introducing_hashes in bug_introducing_modifications.values():
                 for bug_introducing_hash in bug_introducing_hashes:
-                    bug_introducing_commits.append(
-                        {
-                            "bug_fixing_rev": bug_fixing_commit["rev"],
-                            "bug_introducing_rev": git_to_mercurial(
-                                bug_introducing_hash
-                            ),
-                        }
-                    )
+                    try:
+                        bug_introducing_commits.append(
+                            {
+                                "bug_fixing_rev": bug_fixing_commit["rev"],
+                                "bug_introducing_rev": git_to_mercurial(
+                                    bug_introducing_hash
+                                ),
+                            }
+                        )
+                    except Exception as e:
+                        # Skip commits that are in git but not in mercurial, as they are too old (older than "Free the lizard").
+                        if not str(e).startswith("Missing git commit in the VCS map"):
+                            raise
 
             # Add an empty result, just so that we don't reanalyze this again.
             if len(bug_introducing_commits) == 0:

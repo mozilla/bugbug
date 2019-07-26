@@ -99,7 +99,7 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
     for num, table in enumerate(confusion_matrix_table):
         if is_multilabel:
             print(f"label: {labels[num]}")
-            table_labels = [1, 0]
+            table_labels = [0, 1]
         else:
             table_labels = labels
 

@@ -135,7 +135,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_backout.${version}
-        - index.project.relman.bugbug.train_backout.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_backout.latest
       metadata:
         name: bugbug train backout model
@@ -170,7 +171,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_component.${version}
-        - index.project.relman.bugbug.train_component.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_component.latest
       metadata:
         name: bugbug train component model
@@ -205,7 +207,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_defectenhancementtask.${version}
-        - index.project.relman.bugbug.train_defectenhancementtask.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_defectenhancementtask.latest
       metadata:
         name: bugbug train defect/enhancement/task model
@@ -243,7 +246,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regression.${version}
-        - index.project.relman.bugbug.train_regression.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regression.latest
       metadata:
         name: bugbug train regression model
@@ -281,7 +285,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressor.${version}
-        - index.project.relman.bugbug.train_regressor.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regressor.latest
       metadata:
         name: bugbug train regressor model
@@ -316,7 +321,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_tracking.${version}
-        - index.project.relman.bugbug.train_tracking.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_tracking.latest
       metadata:
         name: bugbug train tracking model
@@ -354,7 +360,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressionrange.${version}
-        - index.project.relman.bugbug.train_regressionrange.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regressionrange.latest
       metadata:
         name: bugbug train regressionrange model
@@ -392,7 +399,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_stepstoreproduce.${version}
-        - index.project.relman.bugbug.train_stepstoreproduce.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_stepstoreproduce.latest
       metadata:
         name: bugbug train stepstoreproduce model
@@ -427,7 +435,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_duplicate.${version}
-        - index.project.relman.bugbug.train_duplicate.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_duplicate.latest
       metadata:
         name: bugbug train duplicate model
