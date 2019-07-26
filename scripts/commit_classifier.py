@@ -127,7 +127,7 @@ class CommitClassifier(object):
                 [
                     i + 1,
                     importance["feature_legend"][str(i + 1)],
-                    f'({"+" if (is_positive) else "-"}{val})',
+                    f'{"+" if (is_positive) else "-"}{val}',
                 ]
             )
 

@@ -33,6 +33,14 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 MODEL_CACHE = {}
 
 
+def result_key(model_name, bug_id):
+    return f"result_{model_name}_{bug_id}"
+
+
+def change_time_key(model_name, bug_id):
+    return f"bugbug:change_time_{model_name}_{bug_id}"
+
+
 def get_model(model_name):
     if model_name not in MODEL_CACHE:
         print("Recreating the model in cache")
@@ -145,9 +153,13 @@ def classify_bug(
 
         encoded_data = json.dumps(data)
 
-        redis_key = f"result_{model_name}_{bug_id}"
+        redis_key = result_key(model_name, bug_id)
 
         redis.set(redis_key, encoded_data)
         redis.expire(redis_key, expiration)
+
+        # Save the bug last change
+        change_key = change_time_key(model_name, bug_id)
+        redis.set(change_key, bugs[bug_id]["last_change_time"])
 
     return "OK"

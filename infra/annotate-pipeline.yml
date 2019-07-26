@@ -137,26 +137,29 @@ tasks:
           - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
           - gecko-dev-wordified-and-comments-removed
         artifacts:
-          public/commits_to_ignore.csv:
-            path: /commits_to_ignore.csv
+          public/ignored_commits.json.zst:
+            path: /data/ignored_commits.json.zst
+            type: file
+          public/ignored_commits.json.version:
+            path: /data/ignored_commits.json.version
             type: file
           public/bug_fixing_commits.json.zst:
-            path: /bug_fixing_commits.json.zst
+            path: /data/bug_fixing_commits.json.zst
             type: file
           public/bug_fixing_commits.json.version:
-            path: /bug_fixing_commits.json.version
+            path: /data/bug_fixing_commits.json.version
             type: file
           public/bug_introducing_commits.json.zst:
-            path: /bug_introducing_commits.json.zst
+            path: /data/bug_introducing_commits.json.zst
             type: file
           public/bug_introducing_commits.json.version:
-            path: /bug_introducing_commits.json.version
+            path: /data/bug_introducing_commits.json.version
             type: file
           public/tokenized_bug_introducing_commits.json.zst:
-            path: /tokenized_bug_introducing_commits.json.zst
+            path: /data/tokenized_bug_introducing_commits.json.zst
             type: file
           public/tokenized_bug_introducing_commits.json.version:
-            path: /tokenized_bug_introducing_commits.json.version
+            path: /data/tokenized_bug_introducing_commits.json.version
             type: file
         cache:
           bugbug-mercurial-repository: /cache

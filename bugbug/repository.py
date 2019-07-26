@@ -33,7 +33,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    1,
+    2,
     ["commit_experiences.pickle.zst"],
 )
 
@@ -704,16 +704,13 @@ def hg_log_multi(repo_dir, revs):
 
 
 def download_commits(repo_dir, rev_start=0, ret=False, save=True):
-    hg = hglib.open(repo_dir)
+    with hglib.open(repo_dir) as hg:
+        revs = get_revs(hg, rev_start)
+        if len(revs) == 0:
+            print("No commits to analyze")
+            return []
 
-    revs = get_revs(hg, rev_start)
-    if len(revs) == 0:
-        print("No commits to analyze")
-        return []
-
-    first_pushdate = hg_log(hg, [b"0"])[0].pushdate
-
-    hg.close()
+        first_pushdate = hg_log(hg, [b"0"])[0].pushdate
 
     print(f"Mining {len(revs)} commits using {os.cpu_count()} processes...")
 
