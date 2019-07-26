@@ -53,7 +53,7 @@ q = Queue(connection=redis_conn)  # no args implies the default queue
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 
 # Keep an HTTP client around for persistent connections
-HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
+BUGBUG_HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -136,7 +136,7 @@ def is_running(model_name, bug_id):
 def get_bugs_last_change_time(bug_ids):
     query = {"id": bug_ids, "include_fields": ["last_change_time", "id"]}
     header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
-    response = HTTP_CLIENT.get(
+    response = BUGBUG_HTTP_CLIENT.get(
         BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
     )
     response.raise_for_status()
