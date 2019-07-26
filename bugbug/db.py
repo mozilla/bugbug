@@ -38,9 +38,10 @@ def is_old_version(path):
     r = requests.get(
         urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     )
-    if r.status_code == 404:
+    if not r.ok:
+        print(f"Version file is not yet available to download for {path}")
         return True
-    r.raise_for_status()
+
     prev_version = int(r.text)
 
     return DATABASES[path]["version"] > prev_version
