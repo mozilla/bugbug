@@ -44,6 +44,7 @@ tasks:
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
                git remote add upstream https://github.com/mozilla/bugbug &&
+               git fetch upstream master &&
                pre-commit run --files $(git diff --name-only --diff-filter=d upstream/master...)"
         metadata:
           name: bugbug lint
