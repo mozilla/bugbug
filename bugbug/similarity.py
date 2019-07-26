@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import abc
 import bisect
 import random
 import re
@@ -53,7 +54,7 @@ for bug in bugzilla.get_bugs():
         duplicates[dupe].add(bug["id"])
 
 
-class BaseSimilarity:
+class BaseSimilarity(abc.ABC):
     def __init__(self, cleanup_urls=True):
         self.cleanup_functions = [
             feature_cleanup.responses(),
@@ -147,6 +148,10 @@ class BaseSimilarity:
         print(f"Recall: {hits_r/total_r * 100}%")
         print(f"Precision: {hits_p/total_p * 100}%")
         print(f"MAP@k : {np.mean(apk) * 100}%")
+
+    @abc.abstractmethod
+    def get_distance(self, query1, query2):
+        return
 
 
 class LSISimilarity(BaseSimilarity):
@@ -288,12 +293,8 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
         return emd(d1, d2, distance_matrix)
 
-    def get_similar_bugs(self, query):
-
-        words = self.text_preprocess(self.get_text(query))
-        words = [word for word in words if word in self.w2vmodel.wv.vocab]
-
-        all_distances = np.array(
+    def calculate_all_distances(self, words):
+        return np.array(
             1.0
             - np.dot(
                 self.w2vmodel.wv.vectors_norm,
@@ -303,6 +304,14 @@ class Word2VecWmdSimilarity(BaseSimilarity):
             ),
             dtype=np.double,
         )
+
+    def get_similar_bugs(self, query):
+
+        words = self.text_preprocess(self.get_text(query))
+        words = [word for word in words if word in self.w2vmodel.wv.vocab]
+
+        all_distances = self.calculate_all_distances(words)
+
         distances = []
         for i in range(len(self.corpus)):
             cleaned_corpus = [
@@ -349,3 +358,16 @@ class Word2VecWmdSimilarity(BaseSimilarity):
             for similar in sorted(similarities, key=lambda v: v[1])[:10]
             if similar[0] != query["id"] and similar[1] < self.cut_off
         ]
+
+    def get_distance(self, query1, query2):
+
+        words1 = self.text_preprocess(self.get_text(query1))
+        words1 = [word for word in words1 if word in self.w2vmodel.wv.vocab]
+        words2 = self.text_preprocess(self.get_text(query2))
+        words2 = [word for word in words2 if word in self.w2vmodel.wv.vocab]
+
+        all_distances = self.calculate_all_distances(words1)
+
+        wmd = self.wmdistance(words1, words2, all_distances)
+
+        return wmd
