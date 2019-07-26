@@ -107,6 +107,34 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      - taskId: {$eval: as_slugid("http_tests_task")}
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: aws-provisioner-v1
+        workerType: github-worker
+        payload:
+          maxRunTime: 3600
+          image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+          command:
+            - "/bin/bash"
+            - "-lcx"
+            - "apt-get -qq update &&
+               apt-get -qq install -y python-pip &&
+               git clone --quiet ${repository} &&
+               cd bugbug &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               pip install --quiet -r requirements.txt &&
+               pip install --quiet -r test-requirements.txt &&
+               pytest --cov=http_service http_service/tests/ -vvv &&
+               bash <(curl -s https://codecov.io/bash)"
+        metadata:
+          name: bugbug tests
+          description: bugbug tests
+          owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
       - taskId: {$eval: as_slugid("packaging_test_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
@@ -179,6 +207,7 @@ tasks:
           dependencies:
             - {$eval: as_slugid("lint_task")}
             - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("http_tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("version_check_task")}
           scopes:

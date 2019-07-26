@@ -29,7 +29,6 @@ extras_require = {}
 for extra in extras:
     extras_require[extra] = read_requirements("extra-%s-requirements.txt" % extra)
 
-
 setup(
     name="bugbug",
     version=version,
