@@ -27,8 +27,11 @@ def keyword_mapping(keyword):
         "ateam-marionette-server": "pi-marionette-server",
         "ateam-marionette-client": "pi-marionette-client",
         "ateam-marionette-intermittent": "pi-marionette-intermittent",
+        "ateam-marionette-harness-tests": "pi-marionette-harness-tests",
+        "ateam-marionette-spec": "pi-marionette-spec",
         "csec-dos": "csectype-dos",
         "csec-oom": "csectype-oom",
+        "csec-bounds": "csectype-bounds",
         "bug-quality": "bmo-bug-quality",
     }
 
@@ -66,6 +69,8 @@ def op_sys(op_sys):
 def platform(platform):
     if platform == "Macintosh":
         return "PowerPC"
+    elif platform == "PC":
+        return "x86"
 
     return platform
 
@@ -82,6 +87,8 @@ def product(product):
         "Connected Devices": "Connected Devices Graveyard",
         "Seamonkey": "SeaMonkey",
         "Mozilla Application Suite": "SeaMonkey",
+        "Mozilla Services": "Cloud Services",
+        "Browser": "Core",
     }
 
     return mapping[product] if product in mapping else product
