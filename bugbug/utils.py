@@ -7,7 +7,7 @@ import collections
 import json
 import os
 import time
-
+import zstandard
 import dateutil.parser
 import numpy as np
 import requests
@@ -18,6 +18,31 @@ from sklearn.preprocessing import OrdinalEncoder
 
 TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
 
+# with open(path, mode) as f:
+#         with cctx.stream_writer(f) as writer:
+#                     yield store_constructor(writer)
+
+def zstd_compress(path):
+    cctx=zstandard.ZstdCompressor()
+    with open(path, 'rb') as fh:
+        with cctx.stream_reader(fh) as reader:
+            while True:
+                chunk = reader.read(16384)
+                if not chunk:
+                    break
+                with open(path,'wb') as f:
+                    f.write(chunk)  
+
+def zstd_decompress(path):
+    with open(path, 'rb') as fh:
+        dctx = zstandard.ZstdDecompressor()
+        reader = dctx.stream_reader(fh)
+        while True:
+            chunk = reader.read(16384)
+            if not chunk:
+                break
+            with open(path,'wb') as f:
+                    f.write(chunk)
 
 def split_tuple_iterator(iterable):
     q = collections.deque()
@@ -162,7 +187,7 @@ class CustomJsonEncoder(json.JSONEncoder):
     """ A custom Json Encoder to support Numpy types
     """
 
-    def default(self, obj):
+    def default(self, obj):          
         try:
             return np.asscalar(obj)
         except (ValueError, IndexError, AttributeError, TypeError):

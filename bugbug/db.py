@@ -39,17 +39,6 @@ def is_old_version(path):
     return DATABASES[path]["version"] > prev_version
 
 
-def extract_file(path):
-    path, compression_type = os.path.splitext(path)
-
-    with open(path, "wb") as output_f:
-        if compression_type == ".zst":
-            dctx = zstandard.ZstdDecompressor()
-            with open(f"{path}.zst", "rb") as input_f:
-                dctx.copy_stream(input_f, output_f)
-        else:
-            assert False, f"Unexpected compression type: {compression_type}"
-
 
 def download_support_file(path, file_name):
     try:
@@ -60,7 +49,7 @@ def download_support_file(path, file_name):
         utils.download_check_etag(url, path)
 
         if path.endswith(".zst"):
-            extract_file(path)
+            utils.zstd_decompress(path)
     except requests.exceptions.HTTPError:
         print(f"{file_name} is not yet available to download for {path}")
 
@@ -87,7 +76,7 @@ def download(path, force=False, support_files_too=False):
             print(f"{url} is not yet available to download")
             return
 
-    extract_file(zst_path)
+    utils.zstd_decompress(zst_path)
 
     if support_files_too:
         for support_file in DATABASES[path]["support_files"]:
@@ -157,15 +146,9 @@ def _db_open(path, mode):
             yield store_constructor(f)
     elif compression == "zstd":
         if "w" in mode or "a" in mode:
-            cctx = zstandard.ZstdCompressor()
-            with open(path, mode) as f:
-                with cctx.stream_writer(f) as writer:
-                    yield store_constructor(writer)
+            utils.zstd_compress(path)
         else:
-            dctx = zstandard.ZstdDecompressor()
-            with open(path, mode) as f:
-                with dctx.stream_reader(f) as reader:
-                    yield store_constructor(reader)
+            utils.zstd_decompress(path)
     else:
         with open(path, mode) as f:
             yield store_constructor(f)
