@@ -127,11 +127,12 @@ tasks:
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
+               pip install --quiet -r http_service/requirements.txt &&
                pytest --cov=http_service http_service/tests/ -vvv &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug tests
-          description: bugbug tests
+          description: bugbug http service tests
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
