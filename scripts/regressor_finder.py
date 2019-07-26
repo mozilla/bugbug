@@ -382,14 +382,19 @@ class RegressorFinder(object):
             bug_introducing_commits = []
             for bug_introducing_hashes in bug_introducing_modifications.values():
                 for bug_introducing_hash in bug_introducing_hashes:
-                    bug_introducing_commits.append(
-                        {
-                            "bug_fixing_rev": bug_fixing_commit["rev"],
-                            "bug_introducing_rev": git_to_mercurial(
-                                bug_introducing_hash
-                            ),
-                        }
-                    )
+                    try:
+                        bug_introducing_commits.append(
+                            {
+                                "bug_fixing_rev": bug_fixing_commit["rev"],
+                                "bug_introducing_rev": git_to_mercurial(
+                                    bug_introducing_hash
+                                ),
+                            }
+                        )
+                    except Exception as e:
+                        # Skip commits that are in git but not in mercurial, as they are too old (older than "Free the lizard").
+                        if not str(e).startswith("Missing git commit in the VCS map"):
+                            raise
 
             # Add an empty result, just so that we don't reanalyze this again.
             if len(bug_introducing_commits) == 0:
