@@ -38,6 +38,8 @@ def is_old_version(path):
     r = requests.get(
         urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     )
+    if r.status_code == 404:
+        return True
     r.raise_for_status()
     prev_version = int(r.text)
 

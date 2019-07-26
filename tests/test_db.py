@@ -252,14 +252,24 @@ def test_is_old_version(tmp_path):
     db_path = tmp_path / "prova.json"
     db.register(db_path, url_zst, 1, support_files=[])
 
-    responses.add(responses.GET, url_version, status=200, body="42")
-
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
 
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version, status=200, body="1")
+    responses.add(responses.GET, url_version, status=200, body="42")
+
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_version(db_path)
+
+    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
+    assert not db.is_old_version(db_path)
+
+    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
     assert not db.is_old_version(db_path)
 
     db.register(db_path, url_zst, 43, support_files=[])
 
+    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
     assert db.is_old_version(db_path)
 
 
