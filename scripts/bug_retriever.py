@@ -10,7 +10,15 @@ import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bug_snapshot, bugzilla, db, labels, repository
+<<<<<<< HEAD
 from bugbug.utils import get_secret, zstd_compress
+||||||| merged common ancestors
+from bugbug.utils import get_secret
+
+=======
+from bugbug.utils import get_secret, compress
+
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
@@ -125,7 +133,13 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
+<<<<<<< HEAD
         zstd_compress("data/bugs.json")
+||||||| merged common ancestors
+        self.compress_file("data/bugs.json")
+=======
+        compress("data/bugs.json")
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 
 

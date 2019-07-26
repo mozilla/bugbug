@@ -12,7 +12,13 @@ from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
+<<<<<<< HEAD
 from bugbug.utils import download_check_etag, get_secret, zstd_decompress
+||||||| merged common ancestors
+from bugbug.utils import download_check_etag, get_secret
+=======
+from bugbug.utils import download_check_etag, get_secret, decompress
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -29,7 +35,16 @@ class CommitClassifier(object):
 
         if not os.path.exists("regressormodel"):
             download_check_etag(URL, "regressormodel.zst")
+<<<<<<< HEAD
             zstd_decompress("regressormodel")
+||||||| merged common ancestors
+            dctx = zstandard.ZstdDecompressor()
+            with open("regressormodel.zst", "rb") as input_f:
+                with open("regressormodel", "wb") as output_f:
+                    dctx.copy_stream(input_f, output_f)
+=======
+            decompress("regressormodel.zst")
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
             assert os.path.exists("regressormodel"), "Decompressed file exists"
 
         self.model = RegressorModel.load("regressormodel")

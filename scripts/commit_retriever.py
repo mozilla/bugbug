@@ -7,7 +7,12 @@ from logging import INFO, basicConfig, getLogger
 import zstandard
 
 from bugbug import db, repository
+<<<<<<< HEAD
 from bugbug.utils import zstd_compress
+||||||| merged common ancestors
+=======
+from bugbug.utils import compress
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -38,8 +43,22 @@ class Retriever(object):
 
         logger.info("commit data extracted from repository")
 
+<<<<<<< HEAD
         zstd_compress("data/commits.json")
         zstd_compress("data/commit_experiences.pickle")
+||||||| merged common ancestors
+        self.compress_file("data/commits.json")
+        self.compress_file("data/commit_experiences.pickle")
+
+    def compress_file(self, path):
+        cctx = zstandard.ZstdCompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
+=======
+        compress("data/commits.json")
+        compress("data/commit_experiences.pickle")
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 
 def main():

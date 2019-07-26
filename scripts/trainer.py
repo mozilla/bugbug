@@ -9,7 +9,13 @@ import zstandard
 
 from bugbug import bugzilla, db, model, repository
 from bugbug.models import get_model_class
+<<<<<<< HEAD
 from bugbug.utils import CustomJsonEncoder, zstd_compress
+||||||| merged common ancestors
+from bugbug.utils import CustomJsonEncoder
+=======
+from bugbug.utils import CustomJsonEncoder, compress
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -47,7 +53,13 @@ class Trainer(object):
 
         model_file_name = f"{model_name}model"
         assert os.path.exists(model_file_name)
+<<<<<<< HEAD
         zstd_compress(model_file_name)
+||||||| merged common ancestors
+        self.compress_file(model_file_name)
+=======
+        compress(model_file_name)
+>>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
         logger.info(f"Model compressed")
 
