@@ -45,7 +45,7 @@ tasks:
                pip install --quiet -r test-requirements.txt &&
                git remote add upstream https://github.com/mozilla/bugbug &&
                git fetch upstream master &&
-               pre-commit run --files $(git diff --name-only --diff-filter=d upstream/master...)"
+               pre-commit run --files $(git diff --name-only --diff-filter=d upstream/master...${head_branch})"
         metadata:
           name: bugbug lint
           description: bugbug lint
