@@ -43,7 +43,8 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
-               pre-commit run -a" # TODO Be smarter and run only on modified files
+               git remote add upstream https://github.com/mozilla/bugbug &&
+               pre-commit run --files $(git diff --name-only --diff-filter=d upstream/master...)"
         metadata:
           name: bugbug lint
           description: bugbug lint
