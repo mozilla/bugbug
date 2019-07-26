@@ -32,9 +32,16 @@ def register(path, url, version, support_files=[]):
             f.write(str(version))
 
 
+def exists(path):
+    return os.path.exists(path)
+
+
 def is_old_version(path):
-    with open(f"{path}.version", "r") as f:
-        prev_version = int(f.read())
+    r = requests.get(
+        urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
+    )
+    r.raise_for_status()
+    prev_version = int(r.text)
 
     return DATABASES[path]["version"] > prev_version
 
@@ -63,10 +70,6 @@ def download_support_file(path, file_name):
             extract_file(path)
     except requests.exceptions.HTTPError:
         print(f"{file_name} is not yet available to download for {path}")
-
-
-def download_version(path):
-    download_support_file(path, f"{os.path.basename(path)}.version")
 
 
 # Download and extract databases.

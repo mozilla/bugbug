@@ -140,10 +140,7 @@ class RegressorFinder(object):
     # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
     def get_commits_to_ignore(self):
         logger.info("Download previous commits to ignore...")
-        db.download_version(IGNORED_COMMITS_DB)
-        if db.is_old_version(IGNORED_COMMITS_DB) or not os.path.exists(
-            IGNORED_COMMITS_DB
-        ):
+        if db.is_old_version(IGNORED_COMMITS_DB) or not db.exists(IGNORED_COMMITS_DB):
             db.download(IGNORED_COMMITS_DB, force=True)
 
         logger.info("Get previously classified commits...")
@@ -187,20 +184,17 @@ class RegressorFinder(object):
 
     def find_bug_fixing_commits(self):
         logger.info("Downloading commits database...")
-        db.download_version(repository.COMMITS_DB)
-        if db.is_old_version(repository.COMMITS_DB) or not os.path.exists(
+        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
             db.download(repository.COMMITS_DB, force=True)
 
         logger.info("Downloading bugs database...")
-        db.download_version(bugzilla.BUGS_DB)
-        if db.is_old_version(bugzilla.BUGS_DB) or not os.path.exists(bugzilla.BUGS_DB):
+        if db.is_old_version(bugzilla.BUGS_DB) or not db.exists(bugzilla.BUGS_DB):
             db.download(bugzilla.BUGS_DB, force=True)
 
         logger.info("Download previous classifications...")
-        db.download_version(BUG_FIXING_COMMITS_DB)
-        if db.is_old_version(BUG_FIXING_COMMITS_DB) or not os.path.exists(
+        if db.is_old_version(BUG_FIXING_COMMITS_DB) or not db.exists(
             BUG_FIXING_COMMITS_DB
         ):
             db.download(BUG_FIXING_COMMITS_DB, force=True)
@@ -320,8 +314,7 @@ class RegressorFinder(object):
                 return vcs_map.mercurial_to_git(rev)
 
         logger.info("Download previously found bug-introducing commits...")
-        db.download_version(db_path)
-        if db.is_old_version(db_path) or not os.path.exists(db_path):
+        if db.is_old_version(db_path) or not db.exists(db_path):
             db.download(db_path, force=True)
 
         logger.info("Get previously found bug-introducing commits...")

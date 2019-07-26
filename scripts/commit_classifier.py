@@ -40,8 +40,7 @@ class CommitClassifier(object):
     def update_commit_db(self):
         repository.clone(self.repo_dir)
 
-        db.download_version(repository.COMMITS_DB)
-        if db.is_old_version(repository.COMMITS_DB) or not os.path.exists(
+        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
             db.download(repository.COMMITS_DB, force=True, support_files_too=True)
