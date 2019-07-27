@@ -32,9 +32,9 @@ logger = getLogger(__name__)
 
 MAX_MODIFICATION_NUMBER = 50
 # TODO: Set to 2 years and 6 months. If it takes too long, make the task work incrementally like microannotate-generate.
-RELATIVE_START_DATE = relativedelta(days=49)
+RELATIVE_START_DATE = relativedelta(days=98)
 # Only needed because mercurial<->git mapping could be behind.
-RELATIVE_END_DATE = relativedelta(days=3)
+RELATIVE_END_DATE = relativedelta(days=7)
 
 IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
@@ -152,8 +152,22 @@ class RegressorFinder(object):
         else:
             rev_start = 0
 
+        # 2 days more than the end date, so we can know if a commit was backed-out.
+        # We have to do this as recent commits might be missing in the mercurial <-> git map,
+        # otherwise we could just use "tip".
+        end_date = datetime.now() - RELATIVE_END_DATE + relativedelta(2)
         with hglib.open(self.mercurial_repo_dir) as hg:
-            revs = repository.get_revs(hg, rev_start)
+            revs = repository.get_revs(
+                hg, rev_start, "pushdate('{}')".format(end_date.strftime("%Y-%m-%d"))
+            )
+
+        # Given that we use the pushdate, there might be cases where the starting commit is returned too (e.g. if we rerun the task on the same day).
+        found_prev = -1
+        for i, rev in enumerate(revs):
+            if rev.decode("utf-8") == prev_commits_to_ignore[-1]["rev"]:
+                found_prev = i
+                break
+        revs = revs[found_prev + 1 :]
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
