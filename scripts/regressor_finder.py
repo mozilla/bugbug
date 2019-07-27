@@ -162,12 +162,13 @@ class RegressorFinder(object):
             )
 
         # Given that we use the pushdate, there might be cases where the starting commit is returned too (e.g. if we rerun the task on the same day).
-        found_prev = -1
-        for i, rev in enumerate(revs):
-            if rev.decode("utf-8") == prev_commits_to_ignore[-1]["rev"]:
-                found_prev = i
-                break
-        revs = revs[found_prev + 1 :]
+        if len(prev_commits_to_ignore) > 0:
+            found_prev = -1
+            for i, rev in enumerate(revs):
+                if rev.decode("utf-8") == prev_commits_to_ignore[-1]["rev"]:
+                    found_prev = i
+                    break
+            revs = revs[found_prev + 1 :]
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
