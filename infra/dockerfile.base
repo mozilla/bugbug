@@ -1,13 +1,13 @@
-FROM python:3.7.3-slim
+FROM python:3.7.3-alpine
 
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
-RUN apt-get update && \
-		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
+
+RUN apk update && apk upgrade && \
+		echo "manylinux1_compatible = True" > /usr/local/lib/python3.7/site-packages/_manylinux.py && \
+		apk add --no-cache gcc g++ libgomp lapack-dev git libexecinfo-dev make libc6-compat && \
 		pip install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
-		apt-get remove -y gcc g++ && \
-		apt-get autoremove -y && \
-		rm -rf /var/lib/apt/lists/*
+		rm -rf /var/cache/apk/*
 
 COPY . /tmp/bugbug
-RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
+RUN pip install /tmp/bugbug
