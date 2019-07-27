@@ -17,6 +17,7 @@ class StepsToReproduceModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
+        self.pu_learning = True
 
         feature_extractors = [
             bug_features.has_regression_range(),
@@ -73,7 +74,7 @@ class StepsToReproduceModel(BugModel):
                     classes[int(bug_data["id"])] = 1
 
         print(
-            "{} bugs have no steps to reproduce".format(
+            "{} bugs have no labels".format(
                 sum(1 for label in classes.values() if label == 0)
             )
         )

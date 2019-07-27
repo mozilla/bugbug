@@ -135,6 +135,8 @@ class Model:
 
         self.calculate_importance = True
 
+        self.pu_learning = False
+
     @property
     def le(self):
         """Classifier agnostic getter for the label encoder property"""
@@ -398,7 +400,7 @@ class Model:
         )
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
-        return
+
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)
@@ -411,12 +413,12 @@ class Model:
                     continue
 
                 y_test_filter.append(y_test[i])
-                if is_multilabel:
+                if is_multilabel or self.pu_learning:
                     y_pred_filter.append(y_pred[i])
                 else:
                     y_pred_filter.append(argmax)
 
-            if not is_multilabel:
+            if not is_multilabel and not self.pu_learning:
                 y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
             print(
