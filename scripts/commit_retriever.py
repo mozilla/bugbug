@@ -22,7 +22,6 @@ class Retriever(object):
     def retrieve_commits(self):
         repository.clone(self.repo_dir)
 
-        db.download_version(repository.COMMITS_DB)
         if not db.is_old_version(repository.COMMITS_DB):
             db.download(repository.COMMITS_DB, support_files_too=True)
 

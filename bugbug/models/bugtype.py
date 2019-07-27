@@ -28,7 +28,7 @@ KEYWORD_DICT = {
     "crashreportid": "crash",
     "perf": "performance",
 }
-KEYWORD_LIST = list(set(KEYWORD_DICT.values()))
+KEYWORD_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
 class BugTypeModel(BugModel):

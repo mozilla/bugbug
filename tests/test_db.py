@@ -101,11 +101,19 @@ def test_register_db(tmp_path):
 
     db.register(db_path, "https://alink", 1)
 
-    assert not db.is_old_version(db_path)
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
 
-    db.register(db_path, "https://alink", 2)
 
-    assert db.is_old_version(db_path)
+def test_exists_db(tmp_path):
+    db_path = tmp_path / "prova.json"
+
+    db.register(db_path, "https://alink", 1)
+
+    assert not db.exists(db_path)
+
+    db.write(db_path, range(7))
+
+    assert db.exists(db_path)
 
 
 @pytest.fixture
@@ -193,8 +201,8 @@ def test_download_missing(tmp_path):
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
-    with pytest.raises(requests.exceptions.HTTPError):
-        db.download(db_path)
+    db.download(db_path)
+    assert not os.path.exists(db_path)
 
     with pytest.raises(Exception, match="Last-Modified is not available"):
         db.last_modified(db_path)
@@ -237,26 +245,35 @@ def test_download_support_file_zst(tmp_path, mock_zst):
 
 
 @responses.activate
-def test_download_version(tmp_path):
+def test_is_old_version(tmp_path):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url_zst, 1, support_files=[])
 
-    responses.add(responses.HEAD, url_version, status=200, headers={"ETag": "123"})
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
 
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version, status=424)
+    responses.add(responses.GET, url_version, status=200, body="1")
     responses.add(responses.GET, url_version, status=200, body="42")
 
-    db.download_version(db_path)
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_version(db_path)
 
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version.etag"))
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_version(db_path)
 
+    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
+    assert not db.is_old_version(db_path)
+
+    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
     assert not db.is_old_version(db_path)
 
     db.register(db_path, url_zst, 43, support_files=[])
 
+    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
     assert db.is_old_version(db_path)
 
 

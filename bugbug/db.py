@@ -23,18 +23,26 @@ def register(path, url, version, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
     # Create DB parent directory.
-    parent_dir = os.path.dirname(path)
-    if not os.path.exists(parent_dir):
-        os.makedirs(parent_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
     if not os.path.exists(f"{path}.version"):
         with open(f"{path}.version", "w") as f:
             f.write(str(version))
 
 
+def exists(path):
+    return os.path.exists(path)
+
+
 def is_old_version(path):
-    with open(f"{path}.version", "r") as f:
-        prev_version = int(f.read())
+    r = requests.get(
+        urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
+    )
+    if not r.ok:
+        print(f"Version file is not yet available to download for {path}")
+        return True
+
+    prev_version = int(r.text)
 
     return DATABASES[path]["version"] > prev_version
 
@@ -65,10 +73,6 @@ def download_support_file(path, file_name):
         print(f"{file_name} is not yet available to download for {path}")
 
 
-def download_version(path):
-    download_support_file(path, f"{os.path.basename(path)}.version")
-
-
 # Download and extract databases.
 def download(path, force=False, support_files_too=False):
     if os.path.exists(path) and not force:
@@ -85,7 +89,7 @@ def download(path, force=False, support_files_too=False):
 
         except requests.exceptions.HTTPError:
             print(f"{url} is not yet available to download")
-            raise
+            return
 
     extract_file(zst_path)
 
