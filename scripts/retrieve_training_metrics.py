@@ -10,8 +10,8 @@ import taskcluster
 from bugbug.utils import get_taskcluster_options
 
 LATEST_URI = "train_{}.latest"
-VERSIONED_URI = "train_{}.{}"
-DATED_VERSIONED_URI = "train_{}.{}.{}"
+VERSIONED_URI = "train_{}.per_date"
+DATED_VERSIONED_URI = "train_{}.per_date.{}"
 PROJECT_PREFIX = "project.relman.bugbug.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/{}/artifacts/public/metrics.json"
 NAMESPACE_URI = "project.relman.bugbug.{}"
@@ -53,7 +53,7 @@ def is_later_or_equal(partial_date, from_date):
     return True
 
 
-def get_task_metrics_from_date(model, version, date):
+def get_task_metrics_from_date(model, date):
     options = get_taskcluster_options()
 
     index = taskcluster.Index(options)
@@ -64,8 +64,6 @@ def get_task_metrics_from_date(model, version, date):
     from_date = date.split(".")
 
     uris = []
-
-    # Start at the version level
     uris.append([])
 
     # Recursively list all namespaces greater or equals than the given date
@@ -74,10 +72,10 @@ def get_task_metrics_from_date(model, version, date):
 
         # Handle version level namespaces
         if not uri:
-            index_uri = VERSIONED_URI.format(model, version)
+            index_uri = VERSIONED_URI.format(model)
         else:
             uri_date = ".".join(uri)
-            index_uri = DATED_VERSIONED_URI.format(model, version, uri_date)
+            index_uri = DATED_VERSIONED_URI.format(model, uri_date)
 
         index_uri = NAMESPACE_URI.format(index_uri)
 
@@ -111,11 +109,6 @@ def main():
 
     parser.add_argument("model", help="Which model to retrieve training metrics from.")
     parser.add_argument(
-        "version",
-        nargs="?",
-        help="Which bugbug version should we retrieve training metrics from.",
-    )
-    parser.add_argument(
         "date",
         nargs="?",
         help="Which date should we retrieve training metrics from. Default to latest",
@@ -123,7 +116,7 @@ def main():
 
     args = parser.parse_args()
 
-    get_task_metrics_from_date(args.model, args.version, args.date)
+    get_task_metrics_from_date(args.model, args.date)
 
 
 if __name__ == "__main__":
