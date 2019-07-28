@@ -4,8 +4,7 @@ COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
 
 # Mercurial need Python2 :(
 # git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
-RUN apk update && apk upgrade &&\
-    apk add --no-cache gcc g++ libgomp lapack-dev git libexecinfo-dev make && \
+RUN apk update && apk upgrade && \
     apk add --no-cache gcc g++ libgomp lapack-dev git libexecinfo-dev make libc6-compat && \
     apk add python-dev py-pip git curl && \
     python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
@@ -15,6 +14,7 @@ RUN apk update && apk upgrade &&\
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
     rm -r /depot_tools/.git /depot_tools/recipes /depot_tools/tests /depot_tools/man /depot_tools/testing_support /depot_tools/win_toolchain /depot_tools/bootstrap /depot_tools/fetch_configs && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.2/rust-code-analysis-linux-x86_64.tar.bz2 | tar -C /usr/local/bin -xjv && \
+    apk del python-dev py-pip curl && \
 	rm -rf /var/cache/apk/*
 
 # Force git hyper-blame to use python2.
