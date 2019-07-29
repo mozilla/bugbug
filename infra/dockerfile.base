@@ -5,10 +5,10 @@ COPY requirements.txt /requirements.txt
 
 RUN apk update && apk upgrade && \
 		echo "manylinux1_compatible = True" > /usr/local/lib/python3.7/site-packages/_manylinux.py && \
-		apk add --no-cache gcc g++ libgomp lapack-dev git libexecinfo-dev make libc6-compat && \
+		apk add --no-cache gcc g++ libgomp && \
 		pip install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
-		apk del gcc g++ libgomp lapack-dev git libexecinfo-dev make libc6-compat && \
+		apk del gcc g++ libgomp && \
 		rm -rf /var/cache/apk/*
 
 COPY . /tmp/bugbug
-RUN pip install /tmp/bugbug
+RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
