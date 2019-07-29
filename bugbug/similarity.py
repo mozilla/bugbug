@@ -29,6 +29,7 @@ try:
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
+    from nltk.tokenize import word_tokenize
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
@@ -55,7 +56,7 @@ for bug in bugzilla.get_bugs():
 
 
 class BaseSimilarity(abc.ABC):
-    def __init__(self, cleanup_urls=True):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
         self.cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
@@ -67,6 +68,8 @@ class BaseSimilarity(abc.ABC):
         if cleanup_urls:
             self.cleanup_functions.append(feature_cleanup.url())
 
+        self.nltk_tokenizer = nltk_tokenizer
+
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
 
@@ -77,9 +80,13 @@ class BaseSimilarity(abc.ABC):
         text = re.sub("[^a-zA-Z0-9]", " ", text)
 
         ps = PorterStemmer()
+
+        tokenized_text = (
+            word_tokenize(text.lower()) if self.nltk_tokenizer else text.lower().split()
+        )
         text = [
             ps.stem(word)
-            for word in text.lower().split()
+            for word in tokenized_text
             if word not in set(stopwords.words("english")) and len(word) > 1
         ]
         if join:
@@ -155,8 +162,8 @@ class BaseSimilarity(abc.ABC):
 
 
 class LSISimilarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
@@ -202,8 +209,14 @@ class LSISimilarity(BaseSimilarity):
 
 
 class NeighborsSimilarity(BaseSimilarity):
-    def __init__(self, k=10, vectorizer=TfidfVectorizer(), cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+    def __init__(
+        self,
+        k=10,
+        vectorizer=TfidfVectorizer(),
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+    ):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.vectorizer = vectorizer
         self.similarity_calculator = NearestNeighbors(n_neighbors=k)
         text = []
@@ -227,8 +240,8 @@ class NeighborsSimilarity(BaseSimilarity):
 
 
 class Word2VecWmdSimilarity(BaseSimilarity):
-    def __init__(self, cut_off=0.2, cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.corpus = []
         self.bug_ids = []
         self.cut_off = cut_off

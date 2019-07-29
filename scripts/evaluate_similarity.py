@@ -25,6 +25,12 @@ def parse_args(args):
         default=True,
         action="store_false",
     )
+    parser.add_argument(
+        "--nltk_tokenizer",
+        help="Use nltk's tokenizer for text preprocessing",
+        dest="nltk_tokenizer",
+        default=False,
+    )
     return parser.parse_args(args)
 
 
@@ -42,7 +48,9 @@ def main(args):
     elif args.algorithm == "word2vec_wmd":
         model_creator = Word2VecWmdSimilarity
 
-    model = model_creator(cleanup_urls=args.cleanup_urls)
+    model = model_creator(
+        cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
+    )
     model.evaluation()
 
 
