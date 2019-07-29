@@ -90,9 +90,9 @@ class CommitClassifier(object):
             revision = diff_data["revision"]
 
             if commits and commits[0]["message"]:
-                message = "{}\n".format(commits[0]["message"])
+                message = commits[0]["message"]
             else:
-                message = "{}\n".format(revision["fields"]["title"])
+                message = revision["fields"]["title"]
 
             logger.info(f"Applying {diff_phid}")
             hg.import_(
