@@ -207,6 +207,9 @@ class LSISimilarity(BaseSimilarity):
         # Get IDs of the k most similar bugs
         return [self.corpus[j[0]][0] for j in sims[:k]]
 
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
 
 class NeighborsSimilarity(BaseSimilarity):
     def __init__(
@@ -237,6 +240,9 @@ class NeighborsSimilarity(BaseSimilarity):
         return [
             self.bug_ids[ind] for ind in indices[0] if self.bug_ids[ind] != query["id"]
         ]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
 
 
 class Word2VecWmdSimilarity(BaseSimilarity):
