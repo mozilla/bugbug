@@ -137,6 +137,9 @@ tasks:
           - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
           - gecko-dev-wordified-and-comments-removed
         artifacts:
+          public/done:
+            path: /done
+            type: file
           public/ignored_commits.json.zst:
             path: /data/ignored_commits.json.zst
             type: file

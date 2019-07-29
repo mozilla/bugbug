@@ -31,8 +31,7 @@ logger = getLogger(__name__)
 
 
 MAX_MODIFICATION_NUMBER = 50
-# TODO: Set to 2 years and 6 months. If it takes too long, make the task work incrementally like microannotate-generate.
-RELATIVE_START_DATE = relativedelta(months=6)
+RELATIVE_START_DATE = relativedelta(years=2, months=6)
 # Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=7)
 
@@ -382,6 +381,15 @@ class RegressorFinder(object):
             logger.info(
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
+
+        # Analyze up to 1000 commits at a time, to avoid the task running out of time.
+        done = True
+        if len(bug_fixing_commits) > 1000:
+            bug_fixing_commits = bug_fixing_commits[:1000]
+            done = False
+
+        with open("done", "w") as f:
+            f.write(str(1 if done else 0))
 
         def _init(git_repo_dir):
             global GIT_REPO
