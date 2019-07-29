@@ -32,7 +32,7 @@ logger = getLogger(__name__)
 
 MAX_MODIFICATION_NUMBER = 50
 # TODO: Set to 2 years and 6 months. If it takes too long, make the task work incrementally like microannotate-generate.
-RELATIVE_START_DATE = relativedelta(days=98)
+RELATIVE_START_DATE = relativedelta(months=6)
 # Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=7)
 
