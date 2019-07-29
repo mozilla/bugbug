@@ -76,7 +76,7 @@ def download(path, force=False, support_files_too=False):
             print(f"{url} is not yet available to download")
             return
 
-    utils.zstd_decompress(zst_path)
+    utils.zstd_decompress(path)
 
     if support_files_too:
         for support_file in DATABASES[path]["support_files"]:

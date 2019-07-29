@@ -18,10 +18,6 @@ from sklearn.preprocessing import OrdinalEncoder
 
 TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
 
-# with open(path, mode) as f:
-#         with cctx.stream_writer(f) as writer:
-#                     yield store_constructor(writer)
-
 def zstd_compress(path):
     cctx=zstandard.ZstdCompressor()
     with open(path, 'rb') as fh:
@@ -43,20 +39,6 @@ def zstd_decompress(path):
                 break
             with open(path,'wb') as f:
                     f.write(chunk)
-
-def compress(path):
-    cctx = zstandard.ZstdCompressor()
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
-
-
-        
-def decompress(path):
-    dctx = zstandard.ZstdDecompressor()
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            dctx.copy_stream(input_f, output_f)
 
 def split_tuple_iterator(iterable):
     q = collections.deque()
@@ -201,13 +183,7 @@ class CustomJsonEncoder(json.JSONEncoder):
     """ A custom Json Encoder to support Numpy types
     """
 
-<<<<<<< HEAD
-    def default(self, obj):          
-||||||| merged common ancestors
-    def default(self, obj):
-=======
     def default(self, obj):          # pylint: disable=E0202
->>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
         try:
             return np.asscalar(obj)
         except (ValueError, IndexError, AttributeError, TypeError):

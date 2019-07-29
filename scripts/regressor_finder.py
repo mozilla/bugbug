@@ -24,13 +24,7 @@ from tqdm import tqdm
 from bugbug import bugzilla, db, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
-<<<<<<< HEAD
 from bugbug.utils import download_check_etag, retry, zstd_compress, zstd_decompress
-||||||| merged common ancestors
-from bugbug.utils import download_check_etag, retry
-=======
-from bugbug.utils import download_check_etag, retry, compress, decompress
->>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -82,16 +76,7 @@ def download_model(model_name):
         url = BASE_URL.format(model_name=model_name)
         logger.info(f"Downloading {url}...")
         download_check_etag(url, f"{model_name}model.zst")
-<<<<<<< HEAD
-        zstd_decompress(f"{model_name}model")
-||||||| merged common ancestors
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{model_name}model.zst", "rb") as input_f:
-            with open(f"{model_name}model", "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
-=======
-        decompress(f"{model_name}model.zst")
->>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
+        zstd_decompress(f"{model_name}model.zst")
         assert os.path.exists(f"{model_name}model"), "Decompressed file exists"
 
 
@@ -296,13 +281,7 @@ class RegressorFinder(object):
                 append_bug_fixing_commits(bug["id"], "e")
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
-<<<<<<< HEAD
         zstd_compress(BUG_FIXING_COMMITS_DB)
-||||||| merged common ancestors
-        compress_file(BUG_FIXING_COMMITS_DB)
-=======
-        compress(BUG_FIXING_COMMITS_DB)
->>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
         bug_fixing_commits = prev_bug_fixing_commits + bug_fixing_commits
         return [
@@ -453,13 +432,7 @@ class RegressorFinder(object):
         )
 
         db.append(db_path, bug_introducing_commits)
-<<<<<<< HEAD
         zstd_compress(db_path)
-||||||| merged common ancestors
-        compress_file(db_path)
-=======
-        compress(db_path)
->>>>>>> e1d526ad03385156f14fc5b2dcf7d999a5936192
 
 
 def evaluate(bug_fixing_commits, bug_introducing_commits):
