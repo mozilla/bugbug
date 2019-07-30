@@ -21,14 +21,6 @@ tasks:
         then: ${event.after}
         else: ${event.release.tag_name}
 
-    base_rev:
-      $if: 'tasks_for == "github-pull-request"'
-      then: ${event.pull_request.base.sha}
-      else:
-        $if: 'tasks_for == "github-push"'
-        then: ${event.before}
-        else: ${event.release.tag_name}
-
     repository:
       $if: 'tasks_for == "github-pull-request"'
       then: ${event.pull_request.head.repo.html_url}
@@ -51,9 +43,7 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
-               git remote add upstream https://github.com/mozilla/bugbug &&
-               git fetch --quiet upstream &&
-               pre-commit run --files $(git diff --name-only --diff-filter=d ${base_rev}...${head_rev})"
+               pre-commit run -a"
         metadata:
           name: bugbug lint
           description: bugbug lint
