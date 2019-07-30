@@ -67,7 +67,9 @@ class MicroannotateGenerator(object):
             )
         )
 
-        for _ in range(STEPS):
+        for i in range(STEPS):
+            logger.info(f"Step {i} out of {STEPS}")
+
             done = generator.generate(
                 self.repo_dir,
                 git_repo_path,
