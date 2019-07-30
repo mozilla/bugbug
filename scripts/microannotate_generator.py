@@ -71,7 +71,7 @@ class MicroannotateGenerator(object):
             done = generator.generate(
                 self.repo_dir,
                 git_repo_path,
-                limit=TOTAL_COMMITS / STEPS,
+                limit=TOTAL_COMMITS // STEPS,
                 tokenize=self.tokenize,
                 remove_comments=self.remove_comments,
             )
