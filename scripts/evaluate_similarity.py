@@ -8,7 +8,12 @@ import sys
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from bugbug.similarity import LSISimilarity, NeighborsSimilarity, Word2VecWmdSimilarity
+from bugbug.similarity import (
+    LSISimilarity,
+    NeighborsSimilarity,
+    Word2VecSoftCosSimilarity,
+    Word2VecWmdSimilarity,
+)
 
 
 def parse_args(args):
@@ -16,7 +21,13 @@ def parse_args(args):
     parser.add_argument(
         "--algorithm",
         help="Similarity algorithm to use",
-        choices=["lsi", "neighbors_tfidf", "neighbors_tfidf_bigrams", "word2vec_wmd"],
+        choices=[
+            "lsi",
+            "neighbors_tfidf",
+            "neighbors_tfidf_bigrams",
+            "word2vec_wmd",
+            "word2vec_softcos",
+        ],
     )
     parser.add_argument(
         "--disable-url-cleanup",
@@ -47,7 +58,8 @@ def main(args):
 
     elif args.algorithm == "word2vec_wmd":
         model_creator = Word2VecWmdSimilarity
-
+    elif args.algorithm == "word2vec_softcos":
+        model_creator = Word2VecSoftCosSimilarity
     model = model_creator(
         cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
     )

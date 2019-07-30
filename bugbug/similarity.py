@@ -25,7 +25,8 @@ try:
     import nltk
     import gensim
     from gensim import models, similarities
-    from gensim.models import Word2Vec
+    from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex
+    from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
@@ -245,7 +246,7 @@ class NeighborsSimilarity(BaseSimilarity):
         raise NotImplementedError
 
 
-class Word2VecWmdSimilarity(BaseSimilarity):
+class Word2VecSimilarityBase(BaseSimilarity):
     def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
         super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.corpus = []
@@ -262,6 +263,11 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
         self.w2vmodel = Word2Vec(self.corpus, size=100, min_count=5)
         self.w2vmodel.init_sims(replace=True)
+
+
+class Word2VecWmdSimilarity(Word2VecSimilarityBase):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
 
     # word2vec.wmdistance calculates only the euclidean distance. To get the cosine distance,
     # we're using the function with a few subtle changes. We compute the cosine distances
@@ -390,3 +396,27 @@ class Word2VecWmdSimilarity(BaseSimilarity):
         wmd = self.wmdistance(words1, words2, all_distances)
 
         return wmd
+
+
+class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+
+        terms_idx = WordEmbeddingSimilarityIndex(self.w2vmodel.wv)
+        self.dictionary = Dictionary(self.corpus)
+
+        bow = [self.dictionary.doc2bow(doc) for doc in self.corpus]
+
+        similarity_matrix = SparseTermSimilarityMatrix(terms_idx, self.dictionary)
+        self.softcosinesimilarity = SoftCosineSimilarity(
+            bow, similarity_matrix, num_best=10
+        )
+
+    def get_similar_bugs(self, query):
+        similarities = self.softcosinesimilarity[
+            self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
+        ]
+        return [self.bug_ids[similarity[0]] for similarity in similarities]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
