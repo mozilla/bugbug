@@ -67,6 +67,8 @@ Run the `run.py` script to perform training / classification. The first time `ru
     ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
 
+Note: If you run into problems, it's possible the version of Mercurial you are using is not supported. Check the Docker definition at infra/dockerfile.commit_retrieval to see what we are using in production.
+
 Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to the `log` command.
 
 
