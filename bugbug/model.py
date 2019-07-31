@@ -281,7 +281,7 @@ class Model:
             )
 
     def train(self, importance_cutoff=0.15):
-        classes, self.class_names = self.get_labels()
+        classes, self.class_names = self.get_labels(self.augment())
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
@@ -552,7 +552,7 @@ class BugModel(Model):
             commit_map = defaultdict(list)
 
             for commit in repository.get_commits():
-                bug_id = commit["bug_id"]
+                bug_id = str(commit["bug_id"])
                 if not bug_id:
                     continue
 
@@ -560,7 +560,7 @@ class BugModel(Model):
 
             assert len(commit_map) > 0
 
-        for bug in bugzilla.get_bugs():
+        for bug in self.augmented_bugs:
             bug_id = bug["id"]
             if bug_id not in classes:
                 continue
@@ -572,15 +572,6 @@ class BugModel(Model):
                     bug["commits"] = []
 
             yield bug, classes[bug_id]
-
-        if "to_rollback" in classes:
-            for bug in bugzilla.get_bugs():
-                bug_id = bug["id"]
-                if bug_id not in classes["to_rollback"]:
-                    continue
-
-                rollbacked_bug, rollbacked_label = self.rollback_gen(bug, classes)
-                yield rollbacked_bug, rollbacked_label
 
 
 class CommitModel(Model):
