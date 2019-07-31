@@ -56,6 +56,8 @@ Run the `run.py` script to perform training / classification. The first time `ru
 
 ### Running the repository mining script
 
+Note: This section is only necessary if you want to perform changes to the repository mining script. Otherwise, you can simply use the commits data we generate automatically.
+
 1. Clone https://hg.mozilla.org/mozilla-central/.
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
 3. Enable the pushlog, hgmo and mozext extensions. For example, if you are on Linux, add the following to the extensions section of the `~/.hgrc` file:
