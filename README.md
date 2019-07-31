@@ -41,7 +41,7 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 ## Setup
 
-Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
+Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
 ### Auto-formatting
 
