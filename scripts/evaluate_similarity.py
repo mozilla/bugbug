@@ -12,6 +12,7 @@ from bugbug.similarity import (
     LSISimilarity,
     NeighborsSimilarity,
     Word2VecSoftCosSimilarity,
+    Word2VecWmdRelaxSimilarity,
     Word2VecWmdSimilarity,
 )
 
@@ -25,6 +26,7 @@ def parse_args(args):
             "lsi",
             "neighbors_tfidf",
             "neighbors_tfidf_bigrams",
+            "word2vec_wmdrelax",
             "word2vec_wmd",
             "word2vec_softcos",
         ],
@@ -58,6 +60,8 @@ def main(args):
 
     elif args.algorithm == "word2vec_wmd":
         model_creator = Word2VecWmdSimilarity
+    elif args.algorithm == "word2vec_wmdrelax":
+        model_creator = Word2VecWmdRelaxSimilarity
     elif args.algorithm == "word2vec_softcos":
         model_creator = Word2VecSoftCosSimilarity
     model = model_creator(

@@ -8,6 +8,7 @@ import bisect
 import random
 import re
 from collections import defaultdict
+from itertools import chain
 
 import numpy as np
 from pyemd import emd
@@ -25,12 +26,13 @@ try:
     import nltk
     import gensim
     from gensim import models, similarities
-    from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex
+    from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex, TfidfModel
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
     from nltk.tokenize import word_tokenize
+    from wmd import WMD
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
@@ -396,6 +398,100 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
         wmd = self.wmdistance(words1, words2, all_distances)
 
         return wmd
+
+
+class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        self.dictionary = Dictionary(self.corpus)
+        self.tfidf = TfidfModel(dictionary=self.dictionary)
+
+    def get_similar_bugs(self, query):
+
+        query = self.text_preprocess(self.get_text(query))
+        words = [
+            word for word in set(chain(query, *self.corpus)) if word in self.w2vmodel.wv
+        ]
+        indices, words = zip(
+            *sorted(
+                (
+                    (index, word)
+                    for (index, _), word in zip(self.dictionary.doc2bow(words), words)
+                )
+            )
+        )
+        query = dict(self.tfidf[self.dictionary.doc2bow(query)])
+        query = [
+            (new_index, query[dict_index])
+            for new_index, dict_index in enumerate(indices)
+            if dict_index in query
+        ]
+        documents = [
+            dict(self.tfidf[self.dictionary.doc2bow(document)])
+            for document in self.corpus
+        ]
+        documents = [
+            [
+                (new_index, document[dict_index])
+                for new_index, dict_index in enumerate(indices)
+                if dict_index in document
+            ]
+            for document in documents
+        ]
+        embeddings = np.array(
+            [self.w2vmodel.wv[word] for word in words], dtype=np.float32
+        )
+        nbow = dict(
+            (
+                (index, list(chain([None], zip(*document))))
+                for index, document in enumerate(documents)
+                if document != []
+            )
+        )
+        nbow["query"] = tuple([None] + list(zip(*query)))
+        distances = WMD(embeddings, nbow, vocabulary_min=1).nearest_neighbors("query")
+
+        return [self.bug_ids[distance[0]] for distance in distances]
+
+    def get_distance(self, query1, query2):
+        query1 = self.text_preprocess(self.get_text(query1))
+        query2 = self.text_preprocess(self.get_text(query2))
+
+        words = [
+            word
+            for word in set(chain(query1, query2, *self.corpus))
+            if word in self.w2vmodel.wv
+        ]
+        indices, words = zip(
+            *sorted(
+                (
+                    (index, word)
+                    for (index, _), word in zip(self.dictionary.doc2bow(words), words)
+                )
+            )
+        )
+        query1 = dict(self.tfidf[self.dictionary.doc2bow(query1)])
+        query2 = dict(self.tfidf[self.dictionary.doc2bow(query2)])
+
+        query1 = [
+            (new_index, query1[dict_index])
+            for new_index, dict_index in enumerate(indices)
+            if dict_index in query1
+        ]
+        query2 = [
+            (new_index, query2[dict_index])
+            for new_index, dict_index in enumerate(indices)
+            if dict_index in query2
+        ]
+        embeddings = np.array(
+            [self.w2vmodel.wv[word] for word in words], dtype=np.float32
+        )
+        nbow = {}
+        nbow["query1"] = tuple([None] + list(zip(*query1)))
+        nbow["query2"] = tuple([None] + list(zip(*query2)))
+        distances = WMD(embeddings, nbow, vocabulary_min=1).nearest_neighbors("query1")
+
+        return distances[0][1]
 
 
 class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
