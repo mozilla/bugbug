@@ -385,7 +385,7 @@ class RegressorFinder(object):
         # Analyze up to 500 commits at a time, to avoid the task running out of time.
         done = True
         if len(bug_fixing_commits) > 500:
-            bug_fixing_commits = bug_fixing_commits[:500]
+            bug_fixing_commits = bug_fixing_commits[-500:]
             done = False
 
         with open("done", "w") as f:
