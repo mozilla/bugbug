@@ -43,6 +43,8 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
+Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
+
 ### Auto-formatting
 
 This project is using [pre-commit](https://pre-commit.com/). Please run `pre-commit install` to install the git pre-commit hooks on your clone.
