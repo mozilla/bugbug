@@ -9,7 +9,7 @@ from bugbug import bugzilla
 from bugbug.models import get_model_class
 
 
-def generate_sheet(model_name, token, span, threshold):
+def generate_sheet(model_name, token, days, threshold):
     model_file_name = f"{model_name}model"
 
     assert os.path.exists(
@@ -20,7 +20,7 @@ def generate_sheet(model_name, token, span, threshold):
     model = model_class.load(model_file_name)
 
     today = datetime.utcnow()
-    start_date = today - timedelta(span)
+    start_date = today - timedelta(days)
     bugzilla.set_token(token)
     bug_ids = bugzilla.get_ids_between(start_date, today)
     bugs = bugzilla.get(bug_ids)
@@ -59,7 +59,7 @@ def main():
     parser.add_argument("model", help="Which model to generate a csv for.")
     parser.add_argument("token", help="Bugzilla token")
     parser.add_argument(
-        "span", type=int, help="No. of days back from which bugs will be evaluated"
+        "days", type=int, help="No. of days back from which bugs will be evaluated"
     )
     parser.add_argument(
         "threshold", type=float, help="Confidence threshold for the model"
@@ -67,4 +67,4 @@ def main():
 
     args = parser.parse_args()
 
-    generate_sheet(args.model, args.token, args.span, args.threshold)
+    generate_sheet(args.model, args.token, args.days, args.threshold)
