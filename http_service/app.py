@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import datetime, timedelta
 
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
@@ -49,7 +50,11 @@ spec = APISpec(
 application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
-q = Queue(connection=redis_conn)  # no args implies the default queue
+
+JOB_TIMEOUT = 1800  # 30 minutes in seconds
+q = Queue(
+    connection=redis_conn, default_timeout=JOB_TIMEOUT
+)  # no args implies the default queue
 VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
@@ -57,7 +62,8 @@ BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 # Keep an HTTP client around for persistent connections
 BUGBUG_HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
 
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger()
 
 
@@ -120,17 +126,34 @@ def is_running(model_name, bug_id):
     job_id = redis_conn.get(mapping_key)
 
     if not job_id:
+        LOGGER.debug("No job ID mapping %s, False", job_id)
         return False
 
     try:
         job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
     except NoSuchJobError:
+        LOGGER.debug("No job in DB for %s, False", job_id)
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
-    if job_status in ("running", "started", "queued"):
+    if job_status == "started":
+        LOGGER.debug("Job running %s, True", job_id)
         return True
+
+    # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
+    timeout_datetime = job.enqueued_at + timedelta(seconds=job.timeout)
+    utcnow = datetime.utcnow()
+    if timeout_datetime < utcnow:
+        # Remove the timeouted job so it will be requeued
+        job.cancel()
+        job.cleanup()
+
+        LOGGER.debug("Job timeout %s, False", job_id)
+
+        return False
+
+    LOGGER.debug("Job status %s, False", job_status)
 
     return False
 
