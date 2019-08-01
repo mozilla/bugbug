@@ -382,10 +382,10 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
-        # Analyze up to 1000 commits at a time, to avoid the task running out of time.
+        # Analyze up to 500 commits at a time, to avoid the task running out of time.
         done = True
-        if len(bug_fixing_commits) > 1000:
-            bug_fixing_commits = bug_fixing_commits[:1000]
+        if len(bug_fixing_commits) > 500:
+            bug_fixing_commits = bug_fixing_commits[:500]
             done = False
 
         with open("done", "w") as f:
