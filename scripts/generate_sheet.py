@@ -9,7 +9,7 @@ from bugbug import bugzilla
 from bugbug.models import get_model_class
 
 
-def generate_sheet(model_name, token):
+def generate_sheet(model_name, token, span, threshold):
     model_file_name = f"{model_name}model"
 
     assert os.path.exists(
@@ -20,9 +20,9 @@ def generate_sheet(model_name, token):
     model = model_class.load(model_file_name)
 
     today = datetime.utcnow()
-    a_week_ago = today - timedelta(7)
+    start_date = today - timedelta(span)
     bugzilla.set_token(token)
-    bug_ids = bugzilla.get_ids_between(a_week_ago, today)
+    bug_ids = bugzilla.get_ids_between(start_date, today)
     bugs = bugzilla.get(bug_ids)
 
     print(f"Classifying {len(bugs)} bugs...")
@@ -34,7 +34,7 @@ def generate_sheet(model_name, token):
         rows.append(
             [
                 f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}',
-                "y" if p[0][1] >= 0.7 else "n",
+                "y" if p[0][1] >= threshold else "n",
                 "",
                 bug["summary"],
             ]
@@ -53,12 +53,18 @@ def generate_sheet(model_name, token):
 
 
 def main():
-    description = "Perform evaluation on bugs from last week on the specified model and generate a csv file "
+    description = "Perform evaluation on bugs from specified days back on the specified model and generate a csv file "
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("model", help="Which model to generate a csv for.")
     parser.add_argument("token", help="Bugzilla token")
+    parser.add_argument(
+        "span", type=int, help="No. of days back from which bugs will be evaluated"
+    )
+    parser.add_argument(
+        "threshold", type=float, help="Confidence threshold for the model"
+    )
 
     args = parser.parse_args()
 
-    generate_sheet(args.model, args.token)
+    generate_sheet(args.model, args.token, args.span, args.threshold)
