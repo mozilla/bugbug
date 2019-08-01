@@ -285,7 +285,7 @@ class Model:
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
-        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
+        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes, self.augment()))
 
         # Extract features from the items.
         X = self.extraction_pipeline.fit_transform([item for item in X_iter])
@@ -545,7 +545,7 @@ class BugModel(Model):
         Model.__init__(self, lemmatization)
         self.commit_data = commit_data
 
-    def items_gen(self, classes):
+    def items_gen(self, classes, bugs):
         if not self.commit_data:
             commit_map = None
         else:
@@ -560,7 +560,7 @@ class BugModel(Model):
 
             assert len(commit_map) > 0
 
-        for bug in self.augmented_bugs:
+        for bug in bugs:
             bug_id = bug["id"]
             if bug_id not in classes:
                 continue
