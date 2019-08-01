@@ -11,6 +11,7 @@ import uuid
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
+from cerberus import Validator
 from flask import Flask, jsonify, render_template, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields
@@ -49,6 +50,7 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 q = Queue(connection=redis_conn)  # no args implies the default queue
+VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 
@@ -134,7 +136,10 @@ def is_running(model_name, bug_id):
 
 
 def get_bugs_last_change_time(bug_ids):
-    query = {"id": bug_ids, "include_fields": ["last_change_time", "id"]}
+    query = {
+        "id": ",".join(map(str, bug_ids)),
+        "include_fields": ["last_change_time", "id"],
+    }
     header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
     response = BUGBUG_HTTP_CLIENT.get(
         BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
@@ -378,6 +383,19 @@ def batch_prediction(model_name):
 
     # TODO Check is JSON is valid and validate against a request schema
     batch_body = json.loads(request.data)
+
+    # Validate
+    schema = {
+        "bugs": {
+            "type": "list",
+            "minlength": 1,
+            "maxlength": 1000,
+            "schema": {"type": "integer"},
+        }
+    }
+    validator = Validator()
+    if not validator.validate(batch_body, schema):
+        return jsonify({"errors": validator.errors}), 400
 
     bugs = batch_body["bugs"]
 
