@@ -31,8 +31,7 @@ logger = getLogger(__name__)
 
 
 MAX_MODIFICATION_NUMBER = 50
-# TODO: Set to 2 years and 6 months. If it takes too long, make the task work incrementally like microannotate-generate.
-RELATIVE_START_DATE = relativedelta(days=98)
+RELATIVE_START_DATE = relativedelta(years=2, months=6)
 # Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=7)
 
@@ -383,6 +382,15 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
+        # Analyze up to 1000 commits at a time, to avoid the task running out of time.
+        done = True
+        if len(bug_fixing_commits) > 1000:
+            bug_fixing_commits = bug_fixing_commits[:1000]
+            done = False
+
+        with open("done", "w") as f:
+            f.write(str(1 if done else 0))
+
         def _init(git_repo_dir):
             global GIT_REPO
             GIT_REPO = GitRepository(git_repo_dir)
@@ -452,15 +460,11 @@ class RegressorFinder(object):
         compress_file(db_path)
 
 
-def evaluate(bug_fixing_commits, bug_introducing_commits):
+def evaluate(bug_introducing_commits):
     logger.info("Building bug -> commits map...")
     bug_to_commits_map = defaultdict(list)
     for commit in tqdm(repository.get_commits()):
         bug_to_commits_map[commit["bug_id"]].append(commit["node"])
-
-    bug_fixing_commits = set(
-        bug_fixing_commit["rev"] for bug_fixing_commit in bug_fixing_commits
-    )
 
     logger.info("Loading known regressors using regressed-by information...")
     known_regressors = {}
@@ -471,12 +475,13 @@ def evaluate(bug_fixing_commits, bug_introducing_commits):
 
     fix_to_regressors_map = defaultdict(list)
     for bug_introducing_commit in bug_introducing_commits:
-        if bug_introducing_commit["bug_introducing_rev"] == "":
-            continue
-
         fix_to_regressors_map[bug_introducing_commit["bug_fixing_rev"]].append(
             bug_introducing_commit["bug_introducing_rev"]
         )
+    logger.info(f"{len(fix_to_regressors_map)} fixes linked to regressors")
+    logger.info(
+        f"{sum(len(regressors) for regressors in fix_to_regressors_map.values())} regressors linked to fixes"
+    )
 
     logger.info("Measuring how many known regressors SZZ was able to find correctly...")
     all_regressors = 0
@@ -491,7 +496,7 @@ def evaluate(bug_fixing_commits, bug_introducing_commits):
 
         # Skip bug/regressor when we didn't analyze the commits to fix the bug (as
         # certainly we can't have found the regressor in this case).
-        if not any(fix_commit in bug_fixing_commits for fix_commit in fix_commits):
+        if not any(fix_commit in fix_to_regressors_map for fix_commit in fix_commits):
             continue
 
         # Get all commits linked to the regressor bug.
@@ -511,14 +516,14 @@ def evaluate(bug_fixing_commits, bug_introducing_commits):
         found_bad = False
         for fix_commit in fix_commits:
             # Check if we found at least a correct regressor.
-            if fix_commit in fix_to_regressors_map and any(
+            if any(
                 regressor_commit in regressor_commits
                 for regressor_commit in fix_to_regressors_map[fix_commit]
             ):
                 found_good = True
 
             # Check if we found at least a wrong regressor.
-            if fix_commit in fix_to_regressors_map and any(
+            if any(
                 regressor_commit not in regressor_commits
                 for regressor_commit in fix_to_regressors_map[fix_commit]
             ):
@@ -533,9 +538,13 @@ def evaluate(bug_fixing_commits, bug_introducing_commits):
         if found_bad:
             misassigned_regressors += 1
 
-    print(f"Perfectly found {perfect_regressors} regressors out of {all_regressors}")
-    print(f"Found {found_regressors} regressors out of {all_regressors}")
-    print(f"Misassigned {misassigned_regressors} regressors out of {all_regressors}")
+    logger.info(
+        f"Perfectly found {perfect_regressors} regressors out of {all_regressors}"
+    )
+    logger.info(f"Found {found_regressors} regressors out of {all_regressors}")
+    logger.info(
+        f"Misassigned {misassigned_regressors} regressors out of {all_regressors}"
+    )
 
 
 def main():
@@ -575,9 +584,9 @@ def main():
     regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, True
     )
-    evaluate(bug_fixing_commits, db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
+    evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
 
     regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, False
     )
-    evaluate(bug_fixing_commits, db.read(BUG_INTRODUCING_COMMITS_DB))
+    evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))

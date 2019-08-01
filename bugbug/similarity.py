@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import abc
 import bisect
 import random
 import re
@@ -24,10 +25,12 @@ try:
     import nltk
     import gensim
     from gensim import models, similarities
-    from gensim.models import Word2Vec
+    from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex
+    from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
+    from nltk.tokenize import word_tokenize
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
@@ -53,8 +56,8 @@ for bug in bugzilla.get_bugs():
         duplicates[dupe].add(bug["id"])
 
 
-class BaseSimilarity:
-    def __init__(self, cleanup_urls=True):
+class BaseSimilarity(abc.ABC):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
         self.cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
@@ -66,6 +69,8 @@ class BaseSimilarity:
         if cleanup_urls:
             self.cleanup_functions.append(feature_cleanup.url())
 
+        self.nltk_tokenizer = nltk_tokenizer
+
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
 
@@ -76,9 +81,13 @@ class BaseSimilarity:
         text = re.sub("[^a-zA-Z0-9]", " ", text)
 
         ps = PorterStemmer()
+
+        tokenized_text = (
+            word_tokenize(text.lower()) if self.nltk_tokenizer else text.lower().split()
+        )
         text = [
             ps.stem(word)
-            for word in text.lower().split()
+            for word in tokenized_text
             if word not in set(stopwords.words("english")) and len(word) > 1
         ]
         if join:
@@ -148,10 +157,14 @@ class BaseSimilarity:
         print(f"Precision: {hits_p/total_p * 100}%")
         print(f"MAP@k : {np.mean(apk) * 100}%")
 
+    @abc.abstractmethod
+    def get_distance(self, query1, query2):
+        return
+
 
 class LSISimilarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
@@ -195,10 +208,19 @@ class LSISimilarity(BaseSimilarity):
         # Get IDs of the k most similar bugs
         return [self.corpus[j[0]][0] for j in sims[:k]]
 
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
 
 class NeighborsSimilarity(BaseSimilarity):
-    def __init__(self, k=10, vectorizer=TfidfVectorizer(), cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+    def __init__(
+        self,
+        k=10,
+        vectorizer=TfidfVectorizer(),
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+    ):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.vectorizer = vectorizer
         self.similarity_calculator = NearestNeighbors(n_neighbors=k)
         text = []
@@ -220,10 +242,13 @@ class NeighborsSimilarity(BaseSimilarity):
             self.bug_ids[ind] for ind in indices[0] if self.bug_ids[ind] != query["id"]
         ]
 
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
 
-class Word2VecWmdSimilarity(BaseSimilarity):
-    def __init__(self, cut_off=0.2, cleanup_urls=True):
-        super().__init__(cleanup_urls=cleanup_urls)
+
+class Word2VecSimilarityBase(BaseSimilarity):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
         self.corpus = []
         self.bug_ids = []
         self.cut_off = cut_off
@@ -238,6 +263,11 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
         self.w2vmodel = Word2Vec(self.corpus, size=100, min_count=5)
         self.w2vmodel.init_sims(replace=True)
+
+
+class Word2VecWmdSimilarity(Word2VecSimilarityBase):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
 
     # word2vec.wmdistance calculates only the euclidean distance. To get the cosine distance,
     # we're using the function with a few subtle changes. We compute the cosine distances
@@ -288,12 +318,8 @@ class Word2VecWmdSimilarity(BaseSimilarity):
 
         return emd(d1, d2, distance_matrix)
 
-    def get_similar_bugs(self, query):
-
-        words = self.text_preprocess(self.get_text(query))
-        words = [word for word in words if word in self.w2vmodel.wv.vocab]
-
-        all_distances = np.array(
+    def calculate_all_distances(self, words):
+        return np.array(
             1.0
             - np.dot(
                 self.w2vmodel.wv.vectors_norm,
@@ -303,6 +329,14 @@ class Word2VecWmdSimilarity(BaseSimilarity):
             ),
             dtype=np.double,
         )
+
+    def get_similar_bugs(self, query):
+
+        words = self.text_preprocess(self.get_text(query))
+        words = [word for word in words if word in self.w2vmodel.wv.vocab]
+
+        all_distances = self.calculate_all_distances(words)
+
         distances = []
         for i in range(len(self.corpus)):
             cleaned_corpus = [
@@ -349,3 +383,40 @@ class Word2VecWmdSimilarity(BaseSimilarity):
             for similar in sorted(similarities, key=lambda v: v[1])[:10]
             if similar[0] != query["id"] and similar[1] < self.cut_off
         ]
+
+    def get_distance(self, query1, query2):
+
+        words1 = self.text_preprocess(self.get_text(query1))
+        words1 = [word for word in words1 if word in self.w2vmodel.wv.vocab]
+        words2 = self.text_preprocess(self.get_text(query2))
+        words2 = [word for word in words2 if word in self.w2vmodel.wv.vocab]
+
+        all_distances = self.calculate_all_distances(words1)
+
+        wmd = self.wmdistance(words1, words2, all_distances)
+
+        return wmd
+
+
+class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
+    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+
+        terms_idx = WordEmbeddingSimilarityIndex(self.w2vmodel.wv)
+        self.dictionary = Dictionary(self.corpus)
+
+        bow = [self.dictionary.doc2bow(doc) for doc in self.corpus]
+
+        similarity_matrix = SparseTermSimilarityMatrix(terms_idx, self.dictionary)
+        self.softcosinesimilarity = SoftCosineSimilarity(
+            bow, similarity_matrix, num_best=10
+        )
+
+    def get_similar_bugs(self, query):
+        similarities = self.softcosinesimilarity[
+            self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
+        ]
+        return [self.bug_ids[similarity[0]] for similarity in similarities]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
