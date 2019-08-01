@@ -11,7 +11,6 @@ from bugbug.utils import get_taskcluster_options
 
 ROOT_URI = "train_{}.per_date"
 DATE_URI = "train_{}.per_date.{}"
-PROJECT_PREFIX = "project.relman.bugbug.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/{}/artifacts/public/metrics.json"
 NAMESPACE_URI = "project.relman.bugbug.{}"
 
@@ -62,23 +61,26 @@ def get_task_metrics_from_date(model, date):
     # Split the date
     from_date = date.split(".")
 
-    uris = []
-    uris.append([])
+    namespaces = []
+
+    # Start at the root level
+    # We need an empty list in order to append namespaces part to it
+    namespaces.append([])
 
     # Recursively list all namespaces greater or equals than the given date
-    while uris:
-        uri = uris.pop(0)
+    while namespaces:
+        current_ns = namespaces.pop()
 
         # Handle version level namespaces
-        if not uri:
-            index_uri = ROOT_URI.format(model)
+        if not current_ns:
+            ns_uri = ROOT_URI.format(model)
         else:
-            uri_date = ".".join(uri)
-            index_uri = DATE_URI.format(model, uri_date)
+            current_ns_date = ".".join(current_ns)
+            ns_uri = DATE_URI.format(model, current_ns_date)
 
-        index_uri = NAMESPACE_URI.format(index_uri)
+        ns_full_uri = NAMESPACE_URI.format(ns_uri)
 
-        tasks = index.listTasks(index_uri)
+        tasks = index.listTasks(ns_full_uri)
         for task in tasks["tasks"]:
             task_uri = task["namespace"]
             r = get_task_metrics_from_uri(task_uri)
@@ -89,17 +91,18 @@ def get_task_metrics_from_date(model, date):
                 metric_file.write(r.text)
             LOGGER.info(f"Metrics saved to {file_path!r}")
 
-        for namespace in get_namespaces(index, index_uri):
-            new_uri = uri.copy()
-            new_uri.append(namespace["name"])
+        for namespace in get_namespaces(index, ns_full_uri):
+            new_ns = current_ns.copy()
+            new_ns.append(namespace["name"])
 
-            if not is_later_or_equal(new_uri, from_date):
-                LOGGER.debug("NEW URI %s is before %s", new_uri, from_date)
+            if not is_later_or_equal(new_ns, from_date):
+                LOGGER.debug("NEW namespace %s is before %s", new_ns, from_date)
                 continue
 
-            # Temp
-            if new_uri not in uris:
-                uris.append(new_uri)
+            # Might not be efficient but size of `namespaces` shouldn't be too
+            # big as we are doing a depth-first traversal
+            if new_ns not in namespaces:
+                namespaces.append(new_ns)
 
 
 def main():
