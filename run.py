@@ -6,8 +6,6 @@
 import argparse
 import sys
 
-import numpy as np
-
 from bugbug import bugzilla, db, repository
 from bugbug.models import MODELS, get_model_class
 
@@ -43,7 +41,6 @@ def parse_args(args):
         choices=["default", "nn"],
         default="default",
     )
-    parser.add_argument("--classify", help="Perform evaluation", action="store_true")
     parser.add_argument(
         "--historical",
         help="""Analyze historical bugs. Only used for defect, bugtype,
@@ -54,10 +51,6 @@ def parse_args(args):
 
 
 def main(args):
-    model_file_name = "{}{}model".format(
-        args.goal, "" if args.classifier == "default" else args.classifier
-    )
-
     if args.goal == "component":
         if args.classifier == "default":
             model_class_name = "component"
@@ -88,33 +81,6 @@ def main(args):
         else:
             model = model_class(args.lemmatization)
         model.train()
-    else:
-        model = model_class.load(model_file_name)
-
-    if args.classify:
-        for bug in bugzilla.get_bugs():
-            print(
-                f'https://bugzilla.mozilla.org/show_bug.cgi?id={ bug["id"] } - { bug["summary"]} '
-            )
-
-            if model.calculate_importance:
-                probas, importance = model.classify(
-                    bug, probabilities=True, importances=True
-                )
-
-                feature_names = model.get_human_readable_feature_names()
-
-                model.print_feature_importances(
-                    importance["importances"], feature_names, class_probabilities=probas
-                )
-            else:
-                probas = model.classify(bug, probabilities=True, importances=False)
-
-            if np.argmax(probas) == 1:
-                print(f"Positive! {probas}")
-            else:
-                print(f"Negative! {probas}")
-            input()
 
 
 if __name__ == "__main__":
