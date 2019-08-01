@@ -40,8 +40,7 @@ class CommitClassifier(object):
     def update_commit_db(self):
         repository.clone(self.repo_dir)
 
-        db.download_version(repository.COMMITS_DB)
-        if db.is_old_version(repository.COMMITS_DB) or not os.path.exists(
+        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
             db.download(repository.COMMITS_DB, force=True, support_files_too=True)
@@ -59,7 +58,7 @@ class CommitClassifier(object):
         )
 
         diffs = phabricator_api.search_diffs(diff_id=diff_id)
-        assert len(diffs) == 1, "No diff available for {}".format(diff_id)
+        assert len(diffs) == 1, f"No diff available for {diff_id}"
         diff = diffs[0]
 
         # Get the stack of patches
@@ -70,18 +69,30 @@ class CommitClassifier(object):
         diffs = phabricator_api.search_diffs(
             diff_phid=[p[0] for p in patches], attachments={"commits": True}
         )
-        commits = {
-            diff["phid"]: diff["attachments"]["commits"].get("commits", [])
-            for diff in diffs
-        }
+
+        diffs_data = {}
+        for diff in diffs:
+            revision = phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            logger.info(
+                "Diff {} linked to Revision {}".format(diff["id"], revision["id"])
+            )
+
+            diffs_data[diff["phid"]] = {
+                "commits": diff["attachments"]["commits"].get("commits", []),
+                "revision": revision,
+            }
 
         # First apply patches on local repo
         for diff_phid, patch in patches:
-            commit = commits.get(diff_phid)
+            diff_data = diffs_data.get(diff_phid)
 
-            message = ""
-            if commit:
-                message += "{}\n".format(commit[0]["message"])
+            commits = diff_data["commits"]
+            revision = diff_data["revision"]
+
+            if commits and commits[0]["message"]:
+                message = commits[0]["message"]
+            else:
+                message = revision["fields"]["title"]
 
             logger.info(f"Applying {diff_phid}")
             hg.import_(

@@ -107,6 +107,17 @@ def test_get_revs(fake_hg_repo):
     assert revs[0].decode("ascii") == revision2
     assert revs[1].decode("ascii") == revision3
 
+    add_file(hg, local, "file4", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg)
+
+    revs = repository.get_revs(hg, revision2, revision3)
+
+    assert (
+        len(revs) == 2
+    ), "There should be two revision after the first and up to the third"
+    assert revs[0].decode("ascii") == revision2
+    assert revs[1].decode("ascii") == revision3
+
 
 def test_hg_log(fake_hg_repo):
     hg, local, remote = fake_hg_repo

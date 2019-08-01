@@ -14,6 +14,10 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
+TOTAL_COMMITS = 20000
+STEPS = 20
+
+
 class MicroannotateGenerator(object):
     def __init__(self, cache_root, repo_url, tokenize, remove_comments):
         self.cache_root = cache_root
@@ -57,27 +61,36 @@ class MicroannotateGenerator(object):
             if b"Couldn't find remote ref master" in e.stdout:
                 pass
 
-        done = generator.generate(
-            self.repo_dir,
-            git_repo_path,
-            limit=20000,
-            tokenize=self.tokenize,
-            remove_comments=self.remove_comments,
-        )
-
-        with open("done", "w") as f:
-            f.write(str(1 if done else 0))
-
         retry(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
             )
         )
-        retry(
-            lambda: subprocess.run(
-                ["git", "push", repo_push_url, "master"], cwd=git_repo_path, check=True
+
+        for i in range(STEPS):
+            logger.info(f"Step {i} out of {STEPS}")
+
+            done = generator.generate(
+                self.repo_dir,
+                git_repo_path,
+                limit=TOTAL_COMMITS // STEPS,
+                tokenize=self.tokenize,
+                remove_comments=self.remove_comments,
             )
-        )
+
+            with open("done", "w") as f:
+                f.write(str(1 if done else 0))
+
+            retry(
+                lambda: subprocess.run(
+                    ["git", "push", repo_push_url, "master"],
+                    cwd=git_repo_path,
+                    check=True,
+                )
+            )
+
+            if done:
+                break
 
 
 def main():

@@ -33,7 +33,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    2,
+    1,
     ["commit_experiences.pickle.zst"],
 )
 
@@ -342,15 +342,15 @@ def _hg_log(revs):
     return hg_log(thread_local.hg, revs)
 
 
-def get_revs(hg, rev_start=0):
-    print(f"Getting revs from {rev_start} to tip...")
+def get_revs(hg, rev_start=0, rev_end="tip"):
+    print(f"Getting revs from {rev_start} to {rev_end}...")
 
     args = hglib.util.cmdbuilder(
         b"log",
         template="{node}\n",
         no_merges=True,
         branch="central",
-        rev=f"{rev_start}:tip",
+        rev=f"{rev_start}:{rev_end}",
     )
     x = hg.rawcommand(args)
     return x.splitlines()
@@ -570,48 +570,16 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True)
         assert day >= 0
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        if len(commit.file_copies) > 0:
-            for orig, copied in commit.file_copies.items():
-                orig_directories = get_directories(orig)
-                copied_directories = get_directories(copied)
-
-                for commit_type in ["", "backout"]:
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        if orig_directory in experiences["directory"][commit_type]:
-                            experiences["directory"][commit_type][
-                                copied_directory
-                            ] = copy.deepcopy(
-                                experiences["directory"][commit_type][orig_directory]
-                            )
-                        else:
-                            print(
-                                f"Experience missing for directory {orig_directory}, type '{commit_type}', on commit {commit.node}"
-                            )
-
-                    if orig in path_to_component and copied in path_to_component:
-                        orig_component = path_to_component[orig]
-                        copied_component = path_to_component[copied]
-                        if orig_component in experiences["component"][commit_type]:
-                            experiences["component"][commit_type][
-                                copied_component
-                            ] = copy.deepcopy(
-                                experiences["component"][commit_type][orig_component]
-                            )
-                        else:
-                            print(
-                                f"Experience missing for component {orig_component}, type '{commit_type}', on commit {commit.node}"
-                            )
-
-                    if orig in experiences["file"][commit_type]:
-                        experiences["file"][commit_type][copied] = copy.deepcopy(
-                            experiences["file"][commit_type][orig]
-                        )
-                    else:
-                        print(
-                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
-                        )
+        for orig, copied in commit.file_copies.items():
+            for commit_type in ["", "backout"]:
+                if orig in experiences["file"][commit_type]:
+                    experiences["file"][commit_type][copied] = copy.deepcopy(
+                        experiences["file"][commit_type][orig]
+                    )
+                else:
+                    print(
+                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                    )
 
         if commit not in commits_to_ignore:
             update_experiences("author", day, [commit.author])

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import os
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
@@ -20,7 +19,6 @@ class Retriever(object):
     def retrieve_bugs(self):
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
-        db.download_version(bugzilla.BUGS_DB)
         if not db.is_old_version(bugzilla.BUGS_DB):
             db.download(bugzilla.BUGS_DB)
 
@@ -50,8 +48,7 @@ class Retriever(object):
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
-        db.download_version(repository.COMMITS_DB)
-        if db.is_old_version(repository.COMMITS_DB) or not os.path.exists(
+        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
             db.download(repository.COMMITS_DB, force=True)
