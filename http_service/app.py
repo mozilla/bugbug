@@ -136,7 +136,10 @@ def is_running(model_name, bug_id):
 
 
 def get_bugs_last_change_time(bug_ids):
-    query = {"id": bug_ids, "include_fields": ["last_change_time", "id"]}
+    query = {
+        "id": ",".join(map(str, bug_ids)),
+        "include_fields": ["last_change_time", "id"],
+    }
     header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
     response = BUGBUG_HTTP_CLIENT.get(
         BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
