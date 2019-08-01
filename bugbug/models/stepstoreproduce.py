@@ -11,7 +11,6 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
-from bugbug.models.defect import DefectModel
 
 
 class StepsToReproduceModel(BugModel):
@@ -63,23 +62,23 @@ class StepsToReproduceModel(BugModel):
         self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
-        defects = DefectModel.get_bugbug_labels(self, "bug")
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            if bug_data["id"] in defects:
-                if "cf_has_str" in bug_data:
-                    if bug_data["cf_has_str"] == "no":
-                        classes[int(bug_data["id"])] = 0
-                    elif bug_data["cf_has_str"] == "yes":
-                        classes[int(bug_data["id"])] = 1
-                elif "stepswanted" in bug_data["keywords"]:
+            if "type" in bug_data and bug_data["type"] != "defect":
+                continue
+            if "cf_has_str" in bug_data:
+                if bug_data["cf_has_str"] == "no":
                     classes[int(bug_data["id"])] = 0
-                else:
-                    for entry in bug_data["history"]:
-                        for change in entry["changes"]:
-                            if change["removed"].startswith("stepswanted"):
-                                classes[int(bug_data["id"])] = 1
+                elif bug_data["cf_has_str"] == "yes":
+                    classes[int(bug_data["id"])] = 1
+            elif "stepswanted" in bug_data["keywords"]:
+                classes[int(bug_data["id"])] = 0
+            else:
+                for entry in bug_data["history"]:
+                    for change in entry["changes"]:
+                        if change["removed"].startswith("stepswanted"):
+                            classes[int(bug_data["id"])] = 1
 
         print(
             "{} bugs have no steps to reproduce".format(
