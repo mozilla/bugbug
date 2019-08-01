@@ -3,6 +3,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+# Author: Gilles Louppe <g.louppe@gmail.com>
+# License: BSD 3 clause
+#
+#
+# Adapted for PU learning by Roy Wright <roy.w.wright@gmail.com>
+# (work in progress)
+#
+# A better idea: instead of a separate PU class, modify the original
+# sklearn BaggingClassifier so that the parameters `max_samples`
+# and `bootstrap` may be lists or dicts...
+# e.g. for a PU problem with 500 positives and 10000 unlabeled, we might set
+# max_samples = [500, 500]     (to balance P and U in each bag)
+# bootstrap = [True, False]    (to only bootstrap the unlabeled)
+
 # Module for Positive Unlabeled Learning
 import numpy as np
 from sklearn.ensemble import bagging
@@ -39,6 +53,7 @@ def pu_parallel_build_estimators(
         random_state = np.random.RandomState(seeds[i])
         estimator = ensemble._make_estimator(append=False, random_state=random_state)
 
+        ###################modified part for PULearning########################
         Positive_indices = [pair[0] for pair in enumerate(y) if pair[1] == 1]
         Unlabeled_indices = [pair[0] for pair in enumerate(y) if pair[1] < 1]
         features, indices = bagging._generate_bagging_indices(
@@ -51,6 +66,7 @@ def pu_parallel_build_estimators(
             max_samples,
         )
         indices = [Unlabeled_indices[i] for i in indices] + Positive_indices
+        #######################################################################
 
         # Draw samples, using sample weights, and then fit
         if support_sample_weight:
@@ -121,6 +137,7 @@ class PUClassifier(bagging.BaggingClassifier):
             # to those in `_parallel_build_estimators()`
             random_state = np.random.RandomState(seed)
 
+            ###################modified part for PULearning########################
             Positive_indices = [pair[0] for pair in enumerate(self.y) if pair[1] == 1]
             Unlabeled_indices = [pair[0] for pair in enumerate(self.y) if pair[1] < 1]
 
@@ -137,5 +154,6 @@ class PUClassifier(bagging.BaggingClassifier):
             sample_indices = [
                 Unlabeled_indices[i] for i in sample_indices
             ] + Positive_indices
+            #######################################################################
 
             yield feature_indices, sample_indices
