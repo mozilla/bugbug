@@ -9,9 +9,8 @@ import taskcluster
 
 from bugbug.utils import get_taskcluster_options
 
-LATEST_URI = "train_{}.latest"
-VERSIONED_URI = "train_{}.per_date"
-DATED_VERSIONED_URI = "train_{}.per_date.{}"
+ROOT_URI = "train_{}.per_date"
+DATE_URI = "train_{}.per_date.{}"
 PROJECT_PREFIX = "project.relman.bugbug.{}"
 BASE_URL = "https://index.taskcluster.net/v1/task/{}/artifacts/public/metrics.json"
 NAMESPACE_URI = "project.relman.bugbug.{}"
@@ -72,10 +71,10 @@ def get_task_metrics_from_date(model, date):
 
         # Handle version level namespaces
         if not uri:
-            index_uri = VERSIONED_URI.format(model)
+            index_uri = ROOT_URI.format(model)
         else:
             uri_date = ".".join(uri)
-            index_uri = DATED_VERSIONED_URI.format(model, uri_date)
+            index_uri = DATE_URI.format(model, uri_date)
 
         index_uri = NAMESPACE_URI.format(index_uri)
 
