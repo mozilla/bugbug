@@ -55,6 +55,9 @@ class Commit:
         backedoutby,
         author_email,
         reviewers,
+        files=[],
+        file_copies={},
+        ignored=False,
     ):
         self.node = node
         self.author = author
@@ -65,9 +68,11 @@ class Commit:
         self.backedoutby = backedoutby
         self.ever_backedout = backedoutby != ""
         self.author_email = author_email
-        self.files = []
-        self.file_copies = {}
+        if files:
+            self.set_files(files)
+        self.file_copies = file_copies
         self.reviewers = reviewers
+        self.ignored = ignored
         self.added = 0
         self.test_added = 0
         self.deleted = 0
@@ -79,7 +84,6 @@ class Commit:
         self.maximum_file_size = 0
         self.minimum_file_size = 0
         self.files_modified_num = 0
-        self.ignored = False
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -112,6 +116,7 @@ class Commit:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
+        d["date"] = str(d["date"])
         return d
 
 
@@ -218,6 +223,7 @@ def hg_modified_files(hg, commit):
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
 
+    commit.file_copies = f_copies = {}
     for file_copy in file_copies_str.decode("utf-8").split("|"):
         if not file_copy:
             continue
@@ -225,7 +231,7 @@ def hg_modified_files(hg, commit):
         parts = file_copy.split(" (")
         copied = parts[0]
         orig = parts[1][:-1]
-        commit.file_copies[sys.intern(orig)] = sys.intern(copied)
+        f_copies[sys.intern(orig)] = sys.intern(copied)
 
     commit.set_files([sys.intern(f) for f in files_str.decode("utf-8").split("|")])
 
@@ -316,7 +322,7 @@ def hg_log(hg, revs):
     revs = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
         assert b" " in rev[3]
-        date = str(datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0])))
+        date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
         assert b" " in rev[7]
         pushdate_timestamp = rev[7].split(b" ", 1)[0]
@@ -578,16 +584,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
         assert day >= 0
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        for orig, copied in commit.file_copies.items():
-            for commit_type in ["", "backout"]:
-                if orig in experiences["file"][commit_type]:
-                    experiences["file"][commit_type][copied] = copy.deepcopy(
-                        experiences["file"][commit_type][orig]
-                    )
-                else:
-                    print(
-                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
-                    )
+        if "file" in experiences:
+            xp_file = experiences["file"]
+            for orig, copied in commit.file_copies.items():
+                for commit_type in ["", "backout"]:
+                    if orig in xp_file[commit_type]:
+                        xp_file[commit_type][copied] = copy.deepcopy(
+                            xp_file[commit_type][orig]
+                        )
+                    else:
+                        print(
+                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                        )
 
         if not commit.ignored:
             update_experiences("author", day, [commit.author])
@@ -714,6 +722,9 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     commits = list(commits)
 
     calculate_experiences(commits, first_pushdate, save)
+
+    if ret:
+        commits = [commit for commit in commits if not commit.ignored]
 
     if save:
         db.append(
