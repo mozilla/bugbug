@@ -59,10 +59,13 @@ def main():
     parser.add_argument("model", help="Which model to generate a csv for.")
     parser.add_argument("token", help="Bugzilla token")
     parser.add_argument(
-        "days", type=int, help="No. of days back from which bugs will be evaluated"
+        "days",
+        type=int,
+        default=7,
+        help="No. of days back from which bugs will be evaluated",
     )
     parser.add_argument(
-        "threshold", type=float, help="Confidence threshold for the model"
+        "threshold", type=float, default=0.7, help="Confidence threshold for the model"
     )
 
     args = parser.parse_args()
