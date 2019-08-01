@@ -171,11 +171,11 @@ class RegressorFinder(object):
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
-        ignore_set = repository.get_commits_to_ignore(self.mercurial_repo_dir, commits)
+        repository.set_commits_to_ignore(self.mercurial_repo_dir, commits)
         commits_to_ignore = []
 
         for commit in commits:
-            if commit in ignore_set or commit.backedoutby:
+            if commit.ignored or commit.backedoutby:
                 commits_to_ignore.append(
                     {
                         "rev": commit.node,
