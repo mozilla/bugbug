@@ -4,10 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import csv
-import os
 import sys
-from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -47,12 +44,6 @@ def parse_args(args):
         default="default",
     )
     parser.add_argument("--classify", help="Perform evaluation", action="store_true")
-    parser.add_argument(
-        "--generate-sheet",
-        help="Perform evaluation on bugs from last week and generate a csv file",
-        action="store_true",
-    )
-    parser.add_argument("--token", help="Bugzilla token", action="store")
     parser.add_argument(
         "--historical",
         help="""Analyze historical bugs. Only used for defect, bugtype,
@@ -124,42 +115,6 @@ def main(args):
             else:
                 print(f"Negative! {probas}")
             input()
-
-    if args.generate_sheet:
-        assert (
-            args.token is not None
-        ), "A Bugzilla token should be set in order to download bugs"
-        today = datetime.utcnow()
-        a_week_ago = today - timedelta(7)
-        bugzilla.set_token(args.token)
-        bug_ids = bugzilla.get_ids_between(a_week_ago, today)
-        bugs = bugzilla.get(bug_ids)
-
-        print(f"Classifying {len(bugs)} bugs...")
-
-        rows = [["Bug", f"{args.goal}(model)", args.goal, "Title"]]
-
-        for bug in bugs.values():
-            p = model.classify(bug, probabilities=True)
-            rows.append(
-                [
-                    f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}',
-                    "y" if p[0][1] >= 0.7 else "n",
-                    "",
-                    bug["summary"],
-                ]
-            )
-
-        os.makedirs("sheets", exist_ok=True)
-        with open(
-            os.path.join(
-                "sheets",
-                f'{args.goal}-{datetime.utcnow().strftime("%Y-%m-%d")}-labels.csv',
-            ),
-            "w",
-        ) as f:
-            writer = csv.writer(f)
-            writer.writerows(rows)
 
 
 if __name__ == "__main__":
