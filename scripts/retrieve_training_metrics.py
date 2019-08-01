@@ -2,7 +2,9 @@
 
 import argparse
 import logging
+import os
 import sys
+from os.path import abspath, join
 
 import requests
 import taskcluster
@@ -51,7 +53,7 @@ def is_later_or_equal(partial_date, from_date):
     return True
 
 
-def get_task_metrics_from_date(model, date):
+def get_task_metrics_from_date(model, date, output_directory):
     options = get_taskcluster_options()
 
     index = taskcluster.Index(options)
@@ -86,7 +88,8 @@ def get_task_metrics_from_date(model, date):
             r = get_task_metrics_from_uri(task_uri)
 
             # Write the file on disk
-            file_path = f"metric_{'_'.join(task_uri.split('.'))}.json"
+            file_name = f"metric_{'_'.join(task_uri.split('.'))}.json"
+            file_path = abspath(join(output_directory, file_name))
             with open(file_path, "w") as metric_file:
                 metric_file.write(r.text)
             LOGGER.info(f"Metrics saved to {file_path!r}")
@@ -109,6 +112,12 @@ def main():
     description = "Retrieve a model training metrics"
     parser = argparse.ArgumentParser(description=description)
 
+    parser.add_argument(
+        "-d",
+        "--output-directory",
+        default=os.getcwd(),
+        help="In which directory the script should save the metrics file. The directory must exists",
+    )
     parser.add_argument("model", help="Which model to retrieve training metrics from.")
     parser.add_argument(
         "date",
@@ -118,7 +127,7 @@ def main():
 
     args = parser.parse_args()
 
-    get_task_metrics_from_date(args.model, args.date)
+    get_task_metrics_from_date(args.model, args.date, args.output_directory)
 
 
 if __name__ == "__main__":
