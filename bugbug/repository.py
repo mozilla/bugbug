@@ -55,8 +55,6 @@ class Commit:
         backedoutby,
         author_email,
         reviewers,
-        files=[],
-        file_copies={},
         ignored=False,
     ):
         self.node = node
@@ -68,9 +66,6 @@ class Commit:
         self.backedoutby = backedoutby
         self.ever_backedout = backedoutby != ""
         self.author_email = author_email
-        if files:
-            self.set_files(files)
-        self.file_copies = file_copies
         self.reviewers = reviewers
         self.ignored = ignored
         self.added = 0
@@ -92,12 +87,14 @@ class Commit:
     def __hash__(self):
         return hash(self.node)
 
-    def set_files(self, files):
+    def set_files(self, files, file_copies):
         self.files = files
+        self.file_copies = file_copies
         self.components = list(
             set(path_to_component[path] for path in files if path in path_to_component)
         )
         self.directories = get_directories(files)
+        return self
 
     def set_experience(
         self, exp_type, commit_type, timespan, exp_sum, exp_max, exp_min
@@ -223,7 +220,7 @@ def hg_modified_files(hg, commit):
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
 
-    commit.file_copies = f_copies = {}
+    file_copies = {}
     for file_copy in file_copies_str.decode("utf-8").split("|"):
         if not file_copy:
             continue
@@ -231,9 +228,11 @@ def hg_modified_files(hg, commit):
         parts = file_copy.split(" (")
         copied = parts[0]
         orig = parts[1][:-1]
-        f_copies[sys.intern(orig)] = sys.intern(copied)
+        file_copies[sys.intern(orig)] = sys.intern(copied)
 
-    commit.set_files([sys.intern(f) for f in files_str.decode("utf-8").split("|")])
+    commit.set_files(
+        [sys.intern(f) for f in files_str.decode("utf-8").split("|")], file_copies
+    )
 
 
 def _transform(commit):
@@ -331,7 +330,7 @@ def hg_log(hg, revs):
         else:
             pushdate = datetime.utcnow()
 
-        bug = rev[4]
+        bug_id = int(rev[4].decode("ascii")) if rev[4] else None
 
         revs.append(
             Commit(
@@ -340,7 +339,7 @@ def hg_log(hg, revs):
                 desc=rev[2].decode("utf-8"),
                 date=date,
                 pushdate=pushdate,
-                bug_id=int(bug.decode("ascii")) if bug else None,
+                bug_id=bug_id,
                 backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6].decode("utf-8"),
                 reviewers=tuple(
@@ -612,7 +611,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
             )
 
 
-def get_commits_to_ignore(repo_dir, commits):
+def set_commits_to_ignore(repo_dir, commits):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
@@ -635,7 +634,8 @@ def get_commits_to_ignore(repo_dir, commits):
 
         return False
 
-    return set(commit for commit in commits if should_ignore(commit))
+    for commit in commits:
+        commit.ignored = should_ignore(commit)
 
 
 def download_component_mapping():
@@ -658,9 +658,8 @@ def hg_log_multi(repo_dir, revs):
     cwd = os.getcwd()
     os.chdir(repo_dir)
 
-    CHUNK_SIZE = 256
-    processes = os.cpu_count() + 1
-    CHUNK_SIZE = int(math.ceil(len(revs) / processes))
+    threads_num = os.cpu_count() + 1
+    CHUNK_SIZE = int(math.ceil(len(revs) / threads_num))
     REVS_COUNT = len(revs)
     revs_groups = [
         (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
@@ -668,7 +667,7 @@ def hg_log_multi(repo_dir, revs):
     ]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread, max_workers=processes
+        initializer=_init_thread, max_workers=threads_num
     ) as executor:
         commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
@@ -683,7 +682,7 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
-def download_commits(repo_dir, rev_start=0, ret=False, save=True):
+def download_commits(repo_dir, rev_start=0, save=True):
     with hglib.open(repo_dir) as hg:
         revs = get_revs(hg, rev_start)
         if len(revs) == 0:
@@ -700,11 +699,7 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
     download_component_mapping()
 
-    commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
-    print(f"{len(commits_to_ignore)} commits to ignore")
-
-    for commit in commits:
-        commit.ignored = commit in commits_to_ignore
+    set_commits_to_ignore(repo_dir, commits)
 
     commits_num = len(commits)
 
@@ -718,21 +713,16 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
-
-    commits = list(commits)
+        commits = list(commits)
 
     calculate_experiences(commits, first_pushdate, save)
 
-    if ret:
-        commits = [commit for commit in commits if not commit.ignored]
+    commits = [commit for commit in commits if not commit.ignored]
 
     if save:
-        db.append(
-            COMMITS_DB, (commit.to_json() for commit in commits if not commit.ignored)
-        )
+        db.append(COMMITS_DB, (commit.to_json() for commit in commits))
 
-    if ret:
-        return commits
+    return commits
 
 
 def clean(repo_dir):

@@ -147,10 +147,6 @@ def test_hg_modified_files(fake_hg_repo):
     for c in commits:
         repository.hg_modified_files(hg, c)
 
-    print((commits[2].node, revision1))
-    print(commits[2].files)
-    print(commits[2].file_copies)
-
     assert commits[0].node == revision1
     assert commits[0].files == ["f1"]
     assert commits[0].file_copies == {}
@@ -401,7 +397,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, ret=True)
+    commits = repository.download_commits(local)
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -414,7 +410,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, ret=True)
+    commits = repository.download_commits(local)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -430,7 +426,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, revision3, ret=True)
+    commits = repository.download_commits(local, revision3)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
@@ -443,14 +439,13 @@ def test_download_commits(fake_hg_repo):
 
     os.remove("data/commits.json")
     os.remove("data/commit_experiences.pickle")
-    commits = repository.download_commits(local, f"children({revision2})", ret=True)
+    commits = repository.download_commits(local, f"children({revision2})")
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     os.remove("data/commit_experiences.pickle")
-    commits = repository.download_commits(local, ret=False)
-    assert commits is None
+    commits = repository.download_commits(local)
     assert len(list(repository.get_commits())) == 2
 
 
@@ -540,7 +535,7 @@ def test_exp_queue():
     assert q[12] == 1
 
 
-def test_get_commits_to_ignore(tmpdir):
+def test_set_commits_to_ignore(tmpdir):
     tmp_path = tmpdir.strpath
 
     with open(os.path.join(tmp_path, ".hg-annotate-ignore-revs"), "w") as f:
@@ -556,10 +551,8 @@ def test_get_commits_to_ignore(tmpdir):
             bug_id=bug_id,
             backedoutby=backedoutby,
             author_email="author@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
             reviewers=("reviewer1", "reviewer2"),
-        )
+        ).set_files(["dom/file1.cpp"], {})
 
     commits = [
         create_commit("commit", "", 123, ""),
@@ -577,7 +570,8 @@ def test_get_commits_to_ignore(tmpdir):
         ),
     ]
 
-    leftovers = repository.get_commits_to_ignore(tmp_path, commits)
+    repository.set_commits_to_ignore(tmp_path, commits)
+    leftovers = [commit for commit in commits if commit.ignored]
     assert len(leftovers) == 4
     assert set(commit.node for commit in leftovers) == {
         "commit_backout",
@@ -606,10 +600,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author1@mozilla.org",
-            files=["dom/file1.cpp", "apps/file1.jsm"],
-            file_copies={},
             reviewers=("reviewer1", "reviewer2"),
-        ),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commitbackedout": repository.Commit(
             node="commitbackedout",
             author="author1",
@@ -619,10 +611,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            files=["dom/file1.cpp", "apps/file1.jsm"],
-            file_copies={},
             reviewers=("reviewer1", "reviewer2"),
-        ),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commit2": repository.Commit(
             node="commit2",
             author="author2",
@@ -632,10 +622,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author2@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
             reviewers=("reviewer1",),
-        ),
+        ).set_files(["dom/file1.cpp"], {}),
         "commit2refactoring": repository.Commit(
             node="commit2refactoring",
             author="author2",
@@ -645,11 +633,9 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author2@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
             reviewers=("reviewer1",),
             ignored=True,
-        ),
+        ).set_files(["dom/file1.cpp"], {}),
         "commit3": repository.Commit(
             node="commit3",
             author="author1",
@@ -659,10 +645,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author1@mozilla.org",
-            files=["dom/file2.cpp", "apps/file1.jsm"],
-            file_copies={},
             reviewers=("reviewer2",),
-        ),
+        ).set_files(["dom/file2.cpp", "apps/file1.jsm"], {}),
         "commit4": repository.Commit(
             node="commit4",
             author="author2",
@@ -672,10 +656,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author2@mozilla.org",
-            files=["dom/file1.cpp", "apps/file2.jsm"],
-            file_copies={},
             reviewers=("reviewer1", "reviewer2"),
-        ),
+        ).set_files(["dom/file1.cpp", "apps/file2.jsm"], {}),
         "commit5": repository.Commit(
             node="commit5",
             author="author3",
@@ -685,10 +667,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author3@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={"dom/file1.cpp": "dom/file1copied.cpp"},
             reviewers=("reviewer3",),
-        ),
+        ).set_files(["dom/file1.cpp"], {"dom/file1.cpp": "dom/file1copied.cpp"}),
         "commit6": repository.Commit(
             node="commit6",
             author="author3",
@@ -698,10 +678,8 @@ def test_calculate_experiences():
             bug_id=123,
             backedoutby="",
             author_email="author3@mozilla.org",
-            files=["dom/file1.cpp", "dom/file1copied.cpp"],
-            file_copies={},
             reviewers=("reviewer3",),
-        ),
+        ).set_files(["dom/file1.cpp", "dom/file1copied.cpp"], {}),
     }
 
     repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
