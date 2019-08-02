@@ -88,7 +88,7 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
                apt-get -qq install -y python-pip &&
-               python2 -m pip install --quiet mercurial==4.8 &&
+               python2 -m pip install --quiet mercurial==5.1 &&
                git clone --quiet https://github.com/mozilla/version-control-tools.git &&
                git clone --quiet ${repository} &&
                cd bugbug &&
