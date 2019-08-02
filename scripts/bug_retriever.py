@@ -142,5 +142,6 @@ def main():
     retriever = Retriever()
     retriever.retrieve_bugs()
 
-if __name__ == "__main__": 
-     main()
+
+if __name__ == "__main__":
+    main()

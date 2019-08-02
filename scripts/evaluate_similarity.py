@@ -68,6 +68,3 @@ def main(args):
 
 if __name__ == "__main__":
     main(parse_args(sys.argv[1:]))
-
-if __name__ == "__main__": 
-     main()

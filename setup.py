@@ -50,6 +50,8 @@ setup(
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
             "bugbug-classify-commit = scripts.commit_classifier:main",
             "bugbug-regressor-finder = scripts.regressor_finder:main",
+            "bugbug-generate-sheet = scripts.generate_sheet:main"
+            "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",
         ]
     },
     classifiers=[
