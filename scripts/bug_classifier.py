@@ -9,8 +9,14 @@ from bugbug import bugzilla
 from bugbug.models import get_model_class
 
 
-def classify_bugs(model_name):
-    model_file_name = f"{model_name}model"
+def classify_bugs(model_name, classifier):
+    classifier_models = ["component"]
+
+    if classifier != "default" and model_name in classifier_models:
+        model_file_name = f"{model_name}{classifier}model"
+        model_name = f"{model_name}_{classifier}"
+    else:
+        model_file_name = f"{model_name}model"
 
     assert os.path.exists(
         model_file_name
@@ -49,7 +55,13 @@ def main():
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("model", help="Which model to use for evaluation")
+    parser.add_argument(
+        "--classifier",
+        help="Type of the classifier. Only used for component classification.",
+        choices=["default", "nn"],
+        default="default",
+    )
 
     args = parser.parse_args()
 
-    classify_bugs(args.model)
+    classify_bugs(args.model, args.classifier)
