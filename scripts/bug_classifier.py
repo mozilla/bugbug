@@ -8,11 +8,15 @@ import numpy as np
 from bugbug import bugzilla
 from bugbug.models import get_model_class
 
+MODELS_WITH_TYPE = ("component",)
+
 
 def classify_bugs(model_name, classifier):
-    classifier_models = ["component"]
+    if classifier != "default":
+        assert (
+            model_name in MODELS_WITH_TYPE
+        ), f"{classifier} is not a valid classifier type for {model_name}"
 
-    if classifier != "default" and model_name in classifier_models:
         model_file_name = f"{model_name}{classifier}model"
         model_name = f"{model_name}_{classifier}"
     else:
