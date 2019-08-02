@@ -78,6 +78,11 @@ class Commit:
         self.maximum_file_size = 0
         self.minimum_file_size = 0
         self.files_modified_num = 0
+        self.total_test_file_size = 0
+        self.average_test_file_size = 0
+        self.maximum_test_file_size = 0
+        self.minimum_test_file_size = 0
+        self.test_files_modified_num = 0
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -200,22 +205,17 @@ def _transform(commit):
         return commit
 
     sizes = []
+    test_sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_counts(patch)
     for stats in patch_data:
-        if stats["binary"]:
-            commit.types.add("binary")
-            continue
-
         path = stats["filename"]
 
-        if is_test(path):
-            commit.test_added += stats["added_lines"]
-            commit.test_deleted += stats["deleted_lines"]
-        else:
-            commit.added += stats["added_lines"]
-            commit.deleted += stats["deleted_lines"]
+        if stats["binary"]:
+            if not is_test(path):
+                commit.types.add("binary")
+            continue
 
         ext = os.path.splitext(path)[1]
         if ext in [".js", ".jsm"]:
@@ -241,15 +241,35 @@ def _transform(commit):
             type_ = "Rust"
         else:
             type_ = ext
-        commit.types.add(type_)
 
+        size = None
         if not stats["deleted"]:
             try:
                 after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
-                sizes.append(after.count(b"\n"))
+                size = after.count(b"\n")
             except hglib.error.CommandError as e:
                 if b"no such file in rev" not in e.err:
                     raise
+
+        if is_test(path):
+            commit.test_files_modified_num += 1
+
+            commit.test_added += stats["added_lines"]
+            commit.test_deleted += stats["deleted_lines"]
+
+            if size is not None:
+                test_sizes.append(size)
+            # We don't have a 'test' equivalent of types, as most tests are JS,
+            # so this wouldn't add useful information.
+        else:
+            commit.files_modified_num += 1
+
+            commit.added += stats["added_lines"]
+            commit.deleted += stats["deleted_lines"]
+
+            if size is not None:
+                sizes.append(size)
+            commit.types.add(type_)
 
     commit.total_file_size = sum(sizes)
     commit.average_file_size = (
@@ -258,7 +278,12 @@ def _transform(commit):
     commit.maximum_file_size = max(sizes, default=0)
     commit.minimum_file_size = min(sizes, default=0)
 
-    commit.files_modified_num = len(patch_data)
+    commit.total_test_file_size = sum(test_sizes)
+    commit.average_test_file_size = (
+        commit.total_test_file_size / len(test_sizes) if len(test_sizes) > 0 else 0
+    )
+    commit.maximum_test_file_size = max(test_sizes, default=0)
+    commit.minimum_test_file_size = min(test_sizes, default=0)
 
     return commit
 
