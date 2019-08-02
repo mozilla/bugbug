@@ -125,7 +125,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: releng-svc
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
