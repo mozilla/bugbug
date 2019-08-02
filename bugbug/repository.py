@@ -106,7 +106,7 @@ class Commit:
             setattr(self, f"{exp_str}max", exp_max)
             setattr(self, f"{exp_str}min", exp_min)
 
-    def to_json(self):
+    def to_dict(self):
         d = self.__dict__
         for f in ["backedoutby", "ignored", "file_copies"]:
             del d[f]
@@ -679,10 +679,10 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     calculate_experiences(commits, first_pushdate, save)
 
-    commits = [commit for commit in commits if not commit.ignored]
+    commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
     if save:
-        db.append(COMMITS_DB, (commit.to_json() for commit in commits))
+        db.append(COMMITS_DB, commits)
 
     return commits
 

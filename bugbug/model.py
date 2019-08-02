@@ -232,7 +232,7 @@ class Model:
         self, important_features, feature_names, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
-        # when classsifying
+        # when classifying
         if class_probabilities is not None:
             # shap_values are stored in class 1 for binary classification
             if len(class_probabilities[0]) != 2:

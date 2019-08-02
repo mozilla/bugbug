@@ -111,7 +111,7 @@ class CommitClassifier(object):
 
             # Analyze patch.
             commits = repository.download_commits(
-                self.repo_dir, rev_start=patch_rev.decode("utf-8"), ret=True, save=False
+                self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
         probs, importance = self.model.classify(

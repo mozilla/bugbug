@@ -396,9 +396,9 @@ class RegressorFinder(object):
             GIT_REPO = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
-            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
+            logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
-            logger.info(f"Analyzing {git_fix_revision}...")
+            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
 
             commit = GIT_REPO.get_commit(git_fix_revision)
 
