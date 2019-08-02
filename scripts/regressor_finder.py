@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import concurrent.futures
 import itertools
 import os
 import subprocess
@@ -442,21 +443,16 @@ class RegressorFinder(object):
 
             return bug_introducing_commits
 
-        # TODO: Re-enable multithreaded mode.
-        """with concurrent.futures.ThreadPoolExecutor(
+        with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
-            bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)"""
-        _init(repo_dir)
-        bug_introducing_commits = (
-            find_bic(bug_fixing_commit) for bug_fixing_commit in bug_fixing_commits
-        )
-        bug_introducing_commits = tqdm(
-            bug_introducing_commits, total=len(bug_fixing_commits)
-        )
-        bug_introducing_commits = list(
-            itertools.chain.from_iterable(bug_introducing_commits)
-        )
+            bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)
+            bug_introducing_commits = tqdm(
+                bug_introducing_commits, total=len(bug_fixing_commits)
+            )
+            bug_introducing_commits = list(
+                itertools.chain.from_iterable(bug_introducing_commits)
+            )
 
         total_results_num = len(bug_introducing_commits)
         bug_introducing_commits = list(filter(None, bug_introducing_commits))
