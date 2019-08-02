@@ -42,7 +42,7 @@ setup(
     include_package_data=True,
     license="MPL2",
     entry_points={
-        "console_scripts": [
+        "scripts": [
             "bugbug-data-commits = scripts.commit_retriever:main",
             "bugbug-data-bugzilla = scripts.bug_retriever:main",
             "bugbug-train = scripts.trainer:main",

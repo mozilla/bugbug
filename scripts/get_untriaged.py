@@ -111,3 +111,6 @@ if __name__ == "__main__":
         bugs = fetch_untriaged(args)
 
     run_untriaged(bugs)
+
+if __name__ == "__main__": 
+     main()

@@ -71,3 +71,6 @@ def main():
     args = parser.parse_args()
 
     generate_sheet(args.model, args.token, args.days, args.threshold)
+
+if __name__ == "__main__": 
+     main()

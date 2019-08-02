@@ -103,3 +103,6 @@ for bug in bugs:
 
     if v == "e":
         break
+
+if __name__ == "__main__": 
+     main()
