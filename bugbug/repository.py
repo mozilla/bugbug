@@ -41,6 +41,16 @@ path_to_component = {}
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
+TYPES_TO_EXT = {
+    "Javascript": [".js", ".jsm"],
+    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
+    "Java": [".java"],
+    "Python": [".py"],
+    "Rust": [".rs"],
+}
+
+EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
+
 
 class Commit:
     def __init__(
@@ -217,31 +227,6 @@ def _transform(commit):
                 commit.types.add("binary")
             continue
 
-        ext = os.path.splitext(path)[1]
-        if ext in [".js", ".jsm"]:
-            type_ = "JavaScript"
-        elif ext in [
-            ".c",
-            ".cpp",
-            ".cc",
-            ".cxx",
-            ".m",
-            ".mm",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-        ]:
-            type_ = "C/C++"
-        elif ext == ".java":
-            type_ = "Java"
-        elif ext == ".py":
-            type_ = "Python"
-        elif ext == ".rs":
-            type_ = "Rust"
-        else:
-            type_ = ext
-
         size = None
         if not stats["deleted"]:
             try:
@@ -269,6 +254,10 @@ def _transform(commit):
 
             if size is not None:
                 sizes.append(size)
+
+            ext = os.path.splitext(path)[1].lower()
+            type_ = EXT_TO_TYPES.get(ext, ext)
+
             commit.types.add(type_)
 
     commit.total_file_size = sum(sizes)
