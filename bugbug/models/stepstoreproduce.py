@@ -112,6 +112,7 @@ class StepsToReproduceModel(BugModel):
         y_test = y_test[final_indices]
         y_test[y_test == -1] = 0
         y_train[y_train == -1] = 0
+
         return X_train, X_test, y_train, y_test
 
     def overwrite_classes(self, bugs, classes, probabilities):

@@ -106,7 +106,7 @@ class PUClassifier(bagging.BaggingClassifier):
         max_features=1.0,
         bootstrap=True,
         bootstrap_features=False,
-        oob_score=True,
+        oob_score=False,
         warm_start=False,
         n_jobs=None,
         random_state=None,
@@ -125,35 +125,3 @@ class PUClassifier(bagging.BaggingClassifier):
             random_state=random_state,
             verbose=verbose,
         )
-
-    def fit(self, X, y, sample_weight=None):
-        self.y = y
-        return self._fit(X, y, self.max_samples, sample_weight=sample_weight)
-
-    def _get_estimators_indices(self):
-        # Get drawn indices along both sample and feature axes
-        for seed in self._seeds:
-            # Operations accessing random_state must be performed identically
-            # to those in `_parallel_build_estimators()`
-            random_state = np.random.RandomState(seed)
-
-            ###################modified part for PULearning########################
-            Positive_indices = [pair[0] for pair in enumerate(self.y) if pair[1] == 1]
-            Unlabeled_indices = [pair[0] for pair in enumerate(self.y) if pair[1] < 1]
-
-            feature_indices, sample_indices = bagging._generate_bagging_indices(
-                random_state,
-                self.bootstrap_features,
-                self.bootstrap,
-                self.n_features_,
-                len(Unlabeled_indices),
-                self._max_features,
-                self._max_samples,
-            )
-
-            sample_indices = [
-                Unlabeled_indices[i] for i in sample_indices
-            ] + Positive_indices
-            #######################################################################
-
-            yield feature_indices, sample_indices
