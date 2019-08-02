@@ -136,6 +136,36 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      - taskId: {$eval: as_slugid("check_metrics")}
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: aws-provisioner-v1
+        workerType: github-worker
+        payload:
+          maxRunTime: 3600
+          image: python
+          command:
+            - "/bin/bash"
+            - "-lcx"
+            - "apt-get -qq update &&
+               apt-get -qq install -y python-pip &&
+               git clone --quiet ${repository} &&
+               cd bugbug &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               pip install --quiet . &&
+               pip install --quiet -r test-requirements.txt &&
+               bash ./scripts/check_all_metrics.sh"
+          artifacts:
+            public/bugbug:
+              expires: {$fromNow: '2 weeks'}
+              path: metrics_out
+              type: directory
+        metadata:
+          name: bugbug check_metrics
+          description: bugbug check_metrics
+          owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
       - taskId: {$eval: as_slugid("packaging_test_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
