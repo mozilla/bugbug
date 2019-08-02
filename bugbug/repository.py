@@ -617,12 +617,15 @@ def download_component_mapping():
 
 
 def hg_log_multi(repo_dir, revs):
+    if len(revs) == 0:
+        return []
+
     cwd = os.getcwd()
     os.chdir(repo_dir)
 
     threads_num = os.cpu_count() + 1
-    CHUNK_SIZE = int(math.ceil(len(revs) / threads_num))
     REVS_COUNT = len(revs)
+    CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
     revs_groups = [
         (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
         for i in range(0, REVS_COUNT, CHUNK_SIZE)
