@@ -358,7 +358,7 @@ class Model:
                 importance_cutoff, shap_values
             )
 
-            self.print_feature_importances(important_features, feature_names)
+            self.print_feature_importances(important_features)
 
         print("Test Set scores:")
         # Evaluate results on the test set.
