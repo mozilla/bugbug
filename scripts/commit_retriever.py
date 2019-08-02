@@ -57,3 +57,6 @@ def main():
     retriever = Retriever(getattr(args, "cache-root"))
 
     retriever.retrieve_commits()
+
+if __name__ == "__main__": 
+     main()

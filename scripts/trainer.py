@@ -66,3 +66,6 @@ def main():
 
     retriever = Trainer()
     retriever.go(args.model)
+
+if __name__ == "__main__": 
+     main()

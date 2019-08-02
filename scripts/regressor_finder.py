@@ -590,3 +590,6 @@ def main():
         bug_fixing_commits, commits_to_ignore, False
     )
     evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
+
+if __name__ == "__main__": 
+     main()
