@@ -3,8 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
@@ -66,11 +68,11 @@ class StepsToReproduceModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             if "cf_has_str" in bug_data:
                 if bug_data["cf_has_str"] == "no":
-                    classes[int(bug_data["id"])] = 0
+                    classes[int(bug_data["id"])] = -1
                 elif bug_data["cf_has_str"] == "yes":
                     classes[int(bug_data["id"])] = 1
             elif "stepswanted" in bug_data["keywords"]:
-                classes[int(bug_data["id"])] = 0
+                classes[int(bug_data["id"])] = -1
             else:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
@@ -91,6 +93,21 @@ class StepsToReproduceModel(BugModel):
         )
 
         return classes, [0, 1]
+
+    def overwrite_train_test_split(self, X, y):
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.3, random_state=0
+        )
+
+        # Make test set contain true positives and true negatives only
+        one_indices = np.where(y_test == 1)[0]
+        minusone_indices = np.where(y_test == -1)[0]
+        final_indices = np.concatenate((one_indices, minusone_indices))
+        X_test = X_test[final_indices]
+        y_test = y_test[final_indices]
+        y_test[y_test == -1] = 0
+        y_train[y_train == -1] = 0
+        return X_train, X_test, y_train, y_test
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
