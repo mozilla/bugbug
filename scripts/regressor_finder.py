@@ -409,7 +409,11 @@ class RegressorFinder(object):
             bug_introducing_modifications = GIT_REPO.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
             )
-            logger.info(bug_introducing_modifications)
+            logger.info(
+                "Found {} for {}".format(
+                    bug_introducing_modifications, bug_fixing_commit["rev"]
+                )
+            )
 
             bug_introducing_commits = []
             for bug_introducing_hashes in bug_introducing_modifications.values():
