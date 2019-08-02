@@ -382,10 +382,10 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
-        # Analyze up to 1000 commits at a time, to avoid the task running out of time.
+        # Analyze up to 500 commits at a time, to avoid the task running out of time.
         done = True
-        if len(bug_fixing_commits) > 1000:
-            bug_fixing_commits = bug_fixing_commits[:1000]
+        if len(bug_fixing_commits) > 500:
+            bug_fixing_commits = bug_fixing_commits[-500:]
             done = False
 
         with open("done", "w") as f:
@@ -396,9 +396,9 @@ class RegressorFinder(object):
             GIT_REPO = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
-            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
+            logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
-            logger.info(f"Analyzing {git_fix_revision}...")
+            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
 
             commit = GIT_REPO.get_commit(git_fix_revision)
 
@@ -409,7 +409,11 @@ class RegressorFinder(object):
             bug_introducing_modifications = GIT_REPO.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
             )
-            logger.info(bug_introducing_modifications)
+            logger.info(
+                "Found {} for {}".format(
+                    bug_introducing_modifications, bug_fixing_commit["rev"]
+                )
+            )
 
             bug_introducing_commits = []
             for bug_introducing_hashes in bug_introducing_modifications.values():

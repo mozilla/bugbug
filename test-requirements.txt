@@ -3,4 +3,4 @@ pytest-cov==2.7.1
 coverage==4.5.4
 pre-commit==1.17.0
 responses==0.10.6
-jsonschema==3.0.1
+jsonschema==3.0.2

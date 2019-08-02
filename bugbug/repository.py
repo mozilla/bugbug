@@ -12,7 +12,6 @@ import logging
 import math
 import os
 import pickle
-import re
 import sys
 import threading
 from collections import deque
@@ -107,7 +106,7 @@ class Commit:
             setattr(self, f"{exp_str}max", exp_max)
             setattr(self, f"{exp_str}min", exp_min)
 
-    def to_json(self):
+    def to_dict(self):
         d = self.__dict__
         for f in ["backedoutby", "ignored", "file_copies"]:
             del d[f]
@@ -115,47 +114,6 @@ class Commit:
         d["pushdate"] = str(d["pushdate"])
         d["date"] = str(d["date"])
         return d
-
-
-# This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
-# gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
-def get_reviewers(commit_description, flag_re=None):
-    SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
-    LIST = r"[;,\/\\]\s*"
-    LIST_RE = re.compile(LIST)
-
-    IRC_NICK = r"[a-zA-Z0-9\-\_]+"
-    REVIEWERS_RE = re.compile(
-        r"([\s\(\.\[;,])"
-        + r"("
-        + SPECIFIER
-        + r")"
-        + r"("
-        + IRC_NICK
-        + r"(?:"
-        + LIST
-        + r"(?![a-z0-9\.\-]+[=?])"
-        + IRC_NICK
-        + r")*"
-        + r")?"
-    )
-
-    if commit_description == "":
-        return
-
-    commit_summary = commit_description.splitlines().pop(0)
-    res = []
-    for match in re.finditer(REVIEWERS_RE, commit_summary):
-        if not match.group(3):
-            continue
-
-        for reviewer in re.split(LIST_RE, match.group(3)):
-            if flag_re is None:
-                res.append(reviewer)
-            elif flag_re.match(match.group(2)):
-                res.append(reviewer)
-
-    return res
 
 
 def get_directories(files):
@@ -306,7 +264,7 @@ def _transform(commit):
 
 
 def hg_log(hg, revs):
-    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -332,6 +290,12 @@ def hg_log(hg, revs):
 
         bug_id = int(rev[4].decode("ascii")) if rev[4] else None
 
+        reviewers = (
+            set(sys.intern(r) for r in rev[8].decode("utf-8").split(" "))
+            if rev[8] != b""
+            else set()
+        )
+
         revs.append(
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
@@ -342,9 +306,7 @@ def hg_log(hg, revs):
                 bug_id=bug_id,
                 backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6].decode("utf-8"),
-                reviewers=tuple(
-                    set(sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8")))
-                ),
+                reviewers=tuple(reviewers),
             )
         )
 
@@ -655,12 +617,15 @@ def download_component_mapping():
 
 
 def hg_log_multi(repo_dir, revs):
+    if len(revs) == 0:
+        return []
+
     cwd = os.getcwd()
     os.chdir(repo_dir)
 
     threads_num = os.cpu_count() + 1
-    CHUNK_SIZE = int(math.ceil(len(revs) / threads_num))
     REVS_COUNT = len(revs)
+    CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
     revs_groups = [
         (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
         for i in range(0, REVS_COUNT, CHUNK_SIZE)
@@ -717,10 +682,10 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     calculate_experiences(commits, first_pushdate, save)
 
-    commits = [commit for commit in commits if not commit.ignored]
+    commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
     if save:
-        db.append(COMMITS_DB, (commit.to_json() for commit in commits))
+        db.append(COMMITS_DB, commits)
 
     return commits
 
