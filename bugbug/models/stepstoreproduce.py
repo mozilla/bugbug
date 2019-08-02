@@ -87,6 +87,11 @@ class StepsToReproduceModel(BugModel):
             )
         )
         print(
+            "{} bugs have no steps to reproduce".format(
+                sum(1 for label in classes.values() if label == -1)
+            )
+        )
+        print(
             "{} bugs have steps to reproduce".format(
                 sum(1 for label in classes.values() if label == 1)
             )
