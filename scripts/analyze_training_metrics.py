@@ -66,7 +66,7 @@ def plot_graph(
 
     axes.plot_date(x, y, marker=".", fmt="-")
     # plt.show(block=True)
-    output_file_path = output_directory / f"{model_name}_{metric_name}.svg"
+    output_file_path = output_directory.resolve() / f"{model_name}_{metric_name}.svg"
     LOGGER.info("Saving %s figure", output_file_path)
     plt.savefig(output_file_path)
 

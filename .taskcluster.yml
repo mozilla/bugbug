@@ -158,7 +158,7 @@ tasks:
           artifacts:
             public/bugbug:
               expires: {$fromNow: '2 weeks'}
-              path: metrics_out
+              path: /bugbug/metrics_out
               type: directory
         metadata:
           name: bugbug check_metrics
