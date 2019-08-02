@@ -168,7 +168,7 @@ tasks:
         created: {$fromNow: ''}
         deadline: {$fromNow: '3 hours'}
         provisionerId: aws-provisioner-v1
-        workerType: releng-svc
+        workerType: relman-svc
         payload:
           capabilities:
             privileged: true
