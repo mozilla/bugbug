@@ -21,6 +21,9 @@ LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
 
+# If the latest metric point is 5% lower then the one before, show a warning and exists with 1.
+WARNING_THRESHOLD = 0.95
+
 
 def plot_graph(
     model_name: str,
@@ -36,7 +39,7 @@ def plot_graph(
         before_last_value = y[-2]
     else:
         before_last_value = y[-1]
-    ninety_five_percent = before_last_value * 0.95
+    metric_threshold = before_last_value * WARNING_THRESHOLD
 
     figure = plt.figure()
     axes = plt.axes()
@@ -47,10 +50,10 @@ def plot_graph(
     axes.set_title(f"{model_name} {metric_name}")
 
     # Display threshold
-    axes.axhline(y=ninety_five_percent, linestyle="--", color="red")
+    axes.axhline(y=metric_threshold, linestyle="--", color="red")
     plt.annotate(
-        "{:.4f}".format(ninety_five_percent),
-        (x[-1], ninety_five_percent),
+        "{:.4f}".format(metric_threshold),
+        (x[-1], metric_threshold),
         textcoords="offset points",  # how to position the text
         xytext=(-10, 10),  # distance from text to points (x,y)
         ha="center",
@@ -78,7 +81,7 @@ def plot_graph(
     plt.close(figure)
 
     # Check if the threshold has been crossed
-    return y[-1] < ninety_five_percent
+    return y[-1] < metric_threshold
 
 
 def analyze_metrics(metrics_directory: str, output_directory: str):
