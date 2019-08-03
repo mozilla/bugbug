@@ -57,6 +57,21 @@ def check_metrics(metric_directory: str, output_directory: str):
     subprocess.check_output(cli_args)
 
 
+def get_model_name(queue, task_id: str):
+    dependency_task = queue.task(task_id)
+
+    # Check the route to detect training tasks
+    for route in dependency_task["routes"]:
+        if fnmatch(route, QUEUE_ROUTE_PATTERN):
+            model_name = route.split(".")[4]  # model_name = "train_component"
+            return model_name[6:]
+
+    # Raise an exception if no matching route was found, this can happens when
+    # the current task has a dependency to a non-training task or if the route
+    # pattern changes.
+    raise Exception(f"No matching route found for task id {task_id}")
+
+
 def get_model_names(task_id: str) -> List[str]:
     options = get_taskcluster_options()
     queue = taskcluster.Queue(options)
@@ -71,17 +86,9 @@ def get_model_names(task_id: str) -> List[str]:
             )
         )
 
-        dependency_task = queue.task(task_id)
-
-        # Check dependency route to see if we should download it
-        for route in dependency_task["routes"]:
-            if fnmatch(route, QUEUE_ROUTE_PATTERN):
-                model_name = route.split(".")[4]  # model_name = "train_component"
-                model_name = model_name[6:]
-
-                LOGGER.info("Adding model %r to download list", model_name)
-
-                model_names.append(model_name)
+        model_name = get_model_name(queue, task_id)
+        LOGGER.info("Adding model %r to download list", model_name)
+        model_names.append(model_name)
 
     return model_names
 
