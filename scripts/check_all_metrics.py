@@ -28,14 +28,14 @@ CURRENT_DIR = Path(__file__).resolve().parent
 def download_metric(model_name: str, metric_directory: str):
     download_script_path = CURRENT_DIR / "retrieve_training_metrics.py"
 
-    cli_args = [
+    cli_args: List[str] = [
         sys.executable,
         str(download_script_path),
         model_name,
         "2019",
         "-d",
         metric_directory,
-    ]  # type: List[str]
+    ]
 
     LOGGER.info("Download metrics for %r", model_name)
 
@@ -45,12 +45,12 @@ def download_metric(model_name: str, metric_directory: str):
 def check_metrics(metric_directory: str, output_directory: str):
     analyze_script_path = CURRENT_DIR / "analyze_training_metrics.py"
 
-    cli_args = [
+    cli_args: List[str] = [
         sys.executable,
         str(analyze_script_path),
         metric_directory,
         output_directory,
-    ]  # type: List[str]
+    ]
 
     LOGGER.info("Checking metrics")
 

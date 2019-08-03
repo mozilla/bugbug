@@ -87,9 +87,9 @@ def plot_graph(
 def analyze_metrics(metrics_directory: str, output_directory: str):
     root = Path(metrics_directory)
 
-    metrics = defaultdict(
+    metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
         lambda: defaultdict(dict)
-    )  # type: Dict[str, Dict[str, Dict[datetime, float]]]
+    )
 
     threshold_ever_crossed = False
 
