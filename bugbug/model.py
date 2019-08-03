@@ -229,7 +229,7 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, class_probabilities=None
+        self, important_features, feature_names, class_probabilities=None, X=None
     ):
         # extract importance values from the top features for the predicted class
         # when classifying
@@ -250,7 +250,9 @@ class Model:
                 else:
                     shap_val.append("-" + str(importance))
 
-                top_feature_names.append(feature_names[int(index)])
+                top_feature_names.append(
+                    f"{feature_names[int(index)]} \nvalue: {X.toarray()[:,int(index)]}"
+                )
             shap_val = [[predicted_class] + shap_val]
 
         # extract importance values from the top features for all the classes
@@ -518,6 +520,7 @@ class Model:
             return (
                 classes,
                 {
+                    "bug": X,
                     "importances": important_features,
                     "html": html,
                     "feature_legend": feature_legend,
