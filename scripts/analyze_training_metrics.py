@@ -65,15 +65,15 @@ def plot_graph(
         label = "{:.4f}".format(single_y)
 
         plt.annotate(
-            label,  # this is the text
-            (single_x, single_y),  # this is the point to label
-            textcoords="offset points",  # how to position the text
-            xytext=(0, 10),  # distance from text to points (x,y)
+            label,
+            (single_x, single_y),
+            textcoords="offset points",
+            xytext=(0, 10),
             ha="center",
-        )  # horizontal alignment can be left, right or center
+        )
 
     axes.plot_date(x, y, marker=".", fmt="-")
-    # plt.show(block=True)
+
     output_file_path = output_directory.resolve() / f"{model_name}_{metric_name}.svg"
     LOGGER.info("Saving %s figure", output_file_path)
     plt.savefig(output_file_path)
