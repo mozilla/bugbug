@@ -229,7 +229,7 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, class_probabilities=None
+        self, important_features, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
         # when classifying
@@ -239,7 +239,7 @@ class Model:
                 predicted_class_index = class_probabilities.argmax(axis=-1)[0]
             else:
                 predicted_class_index = 0
-
+            feature_names = self.get_human_readable_feature_names()
             predicted_class = self.class_names[predicted_class_index]
             imp_values = important_features["classes"][predicted_class][0]
             shap_val = []
@@ -358,7 +358,7 @@ class Model:
                 importance_cutoff, shap_values
             )
 
-            self.print_feature_importances(important_features, feature_names)
+            self.print_feature_importances(important_features)
 
         print("Test Set scores:")
         # Evaluate results on the test set.
