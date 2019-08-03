@@ -49,6 +49,7 @@ setup(
             "bugbug-check = scripts.check:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
             "bugbug-classify-commit = scripts.commit_classifier:main",
+            "bugbug-classify-bug = scripts.bug_classifier:main",
             "bugbug-regressor-finder = scripts.regressor_finder:main",
         ]
     },
