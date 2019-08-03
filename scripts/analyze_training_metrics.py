@@ -24,6 +24,8 @@ logging.basicConfig(level=logging.INFO)
 # If the latest metric point is 5% lower then the one before, show a warning and exists with 1.
 WARNING_THRESHOLD = 0.95
 
+REPORT_METRICS = ["accuracy", "precision", "recall"]
+
 
 def plot_graph(
     model_name: str,
@@ -120,6 +122,9 @@ def analyze_metrics(metrics_directory: str, output_directory: str):
 
         # Then process the report
         for key, value in metric["report"]["average"].items():
+            if key not in REPORT_METRICS:
+                continue
+
             metrics[model_name][key][date] = value
 
         # Also process the test_* metrics
