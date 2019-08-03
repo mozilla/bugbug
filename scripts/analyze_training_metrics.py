@@ -116,7 +116,7 @@ def analyze_metrics(metrics_directory: str, output_directory: str):
             date_parts[5],
             tzinfo=timezone.utc,
         )
-        version = file_path_parts[14:]  # noqa TODO: Use version
+        # version = file_path_parts[14:]  # TODO: Use version
 
         # Then process the report
         for key, value in metric["report"]["average"].items():
