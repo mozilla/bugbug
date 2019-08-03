@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import math
+import multiprocessing
 import os
 import pickle
 import sys
@@ -149,10 +150,11 @@ def get_commits():
     return db.read(COMMITS_DB)
 
 
-def _init(repo_dir):
+def _init(mgr, repo_dir):
     global HG
     os.chdir(repo_dir)
     HG = hglib.open(".")
+    mgr.append(HG)
 
 
 def _init_thread():
@@ -687,8 +689,11 @@ def download_commits(repo_dir, rev_start=0, save=True):
     global rs_parsepatch
     import rs_parsepatch
 
+    mp_mgr = multiprocessing.Manager()
+    list_proxy = mp_mgr.list()
+
     with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init, initargs=(repo_dir,)
+        initializer=_init, initargs=(list_proxy, repo_dir,)
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
@@ -700,6 +705,9 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     if save:
         db.append(COMMITS_DB, commits)
+
+    for cmd_server in list_proxy:
+        cmd_server.close()
 
     return commits
 
