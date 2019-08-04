@@ -39,7 +39,7 @@ def download_metric(model_name: str, metric_directory: str):
 
     LOGGER.info("Download metrics for %r", model_name)
 
-    subprocess.check_output(cli_args)
+    subprocess.run(cli_args, check=True)
 
 
 def check_metrics(metric_directory: str, output_directory: str):
@@ -54,7 +54,7 @@ def check_metrics(metric_directory: str, output_directory: str):
 
     LOGGER.info("Checking metrics")
 
-    subprocess.check_output(cli_args)
+    subprocess.run(cli_args, check=True)
 
 
 def get_model_name(queue, task_id: str):
