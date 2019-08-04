@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import concurrent.futures
 import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
@@ -25,7 +26,8 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
-        repository.clone(self.repo_dir)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() + 1)
+        executor.submit(repository.clone, self.repo_dir)
 
         logger.info("mozilla-central cloned")
 
@@ -37,9 +39,11 @@ class MicroannotateGenerator(object):
         )
         git_repo_path = os.path.basename(self.repo_url)
 
-        retry(
-            lambda: subprocess.run(
-                ["git", "clone", self.repo_url, git_repo_path], check=True
+        executor.submit(
+            retry(
+                lambda: subprocess.run(
+                    ["git", "clone", self.repo_url, git_repo_path], check=True
+                )
             )
         )
 

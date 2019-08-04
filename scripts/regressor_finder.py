@@ -102,15 +102,25 @@ class RegressorFinder(object):
         self.tokenized_git_repo_url = tokenized_git_repo_url
         self.tokenized_git_repo_dir = tokenized_git_repo_dir
 
-        logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
-        repository.clone(self.mercurial_repo_dir)
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=os.cpu_count() + 1
+        ) as executor:
 
-        logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
-        self.clone_git_repo(self.git_repo_url, self.git_repo_dir)
-        logger.info(
-            f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
-        )
-        self.clone_git_repo(self.tokenized_git_repo_url, self.tokenized_git_repo_dir)
+            logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
+            executor.submit(repository.clone, self.mercurial_repo_dir)
+
+            logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
+            executor.submit(self.clone_git_repo, self.git_repo_url, self.git_repo_dir)
+
+            logger.info(
+                f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
+            )
+            executor.submit(
+                self.clone_git_repo,
+                self.tokenized_git_repo_url,
+                self.tokenized_git_repo_dir,
+            )
+
         logger.info(f"Initializing mapping between git and mercurial commits...")
         self.init_mapping()
 
