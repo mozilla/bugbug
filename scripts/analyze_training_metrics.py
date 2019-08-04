@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
 
-# If the latest metric point is 5% lower then the one before, show a warning and exists with 1.
+# If the latest metric point is 5% lower than the previous one, show a warning and exit with 1.
 WARNING_THRESHOLD = 0.95
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
