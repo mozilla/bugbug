@@ -7,7 +7,6 @@ import argparse
 import logging
 import os
 import subprocess
-import sys
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import List
@@ -26,11 +25,10 @@ CURRENT_DIR = Path(__file__).resolve().parent
 
 
 def download_metric(model_name: str, metric_directory: str):
-    download_script_path = CURRENT_DIR / "retrieve_training_metrics.py"
+    download_script_path = "bugbug-retrieve-training-metrics"
 
     cli_args: List[str] = [
-        sys.executable,
-        str(download_script_path),
+        download_script_path,
         model_name,
         "2019",
         "-d",
@@ -43,14 +41,9 @@ def download_metric(model_name: str, metric_directory: str):
 
 
 def check_metrics(metric_directory: str, output_directory: str):
-    analyze_script_path = CURRENT_DIR / "analyze_training_metrics.py"
+    analyze_script_path = "bugbug-analyze-training-metrics"
 
-    cli_args: List[str] = [
-        sys.executable,
-        str(analyze_script_path),
-        metric_directory,
-        output_directory,
-    ]
+    cli_args: List[str] = [analyze_script_path, metric_directory, output_directory]
 
     LOGGER.info("Checking metrics")
 

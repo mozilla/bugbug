@@ -461,18 +461,13 @@ tasks:
         - train-tracking
       payload:
         maxRunTime: 3600
-        image: python
+        image: mozilla/bugbug-base:${version}
         command:
           - "/bin/bash"
           - "-lcx"
-          - "git clone --quiet https://github.com/mozilla/bugbug /code &&
-             cd /code &&
-             git checkout ${version} &&
-             pip install --quiet . &&
-             pip install --quiet -r test-requirements.txt &&
-             mkdir /metrics &&
+          - "mkdir /metrics &&
              mkdir /metrics-output &&
-             python /code/scripts/check_all_metrics.py /metrics /metrics-output"
+             bugbug-check-all-metrics /metrics /metrics-output"
         artifacts:
           public/bugbug:
             expires: {$fromNow: '2 weeks'}
