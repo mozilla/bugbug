@@ -5,23 +5,15 @@ import json
 import os
 from logging import INFO, basicConfig, getLogger
 
-import zstandard
-
 from bugbug import bugzilla, db, model, repository
 from bugbug.models import get_model_class
-from bugbug.utils import CustomJsonEncoder
+from bugbug.utils import CustomJsonEncoder, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
 class Trainer(object):
-    def compress_file(self, path):
-        cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
-
     def go(self, model_name):
         # Download datasets that were built by bugbug_data.
         os.makedirs("data", exist_ok=True)
@@ -51,7 +43,7 @@ class Trainer(object):
 
         model_file_name = f"{model_name}model"
         assert os.path.exists(model_file_name)
-        self.compress_file(model_file_name)
+        zstd_compress(model_file_name)
 
         logger.info(f"Model compressed")
 
