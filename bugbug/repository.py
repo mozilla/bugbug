@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import math
+import multiprocessing
 import os
 import pickle
 import sys
@@ -149,6 +150,13 @@ def get_commits():
     return db.read(COMMITS_DB)
 
 
+def _init(mgr, repo_dir):
+    global HG
+    os.chdir(repo_dir)
+    HG = hglib.open(".")
+    mgr.append(HG)
+
+
 def _init_thread():
     hg_server = hglib.open(".")
     thread_local.hg = hg_server
@@ -202,75 +210,71 @@ def hg_modified_files(hg, commit):
     )
 
 
-def _transform(repo_dir, commit):
-    os.chdir(repo_dir)
-    with hglib.open(".") as HG:
-        hg_modified_files(HG, commit)
+def _transform(commit):
+    hg_modified_files(HG, commit)
 
-        if commit.ignored:
-            return commit
+    if commit.ignored:
+        return commit
 
-        sizes = []
-        test_sizes = []
+    sizes = []
+    test_sizes = []
 
-        patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
-        patch_data = rs_parsepatch.get_counts(patch)
-        for stats in patch_data:
-            path = stats["filename"]
+    patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
+    patch_data = rs_parsepatch.get_counts(patch)
+    for stats in patch_data:
+        path = stats["filename"]
 
-            if stats["binary"]:
-                if not is_test(path):
-                    commit.types.add("binary")
-                continue
+        if stats["binary"]:
+            if not is_test(path):
+                commit.types.add("binary")
+            continue
 
-            size = None
-            if not stats["deleted"]:
-                try:
-                    after = HG.cat(
-                        [path.encode("utf-8")], rev=commit.node.encode("ascii")
-                    )
-                    size = after.count(b"\n")
-                except hglib.error.CommandError as e:
-                    if b"no such file in rev" not in e.err:
-                        raise
+        size = None
+        if not stats["deleted"]:
+            try:
+                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
+                size = after.count(b"\n")
+            except hglib.error.CommandError as e:
+                if b"no such file in rev" not in e.err:
+                    raise
 
-            if is_test(path):
-                commit.test_files_modified_num += 1
+        if is_test(path):
+            commit.test_files_modified_num += 1
 
-                commit.test_added += stats["added_lines"]
-                commit.test_deleted += stats["deleted_lines"]
+            commit.test_added += stats["added_lines"]
+            commit.test_deleted += stats["deleted_lines"]
 
-                if size is not None:
-                    test_sizes.append(size)
-                # We don't have a 'test' equivalent of types, as most tests are JS,
-                # so this wouldn't add useful information.
-            else:
-                commit.files_modified_num += 1
+            if size is not None:
+                test_sizes.append(size)
+            # We don't have a 'test' equivalent of types, as most tests are JS,
+            # so this wouldn't add useful information.
+        else:
+            commit.files_modified_num += 1
 
-                commit.added += stats["added_lines"]
-                commit.deleted += stats["deleted_lines"]
+            commit.added += stats["added_lines"]
+            commit.deleted += stats["deleted_lines"]
 
-                if size is not None:
-                    sizes.append(size)
+            if size is not None:
+                sizes.append(size)
 
-                ext = os.path.splitext(path)[1].lower()
-                type_ = EXT_TO_TYPES.get(ext, ext)
+            ext = os.path.splitext(path)[1].lower()
+            type_ = EXT_TO_TYPES.get(ext, ext)
 
-                commit.types.add(type_)
+            commit.types.add(type_)
 
-        commit.total_file_size = sum(sizes)
-        commit.average_file_size = (
-            commit.total_file_size / len(sizes) if len(sizes) > 0 else 0
-        )
-        commit.maximum_file_size = max(sizes, default=0)
-        commit.minimum_file_size = min(sizes, default=0)
+    commit.total_file_size = sum(sizes)
+    commit.average_file_size = (
+        commit.total_file_size / len(sizes) if len(sizes) > 0 else 0
+    )
+    commit.maximum_file_size = max(sizes, default=0)
+    commit.minimum_file_size = min(sizes, default=0)
 
-        commit.total_test_file_size = sum(test_sizes)
-        commit.average_test_file_size = (
-            commit.total_test_file_size / len(test_sizes) if len(test_sizes) > 0 else 0
-        )
-        commit.maximum_test_file_size = max(test_sizes, default=0)
-        commit.minimum_test_file_size = min(test_sizes, default=0)
+    commit.total_test_file_size = sum(test_sizes)
+    commit.average_test_file_size = (
+        commit.total_test_file_size / len(test_sizes) if len(test_sizes) > 0 else 0
+    )
+    commit.maximum_test_file_size = max(test_sizes, default=0)
+    commit.minimum_test_file_size = min(test_sizes, default=0)
 
     return commit
 
@@ -685,10 +689,13 @@ def download_commits(repo_dir, rev_start=0, save=True):
     global rs_parsepatch
     import rs_parsepatch
 
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        commits = executor.map(
-            _transform, itertools.repeat(repo_dir), commits, chunksize=64
-        )
+    mp_mgr = multiprocessing.Manager()
+    list_proxy = mp_mgr.list()
+
+    with concurrent.futures.ProcessPoolExecutor(
+        initializer=_init, initargs=(list_proxy, repo_dir,)
+    ) as executor:
+        commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
         commits = list(commits)
 
@@ -698,6 +705,9 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     if save:
         db.append(COMMITS_DB, commits)
+
+    for cmd_server in list_proxy:
+        cmd_server.close()
 
     return commits
 
