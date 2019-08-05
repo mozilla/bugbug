@@ -16,7 +16,6 @@ MODELS_WITH_TYPE = ("component",)
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-
 def classify_bugs(model_name, classifier):
     if classifier != "default":
         assert (
