@@ -5,7 +5,6 @@
 
 import argparse
 import concurrent.futures
-import itertools
 import os
 import subprocess
 import threading
@@ -394,6 +393,9 @@ class RegressorFinder(object):
 
             # Skip huge changes, we'll likely be wrong with them.
             if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
+                logger.info(
+                    "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
+                )
                 return [None]
 
             bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
@@ -437,21 +439,22 @@ class RegressorFinder(object):
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
-            bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)
-            bug_introducing_commits = tqdm(
-                bug_introducing_commits, total=len(bug_fixing_commits)
-            )
-            bug_introducing_commits = list(
-                itertools.chain.from_iterable(bug_introducing_commits)
-            )
+            bug_introducing_commit_futures = [
+                executor.submit(find_bic, bug_fixing_commit)
+                for bug_fixing_commit in bug_fixing_commits
+            ]
 
-        total_results_num = len(bug_introducing_commits)
-        bug_introducing_commits = list(filter(None, bug_introducing_commits))
-        logger.info(
-            f"Skipped {total_results_num - len(bug_introducing_commits)} commits as they were too big"
-        )
+            def results():
+                for future in tqdm(
+                    concurrent.futures.as_completed(bug_introducing_commit_futures),
+                    total=len(bug_fixing_commits),
+                ):
+                    result = future.result()
+                    if result is not None:
+                        yield from result
 
-        db.append(db_path, bug_introducing_commits)
+            db.append(db_path, results())
+
         zstd_compress(db_path)
 
 
