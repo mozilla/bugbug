@@ -229,7 +229,7 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features,feature_names, class_probabilities=None
+        self, important_features, feature_names, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
         # when classifying
