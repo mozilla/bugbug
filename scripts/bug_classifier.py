@@ -27,8 +27,8 @@ def classify_bugs(model_name, classifier):
         print(f"{model_file_name} does not exist. Downloading the model....")
         download_url = f"https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst"
         download_check_etag(download_url, f"{model_file_name}.zst")
-        zstd_decompress(f"{model_file_name}")
-        assert os.path.exists(f"{model_file_name}"), "Decompressed file doesn't exist"
+        zstd_decompress(model_file_name)
+        assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
