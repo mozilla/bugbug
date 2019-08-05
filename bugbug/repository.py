@@ -154,7 +154,7 @@ def _init(repo_dir):
     global HG
     os.chdir(repo_dir)
     HG = hglib.open(".")
-    Finalize(HG, HG.__exit__)
+    Finalize(HG, HG.__exit__, exitpriority=16)
 
 
 def _init_thread():
