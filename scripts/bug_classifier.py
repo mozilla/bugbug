@@ -4,6 +4,8 @@ import argparse
 import os
 
 import numpy as np
+import requests
+import zstandard
 
 from bugbug import bugzilla
 from bugbug.models import get_model_class
@@ -22,9 +24,23 @@ def classify_bugs(model_name, classifier):
     else:
         model_file_name = f"{model_name}model"
 
-    assert os.path.exists(
-        model_file_name
-    ), f"{model_file_name} does not exist. Train the model with trainer.py first."
+    if not os.path.exists(model_file_name):
+        print(f"{model_file_name} does not exist. Downloading the model....")
+        download_url = f"https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst"
+        r = requests.get(download_url, stream=True)
+        assert (
+            r
+        ), f"{model_file_name} isn't available to download. Train the model with trainer.py first."
+
+        with open(f"{model_file_name}.zst", "wb") as f:
+            for chunk in r.iter_content(chunk_size=4096):
+                f.write(chunk)
+
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{model_file_name}.zst", "rb") as input_f:
+            with open(f"{model_file_name}", "wb") as output_f:
+                dctx.copy_stream(input_f, output_f)
+        assert os.path.exists(f"{model_file_name}"), "Decompressed file doesn't exist"
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
