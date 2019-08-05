@@ -39,7 +39,7 @@ def classify_bugs(model_name, classifier):
             logger.error(
                 f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
             )
-            raise SystemExit(0)
+            raise SystemExit(1)
 
         zstd_decompress(model_file_name)
         assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
