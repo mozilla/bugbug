@@ -12,6 +12,7 @@ import dateutil.parser
 import numpy as np
 import requests
 import taskcluster
+import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
@@ -156,6 +157,20 @@ def retry(operation, retries=5, wait_between_retries=30):
                 raise
 
             time.sleep(wait_between_retries)
+
+
+def zstd_compress(path):
+    cctx = zstandard.ZstdCompressor()
+    with open(path, "rb") as input_f:
+        with open(f"{path}.zst", "wb") as output_f:
+            cctx.copy_stream(input_f, output_f)
+
+
+def zstd_decompress(path):
+    dctx = zstandard.ZstdDecompressor()
+    with open(f"{path}.zst", "rb") as input_f:
+        with open(path, "wb") as output_f:
+            dctx.copy_stream(input_f, output_f)
 
 
 class CustomJsonEncoder(json.JSONEncoder):
