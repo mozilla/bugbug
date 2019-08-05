@@ -51,6 +51,9 @@ setup(
             "bugbug-classify-commit = scripts.commit_classifier:main",
             "bugbug-classify-bug = scripts.bug_classifier:main",
             "bugbug-regressor-finder = scripts.regressor_finder:main",
+            "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",
+            "bugbug-analyze-training-metrics = scripts.analyze_training_metrics:main",
+            "bugbug-check-all-metrics = scripts.check_all_metrics:main",
         ]
     },
     classifiers=[

@@ -2,13 +2,19 @@
 
 import argparse
 import os
+from logging import INFO, basicConfig, getLogger
 
 import numpy as np
+import requests
 
 from bugbug import bugzilla
 from bugbug.models import get_model_class
+from bugbug.utils import download_check_etag, zstd_decompress
 
 MODELS_WITH_TYPE = ("component",)
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def classify_bugs(model_name, classifier):
@@ -22,9 +28,21 @@ def classify_bugs(model_name, classifier):
     else:
         model_file_name = f"{model_name}model"
 
-    assert os.path.exists(
-        model_file_name
-    ), f"{model_file_name} does not exist. Train the model with trainer.py first."
+    if not os.path.exists(model_file_name):
+        logger.info(f"{model_file_name} does not exist. Downloading the model....")
+        try:
+            download_check_etag(
+                f"https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst",
+                f"{model_file_name}.zst",
+            )
+        except requests.HTTPError:
+            logger.error(
+                f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
+            )
+            raise SystemExit(1)
+
+        zstd_decompress(model_file_name)
+        assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
