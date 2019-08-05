@@ -51,10 +51,10 @@ class Trainer(object):
             or isinstance(model_obj, model.BugCoupleModel)
             or (hasattr(model_obj, "bug_data") and model_obj.bug_data)
         ):
-            db.download(bugzilla.BUGS_DB, force=True)
+            db.download(bugzilla.BUGS_DB)
 
         if isinstance(model_obj, model.CommitModel):
-            db.download(repository.COMMITS_DB, force=True)
+            db.download(repository.COMMITS_DB)
 
         logger.info(f"Training *{model_name}* model")
         metrics = model_obj.train()
