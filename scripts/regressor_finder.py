@@ -5,16 +5,15 @@
 
 import argparse
 import concurrent.futures
-import itertools
 import os
 import subprocess
+import threading
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import hglib
-import zstandard
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from microannotate import utils as microannotate_utils
@@ -24,11 +23,12 @@ from tqdm import tqdm
 from bugbug import bugzilla, db, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
-from bugbug.utils import download_check_etag, retry
+from bugbug.utils import download_check_etag, retry, zstd_compress, zstd_decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
+thread_local = threading.local()
 
 MAX_MODIFICATION_NUMBER = 50
 RELATIVE_START_DATE = relativedelta(years=2, months=6)
@@ -67,22 +67,12 @@ db.register(
 BASE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_name}model.zst"
 
 
-def compress_file(path):
-    cctx = zstandard.ZstdCompressor()
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
-
-
 def download_model(model_name):
     if not os.path.exists(f"{model_name}model"):
         url = BASE_URL.format(model_name=model_name)
         logger.info(f"Downloading {url}...")
         download_check_etag(url, f"{model_name}model.zst")
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{model_name}model.zst", "rb") as input_f:
-            with open(f"{model_name}model", "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
+        zstd_decompress(f"{model_name}model")
         assert os.path.exists(f"{model_name}model"), "Decompressed file exists"
 
 
@@ -192,7 +182,7 @@ class RegressorFinder(object):
         )
 
         db.append(IGNORED_COMMITS_DB, commits_to_ignore)
-        compress_file(IGNORED_COMMITS_DB)
+        zstd_compress(IGNORED_COMMITS_DB)
 
         return prev_commits_to_ignore + commits_to_ignore
 
@@ -296,7 +286,7 @@ class RegressorFinder(object):
                 append_bug_fixing_commits(bug["id"], "e")
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
-        compress_file(BUG_FIXING_COMMITS_DB)
+        zstd_compress(BUG_FIXING_COMMITS_DB)
 
         bug_fixing_commits = prev_bug_fixing_commits + bug_fixing_commits
         return [
@@ -392,24 +382,31 @@ class RegressorFinder(object):
             f.write(str(1 if done else 0))
 
         def _init(git_repo_dir):
-            global GIT_REPO
-            GIT_REPO = GitRepository(git_repo_dir)
+            thread_local.git = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
+            logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
+
             git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
 
-            logger.info(f"Analyzing {git_fix_revision}...")
-
-            commit = GIT_REPO.get_commit(git_fix_revision)
+            commit = thread_local.git.get_commit(git_fix_revision)
 
             # Skip huge changes, we'll likely be wrong with them.
             if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
+                logger.info(
+                    "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
+                )
                 return [None]
 
-            bug_introducing_modifications = GIT_REPO.get_commits_last_modified_lines(
+            bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
             )
-            logger.info(bug_introducing_modifications)
+
+            logger.info(
+                "Found {} for {}".format(
+                    bug_introducing_modifications, bug_fixing_commit["rev"]
+                )
+            )
 
             bug_introducing_commits = []
             for bug_introducing_hashes in bug_introducing_modifications.values():
@@ -442,22 +439,23 @@ class RegressorFinder(object):
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
-            bug_introducing_commits = executor.map(find_bic, bug_fixing_commits)
-            bug_introducing_commits = tqdm(
-                bug_introducing_commits, total=len(bug_fixing_commits)
-            )
-            bug_introducing_commits = list(
-                itertools.chain.from_iterable(bug_introducing_commits)
-            )
+            bug_introducing_commit_futures = [
+                executor.submit(find_bic, bug_fixing_commit)
+                for bug_fixing_commit in bug_fixing_commits
+            ]
 
-        total_results_num = len(bug_introducing_commits)
-        bug_introducing_commits = list(filter(None, bug_introducing_commits))
-        logger.info(
-            f"Skipped {total_results_num - len(bug_introducing_commits)} commits as they were too big"
-        )
+            def results():
+                for future in tqdm(
+                    concurrent.futures.as_completed(bug_introducing_commit_futures),
+                    total=len(bug_fixing_commits),
+                ):
+                    result = future.result()
+                    if result is not None:
+                        yield from result
 
-        db.append(db_path, bug_introducing_commits)
-        compress_file(db_path)
+            db.append(db_path, results())
+
+        zstd_compress(db_path)
 
 
 def evaluate(bug_introducing_commits):

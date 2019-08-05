@@ -13,7 +13,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -48,7 +48,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - commit-retrieval
       payload:
@@ -88,7 +88,7 @@ tasks:
       deadline: {$fromNow: '73 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - bugs-retrieval
       payload:
@@ -113,7 +113,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -149,7 +149,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -185,7 +185,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -221,7 +221,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -260,7 +260,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -299,7 +299,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -335,7 +335,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -374,7 +374,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -413,7 +413,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -444,12 +444,47 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+    - ID: check_metrics
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '119 hours'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svg
+      dependencies:
+        - train-backout
+        - train-component
+        - train-defectenhancementtask
+        - train-duplicate
+        - train-regression
+        - train-regressionrange
+        - train-regressor
+        - train-stepstoreproduce
+        - train-tracking
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "/bin/bash"
+          - "-lcx"
+          - "mkdir /metrics &&
+             mkdir /metrics-output &&
+             bugbug-check-all-metrics /metrics /metrics-output"
+        artifacts:
+          public/bugbug:
+            expires: {$fromNow: '2 weeks'}
+            path: /metrics-output
+            type: directory
+      metadata:
+        name: bugbug check_metrics
+        description: bugbug check_metrics
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
     - ID: docker-build
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - train-tracking
         - train-regression

@@ -5,11 +5,10 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
-import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bug_snapshot, bugzilla, db, labels, repository
-from bugbug.utils import get_secret
+from bugbug.utils import get_secret, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -123,13 +122,7 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
-        self.compress_file("data/bugs.json")
-
-    def compress_file(self, path):
-        cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
+        zstd_compress("data/bugs.json")
 
 
 def main():

@@ -12,7 +12,6 @@ import logging
 import math
 import os
 import pickle
-import re
 import sys
 import threading
 from collections import deque
@@ -33,7 +32,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    1,
+    2,
     ["commit_experiences.pickle.zst"],
 )
 
@@ -41,6 +40,16 @@ path_to_component = {}
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+
+TYPES_TO_EXT = {
+    "Javascript": [".js", ".jsm"],
+    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
+    "Java": [".java"],
+    "Python": [".py"],
+    "Rust": [".rs"],
+}
+
+EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
 
 
 class Commit:
@@ -79,6 +88,11 @@ class Commit:
         self.maximum_file_size = 0
         self.minimum_file_size = 0
         self.files_modified_num = 0
+        self.total_test_file_size = 0
+        self.average_test_file_size = 0
+        self.maximum_test_file_size = 0
+        self.minimum_test_file_size = 0
+        self.test_files_modified_num = 0
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -107,7 +121,7 @@ class Commit:
             setattr(self, f"{exp_str}max", exp_max)
             setattr(self, f"{exp_str}min", exp_min)
 
-    def to_json(self):
+    def to_dict(self):
         d = self.__dict__
         for f in ["backedoutby", "ignored", "file_copies"]:
             del d[f]
@@ -115,47 +129,6 @@ class Commit:
         d["pushdate"] = str(d["pushdate"])
         d["date"] = str(d["date"])
         return d
-
-
-# This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
-# gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
-def get_reviewers(commit_description, flag_re=None):
-    SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
-    LIST = r"[;,\/\\]\s*"
-    LIST_RE = re.compile(LIST)
-
-    IRC_NICK = r"[a-zA-Z0-9\-\_]+"
-    REVIEWERS_RE = re.compile(
-        r"([\s\(\.\[;,])"
-        + r"("
-        + SPECIFIER
-        + r")"
-        + r"("
-        + IRC_NICK
-        + r"(?:"
-        + LIST
-        + r"(?![a-z0-9\.\-]+[=?])"
-        + IRC_NICK
-        + r")*"
-        + r")?"
-    )
-
-    if commit_description == "":
-        return
-
-    commit_summary = commit_description.splitlines().pop(0)
-    res = []
-    for match in re.finditer(REVIEWERS_RE, commit_summary):
-        if not match.group(3):
-            continue
-
-        for reviewer in re.split(LIST_RE, match.group(3)):
-            if flag_re is None:
-                res.append(reviewer)
-            elif flag_re.match(match.group(2)):
-                res.append(reviewer)
-
-    return res
 
 
 def get_directories(files):
@@ -242,56 +215,50 @@ def _transform(commit):
         return commit
 
     sizes = []
+    test_sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_counts(patch)
     for stats in patch_data:
-        if stats["binary"]:
-            commit.types.add("binary")
-            continue
-
         path = stats["filename"]
 
-        if is_test(path):
-            commit.test_added += stats["added_lines"]
-            commit.test_deleted += stats["deleted_lines"]
-        else:
-            commit.added += stats["added_lines"]
-            commit.deleted += stats["deleted_lines"]
+        if stats["binary"]:
+            if not is_test(path):
+                commit.types.add("binary")
+            continue
 
-        ext = os.path.splitext(path)[1]
-        if ext in [".js", ".jsm"]:
-            type_ = "JavaScript"
-        elif ext in [
-            ".c",
-            ".cpp",
-            ".cc",
-            ".cxx",
-            ".m",
-            ".mm",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-        ]:
-            type_ = "C/C++"
-        elif ext == ".java":
-            type_ = "Java"
-        elif ext == ".py":
-            type_ = "Python"
-        elif ext == ".rs":
-            type_ = "Rust"
-        else:
-            type_ = ext
-        commit.types.add(type_)
-
+        size = None
         if not stats["deleted"]:
             try:
                 after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
-                sizes.append(after.count(b"\n"))
+                size = after.count(b"\n")
             except hglib.error.CommandError as e:
                 if b"no such file in rev" not in e.err:
                     raise
+
+        if is_test(path):
+            commit.test_files_modified_num += 1
+
+            commit.test_added += stats["added_lines"]
+            commit.test_deleted += stats["deleted_lines"]
+
+            if size is not None:
+                test_sizes.append(size)
+            # We don't have a 'test' equivalent of types, as most tests are JS,
+            # so this wouldn't add useful information.
+        else:
+            commit.files_modified_num += 1
+
+            commit.added += stats["added_lines"]
+            commit.deleted += stats["deleted_lines"]
+
+            if size is not None:
+                sizes.append(size)
+
+            ext = os.path.splitext(path)[1].lower()
+            type_ = EXT_TO_TYPES.get(ext, ext)
+
+            commit.types.add(type_)
 
     commit.total_file_size = sum(sizes)
     commit.average_file_size = (
@@ -300,13 +267,18 @@ def _transform(commit):
     commit.maximum_file_size = max(sizes, default=0)
     commit.minimum_file_size = min(sizes, default=0)
 
-    commit.files_modified_num = len(patch_data)
+    commit.total_test_file_size = sum(test_sizes)
+    commit.average_test_file_size = (
+        commit.total_test_file_size / len(test_sizes) if len(test_sizes) > 0 else 0
+    )
+    commit.maximum_test_file_size = max(test_sizes, default=0)
+    commit.minimum_test_file_size = min(test_sizes, default=0)
 
     return commit
 
 
 def hg_log(hg, revs):
-    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -332,6 +304,12 @@ def hg_log(hg, revs):
 
         bug_id = int(rev[4].decode("ascii")) if rev[4] else None
 
+        reviewers = (
+            set(sys.intern(r) for r in rev[8].decode("utf-8").split(" "))
+            if rev[8] != b""
+            else set()
+        )
+
         revs.append(
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
@@ -342,9 +320,7 @@ def hg_log(hg, revs):
                 bug_id=bug_id,
                 backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6].decode("utf-8"),
-                reviewers=tuple(
-                    set(sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8")))
-                ),
+                reviewers=tuple(reviewers),
             )
         )
 
@@ -655,12 +631,15 @@ def download_component_mapping():
 
 
 def hg_log_multi(repo_dir, revs):
+    if len(revs) == 0:
+        return []
+
     cwd = os.getcwd()
     os.chdir(repo_dir)
 
     threads_num = os.cpu_count() + 1
-    CHUNK_SIZE = int(math.ceil(len(revs) / threads_num))
     REVS_COUNT = len(revs)
+    CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
     revs_groups = [
         (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
         for i in range(0, REVS_COUNT, CHUNK_SIZE)
@@ -717,10 +696,10 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     calculate_experiences(commits, first_pushdate, save)
 
-    commits = [commit for commit in commits if not commit.ignored]
+    commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
     if save:
-        db.append(COMMITS_DB, (commit.to_json() for commit in commits))
+        db.append(COMMITS_DB, commits)
 
     return commits
 
