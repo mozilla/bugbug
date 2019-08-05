@@ -35,13 +35,14 @@ def classify_bugs(model_name, classifier):
                 f"https://index.taskcluster.net/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst",
                 f"{model_file_name}.zst",
             )
-            zstd_decompress(model_file_name)
-            assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
         except requests.HTTPError:
             logger.error(
                 f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
             )
             raise SystemExit(0)
+
+        zstd_decompress(model_file_name)
+        assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
