@@ -8,6 +8,7 @@ import concurrent.futures
 import itertools
 import os
 import subprocess
+import threading
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -28,6 +29,7 @@ from bugbug.utils import download_check_etag, retry, zstd_compress, zstd_decompr
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
+thread_local = threading.local()
 
 MAX_MODIFICATION_NUMBER = 50
 RELATIVE_START_DATE = relativedelta(years=2, months=6)
@@ -381,23 +383,23 @@ class RegressorFinder(object):
             f.write(str(1 if done else 0))
 
         def _init(git_repo_dir):
-            global GIT_REPO
-            GIT_REPO = GitRepository(git_repo_dir)
+            thread_local.git = GitRepository(git_repo_dir)
 
         def find_bic(bug_fixing_commit):
             logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
             git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
 
-            commit = GIT_REPO.get_commit(git_fix_revision)
+            commit = thread_local.git.get_commit(git_fix_revision)
 
             # Skip huge changes, we'll likely be wrong with them.
             if len(commit.modifications) > MAX_MODIFICATION_NUMBER:
                 return [None]
 
-            bug_introducing_modifications = GIT_REPO.get_commits_last_modified_lines(
+            bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
             )
+
             logger.info(
                 "Found {} for {}".format(
                     bug_introducing_modifications, bug_fixing_commit["rev"]
