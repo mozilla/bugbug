@@ -7,4 +7,4 @@ from scripts import trainer
 
 
 def test_trainer():
-    trainer.Trainer().go(trainer.parse_args(["duplicate"]))
+    trainer.Trainer().go(trainer.parse_args(["defect"]))
