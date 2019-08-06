@@ -28,8 +28,10 @@ class MicroannotateGenerator(object):
     def generate(self):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            executor.submit(repository.clone, self.repo_dir)
-            logger.info("Cloning mozilla-central")
+            cloner = executor.submit(repository.clone, self.repo_dir)
+            cloner.add_done_callback(
+                lambda future: logger.info("mozilla-central cloned")
+            )
 
             git_user = get_secret("GIT_USER")
             git_password = get_secret("GIT_PASSWORD")
