@@ -102,9 +102,7 @@ class RegressorFinder(object):
         self.tokenized_git_repo_url = tokenized_git_repo_url
         self.tokenized_git_repo_dir = tokenized_git_repo_dir
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=os.cpu_count() + 1
-        ) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
 
             logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
             executor.submit(repository.clone, self.mercurial_repo_dir)
