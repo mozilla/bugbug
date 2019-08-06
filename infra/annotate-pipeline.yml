@@ -13,7 +13,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -50,7 +50,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -87,7 +87,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -125,7 +125,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -137,6 +137,9 @@ tasks:
           - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
           - gecko-dev-wordified-and-comments-removed
         artifacts:
+          public/done:
+            path: /done
+            type: file
           public/ignored_commits.json.zst:
             path: /data/ignored_commits.json.zst
             type: file

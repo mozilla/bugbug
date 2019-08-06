@@ -9,11 +9,11 @@ import os
 from urllib.request import urlretrieve
 
 import requests
-import zstandard
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version
 from bugbug.models import load_model
+from bugbug.utils import zstd_decompress
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -75,11 +75,8 @@ def retrieve_model(name):
         LOGGER.info(f"Downloading the model from {model_url}")
         urlretrieve(model_url, f"{file_path}.zst")
 
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{file_path}.zst", "rb") as input_f:
-            with open(file_path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
-                LOGGER.info(f"Written model in {file_path}")
+        zstd_decompress(file_path)
+        LOGGER.info(f"Written model in {file_path}")
 
         with open(f"{file_path}.etag", "w") as f:
             f.write(new_etag)
