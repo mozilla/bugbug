@@ -250,7 +250,12 @@ class Model:
                 else:
                     shap_val.append("-" + str(importance))
 
-                top_feature_names.append(feature_names[int(index)])
+                feature_value = np.squeeze(
+                    important_features["values"].toarray()[:, int(index)]
+                )
+                top_feature_names.append(
+                    f"{feature_names[int(index)]} = {feature_value.round(decimals=5)}"
+                )
             shap_val = [[predicted_class] + shap_val]
 
         # extract importance values from the top features for all the classes
@@ -265,16 +270,16 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items()
             ]
 
-        # allow maximum of 6 columns in a row to fit the page better
+        # allow maximum of 5 columns in a row to fit the page better
         print("Top {} features:".format(len(top_feature_names)))
-        for i in range(0, len(top_feature_names), 6):
+        for i in range(0, len(top_feature_names), 5):
             table = []
             for item in shap_val:
-                table.append(item[i : i + 6])
+                table.append(item[i : i + 5])
             print(
                 tabulate(
                     table,
-                    headers=(["classes"] + top_feature_names)[i : i + 6],
+                    headers=(["classes"] + top_feature_names)[i : i + 5],
                     tablefmt="grid",
                 ),
                 end="\n\n",
@@ -476,6 +481,7 @@ class Model:
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
+            important_features["values"] = X
 
             # Workaround: handle multi class case for force_plot to work correctly
             if len(classes[0]) > 2:
