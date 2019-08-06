@@ -58,11 +58,8 @@ Run the `run.py` script to perform training / classification. The first time `ru
 
 1. Clone https://hg.mozilla.org/mozilla-central/.
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
-3. Enable the pushlog, hgmo and mozext extensions. For example, if you are on Linux, add the following to the extensions section of the `~/.hgrc` file:
+3. Enable the extensions mentioned in [infra/hgrc](https://github.com/mozilla/bugbug/blob/master/infra/hgrc). For example, if you are on Linux, you can add `firefoxtree` to the extensions section of the `~/.hgrc` file as:
     ```
-    pushlog = ~/.mozbuild/version-control-tools/hgext/pushlog
-    hgmo = ~/.mozbuild/version-control-tools/hgext/hgmo
-    mozext = ~/.mozbuild/version-control-tools/hgext/mozext
     firefoxtree = ~/.mozbuild/version-control-tools/hgext/firefoxtree
     ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
