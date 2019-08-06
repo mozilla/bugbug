@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import concurrent.futures
 import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
@@ -29,37 +30,22 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
-        repository.clone(self.repo_dir)
 
-        logger.info("mozilla-central cloned")
-
-        git_user = get_secret("GIT_USER")
-        git_password = get_secret("GIT_PASSWORD")
-
-        repo_push_url = self.repo_url.replace(
-            "https://", f"https://{git_user}:{git_password}@"
-        )
-        git_repo_path = os.path.basename(self.repo_url)
-
-        retry(
-            lambda: subprocess.run(
-                ["git", "clone", self.repo_url, git_repo_path], check=True
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            cloner = executor.submit(repository.clone, self.repo_dir)
+            cloner.add_done_callback(
+                lambda future: logger.info("mozilla-central cloned")
             )
-        )
 
-        try:
-            retry(
-                lambda: subprocess.run(
-                    ["git", "pull", self.repo_url, "master"],
-                    cwd=git_repo_path,
-                    capture_output=True,
-                    check=True,
-                )
+            git_user = get_secret("GIT_USER")
+            git_password = get_secret("GIT_PASSWORD")
+
+            repo_push_url = self.repo_url.replace(
+                "https://", f"https://{git_user}:{git_password}@"
             )
-        except subprocess.CalledProcessError as e:
-            # When the repo is empty.
-            if b"Couldn't find remote ref master" in e.stdout:
-                pass
+            git_repo_path = os.path.basename(self.repo_url)
+
+            executor.submit(self.clone_git_repo, git_repo_path)
 
         retry(
             lambda: subprocess.run(
@@ -91,6 +77,27 @@ class MicroannotateGenerator(object):
 
             if done:
                 break
+
+    def clone_git_repo(self, git_repo_path):
+        retry(
+            lambda: subprocess.run(
+                ["git", "clone", self.repo_url, git_repo_path], check=True
+            )
+        )
+
+        try:
+            retry(
+                lambda: subprocess.run(
+                    ["git", "pull", self.repo_url, "master"],
+                    cwd=git_repo_path,
+                    capture_output=True,
+                    check=True,
+                )
+            )
+        except subprocess.CalledProcessError as e:
+            # When the repo is empty.
+            if b"Couldn't find remote ref master" in e.stdout:
+                pass
 
 
 def main():
