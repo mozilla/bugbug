@@ -12,6 +12,7 @@ from itertools import chain
 
 import numpy as np
 from pyemd import emd
+from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
@@ -162,6 +163,13 @@ class BaseSimilarity(abc.ABC):
     @abc.abstractmethod
     def get_distance(self, query1, query2):
         return
+
+    def save(self):
+        joblib.dump(self, f"{self.__class__.__name__.lower()}.similaritymodel")
+
+    @staticmethod
+    def load(model_file_name):
+        return joblib.load(model_file_name)
 
 
 class LSISimilarity(BaseSimilarity):
@@ -516,3 +524,13 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
+
+
+model_name_to_class = {
+    "lsi": LSISimilarity,
+    "neighbors_tfidf": NeighborsSimilarity,
+    "neighbors_tfidf_bigrams": NeighborsSimilarity,
+    "word2vec_wmdrelax": Word2VecWmdRelaxSimilarity,
+    "word2vec_wmd": Word2VecWmdSimilarity,
+    "word2vec_softcos": Word2VecSoftCosSimilarity,
+}
