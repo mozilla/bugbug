@@ -7,12 +7,11 @@ import os
 from logging import INFO, basicConfig, getLogger
 
 import hglib
-import zstandard
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
-from bugbug.utils import download_check_etag, get_secret
+from bugbug.utils import download_check_etag, get_secret, zstd_decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -29,10 +28,7 @@ class CommitClassifier(object):
 
         if not os.path.exists("regressormodel"):
             download_check_etag(URL, "regressormodel.zst")
-            dctx = zstandard.ZstdDecompressor()
-            with open("regressormodel.zst", "rb") as input_f:
-                with open("regressormodel", "wb") as output_f:
-                    dctx.copy_stream(input_f, output_f)
+            zstd_decompress("regressormodel")
             assert os.path.exists("regressormodel"), "Decompressed file exists"
 
         self.model = RegressorModel.load("regressormodel")
@@ -58,7 +54,7 @@ class CommitClassifier(object):
         )
 
         diffs = phabricator_api.search_diffs(diff_id=diff_id)
-        assert len(diffs) == 1, "No diff available for {}".format(diff_id)
+        assert len(diffs) == 1, f"No diff available for {diff_id}"
         diff = diffs[0]
 
         # Get the stack of patches
@@ -69,18 +65,30 @@ class CommitClassifier(object):
         diffs = phabricator_api.search_diffs(
             diff_phid=[p[0] for p in patches], attachments={"commits": True}
         )
-        commits = {
-            diff["phid"]: diff["attachments"]["commits"].get("commits", [])
-            for diff in diffs
-        }
+
+        diffs_data = {}
+        for diff in diffs:
+            revision = phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            logger.info(
+                "Diff {} linked to Revision {}".format(diff["id"], revision["id"])
+            )
+
+            diffs_data[diff["phid"]] = {
+                "commits": diff["attachments"]["commits"].get("commits", []),
+                "revision": revision,
+            }
 
         # First apply patches on local repo
         for diff_phid, patch in patches:
-            commit = commits.get(diff_phid)
+            diff_data = diffs_data.get(diff_phid)
 
-            message = ""
-            if commit:
-                message += "{}\n".format(commit[0]["message"])
+            commits = diff_data["commits"]
+            revision = diff_data["revision"]
+
+            if commits and commits[0]["message"]:
+                message = commits[0]["message"]
+            else:
+                message = revision["fields"]["title"]
 
             logger.info(f"Applying {diff_phid}")
             hg.import_(
@@ -99,7 +107,7 @@ class CommitClassifier(object):
 
             # Analyze patch.
             commits = repository.download_commits(
-                self.repo_dir, rev_start=patch_rev.decode("utf-8"), ret=True, save=False
+                self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
         probs, importance = self.model.classify(

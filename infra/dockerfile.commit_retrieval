@@ -6,8 +6,8 @@ COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
 # git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
 RUN apt-get update && \
     apt-get install -y python python-pip git curl && \
-    python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==4.8 && \
-    hg clone -r 0d68b0deeca2 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==5.1 && \
+    hg clone -r 709c897f2444 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
@@ -16,9 +16,6 @@ RUN apt-get update && \
     apt-get purge -y python-pip curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
-
-# Force git hyper-blame to use python2.
-RUN sed -i 's|#!/usr/bin/env python|#!/usr/bin/env python2|' /depot_tools/git_hyper_blame.py
 
 ENV PATH="${PATH}:/depot_tools"
 

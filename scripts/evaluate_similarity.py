@@ -8,7 +8,12 @@ import sys
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from bugbug.similarity import LSISimilarity, NeighborsSimilarity, Word2VecWmdSimilarity
+from bugbug.similarity import (
+    LSISimilarity,
+    NeighborsSimilarity,
+    Word2VecSoftCosSimilarity,
+    Word2VecWmdSimilarity,
+)
 
 
 def parse_args(args):
@@ -16,7 +21,13 @@ def parse_args(args):
     parser.add_argument(
         "--algorithm",
         help="Similarity algorithm to use",
-        choices=["lsi", "neighbors_tfidf", "neighbors_tfidf_bigrams", "word2vec_wmd"],
+        choices=[
+            "lsi",
+            "neighbors_tfidf",
+            "neighbors_tfidf_bigrams",
+            "word2vec_wmd",
+            "word2vec_softcos",
+        ],
     )
     parser.add_argument(
         "--disable-url-cleanup",
@@ -24,6 +35,12 @@ def parse_args(args):
         dest="cleanup_urls",
         default=True,
         action="store_false",
+    )
+    parser.add_argument(
+        "--nltk_tokenizer",
+        help="Use nltk's tokenizer for text preprocessing",
+        dest="nltk_tokenizer",
+        default=False,
     )
     return parser.parse_args(args)
 
@@ -41,8 +58,11 @@ def main(args):
 
     elif args.algorithm == "word2vec_wmd":
         model_creator = Word2VecWmdSimilarity
-
-    model = model_creator(cleanup_urls=args.cleanup_urls)
+    elif args.algorithm == "word2vec_softcos":
+        model_creator = Word2VecSoftCosSimilarity
+    model = model_creator(
+        cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
+    )
     model.evaluation()
 
 

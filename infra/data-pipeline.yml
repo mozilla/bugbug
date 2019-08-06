@@ -13,7 +13,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -48,7 +48,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - commit-retrieval
       payload:
@@ -88,7 +88,7 @@ tasks:
       deadline: {$fromNow: '73 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - bugs-retrieval
       payload:
@@ -113,7 +113,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -149,7 +149,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -171,8 +171,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_component.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_component.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_component.latest
       metadata:
         name: bugbug train component model
@@ -185,7 +185,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -207,8 +207,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_defectenhancementtask.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_defectenhancementtask.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_defectenhancementtask.latest
       metadata:
         name: bugbug train defect/enhancement/task model
@@ -221,7 +221,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -246,8 +246,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regression.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_regression.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regression.latest
       metadata:
         name: bugbug train regression model
@@ -260,7 +260,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -285,8 +285,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressor.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_regressor.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regressor.latest
       metadata:
         name: bugbug train regressor model
@@ -299,7 +299,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -321,8 +321,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_tracking.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_tracking.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_tracking.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_tracking.latest
       metadata:
         name: bugbug train tracking model
@@ -335,7 +335,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -360,8 +360,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressionrange.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_regressionrange.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_regressionrange.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_regressionrange.latest
       metadata:
         name: bugbug train regressionrange model
@@ -374,7 +374,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -399,8 +399,8 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_stepstoreproduce.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_stepstoreproduce.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_stepstoreproduce.latest
       metadata:
         name: bugbug train stepstoreproduce model
@@ -413,7 +413,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc-compute
+      workerType: relman-svc-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -435,12 +435,47 @@ tasks:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_duplicate.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
         - index.project.relman.bugbug.train_duplicate.latest
       metadata:
         name: bugbug train duplicate model
         description: bugbug train duplicate model
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
+    - ID: check_metrics
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '119 hours'}
+      provisionerId: aws-provisioner-v1
+      workerType: releng-svg
+      dependencies:
+        - train-backout
+        - train-component
+        - train-defectenhancementtask
+        - train-duplicate
+        - train-regression
+        - train-regressionrange
+        - train-regressor
+        - train-stepstoreproduce
+        - train-tracking
+      payload:
+        maxRunTime: 3600
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "/bin/bash"
+          - "-lcx"
+          - "mkdir /metrics &&
+             mkdir /metrics-output &&
+             bugbug-check-all-metrics /metrics /metrics-output"
+        artifacts:
+          public/bugbug:
+            expires: {$fromNow: '2 weeks'}
+            path: /metrics-output
+            type: directory
+      metadata:
+        name: bugbug check_metrics
+        description: bugbug check_metrics
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
@@ -449,7 +484,7 @@ tasks:
       deadline: {$fromNow: '119 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svc
+      workerType: relman-svc
       dependencies:
         - train-tracking
         - train-regression
