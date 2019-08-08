@@ -74,7 +74,9 @@ class CommitClassifier(object):
 
             # Stop as soon as a base revision is available
             if has_revision(patch.base_revision):
-                logger.info(f"Stopping at revision {patch.base_revision}")
+                logger.info(
+                    f"Stopping at diff {patch.id} and revision {patch.base_revision}"
+                )
                 break
 
         if not needed_stack:
