@@ -19,11 +19,11 @@ tasks:
         image: mozilla/bugbug-commit-retrieval:${version}
 
         artifacts:
-          public/commits.json.zst:
-            path: /data/commits.json.zst
+          public/commits.pickle.zst:
+            path: /data/commits.pickle.zst
             type: file
-          public/commits.json.version:
-            path: /data/commits.json.version
+          public/commits.pickle.version:
+            path: /data/commits.pickle.version
             type: file
           public/commit_experiences.pickle.zst:
             path: /data/commit_experiences.pickle.zst
@@ -60,10 +60,10 @@ tasks:
           - "bugbug-data-bugzilla"
 
         artifacts:
-          public/bugs.json.zst:
+          public/bugs.pickle.zst:
             path: /data/bugs.pickle.zst
             type: file
-          public/bugs.json.version:
+          public/bugs.pickle.version:
             path: /data/bugs.pickle.version
             type: file
 

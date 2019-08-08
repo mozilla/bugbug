@@ -27,10 +27,10 @@ hg_servers = list()
 hg_servers_lock = threading.Lock()
 thread_local = threading.local()
 
-COMMITS_DB = "data/commits.json"
+COMMITS_DB = "data/commits.pickle"
 db.register(
     COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.pickle.zst",
     3,
     ["commit_experiences.pickle.zst"],
 )
