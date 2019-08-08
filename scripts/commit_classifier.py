@@ -49,6 +49,14 @@ class CommitClassifier(object):
         repository.download_commits(self.repo_dir, rev_start)
 
     def apply_phab(self, hg, diff_id):
+
+        def has_revision(revision):
+            try:
+                hg.identify(revision)
+                return True
+            except hglib.error.CommandError:
+                return False
+
         phabricator_api = PhabricatorAPI(
             api_key=get_secret("PHABRICATOR_TOKEN"), url=get_secret("PHABRICATOR_URL")
         )
@@ -57,6 +65,11 @@ class CommitClassifier(object):
         stack = phabricator_api.load_patches_stack(diff_id)
         assert len(stack) > 0, "No patches to apply"
 
+        # Update repo to base revision
+        hg_base = stack[0].base_revision
+        if hg_base:
+            hg.update(rev=hg_base, clean=True)
+            logger.info(f'Updated repo to {hg_base}')
 
         for patch in stack:
 
@@ -71,6 +84,10 @@ class CommitClassifier(object):
                 message=message,
                 user="bugbug",
             )
+
+            if patch.base_revision and has_revision(patch.base_revision):
+                logger.info(f'Found available revision {patch.base_revision}')
+                break
 
     def classify(self, diff_id):
         self.update_commit_db()
