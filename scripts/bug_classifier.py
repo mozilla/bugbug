@@ -49,6 +49,7 @@ def classify_bugs(model_name, classifier, bug_id):
 
     if bug_id:
         bugs = bugzilla.get(bug_id).values()
+        assert bugs, f"A bug with a bug id of {bug_id} was not found"
     else:
         bugs = bugzilla.get_bugs()
 
