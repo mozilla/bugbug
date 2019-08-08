@@ -35,7 +35,7 @@ class Retriever(object):
 
         logger.info("commit data extracted from repository")
 
-        zstd_compress("data/commits.pickle")
+        zstd_compress(repository.COMMITS_DB)
         zstd_compress("data/commit_experiences.pickle")
 
 
