@@ -49,8 +49,9 @@ class CommitClassifier(object):
         repository.download_commits(self.repo_dir, rev_start)
 
     def apply_phab(self, hg, diff_id):
-
         def has_revision(revision):
+            if not revision:
+                return False
             try:
                 hg.identify(revision)
                 return True
@@ -65,18 +66,40 @@ class CommitClassifier(object):
         stack = phabricator_api.load_patches_stack(diff_id)
         assert len(stack) > 0, "No patches to apply"
 
+        # Find the first unknown base revision
+        needed_stack = []
+        revisions = {}
+        for patch in reversed(stack):
+            needed_stack.insert(0, patch)
+
+            # Stop as soon as a base revision is available
+            if has_revision(patch.base_revision):
+                logger.info(f"Stopping at revision {patch.base_revision}")
+                break
+
+        if not needed_stack:
+            logger.info("All the patches are already applied")
+            return
+
+        # Load all the diffs revisions
+        diffs = phabricator_api.search_diffs(diff_phid=[p.phid for p in stack])
+        revisions = {
+            diff["phid"]: phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            for diff in diffs
+        }
+
         # Update repo to base revision
-        hg_base = stack[0].base_revision
+        hg_base = needed_stack[0].base_revision
         if hg_base:
             hg.update(rev=hg_base, clean=True)
-            logger.info(f'Updated repo to {hg_base}')
+            logger.info(f"Updated repo to {hg_base}")
 
-        for patch in stack:
+        for patch in needed_stack:
 
             if patch.commits:
                 message = patch.commits[0]["message"]
             else:
-                message = f'Diff {patch.id} - {patch.phid}'
+                message = revisions[patch.phid]["fields"]["title"]
 
             logger.info(f"Applying {patch.phid}: {message}")
             hg.import_(
@@ -84,10 +107,6 @@ class CommitClassifier(object):
                 message=message,
                 user="bugbug",
             )
-
-            if patch.base_revision and has_revision(patch.base_revision):
-                logger.info(f'Found available revision {patch.base_revision}')
-                break
 
     def classify(self, diff_id):
         self.update_commit_db()
