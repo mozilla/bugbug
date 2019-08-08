@@ -63,7 +63,7 @@ class Retriever(object):
             repository.COMMITS_DB = "data/commits.json"
             db.register(
                 repository.COMMITS_DB,
-                "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.pickle.zst",
+                "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
                 2,
                 ["commit_experiences.pickle.zst"],
             )
