@@ -89,7 +89,8 @@ def main():
         choices=["default", "nn"],
         default="default",
     )
-    parser.add_argument("--bug_id", help="Classify the given bug id")
+    parser.add_argument("--bug-id", help="Classify the given bug id")
 
     args = parser.parse_args()
+
     classify_bugs(args.model, args.classifier, args.bug_id)
