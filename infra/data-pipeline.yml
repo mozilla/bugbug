@@ -61,10 +61,10 @@ tasks:
 
         artifacts:
           public/bugs.json.zst:
-            path: /data/bugs.json.zst
+            path: /data/bugs.pickle.zst
             type: file
           public/bugs.json.version:
-            path: /data/bugs.json.version
+            path: /data/bugs.pickle.version
             type: file
 
         features:

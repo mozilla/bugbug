@@ -15,10 +15,10 @@ from tqdm import tqdm
 
 from bugbug import db
 
-BUGS_DB = "data/bugs.json"
+BUGS_DB = "data/bugs.pickle"
 db.register(
     BUGS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.pickle.zst",
     1,
 )
 

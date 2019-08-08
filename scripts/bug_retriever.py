@@ -127,7 +127,7 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
-        zstd_compress("data/bugs.json")
+        zstd_compress("data/bugs.pickle")
 
 
 def main():
