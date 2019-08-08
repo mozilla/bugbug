@@ -49,50 +49,63 @@ class CommitClassifier(object):
         repository.download_commits(self.repo_dir, rev_start)
 
     def apply_phab(self, hg, diff_id):
+        def has_revision(revision):
+            if not revision:
+                return False
+            try:
+                hg.identify(revision)
+                return True
+            except hglib.error.CommandError:
+                return False
+
         phabricator_api = PhabricatorAPI(
             api_key=get_secret("PHABRICATOR_TOKEN"), url=get_secret("PHABRICATOR_URL")
         )
 
-        diffs = phabricator_api.search_diffs(diff_id=diff_id)
-        assert len(diffs) == 1, f"No diff available for {diff_id}"
-        diff = diffs[0]
-
         # Get the stack of patches
-        base, patches = phabricator_api.load_patches_stack(hg, diff)
-        assert len(patches) > 0, "No patches to apply"
+        stack = phabricator_api.load_patches_stack(diff_id)
+        assert len(stack) > 0, "No patches to apply"
 
-        # Load all the diffs details with commits messages
-        diffs = phabricator_api.search_diffs(
-            diff_phid=[p[0] for p in patches], attachments={"commits": True}
-        )
+        # Find the first unknown base revision
+        needed_stack = []
+        revisions = {}
+        for patch in reversed(stack):
+            needed_stack.insert(0, patch)
 
-        diffs_data = {}
-        for diff in diffs:
-            revision = phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
-            logger.info(
-                "Diff {} linked to Revision {}".format(diff["id"], revision["id"])
-            )
+            # Stop as soon as a base revision is available
+            if has_revision(patch.base_revision):
+                logger.info(
+                    f"Stopping at diff {patch.id} and revision {patch.base_revision}"
+                )
+                break
 
-            diffs_data[diff["phid"]] = {
-                "commits": diff["attachments"]["commits"].get("commits", []),
-                "revision": revision,
-            }
+        if not needed_stack:
+            logger.info("All the patches are already applied")
+            return
 
-        # First apply patches on local repo
-        for diff_phid, patch in patches:
-            diff_data = diffs_data.get(diff_phid)
+        # Load all the diffs revisions
+        diffs = phabricator_api.search_diffs(diff_phid=[p.phid for p in stack])
+        revisions = {
+            diff["phid"]: phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            for diff in diffs
+        }
 
-            commits = diff_data["commits"]
-            revision = diff_data["revision"]
+        # Update repo to base revision
+        hg_base = needed_stack[0].base_revision
+        if hg_base:
+            hg.update(rev=hg_base, clean=True)
+            logger.info(f"Updated repo to {hg_base}")
 
-            if commits and commits[0]["message"]:
-                message = commits[0]["message"]
+        for patch in needed_stack:
+
+            if patch.commits:
+                message = patch.commits[0]["message"]
             else:
-                message = revision["fields"]["title"]
+                message = revisions[patch.phid]["fields"]["title"]
 
-            logger.info(f"Applying {diff_phid}")
+            logger.info(f"Applying {patch.phid}: {message}")
             hg.import_(
-                patches=io.BytesIO(patch.encode("utf-8")),
+                patches=io.BytesIO(patch.patch.encode("utf-8")),
                 message=message,
                 user="bugbug",
             )
