@@ -17,7 +17,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_bugs(model_name, classifier):
+def classify_bugs(model_name, classifier, bug_id):
     if classifier != "default":
         assert (
             model_name in MODELS_WITH_TYPE
@@ -47,7 +47,12 @@ def classify_bugs(model_name, classifier):
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
-    for bug in bugzilla.get_bugs():
+    if bug_id:
+        bugs = bugzilla.get(bug_id).values()
+    else:
+        bugs = bugzilla.get_bugs()
+
+    for bug in bugs:
         print(
             f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]} - {bug["summary"]} '
         )
@@ -83,7 +88,7 @@ def main():
         choices=["default", "nn"],
         default="default",
     )
+    parser.add_argument("--bug_id", help="Classify the given bug id")
 
     args = parser.parse_args()
-
-    classify_bugs(args.model, args.classifier)
+    classify_bugs(args.model, args.classifier, args.bug_id)
