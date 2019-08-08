@@ -53,46 +53,21 @@ class CommitClassifier(object):
             api_key=get_secret("PHABRICATOR_TOKEN"), url=get_secret("PHABRICATOR_URL")
         )
 
-        diffs = phabricator_api.search_diffs(diff_id=diff_id)
-        assert len(diffs) == 1, f"No diff available for {diff_id}"
-        diff = diffs[0]
-
         # Get the stack of patches
-        base, patches = phabricator_api.load_patches_stack(hg, diff)
-        assert len(patches) > 0, "No patches to apply"
+        stack = phabricator_api.load_patches_stack(diff_id)
+        assert len(stack) > 0, "No patches to apply"
 
-        # Load all the diffs details with commits messages
-        diffs = phabricator_api.search_diffs(
-            diff_phid=[p[0] for p in patches], attachments={"commits": True}
-        )
 
-        diffs_data = {}
-        for diff in diffs:
-            revision = phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
-            logger.info(
-                "Diff {} linked to Revision {}".format(diff["id"], revision["id"])
-            )
+        for patch in stack:
 
-            diffs_data[diff["phid"]] = {
-                "commits": diff["attachments"]["commits"].get("commits", []),
-                "revision": revision,
-            }
-
-        # First apply patches on local repo
-        for diff_phid, patch in patches:
-            diff_data = diffs_data.get(diff_phid)
-
-            commits = diff_data["commits"]
-            revision = diff_data["revision"]
-
-            if commits and commits[0]["message"]:
-                message = commits[0]["message"]
+            if patch.commits:
+                message = patch.commits[0]["message"]
             else:
-                message = revision["fields"]["title"]
+                message = f'Diff {patch.id} - {patch.phid}'
 
-            logger.info(f"Applying {diff_phid}")
+            logger.info(f"Applying {patch.phid}: {message}")
             hg.import_(
-                patches=io.BytesIO(patch.encode("utf-8")),
+                patches=io.BytesIO(patch.patch.encode("utf-8")),
                 message=message,
                 user="bugbug",
             )
