@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import pickle
 from datetime import datetime
 from logging import getLogger
 
@@ -16,6 +17,14 @@ logger = getLogger(__name__)
 class Retriever(object):
     def retrieve_bugs(self, limit=None):
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
+
+        if not db.exists(bugzilla.BUGS_DB):
+            bugzilla.BUGS_DB = "data/bugs.json"
+            db.register(
+                bugzilla.BUGS_DB,
+                "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
+                1,
+            )
 
         if not db.is_old_version(bugzilla.BUGS_DB):
             db.download(bugzilla.BUGS_DB)
@@ -50,6 +59,15 @@ class Retriever(object):
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
+        if not db.exists(repository.COMMITS_DB):
+            repository.COMMITS_DB = "data/commits.json"
+            db.register(
+                repository.COMMITS_DB,
+                "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.pickle.zst",
+                2,
+                ["commit_experiences.pickle.zst"],
+            )
+
         if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
@@ -126,6 +144,12 @@ class Retriever(object):
             )
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
+
+        if bugzilla.BUGS_DB == "data/bugs.json":
+            with open("data/bugs.pickle", "wb") as f:
+                for bug in bugzilla.get_bugs():
+                    pickle.dump(bug, f)
+            bugzilla.BUGS_DB = "data/bugs.pickle"
 
         zstd_compress(bugzilla.BUGS_DB)
 
