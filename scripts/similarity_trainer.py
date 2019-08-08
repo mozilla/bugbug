@@ -35,6 +35,7 @@ def parse_args(args):
 
 
 def main(args):
+
     if args.algorithm == "neighbors_tfidf_bigrams":
         model = similarity.model_name_to_class[args.algorithm](
             vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
@@ -46,7 +47,7 @@ def main(args):
             cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
         )
 
-    model.evaluation()
+    model.save()
 
 
 if __name__ == "__main__":
