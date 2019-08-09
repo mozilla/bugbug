@@ -377,10 +377,12 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
+
         else:
             confusion_matrix = metrics.confusion_matrix(
                 y_test, y_pred, labels=self.class_names
             )
+            tn, fp, fn, tp = metrics.confusion_matrix(y_test, y_pred).ravel()
 
             print(
                 classification_report_imbalanced(
@@ -433,6 +435,10 @@ class Model:
                         np.asarray(y_pred_filter),
                         labels=self.class_names,
                     )
+                    tp_filtered = metrics.confusion_matrix(
+                        y_test_filter, y_pred_filter
+                    ).ravel()[3]
+
                     print(
                         classification_report_imbalanced(
                             y_test_filter, y_pred_filter, labels=self.class_names
@@ -441,6 +447,8 @@ class Model:
                 print_labeled_confusion_matrix(
                     confusion_matrix, self.class_names, is_multilabel=is_multilabel
                 )
+                if not is_multilabel:
+                    print(f"Corrected Recall: {tp_filtered/(tp + fn)}")
 
         joblib.dump(self, self.__class__.__name__.lower())
 
