@@ -381,7 +381,6 @@ class Model:
             confusion_matrix = metrics.confusion_matrix(
                 y_test, y_pred, labels=self.class_names
             )
-            tn, fp, fn, tp = metrics.confusion_matrix(y_test, y_pred).ravel()
 
             print(
                 classification_report_imbalanced(
@@ -404,11 +403,15 @@ class Model:
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)
 
+            is_binary = len(y_pred_probas[0]) == 2
             y_test_filter = []
             y_pred_filter = []
             for i in range(0, len(y_test)):
                 argmax = np.argmax(y_pred_probas[i])
                 if y_pred_probas[i][argmax] < confidence_threshold:
+                    if is_binary:
+                        y_pred_filter.append(0)
+                        y_test_filter.append(y_test[i])
                     continue
 
                 y_test_filter.append(y_test[i])
@@ -434,10 +437,6 @@ class Model:
                         np.asarray(y_pred_filter),
                         labels=self.class_names,
                     )
-                    tp_filtered = metrics.confusion_matrix(
-                        y_test_filter, y_pred_filter
-                    ).ravel()[3]
-
                     print(
                         classification_report_imbalanced(
                             y_test_filter, y_pred_filter, labels=self.class_names
@@ -446,8 +445,6 @@ class Model:
                 print_labeled_confusion_matrix(
                     confusion_matrix, self.class_names, is_multilabel=is_multilabel
                 )
-                if not is_multilabel:
-                    print(f"Corrected Recall: {tp_filtered/(tp + fn)}")
 
         joblib.dump(self, self.__class__.__name__.lower())
 
