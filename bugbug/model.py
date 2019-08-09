@@ -377,7 +377,6 @@ class Model:
         print(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
-
         else:
             confusion_matrix = metrics.confusion_matrix(
                 y_test, y_pred, labels=self.class_names
