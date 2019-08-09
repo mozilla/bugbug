@@ -444,6 +444,43 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+    - ID: train-similarity
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: relman-svc-compute
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train-similarity
+          - --algorithm
+          - bm25
+
+        artifacts:
+          public/bm25similarity.similaritymodel.zst:
+            path: /bm52similarity.similaritymodel.zst
+            type: file
+          public/metrics.json:
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.train_similarity.${version}
+        - index.project.relman.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_similarity.latest
+      metadata:
+        name: bugbug train similarity model
+        description: bugbug train similarity model
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
     - ID: check_metrics
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
