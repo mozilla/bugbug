@@ -448,7 +448,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
       provisionerId: aws-provisioner-v1
-      workerType: releng-svg
+      workerType: relman-svc
       dependencies:
         - train-backout
         - train-component
