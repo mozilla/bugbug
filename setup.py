@@ -54,6 +54,12 @@ setup(
             "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",
             "bugbug-analyze-training-metrics = scripts.analyze_training_metrics:main",
             "bugbug-check-all-metrics = scripts.check_all_metrics:main",
+            "bugbug-evaluate-similarity = scripts.evaluate_similarity:main",
+            "bugbug-generate-sheet = scripts.generate_sheet:main",
+            "bugbug-get-type-labels = scripts.get_type_labels:main",
+            "bugbug-get-untriaged = scripts.get_untriaged:main",
+            "bugbug-similarity-query = scripts.similarity_query:main",
+            "bugbug-similarity-trainer = scripts.similarity_trainer:main",
         ]
     },
     classifiers=[

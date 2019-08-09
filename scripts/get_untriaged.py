@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -96,7 +97,7 @@ def run_untriaged(untriaged_bugs):
             writer.writerows(rows)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", help="Bugzilla API token")
     parser.add_argument("--days-back", type=int, help="Days since to fetch bugs")
@@ -111,3 +112,7 @@ if __name__ == "__main__":
         bugs = fetch_untriaged(args)
 
     run_untriaged(bugs)
+
+
+if __name__ == "__main__":
+    main()

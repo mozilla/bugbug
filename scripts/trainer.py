@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import argparse
@@ -117,3 +118,7 @@ def main():
 
     retriever = Trainer()
     retriever.go(args)
+
+
+if __name__ == "__main__":
+    main()

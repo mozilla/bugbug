@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import argparse
@@ -94,3 +95,7 @@ def main():
     args = parser.parse_args()
 
     classify_bugs(args.model, args.classifier, args.bug_id)
+
+
+if __name__ == "__main__":
+    main()
