@@ -30,7 +30,7 @@ def pu_parallel_build_estimators(
     # Retrieve settings
     n_samples, n_features = X.shape
     max_features = ensemble._max_features
-    max_samples = ensemble._max_samples
+    max_samples = sum(y)
     bootstrap = ensemble.bootstrap
     bootstrap_features = ensemble.bootstrap_features
     support_sample_weight = bagging.has_fit_parameter(
