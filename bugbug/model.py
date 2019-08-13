@@ -229,10 +229,11 @@ class Model:
         return important_features
 
     def print_feature_importances(
-        self, important_features, feature_names, class_probabilities=None
+        self, important_features, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
         # when classifying
+        feature_names = self.get_human_readable_feature_names()
         if class_probabilities is not None:
             # shap_values are stored in class 1 for binary classification
             if len(class_probabilities[0]) != 2:
