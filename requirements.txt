@@ -13,7 +13,7 @@ rs_parsepatch==0.2.2
 tqdm==4.33.0
 python-dateutil==2.8.0
 zstandard==0.11.1
-taskcluster==16.0.0
+taskcluster==16.1.0
 microannotate==0.0.11
 tabulate==0.8.3
 pydriller==1.9.2
