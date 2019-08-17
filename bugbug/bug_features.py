@@ -472,12 +472,12 @@ class couple_common_whiteboard_keywords(couple_bug_feature):
 
 class is_same_product(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return bugs[0]["product"] == bugs[1]["product"]
+        return int(bugs[0]["product"] == bugs[1]["product"])
 
 
 class is_same_component(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return (
+        return int(
             bugs[0]["product"] == bugs[1]["product"]
             and bugs[0]["component"] == bugs[1]["component"]
         )
@@ -485,22 +485,22 @@ class is_same_component(couple_bug_feature):
 
 class is_same_platform(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return bugs[0]["platform"] == bugs[1]["platform"]
+        return int(bugs[0]["platform"] == bugs[1]["platform"])
 
 
 class is_same_version(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return bugs[0]["version"] == bugs[1]["version"]
+        return int(bugs[0]["version"] == bugs[1]["version"])
 
 
 class is_same_os(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return bugs[0]["op_sys"] == bugs[1]["op_sys"]
+        return int(bugs[0]["op_sys"] == bugs[1]["op_sys"])
 
 
 class is_same_target_milestone(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
+        return int(bugs[0]["target_milestone"] == bugs[1]["target_milestone"])
 
 
 class is_first_affected_same(couple_bug_feature):
