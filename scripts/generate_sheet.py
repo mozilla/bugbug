@@ -31,10 +31,17 @@ def generate_sheet(model_name, token, days, threshold):
 
     for bug in bugs.values():
         p = model.classify(bug, probabilities=True)
+        probability = p[0]
+        if len(probability) > 2:
+            index = probability.index(max(probability))
+            _, all_labels = model.get_labels()
+            prediction = all_labels[index]
+        else:
+            prediction = "y" if probability[1] >= threshold else "n"
         rows.append(
             [
                 f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}',
-                "y" if p[0][1] >= threshold else "n",
+                prediction,
                 "",
                 bug["summary"],
             ]
