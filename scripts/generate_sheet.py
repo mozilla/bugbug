@@ -38,6 +38,7 @@ def generate_sheet(model_name, token, days, threshold):
             prediction = all_labels[index]
         else:
             prediction = "y" if probability[1] >= threshold else "n"
+
         rows.append(
             [
                 f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}',
