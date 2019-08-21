@@ -296,9 +296,7 @@ class BugtypeNNClassifier(KerasClassifier):
             ],
             x,
         )
-        model.compile(
-            optimizer="adam", loss=["categorical_crossentropy"], metrics=["acc"]
-        )
+        model.compile(optimizer="adam", loss=["binary_crossentropy"], metrics=["acc"])
 
         return model
 

@@ -55,7 +55,7 @@ class DictExtractor(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, data):
-        return np.array([elem[self.key] for elem in data]).reshape(-1, 1)
+        return np.array([elem.get(self.key, "Missing") for elem in data]).reshape(-1, 1)
 
 
 class MissingOrdinalEncoder(OrdinalEncoder):
