@@ -368,7 +368,7 @@ class Model:
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
-
+        print(y_pred)
         if is_multilabel:
             assert isinstance(
                 y_pred[0], np.ndarray

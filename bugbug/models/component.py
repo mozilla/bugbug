@@ -2,12 +2,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-
+import itertools
 from collections import Counter
 
 import xgboost
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.multioutput import MultiOutputClassifier
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
@@ -105,8 +106,7 @@ class ComponentModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor="cpu_predictor")
+        self.clf = MultiOutputClassifier(xgboost.XGBClassifier(n_jobs=16))
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
@@ -129,7 +129,7 @@ class ComponentModel(BugModel):
 
     def get_labels(self):
         product_components = {}
-        for bug_data in bugzilla.get_bugs():
+        for bug_data in itertools.islice(bugzilla.get_bugs(), 7000):
             product_components[bug_data["id"]] = (
                 bug_data["product"],
                 bug_data["component"],
@@ -145,12 +145,12 @@ class ComponentModel(BugModel):
 
         classes = {}
         for bug_id, (product, component) in product_components.items():
-            component = self.filter_component(product, component)
+            filtered_component = self.filter_component(product, component)
 
-            if component:
-                classes[bug_id] = component
+            if filtered_component:
+                classes[bug_id] = [product, component, filtered_component]
 
-        component_counts = Counter(classes.values()).most_common()
+        component_counts = Counter([comp[2] for comp in classes.values()]).most_common()
         top_components = set(component for component, count in component_counts)
 
         print(f"{len(top_components)} components")
@@ -181,10 +181,10 @@ class ComponentModel(BugModel):
         classes = {
             bug_id: component
             for bug_id, component in classes.items()
-            if component in top_components
+            if component[2] in top_components
         }
 
-        return classes, set(classes.values())
+        return classes, classes.values()
 
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]
