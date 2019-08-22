@@ -368,11 +368,17 @@ class Model:
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
-        print(y_pred)
+
         if is_multilabel:
             assert isinstance(
                 y_pred[0], np.ndarray
             ), "The predictions should be multilabel"
+
+        # Workaround for multiclass-multioutput models
+        if len(y_pred[0] == 3):
+            score = self.clf.score(X_test, y_test)
+            print(score)
+            return
 
         print(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:

@@ -129,7 +129,7 @@ class ComponentModel(BugModel):
 
     def get_labels(self):
         product_components = {}
-        for bug_data in itertools.islice(bugzilla.get_bugs(), 7000):
+        for bug_data in itertools.islice(bugzilla.get_bugs(), 70000):
             product_components[bug_data["id"]] = (
                 bug_data["product"],
                 bug_data["component"],
