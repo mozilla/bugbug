@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-import itertools
+
 from collections import Counter
 
 import xgboost
@@ -129,7 +129,7 @@ class ComponentModel(BugModel):
 
     def get_labels(self):
         product_components = {}
-        for bug_data in itertools.islice(bugzilla.get_bugs(), 70000):
+        for bug_data in bugzilla.get_bugs():
             product_components[bug_data["id"]] = (
                 bug_data["product"],
                 bug_data["component"],

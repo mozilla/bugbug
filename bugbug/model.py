@@ -375,7 +375,7 @@ class Model:
             ), "The predictions should be multilabel"
 
         # Workaround for multiclass-multioutput models
-        if len(y_pred[0] == 3):
+        if len(y_pred[0]) == 3:
             score = self.clf.score(X_test, y_test)
             print(score)
             return
