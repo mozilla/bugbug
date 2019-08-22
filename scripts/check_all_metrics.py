@@ -59,10 +59,10 @@ def get_model_name(queue, task_id: str):
             model_name = route.split(".")[4]  # model_name = "train_component"
             return model_name[6:]
 
-    # Raise an exception if no matching route was found, this can happens when
-    # the current task has a dependency to a non-training task or if the route
+    # Show a warning if no matching route was found, this can happens when the
+    # current task has a dependency to a non-training task or if the route
     # pattern changes.
-    raise Exception(f"No matching route found for task id {task_id}")
+    LOGGER.warning(f"No matching route found for task id {task_id}")
 
 
 def get_model_names(task_id: str) -> List[str]:
