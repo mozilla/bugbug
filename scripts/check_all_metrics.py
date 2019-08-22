@@ -80,8 +80,10 @@ def get_model_names(task_id: str) -> List[str]:
         )
 
         model_name = get_model_name(queue, task_id)
-        LOGGER.info("Adding model %r to download list", model_name)
-        model_names.append(model_name)
+
+        if model_name:
+            LOGGER.info("Adding model %r to download list", model_name)
+            model_names.append(model_name)
 
     return model_names
 
