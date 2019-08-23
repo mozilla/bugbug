@@ -373,15 +373,18 @@ class Model:
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
 
-        if is_multilabel and not self.is_multioutput_model:
+        if is_multilabel:
             assert isinstance(
                 y_pred[0], np.ndarray
             ), "The predictions should be multilabel"
 
         if self.is_multioutput_model:
+            tracking_metrics["report"] = {}
+            tracking_metrics["confusion_matrix"] = {}
             class_names = self.class_names
+            test_labels = y_test.T
             for num, y_pred in enumerate(y_pred.T):
-                y_test = y_test.T[num]
+                y_test = test_labels[num]
                 self.class_names = class_names[num]
                 output = ["product", "component", "Conflated component"]
 
@@ -415,6 +418,10 @@ class Model:
                 tracking_metrics["confusion_matrix"][
                     output[num]
                 ] = confusion_matrix.tolist()
+
+            joblib.dump(self, self.__class__.__name__.lower())
+
+            return tracking_metrics
         else:
             print(f"No confidence threshold - {len(y_test)} classified")
             if is_multilabel:
