@@ -36,11 +36,13 @@ try:
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
     from nltk.tokenize import word_tokenize
+    import spacy
     from wmd import WMD
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
 nltk.download("stopwords")
+nlp = spacy.load("en_core_web_sm")
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
@@ -80,22 +82,28 @@ class BaseSimilarity(abc.ABC):
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
 
-    def text_preprocess(self, text, join=False):
+    def text_preprocess(self, text, lemmatization=False, join=False):
+
         for func in self.cleanup_functions:
             text = func(text)
 
         text = re.sub("[^a-zA-Z0-9]", " ", text)
 
-        ps = PorterStemmer()
+        if lemmatization:
+            text = [word.lemma_ for word in nlp(text)]
+        else:
+            ps = PorterStemmer()
+            tokenized_text = (
+                word_tokenize(text.lower())
+                if self.nltk_tokenizer
+                else text.lower().split()
+            )
+            text = [
+                ps.stem(word)
+                for word in tokenized_text
+                if word not in set(stopwords.words("english")) and len(word) > 1
+            ]
 
-        tokenized_text = (
-            word_tokenize(text.lower()) if self.nltk_tokenizer else text.lower().split()
-        )
-        text = [
-            ps.stem(word)
-            for word in tokenized_text
-            if word not in set(stopwords.words("english")) and len(word) > 1
-        ]
         if join:
             return " ".join(word for word in text)
         return text
