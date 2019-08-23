@@ -12,7 +12,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Tuple
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -86,6 +86,33 @@ def plot_graph(
     return y[-1] < metric_threshold
 
 
+def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, Any]]:
+    # Load the metric
+    with open(metric_file_path, "r") as metric_file:
+        metric = json.load(metric_file)
+
+    # Get the model, date and version from the file
+    # TODO: Might be better storing it in the file
+    file_path_parts = metric_file_path.stem.split("_")
+
+    assert file_path_parts[:5] == ["metric", "project", "relman", "bugbug", "train"]
+    model_name = file_path_parts[5]
+    assert file_path_parts[6:8] == ["per", "date"]
+    date_parts = list(map(int, file_path_parts[8:14]))
+    date = datetime(
+        date_parts[0],
+        date_parts[1],
+        date_parts[2],
+        date_parts[3],
+        date_parts[4],
+        date_parts[5],
+        tzinfo=timezone.utc,
+    )
+    # version = file_path_parts[14:]  # TODO: Use version
+
+    return (date, model_name, metric)
+
+
 def analyze_metrics(metrics_directory: str, output_directory: str):
     root = Path(metrics_directory)
 
@@ -97,28 +124,7 @@ def analyze_metrics(metrics_directory: str, output_directory: str):
 
     for metric_file_path in root.glob("metric*.json"):
 
-        # Load the metric
-        with open(metric_file_path, "r") as metric_file:
-            metric = json.load(metric_file)
-
-        # Get the model, date and version from the file
-        # TODO: Might be better storing it in the file
-        file_path_parts = metric_file_path.stem.split("_")
-
-        assert file_path_parts[:5] == ["metric", "project", "relman", "bugbug", "train"]
-        model_name = file_path_parts[5]
-        assert file_path_parts[6:8] == ["per", "date"]
-        date_parts = list(map(int, file_path_parts[8:14]))
-        date = datetime(
-            date_parts[0],
-            date_parts[1],
-            date_parts[2],
-            date_parts[3],
-            date_parts[4],
-            date_parts[5],
-            tzinfo=timezone.utc,
-        )
-        # version = file_path_parts[14:]  # TODO: Use version
+        date, model_name, metric = parse_metric_file(metric_file_path)
 
         # Then process the report
         for key, value in metric["report"]["average"].items():
