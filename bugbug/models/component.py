@@ -184,7 +184,7 @@ class ComponentModel(BugModel):
             if component in top_components
         }
 
-        return classes, set(classes.values())
+        return classes, sorted(set(classes.values()))
 
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]

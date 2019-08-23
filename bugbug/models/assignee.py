@@ -110,7 +110,7 @@ class AssigneeModel(BugModel):
             if assignee in top_assignees
         }
 
-        return classes, set(classes.values())
+        return classes, sorted(set(classes.values()))
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()

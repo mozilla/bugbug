@@ -5,6 +5,8 @@ import csv
 import os
 from datetime import datetime, timedelta
 
+import numpy as np
+
 from bugbug import bugzilla
 from bugbug.models import get_model_class
 
@@ -18,6 +20,7 @@ def generate_sheet(model_name, token, days, threshold):
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
+    _, all_labels = model.get_labels()
 
     today = datetime.utcnow()
     start_date = today - timedelta(days)
@@ -33,8 +36,7 @@ def generate_sheet(model_name, token, days, threshold):
         p = model.classify(bug, probabilities=True)
         probability = p[0]
         if len(probability) > 2:
-            index = probability.index(max(probability))
-            _, all_labels = model.get_labels()
+            index = np.argmax(probability)
             prediction = all_labels[index]
         else:
             prediction = "y" if probability[1] >= threshold else "n"
