@@ -20,7 +20,6 @@ def generate_sheet(model_name, token, days, threshold):
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
-    _, all_labels = model.get_labels()
 
     today = datetime.utcnow()
     start_date = today - timedelta(days)
@@ -37,7 +36,7 @@ def generate_sheet(model_name, token, days, threshold):
         probability = p[0]
         if len(probability) > 2:
             index = np.argmax(probability)
-            prediction = all_labels[index]
+            prediction = model.class_names[index]
         else:
             prediction = "y" if probability[1] >= threshold else "n"
 
