@@ -5,6 +5,7 @@
 
 from collections import Counter
 
+import numpy as np
 import xgboost
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -60,6 +61,7 @@ class ComponentModel(BugModel):
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
+        self.is_multioutput_model = True
 
         feature_extractors = [
             bug_features.has_str(),
@@ -184,7 +186,10 @@ class ComponentModel(BugModel):
             if component[2] in top_components
         }
 
-        return classes, classes.values()
+        class_names = [
+            set(item) for item in np.array([item for item in classes.values()]).T
+        ]
+        return classes, class_names
 
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]
