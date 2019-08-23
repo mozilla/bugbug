@@ -16,6 +16,9 @@ from typing import Any, Dict, Tuple
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy
+import statsmodels.api as sm
+from pandas import DataFrame
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,12 +33,11 @@ REPORT_METRICS = ["accuracy", "precision", "recall"]
 def plot_graph(
     model_name: str,
     metric_name: str,
-    values_dict: Dict[datetime, float],
+    df: DataFrame,
     output_directory: Path,
+    negative_slope: bool,
 ) -> bool:
-    sorted_metrics = sorted(values_dict.items())
-    x, y = zip(*sorted_metrics)
-
+    y = df.value
     # Compute the threshold
     if len(y) >= 2:
         before_last_value = y[-2]
@@ -44,18 +46,23 @@ def plot_graph(
     metric_threshold = before_last_value * WARNING_THRESHOLD
 
     figure = plt.figure()
-    axes = plt.axes()
+    axes = df.plot(y="value", marker=".")
+    # axes = plt.axes()
 
     # Formatting of the figure
     figure.autofmt_xdate()
     axes.fmt_xdata = mdates.DateFormatter("%Y-%m-%d-%H-%M")
-    axes.set_title(f"{model_name} {metric_name}")
+
+    if negative_slope:
+        axes.set_title(f"{model_name} {metric_name} [negative slope]")
+    else:
+        axes.set_title(f"{model_name} {metric_name}")
 
     # Display threshold
     axes.axhline(y=metric_threshold, linestyle="--", color="red")
     plt.annotate(
         "{:.4f}".format(metric_threshold),
-        (x[-1], metric_threshold),
+        (df.index[-1], metric_threshold),
         textcoords="offset points",  # how to position the text
         xytext=(-10, 10),  # distance from text to points (x,y)
         ha="center",
@@ -63,7 +70,7 @@ def plot_graph(
     )
 
     # Display point values
-    for single_x, single_y in zip(x, y):
+    for single_x, single_y in zip(df.index, df.value):
         label = "{:.4f}".format(single_y)
 
         plt.annotate(
@@ -73,8 +80,6 @@ def plot_graph(
             xytext=(0, 10),
             ha="center",
         )
-
-    axes.plot_date(x, y, marker=".", fmt="-")
 
     output_file_path = output_directory.resolve() / f"{model_name}_{metric_name}.svg"
     LOGGER.info("Saving %s figure", output_file_path)
@@ -113,12 +118,15 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
     return (date, model_name, metric)
 
 
-def analyze_metrics(metrics_directory: str, output_directory: str):
+def analyze_metrics(
+    metrics_directory: str, output_directory: str, debug_regression: bool = False
+):
     root = Path(metrics_directory)
 
     metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
         lambda: defaultdict(dict)
     )
+    metrics_df: Dict[str, Dict[str, Any]] = defaultdict(lambda: defaultdict(dict))
 
     threshold_ever_crossed = False
 
@@ -143,8 +151,40 @@ def analyze_metrics(metrics_directory: str, output_directory: str):
 
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
+            df = DataFrame.from_dict(values, orient="index", columns=["value"])
+            df = df.sort_index()
+            # Convert the index to a integer to make a linear regression
+            df["days_since"] = (df.index - min(df.index)).astype("timedelta64[s]")
+            model = sm.OLS(df.value, sm.add_constant(df.days_since))
+            # ratio = smf.ols("value ~ days_since", data=df).fitparams[0]
+            f = model.fit()
+            p = f.params
+            slope = p.days_since
+
+            negative_slope = slope < 0
+
+            if negative_slope:
+                # TODO: Raise instead of warning?
+                logging.warning(
+                    "Slope for model %r and metric %r is negative: %r",
+                    model_name,
+                    metric_name,
+                    slope,
+                )
+
+            if negative_slope and debug_regression:
+                x = numpy.arange(min(df.days_since), max(df.days_since))
+                ax = df.plot(x="days_since", y="value", marker=".")
+                ax.plot(p.const + p.days_since * x)
+                ax.set_title(f"{model_name} {metric_name}")
+                plt.show()
+
+            metrics_df[model_name][metric_name] = (df, negative_slope)
+
+    for model_name in metrics_df:
+        for metric_name, (df, negative_slope) in metrics_df[model_name].items():
             threshold_crossed = plot_graph(
-                model_name, metric_name, values, Path(output_directory)
+                model_name, metric_name, df, Path(output_directory), negative_slope
             )
 
             if threshold_crossed:
@@ -173,10 +213,17 @@ def main():
         metavar="output-directory",
         help="In which directory the script will save the generated graphs",
     )
+    parser.add_argument(
+        "--debug-negative-slope",
+        action="store_true",
+        help="Should we display the linear regression detecting the global trend for debugging purposes",
+    )
 
     args = parser.parse_args()
 
-    analyze_metrics(args.metrics_directory, args.output_directory)
+    analyze_metrics(
+        args.metrics_directory, args.output_directory, args.debug_negative_slope
+    )
 
 
 if __name__ == "__main__":

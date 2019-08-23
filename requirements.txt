@@ -17,3 +17,4 @@ taskcluster==16.0.0
 microannotate==0.0.11
 tabulate==0.8.3
 pydriller==1.9.2
+statsmodels==0.10.1
