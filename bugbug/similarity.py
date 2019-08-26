@@ -28,6 +28,8 @@ try:
     import gensim
     from gensim import models, similarities
     from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex, TfidfModel
+    from gensim.models.ldamodel import LdaModel
+    from gensim.matutils import sparse2full
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
@@ -521,6 +523,51 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
             self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
         ]
         return [self.bug_ids[similarity[0]] for similarity in similarities]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
+
+class LDASimilarity(BaseSimilarity):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        self.corpus = []
+        self.bug_ids = []
+        for bug in bugzilla.get_bugs():
+            self.corpus.append(self.text_preprocess(self.get_text(bug)))
+            self.bug_ids.append(bug["id"])
+
+        indexes = list(range(len(self.corpus)))
+        random.shuffle(indexes)
+        self.corpus = [self.corpus[idx] for idx in indexes]
+        self.bug_ids = [self.bug_ids[idx] for idx in indexes]
+
+        self.dictionary = Dictionary(self.corpus)
+
+        self.model = LdaModel([self.dictionary.doc2bow(text) for text in self.corpus])
+
+    def get_similar_bugs(self, query):
+        query = self.text_preprocess(self.get_text(query))
+
+        dense1 = sparse2full(
+            self.model[self.dictionary.doc2bow(query)], self.model.num_topics
+        )
+        distances = []
+
+        for idx in range(len(self.corpus)):
+            dense2 = sparse2full(
+                self.model[self.dictionary.doc2bow(self.corpus[idx])],
+                self.model.num_topics,
+            )
+            hellinger_distance = np.sqrt(
+                0.5 * ((np.sqrt(dense1) - np.sqrt(dense2)) ** 2).sum()
+            )
+
+            distances.append((self.bug_ids[idx], hellinger_distance))
+
+        distances.sort(key=lambda v: v[1])
+
+        return [distance[0] for distance in distances[:10]]
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
