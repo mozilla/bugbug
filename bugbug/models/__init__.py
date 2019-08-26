@@ -21,6 +21,7 @@ MODELS = {
     "regression": "bugbug.models.regression.RegressionModel",
     "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
     "regressor": "bugbug.models.regressor.RegressorModel",
+    "security": "bugbug.models.security.SecurityModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
