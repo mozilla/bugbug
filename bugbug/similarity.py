@@ -622,4 +622,6 @@ model_name_to_class = {
     "word2vec_wmdrelax": Word2VecWmdRelaxSimilarity,
     "word2vec_wmd": Word2VecWmdSimilarity,
     "word2vec_softcos": Word2VecSoftCosSimilarity,
+    "bm25": BM25Similarity,
+    "lda": LDASimilarity,
 }
