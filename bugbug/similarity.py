@@ -216,7 +216,11 @@ class LSISimilarity(BaseSimilarity):
         sims = sorted(enumerate(sims), key=lambda item: -item[1])
 
         # Get IDs of the k most similar bugs
-        return [self.corpus[j[0]][0] for j in sims[:k]]
+        return [
+            self.corpus[j[0]][0]
+            for j in sims[:k]
+            if self.corpus[j[0]][0] != query["id"]
+        ]
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
@@ -459,7 +463,11 @@ class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
         nbow["query"] = tuple([None] + list(zip(*query)))
         distances = WMD(embeddings, nbow, vocabulary_min=1).nearest_neighbors("query")
 
-        return [self.bug_ids[distance[0]] for distance in distances]
+        return [
+            self.bug_ids[distance[0]]
+            for distance in distances
+            if self.bug_ids[distance[0]] != query["id"]
+        ]
 
     def get_distance(self, query1, query2):
         query1 = self.text_preprocess(self.get_text(query1))
@@ -520,7 +528,11 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
         similarities = self.softcosinesimilarity[
             self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
         ]
-        return [self.bug_ids[similarity[0]] for similarity in similarities]
+        return [
+            self.bug_ids[similarity[0]]
+            for similarity in similarities
+            if self.bug_ids[similarity[0]] != query["id"]
+        ]
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
