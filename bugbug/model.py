@@ -93,8 +93,11 @@ def classification_report_imbalanced_values(
 
 def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
     confusion_matrix_table = confusion_matrix.tolist()
-    if "NOT_CLASSIFIED" in labels:
-        confusion_matrix_table.pop()
+    try:
+        confusion_matrix_table.pop(labels.index("NOT_CLASSIFIED"))
+    except ValueError:
+        pass
+
     if not is_multilabel:
         confusion_matrix_table = [confusion_matrix_table]
 
@@ -412,8 +415,7 @@ class Model:
             for i in range(0, len(y_test)):
                 argmax = np.argmax(y_pred_probas[i])
                 if y_pred_probas[i][argmax] < confidence_threshold:
-                    if not is_multilabel:
-                        not_classified_indices.append(i)
+                    not_classified_indices.append(i)
                     continue
 
                 y_test_filter.append(y_test[i])
