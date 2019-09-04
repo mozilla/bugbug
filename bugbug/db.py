@@ -26,6 +26,19 @@ logger = logging.getLogger(__name__)
 def register(path, url, version, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
+    # Register database for fallback path in case preferred path not available
+    parts = str(path).split(".")
+    assert len(parts) == 2, "Extension needed to figure out serialization format"
+    fallback_path = parts[0] + "." + "json"
+    url = str(url).split(".")
+    url[-2] = "json"
+    url = ".".join(url)
+    DATABASES[fallback_path] = {
+        "url": url,
+        "version": version,
+        "support_files": support_files,
+    }
+
     # Create DB parent directory.
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -77,7 +90,11 @@ def download_support_file(path, file_name):
 
 
 # Download and extract databases.
-def download(path, force=False, support_files_too=False):
+def download(path, force=False, support_files_too=False, fallback_path=None):
+    if fallback_path:
+        default_path = path
+        path = fallback_path
+
     if os.path.exists(path) and not force:
         return
 
@@ -92,6 +109,14 @@ def download(path, force=False, support_files_too=False):
 
         except requests.exceptions.HTTPError:
             logger.info(f"{url} is not yet available to download", exc_info=True)
+            if fallback_path:
+                return
+            parts = str(path).split(".")
+            assert (
+                len(parts) == 2
+            ), "Extension needed to figure out serialization format"
+            fallback_path = parts[0] + "." + "json"
+            download(path, force, support_files_too, fallback_path=fallback_path)
             return
 
     extract_file(zst_path)
@@ -99,6 +124,11 @@ def download(path, force=False, support_files_too=False):
     if support_files_too:
         for support_file in DATABASES[path]["support_files"]:
             download_support_file(path, support_file)
+
+    if fallback_path:
+        with open(default_path, "wb") as f:
+            for elem in read(path):
+                pickle.dump(elem, f)
 
 
 def last_modified(path):

@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import pickle
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import db, repository
@@ -22,15 +21,6 @@ class Retriever(object):
     def retrieve_commits(self):
         repository.clone(self.repo_dir)
 
-        if not db.exists(repository.COMMITS_DB):
-            repository.COMMITS_DB = "data/commits.json"
-            db.register(
-                repository.COMMITS_DB,
-                "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-                2,
-                ["commit_experiences.pickle.zst"],
-            )
-
         if not db.is_old_version(repository.COMMITS_DB):
             db.download(repository.COMMITS_DB, support_files_too=True)
 
@@ -44,12 +34,6 @@ class Retriever(object):
         repository.download_commits(self.repo_dir, rev_start)
 
         logger.info("commit data extracted from repository")
-
-        if repository.COMMITS_DB == "data/commits.json":
-            with open("data/commits.pickle", "wb") as f:
-                for commit in repository.get_commits():
-                    pickle.dump(commit, f)
-            repository.COMMITS_DB = "data/commits.pickle"
 
         zstd_compress(repository.COMMITS_DB)
         zstd_compress("data/commit_experiences.pickle")
