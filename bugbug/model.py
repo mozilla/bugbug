@@ -93,8 +93,10 @@ def classification_report_imbalanced_values(
 
 def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
     confusion_matrix_table = confusion_matrix.tolist()
-    if "Not classified" in labels:
-        confusion_matrix_table.pop(labels.index("Not classified"))
+
+    # Don't show the Not classified row in the table output
+    if "NOT_CLASSIFIED" in labels:
+        confusion_matrix_table.pop(labels.index("NOT_CLASSIFIED"))
 
     if not is_multilabel:
         confusion_matrix_table = [confusion_matrix_table]
@@ -110,8 +112,8 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
         for i in range(len(table[0])):
             confusion_matrix_header.append(
                 f"{table_labels[i]} (Predicted)"
-                if table_labels[i] != "Not classified"
-                else f"{table_labels[i]}"
+                if table_labels[i] != "NOT_CLASSIFIED"
+                else "Not classified"
             )
         for i in range(len(table)):
             table[i].insert(0, f"{table_labels[i]} (Actual)")
@@ -409,7 +411,7 @@ class Model:
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)
-            confidence_class_names = self.class_names + ["Not classified"]
+            confidence_class_names = self.class_names + ["NOT_CLASSIFIED"]
 
             y_test_filter = []
             y_pred_filter = []
@@ -431,7 +433,7 @@ class Model:
                 y_pred_filter = np.concatenate(
                     (
                         y_pred_filter,
-                        np.array(["Not classified"] * len(not_classified_indices)),
+                        np.array(["NOT_CLASSIFIED"] * len(not_classified_indices)),
                     )
                 )
                 y_test_filter += [y_test[i] for i in not_classified_indices]
