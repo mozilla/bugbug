@@ -7,16 +7,16 @@ ARG MERCURIAL_VERSION="5.1"
 
 # git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
 RUN apt-get update && \
-    apt-get install -y python git curl && \
-    hg clone -r 709c897f2444 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    apt-get install -y python git curl tar && \
     curl -L https://www.mercurial-scm.org/release/mercurial-$MERCURIAL_VERSION.tar.gz | tar -C /opt -xvz && \
     python2 /opt/mercurial-$MERCURIAL_VERSION/setup.py install && \
+    hg clone -r 709c897f2444 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
     rm -r /depot_tools/.git /depot_tools/recipes /depot_tools/tests /depot_tools/man /depot_tools/testing_support /depot_tools/win_toolchain /depot_tools/bootstrap /depot_tools/fetch_configs && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.2/rust-code-analysis-linux-x86_64.tar.bz2 | tar -C /usr/local/bin -xjv && \
-    apt-get purge -y curl && \
+    apt-get purge -y curl tar && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
 
