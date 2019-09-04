@@ -49,6 +49,7 @@ class Retriever(object):
             labelled_bug_ids = labelled_bug_ids[:limit]
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
+        # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
         if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
         ):
