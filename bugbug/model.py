@@ -430,11 +430,14 @@ class Model:
 
             if not is_multilabel:
                 y_pred_filter = self.le.inverse_transform(y_pred_filter)
-                y_pred_filter = np.concatenate(
-                    (
-                        y_pred_filter,
-                        np.array(["NOT_CLASSIFIED"] * len(not_classified_indices)),
-                    )
+                y_pred_filter = np.asarray(
+                    np.concatenate(
+                        (
+                            y_pred_filter,
+                            np.array(["NOT_CLASSIFIED"] * len(not_classified_indices)),
+                        )
+                    ),
+                    dtype="<U15",
                 )
                 y_test_filter += [y_test[i] for i in not_classified_indices]
                 y_test_filter = np.asarray(y_test_filter, dtype="<U15")
