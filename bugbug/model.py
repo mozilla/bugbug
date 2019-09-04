@@ -95,7 +95,7 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
     confusion_matrix_table = confusion_matrix.tolist()
 
     # Don't show the Not classified row in the table output
-    if "NOT_CLASSIFIED" in labels:
+    if "NOT_CLASSIFIED" in labels and not is_multilabel:
         confusion_matrix_table.pop(labels.index("NOT_CLASSIFIED"))
 
     if not is_multilabel:
@@ -448,7 +448,7 @@ class Model:
             if len(y_test_filter) != 0:
                 if is_multilabel:
                     confusion_matrix = metrics.multilabel_confusion_matrix(
-                        y_test_filter, y_pred_filter
+                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
                     )
                 else:
                     confusion_matrix = metrics.confusion_matrix(
