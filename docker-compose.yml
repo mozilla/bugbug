@@ -6,6 +6,12 @@ services:
       dockerfile: infra/dockerfile.base
     image: mozilla/bugbug-base
 
+  bugbug-nlp:
+    build:
+      context: .
+      dockerfile: infra/dockerfile.nlp
+    image: mozilla/bugbug-nlp
+
   bugbug-commit-retrieval:
     build:
       context: .
