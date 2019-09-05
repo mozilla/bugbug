@@ -83,7 +83,7 @@ class CommitClassifier(object):
             logger.info("All the patches are already applied")
             return
 
-        # Load all the diffs revisions
+        # Load all the diff revisions
         diffs = phabricator_api.search_diffs(diff_phid=[p.phid for p in stack])
         revisions = {
             diff["phid"]: phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
@@ -97,13 +97,17 @@ class CommitClassifier(object):
             logger.info(f"Updated repo to {hg_base}")
 
         for patch in needed_stack:
+            revision = revisions[patch.phid]
 
             if patch.commits:
                 message = patch.commits[0]["message"]
             else:
-                message = revisions[patch.phid]["fields"]["title"]
+                message = revision["fields"]["title"]
 
-            logger.info(f"Applying {patch.phid}: {message}")
+            logger.info(
+                f"Applying {patch.phid} from revision {revision['id']}: {message}"
+            )
+
             hg.import_(
                 patches=io.BytesIO(patch.patch.encode("utf-8")),
                 message=message,

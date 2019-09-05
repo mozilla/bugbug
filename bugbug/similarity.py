@@ -28,16 +28,21 @@ try:
     import gensim
     from gensim import models, similarities
     from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex, TfidfModel
+    from gensim.models.ldamodel import LdaModel
+    from gensim.matutils import sparse2full
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
+    from gensim.summarization.bm25 import BM25
     from gensim.corpora import Dictionary
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
     from nltk.tokenize import word_tokenize
+    import spacy
     from wmd import WMD
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
 nltk.download("stopwords")
+nlp = spacy.load("en_core_web_sm")
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
@@ -77,22 +82,28 @@ class BaseSimilarity(abc.ABC):
     def get_text(self, bug):
         return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
 
-    def text_preprocess(self, text, join=False):
+    def text_preprocess(self, text, lemmatization=False, join=False):
+
         for func in self.cleanup_functions:
             text = func(text)
 
         text = re.sub("[^a-zA-Z0-9]", " ", text)
 
-        ps = PorterStemmer()
+        if lemmatization:
+            text = [word.lemma_ for word in nlp(text)]
+        else:
+            ps = PorterStemmer()
+            tokenized_text = (
+                word_tokenize(text.lower())
+                if self.nltk_tokenizer
+                else text.lower().split()
+            )
+            text = [
+                ps.stem(word)
+                for word in tokenized_text
+                if word not in set(stopwords.words("english")) and len(word) > 1
+            ]
 
-        tokenized_text = (
-            word_tokenize(text.lower()) if self.nltk_tokenizer else text.lower().split()
-        )
-        text = [
-            ps.stem(word)
-            for word in tokenized_text
-            if word not in set(stopwords.words("english")) and len(word) > 1
-        ]
         if join:
             return " ".join(word for word in text)
         return text
@@ -216,7 +227,11 @@ class LSISimilarity(BaseSimilarity):
         sims = sorted(enumerate(sims), key=lambda item: -item[1])
 
         # Get IDs of the k most similar bugs
-        return [self.corpus[j[0]][0] for j in sims[:k]]
+        return [
+            self.corpus[j[0]][0]
+            for j in sims[:k]
+            if self.corpus[j[0]][0] != query["id"]
+        ]
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
@@ -459,7 +474,11 @@ class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
         nbow["query"] = tuple([None] + list(zip(*query)))
         distances = WMD(embeddings, nbow, vocabulary_min=1).nearest_neighbors("query")
 
-        return [self.bug_ids[distance[0]] for distance in distances]
+        return [
+            self.bug_ids[distance[0]]
+            for distance in distances
+            if self.bug_ids[distance[0]] != query["id"]
+        ]
 
     def get_distance(self, query1, query2):
         query1 = self.text_preprocess(self.get_text(query1))
@@ -520,7 +539,85 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
         similarities = self.softcosinesimilarity[
             self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
         ]
-        return [self.bug_ids[similarity[0]] for similarity in similarities]
+        return [
+            self.bug_ids[similarity[0]]
+            for similarity in similarities
+            if self.bug_ids[similarity[0]] != query["id"]
+        ]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
+
+class BM25Similarity(BaseSimilarity):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        self.corpus = []
+        self.bug_ids = []
+
+        for bug in bugzilla.get_bugs():
+            self.corpus.append(self.text_preprocess(self.get_text(bug)))
+            self.bug_ids.append(bug["id"])
+
+        indexes = list(range(len(self.corpus)))
+        random.shuffle(indexes)
+        self.corpus = [self.corpus[idx] for idx in indexes]
+        self.bug_ids = [self.bug_ids[idx] for idx in indexes]
+
+        self.model = BM25(self.corpus)
+
+    def get_similar_bugs(self, query):
+        distances = self.model.get_scores(self.text_preprocess(self.get_text(query)))
+        id_dist = zip(self.bug_ids, distances)
+
+        id_dist = sorted(list(id_dist), reverse=True, key=lambda v: v[1])
+
+        return [distance[0] for distance in id_dist[:10]]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
+
+class LDASimilarity(BaseSimilarity):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        self.corpus = []
+        self.bug_ids = []
+        for bug in bugzilla.get_bugs():
+            self.corpus.append(self.text_preprocess(self.get_text(bug)))
+            self.bug_ids.append(bug["id"])
+
+        indexes = list(range(len(self.corpus)))
+        random.shuffle(indexes)
+        self.corpus = [self.corpus[idx] for idx in indexes]
+        self.bug_ids = [self.bug_ids[idx] for idx in indexes]
+
+        self.dictionary = Dictionary(self.corpus)
+
+        self.model = LdaModel([self.dictionary.doc2bow(text) for text in self.corpus])
+
+    def get_similar_bugs(self, query):
+        query = self.text_preprocess(self.get_text(query))
+
+        dense1 = sparse2full(
+            self.model[self.dictionary.doc2bow(query)], self.model.num_topics
+        )
+        distances = []
+
+        for idx in range(len(self.corpus)):
+            dense2 = sparse2full(
+                self.model[self.dictionary.doc2bow(self.corpus[idx])],
+                self.model.num_topics,
+            )
+            hellinger_distance = np.sqrt(
+                0.5 * ((np.sqrt(dense1) - np.sqrt(dense2)) ** 2).sum()
+            )
+
+            distances.append((self.bug_ids[idx], hellinger_distance))
+
+        distances.sort(key=lambda v: v[1])
+
+        return [distance[0] for distance in distances[:10]]
 
     def get_distance(self, query1, query2):
         raise NotImplementedError
@@ -533,4 +630,6 @@ model_name_to_class = {
     "word2vec_wmdrelax": Word2VecWmdRelaxSimilarity,
     "word2vec_wmd": Word2VecWmdSimilarity,
     "word2vec_softcos": Word2VecSoftCosSimilarity,
+    "bm25": BM25Similarity,
+    "lda": LDASimilarity,
 }
