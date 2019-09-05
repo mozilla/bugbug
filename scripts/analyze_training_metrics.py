@@ -17,8 +17,8 @@ from typing import Any, Dict, Tuple
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy
-import statsmodels.api as sm
 from pandas import DataFrame
+from scipy.signal import argrelextrema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 # By default, if the latest metric point is 5% lower than the previous one, show a warning and exit
 # with 1.
 WARNING_THRESHOLD = 0.95
+LOCAL_MIN_MAX_ORDER = 2
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
 
@@ -35,30 +36,22 @@ def plot_graph(
     model_name: str,
     metric_name: str,
     df: DataFrame,
+    title: str,
     output_directory: Path,
-    warning_threshold: float,
-    negative_slope: bool,
-) -> bool:
-    y = df.value
-    # Compute the threshold
-    if len(y) >= 2:
-        before_last_value = y[-2]
-    else:
-        before_last_value = y[-1]
-    metric_threshold = before_last_value * warning_threshold
-
+    file_path: str,
+    metric_threshold: float,
+) -> None:
     figure = plt.figure()
-    axes = df.plot(y="value", marker=".")
+    axes = df.plot(y="value")
+    axes.scatter(df.index, df["min"], c="r")
+    axes.scatter(df.index, df["max"], c="g")
     # axes = plt.axes()
 
     # Formatting of the figure
     figure.autofmt_xdate()
     axes.fmt_xdata = mdates.DateFormatter("%Y-%m-%d-%H-%M")
 
-    if negative_slope:
-        axes.set_title(f"{model_name} {metric_name} [negative slope]")
-    else:
-        axes.set_title(f"{model_name} {metric_name}")
+    axes.set_title(title)
 
     # Display threshold
     axes.axhline(y=metric_threshold, linestyle="--", color="red")
@@ -83,14 +76,11 @@ def plot_graph(
             ha="center",
         )
 
-    output_file_path = output_directory.resolve() / f"{model_name}_{metric_name}.svg"
+    output_file_path = output_directory.resolve() / file_path
     LOGGER.info("Saving %s figure", output_file_path)
     plt.savefig(output_file_path)
 
     plt.close(figure)
-
-    # Check if the threshold has been crossed
-    return y[-1] < metric_threshold
 
 
 def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, Any]]:
@@ -131,10 +121,10 @@ def analyze_metrics(
     metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
         lambda: defaultdict(dict)
     )
-    metrics_df: Dict[str, Dict[str, Any]] = defaultdict(lambda: defaultdict(dict))
 
     threshold_ever_crossed = False
 
+    # First process the metrics JSON files
     for metric_file_path in root.glob("metric*.json"):
 
         date, model_name, metric = parse_metric_file(metric_file_path)
@@ -154,60 +144,100 @@ def analyze_metrics(
             metrics[model_name][f"{key}_mean"][date] = value["mean"]
             metrics[model_name][f"{key}_std"][date] = value["std"]
 
+    # Then analyze them
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
-            # Convert the index to a integer to make a linear regression
-            df["days_since"] = (df.index - min(df.index)).astype("timedelta64[s]")
-            model = sm.OLS(df.value, sm.add_constant(df.days_since))
-            # ratio = smf.ols("value ~ days_since", data=df).fitparams[0]
-            f = model.fit()
-            p = f.params
-            slope = p.days_since
 
-            negative_slope = slope < 0
+            df["min"] = df.iloc[
+                argrelextrema(
+                    df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
+                )[0]
+            ]["value"]
+            df["max"] = df.iloc[
+                argrelextrema(
+                    df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
+                )[0]
+            ]["value"]
 
-            if negative_slope:
-                # TODO: Raise instead of warning?
-                logging.warning(
-                    "Slope for model %r and metric %r is negative: %r",
-                    model_name,
+            # Smooth the dataframe with rolling mean
+
+            # The data-pipeline is scheduled to run every two weeks
+            mean_df = df.rolling("31d").mean()
+
+            mean_df["min"] = mean_df.iloc[
+                argrelextrema(
+                    mean_df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
+                )[0]
+            ]["value"]
+            mean_df["max"] = mean_df.iloc[
+                argrelextrema(
+                    mean_df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
+                )[0]
+            ]["value"]
+
+            if numpy.isnan(mean_df.iloc[-1]["min"]):
+                LOGGER.info(
+                    "Metric %r for model %s seems to be increasing",
                     metric_name,
-                    slope,
+                    model_name,
+                )
+            else:
+                LOGGER.warning(
+                    "Metric %r for model %s seems to be decreasing",
+                    metric_name,
+                    model_name,
                 )
 
-            if negative_slope and debug_regression:
-                x = numpy.arange(min(df.days_since), max(df.days_since))
-                ax = df.plot(x="days_since", y="value", marker=".")
-                ax.plot(p.const + p.days_since * x)
-                ax.set_title(f"{model_name} {metric_name}")
-                plt.show()
+            # Compute the threshold for the metric
+            if len(df.value) >= 2:
+                before_last_value = df.value[-2]
+            else:
+                before_last_value = df.value[-1]
+            metric_threshold = before_last_value * warning_threshold
 
-            metrics_df[model_name][metric_name] = (df, negative_slope)
-
-    for model_name in metrics_df:
-        for metric_name, (df, negative_slope) in metrics_df[model_name].items():
-            threshold_crossed = plot_graph(
-                model_name,
-                metric_name,
-                df,
-                Path(output_directory),
-                warning_threshold,
-                negative_slope,
-            )
+            threshold_crossed = df.value[-1] < metric_threshold
 
             diff = (1 - warning_threshold) * 100
 
             if threshold_crossed:
                 LOGGER.warning(
-                    "Last metric %r for model %s is %f%% worse than the previous one",
+                    "Last metric %r for model %s is at least %f%% worse than the previous one",
                     metric_name,
                     model_name,
                     diff,
                 )
 
                 threshold_ever_crossed = threshold_ever_crossed or threshold_crossed
+
+            # Plot the non-smoothed graph
+            title = f"{model_name} {metric_name}"
+            file_path = f"{model_name}_{metric_name}_before_smoothing.svg"
+
+            plot_graph(
+                model_name,
+                metric_name,
+                df,
+                title,
+                Path(output_directory),
+                file_path,
+                metric_threshold,
+            )
+
+            # Plot the smoothed graph
+            title = f"Smoothed {model_name} {metric_name}"
+            file_path = f"{model_name}_{metric_name}_after_smoothing.svg"
+
+            plot_graph(
+                model_name,
+                metric_name,
+                mean_df,
+                title,
+                Path(output_directory),
+                file_path,
+                metric_threshold,
+            )
 
     if threshold_ever_crossed:
         sys.exit(1)
