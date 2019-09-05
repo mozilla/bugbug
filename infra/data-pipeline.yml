@@ -476,7 +476,7 @@ tasks:
         - bugs-retrieval
       payload:
         maxRunTime: 25200
-        image: mozilla/bugbug-nlp:${version}
+        image: mozilla/bugbug-base-nlp:${version}
         command:
           - bugbug-train-similarity
           - --algorithm

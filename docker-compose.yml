@@ -9,8 +9,8 @@ services:
   bugbug-nlp:
     build:
       context: .
-      dockerfile: infra/dockerfile.nlp
-    image: mozilla/bugbug-nlp
+      dockerfile: infra/dockerfile.base-nlp
+    image: mozilla/bugbug-base-nlp
 
   bugbug-commit-retrieval:
     build:
