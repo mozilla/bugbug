@@ -501,9 +501,13 @@ class is_same_target_milestone(couple_bug_feature):
 
 class is_first_affected_same(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return min(get_versions_statuses(bugs[0])[1]) == min(
-            get_versions_statuses(bugs[1])[1]
-        )
+        version_status1 = get_versions_statuses(bugs[0])[1]
+        version_status2 = get_versions_statuses(bugs[1])[1]
+
+        if len(version_status1) > 0 and len(version_status2) > 0:
+            return min(version_status1) == min(version_status2)
+
+        return False
 
 
 class couple_delta_creation_date(couple_bug_feature):

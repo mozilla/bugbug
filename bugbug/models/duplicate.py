@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import random
+from itertools import combinations
 
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
@@ -84,6 +85,8 @@ class DuplicateModel(BugCoupleModel):
         duplicates_num = 0
         for bug_data in bugzilla.get_bugs():
             bug_id = bug_data["id"]
+            current_duplicates = [bug_id]
+
             if bug_id not in all_ids:
                 continue
 
@@ -94,11 +97,14 @@ class DuplicateModel(BugCoupleModel):
                 if duplicate_bug_id not in all_ids:
                     continue
 
+                current_duplicates.append(duplicate_bug_id)
                 duplicate_ids.append(duplicate_bug_id)
 
                 if duplicates_num < self.num_duplicates:
-                    classes[(bug_id, duplicate_bug_id)] = 1
-                duplicates_num += 1
+                    # For every pair in the duplicates list of that particular bug, set label = 1
+                    for duplicate_pair in combinations(current_duplicates, 2):
+                        classes[tuple(duplicate_pair)] = 1
+                        duplicates_num += 1
 
         # Remove duplicate duplicate IDs.
         duplicate_ids = list(set(duplicate_ids))
