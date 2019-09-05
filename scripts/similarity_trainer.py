@@ -35,8 +35,8 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-def main(args):
-
+def main():
+    args = parse_args(sys.argv[1:])
     if args.algorithm == "neighbors_tfidf_bigrams":
         model = similarity.model_name_to_class[args.algorithm](
             vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
@@ -52,4 +52,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(parse_args(sys.argv[1:]))
+    main()

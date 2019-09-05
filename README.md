@@ -54,7 +54,7 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-Run the `trainer.py` script with the command `python3 -c 'from scripts import trainer; trainer.main()'` to perform training.
+Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training.
 
 ### Running the repository mining script
 
