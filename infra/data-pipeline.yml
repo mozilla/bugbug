@@ -111,7 +111,7 @@ tasks:
     - ID: train-backout
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -125,9 +125,11 @@ tasks:
 
         artifacts:
           public/backoutmodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /backoutmodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
@@ -147,7 +149,7 @@ tasks:
     - ID: train-component
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -161,9 +163,11 @@ tasks:
 
         artifacts:
           public/componentmodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /componentmodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
@@ -183,7 +187,7 @@ tasks:
     - ID: train-defectenhancementtask
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -197,9 +201,11 @@ tasks:
 
         artifacts:
           public/defectenhancementtaskmodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /defectenhancementtaskmodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
@@ -219,7 +225,7 @@ tasks:
     - ID: train-regression
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -233,12 +239,15 @@ tasks:
 
         artifacts:
           public/regressionmodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /regressionmodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
           public/feature_importance.png:
+            expires: {$fromNow: '1 year'}
             path: /feature_importance.png
             type: file
 
@@ -258,7 +267,7 @@ tasks:
     - ID: train-regressor
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -272,12 +281,15 @@ tasks:
 
         artifacts:
           public/regressormodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /regressormodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
           public/feature_importance.png:
+            expires: {$fromNow: '1 year'}
             path: /feature_importance.png
             type: file
 
@@ -297,7 +309,7 @@ tasks:
     - ID: train-tracking
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -311,9 +323,11 @@ tasks:
 
         artifacts:
           public/trackingmodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /trackingmodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
@@ -333,7 +347,7 @@ tasks:
     - ID: train-regressionrange
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -347,12 +361,15 @@ tasks:
 
         artifacts:
           public/regressionrangemodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /regressionrangemodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
           public/feature_importance.png:
+            expires: {$fromNow: '1 year'}
             path: /feature_importance.png
             type: file
 
@@ -372,7 +389,7 @@ tasks:
     - ID: train-stepstoreproduce
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -386,12 +403,15 @@ tasks:
 
         artifacts:
           public/stepstoreproducemodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /stepstoreproducemodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
           public/feature_importance.png:
+            expires: {$fromNow: '1 year'}
             path: /feature_importance.png
             type: file
 
@@ -411,7 +431,7 @@ tasks:
     - ID: train-duplicate
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -425,9 +445,11 @@ tasks:
 
         artifacts:
           public/duplicatemodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /duplicatemodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
@@ -447,7 +469,7 @@ tasks:
     - ID: train-similarity
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
-      expires: {$fromNow: '1 month'}
+      expires: {$fromNow: '1 year'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc-compute
       dependencies:
@@ -462,9 +484,11 @@ tasks:
 
         artifacts:
           public/bm25similarity.similaritymodel.zst:
+            expires: {$fromNow: '1 month'}
             path: /bm52similarity.similaritymodel.zst
             type: file
           public/metrics.json:
+            expires: {$fromNow: '1 year'}
             path: /metrics.json
             type: file
 
