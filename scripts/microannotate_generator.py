@@ -30,7 +30,6 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
-
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
             cloner.add_done_callback(
