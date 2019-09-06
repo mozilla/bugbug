@@ -5,18 +5,19 @@ COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
 # Setup mercurial from its own website, without install pip2 which has a lot of dependencies
 ARG MERCURIAL_VERSION="5.1"
 
+# Mercurial need Python2 :(
 # git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y python-minimal python-dev gcc bzip2 git curl && \
+    apt-get install --no-install-recommends -y python2.7-minimal python2.7-dev gcc bzip2 git curl && \
     curl -L https://www.mercurial-scm.org/release/mercurial-$MERCURIAL_VERSION.tar.gz | tar -C /opt -xvz && \
-    cd /opt/mercurial-$MERCURIAL_VERSION && python2 setup.py install && cd - && \
+    cd /opt/mercurial-$MERCURIAL_VERSION && python2.7 setup.py install && cd - && \
     hg clone -r 709c897f2444 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
     rm -r /depot_tools/.git /depot_tools/recipes /depot_tools/tests /depot_tools/man /depot_tools/testing_support /depot_tools/win_toolchain /depot_tools/bootstrap /depot_tools/fetch_configs && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.2/rust-code-analysis-linux-x86_64.tar.bz2 | tar -C /usr/local/bin -xjv && \
-    apt-get purge -y gcc python-dev curl && \
+    apt-get purge -y python2.7-dev gcc curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
 
