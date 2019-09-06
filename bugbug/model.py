@@ -297,7 +297,7 @@ class Model:
 
         for i, feature_name in enumerate(top_feature_names):
             for class_name, imp_values in important_features["classes"].items():
-                feature_report.setdefault(feature_name, {})[class_name] = float(
+                feature_report.setdefault(class_name, {})[feature_name] = float(
                     imp_values[1][i]
                 )
 
