@@ -135,6 +135,8 @@ class Model:
 
         self.calculate_importance = True
 
+        self.pu_learning = False
+
     @property
     def le(self):
         """Classifier agnostic getter for the label encoder property"""
@@ -285,6 +287,12 @@ class Model:
                 end="\n\n",
             )
 
+    def overwrite_train_test_split(self, X, y):
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.1, random_state=0
+        )
+        return X_train, X_test, y_train, y_test
+
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
@@ -303,9 +311,8 @@ class Model:
         is_multilabel = isinstance(y[0], np.ndarray)
 
         # Split dataset in training and test.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.1, random_state=0
-        )
+        X_train, X_test, y_train, y_test = self.overwrite_train_test_split(X, y)
+
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -411,12 +418,12 @@ class Model:
                     continue
 
                 y_test_filter.append(y_test[i])
-                if is_multilabel:
+                if is_multilabel or self.pu_learning:
                     y_pred_filter.append(y_pred[i])
                 else:
                     y_pred_filter.append(argmax)
 
-            if not is_multilabel:
+            if not is_multilabel and not self.pu_learning:
                 y_pred_filter = self.le.inverse_transform(y_pred_filter)
 
             print(
