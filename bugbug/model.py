@@ -95,8 +95,8 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
     confusion_matrix_table = confusion_matrix.tolist()
 
     # Don't show the Not classified row in the table output
-    if "NOT_CLASSIFIED" in labels and not is_multilabel:
-        confusion_matrix_table.pop(labels.index("NOT_CLASSIFIED"))
+    if "__NOT_CLASSIFIED__" in labels and not is_multilabel:
+        confusion_matrix_table.pop(labels.index("__NOT_CLASSIFIED__"))
 
     if not is_multilabel:
         confusion_matrix_table = [confusion_matrix_table]
@@ -112,7 +112,7 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
         for i in range(len(table[0])):
             confusion_matrix_header.append(
                 f"{table_labels[i]} (Predicted)"
-                if table_labels[i] != "NOT_CLASSIFIED"
+                if table_labels[i] != "__NOT_CLASSIFIED__"
                 else "Not classified"
             )
         for i in range(len(table)):
@@ -411,52 +411,49 @@ class Model:
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)
-            confidence_class_names = self.class_names + ["NOT_CLASSIFIED"]
+            confidence_class_names = self.class_names + ["__NOT_CLASSIFIED__"]
 
-            y_test_filter = []
             y_pred_filter = []
-            not_classified_indices = []
+            classified_indices = []
             for i in range(0, len(y_test)):
                 argmax = np.argmax(y_pred_probas[i])
                 if y_pred_probas[i][argmax] < confidence_threshold:
-                    not_classified_indices.append(i)
+                    if not is_multilabel:
+                        y_pred_filter.append("__NOT_CLASSIFIED__")
                     continue
 
-                y_test_filter.append(y_test[i])
+                classified_indices.append(i)
                 if is_multilabel:
                     y_pred_filter.append(y_pred[i])
                 else:
                     y_pred_filter.append(argmax)
 
             if not is_multilabel:
-                y_pred_filter = self.le.inverse_transform(y_pred_filter)
-                y_pred_filter = np.asarray(
-                    np.concatenate(
-                        (
-                            y_pred_filter,
-                            np.array(["NOT_CLASSIFIED"] * len(not_classified_indices)),
-                        )
+                y_pred_filter = np.array(y_pred_filter)
+                y_pred_filter[classified_indices] = np.array(
+                    self.le.inverse_transform(
+                        np.array(y_pred_filter[classified_indices], dtype=int)
                     ),
-                    dtype="<U15",
+                    dtype="str",
                 )
-                y_test_filter += [y_test[i] for i in not_classified_indices]
-                y_test_filter = np.asarray(y_test_filter, dtype="<U15")
 
             print(
-                f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
+                f"\nConfidence threshold > {confidence_threshold} - {len(y_test)} classified"
             )
-            if len(y_test_filter) != 0:
+            if len(y_test) != 0:
                 if is_multilabel:
                     confusion_matrix = metrics.multilabel_confusion_matrix(
-                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
+                        y_test[classified_indices], np.asarray(y_pred_filter)
                     )
                 else:
                     confusion_matrix = metrics.confusion_matrix(
-                        y_test_filter, y_pred_filter, labels=confidence_class_names
+                        y_test.astype(str), y_pred_filter, labels=confidence_class_names
                     )
                     print(
                         classification_report_imbalanced(
-                            y_test_filter, y_pred_filter, labels=confidence_class_names
+                            y_test.astype(str),
+                            y_pred_filter,
+                            labels=confidence_class_names,
                         )
                     )
                 print_labeled_confusion_matrix(
