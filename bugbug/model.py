@@ -288,18 +288,19 @@ class Model:
     def save_feature_importances(self, important_features, feature_names):
         # Returns a JSON-encodable dictionary that can be saved in the metrics
         # report
-        top_feature_names = [
-            feature_names[int(index)]
-            for importance, index, is_pos in important_features["average"]
-        ]
+        feature_report = {"classes": {}, "average": {}}
+        top_feature_names = []
 
-        feature_report = {}
+        for importance, index, is_pos in important_features["average"]:
+            feature_name = feature_names[int(index)]
+
+            top_feature_names.append(feature_name)
+            feature_report["average"][feature_name] = importance
 
         for i, feature_name in enumerate(top_feature_names):
             for class_name, imp_values in important_features["classes"].items():
-                feature_report.setdefault(class_name, {})[feature_name] = float(
-                    imp_values[1][i]
-                )
+                class_report = feature_report["classes"].setdefault(class_name, {})
+                class_report[feature_name] = float(imp_values[1][i])
 
         return feature_report
 
