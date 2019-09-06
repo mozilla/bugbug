@@ -1,4 +1,5 @@
 *model
+*similaritymodel
 http_service/models/*model*
 
 data/

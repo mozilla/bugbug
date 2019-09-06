@@ -54,7 +54,7 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-Run the `trainer.py` script with the command `python3 -c 'from scripts import trainer; trainer.main()'` to perform training.
+Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training.
 
 ### Running the repository mining script
 
@@ -62,11 +62,8 @@ Note: This section is only necessary if you want to perform changes to the repos
 
 1. Clone https://hg.mozilla.org/mozilla-central/.
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
-3. Enable the pushlog, hgmo and mozext extensions. For example, if you are on Linux, add the following to the extensions section of the `~/.hgrc` file:
+3. Enable the extensions mentioned in [infra/hgrc](https://github.com/mozilla/bugbug/blob/master/infra/hgrc). For example, if you are on Linux, you can add `firefoxtree` to the extensions section of the `~/.hgrc` file as:
     ```
-    pushlog = ~/.mozbuild/version-control-tools/hgext/pushlog
-    hgmo = ~/.mozbuild/version-control-tools/hgext/hgmo
-    mozext = ~/.mozbuild/version-control-tools/hgext/mozext
     firefoxtree = ~/.mozbuild/version-control-tools/hgext/firefoxtree
     ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.

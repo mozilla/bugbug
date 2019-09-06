@@ -21,7 +21,8 @@ LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
 
-# If the latest metric point is 5% lower than the previous one, show a warning and exit with 1.
+# By default, if the latest metric point is 5% lower than the previous one, show a warning and exit
+# with 1.
 WARNING_THRESHOLD = 0.95
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
@@ -32,6 +33,7 @@ def plot_graph(
     metric_name: str,
     values_dict: Dict[datetime, float],
     output_directory: Path,
+    warning_threshold: float,
 ) -> bool:
     sorted_metrics = sorted(values_dict.items())
     x, y = zip(*sorted_metrics)
@@ -41,7 +43,7 @@ def plot_graph(
         before_last_value = y[-2]
     else:
         before_last_value = y[-1]
-    metric_threshold = before_last_value * WARNING_THRESHOLD
+    metric_threshold = before_last_value * warning_threshold
 
     figure = plt.figure()
     axes = plt.axes()
@@ -86,7 +88,9 @@ def plot_graph(
     return y[-1] < metric_threshold
 
 
-def analyze_metrics(metrics_directory: str, output_directory: str):
+def analyze_metrics(
+    metrics_directory: str, output_directory: str, warning_threshold: float
+):
     root = Path(metrics_directory)
 
     metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
@@ -138,14 +142,21 @@ def analyze_metrics(metrics_directory: str, output_directory: str):
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
             threshold_crossed = plot_graph(
-                model_name, metric_name, values, Path(output_directory)
+                model_name,
+                metric_name,
+                values,
+                Path(output_directory),
+                warning_threshold,
             )
+
+            diff = (1 - warning_threshold) * 100
 
             if threshold_crossed:
                 LOGGER.warning(
-                    "Last metric %r for model %s is 5%% worse than the previous one",
+                    "Last metric %r for model %s is %f%% worse than the previous one",
                     metric_name,
                     model_name,
+                    diff,
                 )
 
                 threshold_ever_crossed = threshold_ever_crossed or threshold_crossed
@@ -167,10 +178,18 @@ def main():
         metavar="output-directory",
         help="In which directory the script will save the generated graphs",
     )
+    parser.add_argument(
+        "--warning_threshold",
+        default=WARNING_THRESHOLD,
+        type=float,
+        help="If the last metric value is below the previous one*warning_threshold, fails. Default to 0.95",
+    )
 
     args = parser.parse_args()
 
-    analyze_metrics(args.metrics_directory, args.output_directory)
+    analyze_metrics(
+        args.metrics_directory, args.output_directory, args.warning_threshold
+    )
 
 
 if __name__ == "__main__":
