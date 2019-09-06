@@ -6,10 +6,14 @@
 
 import argparse
 import sys
+from logging import INFO, basicConfig, getLogger
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from bugbug import similarity
+from bugbug import bugzilla, db, similarity
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def parse_args(args):
@@ -35,7 +39,13 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-def main(args):
+def main():
+    args = parse_args(sys.argv[1:])
+
+    logger.info("Downloading bugs database...")
+
+    if db.is_old_version(bugzilla.BUGS_DB) or not db.exists(bugzilla.BUGS_DB):
+        db.download(bugzilla.BUGS_DB, force=True)
 
     if args.algorithm == "neighbors_tfidf_bigrams":
         model = similarity.model_name_to_class[args.algorithm](
@@ -52,4 +62,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(parse_args(sys.argv[1:]))
+    main()
