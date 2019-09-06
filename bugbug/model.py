@@ -430,11 +430,8 @@ class Model:
 
             if not is_multilabel:
                 y_pred_filter = np.array(y_pred_filter)
-                y_pred_filter[classified_indices] = np.array(
-                    self.le.inverse_transform(
-                        np.array(y_pred_filter[classified_indices], dtype=int)
-                    ),
-                    dtype="str",
+                y_pred_filter[classified_indices] = self.le.inverse_transform(
+                    np.array(y_pred_filter[classified_indices], dtype=int)
                 )
 
             print(
@@ -447,12 +444,14 @@ class Model:
                     )
                 else:
                     confusion_matrix = metrics.confusion_matrix(
-                        y_test.astype(str), y_pred_filter, labels=confidence_class_names
+                        y_test.astype(str),
+                        y_pred_filter.astype(str),
+                        labels=confidence_class_names,
                     )
                     print(
                         classification_report_imbalanced(
                             y_test.astype(str),
-                            y_pred_filter,
+                            y_pred_filter.astype(str),
                             labels=confidence_class_names,
                         )
                     )
