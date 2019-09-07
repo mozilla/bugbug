@@ -89,7 +89,7 @@ tasks:
             - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
-               apt-get -qq install -y python-pip &&
+               apt-get -qq install -y python-pip libhdf5-dev &&
                python2 -m pip install --quiet mercurial==5.1 &&
                git clone --quiet https://github.com/mozilla/version-control-tools.git &&
                git clone --quiet ${repository} &&
@@ -151,7 +151,9 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone --quiet ${repository} &&
+            - "apt-get -qq update &&
+               apt-get -qq install -y libhdf5-dev &&
+               git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
