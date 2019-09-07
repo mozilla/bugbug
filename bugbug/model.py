@@ -285,6 +285,25 @@ class Model:
                 end="\n\n",
             )
 
+    def save_feature_importances(self, important_features, feature_names):
+        # Returns a JSON-encodable dictionary that can be saved in the metrics
+        # report
+        feature_report = {"classes": {}, "average": {}}
+        top_feature_names = []
+
+        for importance, index, is_pos in important_features["average"]:
+            feature_name = feature_names[int(index)]
+
+            top_feature_names.append(feature_name)
+            feature_report["average"][feature_name] = importance
+
+        for i, feature_name in enumerate(top_feature_names):
+            for class_name, imp_values in important_features["classes"].items():
+                class_report = feature_report["classes"].setdefault(class_name, {})
+                class_report[feature_name] = float(imp_values[1][i])
+
+        return feature_report
+
     def train(self, importance_cutoff=0.15):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
@@ -364,6 +383,13 @@ class Model:
             )
 
             self.print_feature_importances(important_features, feature_names)
+
+            # Save the important features in the metric report too
+            feature_report = self.save_feature_importances(
+                important_features, feature_names
+            )
+
+            tracking_metrics["feature_report"] = feature_report
 
         print("Test Set scores:")
         # Evaluate results on the test set.
