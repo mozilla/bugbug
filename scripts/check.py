@@ -52,5 +52,6 @@ def main():
     checker = ModelChecker()
     checker.go(args.model)
 
+
 if __name__ == "__main__":
     main()
