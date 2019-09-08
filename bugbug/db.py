@@ -24,27 +24,32 @@ logger = logging.getLogger(__name__)
 
 
 def register(path, url, version, support_files=[]):
-    DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
+    def register_path(path, url, version, support_files):
+        DATABASES[path] = {
+            "url": url,
+            "version": version,
+            "support_files": support_files,
+        }
 
-    # Register database for fallback path in case preferred path not available
-    parts = str(path).split(".")
-    assert len(parts) == 2, "Extension needed to figure out serialization format"
-    fallback_path = parts[0] + "." + "json"
-    url = str(url).split(".")
-    url[-2] = "json"
-    url = ".".join(url)
-    DATABASES[fallback_path] = {
-        "url": url,
-        "version": version,
-        "support_files": support_files,
-    }
+        # Create DB parent directory.
+        os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    # Create DB parent directory.
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.path.exists(f"{path}.version"):
+            with open(f"{path}.version", "w") as f:
+                f.write(str(version))
 
-    if not os.path.exists(f"{path}.version"):
-        with open(f"{path}.version", "w") as f:
-            f.write(str(version))
+    register_path(path, url, version, support_files)
+
+    # Register database for all of the different serialization formats
+    for item in SERIALIZATION_FORMATS:
+        path = path.replace(item, "__PLACEHOLDER__")
+        url = url.replace(item, "__PLACEHOLDER__")
+
+    for item in SERIALIZATION_FORMATS:
+        if not any(item in keys for keys in DATABASES):
+            fallback_path = path.replace("__PLACEHOLDER__", item)
+            fallback_url = url.replace("__PLACEHOLDER__", item)
+            register_path(fallback_path, fallback_url, version, support_files=[])
 
 
 def exists(path):
@@ -90,45 +95,37 @@ def download_support_file(path, file_name):
 
 
 # Download and extract databases.
-def download(path, force=False, support_files_too=False, fallback_path=None):
-    if fallback_path:
-        default_path = path
-        path = fallback_path
+def download(path, force=False, support_files_too=False):
+    preferred_path = path
 
-    if os.path.exists(path) and not force:
-        return
-
-    zst_path = f"{path}.zst"
-
-    # Only download if the file is not there yet.
-    if not os.path.exists(zst_path) or force:
-        url = DATABASES[path]["url"]
-        try:
-            logger.info(f"Downloading {url} to {zst_path}")
-            utils.download_check_etag(url, zst_path)
-
-        except requests.exceptions.HTTPError:
-            logger.info(f"{url} is not yet available to download", exc_info=True)
-            if fallback_path:
-                return
-            parts = str(path).split(".")
-            assert (
-                len(parts) == 2
-            ), "Extension needed to figure out serialization format"
-            fallback_path = parts[0] + "." + "json"
-            download(path, force, support_files_too, fallback_path=fallback_path)
+    def download_db(path, force, support_files_too):
+        if os.path.exists(path) and not force:
             return
 
-    extract_file(zst_path)
+        zst_path = f"{path}.zst"
 
-    if support_files_too:
-        for support_file in DATABASES[path]["support_files"]:
-            download_support_file(path, support_file)
+        # Only download if the file is not there yet.
+        if not os.path.exists(zst_path) or force:
+            url = DATABASES[path]["url"]
+            try:
+                logger.info(f"Downloading {url} to {zst_path}")
+                utils.download_check_etag(url, zst_path)
 
-    if fallback_path:
-        with open(default_path, "wb") as f:
-            for elem in read(path):
-                pickle.dump(elem, f)
+            except requests.exceptions.HTTPError:
+                logger.info(f"{url} is not yet available to download", exc_info=True)
+                return 1
+
+        extract_file(zst_path)
+
+        if support_files_too:
+            for support_file in DATABASES[path]["support_files"]:
+                download_support_file(path, support_file)
+
+    if download_db(path, force, support_files_too):
+        for path in DATABASES:
+            if download_db(path, force, support_files_too):
+                continue
+            write(preferred_path, read(path))
 
 
 def last_modified(path):
