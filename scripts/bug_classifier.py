@@ -95,5 +95,6 @@ def main():
 
     classify_bugs(args.model, args.classifier, args.bug_id)
 
+
 if __name__ == "__main__":
     main()

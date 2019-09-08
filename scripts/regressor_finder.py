@@ -597,5 +597,6 @@ def main():
     )
     evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
 
+
 if __name__ == "__main__":
     main()

@@ -51,5 +51,6 @@ def main():
 
     retriever.retrieve_commits()
 
+
 if __name__ == "__main__":
     main()
