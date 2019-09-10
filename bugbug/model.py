@@ -437,29 +437,26 @@ class Model:
             print(
                 f"\nConfidence threshold > {confidence_threshold} - {len(y_test)} classified"
             )
-            if len(y_test) != 0:
-                if is_multilabel:
-                    confusion_matrix = metrics.multilabel_confusion_matrix(
-                        y_test[classified_indices], np.asarray(y_pred_filter)
-                    )
-                else:
-                    confusion_matrix = metrics.confusion_matrix(
+            if is_multilabel:
+                confusion_matrix = metrics.multilabel_confusion_matrix(
+                    y_test[classified_indices], np.asarray(y_pred_filter)
+                )
+            else:
+                confusion_matrix = metrics.confusion_matrix(
+                    y_test.astype(str),
+                    y_pred_filter.astype(str),
+                    labels=confidence_class_names,
+                )
+                print(
+                    classification_report_imbalanced(
                         y_test.astype(str),
                         y_pred_filter.astype(str),
                         labels=confidence_class_names,
                     )
-                    print(
-                        classification_report_imbalanced(
-                            y_test.astype(str),
-                            y_pred_filter.astype(str),
-                            labels=confidence_class_names,
-                        )
-                    )
-                print_labeled_confusion_matrix(
-                    confusion_matrix,
-                    confidence_class_names,
-                    is_multilabel=is_multilabel,
                 )
+            print_labeled_confusion_matrix(
+                confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
+            )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
