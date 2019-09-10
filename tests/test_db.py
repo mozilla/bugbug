@@ -150,7 +150,6 @@ def test_extract_db_bad_format(tmp_path):
         db.extract_file(db_path)
 
 
-@responses.activate
 def test_download_zst(tmp_path, mock_zst):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
@@ -183,7 +182,6 @@ def test_download_zst(tmp_path, mock_zst):
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
 
-@responses.activate
 def test_download_missing(tmp_path):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
@@ -208,7 +206,6 @@ def test_download_missing(tmp_path):
         db.last_modified(db_path)
 
 
-@responses.activate
 def test_download_support_file_zst(tmp_path, mock_zst):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support.zst"
@@ -244,7 +241,6 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     )
 
 
-@responses.activate
 def test_is_old_version(tmp_path):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
@@ -277,7 +273,6 @@ def test_is_old_version(tmp_path):
     assert db.is_old_version(db_path)
 
 
-@responses.activate
 def test_download_support_file_missing(tmp_path, capfd):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support_mock.zst"

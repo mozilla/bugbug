@@ -308,7 +308,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].node == revision4
 
 
-@responses.activate
 def test_download_component_mapping():
     responses.add(
         responses.HEAD,
@@ -364,7 +363,6 @@ def test_download_component_mapping():
     assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
 
-@responses.activate
 def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
