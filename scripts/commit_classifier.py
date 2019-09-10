@@ -164,3 +164,7 @@ def main():
 
     classifier = CommitClassifier(getattr(args, "cache-root"))
     classifier.classify(args.diff_id)
+
+
+if __name__ == "__main__":
+    main()
