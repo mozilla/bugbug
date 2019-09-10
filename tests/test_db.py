@@ -24,7 +24,7 @@ def mock_db(tmp_path):
         if db_compression is not None:
             db_name += f".{db_compression}"
 
-        db_path = tmp_path / db_name
+        db_path = str(tmp_path / db_name)
         db.register(db_path, "https://alink", 1)
         return db_path
 
@@ -70,7 +70,7 @@ def test_delete(mock_db, db_format, db_compression):
 
 
 def test_unregistered_db(tmp_path):
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
 
     with pytest.raises(AssertionError):
         list(db.read(db_path))
@@ -86,7 +86,7 @@ def test_unregistered_db(tmp_path):
     "db_name", ["prova", "prova.", "prova.gz", "prova.unknown.gz", "prova.json.unknown"]
 )
 def test_bad_format_compression(tmp_path, db_name):
-    db_path = tmp_path / db_name
+    db_path = str(tmp_path / db_name)
     db.register(db_path, "https://alink", 1)
 
     with pytest.raises(AssertionError):
@@ -97,15 +97,15 @@ def test_bad_format_compression(tmp_path, db_name):
 
 
 def test_register_db(tmp_path):
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
 
     db.register(db_path, "https://alink", 1)
 
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
+    assert os.path.exists(db_path + ".version")
 
 
 def test_exists_db(tmp_path):
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
 
     db.register(db_path, "https://alink", 1)
 
@@ -128,7 +128,7 @@ def mock_zst():
 
 
 def test_extract_db_zst(tmp_path, mock_zst):
-    db_path = tmp_path / f"prova.zst"
+    db_path = str(tmp_path / f"prova.zst")
 
     mock_zst(db_path)
 
@@ -141,7 +141,7 @@ def test_extract_db_zst(tmp_path, mock_zst):
 
 
 def test_extract_db_bad_format(tmp_path):
-    db_path = tmp_path / "prova.pickle"
+    db_path = str(tmp_path / "prova.pickle")
 
     with open(db_path, "wb") as output_f:
         pickle.dump({"Hello": "World"}, output_f)
@@ -153,7 +153,7 @@ def test_extract_db_bad_format(tmp_path):
 def test_download_zst(tmp_path, mock_zst):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
     db.register(db_path, url, 1)
 
     responses.add(
@@ -167,7 +167,7 @@ def test_download_zst(tmp_path, mock_zst):
         },
     )
 
-    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    tmp_zst_path = str(tmp_path / "prova_tmp.zst")
     mock_zst(tmp_zst_path)
 
     with open(tmp_zst_path, "rb") as content:
@@ -178,14 +178,14 @@ def test_download_zst(tmp_path, mock_zst):
     assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
+    assert os.path.exists(db_path + ".zst")
+    assert os.path.exists(db_path + ".zst.etag")
 
 
 def test_download_missing(tmp_path):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
     db.register(db_path, url, 1)
 
     responses.add(
@@ -211,7 +211,7 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     support_filename = "support.zst"
     url_support = urljoin(url, support_filename)
 
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
     db.register(db_path, url, 1, support_files=[support_filename])
 
     responses.add(
@@ -221,7 +221,7 @@ def test_download_support_file_zst(tmp_path, mock_zst):
         headers={"ETag": "123", "Accept-Encoding": "zstd"},
     )
 
-    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    tmp_zst_path = str(tmp_path / "prova_tmp.zst")
     mock_zst(tmp_zst_path)
 
     with open(tmp_zst_path, "rb") as content:
@@ -245,10 +245,10 @@ def test_is_old_version(tmp_path):
     url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
     db.register(db_path, url_zst, 1, support_files=[])
 
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
+    assert os.path.exists(db_path + ".version")
 
     responses.add(responses.GET, url_version, status=404)
     responses.add(responses.GET, url_version, status=424)
@@ -278,7 +278,7 @@ def test_download_support_file_missing(tmp_path, caplog):
     support_filename = "support_mock.zst"
     url_support = urljoin(url, support_filename)
 
-    db_path = tmp_path / "prova.json"
+    db_path = str(tmp_path / "prova.json")
     db.register(db_path, url, 1, support_files=[support_filename])
 
     responses.add(
