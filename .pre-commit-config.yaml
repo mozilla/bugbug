@@ -26,6 +26,7 @@ repos:
         args: ['--django']
     -   id: check-json
         exclude: ^tests/fixtures/
+    -   id: requirements-txt-fixer
 -   repo: https://github.com/codespell-project/codespell
     rev: v1.15.0
     hooks:
