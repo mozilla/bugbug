@@ -314,11 +314,11 @@ class Model:
         return feature_report
 
     def train(self, importance_cutoff=0.15):
-        classes, self.class_names = self.get_labels()
+        classes, self.class_names = self.get_labels(self.augment())
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
-        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
+        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes, self.augment()))
 
         # Extract features from the items.
         X = self.extraction_pipeline.fit_transform([item for item in X_iter])
@@ -593,14 +593,14 @@ class BugModel(Model):
         Model.__init__(self, lemmatization)
         self.commit_data = commit_data
 
-    def items_gen(self, classes):
+    def items_gen(self, classes, bugs):
         if not self.commit_data:
             commit_map = None
         else:
             commit_map = defaultdict(list)
 
             for commit in repository.get_commits():
-                bug_id = commit["bug_id"]
+                bug_id = str(commit["bug_id"])
                 if not bug_id:
                     continue
 
@@ -608,7 +608,7 @@ class BugModel(Model):
 
             assert len(commit_map) > 0
 
-        for bug in bugzilla.get_bugs():
+        for bug in bugs:
             bug_id = bug["id"]
             if bug_id not in classes:
                 continue

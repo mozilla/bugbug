@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bug_snapshot, bugzilla, feature_cleanup
 from bugbug.model import BugModel
 
 
@@ -61,22 +61,22 @@ class StepsToReproduceModel(BugModel):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor="cpu_predictor")
 
-    def get_labels(self):
+    def get_labels(self, bugs):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
+        for bug_data in bugs:
             if "cf_has_str" in bug_data:
                 if bug_data["cf_has_str"] == "no":
-                    classes[int(bug_data["id"])] = 0
+                    classes[bug_data["id"]] = 0
                 elif bug_data["cf_has_str"] == "yes":
-                    classes[int(bug_data["id"])] = 1
+                    classes[bug_data["id"]] = 1
             elif "stepswanted" in bug_data["keywords"]:
-                classes[int(bug_data["id"])] = 0
+                classes[bug_data["id"]] = 0
             else:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
                         if change["removed"].startswith("stepswanted"):
-                            classes[int(bug_data["id"])] = 1
+                            classes[bug_data["id"]] = 1
 
         print(
             "{} bugs have no steps to reproduce".format(
@@ -90,6 +90,28 @@ class StepsToReproduceModel(BugModel):
         )
 
         return classes, [0, 1]
+
+    def augment_when(self, change):
+        return change == self.rollback_change
+
+    def augment(self):
+        for bug in bugzilla.get_bugs():
+            bug["id"] = str(bug["id"])
+            if "cf_has_str" in bug:
+                if bug["cf_has_str"] == "yes":
+                    for entry in bug["history"]:
+                        for change in entry["changes"]:
+                            if (
+                                change["field_name"] == "cf_has_str"
+                                and change["removed"] == "no"
+                            ):
+                                self.rollback_change = change
+                                rollbacked_bug = bug_snapshot.rollback(
+                                    bug, self.augment_when
+                                )
+                                rollbacked_bug["id"] = "a" + bug["id"]
+                                yield rollbacked_bug
+            yield bug
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
