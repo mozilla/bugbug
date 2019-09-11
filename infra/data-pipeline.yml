@@ -97,7 +97,7 @@ tasks:
         command:
           - "/bin/bash"
           - "-lcx"
-          - "wget https://github.com/mozilla/bugbug/blob/${version}/scripts/test_scheduling_history_retriever.py &&
+          - "wget https://github.com/mozilla/bugbug/raw/${version}/scripts/test_scheduling_history_retriever.py &&
              pip install bugbug==${version} &&
              python scripts/test_scheduling_history_retriever.py"
 
