@@ -45,6 +45,7 @@ setup(
         "console_scripts": [
             "bugbug-data-commits = scripts.commit_retriever:main",
             "bugbug-data-bugzilla = scripts.bug_retriever:main",
+            "bugbug-data-test-scheduling-history = scripts.test_scheduling_history_retriever:main",
             "bugbug-train = scripts.trainer:main",
             "bugbug-train-similarity = scripts.similarity_trainer:main",
             "bugbug-check = scripts.check:main",
