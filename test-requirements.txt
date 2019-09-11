@@ -1,6 +1,7 @@
+coverage==4.5.4
+jsonschema==3.0.2
+pre-commit==1.18.3
 pytest==5.1.2
 pytest-cov==2.7.1
-coverage==4.5.4
-pre-commit==1.18.3
+pytest-responses==0.4.0
 responses==0.10.6
-jsonschema==3.0.2
