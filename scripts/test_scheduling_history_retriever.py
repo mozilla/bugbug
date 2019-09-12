@@ -33,6 +33,7 @@ class Retriever(object):
                 logger.info("The adr cache is not available yet")
 
         # Setup adr cache configuration.
+        os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)
         with open(os.path.expanduser("~/.config/adr/config.toml"), "w") as f:
             f.write(
                 f"""[adr.cache.stores]
