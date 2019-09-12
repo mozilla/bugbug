@@ -110,6 +110,17 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
     return (date, model_name, metric)
 
 
+def add_local_min_max_columns(df):
+    df["min"] = df.iloc[
+        argrelextrema(df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER)[0]
+    ]["value"]
+    df["max"] = df.iloc[
+        argrelextrema(df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER)[
+            0
+        ]
+    ]["value"]
+
+
 def analyze_metrics(
     metrics_directory: str,
     output_directory: str,
@@ -150,32 +161,14 @@ def analyze_metrics(
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
 
-            df["min"] = df.iloc[
-                argrelextrema(
-                    df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
-                )[0]
-            ]["value"]
-            df["max"] = df.iloc[
-                argrelextrema(
-                    df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
-                )[0]
-            ]["value"]
+            add_local_min_max_columns(df)
 
             # Smooth the dataframe with rolling mean
 
             # The data-pipeline is scheduled to run every two weeks
             mean_df = df.rolling("31d").mean()
 
-            mean_df["min"] = mean_df.iloc[
-                argrelextrema(
-                    mean_df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
-                )[0]
-            ]["value"]
-            mean_df["max"] = mean_df.iloc[
-                argrelextrema(
-                    mean_df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
-                )[0]
-            ]["value"]
+            add_local_min_max_columns(mean_df)
 
             if numpy.isnan(mean_df.iloc[-1]["min"]):
                 LOGGER.info(
