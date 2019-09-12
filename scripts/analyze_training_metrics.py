@@ -158,6 +158,14 @@ def analyze_metrics(
     # Then analyze them
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
+
+            if metric_name.endswith("_std"):
+                LOGGER.info(
+                    "Skipping analysis of %r, analysis is not efficient on standard deviation",
+                    metric_name,
+                )
+                continue
+
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
 
