@@ -99,7 +99,7 @@ tasks:
           - "-lcx"
           - "wget https://github.com/mozilla/bugbug/raw/${version}/scripts/test_scheduling_history_retriever.py &&
              pip install bugbug==${version} &&
-             python scripts/test_scheduling_history_retriever.py"
+             python test_scheduling_history_retriever.py"
 
         artifacts:
           public/test_scheduling_history.json.zst:
