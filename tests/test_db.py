@@ -273,7 +273,7 @@ def test_is_old_version(tmp_path):
     assert db.is_old_version(db_path)
 
 
-def test_download_support_file_missing(tmp_path, capfd):
+def test_download_support_file_missing(tmp_path, caplog):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support_mock.zst"
     url_support = urljoin(url, support_filename)
@@ -297,11 +297,8 @@ def test_download_support_file_missing(tmp_path, capfd):
 
     db.download_support_file(db_path, support_filename)
 
-    out, err = capfd.readouterr()
     path = os.path.join(
         os.path.dirname(db_path), f"{os.path.splitext(support_filename)[0]}.zst"
     )
-    assert (
-        out.split("\n")[-2]
-        == f"{support_filename} is not yet available to download for {path}"
-    )
+    expected_message = f"{support_filename} is not yet available to download for {path}"
+    assert expected_message in caplog.text
