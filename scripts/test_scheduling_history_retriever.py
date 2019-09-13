@@ -63,6 +63,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
                 "autoland",
             ],
             check=True,
+            stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
 
         zstd_compress("/data/test_scheduling_history.json")
