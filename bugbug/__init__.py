@@ -4,7 +4,9 @@ import logging
 
 import pkg_resources
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s:%(levelname)s:%(name)s:%(message)s"
+)
 
 
 def get_bugbug_version():

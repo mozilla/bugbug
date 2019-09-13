@@ -95,7 +95,10 @@ venv/
 **/.pytest_cache/
 
 # Project-specific stuff
-cache/
-**/cache/
 data/
-http_service/
+*/data
+
+# Integrations tests cache
+cache/
+*/cache/
+*/*/cache/

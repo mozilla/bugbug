@@ -264,7 +264,7 @@ def model_prediction(model_name, bug_id):
         LOGGER.info("Request with API TOKEN %r", auth)
 
     # Get the latest change from Bugzilla for the bug
-    bug = get_bugs_last_change_time([bug_id], auth)
+    bug = get_bugs_last_change_time([bug_id])
 
     if is_prediction_invalidated(model_name, bug_id, bug[bug_id]):
         clean_prediction_cache(model_name, bug_id)

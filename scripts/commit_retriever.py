@@ -43,6 +43,11 @@ def main():
     description = "Retrieve and extract the information from Mozilla-Central repository"
     parser = argparse.ArgumentParser(description=description)
 
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Only download the N oldest commits, used mainly for integration tests",
+    )  # TODO: Use limit
     parser.add_argument("cache-root", help="Cache for repository clones.")
 
     args = parser.parse_args()
