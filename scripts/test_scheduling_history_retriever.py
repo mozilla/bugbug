@@ -19,16 +19,18 @@ URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_sch
 
 class Retriever(object):
     def retrieve_test_scheduling_history(self):
-        os.makedirs("data", exist_ok=True)
+        os.makedirs("/data", exist_ok=True)
 
         # Download previous cache.
-        cache_path = os.path.abspath("data/adr_cache")
+        cache_path = os.path.abspath("/data/adr_cache")
         if not os.path.exists(cache_path):
             try:
-                download_check_etag(URL, "data/adr_cache.tar.xz")
-                with tarfile.open("data/adr_cache.tar.xz", "r:xz") as tar:
+                download_check_etag(URL, "/data/adr_cache.tar.xz")
+                with tarfile.open("/data/adr_cache.tar.xz", "r:xz") as tar:
                     tar.extractall()
-                assert os.path.exists("data/adr_cache"), "Decompressed adr cache exists"
+                assert os.path.exists(
+                    "/data/adr_cache"
+                ), "Decompressed adr cache exists"
             except requests.exceptions.HTTPError:
                 logger.info("The adr cache is not available yet")
 
@@ -48,7 +50,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
                 "ahal/ci-recipes",
                 "recipe",
                 "-o",
-                os.path.abspath("data/test_scheduling_history.json"),
+                os.path.abspath("/data/test_scheduling_history.json"),
                 "-f",
                 "json",
                 "push_data",
@@ -63,10 +65,10 @@ file = {{ driver = "file", path = "{cache_path}" }}
             check=True,
         )
 
-        zstd_compress("data/test_scheduling_history.json")
+        zstd_compress("/data/test_scheduling_history.json")
 
-        with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
-            tar.add("data/adr_cache")
+        with tarfile.open("/data/adr_cache.tar.xz", "w:xz") as tar:
+            tar.add("/data/adr_cache")
 
 
 def main():
