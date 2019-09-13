@@ -27,11 +27,12 @@ def integration_test():
         raise Exception("Couldn't get an answer in 100 seconds")
 
     response_json = response.json()
-    assert response_json["class"] == "defect", response_json
+    print("Response for bug 1376406", response_json)
+    assert response_json["class"] == "defect"
 
     # Then try to classify a batch
     batch_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/batch"
-    bug_ids = [1_376_535, 1_376_412]
+    bug_ids = [1_376_544, 1_376_412]
     response = None
     for i in range(100):
         response = requests.post(
@@ -47,12 +48,12 @@ def integration_test():
         raise Exception("Couldn't get an answer in 100 seconds")
 
     response_json = response.json()
-    assert response_json["bugs"]["1376535"]["class"] == "enhancement", response_json[
-        "bugs"
-    ]["1376535"]
-    assert response_json["bugs"]["1376412"]["class"] == "task", response_json["bugs"][
-        "1376412"
-    ]
+    response_1376544 = response_json["bugs"]["1376544"]
+    print("Response for bug 1376544", response_1376544)
+    assert response_1376544["class"] == "enhancement"
+    response_1376412 = response_json["bugs"]["1376412"]
+    print("Response for bug 1376412", response_1376412)
+    assert response_1376412["class"] == "task"
 
 
 if __name__ == "__main__":
