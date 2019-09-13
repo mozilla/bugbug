@@ -1,14 +1,14 @@
 #!/bin/bash
 set -euox pipefail
 
-# Script that run the whole data pipeline the fastest possible to validate
+# Script that runs the whole data pipeline as fast as possible to validate
 # that every part is working with the others
 
 # Supposed to be run from the repository root directory
 
 cd http_service/models/;
 
-# Remove the model
+# Remove the models
 rm defectenhancementtaskmodel* || true;
 rm backout* || true;
 
@@ -26,9 +26,9 @@ bugbug-train --limit 500 --no-download defectenhancementtask
 # Then train a commit model
 bugbug-train --limit 30000 --no-download backout
 
-# Then spin up the http service up
-# This part duplicated the http service Dockerfiles because we cannot spin up Docker containers on
-# taskcluster easily
+# Then spin the http service up
+# This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
+# up on Taskcluster
 cd ../
 pip install -r requirements.txt
 cd ../
