@@ -266,7 +266,9 @@ def model_prediction(model_name, bug_id):
     # Get the latest change from Bugzilla for the bug
     bug = get_bugs_last_change_time([bug_id])
 
-    if is_prediction_invalidated(model_name, bug_id, bug[bug_id]):
+    # Change time could be None if it's a security bug
+    bug_change_time = bug.get(bug_id, None)
+    if bug_change_time and is_prediction_invalidated(model_name, bug_id, bug[bug_id]):
         clean_prediction_cache(model_name, bug_id)
 
     status_code = 200
