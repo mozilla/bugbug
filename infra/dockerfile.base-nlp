@@ -1,0 +1,13 @@
+FROM mozilla/bugbug-base:latest
+
+# Setup dependencies in a cacheable step
+ADD extra-nlp-requirements.txt /
+
+RUN apt-get update && \
+		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
+		pip install --disable-pip-version-check --no-cache-dir -r /extra-nlp-requirements.txt && \
+		apt-get remove -y gcc g++ && \
+		apt-get autoremove -y && \
+		rm -rf /var/lib/apt/lists/*
+
+RUN python -m spacy download en_core_web_sm

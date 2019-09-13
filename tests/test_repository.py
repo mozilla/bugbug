@@ -119,6 +119,51 @@ def test_get_revs(fake_hg_repo):
     assert revs[1].decode("ascii") == revision3
 
 
+def test_hg_modified_files(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "f1", "1\n2\n3\n4\n5\n6\n7\n")
+    revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
+
+    add_file(hg, local, "f2", "1\n2\n3\n4\n5\n6\n7\n")
+    revision2 = commit(hg, "Bug 123 - Prova. r=moz,rev2")
+
+    hg.copy(
+        bytes(os.path.join(local, "f2"), "ascii"),
+        bytes(os.path.join(local, "f2copy"), "ascii"),
+    )
+    revision3 = commit(hg, "Copy")
+
+    hg.move(
+        bytes(os.path.join(local, "f2copy"), "ascii"),
+        bytes(os.path.join(local, "f2copymove"), "ascii"),
+    )
+    revision4 = commit(hg, "Move")
+
+    hg.push(dest=bytes(remote, "ascii"))
+    revs = repository.get_revs(hg, revision1)
+    commits = repository.hg_log(hg, revs)
+
+    for c in commits:
+        repository.hg_modified_files(hg, c)
+
+    assert commits[0].node == revision1
+    assert commits[0].files == ["f1"]
+    assert commits[0].file_copies == {}
+
+    assert commits[1].node == revision2
+    assert commits[1].files == ["f2"]
+    assert commits[1].file_copies == {}
+
+    assert commits[2].node == revision3
+    assert commits[2].files == ["f2copy"]
+    assert commits[2].file_copies == {"f2": "f2copy"}
+
+    assert commits[3].node == revision4
+    assert commits[3].files == ["f2copy", "f2copymove"]
+    assert commits[3].file_copies == {"f2copy": "f2copymove"}
+
+
 def test_hg_log(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
@@ -181,11 +226,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[0].pushdate
         <= first_push_date + relativedelta(seconds=1)
     )
-    assert commits[0].bug == b""
+    assert commits[0].bug_id is None
     assert commits[0].backedoutby == ""
-    assert commits[0].author_email == b"milla@mozilla.org"
-    assert commits[0].files == ["file1"]
-    assert commits[0].file_copies == {}
+    assert commits[0].author_email == "milla@mozilla.org"
     assert commits[0].reviewers == tuple()
 
     assert commits[1].node == revision2
@@ -197,11 +240,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[1].pushdate
         <= second_push_date + relativedelta(seconds=1)
     )
-    assert commits[1].bug == b"123"
+    assert commits[1].bug_id == 123
     assert commits[1].backedoutby == ""
-    assert commits[1].author_email == b"milla@mozilla.org"
-    assert commits[1].files == ["file2"]
-    assert commits[1].file_copies == {}
+    assert commits[1].author_email == "milla@mozilla.org"
     assert set(commits[1].reviewers) == {"moz", "rev2"}
 
     assert commits[2].node == revision3
@@ -213,11 +254,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[2].pushdate
         <= second_push_date + relativedelta(seconds=1)
     )
-    assert commits[2].bug == b""
+    assert commits[2].bug_id is None
     assert commits[2].backedoutby == ""
-    assert commits[2].author_email == b"milla@mozilla.org"
-    assert commits[2].files == ["file2copy"]
-    assert commits[2].file_copies == {"file2": "file2copy"}
+    assert commits[2].author_email == "milla@mozilla.org"
     assert commits[2].reviewers == tuple()
 
     assert commits[3].node == revision4
@@ -229,11 +268,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[3].pushdate
         <= second_push_date + relativedelta(seconds=1)
     )
-    assert commits[3].bug == b""
+    assert commits[3].bug_id is None
     assert commits[3].backedoutby == revision5
-    assert commits[3].author_email == b"milla@mozilla.org"
-    assert commits[3].files == ["file2copy", "file2copymove"]
-    assert commits[3].file_copies == {"file2copy": "file2copymove"}
+    assert commits[3].author_email == "milla@mozilla.org"
     assert commits[3].reviewers == tuple()
 
     assert commits[4].node == revision5
@@ -245,11 +282,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[4].pushdate
         <= second_push_date + relativedelta(seconds=1)
     )
-    assert commits[4].bug == b""
+    assert commits[4].bug_id is None
     assert commits[4].backedoutby == ""
-    assert commits[4].author_email == b"sheriff"
-    assert commits[4].files == ["file2copy", "file2copymove"]
-    assert commits[4].file_copies == {"file2copymove": "file2copy"}
+    assert commits[4].author_email == "sheriff"
     assert commits[4].reviewers == tuple()
 
     assert commits[5].node == revision6
@@ -261,11 +296,9 @@ def test_hg_log(fake_hg_repo):
         <= commits[5].pushdate
         <= hg_log_date + relativedelta(seconds=1)
     )
-    assert commits[5].bug == b""
+    assert commits[5].bug_id is None
     assert commits[5].backedoutby == ""
-    assert commits[5].author_email == b"milla@mozilla.org"
-    assert commits[5].files == ["file3"]
-    assert commits[5].file_copies == {}
+    assert commits[5].author_email == "milla@mozilla.org"
     assert commits[5].reviewers == tuple()
 
     commits = repository.hg_log(hg, [revs[1], revs[3]])
@@ -275,7 +308,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].node == revision4
 
 
-@responses.activate
 def test_download_component_mapping():
     responses.add(
         responses.HEAD,
@@ -331,7 +363,6 @@ def test_download_component_mapping():
     assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
 
-@responses.activate
 def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
@@ -364,7 +395,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, ret=True)
+    commits = repository.download_commits(local)
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -377,7 +408,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, ret=True)
+    commits = repository.download_commits(local)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -393,7 +424,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, revision3, ret=True)
+    commits = repository.download_commits(local, revision3)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
@@ -406,14 +437,13 @@ def test_download_commits(fake_hg_repo):
 
     os.remove("data/commits.json")
     os.remove("data/commit_experiences.pickle")
-    commits = repository.download_commits(local, f"children({revision2})", ret=True)
+    commits = repository.download_commits(local, f"children({revision2})")
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     os.remove("data/commit_experiences.pickle")
-    commits = repository.download_commits(local, ret=False)
-    assert commits is None
+    commits = repository.download_commits(local)
     assert len(list(repository.get_commits())) == 2
 
 
@@ -503,32 +533,30 @@ def test_exp_queue():
     assert q[12] == 1
 
 
-def test_get_commits_to_ignore(tmpdir):
+def test_set_commits_to_ignore(tmpdir):
     tmp_path = tmpdir.strpath
 
     with open(os.path.join(tmp_path, ".hg-annotate-ignore-revs"), "w") as f:
         f.write("commit1\ncommit2\n8ba995b74e18334ab3707f27e9eb8f4e37ba3d29\n")
 
-    def create_commit(node, desc, bug, backedoutby):
+    def create_commit(node, desc, bug_id, backedoutby):
         return repository.Commit(
             node=node,
             author="author",
             desc=desc,
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
-            bug=bug,
+            bug_id=bug_id,
             backedoutby=backedoutby,
             author_email="author@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
             reviewers=("reviewer1", "reviewer2"),
-        )
+        ).set_files(["dom/file1.cpp"], {})
 
     commits = [
         create_commit("commit", "", 123, ""),
         create_commit("commit_backout", "", 123, ""),
         create_commit("commit_backedout", "", 123, "commit_backout"),
-        create_commit("commit_no_bug", "", b"", ""),
+        create_commit("commit_no_bug", "", None, ""),
         create_commit(
             "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
             "commit in .hg-annotate-ignore-revs",
@@ -540,7 +568,8 @@ def test_get_commits_to_ignore(tmpdir):
         ),
     ]
 
-    leftovers = repository.get_commits_to_ignore(tmp_path, commits)
+    repository.set_commits_to_ignore(tmp_path, commits)
+    leftovers = [commit for commit in commits if commit.ignored]
     assert len(leftovers) == 4
     assert set(commit.node for commit in leftovers) == {
         "commit_backout",
@@ -551,113 +580,6 @@ def test_get_commits_to_ignore(tmpdir):
 
 
 def test_calculate_experiences():
-    commits = {
-        "commit1": repository.Commit(
-            node="commit1",
-            author="author1",
-            desc="commit1",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2019, 1, 1),
-            bug="123",
-            backedoutby="",
-            author_email="author1@mozilla.org",
-            files=["dom/file1.cpp", "apps/file1.jsm"],
-            file_copies={},
-            reviewers=("reviewer1", "reviewer2"),
-        ),
-        "commitbackedout": repository.Commit(
-            node="commitbackedout",
-            author="author1",
-            desc="commitbackedout",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2019, 1, 1),
-            bug="123",
-            backedoutby="commitbackout",
-            author_email="author1@mozilla.org",
-            files=["dom/file1.cpp", "apps/file1.jsm"],
-            file_copies={},
-            reviewers=("reviewer1", "reviewer2"),
-        ),
-        "commit2": repository.Commit(
-            node="commit2",
-            author="author2",
-            desc="commit2",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2019, 1, 1),
-            bug="123",
-            backedoutby="",
-            author_email="author2@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
-            reviewers=("reviewer1",),
-        ),
-        "commit2refactoring": repository.Commit(
-            node="commit2refactoring",
-            author="author2",
-            desc="commit2refactoring",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2019, 1, 1),
-            bug="123",
-            backedoutby="",
-            author_email="author2@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={},
-            reviewers=("reviewer1",),
-        ),
-        "commit3": repository.Commit(
-            node="commit3",
-            author="author1",
-            desc="commit3",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2019, 1, 1),
-            bug="123",
-            backedoutby="",
-            author_email="author1@mozilla.org",
-            files=["dom/file2.cpp", "apps/file1.jsm"],
-            file_copies={},
-            reviewers=("reviewer2",),
-        ),
-        "commit4": repository.Commit(
-            node="commit4",
-            author="author2",
-            desc="commit4",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2020, 1, 1),
-            bug="123",
-            backedoutby="",
-            author_email="author2@mozilla.org",
-            files=["dom/file1.cpp", "apps/file2.jsm"],
-            file_copies={},
-            reviewers=("reviewer1", "reviewer2"),
-        ),
-        "commit5": repository.Commit(
-            node="commit5",
-            author="author3",
-            desc="commit5",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2020, 1, 2),
-            bug="123",
-            backedoutby="",
-            author_email="author3@mozilla.org",
-            files=["dom/file1.cpp"],
-            file_copies={"dom/file1.cpp": "dom/file1copied.cpp"},
-            reviewers=("reviewer3",),
-        ),
-        "commit6": repository.Commit(
-            node="commit6",
-            author="author3",
-            desc="commit6",
-            date=datetime(2019, 1, 1),
-            pushdate=datetime(2020, 1, 3),
-            bug="123",
-            backedoutby="",
-            author_email="author3@mozilla.org",
-            files=["dom/file1.cpp", "dom/file1copied.cpp"],
-            file_copies={},
-            reviewers=("reviewer3",),
-        ),
-    }
-
     repository.path_to_component = {
         "dom/file1.cpp": "Core::DOM",
         "dom/file1copied.cpp": "Core::DOM",
@@ -666,9 +588,99 @@ def test_calculate_experiences():
         "apps/file2.jsm": "Firefox::Boh",
     }
 
-    repository.calculate_experiences(
-        list(commits.values()), {commits["commit2refactoring"]}, datetime(2019, 1, 1)
-    )
+    commits = {
+        "commit1": repository.Commit(
+            node="commit1",
+            author="author1",
+            desc="commit1",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
+        "commitbackedout": repository.Commit(
+            node="commitbackedout",
+            author="author1",
+            desc="commitbackedout",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="commitbackout",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
+        "commit2": repository.Commit(
+            node="commit2",
+            author="author2",
+            desc="commit2",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1",),
+        ).set_files(["dom/file1.cpp"], {}),
+        "commit2refactoring": repository.Commit(
+            node="commit2refactoring",
+            author="author2",
+            desc="commit2refactoring",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1",),
+            ignored=True,
+        ).set_files(["dom/file1.cpp"], {}),
+        "commit3": repository.Commit(
+            node="commit3",
+            author="author1",
+            desc="commit3",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer2",),
+        ).set_files(["dom/file2.cpp", "apps/file1.jsm"], {}),
+        "commit4": repository.Commit(
+            node="commit4",
+            author="author2",
+            desc="commit4",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file2.jsm"], {}),
+        "commit5": repository.Commit(
+            node="commit5",
+            author="author3",
+            desc="commit5",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 2),
+            bug_id=123,
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            reviewers=("reviewer3",),
+        ).set_files(["dom/file1.cpp"], {"dom/file1.cpp": "dom/file1copied.cpp"}),
+        "commit6": repository.Commit(
+            node="commit6",
+            author="author3",
+            desc="commit6",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 3),
+            bug_id=123,
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            reviewers=("reviewer3",),
+        ).set_files(["dom/file1.cpp", "dom/file1copied.cpp"], {}),
+    }
+
+    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0

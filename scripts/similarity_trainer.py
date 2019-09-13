@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -5,10 +6,14 @@
 
 import argparse
 import sys
+from logging import INFO, basicConfig, getLogger
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from bugbug import similarity
+from bugbug import bugzilla, db, similarity
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def parse_args(args):
@@ -34,7 +39,14 @@ def parse_args(args):
     return parser.parse_args(args)
 
 
-def main(args):
+def main():
+    args = parse_args(sys.argv[1:])
+
+    logger.info("Downloading bugs database...")
+
+    if db.is_old_version(bugzilla.BUGS_DB) or not db.exists(bugzilla.BUGS_DB):
+        db.download(bugzilla.BUGS_DB, force=True)
+
     if args.algorithm == "neighbors_tfidf_bigrams":
         model = similarity.model_name_to_class[args.algorithm](
             vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
@@ -46,8 +58,8 @@ def main(args):
             cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
         )
 
-    model.evaluation()
+    model.save()
 
 
 if __name__ == "__main__":
-    main(parse_args(sys.argv[1:]))
+    main()

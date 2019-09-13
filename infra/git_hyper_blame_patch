@@ -1,7 +1,13 @@
 diff --git a/git_hyper_blame.py b/git_hyper_blame.py
-index 3e085134..612a0bb5 100755
+index 3e085134..1671b858 100755
 --- a/git_hyper_blame.py
 +++ b/git_hyper_blame.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python2
+ # Copyright 2016 The Chromium Authors. All rights reserved.
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
 @@ -143,7 +143,7 @@ def pretty_print(parsedblame, show_filenames=False, out=sys.stdout):
    for line in parsedblame:
      author_time = git_dates.timestamp_offset_to_datetime(

@@ -6,6 +6,7 @@
 import gzip
 import io
 import json
+import logging
 import os
 import pickle
 from contextlib import contextmanager
@@ -15,8 +16,11 @@ import requests
 import zstandard
 
 from bugbug import utils
+from bugbug.utils import zstd_decompress
 
 DATABASES = {}
+
+logger = logging.getLogger(__name__)
 
 
 def register(path, url, version, support_files=[]):
@@ -50,13 +54,10 @@ def is_old_version(path):
 def extract_file(path):
     path, compression_type = os.path.splitext(path)
 
-    with open(path, "wb") as output_f:
-        if compression_type == ".zst":
-            dctx = zstandard.ZstdDecompressor()
-            with open(f"{path}.zst", "rb") as input_f:
-                dctx.copy_stream(input_f, output_f)
-        else:
-            assert False, f"Unexpected compression type: {compression_type}"
+    if compression_type == ".zst":
+        zstd_decompress(path)
+    else:
+        assert False, f"Unexpected compression type: {compression_type}"
 
 
 def download_support_file(path, file_name):
@@ -64,13 +65,15 @@ def download_support_file(path, file_name):
         url = urljoin(DATABASES[path]["url"], file_name)
         path = os.path.join(os.path.dirname(path), file_name)
 
-        print(f"Downloading {url} to {path}")
+        logger.info(f"Downloading {url} to {path}")
         utils.download_check_etag(url, path)
 
         if path.endswith(".zst"):
             extract_file(path)
     except requests.exceptions.HTTPError:
-        print(f"{file_name} is not yet available to download for {path}")
+        logger.info(
+            f"{file_name} is not yet available to download for {path}", exc_info=True
+        )
 
 
 # Download and extract databases.
@@ -84,11 +87,11 @@ def download(path, force=False, support_files_too=False):
     if not os.path.exists(zst_path) or force:
         url = DATABASES[path]["url"]
         try:
-            print(f"Downloading {url} to {zst_path}")
+            logger.info(f"Downloading {url} to {zst_path}")
             utils.download_check_etag(url, zst_path)
 
         except requests.exceptions.HTTPError:
-            print(f"{url} is not yet available to download")
+            logger.info(f"{url} is not yet available to download", exc_info=True)
             return
 
     extract_file(zst_path)

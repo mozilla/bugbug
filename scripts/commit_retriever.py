@@ -4,9 +4,8 @@ import argparse
 import os
 from logging import INFO, basicConfig, getLogger
 
-import zstandard
-
 from bugbug import db, repository
+from bugbug.utils import zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -36,20 +35,19 @@ class Retriever(object):
 
         logger.info("commit data extracted from repository")
 
-        self.compress_file("data/commits.json")
-        self.compress_file("data/commit_experiences.pickle")
-
-    def compress_file(self, path):
-        cctx = zstandard.ZstdCompressor()
-        with open(path, "rb") as input_f:
-            with open(f"{path}.zst", "wb") as output_f:
-                cctx.copy_stream(input_f, output_f)
+        zstd_compress("data/commits.json")
+        zstd_compress("data/commit_experiences.pickle")
 
 
 def main():
     description = "Retrieve and extract the information from Mozilla-Central repository"
     parser = argparse.ArgumentParser(description=description)
 
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Only download the N oldest commits, used mainly for integration tests",
+    )  # TODO: Use limit
     parser.add_argument("cache-root", help="Cache for repository clones.")
 
     args = parser.parse_args()
@@ -57,3 +55,7 @@ def main():
     retriever = Retriever(getattr(args, "cache-root"))
 
     retriever.retrieve_commits()
+
+
+if __name__ == "__main__":
+    main()

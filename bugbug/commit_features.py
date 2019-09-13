@@ -19,6 +19,13 @@ class files_modified_num(object):
         return commit["files_modified_num"]
 
 
+class test_files_modified_num(object):
+    name = "# of modified test files"
+
+    def __call__(self, commit, **kwargs):
+        return commit["test_files_modified_num"]
+
+
 class file_size(object):
     name = "File size"
 
@@ -28,6 +35,18 @@ class file_size(object):
             "avg": commit["average_file_size"],
             "max": commit["maximum_file_size"],
             "min": commit["minimum_file_size"],
+        }
+
+
+class test_file_size(object):
+    name = "Test file size"
+
+    def __call__(self, commit, **kwargs):
+        return {
+            "sum": commit["total_test_file_size"],
+            "avg": commit["average_test_file_size"],
+            "max": commit["maximum_test_file_size"],
+            "min": commit["minimum_test_file_size"],
         }
 
 

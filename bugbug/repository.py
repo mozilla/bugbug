@@ -9,9 +9,9 @@ import copy
 import itertools
 import json
 import logging
+import math
 import os
 import pickle
-import re
 import sys
 import threading
 from collections import deque
@@ -24,7 +24,6 @@ from bugbug import db, utils
 
 logger = logging.getLogger(__name__)
 
-
 hg_servers = list()
 hg_servers_lock = threading.Lock()
 thread_local = threading.local()
@@ -33,7 +32,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    1,
+    2,
     ["commit_experiences.pickle.zst"],
 )
 
@@ -41,6 +40,16 @@ path_to_component = {}
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
+
+TYPES_TO_EXT = {
+    "Javascript": [".js", ".jsm"],
+    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
+    "Java": [".java"],
+    "Python": [".py"],
+    "Rust": [".rs"],
+}
+
+EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
 
 
 class Commit:
@@ -51,24 +60,39 @@ class Commit:
         desc,
         date,
         pushdate,
-        bug,
+        bug_id,
         backedoutby,
         author_email,
-        files,
-        file_copies,
         reviewers,
+        ignored=False,
     ):
         self.node = node
         self.author = author
+        self.bug_id = bug_id
         self.desc = desc
         self.date = date
         self.pushdate = pushdate
-        self.bug = bug
         self.backedoutby = backedoutby
+        self.ever_backedout = backedoutby != ""
         self.author_email = author_email
-        self.files = files
-        self.file_copies = file_copies
         self.reviewers = reviewers
+        self.ignored = ignored
+        self.added = 0
+        self.test_added = 0
+        self.deleted = 0
+        self.test_deleted = 0
+        self.types = set()
+        self.seniority_author = 0.0
+        self.total_file_size = 0
+        self.average_file_size = 0
+        self.maximum_file_size = 0
+        self.minimum_file_size = 0
+        self.files_modified_num = 0
+        self.total_test_file_size = 0
+        self.average_test_file_size = 0
+        self.maximum_test_file_size = 0
+        self.minimum_test_file_size = 0
+        self.test_files_modified_num = 0
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -76,6 +100,15 @@ class Commit:
 
     def __hash__(self):
         return hash(self.node)
+
+    def set_files(self, files, file_copies):
+        self.files = files
+        self.file_copies = file_copies
+        self.components = list(
+            set(path_to_component[path] for path in files if path in path_to_component)
+        )
+        self.directories = get_directories(files)
+        return self
 
     def set_experience(
         self, exp_type, commit_type, timespan, exp_sum, exp_max, exp_min
@@ -88,46 +121,14 @@ class Commit:
             setattr(self, f"{exp_str}max", exp_max)
             setattr(self, f"{exp_str}min", exp_min)
 
-
-# This is only a temporary hack: Should be removed after the template issue with reviewers (https://bugzilla.mozilla.org/show_bug.cgi?id=1528938)
-# gets fixed. Most of this code is copied from https://github.com/mozilla/version-control-tools/blob/2c2812d4a41b690203672a183b1dd85ca8b39e01/pylib/mozautomation/mozautomation/commitparser.py#L129
-def get_reviewers(commit_description, flag_re=None):
-    SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
-    LIST = r"[;,\/\\]\s*"
-    LIST_RE = re.compile(LIST)
-
-    IRC_NICK = r"[a-zA-Z0-9\-\_]+"
-    REVIEWERS_RE = re.compile(
-        r"([\s\(\.\[;,])"
-        + r"("
-        + SPECIFIER
-        + r")"
-        + r"("
-        + IRC_NICK
-        + r"(?:"
-        + LIST
-        + r"(?![a-z0-9\.\-]+[=?])"
-        + IRC_NICK
-        + r")*"
-        + r")?"
-    )
-
-    if commit_description == "":
-        return
-
-    commit_summary = commit_description.splitlines().pop(0)
-    res = []
-    for match in re.finditer(REVIEWERS_RE, commit_summary):
-        if not match.group(3):
-            continue
-
-        for reviewer in re.split(LIST_RE, match.group(3)):
-            if flag_re is None:
-                res.append(reviewer)
-            elif flag_re.match(match.group(2)):
-                res.append(reviewer)
-
-    return res
+    def to_dict(self):
+        d = self.__dict__
+        for f in ["backedoutby", "ignored", "file_copies"]:
+            del d[f]
+        d["types"] = list(d["types"])
+        d["pushdate"] = str(d["pushdate"])
+        d["date"] = str(d["date"])
+        return d
 
 
 def get_directories(files):
@@ -180,110 +181,104 @@ def is_test(path):
     )
 
 
+def hg_modified_files(hg, commit):
+    template = '{join(files,"|")}\\0{join(file_copies,"|")}\\0'
+    args = hglib.util.cmdbuilder(
+        b"log",
+        template=template,
+        no_merges=True,
+        rev=commit.node.encode("ascii"),
+        branch="central",
+    )
+    x = hg.rawcommand(args)
+    files_str, file_copies_str = x.split(b"\x00")[:-1]
+
+    file_copies = {}
+    for file_copy in file_copies_str.decode("utf-8").split("|"):
+        if not file_copy:
+            continue
+
+        parts = file_copy.split(" (")
+        copied = parts[0]
+        orig = parts[1][:-1]
+        file_copies[sys.intern(orig)] = sys.intern(copied)
+
+    commit.set_files(
+        [sys.intern(f) for f in files_str.decode("utf-8").split("|")], file_copies
+    )
+
+
 def _transform(commit):
-    obj = {
-        "node": commit.node,
-        "author": commit.author,
-        "reviewers": commit.reviewers,
-        "desc": commit.desc,
-        "date": str(commit.date),
-        "pushdate": str(commit.pushdate),
-        "bug_id": int(commit.bug.decode("ascii")) if commit.bug else None,
-        "ever_backedout": commit.backedoutby != "",
-        "added": 0,
-        "test_added": 0,
-        "deleted": 0,
-        "test_deleted": 0,
-        "types": set(),
-        "author_email": commit.author_email.decode("utf-8"),
-    }
+    hg_modified_files(HG, commit)
 
-    # Copy all experience fields.
-    for attr, value in commit.__dict__.items():
-        if attr.startswith(f"touched_prev"):
-            obj[attr] = value
-
-    obj["seniority_author"] = commit.seniority_author
+    if commit.ignored:
+        return commit
 
     sizes = []
+    test_sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_counts(patch)
     for stats in patch_data:
-        if stats["binary"]:
-            obj["types"].add("binary")
-            continue
-
         path = stats["filename"]
 
-        if is_test(path):
-            obj["test_added"] += stats["added_lines"]
-            obj["test_deleted"] += stats["deleted_lines"]
-        else:
-            obj["added"] += stats["added_lines"]
-            obj["deleted"] += stats["deleted_lines"]
+        if stats["binary"]:
+            if not is_test(path):
+                commit.types.add("binary")
+            continue
 
-        ext = os.path.splitext(path)[1]
-        if ext in [".js", ".jsm"]:
-            type_ = "JavaScript"
-        elif ext in [
-            ".c",
-            ".cpp",
-            ".cc",
-            ".cxx",
-            ".m",
-            ".mm",
-            ".h",
-            ".hh",
-            ".hpp",
-            ".hxx",
-        ]:
-            type_ = "C/C++"
-        elif ext == ".java":
-            type_ = "Java"
-        elif ext == ".py":
-            type_ = "Python"
-        elif ext == ".rs":
-            type_ = "Rust"
-        else:
-            type_ = ext
-        obj["types"].add(type_)
-
+        size = None
         if not stats["deleted"]:
             try:
                 after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
-                sizes.append(after.count(b"\n"))
+                size = after.count(b"\n")
             except hglib.error.CommandError as e:
                 if b"no such file in rev" not in e.err:
                     raise
 
-    obj["total_file_size"] = sum(sizes)
-    obj["average_file_size"] = (
-        obj["total_file_size"] / len(sizes) if len(sizes) > 0 else 0
+        if is_test(path):
+            commit.test_files_modified_num += 1
+
+            commit.test_added += stats["added_lines"]
+            commit.test_deleted += stats["deleted_lines"]
+
+            if size is not None:
+                test_sizes.append(size)
+            # We don't have a 'test' equivalent of types, as most tests are JS,
+            # so this wouldn't add useful information.
+        else:
+            commit.files_modified_num += 1
+
+            commit.added += stats["added_lines"]
+            commit.deleted += stats["deleted_lines"]
+
+            if size is not None:
+                sizes.append(size)
+
+            ext = os.path.splitext(path)[1].lower()
+            type_ = EXT_TO_TYPES.get(ext, ext)
+
+            commit.types.add(type_)
+
+    commit.total_file_size = sum(sizes)
+    commit.average_file_size = (
+        commit.total_file_size / len(sizes) if len(sizes) > 0 else 0
     )
-    obj["maximum_file_size"] = max(sizes, default=0)
-    obj["minimum_file_size"] = min(sizes, default=0)
+    commit.maximum_file_size = max(sizes, default=0)
+    commit.minimum_file_size = min(sizes, default=0)
 
-    obj["files_modified_num"] = len(patch_data)
-
-    # Covert to a list, as a set is not JSON-serializable.
-    obj["types"] = list(obj["types"])
-
-    obj["components"] = list(
-        set(
-            path_to_component[path]
-            for path in commit.files
-            if path in path_to_component
-        )
+    commit.total_test_file_size = sum(test_sizes)
+    commit.average_test_file_size = (
+        commit.total_test_file_size / len(test_sizes) if len(test_sizes) > 0 else 0
     )
-    obj["directories"] = get_directories(commit.files)
-    obj["files"] = commit.files
+    commit.maximum_test_file_size = max(test_sizes, default=0)
+    commit.minimum_test_file_size = min(test_sizes, default=0)
 
-    return obj
+    return commit
 
 
 def hg_log(hg, revs):
-    template = '{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{join(files,"|")}\\0{join(file_copies,"|")}\\0{pushdate|hgdate}\\0'
+    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -300,22 +295,20 @@ def hg_log(hg, revs):
         assert b" " in rev[3]
         date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
 
-        assert b" " in rev[9]
-        pushdate_timestamp = rev[9].split(b" ", 1)[0]
+        assert b" " in rev[7]
+        pushdate_timestamp = rev[7].split(b" ", 1)[0]
         if pushdate_timestamp != b"0":
             pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
         else:
             pushdate = datetime.utcnow()
 
-        file_copies = {}
-        for file_copy in rev[8].decode("utf-8").split("|"):
-            if not file_copy:
-                continue
+        bug_id = int(rev[4].decode("ascii")) if rev[4] else None
 
-            parts = file_copy.split(" (")
-            copied = parts[0]
-            orig = parts[1][:-1]
-            file_copies[sys.intern(orig)] = sys.intern(copied)
+        reviewers = (
+            set(sys.intern(r) for r in rev[8].decode("utf-8").split(" "))
+            if rev[8] != b""
+            else set()
+        )
 
         revs.append(
             Commit(
@@ -324,14 +317,10 @@ def hg_log(hg, revs):
                 desc=rev[2].decode("utf-8"),
                 date=date,
                 pushdate=pushdate,
-                bug=rev[4],
+                bug_id=bug_id,
                 backedoutby=rev[5].decode("ascii"),
-                author_email=rev[6],
-                files=[sys.intern(f) for f in rev[7].decode("utf-8").split("|")],
-                file_copies=file_copies,
-                reviewers=tuple(
-                    set(sys.intern(r) for r in get_reviewers(rev[2].decode("utf-8")))
-                ),
+                author_email=rev[6].decode("utf-8"),
+                reviewers=tuple(reviewers),
             )
         )
 
@@ -409,7 +398,7 @@ class exp_queue:
         assert day == self.last_day
 
 
-def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True):
+def calculate_experiences(commits, first_pushdate, save=True):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
     try:
@@ -483,9 +472,9 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True)
             # We don't want to consider backed out commits when calculating normal experiences.
             if (
                 commit_type == ""
-                and not commit.backedoutby
+                and not commit.ever_backedout
                 or commit_type == "backout"
-                and commit.backedoutby
+                and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
                     experiences[experience_type][commit_type][item][day] = (
@@ -556,9 +545,9 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True)
             # We don't want to consider backed out commits when calculating normal experiences.
             if (
                 commit_type == ""
-                and not commit.backedoutby
+                and not commit.ever_backedout
                 or commit_type == "backout"
-                and commit.backedoutby
+                and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
                     experiences[experience_type][commit_type][item][
@@ -570,66 +559,26 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True)
         assert day >= 0
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        if len(commit.file_copies) > 0:
+        if "file" in experiences:
+            xp_file = experiences["file"]
             for orig, copied in commit.file_copies.items():
-                orig_directories = get_directories(orig)
-                copied_directories = get_directories(copied)
-
                 for commit_type in ["", "backout"]:
-                    for orig_directory, copied_directory in zip(
-                        orig_directories, copied_directories
-                    ):
-                        if orig_directory in experiences["directory"][commit_type]:
-                            experiences["directory"][commit_type][
-                                copied_directory
-                            ] = copy.deepcopy(
-                                experiences["directory"][commit_type][orig_directory]
-                            )
-                        else:
-                            print(
-                                f"Experience missing for directory {orig_directory}, type '{commit_type}', on commit {commit.node}"
-                            )
-
-                    if orig in path_to_component and copied in path_to_component:
-                        orig_component = path_to_component[orig]
-                        copied_component = path_to_component[copied]
-                        if orig_component in experiences["component"][commit_type]:
-                            experiences["component"][commit_type][
-                                copied_component
-                            ] = copy.deepcopy(
-                                experiences["component"][commit_type][orig_component]
-                            )
-                        else:
-                            print(
-                                f"Experience missing for component {orig_component}, type '{commit_type}', on commit {commit.node}"
-                            )
-
-                    if orig in experiences["file"][commit_type]:
-                        experiences["file"][commit_type][copied] = copy.deepcopy(
-                            experiences["file"][commit_type][orig]
+                    if orig in xp_file[commit_type]:
+                        xp_file[commit_type][copied] = copy.deepcopy(
+                            xp_file[commit_type][orig]
                         )
                     else:
                         print(
                             f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
                         )
 
-        if commit not in commits_to_ignore:
+        if not commit.ignored:
             update_experiences("author", day, [commit.author])
             update_experiences("reviewer", day, commit.reviewers)
 
             update_complex_experiences("file", day, commit.files)
-
-            update_complex_experiences("directory", day, get_directories(commit.files))
-
-            components = list(
-                set(
-                    path_to_component[path]
-                    for path in commit.files
-                    if path in path_to_component
-                )
-            )
-
-            update_complex_experiences("component", day, components)
+            update_complex_experiences("directory", day, commit.directories)
+            update_complex_experiences("component", day, commit.components)
 
     if save:
         with open("data/commit_experiences.pickle", "wb") as f:
@@ -638,14 +587,14 @@ def calculate_experiences(commits, commits_to_ignore, first_pushdate, save=True)
             )
 
 
-def get_commits_to_ignore(repo_dir, commits):
+def set_commits_to_ignore(repo_dir, commits):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
     with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
         ignore_revs = set(l[:40] for l in f)
 
-    backouts = set(commit.backedoutby for commit in commits if commit.backedoutby != "")
+    backouts = set(commit.backedoutby for commit in commits if commit.ever_backedout)
 
     def should_ignore(commit):
         if commit.node in ignore_revs or "ignore-this-changeset" in commit.desc:
@@ -656,12 +605,13 @@ def get_commits_to_ignore(repo_dir, commits):
             return True
 
         # Don't analyze commits that are not linked to a bug.
-        if commit.bug == b"":
+        if commit.bug_id is None:
             return True
 
         return False
 
-    return set(commit for commit in commits if should_ignore(commit))
+    for commit in commits:
+        commit.ignored = should_ignore(commit)
 
 
 def download_component_mapping():
@@ -681,14 +631,22 @@ def download_component_mapping():
 
 
 def hg_log_multi(repo_dir, revs):
+    if len(revs) == 0:
+        return []
+
     cwd = os.getcwd()
     os.chdir(repo_dir)
 
-    CHUNK_SIZE = 256
-    revs_groups = [revs[i : (i + CHUNK_SIZE)] for i in range(0, len(revs), CHUNK_SIZE)]
+    threads_num = os.cpu_count() + 1
+    REVS_COUNT = len(revs)
+    CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
+    revs_groups = [
+        (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
+        for i in range(0, REVS_COUNT, CHUNK_SIZE)
+    ]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread, max_workers=os.cpu_count() + 1
+        initializer=_init_thread, max_workers=threads_num
     ) as executor:
         commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
@@ -703,7 +661,7 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
-def download_commits(repo_dir, rev_start=0, ret=False, save=True):
+def download_commits(repo_dir, rev_start=0, save=True):
     with hglib.open(repo_dir) as hg:
         revs = get_revs(hg, rev_start)
         if len(revs) == 0:
@@ -720,13 +678,7 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
 
     download_component_mapping()
 
-    commits_to_ignore = get_commits_to_ignore(repo_dir, commits)
-    print(f"{len(commits_to_ignore)} commits to ignore")
-
-    calculate_experiences(commits, commits_to_ignore, first_pushdate, save)
-
-    # Exclude commits to ignore.
-    commits = [commit for commit in commits if commit not in commits_to_ignore]
+    set_commits_to_ignore(repo_dir, commits)
 
     commits_num = len(commits)
 
@@ -740,15 +692,16 @@ def download_commits(repo_dir, rev_start=0, ret=False, save=True):
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
+        commits = list(commits)
 
-        if ret:
-            commits = list(commits)
+    calculate_experiences(commits, first_pushdate, save)
 
-        if save:
-            db.append(COMMITS_DB, commits)
+    commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
-        if ret:
-            return commits
+    if save:
+        db.append(COMMITS_DB, commits)
+
+    return commits
 
 
 def clean(repo_dir):

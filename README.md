@@ -41,7 +41,9 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 ## Setup
 
-Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`
+Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
+
+Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
 
 ### Auto-formatting
 
@@ -52,20 +54,21 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-Run the `run.py` script to perform training / classification. The first time `run.py` is executed, the `--train` argument should be used to automatically download databases containing bugs and commits data.
+Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training.
 
 ### Running the repository mining script
 
+Note: This section is only necessary if you want to perform changes to the repository mining script. Otherwise, you can simply use the commits data we generate automatically.
+
 1. Clone https://hg.mozilla.org/mozilla-central/.
 2. Run `./mach vcs-setup` in the directory where you have cloned mozilla-central.
-3. Enable the pushlog, hgmo and mozext extensions. For example, if you are on Linux, add the following to the extensions section of the `~/.hgrc` file:
+3. Enable the extensions mentioned in [infra/hgrc](https://github.com/mozilla/bugbug/blob/master/infra/hgrc). For example, if you are on Linux, you can add `firefoxtree` to the extensions section of the `~/.hgrc` file as:
     ```
-    pushlog = ~/.mozbuild/version-control-tools/hgext/pushlog
-    hgmo = ~/.mozbuild/version-control-tools/hgext/hgmo
-    mozext = ~/.mozbuild/version-control-tools/hgext/mozext
     firefoxtree = ~/.mozbuild/version-control-tools/hgext/firefoxtree
     ```
 3. Run the `repository.py` script, with the only argument being the path to the mozilla-central repository.
+
+Note: If you run into problems, it's possible the version of Mercurial you are using is not supported. Check the Docker definition at infra/dockerfile.commit_retrieval to see what we are using in production.
 
 Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to the `log` command.
 

@@ -93,6 +93,11 @@ def classification_report_imbalanced_values(
 
 def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
     confusion_matrix_table = confusion_matrix.tolist()
+
+    # Don't show the Not classified row in the table output
+    if "__NOT_CLASSIFIED__" in labels and not is_multilabel:
+        confusion_matrix_table.pop(labels.index("__NOT_CLASSIFIED__"))
+
     if not is_multilabel:
         confusion_matrix_table = [confusion_matrix_table]
 
@@ -104,8 +109,12 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
             table_labels = labels
 
         confusion_matrix_header = []
-        for i in range(len(table)):
-            confusion_matrix_header.append(f"{table_labels[i]} (Predicted)")
+        for i in range(len(table[0])):
+            confusion_matrix_header.append(
+                f"{table_labels[i]} (Predicted)"
+                if table_labels[i] != "__NOT_CLASSIFIED__"
+                else "Not classified"
+            )
         for i in range(len(table)):
             table[i].insert(0, f"{table_labels[i]} (Actual)")
         print(
@@ -232,7 +241,7 @@ class Model:
         self, important_features, feature_names, class_probabilities=None
     ):
         # extract importance values from the top features for the predicted class
-        # when classsifying
+        # when classifying
         if class_probabilities is not None:
             # shap_values are stored in class 1 for binary classification
             if len(class_probabilities[0]) != 2:
@@ -250,7 +259,12 @@ class Model:
                 else:
                     shap_val.append("-" + str(importance))
 
-                top_feature_names.append(feature_names[int(index)])
+                feature_value = np.squeeze(
+                    important_features["values"].toarray()[:, int(index)]
+                )
+                top_feature_names.append(
+                    f"{feature_names[int(index)]} = {feature_value.round(decimals=5)}"
+                )
             shap_val = [[predicted_class] + shap_val]
 
         # extract importance values from the top features for all the classes
@@ -265,22 +279,41 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items()
             ]
 
-        # allow maximum of 6 columns in a row to fit the page better
+        # allow maximum of 5 columns in a row to fit the page better
         print("Top {} features:".format(len(top_feature_names)))
-        for i in range(0, len(top_feature_names), 6):
+        for i in range(0, len(top_feature_names), 5):
             table = []
             for item in shap_val:
-                table.append(item[i : i + 6])
+                table.append(item[i : i + 5])
             print(
                 tabulate(
                     table,
-                    headers=(["classes"] + top_feature_names)[i : i + 6],
+                    headers=(["classes"] + top_feature_names)[i : i + 5],
                     tablefmt="grid",
                 ),
                 end="\n\n",
             )
 
-    def train(self, importance_cutoff=0.15):
+    def save_feature_importances(self, important_features, feature_names):
+        # Returns a JSON-encodable dictionary that can be saved in the metrics
+        # report
+        feature_report = {"classes": {}, "average": {}}
+        top_feature_names = []
+
+        for importance, index, is_pos in important_features["average"]:
+            feature_name = feature_names[int(index)]
+
+            top_feature_names.append(feature_name)
+            feature_report["average"][feature_name] = importance
+
+        for i, feature_name in enumerate(top_feature_names):
+            for class_name, imp_values in important_features["classes"].items():
+                class_report = feature_report["classes"].setdefault(class_name, {})
+                class_report[feature_name] = float(imp_values[1][i])
+
+        return feature_report
+
+    def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -292,6 +325,10 @@ class Model:
 
         # Calculate labels.
         y = np.array(y_iter)
+
+        if limit:
+            X = X[:limit]
+            y = y[:limit]
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -360,6 +397,13 @@ class Model:
 
             self.print_feature_importances(important_features, feature_names)
 
+            # Save the important features in the metric report too
+            feature_report = self.save_feature_importances(
+                important_features, feature_names
+            )
+
+            tracking_metrics["feature_report"] = feature_report
+
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
@@ -397,45 +441,52 @@ class Model:
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
             y_pred_probas = self.clf.predict_proba(X_test)
+            confidence_class_names = self.class_names + ["__NOT_CLASSIFIED__"]
 
-            y_test_filter = []
             y_pred_filter = []
+            classified_indices = []
             for i in range(0, len(y_test)):
                 argmax = np.argmax(y_pred_probas[i])
                 if y_pred_probas[i][argmax] < confidence_threshold:
+                    if not is_multilabel:
+                        y_pred_filter.append("__NOT_CLASSIFIED__")
                     continue
 
-                y_test_filter.append(y_test[i])
+                classified_indices.append(i)
                 if is_multilabel:
                     y_pred_filter.append(y_pred[i])
                 else:
                     y_pred_filter.append(argmax)
 
             if not is_multilabel:
-                y_pred_filter = self.le.inverse_transform(y_pred_filter)
+                y_pred_filter = np.array(y_pred_filter)
+                y_pred_filter[classified_indices] = self.le.inverse_transform(
+                    np.array(y_pred_filter[classified_indices], dtype=int)
+                )
 
             print(
-                f"\nConfidence threshold > {confidence_threshold} - {len(y_test_filter)} classified"
+                f"\nConfidence threshold > {confidence_threshold} - {len(y_test)} classified"
             )
-            if len(y_test_filter) != 0:
-                if is_multilabel:
-                    confusion_matrix = metrics.multilabel_confusion_matrix(
-                        np.asarray(y_test_filter), np.asarray(y_pred_filter)
-                    )
-                else:
-                    confusion_matrix = metrics.confusion_matrix(
-                        np.asarray(y_test_filter),
-                        np.asarray(y_pred_filter),
-                        labels=self.class_names,
-                    )
-                    print(
-                        classification_report_imbalanced(
-                            y_test_filter, y_pred_filter, labels=self.class_names
-                        )
-                    )
-                print_labeled_confusion_matrix(
-                    confusion_matrix, self.class_names, is_multilabel=is_multilabel
+            if is_multilabel:
+                confusion_matrix = metrics.multilabel_confusion_matrix(
+                    y_test[classified_indices], np.asarray(y_pred_filter)
                 )
+            else:
+                confusion_matrix = metrics.confusion_matrix(
+                    y_test.astype(str),
+                    y_pred_filter.astype(str),
+                    labels=confidence_class_names,
+                )
+                print(
+                    classification_report_imbalanced(
+                        y_test.astype(str),
+                        y_pred_filter.astype(str),
+                        labels=confidence_class_names,
+                    )
+                )
+            print_labeled_confusion_matrix(
+                confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
+            )
 
         joblib.dump(self, self.__class__.__name__.lower())
 
@@ -476,6 +527,7 @@ class Model:
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
+            important_features["values"] = X
 
             # Workaround: handle multi class case for force_plot to work correctly
             if len(classes[0]) > 2:

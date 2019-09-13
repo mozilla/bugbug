@@ -45,11 +45,17 @@ setup(
         "console_scripts": [
             "bugbug-data-commits = scripts.commit_retriever:main",
             "bugbug-data-bugzilla = scripts.bug_retriever:main",
+            "bugbug-data-test-scheduling-history = scripts.test_scheduling_history_retriever:main",
             "bugbug-train = scripts.trainer:main",
+            "bugbug-train-similarity = scripts.similarity_trainer:main",
             "bugbug-check = scripts.check:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
             "bugbug-classify-commit = scripts.commit_classifier:main",
+            "bugbug-classify-bug = scripts.bug_classifier:main",
             "bugbug-regressor-finder = scripts.regressor_finder:main",
+            "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",
+            "bugbug-analyze-training-metrics = scripts.analyze_training_metrics:main",
+            "bugbug-check-all-metrics = scripts.check_all_metrics:main",
         ]
     },
     classifiers=[

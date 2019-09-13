@@ -9,11 +9,11 @@ import os
 from urllib.request import urlretrieve
 
 import requests
-import zstandard
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version
 from bugbug.models import load_model
+from bugbug.utils import zstd_decompress
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -26,6 +26,8 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 MODEL_CACHE = {}
 
+ALLOW_MISSING_MODELS = bool(int(os.environ.get("BUGBUG_ALLOW_MISSING_MODELS", "0")))
+
 
 def result_key(model_name, bug_id):
     return f"result_{model_name}_{bug_id}"
@@ -37,8 +39,18 @@ def change_time_key(model_name, bug_id):
 
 def get_model(model_name):
     if model_name not in MODEL_CACHE:
-        print("Recreating the model in cache")
-        model = load_model(model_name, MODELS_DIR)
+        print("Recreating the %r model in cache" % model_name)
+        try:
+            model = load_model(model_name, MODELS_DIR)
+        except FileNotFoundError:
+            if ALLOW_MISSING_MODELS:
+                print(
+                    "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
+                    % model_name
+                )
+                return None
+            else:
+                raise
 
         MODEL_CACHE[model_name] = model
         return model
@@ -75,11 +87,8 @@ def retrieve_model(name):
         LOGGER.info(f"Downloading the model from {model_url}")
         urlretrieve(model_url, f"{file_path}.zst")
 
-        dctx = zstandard.ZstdDecompressor()
-        with open(f"{file_path}.zst", "rb") as input_f:
-            with open(file_path, "wb") as output_f:
-                dctx.copy_stream(input_f, output_f)
-                LOGGER.info(f"Written model in {file_path}")
+        zstd_decompress(file_path)
+        LOGGER.info(f"Written model in {file_path}")
 
         with open(f"{file_path}.etag", "w") as f:
             f.write(new_etag)
@@ -116,6 +125,10 @@ def classify_bug(
         return "NOK"
 
     model = get_model(model_name)
+
+    if not model:
+        print("Missing model %r, aborting" % model_name)
+        return "NOK"
 
     model_extra_data = model.get_extra_data()
 

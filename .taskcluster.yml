@@ -25,6 +25,8 @@ tasks:
       $if: 'tasks_for == "github-pull-request"'
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
+
+    taskboot_image: "mozilla/taskboot:0.1.10"
   in:
     $if: 'tasks_for in ["github-pull-request", "github-push"]'
     then:
@@ -43,7 +45,7 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
-               pre-commit run -a" # TODO Be smarter and run only on modified files
+               pre-commit run -a"
         metadata:
           name: bugbug lint
           description: bugbug lint
@@ -87,8 +89,8 @@ tasks:
             - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
-               apt-get -qq install -y python-pip &&
-               python2 -m pip install --quiet mercurial==4.8 &&
+               apt-get -qq install -y python-pip libhdf5-dev &&
+               python2 -m pip install --quiet mercurial==5.1 &&
                git clone --quiet https://github.com/mozilla/version-control-tools.git &&
                git clone --quiet ${repository} &&
                cd bugbug &&
@@ -97,13 +99,42 @@ tasks:
                pip install --quiet -r requirements.txt &&
                pip install --quiet -r extra-nlp-requirements.txt &&
                pip install --quiet -r extra-nn-requirements.txt &&
-               pip install --quiet -r infra/spawn_data_pipeline_requirements.txt &&
+               pip install --quiet -r infra/spawn_pipeline_requirements.txt &&
                pip install --quiet -r test-requirements.txt &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug tests
           description: bugbug tests
+          owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - taskId: {$eval: as_slugid("http_tests_task")}
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: aws-provisioner-v1
+        workerType: github-worker
+        payload:
+          maxRunTime: 3600
+          image: python
+          env:
+            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+          command:
+            - "/bin/bash"
+            - "-lcx"
+            - "apt-get -qq update &&
+               apt-get -qq install -y python-pip &&
+               git clone --quiet ${repository} &&
+               cd bugbug &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               pip install --quiet . &&
+               pip install --quiet -r test-requirements.txt &&
+               pip install --quiet -r http_service/requirements.txt &&
+               pytest --cov=http_service http_service/tests/ -vvv &&
+               bash <(curl -s https://codecov.io/bash)"
+        metadata:
+          name: bugbug http service tests
+          description: bugbug http service tests
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
@@ -120,7 +151,9 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone --quiet ${repository} &&
+            - "apt-get -qq update &&
+               apt-get -qq install -y libhdf5-dev &&
+               git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --quiet -r test-requirements.txt &&
@@ -139,12 +172,12 @@ tasks:
         created: {$fromNow: ''}
         deadline: {$fromNow: '3 hours'}
         provisionerId: aws-provisioner-v1
-        workerType: releng-svc
+        workerType: relman-svc
         payload:
           capabilities:
             privileged: true
           maxRunTime: 10800
-          image: mozilla/taskboot:0.1.9
+          image: "${taskboot_image}"
           env:
             REGISTRY: registry.hub.docker.com
             VERSION:
@@ -179,6 +212,7 @@ tasks:
           dependencies:
             - {$eval: as_slugid("lint_task")}
             - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("http_tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("version_check_task")}
           scopes:
@@ -192,16 +226,14 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: python
+            image: "${taskboot_image}"
             command:
-              - "/bin/bash"
-              - "-lcx"
-              - "git clone --quiet ${repository} &&
-                 cd bugbug &&
-                 git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python setup.py sdist bdist_wheel &&
-                 pip install --quiet twine &&
-                 python infra/pypi.py"
+              - taskboot
+              - deploy-pypi
+            env:
+              TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+              GIT_REPOSITORY: "${repository}"
+              GIT_REVISION: "${head_rev}"
           metadata:
             name: bugbug PyPI release
             description: bugbug PyPI release
@@ -228,7 +260,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.9
+            image: "${taskboot_image}"
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
             command:
@@ -259,7 +291,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.9
+            image: "${taskboot_image}"
             env:
               VERSION: {$eval: 'head_branch[10:]'}
             command:
@@ -294,7 +326,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.9
+            image: "${taskboot_image}"
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -328,7 +360,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.9
+            image: "${taskboot_image}"
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -360,7 +392,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 3600
-            image: mozilla/taskboot:0.1.9
+            image: "${taskboot_image}"
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -373,4 +405,39 @@ tasks:
             name: bugbug update classify patch hook
             description: bugbug update classify patch hook
             owner: mcastelluccio@mozilla.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("integration_test")}
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '1 hour'}
+          provisionerId: aws-provisioner-v1
+          workerType: relman-svc
+          scopes:
+            - secrets:get:project/relman/bugbug/integration
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 10800
+            image: mozilla/bugbug-commit-retrieval:latest
+            env:
+              TC_SECRET_ID: project/relman/bugbug/integration
+            command:
+              - "/bin/bash"
+              - "-lcx"
+              - "git clone --quiet ${repository} &&
+                cd bugbug &&
+                git -c advice.detachedHead=false checkout ${head_rev} &&
+                pip install --quiet . &&
+                pip install --quiet -r test-requirements.txt &&
+                apt-get update &&
+                apt-get install -y redis-server &&
+                python -c 'import os; print(os.environ.keys())' &&
+                bash ./scripts/integration_test.sh || true"
+          metadata:
+            name: bugbug integration test
+            description: bugbug integration test
+            owner: ${user}@users.noreply.github.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
