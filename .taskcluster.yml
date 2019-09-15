@@ -406,3 +406,38 @@ tasks:
             description: bugbug update classify patch hook
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("integration_test")}
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '1 hour'}
+          provisionerId: aws-provisioner-v1
+          workerType: relman-svc
+          scopes:
+            - secrets:get:project/relman/bugbug/integration
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 10800
+            image: mozilla/bugbug-commit-retrieval:latest
+            env:
+              TC_SECRET_ID: project/relman/bugbug/integration
+            command:
+              - "/bin/bash"
+              - "-lcx"
+              - "git clone --quiet ${repository} &&
+                cd bugbug &&
+                git -c advice.detachedHead=false checkout ${head_rev} &&
+                pip install --quiet . &&
+                pip install --quiet -r test-requirements.txt &&
+                apt-get update &&
+                apt-get install -y redis-server &&
+                python -c 'import os; print(os.environ.keys())' &&
+                bash ./scripts/integration_test.sh || true"
+          metadata:
+            name: bugbug integration test
+            description: bugbug integration test
+            owner: ${user}@users.noreply.github.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml

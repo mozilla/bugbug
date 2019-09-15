@@ -237,9 +237,8 @@ class Model:
 
         return important_features
 
-    def print_feature_importances(
-        self, important_features, feature_names, class_probabilities=None
-    ):
+    def print_feature_importances(self, important_features, class_probabilities=None):
+        feature_names = self.get_human_readable_feature_names()
         # extract importance values from the top features for the predicted class
         # when classifying
         if class_probabilities is not None:
@@ -313,7 +312,7 @@ class Model:
 
         return feature_report
 
-    def train(self, importance_cutoff=0.15):
+    def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -325,6 +324,10 @@ class Model:
 
         # Calculate labels.
         y = np.array(y_iter)
+
+        if limit:
+            X = X[:limit]
+            y = y[:limit]
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -391,7 +394,7 @@ class Model:
                 importance_cutoff, shap_values
             )
 
-            self.print_feature_importances(important_features, feature_names)
+            self.print_feature_importances(important_features)
 
             # Save the important features in the metric report too
             feature_report = self.save_feature_importances(
