@@ -27,7 +27,7 @@ class Retriever(object):
             try:
                 download_check_etag(URL, "/data/adr_cache.tar.xz")
                 with tarfile.open("/data/adr_cache.tar.xz", "r:xz") as tar:
-                    tar.extractall()
+                    tar.extractall("/")
                 assert os.path.exists(
                     "/data/adr_cache"
                 ), "Decompressed adr cache exists"
