@@ -11,6 +11,7 @@ from logging import INFO, basicConfig, getLogger
 import dateutil.parser
 import requests
 from dateutil.relativedelta import relativedelta
+from tqdm import tqdm
 
 from bugbug import db, repository
 from bugbug.utils import download_check_etag, zstd_compress
@@ -118,7 +119,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
             saved_nodes = set()
 
             push_num = 0
-            for commit_data in repository.get_commits():
+            for commit_data in tqdm(repository.get_commits()):
                 node = commit_data["node"]
 
                 if node not in push_data:
