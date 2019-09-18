@@ -89,6 +89,8 @@ tasks:
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc
+      dependencies:
+        - commit-retrieval
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -102,11 +104,11 @@ tasks:
              python test_scheduling_history_retriever.py"
 
         artifacts:
-          public/test_scheduling_history.json.zst:
-            path: /data/test_scheduling_history.json.zst
+          public/test_scheduling_history.pickle.zst:
+            path: /builds/worker/data/test_scheduling_history.pickle.zst
             type: file
           public/adr_cache.tar.xz:
-            path: /data/adr_cache.tar.xz
+            path: /builds/worker/data/adr_cache.tar.xz
             type: file
 
         features:
