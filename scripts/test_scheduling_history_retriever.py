@@ -13,7 +13,7 @@ import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import db, repository
+from bugbug import db, repository, test_scheduling
 from bugbug.utils import download_check_etag, zstd_compress
 
 basicConfig(level=INFO)
@@ -29,12 +29,7 @@ JOBS_TO_SKIP = (
     "webrender-",
 )
 
-TEST_SCHEDULING_DB = "data/test_scheduling_history.pickle"
-db.register(
-    TEST_SCHEDULING_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/test_scheduling_history.pickle.zst",
-    1,
-)
+
 URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
 
 
@@ -174,9 +169,9 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
 
-        db.write(TEST_SCHEDULING_DB, generate_data())
+        db.write(test_scheduling.TEST_SCHEDULING_DB, generate_data())
 
-        zstd_compress(TEST_SCHEDULING_DB)
+        zstd_compress(test_scheduling.TEST_SCHEDULING_DB)
 
         with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
             tar.add("data/adr_cache")
