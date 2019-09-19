@@ -27,6 +27,7 @@ JOBS_TO_SKIP = (
     "toolchain-",
     "packages-",
     "webrender-",
+    "diff-artifact-",
 )
 
 
