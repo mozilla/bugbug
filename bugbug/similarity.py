@@ -46,23 +46,6 @@ nlp = spacy.load("en_core_web_sm")
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
-# A map from bug ID to its duplicate IDs
-duplicates = defaultdict(set)
-all_ids = set(
-    bug["id"]
-    for bug in bugzilla.get_bugs()
-    if bug["creator"] not in REPORTERS_TO_IGNORE and "dupeme" not in bug["keywords"]
-)
-
-for bug in bugzilla.get_bugs():
-    dupes = [entry for entry in bug["duplicates"] if entry in all_ids]
-    if bug["dupe_of"] in all_ids:
-        dupes.append(bug["dupe_of"])
-
-    duplicates[bug["id"]].update(dupes)
-    for dupe in dupes:
-        duplicates[dupe].add(bug["id"])
-
 
 class BaseSimilarity(abc.ABC):
     def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
@@ -109,6 +92,24 @@ class BaseSimilarity(abc.ABC):
         return text
 
     def evaluation(self):
+        # A map from bug ID to its duplicate IDs
+        duplicates = defaultdict(set)
+        all_ids = set(
+            bug["id"]
+            for bug in bugzilla.get_bugs()
+            if bug["creator"] not in REPORTERS_TO_IGNORE
+            and "dupeme" not in bug["keywords"]
+        )
+
+        for bug in bugzilla.get_bugs():
+            dupes = [entry for entry in bug["duplicates"] if entry in all_ids]
+            if bug["dupe_of"] in all_ids:
+                dupes.append(bug["dupe_of"])
+
+            duplicates[bug["id"]].update(dupes)
+            for dupe in dupes:
+                duplicates[dupe].add(bug["id"])
+
         total_r = 0
         hits_r = 0
         total_p = 0
