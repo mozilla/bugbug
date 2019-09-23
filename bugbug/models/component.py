@@ -5,9 +5,11 @@
 
 from collections import Counter
 
+import numpy as np
 import xgboost
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.multioutput import MultiOutputClassifier
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
@@ -59,6 +61,7 @@ class ComponentModel(BugModel):
 
         self.cross_validation_enabled = False
         self.calculate_importance = False
+        self.is_multioutput_model = True
 
         feature_extractors = [
             bug_features.has_str(),
@@ -105,8 +108,7 @@ class ComponentModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
-        self.clf.set_params(predictor="cpu_predictor")
+        self.clf = MultiOutputClassifier(xgboost.XGBClassifier(n_jobs=16))
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
@@ -145,12 +147,12 @@ class ComponentModel(BugModel):
 
         classes = {}
         for bug_id, (product, component) in product_components.items():
-            component = self.filter_component(product, component)
+            filtered_component = self.filter_component(product, component)
 
-            if component:
-                classes[bug_id] = component
+            if filtered_component:
+                classes[bug_id] = [product, component, filtered_component]
 
-        component_counts = Counter(classes.values()).most_common()
+        component_counts = Counter([comp[2] for comp in classes.values()]).most_common()
         top_components = set(component for component, count in component_counts)
 
         print(f"{len(top_components)} components")
@@ -181,10 +183,13 @@ class ComponentModel(BugModel):
         classes = {
             bug_id: component
             for bug_id, component in classes.items()
-            if component in top_components
+            if component[2] in top_components
         }
 
-        return classes, set(classes.values())
+        class_names = [
+            set(item) for item in np.array([item for item in classes.values()]).T
+        ]
+        return classes, class_names
 
     def is_meaningful(self, product, component):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]
