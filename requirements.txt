@@ -1,6 +1,6 @@
 imbalanced-learn==0.5.0
 libmozdata==0.1.59
-microannotate==0.0.13
+microannotate==0.0.14
 numpy==1.17.2
 pandas==0.25.1
 pydriller==1.9.2
