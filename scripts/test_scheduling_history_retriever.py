@@ -19,16 +19,7 @@ from bugbug.utils import download_check_etag, zstd_compress
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-JOBS_TO_SKIP = (
-    "build-docker-",
-    "source-test-",
-    "Autophone Throbber",
-    "fetch-",
-    "toolchain-",
-    "packages-",
-    "webrender-",
-    "diff-artifact-",
-)
+JOBS_TO_CONSIDER = ("test-", "build-")
 
 
 URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
@@ -128,7 +119,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
                 commit_push_data = push_data[node]
 
                 for task in commit_push_data[0]:
-                    if any(task.startswith(j) for j in JOBS_TO_SKIP):
+                    if not any(task.startswith(j) for j in JOBS_TO_CONSIDER):
                         continue
 
                     total_failures = get_past_failures(task, push_num)
