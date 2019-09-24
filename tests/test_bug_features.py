@@ -22,7 +22,14 @@ from bugbug.bug_features import (
     has_url,
     has_w3c_url,
     is_coverity_issue,
+    is_first_affected_same,
     is_mozillian,
+    is_same_component,
+    is_same_os,
+    is_same_platform,
+    is_same_product,
+    is_same_target_milestone,
+    is_same_version,
     keywords,
     landings,
     patches,
@@ -154,3 +161,35 @@ def test_comment_count(read):
 
 def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
+
+
+def test_is_same_product(read):
+    read("is_same_product.json", is_same_product, [True, False])
+
+
+def test_is_same_component(read):
+    read("is_same_component.json", is_same_component, [True, False, False, False])
+
+
+def test_is_same_platform(read):
+    read("is_same_platform.json", is_same_platform, [True, False])
+
+
+def test_is_same_version(read):
+    read("is_same_version.json", is_same_version, [True, False])
+
+
+def test_is_same_os(read):
+    read("is_same_os.json", is_same_os, [True, False])
+
+
+def test_is_same_target_milestone(read):
+    read("is_same_target_milestone.json", is_same_target_milestone, [True, False])
+
+
+def test_is_first_affected_same(read):
+    read(
+        "is_first_affected_same.json",
+        is_first_affected_same,
+        [True, False, False, False],
+    )
