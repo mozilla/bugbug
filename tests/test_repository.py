@@ -13,7 +13,7 @@ import pytest
 import responses
 from dateutil.relativedelta import relativedelta
 
-from bugbug import repository
+from bugbug import repository, utils
 
 
 @pytest.fixture
@@ -469,20 +469,20 @@ def test_get_directories():
 
 
 def test_exp_queue():
-    q = repository.exp_queue(0, 4, 0)
+    q = utils.ExpQueue(0, 4, 0)
     q[0] = 1
     assert q[0] == 1
     q[0] = 2
     assert q[0] == 2
 
-    q = repository.exp_queue(366, 91, 0)
+    q = utils.ExpQueue(366, 91, 0)
     assert q[366] == 0
     assert q[276] == 0
     q[366] += 1
     assert q[367] == 1
     assert q[277] == 0
 
-    q = repository.exp_queue(0, 4, 0)
+    q = utils.ExpQueue(0, 4, 0)
     assert q[0] == 0
     q[0] += 1
     assert q[0] == 1
@@ -507,7 +507,7 @@ def test_exp_queue():
     q[15] += 1
     assert q[15] == 9
 
-    q = repository.exp_queue(0, 4, 0)
+    q = utils.ExpQueue(0, 4, 0)
     assert q[0] == 0
     q[0] += 1
     assert q[0] == 1
@@ -520,7 +520,7 @@ def test_exp_queue():
     assert q[7] == 1
     assert q[6] == 1
 
-    q = repository.exp_queue(9, 3, 0)
+    q = utils.ExpQueue(9, 3, 0)
     assert q[8] == 0
     assert q[9] == 0
     q[9] += 1
