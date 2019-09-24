@@ -19,19 +19,12 @@ from bugbug.utils import ExpQueue, download_check_etag, zstd_compress
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-JOBS_TO_SKIP = (
-    "build-docker-",
-    "source-test-",
-    "Autophone Throbber",
-    "fetch-",
-    "toolchain-",
-    "packages-",
-    "webrender-",
-    "diff-artifact-",
-)
+JOBS_TO_CONSIDER = ("test-", "build-")
 
 
 URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
+
+TRAINING_MONTHS = 6
 
 
 class Retriever(object):
@@ -64,8 +57,8 @@ file = {{ driver = "file", path = "{cache_path}" }}
         ):
             db.download(repository.COMMITS_DB, force=True)
 
-        # We'll use the past 3 months only for training the model, but we use 6 months to calculate
-        # the failure statistics.
+        # We'll use the past TRAINING_MONTHS months only for training the model,
+        # but we use 3 months more than that to calculate the failure statistics.
         subprocess.run(
             [
                 "run-adr",
@@ -78,7 +71,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
                 "push_data",
                 "--",
                 "--from",
-                "today-6month",
+                f"today-{TRAINING_MONTHS + 3}month",
                 "--to",
                 "today-2day",
                 "--branch",
@@ -88,7 +81,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
             stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
 
-        HISTORY_DATE_START = datetime.now() - relativedelta(months=3)
+        HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
         with open("push_data.json", "r") as f:
             data = json.load(f)
@@ -124,7 +117,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
                 commit_push_data = push_data[node]
 
                 for task in commit_push_data[0]:
-                    if any(task.startswith(j) for j in JOBS_TO_SKIP):
+                    if not any(task.startswith(j) for j in JOBS_TO_CONSIDER):
                         continue
 
                     total_failures = get_past_failures(task, push_num)
