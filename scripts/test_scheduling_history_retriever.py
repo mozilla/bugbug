@@ -14,7 +14,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import db, repository, test_scheduling
-from bugbug.utils import download_check_etag, zstd_compress
+from bugbug.utils import ExpQueue, download_check_etag, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -97,9 +97,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         def get_past_failures(task, push_num):
             if task not in past_failures:
-                past_failures[task] = repository.exp_queue(
-                    push_num, HISTORICAL_TIMESPAN + 1, 0
-                )
+                past_failures[task] = ExpQueue(push_num, HISTORICAL_TIMESPAN + 1, 0)
 
             return past_failures[task][push_num]
 
