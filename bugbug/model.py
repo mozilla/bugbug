@@ -144,6 +144,8 @@ class Model:
 
         self.calculate_importance = True
 
+        self.store_dataset = False
+
     @property
     def le(self):
         """Classifier agnostic getter for the label encoder property"""
@@ -490,6 +492,9 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+        if self.store_dataset:
+            joblib.dump(X, f"{self.__class__.__name__.lower()}_data_X")
+            joblib.dump(y, f"{self.__class__.__name__.lower()}_data_y")
 
         return tracking_metrics
 
