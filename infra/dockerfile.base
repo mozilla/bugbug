@@ -9,5 +9,6 @@ RUN apt-get update && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
 
-
+COPY . /tmp/bugbug
+RUN rm -rf /tmp/bugbug
 RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
