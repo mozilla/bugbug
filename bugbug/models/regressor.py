@@ -21,6 +21,7 @@ class RegressorModel(CommitModel):
     def __init__(self, lemmatization=False, interpretable=False):
         CommitModel.__init__(self, lemmatization)
 
+        self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
