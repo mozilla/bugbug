@@ -25,7 +25,7 @@ from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-from bugbug.utils import split_tuple_iterator
+from bugbug.utils import split_tuple_iterator, to_array
 
 
 def classification_report_imbalanced_values(
@@ -501,7 +501,12 @@ class Model:
         return classes
 
     def classify(
-        self, items, probabilities=False, importances=False, importance_cutoff=0.15
+        self,
+        items,
+        probabilities=False,
+        importances=False,
+        importance_cutoff=0.15,
+        background_dataset=None,
     ):
         assert items is not None
         assert (
@@ -522,8 +527,15 @@ class Model:
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
-            explainer = shap.TreeExplainer(self.clf)
-            shap_values = explainer.shap_values(X)
+            if background_dataset is None:
+                explainer = shap.TreeExplainer(self.clf)
+            else:
+                explainer = shap.TreeExplainer(
+                    self.clf,
+                    to_array(background_dataset),
+                    feature_dependence="independent",
+                )
+            shap_values = explainer.shap_values(to_array(X))
 
             important_features = self.get_important_features(
                 importance_cutoff, shap_values

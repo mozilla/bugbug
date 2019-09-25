@@ -12,6 +12,7 @@ from collections import deque
 import dateutil.parser
 import numpy as np
 import requests
+import scipy
 import taskcluster
 import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -34,6 +35,13 @@ def split_tuple_iterator(iterable):
 
 def numpy_to_dict(array):
     return {name: array[name].squeeze(axis=1) for name in array.dtype.names}
+
+
+def to_array(val):
+    if isinstance(val, scipy.sparse.csr_matrix):
+        return val.toarray()
+
+    return val
 
 
 class StructuredColumnTransformer(ColumnTransformer):
