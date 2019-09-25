@@ -25,7 +25,7 @@ from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-from bugbug.utils import split_tuple_iterator
+from bugbug.utils import split_tuple_iterator, to_array
 
 
 def classification_report_imbalanced_values(
@@ -143,6 +143,8 @@ class Model:
         self.sampler = None
 
         self.calculate_importance = True
+
+        self.store_dataset = False
 
     @property
     def le(self):
@@ -372,6 +374,8 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
+        print("Model trained")
+
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
@@ -488,6 +492,9 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+        if self.store_dataset:
+            joblib.dump(X, f"{self.__class__.__name__.lower()}_data_X")
+            joblib.dump(y, f"{self.__class__.__name__.lower()}_data_y")
 
         return tracking_metrics
 
@@ -499,7 +506,12 @@ class Model:
         return classes
 
     def classify(
-        self, items, probabilities=False, importances=False, importance_cutoff=0.15
+        self,
+        items,
+        probabilities=False,
+        importances=False,
+        importance_cutoff=0.15,
+        background_dataset=None,
     ):
         assert items is not None
         assert (
@@ -520,8 +532,15 @@ class Model:
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
-            explainer = shap.TreeExplainer(self.clf)
-            shap_values = explainer.shap_values(X)
+            if background_dataset is None:
+                explainer = shap.TreeExplainer(self.clf)
+            else:
+                explainer = shap.TreeExplainer(
+                    self.clf,
+                    to_array(background_dataset),
+                    feature_dependence="independent",
+                )
+            shap_values = explainer.shap_values(to_array(X))
 
             important_features = self.get_important_features(
                 importance_cutoff, shap_values

@@ -18,9 +18,10 @@ from bugbug.model import CommitModel
 
 
 class RegressorModel(CommitModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, interpretable=False):
         CommitModel.__init__(self, lemmatization)
 
+        self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
@@ -50,6 +51,13 @@ class RegressorModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
+        column_transformers = [("data", DictVectorizer(), "data")]
+
+        if not interpretable:
+            column_transformers.append(
+                ("desc", self.text_vectorizer(min_df=0.0001), "desc")
+            )
+
         self.extraction_pipeline = Pipeline(
             [
                 (
@@ -58,15 +66,7 @@ class RegressorModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
-                (
-                    "union",
-                    ColumnTransformer(
-                        [
-                            ("data", DictVectorizer(), "data"),
-                            ("desc", self.text_vectorizer(min_df=0.0001), "desc"),
-                        ]
-                    ),
-                ),
+                ("union", ColumnTransformer(column_transformers)),
             ]
         )
 

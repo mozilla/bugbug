@@ -78,6 +78,12 @@ class Trainer(object):
 
         logger.info(f"Model compressed")
 
+        if model_obj.store_dataset:
+            assert os.path.exists(f"{model_file_name}_data_X")
+            zstd_compress(f"{model_file_name}_data_X")
+            assert os.path.exists(f"{model_file_name}_data_y")
+            zstd_compress(f"{model_file_name}_data_y")
+
 
 def parse_args(args):
     description = "Train the models"

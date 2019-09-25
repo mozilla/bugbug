@@ -328,6 +328,14 @@ tasks:
             expires: {$fromNow: '1 month'}
             path: /regressormodel.zst
             type: file
+          public/regressormodel_data_X.zst:
+            expires: {$fromNow: '1 month'}
+            path: /regressormodel_data_X.zst
+            type: file
+          public/regressormodel_data_y.zst:
+            expires: {$fromNow: '1 month'}
+            path: /regressormodel_data_y.zst
+            type: file
           public/metrics.json:
             expires: {$fromNow: '1 year'}
             path: /metrics.json
