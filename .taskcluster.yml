@@ -437,7 +437,7 @@ tasks:
                 apt-get update &&
                 apt-get install -y redis-server &&
                 python -c 'import os; print(os.environ.keys())' &&
-                bash ./scripts/integration_test.sh || true"
+                bash ./scripts/integration_test.sh"
           metadata:
             name: bugbug integration test
             description: bugbug integration test

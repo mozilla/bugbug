@@ -8,9 +8,10 @@ set -euox pipefail
 
 cd http_service/models/;
 
-# Remove the models
+# Remove the models and any old data
 rm defectenhancementtaskmodel* || true;
 rm backout* || true;
+rm -Rf data || true;
 
 # First retrieve a subset of bugs data
 # TODO: Let the script download the previous DB as it should be pretty fast?
