@@ -8,11 +8,13 @@ from logging import INFO, basicConfig, getLogger
 
 import hglib
 import joblib
+import numpy as np
 from libmozdata.phabricator import PhabricatorAPI
+from scipy.stats import spearmanr
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
-from bugbug.utils import download_check_etag, get_secret, zstd_decompress
+from bugbug.utils import download_check_etag, get_secret, to_array, zstd_decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -47,12 +49,8 @@ class CommitClassifier(object):
             ), "Decompressed y dataset exists"
 
         self.model = RegressorModel.load("regressormodel")
-        # We use "clean" commits as the background dataset for feature importance.
-        # This way, we can see the features which are most important in differentiating
-        # the current commit from the "clean" commits.
-        X = joblib.load("regressormodel_data_X")
-        y = joblib.load("regressormodel_data_y")
-        self.background_dataset = X[y == 0]
+        self.X = to_array(joblib.load("regressormodel_data_X"))
+        self.y = to_array(joblib.load("regressormodel_data_y"))
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)
@@ -148,23 +146,85 @@ class CommitClassifier(object):
                 self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
+        # We use "clean" commits as the background dataset for feature importance.
+        # This way, we can see the features which are most important in differentiating
+        # the current commit from the "clean" commits.
+        background_dataset = self.X[self.y == 0]
+
         probs, importance = self.model.classify(
             commits[-1],
             probabilities=True,
             importances=True,
-            background_dataset=self.background_dataset,
+            background_dataset=background_dataset,
+            importance_cutoff=0.1,
         )
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
             importance["importances"]["classes"][1][0]
         ):
+            value = importance["importances"]["values"][0, int(feature_index)]
+
+            X = self.X[:, int(feature_index)]
+            spearman = spearmanr(X, self.y)
+
+            buggy_X = X[self.y == 1]
+            clean_X = X[self.y == 0]
+            median = np.median(X)
+            median_clean = np.median(clean_X)
+            median_buggy = np.median(buggy_X)
+
+            perc_buggy_values_higher_than_median = (
+                buggy_X > median
+            ).sum() / buggy_X.shape[0]
+            perc_buggy_values_lower_than_median = (
+                buggy_X < median
+            ).sum() / buggy_X.shape[0]
+            perc_clean_values_higher_than_median = (
+                clean_X > median
+            ).sum() / clean_X.shape[0]
+            perc_clean_values_lower_than_median = (
+                clean_X < median
+            ).sum() / clean_X.shape[0]
+
+            logger.info("Feature: {}".format(importance["feature_legend"][str(i + 1)]))
+            logger.info("Shap value: {}{}".format("+" if (is_positive) else "-", val))
+            logger.info(f"spearman:  {spearman}")
+            logger.info(f"value: {value}")
+            logger.info(f"overall mean: {np.mean(X)}")
+            logger.info(f"overall median: {np.median(X)}")
+            logger.info(f"mean for y == 0: {np.mean(clean_X)}")
+            logger.info(f"mean for y == 1: {np.mean(buggy_X)}")
+            logger.info(f"median for y == 0: {np.median(clean_X)}")
+            logger.info(f"median for y == 1: {np.median(buggy_X)}")
+            logger.info(
+                f"perc_buggy_values_higher_than_median: {perc_buggy_values_higher_than_median}"
+            )
+            logger.info(
+                f"perc_buggy_values_lower_than_median: {perc_buggy_values_lower_than_median}"
+            )
+            logger.info(
+                f"perc_clean_values_higher_than_median: {perc_clean_values_higher_than_median}"
+            )
+            logger.info(
+                f"perc_clean_values_lower_than_median: {perc_clean_values_lower_than_median}"
+            )
+
             features.append(
-                [
-                    i + 1,
-                    importance["feature_legend"][str(i + 1)],
-                    f'{"+" if (is_positive) else "-"}{val}',
-                ]
+                {
+                    "index": i + 1,
+                    "name": importance["feature_legend"][str(i + 1)],
+                    "shap": f'{"+" if (is_positive) else "-"}{val}',
+                    "value": importance["importances"]["values"][0, int(feature_index)],
+                    "spearman": spearman,
+                    "median": median,
+                    "median_bug_introducing": median_buggy,
+                    "median_clean": median_clean,
+                    "perc_buggy_values_higher_than_median": perc_buggy_values_higher_than_median,
+                    "perc_buggy_values_lower_than_median": perc_buggy_values_lower_than_median,
+                    "perc_clean_values_higher_than_median": perc_clean_values_higher_than_median,
+                    "perc_clean_values_lower_than_median": perc_clean_values_lower_than_median,
+                }
             )
 
         with open("probs.json", "w") as f:
