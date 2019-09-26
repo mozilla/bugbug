@@ -25,7 +25,6 @@ logging.basicConfig(level=logging.INFO)
 # By default, if the latest metric point is 5% lower than the previous one, show a warning and exit
 # with 1.
 ABSOLUTE_THRESHOLD = 0.1
-LOCAL_MIN_MAX_ORDER = 2
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
 
