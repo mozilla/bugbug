@@ -45,7 +45,7 @@ redis_pid=$!
 sleep 1
 
 # Uncomment following line to clean up the redis-server
-redis-cli -u $REDIS_URL FLUSHDB
+redis-cli -n 4 FLUSHDB
 
 # Start the http server
 gunicorn -b 127.0.0.1:8000 http_service.app --preload --timeout 30 -w 3 &
