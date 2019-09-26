@@ -215,6 +215,7 @@ tasks:
             - {$eval: as_slugid("http_tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("version_check_task")}
+            - {$eval: as_slugid("integration_test")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
           created: {$fromNow: ''}
@@ -248,6 +249,7 @@ tasks:
             - {$eval: as_slugid("version_check_task")}
             - {$eval: as_slugid("tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
+            - {$eval: as_slugid("integration_test")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
           taskId: {$eval: as_slugid("docker_push")}
