@@ -111,14 +111,25 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
 
 
 def add_local_min_max_columns(df):
-    df["min"] = df.iloc[
-        argrelextrema(df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER)[0]
+    # Ignore first and last point for local min/max
+    sliced_df = df[1:-1]
+
+    sliced_df["min"] = sliced_df.iloc[
+        argrelextrema(
+            sliced_df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
+        )[0]
     ]["value"]
-    df["max"] = df.iloc[
-        argrelextrema(df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER)[
-            0
-        ]
+    sliced_df["max"] = sliced_df.iloc[
+        argrelextrema(
+            sliced_df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
+        )[0]
     ]["value"]
+
+    # Inject back min and max columns
+    df.insert(1, "min", sliced_df["min"])
+    df.insert(1, "max", sliced_df["max"])
+
+    return df
 
 
 def analyze_metrics(
@@ -168,17 +179,16 @@ def analyze_metrics(
 
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
+            mean_df = df.rolling("31d").mean()
 
-            add_local_min_max_columns(df)
+            df = add_local_min_max_columns(df)
 
             # Smooth the dataframe with rolling mean
 
             # The data-pipeline is scheduled to run every two weeks
-            mean_df = df.rolling("31d").mean()
+            mean_df = add_local_min_max_columns(mean_df)
 
-            add_local_min_max_columns(mean_df)
-
-            if numpy.isnan(mean_df.iloc[-1]["min"]):
+            if numpy.isnan(mean_df.iloc[-2]["min"]):
                 LOGGER.info(
                     "Metric %r for model %s seems to be increasing",
                     metric_name,
