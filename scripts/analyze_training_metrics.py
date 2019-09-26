@@ -200,7 +200,7 @@ def analyze_metrics(
                         features = set()
 
                     previous_only = previous.difference(features)
-                    current_only = features.difference(features)
+                    current_only = features.difference(previous)
                     common = previous.intersection(features)
 
                     LOGGER.warning("Feature only present at %s:", previous_date)
