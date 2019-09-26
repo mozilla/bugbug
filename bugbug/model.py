@@ -25,7 +25,7 @@ from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-from bugbug.utils import split_tuple_iterator
+from bugbug.utils import split_tuple_iterator, to_array
 
 
 def classification_report_imbalanced_values(
@@ -144,6 +144,8 @@ class Model:
 
         self.calculate_importance = True
 
+        self.store_dataset = False
+
     @property
     def le(self):
         """Classifier agnostic getter for the label encoder property"""
@@ -237,9 +239,8 @@ class Model:
 
         return important_features
 
-    def print_feature_importances(
-        self, important_features, feature_names, class_probabilities=None
-    ):
+    def print_feature_importances(self, important_features, class_probabilities=None):
+        feature_names = self.get_human_readable_feature_names()
         # extract importance values from the top features for the predicted class
         # when classifying
         if class_probabilities is not None:
@@ -313,7 +314,7 @@ class Model:
 
         return feature_report
 
-    def train(self, importance_cutoff=0.15):
+    def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -325,6 +326,10 @@ class Model:
 
         # Calculate labels.
         y = np.array(y_iter)
+
+        if limit:
+            X = X[:limit]
+            y = y[:limit]
 
         print(f"X: {X.shape}, y: {y.shape}")
 
@@ -369,6 +374,8 @@ class Model:
 
         self.clf.fit(X_train, y_train)
 
+        print("Model trained")
+
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
             explainer = shap.TreeExplainer(self.clf)
@@ -391,7 +398,7 @@ class Model:
                 importance_cutoff, shap_values
             )
 
-            self.print_feature_importances(important_features, feature_names)
+            self.print_feature_importances(important_features)
 
             # Save the important features in the metric report too
             feature_report = self.save_feature_importances(
@@ -485,6 +492,9 @@ class Model:
             )
 
         joblib.dump(self, self.__class__.__name__.lower())
+        if self.store_dataset:
+            joblib.dump(X, f"{self.__class__.__name__.lower()}_data_X")
+            joblib.dump(y, f"{self.__class__.__name__.lower()}_data_y")
 
         return tracking_metrics
 
@@ -496,7 +506,12 @@ class Model:
         return classes
 
     def classify(
-        self, items, probabilities=False, importances=False, importance_cutoff=0.15
+        self,
+        items,
+        probabilities=False,
+        importances=False,
+        importance_cutoff=0.15,
+        background_dataset=None,
     ):
         assert items is not None
         assert (
@@ -517,8 +532,15 @@ class Model:
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
-            explainer = shap.TreeExplainer(self.clf)
-            shap_values = explainer.shap_values(X)
+            if background_dataset is None:
+                explainer = shap.TreeExplainer(self.clf)
+            else:
+                explainer = shap.TreeExplainer(
+                    self.clf,
+                    to_array(background_dataset),
+                    feature_dependence="independent",
+                )
+            shap_values = explainer.shap_values(to_array(X))
 
             important_features = self.get_important_features(
                 importance_cutoff, shap_values

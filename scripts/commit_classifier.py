@@ -7,6 +7,7 @@ import os
 from logging import INFO, basicConfig, getLogger
 
 import hglib
+import joblib
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, repository
@@ -29,9 +30,29 @@ class CommitClassifier(object):
         if not os.path.exists("regressormodel"):
             download_check_etag(URL, "regressormodel.zst")
             zstd_decompress("regressormodel")
-            assert os.path.exists("regressormodel"), "Decompressed file exists"
+            assert os.path.exists("regressormodel"), "Decompressed model exists"
+
+        if not os.path.exists("regressormodel_data_X"):
+            download_check_etag(URL, "regressormodel_data_X.zst")
+            zstd_decompress("regressormodel_data_X")
+            assert os.path.exists(
+                "regressormodel_data_X"
+            ), "Decompressed X dataset exists"
+
+        if not os.path.exists("regressormodel_data_y"):
+            download_check_etag(URL, "regressormodel_data_y.zst")
+            zstd_decompress("regressormodel_data_y")
+            assert os.path.exists(
+                "regressormodel_data_y"
+            ), "Decompressed y dataset exists"
 
         self.model = RegressorModel.load("regressormodel")
+        # We use "clean" commits as the background dataset for feature importance.
+        # This way, we can see the features which are most important in differentiating
+        # the current commit from the "clean" commits.
+        X = joblib.load("regressormodel_data_X")
+        y = joblib.load("regressormodel_data_y")
+        self.background_dataset = X[y == 0]
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)
@@ -128,7 +149,10 @@ class CommitClassifier(object):
             )
 
         probs, importance = self.model.classify(
-            commits[-1], probabilities=True, importances=True
+            commits[-1],
+            probabilities=True,
+            importances=True,
+            background_dataset=self.background_dataset,
         )
 
         features = []

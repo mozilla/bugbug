@@ -51,13 +51,19 @@ class Trainer(object):
             or isinstance(model_obj, model.BugCoupleModel)
             or (hasattr(model_obj, "bug_data") and model_obj.bug_data)
         ):
-            db.download(bugzilla.BUGS_DB)
+            if args.download_db:
+                db.download(bugzilla.BUGS_DB)
+            else:
+                logger.info("Skipping download of the bug database")
 
         if isinstance(model_obj, model.CommitModel):
-            db.download(repository.COMMITS_DB)
+            if args.download_db:
+                db.download(repository.COMMITS_DB)
+            else:
+                logger.info("Skipping download of the commit database")
 
         logger.info(f"Training *{model_name}* model")
-        metrics = model_obj.train()
+        metrics = model_obj.train(limit=args.limit)
 
         # Save the metrics as a file that can be uploaded as an artifact.
         metric_file_path = "metrics.json"
@@ -72,12 +78,29 @@ class Trainer(object):
 
         logger.info(f"Model compressed")
 
+        if model_obj.store_dataset:
+            assert os.path.exists(f"{model_file_name}_data_X")
+            zstd_compress(f"{model_file_name}_data_X")
+            assert os.path.exists(f"{model_file_name}_data_y")
+            zstd_compress(f"{model_file_name}_data_y")
+
 
 def parse_args(args):
     description = "Train the models"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("model", help="Which model to train.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Only train on a subset of the data, used mainly for integrations tests",
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_false",
+        dest="download_db",
+        help="Do not download databases, uses whatever is on disk",
+    )
     parser.add_argument(
         "--lemmatization",
         help="Perform lemmatization (using spaCy)",

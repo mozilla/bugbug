@@ -371,6 +371,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
                 1500185,
                 1510849,
                 1531130,
+                1578734,
             )
         )  # https://bugzilla.mozilla.org/show_bug.cgi?id=1556319
         or (field == "whiteboard" and bug_id in (1385923, 1340867))
@@ -382,7 +383,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
         or (field in ("platform", "op_sys") and bug_id == 568516)
         or (
             field == "target_milestone"
-            and bug_id in {19462, 106327, 107264, 144795, 306730}
+            and bug_id in {11050, 19462, 106327, 107264, 144795, 306730}
         )
         or is_email(
             new_value
@@ -478,8 +479,12 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
                 1416728,
             )
         )
-        or (flag == "webcompat+" and obj_id in (1294490, 1443958, 1455894, 1456313))
+        or (
+            flag == "webcompat+"
+            and obj_id in (1294490, 1443958, 1455894, 1456313, 1489308)
+        )
         or (flag == "webcompat-" and obj_id == 1419848)
+        or (flag == "qe-verify+" and obj_id in {1567624, 1572197})
         or (
             flag == "qe-verify-"
             and obj_id
@@ -509,6 +514,7 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
                 "blocking1.9.0.3?",
                 "blocking1.9.0.10+",
                 "wanted-firefox3.1?",
+                "approval1.7.x+",
                 "approval1.9.0.10+",
             ]
         )  # These flags have been removed.
@@ -677,7 +683,13 @@ def rollback(bug, when=None, do_assert=False):
                                     )
                                 )
                             ):
-                                if found_flag is not None and not is_question_flag:
+                                if (
+                                    found_flag is not None
+                                    and not is_expected_inconsistent_change_flag(
+                                        to_remove, obj["id"]
+                                    )
+                                    and not is_question_flag
+                                ):
                                     flag_text = "{}{}".format(f["name"], f["status"])
                                     if "requestee" in f:
                                         flag_text = "{}{}".format(

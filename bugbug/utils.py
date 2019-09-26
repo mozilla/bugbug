@@ -7,10 +7,12 @@ import collections
 import json
 import os
 import time
+from collections import deque
 
 import dateutil.parser
 import numpy as np
 import requests
+import scipy
 import taskcluster
 import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -33,6 +35,13 @@ def split_tuple_iterator(iterable):
 
 def numpy_to_dict(array):
     return {name: array[name].squeeze(axis=1) for name in array.dtype.names}
+
+
+def to_array(val):
+    if isinstance(val, scipy.sparse.csr_matrix):
+        return val.toarray()
+
+    return val
 
 
 class StructuredColumnTransformer(ColumnTransformer):
@@ -184,3 +193,56 @@ class CustomJsonEncoder(json.JSONEncoder):
             pass
 
         return super().default(self, obj)
+
+
+class ExpQueue:
+    def __init__(self, start_day, maxlen, default):
+        self.list = deque([default] * maxlen, maxlen=maxlen)
+        self.start_day = start_day - (maxlen - 1)
+        self.default = default
+
+    def __deepcopy__(self, memo):
+        result = ExpQueue.__new__(ExpQueue)
+
+        # We don't need to deepcopy the list, as elements in the list are immutable.
+        result.list = self.list.copy()
+        result.start_day = self.start_day
+        result.default = self.default
+
+        return result
+
+    @property
+    def last_day(self):
+        return self.start_day + (self.list.maxlen - 1)
+
+    def __getitem__(self, day):
+        assert (
+            day >= self.start_day
+        ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
+
+        if day < 0:
+            return self.default
+
+        if day > self.last_day:
+            return self.list[-1]
+
+        return self.list[day - self.start_day]
+
+    def __setitem__(self, day, value):
+        if day == self.last_day:
+            self.list[day - self.start_day] = value
+        elif day > self.last_day:
+            last_val = self.list[-1]
+            # We need to extend the list except for 2 elements (the last, which
+            # is going to be the same, and the one we are adding now).
+            range_end = min(day - self.last_day, self.list.maxlen) - 2
+            if range_end > 0:
+                self.list.extend(last_val for _ in range(range_end))
+
+            self.start_day = day - (self.list.maxlen - 1)
+
+            self.list.append(value)
+        else:
+            assert False, "Can't insert in the past"
+
+        assert day == self.last_day

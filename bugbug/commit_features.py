@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+import sys
 from collections import defaultdict
 
 import pandas as pd
@@ -268,18 +269,18 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
                 if isinstance(res, dict):
                     for key, value in res.items():
-                        data[f"{feature_extractor_name} ({key})"] = value
+                        data[sys.intern(f"{feature_extractor_name} ({key})")] = value
                     continue
 
                 if isinstance(res, list):
                     for item in res:
-                        data[f"{item} in {feature_extractor_name}"] = "True"
+                        data[sys.intern(f"{item} in {feature_extractor_name}")] = "True"
                     continue
 
                 if isinstance(res, bool):
                     res = str(res)
 
-                data[feature_extractor_name] = res
+                data[sys.intern(feature_extractor_name)] = res
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
 
