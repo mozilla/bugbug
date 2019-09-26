@@ -16,9 +16,7 @@ from typing import Any, Dict, Tuple
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-import numpy
 from pandas import DataFrame
-from scipy.signal import argrelextrema
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 
 # By default, if the latest metric point is 5% lower than the previous one, show a warning and exit
 # with 1.
-WARNING_THRESHOLD = 0.95
+ABSOLUTE_THRESHOLD = 0.1
 LOCAL_MIN_MAX_ORDER = 2
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
@@ -43,9 +41,6 @@ def plot_graph(
 ) -> None:
     figure = plt.figure()
     axes = df.plot(y="value")
-    axes.scatter(df.index, df["min"], c="r")
-    axes.scatter(df.index, df["max"], c="g")
-    # axes = plt.axes()
 
     # Formatting of the figure
     figure.autofmt_xdate()
@@ -110,33 +105,8 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
     return (date, model_name, metric)
 
 
-def add_local_min_max_columns(df):
-    # Ignore first and last point for local min/max
-    sliced_df = df[1:-1]
-
-    sliced_df["min"] = sliced_df.iloc[
-        argrelextrema(
-            sliced_df.value.values, numpy.less_equal, order=LOCAL_MIN_MAX_ORDER
-        )[0]
-    ]["value"]
-    sliced_df["max"] = sliced_df.iloc[
-        argrelextrema(
-            sliced_df.value.values, numpy.greater_equal, order=LOCAL_MIN_MAX_ORDER
-        )[0]
-    ]["value"]
-
-    # Inject back min and max columns
-    df.insert(1, "min", sliced_df["min"])
-    df.insert(1, "max", sliced_df["max"])
-
-    return df
-
-
 def analyze_metrics(
-    metrics_directory: str,
-    output_directory: str,
-    warning_threshold: float,
-    debug_regression: bool = False,
+    metrics_directory: str, output_directory: str, absolute_threshold: float
 ):
     root = Path(metrics_directory)
 
@@ -179,71 +149,31 @@ def analyze_metrics(
 
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
-            mean_df = df.rolling("31d").mean()
-
-            df = add_local_min_max_columns(df)
-
-            # Smooth the dataframe with rolling mean
-
-            # The data-pipeline is scheduled to run every two weeks
-            mean_df = add_local_min_max_columns(mean_df)
-
-            if numpy.isnan(mean_df.iloc[-2]["min"]):
-                LOGGER.info(
-                    "Metric %r for model %s seems to be increasing",
-                    metric_name,
-                    model_name,
-                )
-            else:
-                LOGGER.warning(
-                    "Metric %r for model %s seems to be decreasing",
-                    metric_name,
-                    model_name,
-                )
 
             # Compute the threshold for the metric
-            if len(df.value) >= 2:
-                before_last_value = df.value[-2]
-            else:
-                before_last_value = df.value[-1]
-            metric_threshold = before_last_value * warning_threshold
+            max_value = max(df["value"])
+            metric_threshold = max_value - ABSOLUTE_THRESHOLD
 
             threshold_crossed = df.value[-1] < metric_threshold
 
-            diff = (1 - warning_threshold) * 100
-
             if threshold_crossed:
                 LOGGER.warning(
-                    "Last metric %r for model %s is at least %f%% worse than the previous one",
+                    "Last metric %r for model %s is at least %f%% less than the max",
                     metric_name,
                     model_name,
-                    diff,
+                    ABSOLUTE_THRESHOLD,
                 )
 
                 threshold_ever_crossed = threshold_ever_crossed or threshold_crossed
 
             # Plot the non-smoothed graph
             title = f"{model_name} {metric_name}"
-            file_path = f"{model_name}_{metric_name}_before_smoothing.svg"
+            file_path = f"{model_name}_{metric_name}.svg"
 
             plot_graph(
                 model_name,
                 metric_name,
                 df,
-                title,
-                Path(output_directory),
-                file_path,
-                metric_threshold,
-            )
-
-            # Plot the smoothed graph
-            title = f"Smoothed {model_name} {metric_name}"
-            file_path = f"{model_name}_{metric_name}_after_smoothing.svg"
-
-            plot_graph(
-                model_name,
-                metric_name,
-                mean_df,
                 title,
                 Path(output_directory),
                 file_path,
@@ -268,24 +198,16 @@ def main():
         help="In which directory the script will save the generated graphs",
     )
     parser.add_argument(
-        "--warning_threshold",
-        default=WARNING_THRESHOLD,
+        "--absolute_threshold",
+        default=ABSOLUTE_THRESHOLD,
         type=float,
-        help="If the last metric value is below the previous one*warning_threshold, fails. Default to 0.95",
-    )
-    parser.add_argument(
-        "--debug-negative-slope",
-        action="store_true",
-        help="Should we display the linear regression detecting the global trend for debugging purposes",
+        help="If the last metric value is below the max value - absolute_threshod, fails. Default to 0.1",
     )
 
     args = parser.parse_args()
 
     analyze_metrics(
-        args.metrics_directory,
-        args.output_directory,
-        args.warning_threshold,
-        args.debug_negative_slope,
+        args.metrics_directory, args.output_directory, args.absolute_threshold
     )
 
 
