@@ -8,11 +8,12 @@
 import argparse
 import json
 import logging
+import pprint
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -96,8 +97,9 @@ def analyze_metrics(
     metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
         lambda: defaultdict(dict)
     )
+    all_features_report: Dict[str, Dict[datetime, Optional[set]]] = defaultdict(dict)
 
-    threshold_ever_crossed = False
+    clean = True
 
     for metric_file_path in root.glob("metric*.json"):
 
@@ -139,6 +141,15 @@ def analyze_metrics(
             metrics[model_name][f"{key}_mean"][date] = value["mean"]
             metrics[model_name][f"{key}_std"][date] = value["std"]
 
+        feature_report = metric.get("feature_report")
+        if not feature_report:
+            all_features_report[model_name][date] = None
+        else:
+            all_features_report[model_name][date] = set(
+                feature_report["average"].keys()
+            )
+
+    # Check training metrics trend
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
             threshold_crossed = plot_graph(
@@ -159,9 +170,52 @@ def analyze_metrics(
                     diff,
                 )
 
-                threshold_ever_crossed = threshold_ever_crossed or threshold_crossed
+                clean = False
 
-    if threshold_ever_crossed:
+    # Check feature reports on models who have them
+    for model_name in metrics:
+        model_feature_report = all_features_report[model_name]
+        if not any(model_feature_report.values()):
+            # The model doesn't have any feature report, skip it
+            continue
+
+        previous = None
+        previous_date = None
+
+        features: Optional[set]
+        for report_date, features in sorted(model_feature_report.items()):
+            if previous is not None:
+                if previous != features:
+                    clean = False
+                    LOGGER.warning(
+                        "Feature for model %r changed between %s and %s",
+                        model_name,
+                        previous_date,
+                        report_date,
+                    )
+
+                    # Could happens if the feature toggle is turned off or in
+                    # case of a bug
+                    if features is None:
+                        features = set()
+
+                    previous_only = previous.difference(features)
+                    current_only = features.difference(features)
+                    common = previous.intersection(features)
+
+                    LOGGER.warning("Feature only present at %s:", previous_date)
+                    pprint.pprint(previous_only, sys.stderr)
+
+                    LOGGER.warning("Feature only present at %s:", report_date)
+                    pprint.pprint(current_only, sys.stderr)
+
+                    LOGGER.warning("Present in both:")
+                    pprint.pprint(common, sys.stderr)
+
+            previous_date = report_date
+            previous = features
+
+    if not clean:
         sys.exit(1)
 
 
