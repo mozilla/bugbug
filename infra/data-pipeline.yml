@@ -652,9 +652,9 @@ tasks:
         command:
           - "/bin/bash"
           - "-lcx"
-          - "git clone --quiet ${repository} &&
+          - "git clone --quiet https://github.com/mozilla/bugbug &&
             cd bugbug &&
-            git -c advice.detachedHead=false checkout ${head_rev} &&
+            git checkout ${version} &&
             pip install --quiet . &&
             pip install --quiet -r test-requirements.txt &&
             apt-get update &&
