@@ -1,4 +1,4 @@
-gensim==3.8.0
+gensim==3.8.1
 nltk==3.4.5
 pyemd==0.5.1
 spacy==2.1.8
