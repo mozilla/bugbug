@@ -409,7 +409,7 @@ tasks:
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+      - $if: 'tasks_for == "github-push"'
         then:
           taskId: {$eval: as_slugid("integration_test")}
           created: {$fromNow: ''}
