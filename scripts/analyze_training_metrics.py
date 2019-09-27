@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.INFO)
 
 # By default, if the latest metric point is 5% lower than the previous one, show a warning and exit
 # with 1.
+RELATIVE_THRESHOLD = 0.95
 ABSOLUTE_THRESHOLD = 0.1
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
@@ -105,7 +106,10 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
 
 
 def analyze_metrics(
-    metrics_directory: str, output_directory: str, absolute_threshold: float
+    metrics_directory: str,
+    output_directory: str,
+    relative_threshold: float,
+    absolute_threshold: float,
 ):
     root = Path(metrics_directory)
 
@@ -113,7 +117,7 @@ def analyze_metrics(
         lambda: defaultdict(dict)
     )
 
-    threshold_ever_crossed = False
+    clean = True
 
     # First process the metrics JSON files
     for metric_file_path in root.glob("metric*.json"):
@@ -149,7 +153,7 @@ def analyze_metrics(
             df = DataFrame.from_dict(values, orient="index", columns=["value"])
             df = df.sort_index()
 
-            # Compute the threshold for the metric
+            # Compute the absolute threshold for the metric
             max_value = max(df["value"])
             metric_threshold = max_value - absolute_threshold
 
@@ -163,7 +167,26 @@ def analyze_metrics(
                     ABSOLUTE_THRESHOLD,
                 )
 
-                threshold_ever_crossed = threshold_ever_crossed or threshold_crossed
+                clean = False
+
+            # Compute the relative threshold for the metric
+            if len(df["value"]) >= 2:
+                before_last_value = df["value"][-2]
+            else:
+                before_last_value = df["value"][-1]
+            relative_metric_threshold = before_last_value * relative_threshold
+            relative_threshold_crossed = df.value[-1] < relative_metric_threshold
+
+            if relative_threshold_crossed:
+                diff = (1 - relative_threshold) * 100
+                LOGGER.warning(
+                    "Last metric %r for model %s is %f%% worse than the previous one",
+                    metric_name,
+                    model_name,
+                    diff,
+                )
+
+                clean = False
 
             # Plot the non-smoothed graph
             title = f"{model_name} {metric_name}"
@@ -179,7 +202,7 @@ def analyze_metrics(
                 metric_threshold,
             )
 
-    if threshold_ever_crossed:
+    if not clean:
         sys.exit(1)
 
 
@@ -197,6 +220,12 @@ def main():
         help="In which directory the script will save the generated graphs",
     )
     parser.add_argument(
+        "--relative_threshold",
+        default=RELATIVE_THRESHOLD,
+        type=float,
+        help="If the last metric value is below the previous_one * relative_threshold, fails. Default to 0.95",
+    )
+    parser.add_argument(
         "--absolute_threshold",
         default=ABSOLUTE_THRESHOLD,
         type=float,
@@ -206,7 +235,10 @@ def main():
     args = parser.parse_args()
 
     analyze_metrics(
-        args.metrics_directory, args.output_directory, args.absolute_threshold
+        args.metrics_directory,
+        args.output_directory,
+        args.relative_threshold,
+        args.absolute_threshold,
     )
 
 
