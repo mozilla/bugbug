@@ -15,17 +15,22 @@ rm -Rf data || true;
 
 ls -lh
 
-# First retrieve a subset of bugs data
+# First retrieve a subset of bug data
 # TODO: Let the script download the previous DB as it should be pretty fast?
 bugbug-data-bugzilla --limit 100
 ls -lh
 ls -lh data
 
+# The bug data force download the commit DB
+# Removes it to ensure the commit retrieval work as expected
+rm data/commit*
+
 # Then retrieve a subset of commit data
 mkdir -p cache
-bugbug-data-commits --limit 100 cache
+bugbug-data-commits --limit 1000 cache
 ls -lh
 ls -lh data
+
 
 # Then train a bug model
 bugbug-train --limit 500 --no-download defectenhancementtask
