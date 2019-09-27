@@ -151,13 +151,13 @@ def analyze_metrics(
 
             # Compute the threshold for the metric
             max_value = max(df["value"])
-            metric_threshold = max_value - ABSOLUTE_THRESHOLD
+            metric_threshold = max_value - absolute_threshold
 
             threshold_crossed = df.value[-1] < metric_threshold
 
             if threshold_crossed:
                 LOGGER.warning(
-                    "Last metric %r for model %s is at least %f%% less than the max",
+                    "Last metric %r for model %s is at least %f less than the max",
                     metric_name,
                     model_name,
                     ABSOLUTE_THRESHOLD,
