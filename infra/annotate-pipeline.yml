@@ -120,66 +120,66 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
 
-#    - ID: regressor-finder
-#      created: {$fromNow: ''}
-#      deadline: {$fromNow: '118 hours'}
-#      expires: {$fromNow: '1 month'}
-#      provisionerId: aws-provisioner-v1
-#      workerType: relman-svc-compute
-#      payload:
-#        maxRunTime: 86400
-#        image: mozilla/bugbug-commit-retrieval:${version}
-#        command:
-#          - bugbug-regressor-finder
-#          - /cache/
-#          - https://github.com/mozilla/gecko-dev
-#          - gecko-dev
-#          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
-#          - gecko-dev-wordified-and-comments-removed
-#        artifacts:
-#          public/done:
-#            path: /done
-#            type: file
-#          public/ignored_commits.json.zst:
-#            path: /data/ignored_commits.json.zst
-#            type: file
-#          public/ignored_commits.json.version:
-#            path: /data/ignored_commits.json.version
-#            type: file
-#          public/bug_fixing_commits.json.zst:
-#            path: /data/bug_fixing_commits.json.zst
-#            type: file
-#          public/bug_fixing_commits.json.version:
-#            path: /data/bug_fixing_commits.json.version
-#            type: file
-#          public/bug_introducing_commits.json.zst:
-#            path: /data/bug_introducing_commits.json.zst
-#            type: file
-#          public/bug_introducing_commits.json.version:
-#            path: /data/bug_introducing_commits.json.version
-#            type: file
-#          public/tokenized_bug_introducing_commits.json.zst:
-#            path: /data/tokenized_bug_introducing_commits.json.zst
-#            type: file
-#          public/tokenized_bug_introducing_commits.json.version:
-#            path: /data/tokenized_bug_introducing_commits.json.version
-#            type: file
-#        cache:
-#          bugbug-mercurial-repository: /cache
-#        features:
-#          taskclusterProxy:
-#            true
-#      scopes:
-#        - "docker-worker:cache:bugbug-mercurial-repository"
-#      routes:
-#        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
-#        - notify.irc-channel.#bugbug.on-failed
-#        - index.project.relman.bugbug_annotate.regressor_finder.latest
-#      metadata:
-#        name: bugbug regressor finder
-#        description: bugbug regressor finder
-#        owner: release-mgmt-analysis@mozilla.com
-#        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
+    - ID: regressor-finder
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: relman-svc-compute
+      payload:
+        maxRunTime: 86400
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-regressor-finder
+          - /cache/
+          - https://github.com/mozilla/gecko-dev
+          - gecko-dev
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - gecko-dev-wordified-and-comments-removed
+        artifacts:
+          public/done:
+            path: /done
+            type: file
+          public/ignored_commits.json.zst:
+            path: /data/ignored_commits.json.zst
+            type: file
+          public/ignored_commits.json.version:
+            path: /data/ignored_commits.json.version
+            type: file
+          public/bug_fixing_commits.json.zst:
+            path: /data/bug_fixing_commits.json.zst
+            type: file
+          public/bug_fixing_commits.json.version:
+            path: /data/bug_fixing_commits.json.version
+            type: file
+          public/bug_introducing_commits.json.zst:
+            path: /data/bug_introducing_commits.json.zst
+            type: file
+          public/bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
+            type: file
+          public/tokenized_bug_introducing_commits.json.zst:
+            path: /data/tokenized_bug_introducing_commits.json.zst
+            type: file
+          public/tokenized_bug_introducing_commits.json.version:
+            path: /data/tokenized_bug_introducing_commits.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder.latest
+      metadata:
+        name: bugbug regressor finder
+        description: bugbug regressor finder
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/annotate-pipeline.yml
 
     - ID: run-again
       created: {$fromNow: ''}
@@ -191,7 +191,7 @@ tasks:
         - microannotate-generate-tokenize
         - microannotate-generate-remove-comments
         - microannotate-generate-tokenize-and-remove-comments
-#        - regressor-finder
+        - regressor-finder
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-spawn-pipeline:${version}
