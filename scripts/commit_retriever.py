@@ -18,7 +18,7 @@ class Retriever(object):
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-    def retrieve_commits(self):
+    def retrieve_commits(self, limit):
         repository.clone(self.repo_dir)
 
         if not db.is_old_version(repository.COMMITS_DB):
@@ -28,8 +28,16 @@ class Retriever(object):
                 pass
 
             rev_start = f"children({commit['node']})"
+
+            if limit:
+                logger.warning("Limit argument was ignored, the DB was used instead")
         else:
-            rev_start = 0
+            if limit:
+                rev_start = (
+                    -1 * limit
+                )  # Mercurial revset support negative integers starting from tip
+            else:
+                rev_start = 0
 
         repository.download_commits(self.repo_dir, rev_start)
 
@@ -54,7 +62,7 @@ def main():
 
     retriever = Retriever(getattr(args, "cache-root"))
 
-    retriever.retrieve_commits()
+    retriever.retrieve_commits(args.limit)
 
 
 if __name__ == "__main__":
