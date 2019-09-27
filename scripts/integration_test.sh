@@ -13,6 +13,9 @@ rm defectenhancementtaskmodel* || true;
 rm backout* || true;
 rm -Rf data || true;
 
+ls -lh
+ls -lh data
+
 # First retrieve a subset of bugs data
 # TODO: Let the script download the previous DB as it should be pretty fast?
 bugbug-data-bugzilla --limit 100
