@@ -1,4 +1,17 @@
 *model
+*model.zst
+*model.zst.etag
+*data_X
+*data_y
+*data_X.zst
+*data_X.zst.etag
+*data_y.zst
+*data_y.zst.etag
+feature_importance.png
+importance.html
+importances.json
+metrics.json
+probs.json
 *similaritymodel
 http_service/models/*model*
 
