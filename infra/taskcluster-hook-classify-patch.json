@@ -68,7 +68,7 @@
             "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
-        "workerType": "taskcluster-generic"
+        "workerType": "relman-svc-compute"
     },
     "triggerSchema": {
         "additionalProperties": false,
