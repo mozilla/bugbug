@@ -404,7 +404,7 @@ class RegressorFinder(object):
                 logger.info(
                     "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
                 )
-                return [None]
+                return None
 
             bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
