@@ -537,7 +537,7 @@ tasks:
         artifacts:
           public/bm25similarity.similaritymodel.zst:
             expires: {$fromNow: '1 month'}
-            path: /bm52similarity.similaritymodel.zst
+            path: /bm25similarity.similaritymodel.zst
             type: file
           public/metrics.json:
             expires: {$fromNow: '1 year'}
