@@ -19,7 +19,7 @@ from bugbug.utils import download_check_etag, get_secret, to_array, zstd_decompr
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/regressormodel.zst"
+URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
 
 
 class CommitClassifier(object):
@@ -29,28 +29,39 @@ class CommitClassifier(object):
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-        if not os.path.exists("regressormodel"):
-            download_check_etag(URL, "regressormodel.zst")
-            zstd_decompress("regressormodel")
-            assert os.path.exists("regressormodel"), "Decompressed model exists"
+        regressormodel_path = "regressormodel"
+        if not os.path.exists(regressormodel_path):
+            download_check_etag(
+                URL.format(f"{regressormodel_path}.zst"), f"{regressormodel_path}.zst"
+            )
+            zstd_decompress(regressormodel_path)
+            assert os.path.exists(regressormodel_path), "Decompressed model exists"
 
-        if not os.path.exists("regressormodel_data_X"):
-            download_check_etag(URL, "regressormodel_data_X.zst")
-            zstd_decompress("regressormodel_data_X")
+        regressormodel_data_X_path = "regressormodel_data_X"
+        if not os.path.exists(regressormodel_data_X_path):
+            download_check_etag(
+                URL.format(f"{regressormodel_data_X_path}.zst"),
+                f"{regressormodel_data_X_path}.zst",
+            )
+            zstd_decompress(regressormodel_data_X_path)
             assert os.path.exists(
-                "regressormodel_data_X"
+                regressormodel_data_X_path
             ), "Decompressed X dataset exists"
 
-        if not os.path.exists("regressormodel_data_y"):
-            download_check_etag(URL, "regressormodel_data_y.zst")
-            zstd_decompress("regressormodel_data_y")
+        regressormodel_data_y_path = "regressormodel_data_y"
+        if not os.path.exists(regressormodel_data_y_path):
+            download_check_etag(
+                URL.format(f"{regressormodel_data_y_path}.zst"),
+                f"{regressormodel_data_y_path}.zst",
+            )
+            zstd_decompress(regressormodel_data_y_path)
             assert os.path.exists(
-                "regressormodel_data_y"
+                regressormodel_data_y_path
             ), "Decompressed y dataset exists"
 
-        self.model = RegressorModel.load("regressormodel")
-        self.X = to_array(joblib.load("regressormodel_data_X"))
-        self.y = to_array(joblib.load("regressormodel_data_y"))
+        self.model = RegressorModel.load(regressormodel_path)
+        self.X = to_array(joblib.load(regressormodel_data_X_path))
+        self.y = to_array(joblib.load(regressormodel_data_y_path))
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)
