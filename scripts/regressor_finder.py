@@ -481,9 +481,13 @@ def evaluate(bug_introducing_commits):
 
     fix_to_regressors_map = defaultdict(list)
     for bug_introducing_commit in bug_introducing_commits:
+        if not bug_introducing_commit["bug_introducing_rev"]:
+            continue
+
         fix_to_regressors_map[bug_introducing_commit["bug_fixing_rev"]].append(
             bug_introducing_commit["bug_introducing_rev"]
         )
+
     logger.info(f"{len(fix_to_regressors_map)} fixes linked to regressors")
     logger.info(
         f"{sum(len(regressors) for regressors in fix_to_regressors_map.values())} regressors linked to fixes"
