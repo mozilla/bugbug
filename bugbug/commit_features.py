@@ -199,22 +199,23 @@ class directory_touched_prev(object):
 
 
 class files(object):
-    def __init__(self, min_freq=0.00003):
+    def __init__(self, min_freq=0.0014):
         self.min_freq = min_freq
 
     def fit(self, commits):
         self.count = defaultdict(int)
 
+        self.total_commits = len(commits)
+
         for commit in commits:
             for f in commit["files"]:
                 self.count[f] += 1
-        self.total_files = sum(self.count.values())
 
     def __call__(self, commit, **kwargs):
         return [
             f
             for f in commit["files"]
-            if (self.count[f] / self.total_files) > self.min_freq
+            if (self.count[f] / self.total_commits) > self.min_freq
         ]
 
 
