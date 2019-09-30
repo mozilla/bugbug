@@ -39,6 +39,8 @@ class Trainer(object):
         model_class = get_model_class(model_name)
         if args.model in HISTORICAL_SUPPORTED_TASKS:
             model_obj = model_class(args.lemmatization, args.historical)
+        elif args.model == "regressor":
+            model_obj = model_class(args.lemmatization, args.interpretable)
         elif args.model == "duplicate":
             model_obj = model_class(
                 args.training_set_size, args.lemmatization, args.cleanup_urls
@@ -130,6 +132,11 @@ def parse_args(args):
         "--historical",
         help="""Analyze historical bugs. Only used for defect, bugtype,
                 defectenhancementtask and regression tasks.""",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--interpretable",
+        help="""Only use human-interpretable features. Only used for regressor task.""",
         action="store_true",
     )
     return parser.parse_args(args)
