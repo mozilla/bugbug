@@ -211,6 +211,15 @@ class files(object):
             for f in commit["files"]:
                 self.count[f] += 1
 
+        # We no longer need to store counts for files which have low frequency.
+        to_del = set()
+        for f, c in self.count.items():
+            if c / self.total_commits < self.min_freq:
+                to_del.add(f)
+
+        for f in to_del:
+            del self.count[f]
+
     def __call__(self, commit, **kwargs):
         return [
             f
