@@ -261,7 +261,7 @@ class Model:
                     shap_val.append("-" + str(importance))
 
                 feature_value = np.squeeze(
-                    important_features["values"].toarray()[:, int(index)]
+                    to_array(important_features["values"])[:, int(index)]
                 )
                 top_feature_names.append(
                     f"{feature_names[int(index)]} = {feature_value.round(decimals=5)}"
@@ -383,7 +383,7 @@ class Model:
 
             shap.summary_plot(
                 shap_values,
-                X_train.toarray(),
+                to_array(X_train),
                 feature_names=feature_names,
                 class_names=self.class_names,
                 plot_type="layered_violin"
@@ -574,7 +574,7 @@ class Model:
                 p = shap.force_plot(
                     explainer.expected_value,
                     shap_values[:, top_indexes],
-                    X.toarray()[:, top_indexes],
+                    to_array(X)[:, top_indexes],
                     feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
                     show=False,
