@@ -1,20 +1,32 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import csv
 import io
 import json
 import os
+import subprocess
+import tempfile
+from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import hglib
 import joblib
 import numpy as np
+from dateutil.relativedelta import relativedelta
+from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
 from bugbug import db, repository
 from bugbug.models.regressor import RegressorModel
-from bugbug.utils import download_check_etag, get_secret, to_array, zstd_decompress
+from bugbug.utils import (
+    download_check_etag,
+    get_secret,
+    retry,
+    to_array,
+    zstd_decompress,
+)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -23,7 +35,7 @@ URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regress
 
 
 class CommitClassifier(object):
-    def __init__(self, cache_root):
+    def __init__(self, cache_root, git_repo_dir, method_defect_predictor_dir):
         self.cache_root = cache_root
 
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
@@ -62,6 +74,38 @@ class CommitClassifier(object):
         self.model = RegressorModel.load(regressormodel_path)
         self.X = to_array(joblib.load(regressormodel_data_X_path))
         self.y = to_array(joblib.load(regressormodel_data_y_path))
+
+        self.method_defect_predictor_dir = method_defect_predictor_dir
+        self.clone_git_repo(
+            "https://github.com/lucapascarella/MethodDefectPredictor",
+            method_defect_predictor_dir,
+            "6215de02517eb3484d6943ce1a1fb6c13b27475f",
+        )
+        self.git_repo_dir = git_repo_dir
+        self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
+
+    def clone_git_repo(self, repo_url, repo_dir, rev="master"):
+        logger.info(f"Cloning {repo_url}...")
+
+        if not os.path.exists(repo_dir):
+            retry(
+                lambda: subprocess.run(["git", "clone", repo_url, repo_dir], check=True)
+            )
+
+        retry(
+            lambda: subprocess.run(
+                ["git", "pull", repo_url, "master"],
+                cwd=repo_dir,
+                capture_output=True,
+                check=True,
+            )
+        )
+
+        retry(
+            lambda: subprocess.run(
+                ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
+            )
+        )
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)
@@ -126,6 +170,17 @@ class CommitClassifier(object):
             hg.update(rev=hg_base, clean=True)
             logger.info(f"Updated repo to {hg_base}")
 
+            try:
+                self.git_base = vcs_map.mercurial_to_git(hg_base)
+                subprocess.run(
+                    ["git", "checkout", "-b", "analysis_branch", self.git_base],
+                    check=True,
+                    cwd=self.git_repo_dir,
+                )
+                logger.info(f"Updated git repo to {self.git_base}")
+            except Exception as e:
+                logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
+
         for patch in needed_stack:
             revision = revisions[patch.phid]
 
@@ -143,6 +198,20 @@ class CommitClassifier(object):
                 message=message,
                 user="bugbug",
             )
+
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                temp_file = os.path.join(tmpdirname, "temp.patch")
+                with open(temp_file, "w") as f:
+                    f.write(patch.patch)
+
+                subprocess.run(
+                    ["git", "apply", "--3way", temp_file],
+                    check=True,
+                    cwd=self.git_repo_dir,
+                )
+                subprocess.run(
+                    ["git", "commit", "-am", message], check=True, cwd=self.git_repo_dir
+                )
 
     def classify(self, diff_id):
         self.update_commit_db()
@@ -247,17 +316,72 @@ class CommitClassifier(object):
         with open("importance.html", "w") as f:
             f.write(importance["html"])
 
+        # Get commit hash from 4 months before the analysis time.
+        # The method-level analyzer needs 4 months of history.
+        four_months_ago = datetime.utcnow() - relativedelta(months=4)
+        p = subprocess.run(
+            [
+                "git",
+                "rev-list",
+                "-n",
+                "1",
+                "--until={}".format(four_months_ago.strftime("%Y-%m-%d")),
+                "HEAD",
+            ],
+            check=True,
+            capture_output=True,
+            cwd=self.git_repo_dir,
+        )
+
+        stop_hash = p.stdout.decode().strip()
+
+        # Run the method-level analyzer.
+        subprocess.run(
+            [
+                "python3",
+                "tester.py",
+                "--repo",
+                self.git_repo_dir,
+                "--start",
+                "HEAD",
+                "--stop",
+                stop_hash,
+                "--output",
+                os.path.abspath("method_level.csv"),
+            ],
+            check=True,
+            cwd=self.method_defect_predictor_dir,
+        )
+
+        method_level_results = []
+        with open("method_level.csv", "r") as f:
+            reader = csv.DictReader(f)
+            for item in reader:
+                method_level_results.append(item)
+
+        with open("method_level.json", "w") as f:
+            json.dump(method_level_results, f)
+
 
 def main():
     description = "Classify a commit"
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument("cache-root", help="Cache for repository clones.")
+    parser.add_argument("cache_root", help="Cache for repository clones.")
     parser.add_argument("diff_id", help="diff ID to analyze.", type=int)
+    parser.add_argument(
+        "git_repo_dir", help="Path where the git repository will be cloned."
+    )
+    parser.add_argument(
+        "method_defect_predictor_dir",
+        help="Path where the git repository will be cloned.",
+    )
 
     args = parser.parse_args()
 
-    classifier = CommitClassifier(getattr(args, "cache-root"))
+    classifier = CommitClassifier(
+        args.cache_root, args.git_repo_dir, args.method_defect_predictor_dir
+    )
     classifier.classify(args.diff_id)
 
 

@@ -34,6 +34,10 @@
                 "public/importance.html": {
                     "path": "/importance.html",
                     "type": "file"
+                },
+                "public/method_level.json": {
+                    "path": "/method_level.json",
+                    "type": "file"
                 }
             },
             "cache": {
