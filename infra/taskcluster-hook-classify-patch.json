@@ -54,8 +54,8 @@
                 "bugbug-classify-commit",
                 "/cache",
                 "${payload['DIFF_ID']}",
-                "MethodDefectPredictor",
-                "gecko-dev"
+                "/gecko-dev",
+                "/MethodDefectPredictor"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
