@@ -186,8 +186,12 @@ class CommitClassifier(object):
 
             if patch.commits:
                 message = patch.commits[0]["message"]
+                author_name = patch.commits[0]["author"]["name"]
+                author_email = patch.commits[0]["author"]["email"]
             else:
                 message = revision["fields"]["title"]
+                author_name = "bugbug"
+                author_email = "bugbug@mozilla.org"
 
             logger.info(
                 f"Applying {patch.phid} from revision {revision['id']}: {message}"
@@ -196,7 +200,7 @@ class CommitClassifier(object):
             hg.import_(
                 patches=io.BytesIO(patch.patch.encode("utf-8")),
                 message=message,
-                user="bugbug",
+                user=author_email,
             )
 
             with tempfile.TemporaryDirectory() as tmpdirname:
@@ -210,7 +214,18 @@ class CommitClassifier(object):
                     cwd=self.git_repo_dir,
                 )
                 subprocess.run(
-                    ["git", "commit", "-am", message], check=True, cwd=self.git_repo_dir
+                    [
+                        "git",
+                        "-c",
+                        f"user.name={author_name}",
+                        "-c",
+                        f"user.email={author_email}",
+                        "commit",
+                        "-am",
+                        message,
+                    ],
+                    check=True,
+                    cwd=self.git_repo_dir,
                 )
 
     def classify(self, diff_id):
