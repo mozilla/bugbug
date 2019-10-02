@@ -166,6 +166,10 @@ class CommitClassifier(object):
 
         # Update repo to base revision
         hg_base = needed_stack[0].base_revision
+        if not has_revision(hg_base):
+            logger.warning("Missing base revision {} from Phabricator".format(hg_base))
+            hg_base = "tip"
+
         if hg_base:
             hg.update(rev=hg_base, clean=True)
             logger.info(f"Updated repo to {hg_base}")
