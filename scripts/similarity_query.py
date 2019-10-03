@@ -22,11 +22,11 @@ URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_similar
 def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--algorithm",
+        "algorithm",
         help="Similarity algorithm to use",
         choices=similarity.model_name_to_class.keys(),
     )
-    parser.add_argument("--bug_id", help="Bug to test")
+    parser.add_argument("bug_id", help="Bug to test")
     return parser.parse_args(args)
 
 
