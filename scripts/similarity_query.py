@@ -51,7 +51,16 @@ def main(args):
         f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
     )
 
-    print(model.get_similar_bugs(bugzilla.get(int(args.bug_id))[int(args.bug_id)]))
+    bug_ids = model.get_similar_bugs(bugzilla.get(args.bug_id)[args.bug_id])
+
+    bugs = {}
+    for bug in bugzilla.get_bugs():
+        if bug["id"] in bug_ids or bug["id"] == args.bug_id:
+            bugs[bug["id"]] = bug
+
+    print("{}: {}".format(args.bug_id, bugs[args.bug_id]["summary"]))
+    for bug_id in bug_ids:
+        print("{}: {}".format(bug_id, bugs[bug_id]["summary"]))
 
 
 if __name__ == "__main__":
