@@ -26,7 +26,7 @@ def parse_args(args):
         help="Similarity algorithm to use",
         choices=similarity.model_name_to_class.keys(),
     )
-    parser.add_argument("bug_id", help="Bug to test")
+    parser.add_argument("bug_id", help="Bug to test", type=int)
     return parser.parse_args(args)
 
 
