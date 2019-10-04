@@ -334,6 +334,7 @@ class Model:
         print(f"X: {X.shape}, y: {y.shape}")
 
         is_multilabel = isinstance(y[0], np.ndarray)
+        is_binary = len(self.class_names) == 2
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = train_test_split(
@@ -450,15 +451,24 @@ class Model:
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
+        confidence_thresholds = [0.6, 0.7, 0.8, 0.9]
+
+        if is_binary:
+            confidence_thresholds = [0.1, 0.2, 0.3, 0.4] + confidence_thresholds
+
         # Evaluate results on the test set for some confidence thresholds.
-        for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
+        for confidence_threshold in confidence_thresholds:
             y_pred_probas = self.clf.predict_proba(X_test)
             confidence_class_names = self.class_names + ["__NOT_CLASSIFIED__"]
 
             y_pred_filter = []
             classified_indices = []
             for i in range(0, len(y_test)):
-                argmax = np.argmax(y_pred_probas[i])
+                if not is_binary:
+                    argmax = np.argmax(y_pred_probas[i])
+                else:
+                    argmax = 1 if y_pred_probas[i][1] > confidence_threshold else 0
+
                 if y_pred_probas[i][argmax] < confidence_threshold:
                     if not is_multilabel:
                         y_pred_filter.append("__NOT_CLASSIFIED__")
