@@ -407,6 +407,15 @@ class Model:
 
             tracking_metrics["feature_report"] = feature_report
 
+        print("Training Set scores:")
+        y_pred = self.clf.predict(X_train)
+        if not is_multilabel:
+            print(
+                classification_report_imbalanced(
+                    y_train, y_pred, labels=self.class_names
+                )
+            )
+
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
