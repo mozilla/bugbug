@@ -486,8 +486,10 @@ class Model:
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
 
+            classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
+
             print(
-                f"\nConfidence threshold > {confidence_threshold} - {len(y_test)} classified"
+                f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
