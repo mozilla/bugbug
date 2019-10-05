@@ -342,10 +342,6 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
         or (bug_id == 1370035 and field in ("cf_has_str", "cf_has_regression_range"))
         or (bug_id == 1400540 and field in ("target_milestone", "status", "resolution"))
         or (bug_id == 1402929 and field == "priority")
-        or (
-            field in ["summary", "whiteboard"]
-            and new_value.lower() == new_value_exp.lower()
-        )  # https://bugzilla.mozilla.org/show_bug.cgi?id=1556320
         or (field == "whiteboard" and new_value.rstrip() == new_value_exp.rstrip())
         or (
             field == "summary"
