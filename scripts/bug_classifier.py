@@ -63,10 +63,8 @@ def classify_bugs(model_name, classifier, bug_id):
                 bug, probabilities=True, importances=True
             )
 
-            feature_names = model.get_human_readable_feature_names()
-
             model.print_feature_importances(
-                importance["importances"], feature_names, class_probabilities=probas
+                importance["importances"], class_probabilities=probas
             )
         else:
             probas = model.classify(bug, probabilities=True, importances=False)
