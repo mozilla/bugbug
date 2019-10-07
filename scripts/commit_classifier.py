@@ -373,10 +373,14 @@ class CommitClassifier(object):
         )
 
         method_level_results = []
-        with open("method_level.csv", "r") as f:
-            reader = csv.DictReader(f)
-            for item in reader:
-                method_level_results.append(item)
+        try:
+            with open("method_level.csv", "r") as f:
+                reader = csv.DictReader(f)
+                for item in reader:
+                    method_level_results.append(item)
+        except FileNotFoundError:
+            # No methods were classified.
+            pass
 
         with open("method_level.json", "w") as f:
             json.dump(method_level_results, f)
