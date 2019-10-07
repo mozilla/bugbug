@@ -41,11 +41,32 @@ EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 TYPES_TO_EXT = {
-    "Javascript": [".js", ".jsm"],
+    "Javascript": [".js", ".jsm", ".sjs"],
     "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
     "Java": [".java"],
     "Python": [".py"],
     "Rust": [".rs"],
+    "Kotlin": [".kt"],
+    "HTML/XHTML/XUL": [".html", ".htm", ".xhtml", ".xht", ".xul"],
+    "Image": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".ico",
+        ".icns",
+        ".psd",
+        ".tiff",
+        ".ttf",
+        ".bcmap",
+        ".webp",
+    ],
+    "Archive": [".zip", ".gz", ".bz2", ".tar", ".xpi", ".jar"],
+    "Video": [".mp4", ".webm", ".ogv", ".avi", ".mov", ".m4s", ".mgif"],
+    "Audio": [".mp3", ".ogg", ".wav", ".flac", ".opus"],
+    "Executable": [".exe", ".dll", ".so", ".class"],
+    "Document": [".pdf", ".doc", ".otf"],
 }
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
