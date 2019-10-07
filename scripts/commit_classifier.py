@@ -79,7 +79,7 @@ class CommitClassifier(object):
         self.clone_git_repo(
             "https://github.com/lucapascarella/MethodDefectPredictor",
             method_defect_predictor_dir,
-            "6215de02517eb3484d6943ce1a1fb6c13b27475f",
+            "fa5269b959d8ddf7e97d1e92523bb64c17f9bbcd",
         )
         self.git_repo_dir = git_repo_dir
         self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
