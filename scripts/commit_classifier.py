@@ -203,8 +203,8 @@ class CommitClassifier(object):
 
             hg.import_(
                 patches=io.BytesIO(patch.patch.encode("utf-8")),
-                message=message,
-                user=f"{author_name} <{author_email}>",
+                message=message.encode("utf-8"),
+                user=f"{author_name} <{author_email}>".encode("utf-8"),
             )
 
             with tempfile.TemporaryDirectory() as tmpdirname:
