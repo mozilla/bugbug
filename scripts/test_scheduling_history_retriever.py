@@ -95,11 +95,51 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         past_failures = {}
 
-        def get_past_failures(task, push_num):
-            if task not in past_failures:
-                past_failures[task] = ExpQueue(push_num, HISTORICAL_TIMESPAN + 1, 0)
+        def get_and_update_past_failures(type_, task, items, push_num, is_regression):
+            if type_ not in past_failures:
+                past_failures[type_] = {}
 
-            return past_failures[task][push_num]
+            if task not in past_failures[type_]:
+                past_failures[type_][task] = {}
+
+            values_total = []
+            values_prev_7 = []
+            values_prev_14 = []
+            values_prev_28 = []
+            values_prev_56 = []
+
+            for item in items:
+                if item not in past_failures[type_][task]:
+                    past_failures[type_][task][item] = ExpQueue(
+                        push_num, HISTORICAL_TIMESPAN + 1, 0
+                    )
+
+                value = past_failures[type_][task][item][push_num]
+
+                values_total.append(value)
+                values_prev_7.append(
+                    value - past_failures[type_][task][item][push_num - 7]
+                )
+                values_prev_14.append(
+                    value - past_failures[type_][task][item][push_num - 14]
+                )
+                values_prev_28.append(
+                    value - past_failures[type_][task][item][push_num - 28]
+                )
+                values_prev_56.append(
+                    value - past_failures[type_][task][item][push_num - 56]
+                )
+
+                if is_regression:
+                    past_failures[type_][task][item][push_num] = value + 1
+
+            return (
+                sum(values_total),
+                sum(values_prev_7),
+                sum(values_prev_14),
+                sum(values_prev_28),
+                sum(values_prev_56),
+            )
 
         def generate_data():
             commits_with_data = set()
@@ -120,18 +160,36 @@ file = {{ driver = "file", path = "{cache_path}" }}
                     if not any(task.startswith(j) for j in JOBS_TO_CONSIDER):
                         continue
 
-                    total_failures = get_past_failures(task, push_num)
-                    past_7_pushes_failures = total_failures - get_past_failures(
-                        task, push_num - 7
+                    is_regression = (
+                        task in commit_push_data[1] or task in commit_push_data[2]
                     )
-                    past_14_pushes_failures = total_failures - get_past_failures(
-                        task, push_num - 14
+
+                    total_failures, past_7_pushes_failures, past_14_pushes_failures, past_28_pushes_failures, past_56_pushes_failures = get_and_update_past_failures(
+                        "all", task, ["all"], push_num, is_regression
                     )
-                    past_28_pushes_failures = total_failures - get_past_failures(
-                        task, push_num - 28
+
+                    total_types_failures, past_7_pushes_types_failures, past_14_pushes_types_failures, past_28_pushes_types_failures, past_56_pushes_types_failures = get_and_update_past_failures(
+                        "type", task, commit_data["types"], push_num, is_regression
                     )
-                    past_56_pushes_failures = total_failures - get_past_failures(
-                        task, push_num - 56
+
+                    total_files_failures, past_7_pushes_files_failures, past_14_pushes_files_failures, past_28_pushes_files_failures, past_56_pushes_files_failures = get_and_update_past_failures(
+                        "file", task, commit_data["files"], push_num, is_regression
+                    )
+
+                    total_directories_failures, past_7_pushes_directories_failures, past_14_pushes_directories_failures, past_28_pushes_directories_failures, past_56_pushes_directories_failures = get_and_update_past_failures(
+                        "directory",
+                        task,
+                        commit_data["directories"],
+                        push_num,
+                        is_regression,
+                    )
+
+                    total_components_failures, past_7_pushes_components_failures, past_14_pushes_components_failures, past_28_pushes_components_failures, past_56_pushes_components_failures = get_and_update_past_failures(
+                        "component",
+                        task,
+                        commit_data["components"],
+                        push_num,
+                        is_regression,
                     )
 
                     pushdate = dateutil.parser.parse(commit_data["pushdate"])
@@ -146,12 +204,29 @@ file = {{ driver = "file", path = "{cache_path}" }}
                             "failures_past_14_pushes": past_14_pushes_failures,
                             "failures_past_28_pushes": past_28_pushes_failures,
                             "failures_past_56_pushes": past_56_pushes_failures,
+                            "failures_in_types": total_types_failures,
+                            "failures_past_7_pushes_in_types": past_7_pushes_types_failures,
+                            "failures_past_14_pushes_in_types": past_14_pushes_types_failures,
+                            "failures_past_28_pushes_in_types": past_28_pushes_types_failures,
+                            "failures_past_56_pushes_in_types": past_56_pushes_types_failures,
+                            "failures_in_files": total_files_failures,
+                            "failures_past_7_pushes_in_files": past_7_pushes_files_failures,
+                            "failures_past_14_pushes_in_files": past_14_pushes_files_failures,
+                            "failures_past_28_pushes_in_files": past_28_pushes_files_failures,
+                            "failures_past_56_pushes_in_files": past_56_pushes_files_failures,
+                            "failures_in_directories": total_directories_failures,
+                            "failures_past_7_pushes_in_directories": past_7_pushes_directories_failures,
+                            "failures_past_14_pushes_in_directories": past_14_pushes_directories_failures,
+                            "failures_past_28_pushes_in_directories": past_28_pushes_directories_failures,
+                            "failures_past_56_pushes_in_directories": past_56_pushes_directories_failures,
+                            "failures_in_components": total_components_failures,
+                            "failures_past_7_pushes_in_components": past_7_pushes_components_failures,
+                            "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
+                            "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
+                            "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
                             "is_possible_regression": task in commit_push_data[1],
                             "is_likely_regression": task in commit_push_data[2],
                         }
-
-                    if task in commit_push_data[1] or task in commit_push_data[2]:
-                        past_failures[task][push_num] = total_failures + 1
 
                 push_num += 1
 
