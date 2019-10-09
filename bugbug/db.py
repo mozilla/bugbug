@@ -38,18 +38,15 @@ def register(path, url, version, support_files=[]):
             with open(f"{path}.version", "w") as f:
                 f.write(str(version))
 
-    register_path(path, url, version, support_files)
-
     # Register database for all of the different serialization formats
     for item in SERIALIZATION_FORMATS:
         path = path.replace(item, "__PLACEHOLDER__")
         url = url.replace(item, "__PLACEHOLDER__")
 
     for item in SERIALIZATION_FORMATS:
-        if not any(item in keys for keys in DATABASES):
-            fallback_path = path.replace("__PLACEHOLDER__", item)
-            fallback_url = url.replace("__PLACEHOLDER__", item)
-            register_path(fallback_path, fallback_url, version, support_files=[])
+        fallback_path = path.replace("__PLACEHOLDER__", item)
+        fallback_url = url.replace("__PLACEHOLDER__", item)
+        register_path(fallback_path, fallback_url, version, support_files=support_files)
 
 
 def exists(path):
@@ -98,6 +95,14 @@ def download_support_file(path, file_name):
 def download(path, force=False, support_files_too=False):
     preferred_path = path
 
+    # Fallback downloads should be the same db but with different format
+    def check_db(current_path, target_path):
+        for item in SERIALIZATION_FORMATS:
+            current_path = current_path.replace(item, "__PLACEHOLDER__")
+            target_path = target_path.replace(item, "__PLACEHOLDER__")
+
+        return target_path == current_path
+
     def download_db(path, force, support_files_too):
         if os.path.exists(path) and not force:
             return
@@ -123,9 +128,11 @@ def download(path, force=False, support_files_too=False):
 
     if download_db(path, force, support_files_too):
         for path in DATABASES:
-            if download_db(path, force, support_files_too):
-                continue
-            write(preferred_path, read(path))
+            if check_db(path, preferred_path):
+                if download_db(path, force, support_files_too):
+                    continue
+                write(preferred_path, read(path))
+                break
 
 
 def last_modified(path):

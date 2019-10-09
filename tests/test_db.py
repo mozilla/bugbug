@@ -184,6 +184,7 @@ def test_download_zst(tmp_path, mock_zst):
 
 def test_download_missing(tmp_path):
     url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    fallback_url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.pickle.zst"
 
     db_path = str(tmp_path / "prova.json")
     db.register(db_path, url, 1)
@@ -197,6 +198,20 @@ def test_download_missing(tmp_path):
 
     responses.add(
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
+    )
+
+    responses.add(
+        responses.HEAD,
+        fallback_url,
+        status=404,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
+
+    responses.add(
+        responses.GET,
+        fallback_url,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
     )
 
     db.download(db_path)
