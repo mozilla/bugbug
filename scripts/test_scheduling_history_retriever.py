@@ -48,7 +48,7 @@ class Retriever(object):
             f.write(
                 f"""[adr.cache.stores]
 file = {{ driver = "file", path = "{cache_path}" }}
-            """
+"""
             )
 
         # Get the commits DB.
