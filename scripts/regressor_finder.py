@@ -380,15 +380,6 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
-        # Analyze up to 500 commits at a time, to avoid the task running out of time.
-        done = True
-        if len(bug_fixing_commits) > 500:
-            bug_fixing_commits = bug_fixing_commits[-500:]
-            done = False
-
-        with open("done", "w") as f:
-            f.write(str(1 if done else 0))
-
         def _init(git_repo_dir):
             thread_local.git = GitRepository(git_repo_dir)
 
@@ -447,19 +438,35 @@ class RegressorFinder(object):
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
-            bug_introducing_commit_futures = [
-                executor.submit(find_bic, bug_fixing_commit)
-                for bug_fixing_commit in bug_fixing_commits
-            ]
 
             def results():
-                for future in tqdm(
-                    concurrent.futures.as_completed(bug_introducing_commit_futures),
-                    total=len(bug_fixing_commits),
-                ):
-                    result = future.result()
-                    if result is not None:
-                        yield from result
+                num_analyzed = 0
+
+                bug_fixing_commits_queue = bug_fixing_commits.copy()
+
+                # Analyze up to 500 commits at a time, to avoid the task running out of time.
+                while len(bug_fixing_commits_queue) != 0 and num_analyzed != 500:
+                    bug_introducing_commit_futures = []
+                    for _ in range(500 - num_analyzed):
+                        bug_introducing_commit_futures.append(
+                            executor.submit(find_bic, bug_fixing_commits.pop())
+                        )
+
+                    logger.info(
+                        f"Analyzing a chunk of {len(bug_introducing_commit_futures)} commits"
+                    )
+
+                    for future in tqdm(
+                        concurrent.futures.as_completed(bug_introducing_commit_futures),
+                        total=len(bug_introducing_commit_futures),
+                    ):
+                        result = future.result()
+                        if result is not None:
+                            num_analyzed += 1
+                            yield from result
+
+                with open("done", "w") as f:
+                    f.write(str(1 if len(bug_fixing_commits_queue) == 0 else 0))
 
             db.append(db_path, results())
 
