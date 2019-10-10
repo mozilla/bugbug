@@ -88,7 +88,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      workerType: relman-svc-memory
       dependencies:
         - commit-retrieval
       payload:
