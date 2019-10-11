@@ -25,7 +25,7 @@ from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-from bugbug.utils import split_tuple_iterator, to_array
+from bugbug.utils import split_tuple_generator, to_array
 
 
 def classification_report_imbalanced_values(
@@ -319,13 +319,13 @@ class Model:
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
-        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
+        X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform([item for item in X_iter])
+        X = self.extraction_pipeline.fit_transform(X_gen)
 
         # Calculate labels.
-        y = np.array(y_iter)
+        y = np.array(y)
 
         if limit:
             X = X[:limit]

@@ -250,14 +250,14 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
     def fit(self, x, y=None):
         for feature in self.feature_extractors:
             if hasattr(feature, "fit"):
-                feature.fit(x)
+                feature.fit(x())
 
         return self
 
     def transform(self, commits):
         results = []
 
-        for commit in commits:
+        for commit in commits():
             data = {}
 
             for feature_extractor in self.feature_extractors:
