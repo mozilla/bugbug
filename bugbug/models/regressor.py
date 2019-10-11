@@ -13,13 +13,29 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import commit_features, feature_cleanup, labels, repository
+from bugbug import commit_features, db, feature_cleanup, repository
 from bugbug.model import CommitModel
+
+BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
+db.register(
+    BUG_INTRODUCING_COMMITS_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
+    2,
+)
+
+TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
+db.register(
+    TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
+    2,
+)
 
 
 class RegressorModel(CommitModel):
     def __init__(self, lemmatization=False, interpretable=False):
         CommitModel.__init__(self, lemmatization)
+
+        self.required_dbs.append(BUG_INTRODUCING_COMMITS_DB)
 
         self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
@@ -76,7 +92,11 @@ class RegressorModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        regressors = set(r[0] for r in labels.get_labels("regressor"))
+        regressors = set(
+            r["bug_introducing_rev"]
+            for r in db.read(BUG_INTRODUCING_COMMITS_DB)
+            if r["bug_introducing_rev"]
+        )
 
         for commit_data in repository.get_commits():
             if commit_data["ever_backedout"]:
@@ -88,9 +108,8 @@ class RegressorModel(CommitModel):
             else:
                 push_date = dateutil.parser.parse(commit_data["pushdate"])
 
-                # The labels we have are only from 2016-11-01.
-                # TODO: Automate collection of labels and somehow remove this check.
-                if push_date < datetime(2016, 11, 1):
+                # The labels we have are only from two years and six months ago (see the regressor finder script).
+                if push_date < datetime.utcnow() - relativedelta(years=2, months=6):
                     continue
 
                 # We remove the last 6 months, as there could be regressions which haven't been filed yet.

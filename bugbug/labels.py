@@ -7,12 +7,6 @@ import csv
 import os
 import sys
 
-from bugbug import utils
-
-LABELS_URLS = {
-    "regressor": "https://github.com/marco-c/mozilla-central-regressors/raw/master/regressor.csv"
-}
-
 
 def get_labels_dir():
     return os.path.join(os.path.dirname(sys.modules[__package__].__file__), "labels")
@@ -20,9 +14,6 @@ def get_labels_dir():
 
 def get_labels(file_name):
     path = os.path.join(get_labels_dir(), f"{file_name}.csv")
-
-    if not os.path.exists(path) and file_name in LABELS_URLS:
-        utils.download_check_etag(LABELS_URLS[file_name], path)
 
     with open(path, "r") as f:
         reader = csv.reader(f)
