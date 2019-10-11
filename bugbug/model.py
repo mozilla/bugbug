@@ -314,6 +314,9 @@ class Model:
 
         return feature_report
 
+    def train_test_split(self, X, y):
+        return train_test_split(X, y, test_size=0.1, random_state=0)
+
     def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
@@ -337,9 +340,7 @@ class Model:
         is_binary = len(self.class_names) == 2
 
         # Split dataset in training and test.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.1, random_state=0
-        )
+        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
