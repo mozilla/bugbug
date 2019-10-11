@@ -266,6 +266,8 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                         continue
 
                     res = feature_extractor(commit["bug"])
+                elif "test_scheduling_features" in feature_extractor.__module__:
+                    res = feature_extractor(commit["test_job"])
                 else:
                     res = feature_extractor(commit)
 
