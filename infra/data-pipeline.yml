@@ -519,6 +519,45 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+    - ID: train-test-select
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 year'}
+      provisionerId: aws-provisioner-v1
+      workerType: relman-svc-compute
+      dependencies:
+        - commit-retrieval
+        - test-scheduling-history-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testselect
+
+        artifacts:
+          public/testselectmodel.zst:
+            expires: {$fromNow: '1 month'}
+            path: /testselectmodel.zst
+            type: file
+          public/metrics.json:
+            expires: {$fromNow: '1 year'}
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.train_testselect.${version}
+        - index.project.relman.bugbug.train_testselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_testselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_testselect.latest
+      metadata:
+        name: bugbug train test selection model
+        description: bugbug train test selection model
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
     - ID: train-similarity
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
@@ -573,6 +612,7 @@ tasks:
         - train-regressor
         - train-stepstoreproduce
         - train-tracking
+        - train-test-select
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
