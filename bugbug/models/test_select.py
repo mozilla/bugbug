@@ -24,6 +24,8 @@ class TestSelectModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
 
+        self.required_dbs = [repository.COMMITS_DB, test_scheduling.TEST_SCHEDULING_DB]
+
         self.calculate_importance = False
         self.cross_validation_enabled = False
 
