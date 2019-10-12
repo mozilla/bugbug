@@ -636,6 +636,9 @@ class BugModel(Model):
     def __init__(self, lemmatization=False, commit_data=False):
         Model.__init__(self, lemmatization)
         self.commit_data = commit_data
+        self.required_dbs = [bugzilla.BUGS_DB]
+        if commit_data:
+            self.required_dbs.append(repository.COMMITS_DB)
 
     def items_gen(self, classes):
         if not self.commit_data:
@@ -670,6 +673,9 @@ class CommitModel(Model):
     def __init__(self, lemmatization=False, bug_data=False):
         Model.__init__(self, lemmatization)
         self.bug_data = bug_data
+        self.required_dbs = [repository.COMMITS_DB]
+        if bug_data:
+            self.required_dbs.append(bugzilla.BUGS_DB)
 
     def items_gen(self, classes):
         if not self.bug_data:
@@ -705,6 +711,10 @@ class CommitModel(Model):
 
 
 class BugCoupleModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.required_dbs = [bugzilla.BUGS_DB]
+
     def items_gen(self, classes):
         bugs = {}
         for bug in bugzilla.get_bugs():
