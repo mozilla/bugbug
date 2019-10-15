@@ -11,4 +11,4 @@ def test_get_defect_enhancement_task_labels():
     classes, _ = model.get_labels()
     assert classes[1042414] == "defect"
     assert classes[1531080] == "task"
-    assert classes[1042734] != "enhancement"
+    assert classes[1348788] == "enhancement"
