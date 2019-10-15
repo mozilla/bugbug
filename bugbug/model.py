@@ -545,7 +545,7 @@ class Model:
 
         assert isinstance(items[0], dict) or isinstance(items[0], tuple)
 
-        X = self.extraction_pipeline.transform(items)
+        X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
             classes = self.clf.predict_proba(X)
         else:
