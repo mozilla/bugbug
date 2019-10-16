@@ -5,13 +5,13 @@
 
 import gzip
 import io
-import json
 import logging
 import os
 import pickle
 from contextlib import contextmanager
 from urllib.parse import urljoin
 
+import orjson
 import requests
 import zstandard
 
@@ -119,11 +119,11 @@ class Store:
 class JSONStore(Store):
     def write(self, elems):
         for elem in elems:
-            self.fh.write((json.dumps(elem) + "\n").encode("utf-8"))
+            self.fh.write((orjson.dumps(elem) + "\n").encode("utf-8"))
 
     def read(self):
         for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
-            yield json.loads(line)
+            yield orjson.loads(line)
 
 
 class PickleStore(Store):

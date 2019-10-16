@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import json
 import os
 import subprocess
 import tarfile
@@ -9,6 +8,7 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
+import orjson
 import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
@@ -84,7 +84,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
         with open("push_data.json", "r") as f:
-            data = json.load(f)
+            data = orjson.load(f)
 
         push_data = {}
         for row in data[1:]:
