@@ -214,9 +214,12 @@ def delete(path, match):
             if not match(elem):
                 yield elem
 
-    with _db_open(new_path, "wb") as wstore:
+    try:
         with _db_open(path, "rb") as rstore:
-            wstore.write(matching_elems(rstore))
+            with _db_open(new_path, "wb") as wstore:
+                wstore.write(matching_elems(rstore))
+    except FileNotFoundError:
+        return
 
     os.unlink(path)
     os.rename(new_path, path)
