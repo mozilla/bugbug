@@ -119,7 +119,7 @@ class Store:
 class JSONStore(Store):
     def write(self, elems):
         for elem in elems:
-            self.fh.write((orjson.dumps(elem) + "\n").encode("utf-8"))
+            self.fh.write(orjson.dumps(elem) + b"\n")
 
     def read(self):
         for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
