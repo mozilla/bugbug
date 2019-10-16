@@ -205,9 +205,11 @@ class files(object):
     def fit(self, commits):
         self.count = defaultdict(int)
 
-        self.total_commits = len(commits)
+        self.total_commits = 0
 
         for commit in commits:
+            self.total_commits += 1
+
             for f in commit["files"]:
                 self.count[f] += 1
 
