@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import pickle
 import subprocess
 import tarfile
 from datetime import datetime
@@ -93,7 +94,22 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         HISTORICAL_TIMESPAN = 56
 
-        past_failures = {}
+        if not db.is_old_version(test_scheduling.TEST_SCHEDULING_DB):
+            db.download(test_scheduling.TEST_SCHEDULING_DB, support_files_too=True)
+
+            for test_data in test_scheduling.get_test_scheduling_history():
+                pass
+
+            last_node = test_data["rev"]
+        else:
+            last_node = None
+
+        try:
+            with open("data/past_failures.pickle", "rb") as f:
+                past_failures, push_num = pickle.load(f)
+        except FileNotFoundError:
+            past_failures = {}
+            push_num = 0
 
         def get_and_update_past_failures(type_, task, items, push_num, is_regression):
             if type_ not in past_failures:
@@ -142,12 +158,21 @@ file = {{ driver = "file", path = "{cache_path}" }}
             )
 
         def generate_data():
+            nonlocal push_num
             commits_with_data = set()
             saved_nodes = set()
 
-            push_num = 0
+            # We can start once we get to the last revision we added in the previous run.
+            can_start = True if last_node is None else False
             for commit_data in tqdm(repository.get_commits()):
                 node = commit_data["node"]
+
+                if node == last_node:
+                    can_start = True
+                    continue
+
+                if not can_start:
+                    continue
 
                 if node not in push_data:
                     continue
@@ -236,9 +261,14 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
 
-        db.write(test_scheduling.TEST_SCHEDULING_DB, generate_data())
+        db.append(test_scheduling.TEST_SCHEDULING_DB, generate_data())
 
         zstd_compress(test_scheduling.TEST_SCHEDULING_DB)
+
+        with open("data/past_failures.pickle", "wb") as f:
+            pickle.dump((past_failures, push_num), f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        zstd_compress("data/past_failures.pickle")
 
         with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
             tar.add("data/adr_cache")
