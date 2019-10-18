@@ -29,9 +29,10 @@ TRAINING_MONTHS = 6
 
 
 class Retriever(object):
-    def retrieve_test_scheduling_history(self):
+    def __init__(self):
         os.makedirs("data", exist_ok=True)
 
+    def retrieve_push_data(self):
         # Download previous cache.
         cache_path = os.path.abspath("data/adr_cache")
         if not os.path.exists(cache_path):
@@ -51,12 +52,6 @@ class Retriever(object):
 file = {{ driver = "file", path = "{cache_path}" }}
 """
             )
-
-        # Get the commits DB.
-        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
-            repository.COMMITS_DB
-        ):
-            db.download(repository.COMMITS_DB, force=True)
 
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use 3 months more than that to calculate the failure statistics.
@@ -81,6 +76,16 @@ file = {{ driver = "file", path = "{cache_path}" }}
             check=True,
             stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
+
+        with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
+            tar.add("data/adr_cache")
+
+    def generate_test_scheduling_history(self):
+        # Get the commits DB.
+        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
+            repository.COMMITS_DB
+        ):
+            db.download(repository.COMMITS_DB, force=True)
 
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
@@ -270,9 +275,6 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         zstd_compress("data/past_failures.pickle")
 
-        with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
-            tar.add("data/adr_cache")
-
 
 def main():
     description = "Retrieve and extract the test scheduling history from ActiveData"
@@ -282,7 +284,8 @@ def main():
     parser.parse_args()
 
     retriever = Retriever()
-    retriever.retrieve_test_scheduling_history()
+    retriever.retrieve_push_data()
+    retriever.generate_test_scheduling_history()
 
 
 if __name__ == "__main__":
