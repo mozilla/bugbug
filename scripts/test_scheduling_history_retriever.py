@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import db, repository, test_scheduling
-from bugbug.utils import ExpQueue, download_check_etag, zstd_compress
+from bugbug.utils import ExpQueue, download_check_etag, zstd_compress, zstd_decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -23,7 +23,8 @@ logger = getLogger(__name__)
 JOBS_TO_CONSIDER = ("test-", "build-")
 
 
-URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
+ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
+PUSH_DATA_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
 TRAINING_MONTHS = 6
 
@@ -37,7 +38,7 @@ class Retriever(object):
         cache_path = os.path.abspath("data/adr_cache")
         if not os.path.exists(cache_path):
             try:
-                download_check_etag(URL, "adr_cache.tar.xz")
+                download_check_etag(ADR_CACHE_URL, "adr_cache.tar.xz")
                 with tarfile.open("adr_cache.tar.xz", "r:xz") as tar:
                     tar.extractall()
                 assert os.path.exists("data/adr_cache"), "Decompressed adr cache exists"
@@ -80,7 +81,16 @@ file = {{ driver = "file", path = "{cache_path}" }}
         with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
             tar.add("data/adr_cache")
 
+        zstd_compress("push_data.json")
+
     def generate_test_scheduling_history(self):
+        if not os.path.exists("push_data.json"):
+            download_check_etag(PUSH_DATA_URL, "push_data.json.zst")
+            zstd_decompress("push_data.json")
+            assert os.path.exists(
+                "push_data.json"
+            ), "Decompressed push data file exists"
+
         # Get the commits DB.
         if db.is_old_version(repository.COMMITS_DB) or not db.exists(
             repository.COMMITS_DB
@@ -280,12 +290,17 @@ def main():
     description = "Retrieve and extract the test scheduling history from ActiveData"
     parser = argparse.ArgumentParser(description=description)
 
-    # Parse args to show the help if `--help` is passed
-    parser.parse_args()
+    parser.add_argument(
+        "op", help="Which operation to perform.", choices=["retrieve", "generate"]
+    )
+
+    args = parser.parse_args()
 
     retriever = Retriever()
-    retriever.retrieve_push_data()
-    retriever.generate_test_scheduling_history()
+    if args.op == "retrieve":
+        retriever.retrieve_push_data()
+    elif args.op == "generate":
+        retriever.generate_test_scheduling_history()
 
 
 if __name__ == "__main__":
