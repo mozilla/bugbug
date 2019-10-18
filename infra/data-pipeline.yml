@@ -565,7 +565,7 @@ tasks:
       workerType: relman-svc-compute
       dependencies:
         - commit-retrieval
-        - test-scheduling-history-retrieval
+        - test-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
