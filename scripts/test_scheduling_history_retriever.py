@@ -46,9 +46,7 @@ class Retriever(object):
                 try:
                     download_check_etag(OLD_ADR_CACHE_URL, "adr_cache.tar.xz")
                 except requests.exceptions.HTTPError:
-                    logger.info(
-                        "The adr cache is not available yet, trying fallback..."
-                    )
+                    logger.info("The adr cache fallback is not available...")
                     cache_available = False
 
             if cache_available:
