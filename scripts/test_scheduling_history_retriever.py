@@ -23,7 +23,7 @@ logger = getLogger(__name__)
 JOBS_TO_CONSIDER = ("test-", "build-")
 
 
-OLD_ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
+OLD_ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
 ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
 PUSH_DATA_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
