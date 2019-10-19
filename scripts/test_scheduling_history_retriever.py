@@ -23,6 +23,7 @@ logger = getLogger(__name__)
 JOBS_TO_CONSIDER = ("test-", "build-")
 
 
+OLD_ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
 ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
 PUSH_DATA_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
@@ -37,13 +38,23 @@ class Retriever(object):
         # Download previous cache.
         cache_path = os.path.abspath("data/adr_cache")
         if not os.path.exists(cache_path):
+            cache_available = True
             try:
                 download_check_etag(ADR_CACHE_URL, "adr_cache.tar.xz")
+            except requests.exceptions.HTTPError:
+                logger.info("The adr cache is not available yet, trying fallback...")
+                try:
+                    download_check_etag(OLD_ADR_CACHE_URL, "adr_cache.tar.xz")
+                except requests.exceptions.HTTPError:
+                    logger.info(
+                        "The adr cache is not available yet, trying fallback..."
+                    )
+                    cache_available = False
+
+            if cache_available:
                 with tarfile.open("adr_cache.tar.xz", "r:xz") as tar:
                     tar.extractall()
                 assert os.path.exists("data/adr_cache"), "Decompressed adr cache exists"
-            except requests.exceptions.HTTPError:
-                logger.info("The adr cache is not available yet")
 
         # Setup adr cache configuration.
         os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)
