@@ -1,13 +1,12 @@
-FROM python:3.7.4-slim
+FROM alpine:latest
 
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
-RUN apt-get update && \
-		apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev && \
-		pip install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
-		apt-get remove -y gcc g++ libffi-dev && \
-		apt-get autoremove -y && \
-		rm -rf /var/lib/apt/lists/*
+RUN apk update && \
+    apk add --no-cache build-base python3=3.7.5-r1 py3-setuptools && \
+    echo 'manylinux1_compatible = True' > /usr/lib/python3.7/_manylinux.py && \
+	pip3 install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
+	apk del build-base
 
 COPY . /tmp/bugbug
-RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
+RUN pip3 install --disable-pip-version-check --no-cache-dir /tmp/bugbug
