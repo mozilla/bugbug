@@ -108,7 +108,7 @@ tasks:
             path: /builds/worker/data/adr_cache.tar.xz
             type: file
           public/push_data.json.zst:
-            path: /builds/worker/data/push_data.json.zst
+            path: /builds/worker/push_data.json.zst
             type: file
 
         features:
