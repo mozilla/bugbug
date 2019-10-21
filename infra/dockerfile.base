@@ -4,10 +4,10 @@ FROM python:3.7.4-slim
 COPY requirements.txt /requirements.txt
 RUN apt-get update && \
 		apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev && \
-		pip install --disable-pip-version-check --no-cache-dir -r /requirements.txt && \
+		pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
 		apt-get remove -y gcc g++ libffi-dev && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
 
 COPY . /tmp/bugbug
-RUN pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
