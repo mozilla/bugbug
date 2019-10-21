@@ -4,7 +4,7 @@ FROM mozilla/bugbug-base:$BUGBUG_VERSION
 
 COPY requirements.txt /code/http_service/
 
-RUN pip install -r /code/http_service/requirements.txt
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir-r /code/http_service/requirements.txt
 
 COPY . /code/http_service/
 

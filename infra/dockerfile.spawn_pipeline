@@ -3,7 +3,7 @@ FROM python:3.7.4-slim
 # Setup dependencies in a cacheable step
 ADD spawn_pipeline_requirements.txt /code/
 
-RUN pip install --disable-pip-version-check --no-cache-dir -r /code/spawn_pipeline_requirements.txt
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /code/spawn_pipeline_requirements.txt
 
 ADD spawn_pipeline.py /code
 ADD trigger_again.py /code
