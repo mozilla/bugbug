@@ -10,7 +10,7 @@ db.register(
     TEST_SCHEDULING_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/test_scheduling_history.pickle.zst",
     2,
-    ["past_failures.pickle.zst"],
+    ["past_failures.shelve.db.zst"],
 )
 
 

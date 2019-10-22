@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import pickle
+import shelve
 import subprocess
 import tarfile
 from datetime import datetime
@@ -130,33 +131,32 @@ file = {{ driver = "file", path = "{cache_path}" }}
         else:
             last_node = None
 
-        try:
-            with open("data/past_failures.pickle", "rb") as f:
-                past_failures, push_num = pickle.load(f)
-        except FileNotFoundError:
-            past_failures = {}
-            push_num = 0
+        past_failures = shelve.open(
+            "data/past_failures.shelve",
+            protocol=pickle.HIGHEST_PROTOCOL,
+            writeback=True,
+        )
+
+        push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
         def get_and_update_past_failures(type_, task, items, push_num, is_regression):
-            if type_ not in past_failures:
-                past_failures[type_] = {}
-
-            if task not in past_failures[type_]:
-                past_failures[type_][task] = {}
-
             values_total = []
             values_prev_7 = []
             values_prev_14 = []
             values_prev_28 = []
             values_prev_56 = []
 
+            key = f"{type_}${task}${{}}"
+
             for item in items:
-                if item not in past_failures[type_][task]:
-                    cur = past_failures[type_][task][item] = ExpQueue(
+                full_key = key.format(item)
+
+                if full_key not in past_failures:
+                    cur = past_failures[full_key] = ExpQueue(
                         push_num, HISTORICAL_TIMESPAN + 1, 0
                     )
                 else:
-                    cur = past_failures[type_][task][item]
+                    cur = past_failures[full_key]
 
                 value = cur[push_num]
 
@@ -186,6 +186,10 @@ file = {{ driver = "file", path = "{cache_path}" }}
             can_start = True if last_node is None else False
             for commit_data in tqdm(repository.get_commits()):
                 node = commit_data["node"]
+
+                # Sync DB every 500 commits, so we cleanup the shelve cache (we'd run OOM otherwise!).
+                if len(commits_with_data) % 500 == 0:
+                    past_failures.sync()
 
                 if node == last_node:
                     can_start = True
@@ -286,10 +290,9 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         zstd_compress(test_scheduling.TEST_SCHEDULING_DB)
 
-        with open("data/past_failures.pickle", "wb") as f:
-            pickle.dump((past_failures, push_num), f, protocol=pickle.HIGHEST_PROTOCOL)
-
-        zstd_compress("data/past_failures.pickle")
+        past_failures["push_num"] = push_num
+        past_failures.close()
+        zstd_compress("data/past_failures.shelve.db")
 
 
 def main():
