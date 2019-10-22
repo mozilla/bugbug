@@ -151,6 +151,9 @@ tasks:
           public/test_scheduling_history.pickle.version:
             path: /data/test_scheduling_history.pickle.version
             type: file
+          public/past_failures.shelve.db.zst:
+            path: /data/past_failures.shelve.db.zst
+            type: file
 
         features:
           taskclusterProxy:
