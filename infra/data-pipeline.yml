@@ -148,6 +148,9 @@ tasks:
           public/test_scheduling_history.pickle.zst:
             path: /data/test_scheduling_history.pickle.zst
             type: file
+          public/test_scheduling_history.pickle.version:
+            path: /data/test_scheduling_history.pickle.version
+            type: file
 
         features:
           taskclusterProxy:
