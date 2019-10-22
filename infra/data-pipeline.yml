@@ -146,7 +146,7 @@ tasks:
 
         artifacts:
           public/test_scheduling_history.pickle.zst:
-            path: /builds/worker/data/test_scheduling_history.pickle.zst
+            path: /data/test_scheduling_history.pickle.zst
             type: file
 
         features:
