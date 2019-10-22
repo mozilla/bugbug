@@ -116,6 +116,8 @@ file = {{ driver = "file", path = "{cache_path}" }}
             # Revision -> (all tasks, possible regressions, likely regressions)
             push_data[row[0]] = (row[1], row[2], row[3])
 
+        logger.info(f"push data nodes: {len(push_data)}")
+
         HISTORICAL_TIMESPAN = 56
 
         if not db.is_old_version(test_scheduling.TEST_SCHEDULING_DB):
@@ -277,9 +279,10 @@ file = {{ driver = "file", path = "{cache_path}" }}
                             "is_likely_regression": task in commit_push_data[2],
                         }
 
-                push_num += 1
+                # We no longer need the push data for this node, we can free the memory.
+                del push_data[node]
 
-            logger.info(f"push data nodes: {len(push_data)}")
+                push_num += 1
 
             logger.info(f"commits linked to push data: {len(commits_with_data)}")
 
