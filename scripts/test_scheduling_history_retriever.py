@@ -152,28 +152,22 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
             for item in items:
                 if item not in past_failures[type_][task]:
-                    past_failures[type_][task][item] = ExpQueue(
+                    cur = past_failures[type_][task][item] = ExpQueue(
                         push_num, HISTORICAL_TIMESPAN + 1, 0
                     )
+                else:
+                    cur = past_failures[type_][task][item]
 
-                value = past_failures[type_][task][item][push_num]
+                value = cur[push_num]
 
                 values_total.append(value)
-                values_prev_7.append(
-                    value - past_failures[type_][task][item][push_num - 7]
-                )
-                values_prev_14.append(
-                    value - past_failures[type_][task][item][push_num - 14]
-                )
-                values_prev_28.append(
-                    value - past_failures[type_][task][item][push_num - 28]
-                )
-                values_prev_56.append(
-                    value - past_failures[type_][task][item][push_num - 56]
-                )
+                values_prev_7.append(value - cur[push_num - 7])
+                values_prev_14.append(value - cur[push_num - 14])
+                values_prev_28.append(value - cur[push_num - 28])
+                values_prev_56.append(value - cur[push_num - 56])
 
                 if is_regression:
-                    past_failures[type_][task][item][push_num] = value + 1
+                    cur[push_num] = value + 1
 
             return (
                 sum(values_total),
