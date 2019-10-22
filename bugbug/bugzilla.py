@@ -39,6 +39,7 @@ PRODUCTS = (
     "Firefox Health Report",
     # 'Focus',
     # 'Hello (Loop)',
+    "Invalid Bugs::General",
     "NSPR",
     "NSS",
     "Toolkit",
