@@ -146,10 +146,10 @@ file = {{ driver = "file", path = "{cache_path}" }}
             values_prev_28 = []
             values_prev_56 = []
 
-            key = f"{type_}${task}${{}}"
+            key = f"{type_}${task}$"
 
             for item in items:
-                full_key = key.format(item)
+                full_key = key + item
 
                 if full_key not in past_failures:
                     cur = past_failures[full_key] = ExpQueue(
