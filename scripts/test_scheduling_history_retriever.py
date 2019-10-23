@@ -187,8 +187,8 @@ file = {{ driver = "file", path = "{cache_path}" }}
             for commit_data in tqdm(repository.get_commits()):
                 node = commit_data["node"]
 
-                # Sync DB every 500 commits, so we cleanup the shelve cache (we'd run OOM otherwise!).
-                if len(commits_with_data) % 500 == 0:
+                # Sync DB every 1000 commits, so we cleanup the shelve cache (we'd run OOM otherwise!).
+                if len(commits_with_data) % 1000 == 0:
                     past_failures.sync()
 
                 if node == last_node:
