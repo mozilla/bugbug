@@ -292,7 +292,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
         past_failures["push_num"] = push_num
         past_failures.close()
-        zstd_compress("data/past_failures.shelve.db")
+        zstd_compress("data/past_failures.shelve")
 
 
 def main():
