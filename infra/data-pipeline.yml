@@ -726,7 +726,7 @@ tasks:
       workerType: relman-svc
       scopes:
         - secrets:get:project/relman/bugbug/integration
-        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "docker-worker:cache:bugbug-build"
       payload:
         features:
           taskclusterProxy:
@@ -749,7 +749,7 @@ tasks:
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
-          bugbug-mercurial-repository: /cache
+          bugbug-build: /cache
       metadata:
         name: bugbug integration test
         description: bugbug integration test
