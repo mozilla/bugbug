@@ -28,7 +28,7 @@ def integration_test():
 
     response_json = response.json()
     print("Response for bug 1376406", response_json)
-    assert response_json["class"] == "defect"
+    assert response_json["class"] is not None
 
     # Then try to classify a batch
     batch_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/batch"
@@ -50,10 +50,10 @@ def integration_test():
     response_json = response.json()
     response_1376544 = response_json["bugs"]["1376544"]
     print("Response for bug 1376544", response_1376544)
-    assert response_1376544["class"] == "enhancement"
+    assert response_1376544["class"] is not None
     response_1376412 = response_json["bugs"]["1376412"]
     print("Response for bug 1376412", response_1376412)
-    assert response_1376412["class"] == "task"
+    assert response_1376412["class"] is not None
 
 
 if __name__ == "__main__":
