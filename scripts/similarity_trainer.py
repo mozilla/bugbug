@@ -5,12 +5,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import os
 import sys
 from logging import INFO, basicConfig, getLogger
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from bugbug import bugzilla, db, similarity
+from bugbug.utils import zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -58,7 +60,9 @@ def main():
             cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
         )
 
-    model.save()
+    path = model.save()
+    assert os.path.exists(path)
+    zstd_compress(path)
 
 
 if __name__ == "__main__":

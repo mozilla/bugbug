@@ -643,7 +643,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     "comments": " ".join([c["text"] for c in bug["comments"]]),
                 }
 
-        for bug in bugs:
+        for bug in bugs():
             if isinstance(bug, dict):
                 results.append(apply_transform(bug))
             elif isinstance(bug, tuple):

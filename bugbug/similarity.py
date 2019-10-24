@@ -177,7 +177,9 @@ class BaseSimilarity(abc.ABC):
         return
 
     def save(self):
-        joblib.dump(self, f"{self.__class__.__name__.lower()}.similaritymodel")
+        path = f"{self.__class__.__name__.lower()}.similaritymodel"
+        joblib.dump(self, path)
+        return path
 
     @staticmethod
     def load(model_file_name):

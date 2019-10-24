@@ -6,7 +6,7 @@ import os
 import sys
 from logging import INFO, basicConfig, getLogger
 
-from bugbug import bugzilla, db, model, repository
+from bugbug import db
 from bugbug.models import get_model_class
 from bugbug.utils import CustomJsonEncoder, zstd_compress
 
@@ -39,6 +39,8 @@ class Trainer(object):
         model_class = get_model_class(model_name)
         if args.model in HISTORICAL_SUPPORTED_TASKS:
             model_obj = model_class(args.lemmatization, args.historical)
+        elif args.model == "regressor":
+            model_obj = model_class(args.lemmatization, args.interpretable)
         elif args.model == "duplicate":
             model_obj = model_class(
                 args.training_set_size, args.lemmatization, args.cleanup_urls
@@ -46,21 +48,11 @@ class Trainer(object):
         else:
             model_obj = model_class(args.lemmatization)
 
-        if (
-            isinstance(model_obj, model.BugModel)
-            or isinstance(model_obj, model.BugCoupleModel)
-            or (hasattr(model_obj, "bug_data") and model_obj.bug_data)
-        ):
-            if args.download_db:
-                db.download(bugzilla.BUGS_DB)
-            else:
-                logger.info("Skipping download of the bug database")
-
-        if isinstance(model_obj, model.CommitModel):
-            if args.download_db:
-                db.download(repository.COMMITS_DB)
-            else:
-                logger.info("Skipping download of the commit database")
+        if args.download_db:
+            for required_db in model_obj.required_dbs:
+                db.download(required_db)
+        else:
+            logger.info("Skipping download of the databases")
 
         logger.info(f"Training *{model_name}* model")
         metrics = model_obj.train(limit=args.limit)
@@ -130,6 +122,11 @@ def parse_args(args):
         "--historical",
         help="""Analyze historical bugs. Only used for defect, bugtype,
                 defectenhancementtask and regression tasks.""",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--interpretable",
+        help="""Only use human-interpretable features. Only used for regressor task.""",
         action="store_true",
     )
     return parser.parse_args(args)

@@ -34,6 +34,10 @@
                 "public/importance.html": {
                     "path": "/importance.html",
                     "type": "file"
+                },
+                "public/method_level.json": {
+                    "path": "/method_level.json",
+                    "type": "file"
                 }
             },
             "cache": {
@@ -49,7 +53,9 @@
             "command": [
                 "bugbug-classify-commit",
                 "/cache",
-                "${payload['DIFF_ID']}"
+                "${payload['DIFF_ID']}",
+                "/gecko-dev",
+                "/MethodDefectPredictor"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
@@ -68,7 +74,7 @@
             "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
-        "workerType": "taskcluster-generic"
+        "workerType": "relman-svc-compute"
     },
     "triggerSchema": {
         "additionalProperties": false,

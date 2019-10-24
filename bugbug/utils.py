@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import collections
 import json
 import os
 import time
@@ -22,15 +21,21 @@ from sklearn.preprocessing import OrdinalEncoder
 TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
 
 
-def split_tuple_iterator(iterable):
-    q = collections.deque()
+def split_tuple_generator(generator):
+    second_filled = False
+    q = deque()
 
     def first_iter():
-        for first, second in iterable:
-            yield first
-            q.append(second)
+        nonlocal second_filled
 
-    return first_iter(), q
+        for first, second in generator():
+            yield first
+            if not second_filled:
+                q.append(second)
+
+        second_filled = True
+
+    return first_iter, q
 
 
 def numpy_to_dict(array):

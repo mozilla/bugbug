@@ -5,13 +5,13 @@
 
 import gzip
 import io
-import json
 import logging
 import os
 import pickle
 from contextlib import contextmanager
 from urllib.parse import urljoin
 
+import orjson
 import requests
 import zstandard
 
@@ -119,11 +119,11 @@ class Store:
 class JSONStore(Store):
     def write(self, elems):
         for elem in elems:
-            self.fh.write((json.dumps(elem) + "\n").encode("utf-8"))
+            self.fh.write(orjson.dumps(elem) + b"\n")
 
     def read(self):
         for line in io.TextIOWrapper(self.fh, encoding="utf-8"):
-            yield json.loads(line)
+            yield orjson.loads(line)
 
 
 class PickleStore(Store):
@@ -214,9 +214,12 @@ def delete(path, match):
             if not match(elem):
                 yield elem
 
-    with _db_open(new_path, "wb") as wstore:
+    try:
         with _db_open(path, "rb") as rstore:
-            wstore.write(matching_elems(rstore))
+            with _db_open(new_path, "wb") as wstore:
+                wstore.write(matching_elems(rstore))
+    except FileNotFoundError:
+        return
 
     os.unlink(path)
     os.rename(new_path, path)

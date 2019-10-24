@@ -22,8 +22,8 @@ OPT_MSG_MISSING = (
 )
 
 try:
-    from keras import Input, layers
-    from keras.layers import (
+    from tensorflow.keras import Input, layers
+    from tensorflow.keras.layers import (
         GRU,
         Bidirectional,
         Dense,
@@ -33,7 +33,7 @@ try:
         GlobalMaxPooling1D,
         SpatialDropout1D,
     )
-    from keras.models import Model as KerasModel
+    from tensorflow.keras.models import Model as KerasModel
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 

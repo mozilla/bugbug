@@ -69,6 +69,13 @@ def test_delete(mock_db, db_format, db_compression):
     assert list(db.read(db_path)) == [1, 2, 3, 5, 6, 7, 8]
 
 
+def test_delete_not_existent(mock_db):
+    db_path = mock_db("json", None)
+    assert not os.path.exists(db_path)
+    db.delete(db_path, lambda x: x == 4)
+    assert not os.path.exists(db_path)
+
+
 def test_unregistered_db(tmp_path):
     db_path = tmp_path / "prova.json"
 

@@ -199,22 +199,34 @@ class directory_touched_prev(object):
 
 
 class files(object):
-    def __init__(self, min_freq=0.00003):
+    def __init__(self, min_freq=0.0014):
         self.min_freq = min_freq
 
     def fit(self, commits):
         self.count = defaultdict(int)
 
+        self.total_commits = 0
+
         for commit in commits:
+            self.total_commits += 1
+
             for f in commit["files"]:
                 self.count[f] += 1
-        self.total_files = sum(self.count.values())
+
+        # We no longer need to store counts for files which have low frequency.
+        to_del = set()
+        for f, c in self.count.items():
+            if c / self.total_commits < self.min_freq:
+                to_del.add(f)
+
+        for f in to_del:
+            del self.count[f]
 
     def __call__(self, commit, **kwargs):
         return [
             f
             for f in commit["files"]
-            if (self.count[f] / self.total_files) > self.min_freq
+            if (self.count[f] / self.total_commits) > self.min_freq
         ]
 
 
@@ -240,14 +252,14 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
     def fit(self, x, y=None):
         for feature in self.feature_extractors:
             if hasattr(feature, "fit"):
-                feature.fit(x)
+                feature.fit(x())
 
         return self
 
     def transform(self, commits):
         results = []
 
-        for commit in commits:
+        for commit in commits():
             data = {}
 
             for feature_extractor in self.feature_extractors:
@@ -256,6 +268,8 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                         continue
 
                     res = feature_extractor(commit["bug"])
+                elif "test_scheduling_features" in feature_extractor.__module__:
+                    res = feature_extractor(commit["test_job"])
                 else:
                     res = feature_extractor(commit)
 

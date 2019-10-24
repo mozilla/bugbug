@@ -23,6 +23,10 @@ from tqdm import tqdm
 from bugbug import bugzilla, db, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
+from bugbug.models.regressor import (
+    BUG_INTRODUCING_COMMITS_DB,
+    TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
+)
 from bugbug.utils import download_check_etag, retry, zstd_compress, zstd_decompress
 
 basicConfig(level=INFO)
@@ -46,20 +50,6 @@ BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
     BUG_FIXING_COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
-    1,
-)
-
-BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
-db.register(
-    BUG_INTRODUCING_COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
-    1,
-)
-
-TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
-db.register(
-    TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
     1,
 )
 
@@ -380,15 +370,6 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
-        # Analyze up to 500 commits at a time, to avoid the task running out of time.
-        done = True
-        if len(bug_fixing_commits) > 500:
-            bug_fixing_commits = bug_fixing_commits[-500:]
-            done = False
-
-        with open("done", "w") as f:
-            f.write(str(1 if done else 0))
-
         def _init(git_repo_dir):
             thread_local.git = GitRepository(git_repo_dir)
 
@@ -404,7 +385,7 @@ class RegressorFinder(object):
                 logger.info(
                     "Skipping {} as it is too big".format(bug_fixing_commit["rev"])
                 )
-                return [None]
+                return None
 
             bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
                 commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
@@ -447,19 +428,35 @@ class RegressorFinder(object):
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
-            bug_introducing_commit_futures = [
-                executor.submit(find_bic, bug_fixing_commit)
-                for bug_fixing_commit in bug_fixing_commits
-            ]
 
             def results():
-                for future in tqdm(
-                    concurrent.futures.as_completed(bug_introducing_commit_futures),
-                    total=len(bug_fixing_commits),
-                ):
-                    result = future.result()
-                    if result is not None:
-                        yield from result
+                num_analyzed = 0
+
+                bug_fixing_commits_queue = bug_fixing_commits.copy()
+
+                # Analyze up to 500 commits at a time, to avoid the task running out of time.
+                while len(bug_fixing_commits_queue) != 0 and num_analyzed != 500:
+                    bug_introducing_commit_futures = []
+                    for _ in range(min(500 - num_analyzed, len(bug_fixing_commits))):
+                        bug_introducing_commit_futures.append(
+                            executor.submit(find_bic, bug_fixing_commits.pop())
+                        )
+
+                    logger.info(
+                        f"Analyzing a chunk of {len(bug_introducing_commit_futures)} commits"
+                    )
+
+                    for future in tqdm(
+                        concurrent.futures.as_completed(bug_introducing_commit_futures),
+                        total=len(bug_introducing_commit_futures),
+                    ):
+                        result = future.result()
+                        if result is not None:
+                            num_analyzed += 1
+                            yield from result
+
+                with open("done", "w") as f:
+                    f.write(str(1 if len(bug_fixing_commits_queue) == 0 else 0))
 
             db.append(db_path, results())
 
@@ -481,9 +478,13 @@ def evaluate(bug_introducing_commits):
 
     fix_to_regressors_map = defaultdict(list)
     for bug_introducing_commit in bug_introducing_commits:
+        if not bug_introducing_commit["bug_introducing_rev"]:
+            continue
+
         fix_to_regressors_map[bug_introducing_commit["bug_fixing_rev"]].append(
             bug_introducing_commit["bug_introducing_rev"]
         )
+
     logger.info(f"{len(fix_to_regressors_map)} fixes linked to regressors")
     logger.info(
         f"{sum(len(regressors) for regressors in fix_to_regressors_map.values())} regressors linked to fixes"

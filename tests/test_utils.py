@@ -6,6 +6,18 @@
 from bugbug import utils
 
 
+def test_split_tuple_iterator():
+    X, y = utils.split_tuple_generator(
+        lambda: [("val1", "label1"), ("val2", "label2"), ("val3", "label3")]
+    )
+
+    assert list(X()) == ["val1", "val2", "val3"]
+    assert list(y) == ["label1", "label2", "label3"]
+    assert list(y) == ["label1", "label2", "label3"]
+    assert list(X()) == ["val1", "val2", "val3"]
+    assert list(y) == ["label1", "label2", "label3"]
+
+
 def test_exp_queue():
     q = utils.ExpQueue(0, 4, 0)
     q[0] = 1

@@ -44,7 +44,7 @@ tasks:
             - "git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --quiet -r test-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                pre-commit run -a"
         metadata:
           name: bugbug lint
@@ -61,7 +61,7 @@ tasks:
           workerType: github-worker
           payload:
             maxRunTime: 3600
-            image: python
+            image: python:3.7
             command:
               - "/bin/bash"
               - "-lcx"
@@ -82,7 +82,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python
+          image: python:3.7
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -90,17 +90,17 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
                apt-get -qq install -y python-pip libhdf5-dev &&
-               python2 -m pip install --quiet mercurial==5.1 &&
+               python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.1 &&
                git clone --quiet https://github.com/mozilla/version-control-tools.git &&
                git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /root/.hgrc &&
-               pip install --quiet -r requirements.txt &&
-               pip install --quiet -r extra-nlp-requirements.txt &&
-               pip install --quiet -r extra-nn-requirements.txt &&
-               pip install --quiet -r infra/spawn_pipeline_requirements.txt &&
-               pip install --quiet -r test-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nlp-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nn-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r infra/spawn_pipeline_requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
@@ -116,7 +116,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python
+          image: python:3.7
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -127,9 +127,9 @@ tasks:
                git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --quiet . &&
-               pip install --quiet -r test-requirements.txt &&
-               pip install --quiet -r http_service/requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir . &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r http_service/requirements.txt &&
                pytest --cov=http_service http_service/tests/ -vvv &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
@@ -145,7 +145,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python
+          image: python:3.7
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -156,11 +156,11 @@ tasks:
                git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --quiet -r test-requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                python -m coverage run setup.py sdist &&
-               pip install dist/bugbug-$(cat VERSION).tar.gz &&
-               pip install dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
-               pip install dist/bugbug-$(cat VERSION).tar.gz[nn] &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nn] &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
@@ -432,8 +432,8 @@ tasks:
               - "git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
-                pip install --quiet . &&
-                pip install --quiet -r test-requirements.txt &&
+                pip install --disable-pip-version-check --quiet --no-cache-dir . &&
+                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                 apt-get update &&
                 apt-get install -y redis-server &&
                 python -c 'import os; print(os.environ.keys())' &&

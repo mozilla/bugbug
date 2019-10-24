@@ -25,7 +25,7 @@ from tabulate import tabulate
 
 from bugbug import bugzilla, repository
 from bugbug.nlp import SpacyVectorizer
-from bugbug.utils import split_tuple_iterator, to_array
+from bugbug.utils import split_tuple_generator, to_array
 
 
 def classification_report_imbalanced_values(
@@ -261,7 +261,7 @@ class Model:
                     shap_val.append("-" + str(importance))
 
                 feature_value = np.squeeze(
-                    important_features["values"].toarray()[:, int(index)]
+                    to_array(important_features["values"])[:, int(index)]
                 )
                 top_feature_names.append(
                     f"{feature_names[int(index)]} = {feature_value.round(decimals=5)}"
@@ -314,18 +314,21 @@ class Model:
 
         return feature_report
 
+    def train_test_split(self, X, y):
+        return train_test_split(X, y, test_size=0.1, random_state=0)
+
     def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
         # Get items and labels, filtering out those for which we have no labels.
-        X_iter, y_iter = split_tuple_iterator(self.items_gen(classes))
+        X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform([item for item in X_iter])
+        X = self.extraction_pipeline.fit_transform(X_gen)
 
         # Calculate labels.
-        y = np.array(y_iter)
+        y = np.array(y)
 
         if limit:
             X = X[:limit]
@@ -334,11 +337,10 @@ class Model:
         print(f"X: {X.shape}, y: {y.shape}")
 
         is_multilabel = isinstance(y[0], np.ndarray)
+        is_binary = len(self.class_names) == 2
 
         # Split dataset in training and test.
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.1, random_state=0
-        )
+        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -383,7 +385,7 @@ class Model:
 
             shap.summary_plot(
                 shap_values,
-                X_train.toarray(),
+                to_array(X_train),
                 feature_names=feature_names,
                 class_names=self.class_names,
                 plot_type="layered_violin"
@@ -406,6 +408,15 @@ class Model:
             )
 
             tracking_metrics["feature_report"] = feature_report
+
+        print("Training Set scores:")
+        y_pred = self.clf.predict(X_train)
+        if not is_multilabel:
+            print(
+                classification_report_imbalanced(
+                    y_train, y_pred, labels=self.class_names
+                )
+            )
 
         print("Test Set scores:")
         # Evaluate results on the test set.
@@ -441,15 +452,24 @@ class Model:
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
 
+        confidence_thresholds = [0.6, 0.7, 0.8, 0.9]
+
+        if is_binary:
+            confidence_thresholds = [0.1, 0.2, 0.3, 0.4] + confidence_thresholds
+
         # Evaluate results on the test set for some confidence thresholds.
-        for confidence_threshold in [0.6, 0.7, 0.8, 0.9]:
+        for confidence_threshold in confidence_thresholds:
             y_pred_probas = self.clf.predict_proba(X_test)
             confidence_class_names = self.class_names + ["__NOT_CLASSIFIED__"]
 
             y_pred_filter = []
             classified_indices = []
             for i in range(0, len(y_test)):
-                argmax = np.argmax(y_pred_probas[i])
+                if not is_binary:
+                    argmax = np.argmax(y_pred_probas[i])
+                else:
+                    argmax = 1 if y_pred_probas[i][1] > confidence_threshold else 0
+
                 if y_pred_probas[i][argmax] < confidence_threshold:
                     if not is_multilabel:
                         y_pred_filter.append("__NOT_CLASSIFIED__")
@@ -467,8 +487,10 @@ class Model:
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
 
+            classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
+
             print(
-                f"\nConfidence threshold > {confidence_threshold} - {len(y_test)} classified"
+                f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
@@ -523,7 +545,7 @@ class Model:
 
         assert isinstance(items[0], dict) or isinstance(items[0], tuple)
 
-        X = self.extraction_pipeline.transform(items)
+        X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
             classes = self.clf.predict_proba(X)
         else:
@@ -574,7 +596,7 @@ class Model:
                 p = shap.force_plot(
                     explainer.expected_value,
                     shap_values[:, top_indexes],
-                    X.toarray()[:, top_indexes],
+                    to_array(X)[:, top_indexes],
                     feature_names=[str(i + 1) for i in range(len(top_indexes))],
                     matplotlib=False,
                     show=False,
@@ -614,6 +636,9 @@ class BugModel(Model):
     def __init__(self, lemmatization=False, commit_data=False):
         Model.__init__(self, lemmatization)
         self.commit_data = commit_data
+        self.required_dbs = [bugzilla.BUGS_DB]
+        if commit_data:
+            self.required_dbs.append(repository.COMMITS_DB)
 
     def items_gen(self, classes):
         if not self.commit_data:
@@ -648,6 +673,9 @@ class CommitModel(Model):
     def __init__(self, lemmatization=False, bug_data=False):
         Model.__init__(self, lemmatization)
         self.bug_data = bug_data
+        self.required_dbs = [repository.COMMITS_DB]
+        if bug_data:
+            self.required_dbs.append(bugzilla.BUGS_DB)
 
     def items_gen(self, classes):
         if not self.bug_data:
@@ -683,6 +711,10 @@ class CommitModel(Model):
 
 
 class BugCoupleModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.required_dbs = [bugzilla.BUGS_DB]
+
     def items_gen(self, classes):
         bugs = {}
         for bug in bugzilla.get_bugs():
