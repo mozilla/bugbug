@@ -17,7 +17,7 @@ ls -lh
 
 # First retrieve a subset of bug data
 # TODO: Let the script download the previous DB as it should be pretty fast?
-bugbug-data-bugzilla --limit 100
+bugbug-data-bugzilla --limit 500
 ls -lh
 ls -lh data
 
