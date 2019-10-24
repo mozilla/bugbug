@@ -418,6 +418,7 @@ tasks:
           workerType: relman-svc
           scopes:
             - secrets:get:project/relman/bugbug/integration
+            - "docker-worker:cache:integration-test"
           payload:
             features:
               taskclusterProxy:
