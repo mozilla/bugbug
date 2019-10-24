@@ -3,7 +3,7 @@ libmozdata==0.1.59
 matplotlib==3.1.1
 microannotate==0.0.16
 numpy==1.17.3
-orjson==2.0.11
+orjson==2.1.0
 pandas==0.25.2
 pydriller==1.9.2
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
