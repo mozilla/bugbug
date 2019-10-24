@@ -108,3 +108,18 @@ class prev_failures(object):
                 "failures_past_56_pushes_in_components"
             ],
         }
+
+class arch(object):
+    def __call__(self, test_job, **kwargs):
+        archs = []
+        architectures = ("64", "32", "x86", "i386", "arm", "aarch64")
+        for ps in (("linux",), ("windows", "win"), ("android",), ("macosx",)):
+            for p in ps:
+                os_info = test_job["name"][: test_job["name"].index("/")].split("-")[1]
+                if p in os_info:
+                    archs.append(os_info.replace(p, ""))
+                    break
+        assert len([a in architectures for a in archs]) == 1, "Wrong architectures ({}) in {}".format(
+            archs, test_job["name"]
+        )
+        return archs[0]
