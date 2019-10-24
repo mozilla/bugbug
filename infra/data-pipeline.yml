@@ -734,6 +734,7 @@ tasks:
         image: mozilla/bugbug-commit-retrieval:latest
         env:
           TC_SECRET_ID: project/relman/bugbug/integration
+          CACHE_DIR: "/cache"
         command:
           - "/bin/bash"
           - "-lcx"
@@ -746,6 +747,8 @@ tasks:
             apt-get install -y redis-server &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
+        cache:
+          integration-test: /cache
       metadata:
         name: bugbug integration test
         description: bugbug integration test
