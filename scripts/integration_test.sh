@@ -17,7 +17,7 @@ ls -lh
 
 # First retrieve a subset of bug data
 # TODO: Let the script download the previous DB as it should be pretty fast?
-bugbug-data-bugzilla --limit 500
+bugbug-data-bugzilla --limit 100
 ls -lh
 ls -lh data
 
@@ -27,7 +27,7 @@ rm data/commit*
 
 # Then retrieve a subset of commit data
 mkdir -p cache
-bugbug-data-commits --limit 2000 cache
+bugbug-data-commits --limit 100 cache
 ls -lh
 ls -lh data
 
