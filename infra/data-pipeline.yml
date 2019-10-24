@@ -718,6 +718,7 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+    # It's the same task integration_test as in .taskcluster.yml
     - ID: integration-test
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}

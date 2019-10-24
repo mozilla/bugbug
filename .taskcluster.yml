@@ -409,6 +409,7 @@ tasks:
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      # It's the same task integration_test as in data-pipeline.yml
       - $if: 'tasks_for == "github-push"'
         then:
           taskId: {$eval: as_slugid("integration_test")}
