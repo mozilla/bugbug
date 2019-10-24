@@ -27,7 +27,7 @@ rm data/commit*
 
 # Then retrieve a subset of commit data
 mkdir -p cache
-bugbug-data-commits --limit 100 "${CACHED_DIR:-cache}"
+bugbug-data-commits --limit 100 "${CACHE_DIR:-cache}"
 ls -lh
 ls -lh data
 
