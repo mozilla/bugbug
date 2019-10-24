@@ -28,9 +28,6 @@ class Retriever(object):
                 pass
 
             rev_start = f"children({commit['node']})"
-
-            if limit:
-                logger.warning("Limit argument was ignored, the DB was used instead")
         else:
             if limit:
                 rev_start = (
