@@ -718,44 +718,49 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
-#    - ID: integration-test
-#      created: {$fromNow: ''}
-#      deadline: {$fromNow: '119 hours'}
-#      expires: {$fromNow: '1 month'}
-#      provisionerId: aws-provisioner-v1
-#      workerType: relman-svc
-#      scopes:
-#        - secrets:get:project/relman/bugbug/integration
-#      payload:
-#        features:
-#          taskclusterProxy:
-#            true
-#        maxRunTime: 10800
-#        image: mozilla/bugbug-commit-retrieval:latest
-#        env:
-#          TC_SECRET_ID: project/relman/bugbug/integration
-#        command:
-#          - "/bin/bash"
-#          - "-lcx"
-#          - "git clone --quiet https://github.com/mozilla/bugbug &&
-#            cd bugbug &&
-#            git checkout ${version} &&
-#            pip install --quiet . &&
-#            pip install --quiet -r test-requirements.txt &&
-#            apt-get update &&
-#            apt-get install -y redis-server &&
-#            python -c 'import os; print(os.environ.keys())' &&
-#            bash ./scripts/integration_test.sh"
-#      metadata:
-#        name: bugbug integration test
-#        description: bugbug integration test
-#        owner: release-mgmt-analysis@mozilla.com
-#        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+    # It's the same task integration_test as in .taskcluster.yml
+    - ID: integration-test
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '119 hours'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: aws-provisioner-v1
+      workerType: relman-svc
+      scopes:
+        - secrets:get:project/relman/bugbug/integration
+        - "docker-worker:cache:bugbug-mercurial-repository"
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 10800
+        image: mozilla/bugbug-commit-retrieval:latest
+        env:
+          TC_SECRET_ID: project/relman/bugbug/integration
+          CACHE_DIR: "/cache"
+        command:
+          - "/bin/bash"
+          - "-lcx"
+          - "git clone --quiet https://github.com/mozilla/bugbug &&
+            cd bugbug &&
+            git checkout ${version} &&
+            pip install --quiet . &&
+            pip install --quiet -r test-requirements.txt &&
+            apt-get update &&
+            apt-get install -y redis-server &&
+            python -c 'import os; print(os.environ.keys())' &&
+            bash ./scripts/integration_test.sh"
+        cache:
+          bugbug-mercurial-repository: /cache
+      metadata:
+        name: bugbug integration test
+        description: bugbug integration test
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
     - ID: docker-push
       dependencies:
         - docker-build
-        # - integration-test
+        - integration-test
       scopes:
         - secrets:get:project/relman/bugbug/deploy
       created: {$fromNow: ''}
