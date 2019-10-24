@@ -39,6 +39,7 @@ PRODUCTS = (
     "Firefox Health Report",
     # 'Focus',
     # 'Hello (Loop)',
+    "Invalid Bugs",
     "NSPR",
     "NSS",
     "Toolkit",
@@ -75,8 +76,12 @@ def get_bug_fields():
     return r.json()["fields"]
 
 
-def get_bugs():
-    return db.read(BUGS_DB)
+def get_bugs(include_invalid=False):
+    yield from (
+        bug
+        for bug in db.read(BUGS_DB)
+        if include_invalid or bug["product"] != "Invalid Bugs"
+    )
 
 
 def set_token(token):
