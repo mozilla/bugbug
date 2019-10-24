@@ -119,7 +119,7 @@ class arch(object):
                 if p in os_info:
                     archs.append(os_info.replace(p, ""))
                     break
-        assert len([a in architectures for a in archs]) == 1, "Wrong architectures ({}) in {}".format(
+        assert sum([a in architectures for a in archs]) == 1, "Wrong architectures ({}) in {}".format(
             archs, test_job["name"]
         )
         return archs[0]
