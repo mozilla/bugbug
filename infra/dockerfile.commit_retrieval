@@ -4,18 +4,16 @@ COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
 
 # Mercurial need Python2 :(
 # git and git-hyper-blame (from depot_tools) are required by the annotate pipeline.
-RUN apt-get update && \
-    apt-get install -y python python-pip git curl && \
-    python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.1 && \
+RUN apk update && \
+    apk add --no-cache gcc g++ libgomp python2 py-setuptools py2-pip python2-dev git curl && \
+    python2 -m pip install --disable-pip-version-check --no-cache-dir mercurial==5.1 && \
     hg clone -r 709c897f2444 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
     rm -r /depot_tools/.git /depot_tools/recipes /depot_tools/tests /depot_tools/man /depot_tools/testing_support /depot_tools/win_toolchain /depot_tools/bootstrap /depot_tools/fetch_configs && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.2/rust-code-analysis-linux-x86_64.tar.bz2 | tar -C /usr/local/bin -xjv && \
-    apt-get purge -y python-pip curl && \
-    apt-get autoremove -y && \
-    rm -r /var/lib/apt/lists/*
+    apk del gcc g++ libgomp py-setuptools py2-pip python2-dev curl
 
 ENV PATH="${PATH}:/depot_tools"
 
