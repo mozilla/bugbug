@@ -33,9 +33,6 @@ class SpamBugModel(BugModel):
             bug_features.landings(),
             bug_features.product(),
             bug_features.component(),
-            bug_features.commit_added(),
-            bug_features.commit_deleted(),
-            bug_features.commit_types(),
         ]
 
         cleanup_functions = [
@@ -71,7 +68,7 @@ class SpamBugModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
+        for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
 
             # Legitimate bugs
