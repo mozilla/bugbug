@@ -833,6 +833,18 @@ def rollback(bug, when=None, do_assert=False):
 
                 bug[field] = old_value
 
+    if len(bug["comments"]) == 0:
+        assert_or_log("There must be at least one comment")
+        bug["comments"] = [
+            {
+                "count": 0,
+                "id": 0,
+                "text": "",
+                "author": bug["creator"],
+                "creation_time": bug["creation_time"],
+            }
+        ]
+
     # If the first comment is hidden.
     if bug["comments"][0]["count"] != 0:
         bug["comments"].insert(
@@ -857,17 +869,6 @@ def rollback(bug, when=None, do_assert=False):
         if dateutil.parser.parse(a["creation_time"]) - relativedelta(seconds=3)
         <= rollback_date
     ]
-
-    if len(bug["comments"]) == 0:
-        assert_or_log("There must be at least one comment")
-        bug["comments"] = [
-            {
-                "id": 0,
-                "text": "",
-                "author": bug["creator"],
-                "creation_time": bug["creation_time"],
-            }
-        ]
 
     return bug
 
