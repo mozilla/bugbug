@@ -213,19 +213,43 @@ file = {{ driver = "file", path = "{cache_path}" }}
                         task in commit_push_data[1] or task in commit_push_data[2]
                     )
 
-                    total_failures, past_7_pushes_failures, past_14_pushes_failures, past_28_pushes_failures, past_56_pushes_failures = get_and_update_past_failures(
+                    (
+                        total_failures,
+                        past_7_pushes_failures,
+                        past_14_pushes_failures,
+                        past_28_pushes_failures,
+                        past_56_pushes_failures,
+                    ) = get_and_update_past_failures(
                         "all", task, ["all"], push_num, is_regression
                     )
 
-                    total_types_failures, past_7_pushes_types_failures, past_14_pushes_types_failures, past_28_pushes_types_failures, past_56_pushes_types_failures = get_and_update_past_failures(
+                    (
+                        total_types_failures,
+                        past_7_pushes_types_failures,
+                        past_14_pushes_types_failures,
+                        past_28_pushes_types_failures,
+                        past_56_pushes_types_failures,
+                    ) = get_and_update_past_failures(
                         "type", task, commit_data["types"], push_num, is_regression
                     )
 
-                    total_files_failures, past_7_pushes_files_failures, past_14_pushes_files_failures, past_28_pushes_files_failures, past_56_pushes_files_failures = get_and_update_past_failures(
+                    (
+                        total_files_failures,
+                        past_7_pushes_files_failures,
+                        past_14_pushes_files_failures,
+                        past_28_pushes_files_failures,
+                        past_56_pushes_files_failures,
+                    ) = get_and_update_past_failures(
                         "file", task, commit_data["files"], push_num, is_regression
                     )
 
-                    total_directories_failures, past_7_pushes_directories_failures, past_14_pushes_directories_failures, past_28_pushes_directories_failures, past_56_pushes_directories_failures = get_and_update_past_failures(
+                    (
+                        total_directories_failures,
+                        past_7_pushes_directories_failures,
+                        past_14_pushes_directories_failures,
+                        past_28_pushes_directories_failures,
+                        past_56_pushes_directories_failures,
+                    ) = get_and_update_past_failures(
                         "directory",
                         task,
                         commit_data["directories"],
@@ -233,7 +257,13 @@ file = {{ driver = "file", path = "{cache_path}" }}
                         is_regression,
                     )
 
-                    total_components_failures, past_7_pushes_components_failures, past_14_pushes_components_failures, past_28_pushes_components_failures, past_56_pushes_components_failures = get_and_update_past_failures(
+                    (
+                        total_components_failures,
+                        past_7_pushes_components_failures,
+                        past_14_pushes_components_failures,
+                        past_28_pushes_components_failures,
+                        past_56_pushes_components_failures,
+                    ) = get_and_update_past_failures(
                         "component",
                         task,
                         commit_data["components"],
