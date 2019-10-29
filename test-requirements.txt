@@ -1,6 +1,6 @@
 coverage==4.5.4
 jsonschema==3.1.1
-pre-commit==1.19.0
+pre-commit==1.20.0
 pytest==5.2.2
 pytest-cov==2.8.1
 pytest-responses==0.4.0
