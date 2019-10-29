@@ -313,7 +313,7 @@ class CommitClassifier(object):
                 {
                     "index": i + 1,
                     "name": importance["feature_legend"][str(i + 1)],
-                    "shap": f'{"+" if (is_positive) else "-"}{val}',
+                    "shap": float(f'{"+" if (is_positive) else "-"}{val}'),
                     "value": importance["importances"]["values"][0, int(feature_index)],
                     "spearman": spearman,
                     "median": median,
@@ -331,9 +331,6 @@ class CommitClassifier(object):
 
         with open("importances.json", "w") as f:
             json.dump(features, f)
-
-        with open("importance.html", "w") as f:
-            f.write(importance["html"])
 
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
