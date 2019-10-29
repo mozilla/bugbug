@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime
@@ -32,6 +33,87 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
+
+
+# ------------------------------------------------------------------------------
+# Copied from https://github.com/mozilla-conduit/lando-api/blob/4b583f9d773dfc8c3e8c39e3d3b7385568d744df/landoapi/commit_message.py
+
+SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
+R_SPECIFIER = r"\br[=?]"
+R_SPECIFIER_RE = re.compile(R_SPECIFIER)
+
+LIST = r"[;,\/\\]\s*"
+
+# Note that we only allows a subset of legal IRC-nick characters.
+# Specifically, we do not allow [ \ ] ^ ` { | }
+IRC_NICK = r"[a-zA-Z0-9\-\_]+"
+
+# fmt: off
+REVIEWERS_RE = re.compile(  # noqa: E131
+    r"([\s\(\.\[;,])"                   # before "r" delimiter
+    + r"(" + SPECIFIER + r")"           # flag
+    + r"("                              # capture all reviewers
+        + r"#?"                         # Optional "#" group reviewer prefix
+        + IRC_NICK                      # reviewer
+        + r"!?"                         # Optional "!" blocking indicator
+        + r"(?:"                        # additional reviewers
+            + LIST                      # delimiter
+            + r"(?![a-z0-9\.\-]+[=?])"  # don"t extend match into next flag
+            + r"#?"                     # Optional "#" group reviewer prefix
+            + IRC_NICK                  # reviewer
+            + r"!?"                     # Optional "!" blocking indicator
+        + r")*"
+    + r")?"
+)
+# fmt: on
+
+
+def replace_reviewers(commit_description, reviewers):
+    if not reviewers:
+        reviewers_str = ""
+    else:
+        reviewers_str = "r=" + ",".join(reviewers)
+
+    if commit_description == "":
+        return reviewers_str
+
+    commit_description = commit_description.splitlines()
+    commit_summary = commit_description.pop(0)
+    commit_description = "\n".join(commit_description)
+
+    if not R_SPECIFIER_RE.search(commit_summary):
+        commit_summary += " " + reviewers_str
+    else:
+        # replace the first r? with the reviewer list, and all subsequent
+        # occurrences with a marker to mark the blocks we need to remove
+        # later
+        d = {"first": True}
+
+        def replace_first_reviewer(matchobj):
+            if R_SPECIFIER_RE.match(matchobj.group(2)):
+                if d["first"]:
+                    d["first"] = False
+                    return matchobj.group(1) + reviewers_str
+                else:
+                    return "\0"
+            else:
+                return matchobj.group(0)
+
+        commit_summary = re.sub(REVIEWERS_RE, replace_first_reviewer, commit_summary)
+
+        # remove marker values as well as leading separators.  this allows us
+        # to remove runs of multiple reviewers and retain the trailing
+        # separator.
+        commit_summary = re.sub(LIST + "\0", "", commit_summary)
+        commit_summary = re.sub("\0", "", commit_summary)
+
+    if commit_description == "":
+        return commit_summary.strip()
+    else:
+        return commit_summary.strip() + "\n" + commit_description
+
+
+# ------------------------------------------------------------------------------
 
 
 class CommitClassifier(object):
@@ -160,7 +242,9 @@ class CommitClassifier(object):
         # Load all the diff revisions
         diffs = phabricator_api.search_diffs(diff_phid=[p.phid for p in stack])
         revisions = {
-            diff["phid"]: phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            diff["phid"]: phabricator_api.load_revision(
+                rev_phid=diff["revisionPHID"], attachments={"reviewers": True}
+            )
             for diff in diffs
         }
 
@@ -185,6 +269,15 @@ class CommitClassifier(object):
             except Exception as e:
                 logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
 
+        def load_user(phid):
+            if phid.startswith("PHID-USER"):
+                return phabricator_api.load_user(user_phid=phid)
+            elif phid.startswith("PHID-PROJ"):
+                # TODO: Support group reviewers somehow.
+                logger.info(f"Skipping group reviewer {phid}")
+            else:
+                raise Exception(f"Unsupported reviewer {phid}")
+
         for patch in needed_stack:
             revision = revisions[patch.phid]
 
@@ -196,6 +289,22 @@ class CommitClassifier(object):
                 message = revision["fields"]["title"]
                 author_name = "bugbug"
                 author_email = "bugbug@mozilla.org"
+
+            reviewers = list(
+                filter(
+                    None,
+                    (
+                        load_user(reviewer["reviewerPHID"])
+                        for reviewer in revision["attachments"]["reviewers"][
+                            "reviewers"
+                        ]
+                    ),
+                )
+            )
+            reviewers = set(reviewer["fields"]["username"] for reviewer in reviewers)
+
+            if len(reviewers):
+                message = replace_reviewers(message, reviewers)
 
             logger.info(
                 f"Applying {patch.phid} from revision {revision['id']}: {message}"
