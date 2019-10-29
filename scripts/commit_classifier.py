@@ -313,7 +313,7 @@ class CommitClassifier(object):
                 {
                     "index": i + 1,
                     "name": importance["feature_legend"][str(i + 1)],
-                    "shap": f'{"+" if (is_positive) else "-"}{val}',
+                    "shap": float(f'{"+" if (is_positive) else "-"}{val}'),
                     "value": importance["importances"]["values"][0, int(feature_index)],
                     "spearman": spearman,
                     "median": median,
