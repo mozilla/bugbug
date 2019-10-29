@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import io
 from collections import defaultdict
 
 import matplotlib
@@ -592,28 +591,9 @@ class Model:
                 for i, feature_i in enumerate(top_indexes)
             }
 
-            with io.StringIO() as out:
-                p = shap.force_plot(
-                    explainer.expected_value,
-                    shap_values[:, top_indexes],
-                    to_array(X)[:, top_indexes],
-                    feature_names=[str(i + 1) for i in range(len(top_indexes))],
-                    matplotlib=False,
-                    show=False,
-                )
-
-                # TODO: use full_html=False
-                shap.save_html(out, p)
-
-                html = out.getvalue()
-
             return (
                 classes,
-                {
-                    "importances": important_features,
-                    "html": html,
-                    "feature_legend": feature_legend,
-                },
+                {"importances": important_features, "feature_legend": feature_legend},
             )
 
         return classes
