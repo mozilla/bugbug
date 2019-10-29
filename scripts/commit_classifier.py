@@ -332,9 +332,6 @@ class CommitClassifier(object):
         with open("importances.json", "w") as f:
             json.dump(features, f)
 
-        with open("importance.html", "w") as f:
-            f.write(importance["html"])
-
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
         four_months_ago = datetime.utcnow() - relativedelta(months=4)
