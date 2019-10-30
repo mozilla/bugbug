@@ -41,6 +41,7 @@ EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 TYPES_TO_EXT = {
+    "Assembly": [".asm", ".S"],
     "Javascript": [".js", ".jsm", ".sjs"],
     "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
     "Java": [".java"],
@@ -48,6 +49,7 @@ TYPES_TO_EXT = {
     "Rust": [".rs"],
     "Kotlin": [".kt"],
     "HTML/XHTML/XUL": [".html", ".htm", ".xhtml", ".xht", ".xul"],
+    "YAML": [".yaml", ".yml"],
     "Image": [
         ".png",
         ".jpg",
@@ -67,6 +69,8 @@ TYPES_TO_EXT = {
     "Audio": [".mp3", ".ogg", ".wav", ".flac", ".opus"],
     "Executable": [".exe", ".dll", ".so", ".class"],
     "Document": [".pdf", ".doc", ".otf"],
+    "Documentation": [".rst", ".md"],
+    "Build System File": [".build", ".mk", ".in"],
 }
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
