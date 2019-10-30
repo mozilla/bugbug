@@ -175,7 +175,7 @@ class Model:
                 feature_name = f"Combined text contains '{feature_name}'"
             elif type_ == "data":
                 if " in " in feature_name and feature_name.endswith("=True"):
-                    feature_name = feature_name[: len(feature_name) - len("=True")]
+                    feature_name = feature_name[: -len("=True")]
             else:
                 raise Exception(f"Unexpected feature type for: {full_feature_name}")
 
