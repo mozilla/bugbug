@@ -120,9 +120,10 @@ class RegressorFinder(object):
         logger.info("Downloading Mercurial <-> git mapping file...")
         vcs_map.download_mapfile()
 
-        self.tokenized_git_to_mercurial, self.mercurial_to_tokenized_git = microannotate_utils.get_commit_mapping(
-            self.tokenized_git_repo_dir
-        )
+        (
+            self.tokenized_git_to_mercurial,
+            self.mercurial_to_tokenized_git,
+        ) = microannotate_utils.get_commit_mapping(self.tokenized_git_repo_dir)
 
     # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
     def get_commits_to_ignore(self):
