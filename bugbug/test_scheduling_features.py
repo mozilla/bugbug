@@ -112,10 +112,11 @@ class prev_failures(object):
 class arch(object):
     def __call__(self, test_job, **kwargs):
         archs = set()   # Used set to eliminate duplicates like in case of aarch64
-        architectures = (("arm",), ("64", "aarch64"), ("32", "x86", "i386"))
-        for arcs in architectures:
+        for arcs in (("arm",), ("aarch64", "arm64"), ("64",), ("32", "x86", "i386")):
             for a in arcs:
                 if a in test_job["name"][: test_job["name"].index("/")]:
+                    if a=="64" and "aarch64" in archs:
+                        continue
                     archs.add(arcs[0])
         assert len(archs) == 1, "Wrong architectures ({}) in {}".format(
             archs, test_job["name"]
