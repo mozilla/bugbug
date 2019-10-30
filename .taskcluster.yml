@@ -37,7 +37,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python:3.7
+          image: python:3.8
           command:
             - "/bin/bash"
             - "-lcx"
@@ -61,7 +61,7 @@ tasks:
           workerType: github-worker
           payload:
             maxRunTime: 3600
-            image: python:3.7
+            image: python:3.8
             command:
               - "/bin/bash"
               - "-lcx"
@@ -82,7 +82,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python:3.7
+          image: python:3.8
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -116,7 +116,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python:3.7
+          image: python:3.8
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -145,7 +145,7 @@ tasks:
         workerType: github-worker
         payload:
           maxRunTime: 3600
-          image: python:3.7
+          image: python:3.8
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
