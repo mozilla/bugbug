@@ -281,14 +281,22 @@ class CommitClassifier(object):
         for patch in needed_stack:
             revision = revisions[patch.phid]
 
+            message = "{}\n\n{}".format(
+                revision["fields"]["title"], revision["fields"]["summary"]
+            )
+
+            author_name = None
+            author_email = None
+
             if patch.commits:
-                message = patch.commits[0]["message"]
                 author_name = patch.commits[0]["author"]["name"]
                 author_email = patch.commits[0]["author"]["email"]
-            else:
-                message = revision["fields"]["title"]
-                author_name = "bugbug"
-                author_email = "bugbug@mozilla.org"
+
+            if author_name is None:
+                author = load_user(revision["fields"]["authorPHID"])
+                author_name = author["fields"]["realName"]
+                # XXX: Figure out a way to know the email address of the author.
+                author_email = author["fields"]["username"]
 
             reviewers = list(
                 filter(
