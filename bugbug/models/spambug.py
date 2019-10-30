@@ -84,5 +84,14 @@ class SpamBugModel(BugModel):
 
         return classes, [0, 1]
 
+    def items_gen(self, classes):
+        # Overwriting this method to add include_invalid=True to get_bugs to
+        # include spam bugs.
+        return (
+            (bug, classes[bug["id"]])
+            for bug in bugzilla.get_bugs(include_invalid=True)
+            if bug["id"] in classes
+        )
+
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
