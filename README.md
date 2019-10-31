@@ -86,3 +86,9 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/nlp` contains utility functions for NLP;
 - `bugbug/labels.py` contains utility functions for handling labels;
 - `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
+
+
+## Using bugbug for non-Mozilla projects
+
+Bugbug is focussing on Mozilla use-cases for Firefox and Bugzilla.
+However, we will be happy to accept pull requests adding support for other projects or bug trackers.
