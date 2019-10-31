@@ -88,7 +88,7 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
 
 
-## Using bugbug for non-Mozilla project
+## Using bugbug for non-Mozilla projects
 
 Bugbug is focussing on Mozilla use-cases for Firefox and Bugzila.
 However, we will be happy to accept pul request adding support for other projects or bug tracker.
