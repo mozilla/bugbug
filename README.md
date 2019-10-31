@@ -90,5 +90,5 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 
 ## Using bugbug for non-Mozilla projects
 
-Bugbug is focussing on Mozilla use-cases for Firefox and Bugzila.
+Bugbug is focussing on Mozilla use-cases for Firefox and Bugzilla.
 However, we will be happy to accept pull requests adding support for other projects or bug trackers.
