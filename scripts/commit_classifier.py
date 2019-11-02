@@ -391,7 +391,7 @@ class CommitClassifier(object):
             median_buggy = np.median(buggy_X)
 
             perc_buggy_values_higher_than_median = (
-                buggy_X > median
+                buggy_X >= median
             ).sum() / buggy_X.shape[0]
             perc_buggy_values_lower_than_median = (
                 buggy_X < median
@@ -400,7 +400,7 @@ class CommitClassifier(object):
                 clean_X > median
             ).sum() / clean_X.shape[0]
             perc_clean_values_lower_than_median = (
-                clean_X < median
+                clean_X <= median
             ).sum() / clean_X.shape[0]
 
             logger.info("Feature: {}".format(importance["feature_legend"][str(i + 1)]))
