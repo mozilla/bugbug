@@ -30,9 +30,8 @@ class Retriever(object):
             rev_start = f"children({commit['node']})"
         else:
             if limit:
-                rev_start = (
-                    -limit
-                )  # Mercurial revset support negative integers starting from tip
+                # Mercurial revset supports negative integers starting from tip
+                rev_start = -limit
             else:
                 rev_start = 0
 
