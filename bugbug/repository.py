@@ -40,7 +40,7 @@ path_to_component = {}
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
-TYPES_TO_EXT = {
+SOURCE_CODE_TYPES_TO_EXT = {
     "Assembly": [".asm", ".S"],
     "Javascript": [".js", ".jsm", ".sjs"],
     "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
@@ -49,6 +49,9 @@ TYPES_TO_EXT = {
     "Rust": [".rs"],
     "Kotlin": [".kt"],
     "HTML/XHTML/XUL": [".html", ".htm", ".xhtml", ".xht", ".xul"],
+}
+
+OTHER_TYPES_TO_EXT = {
     "YAML": [".yaml", ".yml"],
     "Image": [
         ".png",
@@ -72,6 +75,8 @@ TYPES_TO_EXT = {
     "Documentation": [".rst", ".md"],
     "Build System File": [".build", ".mk", ".in"],
 }
+
+TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
 
