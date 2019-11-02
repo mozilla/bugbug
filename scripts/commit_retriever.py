@@ -31,7 +31,7 @@ class Retriever(object):
         else:
             if limit:
                 rev_start = (
-                    -1 * limit
+                    -limit
                 )  # Mercurial revset support negative integers starting from tip
             else:
                 rev_start = 0
