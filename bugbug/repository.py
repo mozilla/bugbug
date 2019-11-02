@@ -49,6 +49,7 @@ SOURCE_CODE_TYPES_TO_EXT = {
     "Rust": [".rs"],
     "Kotlin": [".kt"],
     "HTML/XHTML/XUL": [".html", ".htm", ".xhtml", ".xht", ".xul"],
+    "IDL/IPDL/WebIDL": [".idl", ".ipdl", ".webidl"],
 }
 
 OTHER_TYPES_TO_EXT = {
