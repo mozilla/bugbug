@@ -745,8 +745,8 @@ tasks:
             git checkout ${version} &&
             pip install --quiet . &&
             pip install --quiet -r test-requirements.txt &&
-            apt-get update &&
-            apt-get install -y redis-server &&
+            apt-get -qq update &&
+            apt-get -qq install -y redis-server &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
