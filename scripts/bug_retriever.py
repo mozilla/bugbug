@@ -83,8 +83,6 @@ class Retriever(object):
         all_ids = (
             timespan_ids + labelled_bug_ids + commit_bug_ids + regressed_by_bug_ids
         )
-
-        all_ids = timespan_ids + labelled_bug_ids + commit_bug_ids
         all_ids_set = set(all_ids)
 
         # We have to redownload bugs that were changed since the last download.
