@@ -76,6 +76,8 @@ class Retriever(object):
             ],
             [],
         )
+        if limit:
+            regressed_by_bug_ids = regressed_by_bug_ids[-limit:]
         logger.info(
             f"{len(regressed_by_bug_ids)} bugs which caused regressions fixed by commits."
         )
