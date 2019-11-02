@@ -232,17 +232,15 @@ class component_touched_prev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("component", commit)
         return {
-            "# of times these components have been touched before": exps["sum"],
+            "Total # of times these components have been touched before": exps["sum"],
             "Maximum # of times these components have been touched before": exps["max"],
             "Minimum # of times these components have been touched before": exps["min"],
             "Average # of times these components have been touched before": exps["avg"],
-            "# of times patches in these components have been backed out": exps[
-                "sum backout"
-            ],
+            "Total # of backouts in these components": exps["sum backout"],
             "Maximum # of backouts in these components": exps["max backout"],
             "Minimum # of backouts in these components": exps["min backout"],
             "Average # of backouts in these components": exps["avg backout"],
-            "# of times these components have recently been touched": exps[
+            "Total # of times these components have recently been touched": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT}"
             ],
             "Maximum # of times these components have recently been touched": exps[
@@ -254,7 +252,7 @@ class component_touched_prev(object):
             "Average # of times these components have recently been touched": exps[
                 f"avg {EXPERIENCE_TIMESPAN_TEXT}"
             ],
-            "# of recent backouts in these components": exps[
+            "Total # of recent backouts in these components": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT} backout"
             ],
             "Maximum # of recent backouts in these components": exps[
@@ -285,7 +283,7 @@ class directory_touched_prev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("directory", commit)
         return {
-            "# of times these directories have been touched before": exps["sum"],
+            "Total # of times these directories have been touched before": exps["sum"],
             "Maximum # of times these directories have been touched before": exps[
                 "max"
             ],
@@ -295,13 +293,11 @@ class directory_touched_prev(object):
             "Average # of times these directories have been touched before": exps[
                 "avg"
             ],
-            "# of times patches in these directories have been backed out": exps[
-                "sum backout"
-            ],
+            "Total # of backouts in these directories": exps["sum backout"],
             "Maximum # of backouts in these directories": exps["max backout"],
             "Minimum # of backouts in these directories": exps["min backout"],
             "Average # of backouts in these directories": exps["avg backout"],
-            "# of times these directories have recently been touched": exps[
+            "Total # of times these directories have recently been touched": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT}"
             ],
             "Maximum # of times these directories have recently been touched": exps[
@@ -313,7 +309,7 @@ class directory_touched_prev(object):
             "Average # of times these directories have recently been touched": exps[
                 f"avg {EXPERIENCE_TIMESPAN_TEXT}"
             ],
-            "# of recent backouts in these directories": exps[
+            "Total # of recent backouts in these directories": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT} backout"
             ],
             "Maximum # of recent backouts in these directories": exps[
@@ -364,17 +360,15 @@ class file_touched_prev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("component", commit)
         return {
-            "# of times these files have been touched before": exps["sum"],
+            "Total # of times these files have been touched before": exps["sum"],
             "Maximum # of times these files have been touched before": exps["max"],
             "Minimum # of times these files have been touched before": exps["min"],
             "Average # of times these files have been touched before": exps["avg"],
-            "# of times patches in these files have been backed out": exps[
-                "sum backout"
-            ],
+            "Total # of backouts in these files": exps["sum backout"],
             "Maximum # of backouts in these files": exps["max backout"],
             "Minimum # of backouts in these files": exps["min backout"],
             "Average # of backouts in these files": exps["avg backout"],
-            "# of times these files have recently been touched": exps[
+            "Total # of times these files have recently been touched": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT}"
             ],
             "Maximum # of times these files have recently been touched": exps[
@@ -386,7 +380,7 @@ class file_touched_prev(object):
             "Average # of times these files have recently been touched": exps[
                 f"avg {EXPERIENCE_TIMESPAN_TEXT}"
             ],
-            "# of recent backouts in these files": exps[
+            "Total # of recent backouts in these files": exps[
                 f"sum {EXPERIENCE_TIMESPAN_TEXT} backout"
             ],
             "Maximum # of recent backouts in these files": exps[

@@ -443,6 +443,85 @@ class CommitClassifier(object):
                 }
             )
 
+        # Group together features that are very similar to each other, so we can simplify the explanation
+        # to users.
+        attributes = ["Total", "Maximum", "Minimum", "Average"]
+        already_added = set()
+        feature_groups = []
+        for i1, f1 in enumerate(features):
+            if i1 in already_added:
+                continue
+
+            feature_groups.append([f1])
+
+            for j, f2 in enumerate(features[i1 + 1 :]):
+                i2 = j + i1 + 1
+
+                f1_name = f1["name"]
+                for attribute in attributes:
+                    if f1_name.startswith(attribute):
+                        f1_name = f1_name[len(attribute) + 1 :]
+                        break
+
+                f2_name = f2["name"]
+                for attribute in attributes:
+                    if f2_name.startswith(attribute):
+                        f2_name = f2_name[len(attribute) + 1 :]
+                        break
+
+                if f1_name != f2_name:
+                    continue
+
+                already_added.add(i2)
+                feature_groups[-1].append(f2)
+
+        # Pick a representative example from each group.
+        features = []
+        for feature_group in feature_groups:
+            shap = sum(f["shap"] for f in feature_group)
+
+            # Only select easily explainable features from the group.
+            selected = [
+                f
+                for f in feature_group
+                if (
+                    f["shap"] > 0
+                    and abs(f["value"] - f["median_bug_introducing"])
+                    < abs(f["value"] - f["median_clean"])
+                )
+                or (
+                    f["shap"] < 0
+                    and abs(f["value"] - f["median_clean"])
+                    < abs(f["value"] - f["median_bug_introducing"])
+                )
+            ]
+
+            # If there are no easily explainable features in the group, select all features of the group.
+            if len(selected) == 0:
+                selected = feature_group
+
+            def feature_sort_key(f):
+                if f["shap"] > 0 and f["spearman"][0] > 0:
+                    return f["perc_buggy_values_higher_than_median"]
+                elif f["shap"] > 0 and f["spearman"][0] < 0:
+                    return f["perc_buggy_values_lower_than_median"]
+                elif f["shap"] < 0 and f["spearman"][0] > 0:
+                    return f["perc_clean_values_lower_than_median"]
+                elif f["shap"] < 0 and f["spearman"][0] < 0:
+                    return f["perc_clean_values_higher_than_median"]
+
+            selected.sort(reverse=True, key=feature_sort_key)
+
+            feature = selected[-1]
+            feature["shap"] = shap
+
+            for attribute in attributes:
+                if feature["name"].startswith(attribute):
+                    feature["name"] = feature["name"][len(attribute) + 1 :]
+                    break
+
+            features.append(feature)
+
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
 
