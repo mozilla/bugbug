@@ -725,6 +725,8 @@ tasks:
       expires: {$fromNow: '1 month'}
       provisionerId: aws-provisioner-v1
       workerType: relman-svc
+      dependencies:
+        - docker-build
       scopes:
         - secrets:get:project/relman/bugbug/integration
         - "docker-worker:cache:bugbug-mercurial-repository"
