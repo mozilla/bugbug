@@ -12,11 +12,18 @@ EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 
-class files_modified_num(object):
-    name = "# of modified files"
+class source_code_files_modified_num(object):
+    name = "# of modified code files"
 
     def __call__(self, commit, **kwargs):
-        return commit["files_modified_num"]
+        return commit["source_code_files_modified_num"]
+
+
+class other_files_modified_num(object):
+    name = "# of modified non-code files"
+
+    def __call__(self, commit, **kwargs):
+        return commit["other_files_modified_num"]
 
 
 class test_files_modified_num(object):
@@ -26,31 +33,48 @@ class test_files_modified_num(object):
         return commit["test_files_modified_num"]
 
 
-class file_size(object):
+class source_code_file_size(object):
     def __call__(self, commit, **kwargs):
         return {
-            "Total file size": commit["total_file_size"],
-            "Average file size": commit["average_file_size"],
-            "Maximum file size": commit["maximum_file_size"],
-            "Minimum file size": commit["minimum_file_size"],
+            "Total code files size": commit["total_source_code_file_size"],
+            "Average code files size": commit["average_source_code_file_size"],
+            "Maximum code files size": commit["maximum_source_code_file_size"],
+            "Minimum code files size": commit["minimum_source_code_file_size"],
+        }
+
+
+class other_file_size(object):
+    def __call__(self, commit, **kwargs):
+        return {
+            "Total non-code files size": commit["total_other_file_size"],
+            "Average non-code files size": commit["average_other_file_size"],
+            "Maximum non-code files size": commit["maximum_other_file_size"],
+            "Minimum non-code files size": commit["minimum_other_file_size"],
         }
 
 
 class test_file_size(object):
     def __call__(self, commit, **kwargs):
         return {
-            "Total test file size": commit["total_test_file_size"],
-            "Average test file size": commit["average_test_file_size"],
-            "Maximum test file size": commit["maximum_test_file_size"],
-            "Minimum test file size": commit["minimum_test_file_size"],
+            "Total test files size": commit["total_test_file_size"],
+            "Average test files size": commit["average_test_file_size"],
+            "Maximum test files size": commit["maximum_test_file_size"],
+            "Minimum test files size": commit["minimum_test_file_size"],
         }
 
 
-class added(object):
-    name = "# of lines added"
+class source_code_added(object):
+    name = "# of code lines added"
 
     def __call__(self, commit, **kwargs):
-        return commit["added"]
+        return commit["source_code_added"]
+
+
+class other_added(object):
+    name = "# of non-code lines added"
+
+    def __call__(self, commit, **kwargs):
+        return commit["other_added"]
 
 
 class test_added(object):
@@ -60,11 +84,18 @@ class test_added(object):
         return commit["test_added"]
 
 
-class deleted(object):
-    name = "# of lines deleted"
+class source_code_deleted(object):
+    name = "# of code lines deleted"
 
     def __call__(self, commit, **kwargs):
-        return commit["deleted"]
+        return commit["source_code_deleted"]
+
+
+class other_deleted(object):
+    name = "# of non-code lines deleted"
+
+    def __call__(self, commit, **kwargs):
+        return commit["other_deleted"]
 
 
 class test_deleted(object):

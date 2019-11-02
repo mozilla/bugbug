@@ -107,17 +107,24 @@ class Commit:
         self.author_email = author_email
         self.reviewers = reviewers
         self.ignored = ignored
-        self.added = 0
+        self.source_code_added = 0
+        self.other_added = 0
         self.test_added = 0
-        self.deleted = 0
+        self.source_code_deleted = 0
+        self.other_deleted = 0
         self.test_deleted = 0
         self.types = set()
         self.seniority_author = 0.0
-        self.total_file_size = 0
-        self.average_file_size = 0
-        self.maximum_file_size = 0
-        self.minimum_file_size = 0
-        self.files_modified_num = 0
+        self.total_source_code_file_size = 0
+        self.average_source_code_file_size = 0
+        self.maximum_source_code_file_size = 0
+        self.minimum_source_code_file_size = 0
+        self.source_code_files_modified_num = 0
+        self.total_other_file_size = 0
+        self.average_other_file_size = 0
+        self.maximum_other_file_size = 0
+        self.minimum_other_file_size = 0
+        self.other_files_modified_num = 0
         self.total_test_file_size = 0
         self.average_test_file_size = 0
         self.maximum_test_file_size = 0
@@ -244,7 +251,8 @@ def _transform(commit):
     if commit.ignored:
         return commit
 
-    sizes = []
+    source_code_sizes = []
+    other_sizes = []
     test_sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
@@ -266,6 +274,9 @@ def _transform(commit):
                 if b"no such file in rev" not in e.err:
                     raise
 
+        ext = os.path.splitext(path)[1].lower()
+        type_ = EXT_TO_TYPES.get(ext, ext)
+
         if is_test(path):
             commit.test_files_modified_num += 1
 
@@ -274,28 +285,45 @@ def _transform(commit):
 
             if size is not None:
                 test_sizes.append(size)
+
             # We don't have a 'test' equivalent of types, as most tests are JS,
             # so this wouldn't add useful information.
-        else:
-            commit.files_modified_num += 1
+        elif type_ in SOURCE_CODE_TYPES_TO_EXT:
+            commit.source_code_files_modified_num += 1
 
-            commit.added += stats["added_lines"]
-            commit.deleted += stats["deleted_lines"]
+            commit.source_code_added += stats["added_lines"]
+            commit.source_code_deleted += stats["deleted_lines"]
 
             if size is not None:
-                sizes.append(size)
+                source_code_sizes.append(size)
 
-            ext = os.path.splitext(path)[1].lower()
-            type_ = EXT_TO_TYPES.get(ext, ext)
+            commit.types.add(type_)
+        else:
+            commit.other_files_modified_num += 1
+
+            commit.other_added += stats["added_lines"]
+            commit.other_deleted += stats["deleted_lines"]
+
+            if size is not None:
+                other_sizes.append(size)
 
             commit.types.add(type_)
 
-    commit.total_file_size = sum(sizes)
-    commit.average_file_size = (
-        commit.total_file_size / len(sizes) if len(sizes) > 0 else 0
+    commit.total_source_code_file_size = sum(source_code_sizes)
+    commit.average_source_code_file_size = (
+        commit.total_source_code_file_size / len(source_code_sizes)
+        if len(source_code_sizes) > 0
+        else 0
     )
-    commit.maximum_file_size = max(sizes, default=0)
-    commit.minimum_file_size = min(sizes, default=0)
+    commit.maximum_source_code_file_size = max(source_code_sizes, default=0)
+    commit.minimum_source_code_file_size = min(source_code_sizes, default=0)
+
+    commit.total_other_file_size = sum(other_sizes)
+    commit.average_other_file_size = (
+        commit.total_other_file_size / len(other_sizes) if len(other_sizes) > 0 else 0
+    )
+    commit.maximum_other_file_size = max(other_sizes, default=0)
+    commit.minimum_other_file_size = min(other_sizes, default=0)
 
     commit.total_test_file_size = sum(test_sizes)
     commit.average_test_file_size = (
