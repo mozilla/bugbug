@@ -31,7 +31,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    3,
+    4,
     ["commit_experiences.pickle.zst"],
 )
 
