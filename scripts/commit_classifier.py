@@ -515,7 +515,7 @@ class CommitClassifier(object):
 
             for attribute in attributes:
                 if feature["name"].startswith(attribute):
-                    feature["name"] = feature["name"][len(attribute) + 1 :]
+                    feature["name"] = feature["name"][len(attribute) + 1 :].capitalize()
                     break
 
             features.append(feature)
