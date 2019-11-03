@@ -510,7 +510,7 @@ class CommitClassifier(object):
                 elif f["shap"] < 0 and f["spearman"][0] < 0:
                     return f["perc_clean_values_higher_than_median"]
 
-            selected.sort(reverse=True, key=feature_sort_key)
+            selected.sort(key=feature_sort_key)
 
             feature = selected[-1]
             feature["shap"] = shap
