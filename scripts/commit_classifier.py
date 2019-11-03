@@ -372,7 +372,7 @@ class CommitClassifier(object):
             probabilities=True,
             importances=True,
             background_dataset=background_dataset,
-            importance_cutoff=0.1,
+            importance_cutoff=0.05,
         )
 
         features = []
