@@ -136,7 +136,7 @@ def classify_bug(
     # job to fails. What should we do here?
     probs = model.classify(list(bugs.values()), True)
     indexes = probs.argmax(axis=-1)
-    suggestions = model.clf._le.inverse_transform(indexes)
+    suggestions = model.le.inverse_transform(indexes)
 
     probs_list = probs.tolist()
     indexes_list = indexes.tolist()
