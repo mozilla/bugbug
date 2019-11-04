@@ -565,7 +565,7 @@ class Model:
             else:
                 explainer = shap.TreeExplainer(
                     self.clf,
-                    to_array(background_dataset),
+                    to_array(background_dataset(pred_class)),
                     feature_dependence="independent",
                 )
 

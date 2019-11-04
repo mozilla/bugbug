@@ -362,16 +362,15 @@ class CommitClassifier(object):
                 self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
-        # We use "clean" commits as the background dataset for feature importance.
+        # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
-        # the current commit from the "clean" commits.
-        background_dataset = self.X[self.y == 0]
+        # the current commit from the "clean" (or "dirty") commits.
 
         probs, importance = self.model.classify(
             commits[-1],
             probabilities=True,
             importances=True,
-            background_dataset=background_dataset,
+            background_dataset=lambda v: self.X[self.y != v],
             importance_cutoff=0.05,
         )
 
