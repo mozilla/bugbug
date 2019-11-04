@@ -375,9 +375,11 @@ class CommitClassifier(object):
             importance_cutoff=0.05,
         )
 
+        pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
+
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]["classes"][1][0]
+            importance["importances"]["classes"][pred_class][0]
         ):
             value = importance["importances"]["values"][0, int(feature_index)]
 
