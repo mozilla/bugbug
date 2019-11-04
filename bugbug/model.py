@@ -273,16 +273,17 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items()
             ]
 
-        # allow maximum of 5 columns in a row to fit the page better
+        # allow maximum of 3 columns in a row to fit the page better
+        COLUMNS = 3
         print("Top {} features:".format(len(top_feature_names)))
-        for i in range(0, len(top_feature_names), 5):
+        for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
-                table.append(item[i : i + 5])
+                table.append(item[i : i + COLUMNS])
             print(
                 tabulate(
                     table,
-                    headers=(["classes"] + top_feature_names)[i : i + 5],
+                    headers=(["classes"] + top_feature_names)[i : i + COLUMNS],
                     tablefmt="grid",
                 ),
                 end="\n\n",
