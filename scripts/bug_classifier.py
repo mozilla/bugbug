@@ -66,9 +66,6 @@ def classify_bugs(model_name, classifier, bug_id):
             model.print_feature_importances(
                 importance["importances"], class_probabilities=probas
             )
-
-            with open("importance.html", "w") as f:
-                f.write(importance["html"])
         else:
             probas = model.classify(bug, probabilities=True, importances=False)
 

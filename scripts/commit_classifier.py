@@ -362,22 +362,23 @@ class CommitClassifier(object):
                 self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
-        # We use "clean" commits as the background dataset for feature importance.
+        # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
-        # the current commit from the "clean" commits.
-        background_dataset = self.X[self.y == 0]
+        # the current commit from the "clean" (or "dirty") commits.
 
         probs, importance = self.model.classify(
             commits[-1],
             probabilities=True,
             importances=True,
-            background_dataset=background_dataset,
-            importance_cutoff=0.1,
+            background_dataset=lambda v: self.X[self.y != v],
+            importance_cutoff=0.05,
         )
+
+        pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]["classes"][1][0]
+            importance["importances"]["classes"][pred_class][0]
         ):
             value = importance["importances"]["values"][0, int(feature_index)]
 
@@ -510,14 +511,12 @@ class CommitClassifier(object):
                 elif f["shap"] < 0 and f["spearman"][0] < 0:
                     return f["perc_clean_values_higher_than_median"]
 
-            selected.sort(reverse=True, key=feature_sort_key)
-
-            feature = selected[-1]
+            feature = max(selected, key=feature_sort_key)
             feature["shap"] = shap
 
             for attribute in attributes:
                 if feature["name"].startswith(attribute):
-                    feature["name"] = feature["name"][len(attribute) + 1 :]
+                    feature["name"] = feature["name"][len(attribute) + 1 :].capitalize()
                     break
 
             features.append(feature)
