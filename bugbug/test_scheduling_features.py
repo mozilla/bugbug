@@ -116,10 +116,10 @@ class arch(object):
             return []
         archs = set()  # Used set to eliminate duplicates like in case of aarch64
         for arcs in (
-            ("arm",),
+            ("arm", "arm7"),
             ("aarch64", "arm64"),
             ("64", "x86_64"),
-            ("32", "x86", "i386", "arm7"),
+            ("32", "x86", "i386"),
         ):
             for a in arcs:
                 if a in test_job["name"][: test_job["name"].index("/")]:
@@ -127,8 +127,6 @@ class arch(object):
                         continue
                     elif a == "x86" and "64" in archs:
                         continue
-                    elif a == "arm7" and "arm" in archs:
-                        archs.remove("arm")
                     archs.add(arcs[0])
         assert len(archs) == 1, "Wrong architectures ({}) in {}".format(
             archs, test_job["name"]
