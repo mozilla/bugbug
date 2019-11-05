@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 from datetime import datetime
@@ -32,6 +33,87 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
+
+
+# ------------------------------------------------------------------------------
+# Copied from https://github.com/mozilla-conduit/lando-api/blob/4b583f9d773dfc8c3e8c39e3d3b7385568d744df/landoapi/commit_message.py
+
+SPECIFIER = r"(?:r|a|sr|rs|ui-r)[=?]"
+R_SPECIFIER = r"\br[=?]"
+R_SPECIFIER_RE = re.compile(R_SPECIFIER)
+
+LIST = r"[;,\/\\]\s*"
+
+# Note that we only allows a subset of legal IRC-nick characters.
+# Specifically, we do not allow [ \ ] ^ ` { | }
+IRC_NICK = r"[a-zA-Z0-9\-\_]+"
+
+# fmt: off
+REVIEWERS_RE = re.compile(  # noqa: E131
+    r"([\s\(\.\[;,])"                   # before "r" delimiter
+    + r"(" + SPECIFIER + r")"           # flag
+    + r"("                              # capture all reviewers
+        + r"#?"                         # Optional "#" group reviewer prefix
+        + IRC_NICK                      # reviewer
+        + r"!?"                         # Optional "!" blocking indicator
+        + r"(?:"                        # additional reviewers
+            + LIST                      # delimiter
+            + r"(?![a-z0-9\.\-]+[=?])"  # don"t extend match into next flag
+            + r"#?"                     # Optional "#" group reviewer prefix
+            + IRC_NICK                  # reviewer
+            + r"!?"                     # Optional "!" blocking indicator
+        + r")*"
+    + r")?"
+)
+# fmt: on
+
+
+def replace_reviewers(commit_description, reviewers):
+    if not reviewers:
+        reviewers_str = ""
+    else:
+        reviewers_str = "r=" + ",".join(reviewers)
+
+    if commit_description == "":
+        return reviewers_str
+
+    commit_description = commit_description.splitlines()
+    commit_summary = commit_description.pop(0)
+    commit_description = "\n".join(commit_description)
+
+    if not R_SPECIFIER_RE.search(commit_summary):
+        commit_summary += " " + reviewers_str
+    else:
+        # replace the first r? with the reviewer list, and all subsequent
+        # occurrences with a marker to mark the blocks we need to remove
+        # later
+        d = {"first": True}
+
+        def replace_first_reviewer(matchobj):
+            if R_SPECIFIER_RE.match(matchobj.group(2)):
+                if d["first"]:
+                    d["first"] = False
+                    return matchobj.group(1) + reviewers_str
+                else:
+                    return "\0"
+            else:
+                return matchobj.group(0)
+
+        commit_summary = re.sub(REVIEWERS_RE, replace_first_reviewer, commit_summary)
+
+        # remove marker values as well as leading separators.  this allows us
+        # to remove runs of multiple reviewers and retain the trailing
+        # separator.
+        commit_summary = re.sub(LIST + "\0", "", commit_summary)
+        commit_summary = re.sub("\0", "", commit_summary)
+
+    if commit_description == "":
+        return commit_summary.strip()
+    else:
+        return commit_summary.strip() + "\n" + commit_description
+
+
+# ------------------------------------------------------------------------------
 
 
 class CommitClassifier(object):
@@ -160,7 +242,9 @@ class CommitClassifier(object):
         # Load all the diff revisions
         diffs = phabricator_api.search_diffs(diff_phid=[p.phid for p in stack])
         revisions = {
-            diff["phid"]: phabricator_api.load_revision(rev_phid=diff["revisionPHID"])
+            diff["phid"]: phabricator_api.load_revision(
+                rev_phid=diff["revisionPHID"], attachments={"reviewers": True}
+            )
             for diff in diffs
         }
 
@@ -185,17 +269,50 @@ class CommitClassifier(object):
             except Exception as e:
                 logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
 
+        def load_user(phid):
+            if phid.startswith("PHID-USER"):
+                return phabricator_api.load_user(user_phid=phid)
+            elif phid.startswith("PHID-PROJ"):
+                # TODO: Support group reviewers somehow.
+                logger.info(f"Skipping group reviewer {phid}")
+            else:
+                raise Exception(f"Unsupported reviewer {phid}")
+
         for patch in needed_stack:
             revision = revisions[patch.phid]
 
+            message = "{}\n\n{}".format(
+                revision["fields"]["title"], revision["fields"]["summary"]
+            )
+
+            author_name = None
+            author_email = None
+
             if patch.commits:
-                message = patch.commits[0]["message"]
                 author_name = patch.commits[0]["author"]["name"]
                 author_email = patch.commits[0]["author"]["email"]
-            else:
-                message = revision["fields"]["title"]
-                author_name = "bugbug"
-                author_email = "bugbug@mozilla.org"
+
+            if author_name is None:
+                author = load_user(revision["fields"]["authorPHID"])
+                author_name = author["fields"]["realName"]
+                # XXX: Figure out a way to know the email address of the author.
+                author_email = author["fields"]["username"]
+
+            reviewers = list(
+                filter(
+                    None,
+                    (
+                        load_user(reviewer["reviewerPHID"])
+                        for reviewer in revision["attachments"]["reviewers"][
+                            "reviewers"
+                        ]
+                    ),
+                )
+            )
+            reviewers = set(reviewer["fields"]["username"] for reviewer in reviewers)
+
+            if len(reviewers):
+                message = replace_reviewers(message, reviewers)
 
             logger.info(
                 f"Applying {patch.phid} from revision {revision['id']}: {message}"
@@ -245,36 +362,39 @@ class CommitClassifier(object):
                 self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
             )
 
-        # We use "clean" commits as the background dataset for feature importance.
+        # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
-        # the current commit from the "clean" commits.
-        background_dataset = self.X[self.y == 0]
+        # the current commit from the "clean" (or "dirty") commits.
 
         probs, importance = self.model.classify(
             commits[-1],
             probabilities=True,
             importances=True,
-            background_dataset=background_dataset,
-            importance_cutoff=0.1,
+            background_dataset=lambda v: self.X[self.y != v],
+            importance_cutoff=0.05,
         )
+
+        pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
-            importance["importances"]["classes"][1][0]
+            importance["importances"]["classes"][pred_class][0]
         ):
             value = importance["importances"]["values"][0, int(feature_index)]
 
             X = self.X[:, int(feature_index)]
-            spearman = spearmanr(X, self.y)
+            y = self.y[X != 0]
+            X = X[X != 0]
+            spearman = spearmanr(X, y)
 
-            buggy_X = X[self.y == 1]
-            clean_X = X[self.y == 0]
+            buggy_X = X[y == 1]
+            clean_X = X[y == 0]
             median = np.median(X)
             median_clean = np.median(clean_X)
             median_buggy = np.median(buggy_X)
 
             perc_buggy_values_higher_than_median = (
-                buggy_X > median
+                buggy_X >= median
             ).sum() / buggy_X.shape[0]
             perc_buggy_values_lower_than_median = (
                 buggy_X < median
@@ -283,7 +403,7 @@ class CommitClassifier(object):
                 clean_X > median
             ).sum() / clean_X.shape[0]
             perc_clean_values_lower_than_median = (
-                clean_X < median
+                clean_X <= median
             ).sum() / clean_X.shape[0]
 
             logger.info("Feature: {}".format(importance["feature_legend"][str(i + 1)]))
@@ -313,7 +433,7 @@ class CommitClassifier(object):
                 {
                     "index": i + 1,
                     "name": importance["feature_legend"][str(i + 1)],
-                    "shap": f'{"+" if (is_positive) else "-"}{val}',
+                    "shap": float(f'{"+" if (is_positive) else "-"}{val}'),
                     "value": importance["importances"]["values"][0, int(feature_index)],
                     "spearman": spearman,
                     "median": median,
@@ -326,14 +446,88 @@ class CommitClassifier(object):
                 }
             )
 
+        # Group together features that are very similar to each other, so we can simplify the explanation
+        # to users.
+        attributes = ["Total", "Maximum", "Minimum", "Average"]
+        already_added = set()
+        feature_groups = []
+        for i1, f1 in enumerate(features):
+            if i1 in already_added:
+                continue
+
+            feature_groups.append([f1])
+
+            for j, f2 in enumerate(features[i1 + 1 :]):
+                i2 = j + i1 + 1
+
+                f1_name = f1["name"]
+                for attribute in attributes:
+                    if f1_name.startswith(attribute):
+                        f1_name = f1_name[len(attribute) + 1 :]
+                        break
+
+                f2_name = f2["name"]
+                for attribute in attributes:
+                    if f2_name.startswith(attribute):
+                        f2_name = f2_name[len(attribute) + 1 :]
+                        break
+
+                if f1_name != f2_name:
+                    continue
+
+                already_added.add(i2)
+                feature_groups[-1].append(f2)
+
+        # Pick a representative example from each group.
+        features = []
+        for feature_group in feature_groups:
+            shap = sum(f["shap"] for f in feature_group)
+
+            # Only select easily explainable features from the group.
+            selected = [
+                f
+                for f in feature_group
+                if (
+                    f["shap"] > 0
+                    and abs(f["value"] - f["median_bug_introducing"])
+                    < abs(f["value"] - f["median_clean"])
+                )
+                or (
+                    f["shap"] < 0
+                    and abs(f["value"] - f["median_clean"])
+                    < abs(f["value"] - f["median_bug_introducing"])
+                )
+            ]
+
+            # If there are no easily explainable features in the group, select all features of the group.
+            if len(selected) == 0:
+                selected = feature_group
+
+            def feature_sort_key(f):
+                if f["shap"] > 0 and f["spearman"][0] > 0:
+                    return f["perc_buggy_values_higher_than_median"]
+                elif f["shap"] > 0 and f["spearman"][0] < 0:
+                    return f["perc_buggy_values_lower_than_median"]
+                elif f["shap"] < 0 and f["spearman"][0] > 0:
+                    return f["perc_clean_values_lower_than_median"]
+                elif f["shap"] < 0 and f["spearman"][0] < 0:
+                    return f["perc_clean_values_higher_than_median"]
+
+            feature = max(selected, key=feature_sort_key)
+            feature["shap"] = shap
+
+            for attribute in attributes:
+                if feature["name"].startswith(attribute):
+                    feature["name"] = feature["name"][len(attribute) + 1 :].capitalize()
+                    break
+
+            features.append(feature)
+
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
 
         with open("importances.json", "w") as f:
             json.dump(features, f)
-
-        with open("importance.html", "w") as f:
-            f.write(importance["html"])
 
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.

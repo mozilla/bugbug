@@ -76,6 +76,8 @@ class Retriever(object):
             ],
             [],
         )
+        if limit:
+            regressed_by_bug_ids = regressed_by_bug_ids[-limit:]
         logger.info(
             f"{len(regressed_by_bug_ids)} bugs which caused regressions fixed by commits."
         )
@@ -83,8 +85,6 @@ class Retriever(object):
         all_ids = (
             timespan_ids + labelled_bug_ids + commit_bug_ids + regressed_by_bug_ids
         )
-
-        all_ids = timespan_ids + labelled_bug_ids + commit_bug_ids
         all_ids_set = set(all_ids)
 
         # We have to redownload bugs that were changed since the last download.

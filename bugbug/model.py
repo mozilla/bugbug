@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import io
 from collections import defaultdict
 
 import matplotlib
@@ -176,7 +175,7 @@ class Model:
                 feature_name = f"Combined text contains '{feature_name}'"
             elif type_ == "data":
                 if " in " in feature_name and feature_name.endswith("=True"):
-                    feature_name = feature_name[: len(feature_name) - len("=True")]
+                    feature_name = feature_name[: -len("=True")]
             else:
                 raise Exception(f"Unexpected feature type for: {full_feature_name}")
 
@@ -185,10 +184,6 @@ class Model:
         return cleaned_feature_names
 
     def get_important_features(self, cutoff, shap_values):
-
-        if not isinstance(shap_values, list):
-            shap_values = [shap_values]
-
         # returns top features for a shap_value matrix
         def get_top_features(cutoff, shap_values):
             # Calculate the values that represent the fraction of the model output variability attributable
@@ -232,7 +227,9 @@ class Model:
                 for importance, index, is_positive in important_features["average"]
             ]
 
-            important_features["classes"][self.class_names[num]] = (
+            class_name = self.le.inverse_transform([num])[0]
+
+            important_features["classes"][class_name] = (
                 top_item_features,
                 top_avg,
             )
@@ -244,13 +241,9 @@ class Model:
         # extract importance values from the top features for the predicted class
         # when classifying
         if class_probabilities is not None:
-            # shap_values are stored in class 1 for binary classification
-            if len(class_probabilities[0]) != 2:
-                predicted_class_index = class_probabilities.argmax(axis=-1)[0]
-            else:
-                predicted_class_index = 0
+            predicted_class_index = class_probabilities.argmax(axis=-1)[0]
+            predicted_class = self.le.inverse_transform([predicted_class_index])[0]
 
-            predicted_class = self.class_names[predicted_class_index]
             imp_values = important_features["classes"][predicted_class][0]
             shap_val = []
             top_feature_names = []
@@ -280,16 +273,17 @@ class Model:
                 for class_name, imp_values in important_features["classes"].items()
             ]
 
-        # allow maximum of 5 columns in a row to fit the page better
+        # allow maximum of 3 columns in a row to fit the page better
+        COLUMNS = 3
         print("Top {} features:".format(len(top_feature_names)))
-        for i in range(0, len(top_feature_names), 5):
+        for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
-                table.append(item[i : i + 5])
+                table.append(item[i : i + COLUMNS])
             print(
                 tabulate(
                     table,
-                    headers=(["classes"] + top_feature_names)[i : i + 5],
+                    headers=(["classes"] + top_feature_names)[i : i + COLUMNS],
                     tablefmt="grid",
                 ),
                 end="\n\n",
@@ -309,7 +303,9 @@ class Model:
 
         for i, feature_name in enumerate(top_feature_names):
             for class_name, imp_values in important_features["classes"].items():
-                class_report = feature_report["classes"].setdefault(class_name, {})
+                class_report = feature_report["classes"].setdefault(
+                    class_name.item(), {}
+                )
                 class_report[feature_name] = float(imp_values[1][i])
 
         return feature_report
@@ -383,14 +379,21 @@ class Model:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
+            # In the binary case, sometimes shap returns a single shap values matrix.
+            if is_binary and not isinstance(shap_values, list):
+                shap_values = [-shap_values, shap_values]
+                summary_plot_value = shap_values[1]
+                summary_plot_type = "layered_violin"
+            else:
+                summary_plot_value = shap_values
+                summary_plot_type = None
+
             shap.summary_plot(
-                shap_values,
+                summary_plot_value,
                 to_array(X_train),
                 feature_names=feature_names,
                 class_names=self.class_names,
-                plot_type="layered_violin"
-                if not isinstance(shap_values, list)
-                else None,
+                plot_type=summary_plot_type,
                 show=False,
             )
 
@@ -554,35 +557,32 @@ class Model:
         classes = self.overwrite_classes(items, classes, probabilities)
 
         if importances:
+            pred_class_index = classes.argmax(axis=-1)[0]
+            pred_class = self.le.inverse_transform([pred_class_index])[0]
+
             if background_dataset is None:
                 explainer = shap.TreeExplainer(self.clf)
             else:
                 explainer = shap.TreeExplainer(
                     self.clf,
-                    to_array(background_dataset),
+                    to_array(background_dataset(pred_class)),
                     feature_dependence="independent",
                 )
+
             shap_values = explainer.shap_values(to_array(X))
+
+            # In the binary case, sometimes shap returns a single shap values matrix.
+            if len(classes[0]) == 2 and not isinstance(shap_values, list):
+                shap_values = [-shap_values, shap_values]
 
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
             important_features["values"] = X
 
-            # Workaround: handle multi class case for force_plot to work correctly
-            if len(classes[0]) > 2:
-                pred_class_index = classes.argmax(axis=-1)[0]
-                explainer.expected_value = explainer.expected_value[pred_class_index]
-                shap_values = shap_values[pred_class_index]
-            else:
-                pred_class_index = 0
-
-            pred_class = self.class_names[pred_class_index]
             top_indexes = [
                 int(index)
-                for importance, index, is_positive in important_features["classes"][
-                    pred_class
-                ][0]
+                for _, index, _ in important_features["classes"][pred_class][0]
             ]
 
             feature_names = self.get_human_readable_feature_names()
@@ -592,28 +592,9 @@ class Model:
                 for i, feature_i in enumerate(top_indexes)
             }
 
-            with io.StringIO() as out:
-                p = shap.force_plot(
-                    explainer.expected_value,
-                    shap_values[:, top_indexes],
-                    to_array(X)[:, top_indexes],
-                    feature_names=[str(i + 1) for i in range(len(top_indexes))],
-                    matplotlib=False,
-                    show=False,
-                )
-
-                # TODO: use full_html=False
-                shap.save_html(out, p)
-
-                html = out.getvalue()
-
             return (
                 classes,
-                {
-                    "importances": important_features,
-                    "html": html,
-                    "feature_legend": feature_legend,
-                },
+                {"importances": important_features, "feature_legend": feature_legend},
             )
 
         return classes

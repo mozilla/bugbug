@@ -368,6 +368,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
                 1510849,
                 1531130,
                 1578734,
+                1591051,
             )
         )  # https://bugzilla.mozilla.org/show_bug.cgi?id=1556319
         or (field == "whiteboard" and bug_id in (1385923, 1340867))
@@ -381,6 +382,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             field == "target_milestone"
             and bug_id in {11050, 19462, 106327, 107264, 144795, 306730}
         )
+        or (field == "product" and bug_id == 21438)
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -401,6 +403,7 @@ def is_expected_inconsistent_change_list_field(field, bug_id, value):
                 "patch",
                 "nsbeta1",
                 "nsbeta1+",
+                "nsbeta1-",
                 "nsbeta3",
                 "mozilla1.1",
                 "mozilla1.0",
@@ -412,6 +415,7 @@ def is_expected_inconsistent_change_list_field(field, bug_id, value):
                 "verified1.0.1",
                 "fixed1.9.0.10",
                 "adt1.0.1+",
+                "mail3",
             ]
         )  # These keywords don't exist anymore.
         or is_email(
@@ -833,6 +837,18 @@ def rollback(bug, when=None, do_assert=False):
 
                 bug[field] = old_value
 
+    if len(bug["comments"]) == 0:
+        assert_or_log("There must be at least one comment")
+        bug["comments"] = [
+            {
+                "count": 0,
+                "id": 0,
+                "text": "",
+                "author": bug["creator"],
+                "creation_time": bug["creation_time"],
+            }
+        ]
+
     # If the first comment is hidden.
     if bug["comments"][0]["count"] != 0:
         bug["comments"].insert(
@@ -857,17 +873,6 @@ def rollback(bug, when=None, do_assert=False):
         if dateutil.parser.parse(a["creation_time"]) - relativedelta(seconds=3)
         <= rollback_date
     ]
-
-    if len(bug["comments"]) == 0:
-        assert_or_log("There must be at least one comment")
-        bug["comments"] = [
-            {
-                "id": 0,
-                "text": "",
-                "author": bug["creator"],
-                "creation_time": bug["creation_time"],
-            }
-        ]
 
     return bug
 

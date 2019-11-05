@@ -41,10 +41,14 @@ class RegressorModel(CommitModel):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            commit_features.file_size(),
+            commit_features.source_code_file_size(),
+            commit_features.other_file_size(),
+            commit_features.test_file_size(),
+            commit_features.source_code_added(),
+            commit_features.other_added(),
             commit_features.test_added(),
-            commit_features.added(),
-            commit_features.deleted(),
+            commit_features.source_code_deleted(),
+            commit_features.other_deleted(),
             commit_features.test_deleted(),
             commit_features.author_experience(),
             commit_features.reviewer_experience(),
@@ -58,7 +62,9 @@ class RegressorModel(CommitModel):
             commit_features.components_modified_num(),
             commit_features.directories(),
             commit_features.directories_modified_num(),
-            commit_features.files_modified_num(),
+            commit_features.source_code_files_modified_num(),
+            commit_features.other_files_modified_num(),
+            commit_features.test_files_modified_num(),
         ]
 
         cleanup_functions = [

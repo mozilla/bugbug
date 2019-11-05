@@ -33,9 +33,6 @@ class SpamBugModel(BugModel):
             bug_features.landings(),
             bug_features.product(),
             bug_features.component(),
-            bug_features.commit_added(),
-            bug_features.commit_deleted(),
-            bug_features.commit_types(),
         ]
 
         cleanup_functions = [
@@ -71,7 +68,7 @@ class SpamBugModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
+        for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
 
             # Legitimate bugs
@@ -86,6 +83,15 @@ class SpamBugModel(BugModel):
                 classes[bug_id] = 1
 
         return classes, [0, 1]
+
+    def items_gen(self, classes):
+        # Overwriting this method to add include_invalid=True to get_bugs to
+        # include spam bugs.
+        return (
+            (bug, classes[bug["id"]])
+            for bug in bugzilla.get_bugs(include_invalid=True)
+            if bug["id"] in classes
+        )
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
