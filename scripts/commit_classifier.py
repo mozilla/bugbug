@@ -383,10 +383,12 @@ class CommitClassifier(object):
             value = importance["importances"]["values"][0, int(feature_index)]
 
             X = self.X[:, int(feature_index)]
-            spearman = spearmanr(X, self.y)
+            y = self.y[X != 0]
+            X = X[X != 0]
+            spearman = spearmanr(X, y)
 
-            buggy_X = X[self.y == 1]
-            clean_X = X[self.y == 0]
+            buggy_X = X[y == 1]
+            clean_X = X[y == 0]
             median = np.median(X)
             median_clean = np.median(clean_X)
             median_buggy = np.median(buggy_X)
