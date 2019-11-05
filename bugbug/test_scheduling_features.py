@@ -108,3 +108,27 @@ class prev_failures(object):
                 "failures_past_56_pushes_in_components"
             ],
         }
+
+
+class arch(object):
+    def __call__(self, test_job, **kwargs):
+        if "build-" in test_job["name"]:
+            return []
+        archs = set()  # Used set to eliminate duplicates like in case of aarch64
+        for arcs in (
+            ("arm", "arm7"),
+            ("aarch64", "arm64"),
+            ("64", "x86_64"),
+            ("32", "x86", "i386"),
+        ):
+            for a in arcs:
+                if a in test_job["name"][: test_job["name"].index("/")]:
+                    if a == "64" and "aarch64" in archs:
+                        continue
+                    elif a == "x86" and "64" in archs:
+                        continue
+                    archs.add(arcs[0])
+        assert len(archs) == 1, "Wrong architectures ({}) in {}".format(
+            archs, test_job["name"]
+        )
+        return archs.pop()
