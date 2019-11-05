@@ -22,6 +22,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 JOBS_TO_CONSIDER = ("test-", "build-")
+JOBS_TO_IGNORE = ("build-docker-image-",)
 
 
 OLD_ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/adr_cache.tar.xz"
@@ -207,6 +208,9 @@ file = {{ driver = "file", path = "{cache_path}" }}
 
                 for task in commit_push_data[0]:
                     if not any(task.startswith(j) for j in JOBS_TO_CONSIDER):
+                        continue
+
+                    if any(task.startswith(j) for j in JOBS_TO_IGNORE):
                         continue
 
                     is_regression = (
