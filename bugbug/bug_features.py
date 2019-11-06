@@ -303,6 +303,11 @@ class affected_then_unaffected(single_bug_feature):
         )
 
 
+class num_words_title(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return len(bug["summary"].split())
+
+
 class has_image_attachment_at_bug_creation(single_bug_feature):
     name = "Image attachment present at bug creation"
 
