@@ -33,6 +33,7 @@ class SpamBugModel(BugModel):
             bug_features.landings(),
             bug_features.product(),
             bug_features.component(),
+            bug_features.num_words_title(),
         ]
 
         cleanup_functions = [
