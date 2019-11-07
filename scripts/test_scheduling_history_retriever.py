@@ -11,7 +11,6 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
-import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -24,7 +23,13 @@ logger = getLogger(__name__)
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = ("build-docker-image-",)
 
-ADR_CACHE_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.xz"
+ADR_CACHE_DB = "data/adr_cache.tar"
+db.register(
+    ADR_CACHE_DB,
+    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.zst",
+    1,
+    support_files=[],
+)
 PUSH_DATA_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
 TRAINING_MONTHS = 6
@@ -36,22 +41,20 @@ class Retriever(object):
 
     def retrieve_push_data(self):
         # Download previous cache.
-        cache_path = os.path.abspath("data/adr_cache")
-        if not os.path.exists(cache_path):
-            try:
-                download_check_etag(ADR_CACHE_URL, "adr_cache.tar.xz")
-                with tarfile.open("adr_cache.tar.xz", "r:xz") as tar:
+        cache_path = os.path.splitext(ADR_CACHE_DB)[0]
+        if not db.is_old_version(ADR_CACHE_DB):
+            db.download(ADR_CACHE_DB)
+            if os.path.exists(ADR_CACHE_DB):
+                with tarfile.open(ADR_CACHE_DB, "r") as tar:
                     tar.extractall()
-                assert os.path.exists("data/adr_cache"), "Decompressed adr cache exists"
-            except requests.exceptions.HTTPError:
-                logger.info("The adr cache is not available yet...")
+                assert os.path.exists(cache_path), "Decompressed adr cache exists"
 
         # Setup adr cache configuration.
         os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)
         with open(os.path.expanduser("~/.config/adr/config.toml"), "w") as f:
             f.write(
                 f"""[adr.cache.stores]
-file = {{ driver = "file", path = "{cache_path}" }}
+file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 """
             )
 
@@ -79,8 +82,9 @@ file = {{ driver = "file", path = "{cache_path}" }}
             stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
 
-        with tarfile.open("data/adr_cache.tar.xz", "w:xz") as tar:
-            tar.add("data/adr_cache")
+        with tarfile.open(ADR_CACHE_DB, "w") as tar:
+            tar.add(cache_path)
+        zstd_compress(ADR_CACHE_DB)
 
         zstd_compress("push_data.json")
 
