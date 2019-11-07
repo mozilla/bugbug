@@ -100,7 +100,7 @@ tasks:
           - "/bin/bash"
           - "-cx"
           - "wget https://github.com/mozilla/bugbug/raw/${version}/scripts/test_scheduling_history_retriever.py &&
-             pip install --quiet --no-cache-dir bugbug==${version} &&
+             pip install --disable-pip-version-check --quiet --no-cache-dir bugbug==${version} &&
              python test_scheduling_history_retriever.py retrieve"
 
         artifacts:
@@ -747,8 +747,8 @@ tasks:
             git clone --quiet https://github.com/mozilla/bugbug &&
             cd bugbug &&
             git checkout ${version} &&
-            pip install --quiet . &&
-            pip install --quiet -r test-requirements.txt &&
+            pip install --disable-pip-version-check --quiet --no-cache-dir . &&
+            pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
