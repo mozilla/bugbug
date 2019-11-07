@@ -432,13 +432,13 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "git clone --quiet ${repository} &&
+              - "apt-get -qq update &&
+                apt-get -qq install -y python-pip redis-server &&
+                git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 pip install --disable-pip-version-check --quiet --no-cache-dir . &&
                 pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
-                apt-get -qq update &&
-                apt-get -qq install -y redis-server &&
                 python -c 'import os; print(os.environ.keys())' &&
                 bash ./scripts/integration_test.sh"
             cache:

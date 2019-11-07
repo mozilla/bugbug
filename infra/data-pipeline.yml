@@ -742,13 +742,13 @@ tasks:
         command:
           - "/bin/bash"
           - "-lcx"
-          - "git clone --quiet https://github.com/mozilla/bugbug &&
+          - "apt-get -qq update &&
+            apt-get -qq install -y python-pip redis-server &&
+            git clone --quiet https://github.com/mozilla/bugbug &&
             cd bugbug &&
             git checkout ${version} &&
             pip install --quiet . &&
             pip install --quiet -r test-requirements.txt &&
-            apt-get -qq update &&
-            apt-get -qq install -y redis-server &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
