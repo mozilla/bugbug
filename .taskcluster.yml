@@ -180,7 +180,6 @@ tasks:
           image: "${taskboot_image}"
           env:
             REGISTRY: registry.hub.docker.com
-            TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             VERSION:
               $if: 'head_branch[:10] == "refs/tags/"'
               then: {$eval: 'head_branch[10:]' }
@@ -236,7 +235,6 @@ tasks:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
               GIT_REPOSITORY: "${repository}"
               GIT_REVISION: "${head_rev}"
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
           metadata:
             name: bugbug PyPI release
             description: bugbug PyPI release
@@ -267,7 +265,6 @@ tasks:
             image: "${taskboot_image}"
             env:
               TASKCLUSTER_SECRET: project/relman/bugbug/deploy
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             command:
               - taskboot
               - push-artifact
@@ -299,7 +296,6 @@ tasks:
             image: "${taskboot_image}"
             env:
               VERSION: {$eval: 'head_branch[10:]'}
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -333,8 +329,6 @@ tasks:
                 true
             maxRunTime: 3600
             image: "${taskboot_image}"
-            env:
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -369,8 +363,6 @@ tasks:
                 true
             maxRunTime: 3600
             image: "${taskboot_image}"
-            env:
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             command:
               - "/bin/sh"
               - "-lcxe"
@@ -403,8 +395,6 @@ tasks:
                 true
             maxRunTime: 3600
             image: "${taskboot_image}"
-            env:
-              TASKCLUSTER_ROOT_URL: '${taskcluster_root_url}'
             command:
               - "/bin/sh"
               - "-lcxe"
