@@ -106,7 +106,7 @@ file = {{ driver = "file", path = "{cache_path}" }}
         push_data = {}
         for row in data[1:]:
             # Revision -> (all tasks, possible regressions, likely regressions)
-            push_data[row[0]] = (row[1], row[2], row[3])
+            push_data[row[0][0]] = (row[1], row[2], row[3])
 
         logger.info(f"push data nodes: {len(push_data)}")
 
