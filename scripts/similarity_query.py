@@ -16,7 +16,7 @@ from bugbug.utils import download_check_etag, zstd_decompress
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_similarity.latest/artifacts/public/{}.zst"
+URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_similarity.latest/artifacts/public/{}.zst"
 
 
 def parse_args(args):

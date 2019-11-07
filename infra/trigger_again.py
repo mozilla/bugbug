@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 requests.packages.urllib3.disable_warnings()
 
-TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
+TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
 
 
 def get_taskcluster_options():
