@@ -743,12 +743,10 @@ tasks:
           - "/bin/bash"
           - "-lcx"
           - "apt-get -qq update &&
-            apt-get -qq install -y python-pip redis-server &&
+            apt-get -qq install -y redis-server &&
             git clone --quiet https://github.com/mozilla/bugbug &&
             cd bugbug &&
             git checkout ${version} &&
-            pip install --disable-pip-version-check --quiet --no-cache-dir . &&
-            pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
