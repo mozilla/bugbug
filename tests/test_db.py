@@ -206,6 +206,25 @@ def test_download_missing(tmp_path):
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD,
+        url_fallback,
+        status=404,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
+
+    responses.add(
+        responses.GET,
+        url_fallback,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
+    )
+
     db.download(db_path)
     assert not os.path.exists(db_path)
 
@@ -298,6 +317,25 @@ def test_download_support_file_missing(tmp_path, caplog):
     responses.add(
         responses.GET,
         url_support,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
+    )
+
+    url_fallback = url_support.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD,
+        url_fallback,
+        status=404,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
+
+    responses.add(
+        responses.GET,
+        url_fallback,
         status=404,
         body=requests.exceptions.HTTPError("HTTP error"),
     )
