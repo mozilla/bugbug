@@ -32,7 +32,7 @@ from bugbug.utils import (
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
+URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
 
 
 # ------------------------------------------------------------------------------

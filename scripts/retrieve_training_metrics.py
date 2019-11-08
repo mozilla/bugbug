@@ -16,7 +16,7 @@ from bugbug.utils import get_taskcluster_options
 
 ROOT_URI = "train_{}.per_date"
 DATE_URI = "train_{}.per_date.{}"
-BASE_URL = "https://index.taskcluster.net/v1/task/{}/artifacts/public/metrics.json"
+BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/{}/artifacts/public/metrics.json"
 NAMESPACE_URI = "project.relman.bugbug.{}"
 
 LOGGER = logging.getLogger(__name__)

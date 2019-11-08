@@ -12,8 +12,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -47,8 +47,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - commit-retrieval
       payload:
@@ -87,8 +87,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - commit-retrieval
       payload:
@@ -134,8 +134,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - test-scheduling-history-push_data-retrieval
       payload:
@@ -178,8 +178,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '73 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - bugs-retrieval
       payload:
@@ -203,8 +203,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -241,8 +241,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -279,8 +279,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -317,8 +317,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -359,8 +359,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - commit-retrieval
       payload:
@@ -410,8 +410,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -448,8 +448,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -490,8 +490,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -532,8 +532,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -570,8 +570,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - commit-retrieval
         - test-scheduling-history-generator
@@ -609,8 +609,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       dependencies:
         - bugs-retrieval
       payload:
@@ -647,8 +647,8 @@ tasks:
     - ID: check_metrics
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - train-backout
         - train-component
@@ -684,8 +684,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - train-tracking
         - train-regression
@@ -726,8 +726,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '119 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - docker-build
       scopes:
@@ -769,8 +769,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: github-worker
+      provisionerId: proj-relman
+      workerType: ci
       payload:
         features:
           taskclusterProxy:
@@ -800,8 +800,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: github-worker
+      provisionerId: proj-relman
+      workerType: ci
       payload:
         features:
           taskclusterProxy:

@@ -30,7 +30,7 @@ thread_local = threading.local()
 COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
     4,
     ["commit_experiences.pickle.zst"],
 )
@@ -623,7 +623,7 @@ def download_component_mapping():
     global path_to_component
 
     utils.download_check_etag(
-        "https://index.taskcluster.net/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         "data/component_mapping.json",
     )
 

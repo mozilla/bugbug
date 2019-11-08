@@ -158,7 +158,7 @@ def test_extract_db_bad_format(tmp_path):
 
 
 def test_download_zst(tmp_path, mock_zst):
-    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -190,7 +190,7 @@ def test_download_zst(tmp_path, mock_zst):
 
 
 def test_download_missing(tmp_path):
-    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -206,6 +206,25 @@ def test_download_missing(tmp_path):
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD,
+        url_fallback,
+        status=404,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
+
+    responses.add(
+        responses.GET,
+        url_fallback,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
+    )
+
     db.download(db_path)
     assert not os.path.exists(db_path)
 
@@ -214,7 +233,7 @@ def test_download_missing(tmp_path):
 
 
 def test_download_support_file_zst(tmp_path, mock_zst):
-    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support.zst"
     url_support = urljoin(url, support_filename)
 
@@ -249,8 +268,8 @@ def test_download_support_file_zst(tmp_path, mock_zst):
 
 
 def test_is_old_version(tmp_path):
-    url_zst = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url_zst, 1, support_files=[])
@@ -281,7 +300,7 @@ def test_is_old_version(tmp_path):
 
 
 def test_download_support_file_missing(tmp_path, caplog):
-    url = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
     support_filename = "support_mock.zst"
     url_support = urljoin(url, support_filename)
 
@@ -298,6 +317,25 @@ def test_download_support_file_missing(tmp_path, caplog):
     responses.add(
         responses.GET,
         url_support,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
+    )
+
+    url_fallback = url_support.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD,
+        url_fallback,
+        status=404,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
+
+    responses.add(
+        responses.GET,
+        url_fallback,
         status=404,
         body=requests.exceptions.HTTPError("HTTP error"),
     )

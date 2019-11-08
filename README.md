@@ -1,7 +1,5 @@
 # bugbug
 
-[![Task Status](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)](https://github.taskcluster.net/v1/repository/mozilla/bugbug/master/badge.svg)
-
 Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks.
 
 More information on the Mozilla hacks blog:
