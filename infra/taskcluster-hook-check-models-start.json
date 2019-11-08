@@ -41,7 +41,7 @@
             "maxRunTime": 7200
         },
         "priority": "normal",
-        "provisionerId": "aws-provisioner-v1",
+        "provisionerId": "proj-relman",
         "retries": 5,
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
@@ -52,7 +52,7 @@
             "assume:hook-id:project-relman/bugbug-checks"
         ],
         "tags": {},
-        "workerType": "taskcluster-generic"
+        "workerType": "ci"
     },
     "triggerSchema": {
         "additionalProperties": false,

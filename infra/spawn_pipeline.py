@@ -30,7 +30,7 @@ import yaml
 
 requests.packages.urllib3.disable_warnings()
 
-TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
+TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
 
 
 def get_taskcluster_options():
@@ -112,7 +112,7 @@ def main():
         for task_id, task_payload in tasks:
             queue.createTask(task_id, task_payload)
 
-        print(f"https://tools.taskcluster.net/task-group-inspector/#/{task_group_id}")
+        print(f"https://community-tc.services.mozilla.com/tasks/groups/{task_group_id}")
     except taskcluster.exceptions.TaskclusterAuthFailure as e:
         print(f"TaskclusterAuthFailure: {e.body}", file=sys.stderr)
         raise

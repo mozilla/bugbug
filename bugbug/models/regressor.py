@@ -19,14 +19,14 @@ from bugbug.model import CommitModel
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
 db.register(
     BUG_INTRODUCING_COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_introducing_commits.json.zst",
     2,
 )
 
 TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
 db.register(
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
     2,
 )
 

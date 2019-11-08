@@ -12,8 +12,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -49,8 +49,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -86,8 +86,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc
+      provisionerId: proj-relman
+      workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -124,8 +124,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: relman-svc-compute
+      provisionerId: proj-relman
+      workerType: ci-compute
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -185,8 +185,8 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '73 hours'}
       expires: {$fromNow: '1 month'}
-      provisionerId: aws-provisioner-v1
-      workerType: taskcluster-generic
+      provisionerId: proj-relman
+      workerType: ci
       dependencies:
         - microannotate-generate-tokenize
         - microannotate-generate-remove-comments

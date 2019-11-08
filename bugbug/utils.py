@@ -18,7 +18,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
-TASKCLUSTER_DEFAULT_URL = "https://taskcluster.net"
+TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
 
 
 def split_tuple_generator(generator):
@@ -133,6 +133,13 @@ def get_secret(secret_id):
 
 def download_check_etag(url, path):
     r = requests.head(url, allow_redirects=True)
+
+    # TODO Remove this hack after a few runs on the new deployment
+    #      This just exists to copy over old runs.
+    if r.status_code == 404:
+        url = url.replace('https://community-tc.services.mozilla.com/api/index', 'https://index.taskcluster.net')
+        r = requests.head(url, allow_redirects=True)
+
     new_etag = r.headers["ETag"]
 
     try:

@@ -26,11 +26,11 @@ JOBS_TO_IGNORE = ("build-docker-image-",)
 ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
     ADR_CACHE_DB,
-    "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.zst",
     1,
     support_files=[],
 )
-PUSH_DATA_URL = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
+PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
 TRAINING_MONTHS = 6
 
