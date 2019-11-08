@@ -137,7 +137,10 @@ def download_check_etag(url, path):
     # TODO Remove this hack after a few runs on the new deployment
     #      This just exists to copy over old runs.
     if r.status_code == 404:
-        url = url.replace('https://community-tc.services.mozilla.com/api/index', 'https://index.taskcluster.net')
+        url = url.replace(
+            "https://community-tc.services.mozilla.com/api/index",
+            "https://index.taskcluster.net",
+        )
         r = requests.head(url, allow_redirects=True)
 
     new_etag = r.headers["ETag"]
