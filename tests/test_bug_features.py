@@ -160,7 +160,7 @@ def test_comment_count(read):
 
 
 def test_comment_length(read):
-    read("comment_length.json", comment_length, [566, 5335])
+    read("comment_length.json", comment_length, [566, 5291])
 
 
 PRODUCT_PARAMS = [
