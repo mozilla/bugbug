@@ -133,6 +133,13 @@ def get_secret(secret_id):
 
 def download_check_etag(url, path):
     r = requests.head(url, allow_redirects=True)
+
+    # TODO Remove this hack after a few runs on the new deployment
+    #      This just exists to copy over old runs.
+    if r.status_code == 404:
+        url = url.replace('https://community-tc.services.mozilla.com/api/index', 'https://index.taskcluster.net')
+        r = requests.head(url, allow_redirects=True)
+
     new_etag = r.headers["ETag"]
 
     try:
@@ -143,13 +150,6 @@ def download_check_etag(url, path):
 
     if old_etag != new_etag:
         r = requests.get(url, stream=True)
-
-        # TODO Remove this hack after a few runs on the new deployment
-        #      This just exists to copy over old runs.
-        if r.status_code == 404:
-            url = url.replace('https://community-tc.services.mozilla.com/api/index', 'https://index.taskcluster.net')
-            r = requests.get(url, stream=True)
-
         r.raise_for_status()
 
         with open(path, "wb") as f:
