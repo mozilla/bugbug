@@ -3,6 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
+
+import pytest
+import requests
+import responses
+
 from bugbug import utils
 
 
@@ -81,3 +87,164 @@ def test_exp_queue():
     assert q[8] == 0
     assert q[9] == 1
     assert q[12] == 1
+
+
+def test_download_check_etag(tmp_path):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(responses.GET, url, status=200, body="prova")
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova"
+
+
+def test_download_check_etag_changed(tmp_path):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(responses.GET, url, status=200, body="prova")
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "456", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(responses.GET, url, status=200, body="prova2")
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova"
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova2"
+
+
+def test_download_check_etag_unchanged(tmp_path):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(responses.GET, url, status=200, body="prova")
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(responses.GET, url, status=200, body="prova2")
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova"
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova"
+
+
+def test_download_check_etag_fallback(tmp_path):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=404,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(
+        responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
+    )
+
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD, url_fallback, status=200, headers={"ETag": "123"},
+    )
+
+    responses.add(responses.GET, url_fallback, status=200, body="prova")
+
+    utils.download_check_etag(url, "prova.txt")
+
+    assert os.path.exists("prova.txt")
+
+    with open("prova.txt", "r") as f:
+        assert f.read() == "prova"
+
+
+def test_download_check_missing(tmp_path):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=404,
+        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+    )
+
+    responses.add(
+        responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
+    )
+
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD, url_fallback, status=404, headers={"ETag": "123"},
+    )
+
+    responses.add(
+        responses.GET,
+        url_fallback,
+        status=404,
+        body=requests.exceptions.HTTPError("HTTP error"),
+    )
+
+    with pytest.raises(requests.exceptions.HTTPError, match="HTTP error"):
+        utils.download_check_etag(url, "prova.txt")
+
+    assert not os.path.exists("prova.txt")
