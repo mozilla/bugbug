@@ -53,6 +53,8 @@ def classify_bugs(model_name, classifier, bug_id):
     else:
         bugs = bugzilla.get_bugs()
 
+    class_names = model.class_names
+
     for bug in bugs:
         print(
             f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]} - {bug["summary"]} '
@@ -69,10 +71,8 @@ def classify_bugs(model_name, classifier, bug_id):
         else:
             probas = model.classify(bug, probabilities=True, importances=False)
 
-        if np.argmax(probas) == 1:
-            print(f"Positive! {probas}")
-        else:
-            print(f"Negative! {probas}")
+        predicted_class = class_names[np.argmax(probas)]
+        print(f"{predicted_class} {probas}")
         input()
 
 
