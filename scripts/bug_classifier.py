@@ -69,7 +69,11 @@ def classify_bugs(model_name, classifier, bug_id):
         else:
             probas = model.classify(bug, probabilities=True, importances=False)
 
-        pred_class = model.le.inverse_transform([np.argmax(probas)])[0]
+        probability = probas[0]
+        if len(probability) > 2:
+            pred_class = model.le.inverse_transform([np.argmax(probability)])[0]
+        else:
+            pred_class = "Positive" if np.argmax(probability) == 1 else "Negative"
         print(f"{pred_class} {probas}")
         input()
 

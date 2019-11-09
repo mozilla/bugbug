@@ -35,7 +35,8 @@ def generate_sheet(model_name, token, days, threshold):
         p = model.classify(bug, probabilities=True)
         probability = p[0]
         if len(probability) > 2:
-            prediction = model.le.inverse_transform([np.argmax(probability)])[0]
+            index = np.argmax(probability)
+            prediction = model.class_names[index]
         else:
             prediction = "y" if probability[1] >= threshold else "n"
 
