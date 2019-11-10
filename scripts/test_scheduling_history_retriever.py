@@ -14,7 +14,7 @@ import dateutil.parser
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
-from bugbug import db, repository, test_scheduling
+from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import ExpQueue, download_check_etag, zstd_compress, zstd_decompress
 
 basicConfig(level=INFO)
@@ -33,6 +33,15 @@ db.register(
 PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
 
 TRAINING_MONTHS = 6
+
+
+def filter_tasks(tasks):
+    return tuple(
+        task
+        for task in tasks
+        if any(task.startswith(j) for j in JOBS_TO_CONSIDER)
+        and not any(task.startswith(j) for j in JOBS_TO_IGNORE)
+    )
 
 
 class Retriever(object):
@@ -104,16 +113,6 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
-        with open("push_data.json", "r") as f:
-            data = json.load(f)
-
-        push_data = {}
-        for row in data[1:]:
-            # Revision -> (all tasks, possible regressions, likely regressions)
-            push_data[row[0][0]] = (row[1], row[2], row[3])
-
-        logger.info(f"push data nodes: {len(push_data)}")
-
         HISTORICAL_TIMESPAN = 56
 
         if not db.is_old_version(test_scheduling.TEST_SCHEDULING_DB):
@@ -122,7 +121,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             for test_data in test_scheduling.get_test_scheduling_history():
                 pass
 
-            last_node = test_data["rev"]
+            last_node = test_data["revs"][0]
         else:
             last_node = None
 
@@ -174,41 +173,84 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         def generate_data():
             nonlocal push_num
-            commits_with_data = set()
             saved_nodes = set()
+            skipped_no_commits = 0
+            skipped_too_big_commits = 0
+            skipped_no_tasks = 0
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
+
+            commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
-                node = commit_data["node"]
+                if not can_start:
+                    if last_node == commit_data["node"]:
+                        can_start = True
 
-                # Sync DB every 1000 commits, so we cleanup the shelve cache (we'd run OOM otherwise!).
-                if len(commits_with_data) % 1000 == 0:
-                    past_failures.sync()
-
-                if node == last_node:
-                    can_start = True
                     continue
+
+                commit_map[commit_data["node"]] = commit_data
+
+            with open("push_data.json", "r") as f:
+                push_data = json.load(f)[1:]
+
+            logger.info(f"push data nodes: {len(push_data)}")
+
+            # We can start once we get to the last revision we added in the previous run.
+            can_start = True if last_node is None else False
+
+            for i in tqdm(range(len(push_data))):
+                (
+                    revisions,
+                    all_tasks,
+                    possible_regressions,
+                    likely_regressions,
+                ) = push_data.pop(0)
 
                 if not can_start:
+                    if last_node == revisions[0]:
+                        can_start = True
+
                     continue
 
-                if node not in push_data:
+                push_num += 1
+
+                # XXX: Some commits are skipped in the repository mining, e.g. merges and backouts. Maybe we should not skip them.
+                commits = tuple(
+                    commit_map.pop(revision)
+                    for revision in revisions
+                    if revision in commit_map
+                )
+                if len(commits) == 0:
+                    skipped_no_commits += 1
                     continue
 
-                commits_with_data.add(node)
+                merged_commits = commit_features.merge_commits(commits)
 
-                commit_push_data = push_data[node]
+                # XXX: For now, skip commits which are too large.
+                # In the future we can either:
+                #  - Improve shelve perf and go back to consider all files;
+                #  - Consider only files which appear with a given frequency, like the "files" feature in commit_features;
+                #  - Keep a limit of number of files.
+                if len(merged_commits["files"]) > 50:
+                    skipped_too_big_commits += 1
+                    continue
 
-                for task in commit_push_data[0]:
-                    if not any(task.startswith(j) for j in JOBS_TO_CONSIDER):
-                        continue
+                tasks = filter_tasks(all_tasks)
 
-                    if any(task.startswith(j) for j in JOBS_TO_IGNORE):
-                        continue
+                if len(tasks) == 0:
+                    skipped_no_tasks += 1
+                    continue
 
+                # Sync DB every 500 pushes, so we cleanup the shelve cache (we'd run OOM otherwise!).
+                if i % 500 == 0:
+                    past_failures.sync()
+
+                pushdate = dateutil.parser.parse(merged_commits["pushdate"])
+
+                for task in all_tasks:
                     is_regression = (
-                        task in commit_push_data[1] or task in commit_push_data[2]
+                        task in possible_regressions or task in likely_regressions
                     )
 
                     (
@@ -228,7 +270,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                         past_28_pushes_types_failures,
                         past_56_pushes_types_failures,
                     ) = get_and_update_past_failures(
-                        "type", task, commit_data["types"], push_num, is_regression
+                        "type", task, merged_commits["types"], push_num, is_regression
                     )
 
                     (
@@ -238,7 +280,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                         past_28_pushes_files_failures,
                         past_56_pushes_files_failures,
                     ) = get_and_update_past_failures(
-                        "file", task, commit_data["files"], push_num, is_regression
+                        "file", task, merged_commits["files"], push_num, is_regression
                     )
 
                     (
@@ -250,7 +292,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                     ) = get_and_update_past_failures(
                         "directory",
                         task,
-                        commit_data["directories"],
+                        merged_commits["directories"],
                         push_num,
                         is_regression,
                     )
@@ -264,17 +306,16 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                     ) = get_and_update_past_failures(
                         "component",
                         task,
-                        commit_data["components"],
+                        merged_commits["components"],
                         push_num,
                         is_regression,
                     )
 
-                    pushdate = dateutil.parser.parse(commit_data["pushdate"])
                     if pushdate > HISTORY_DATE_START:
-                        saved_nodes.add(node)
+                        saved_nodes.add(i)
 
                         yield {
-                            "rev": node,
+                            "revs": revisions,
                             "name": task,
                             "failures": total_failures,
                             "failures_past_7_pushes": past_7_pushes_failures,
@@ -301,18 +342,14 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                             "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
                             "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
                             "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
-                            "is_possible_regression": task in commit_push_data[1],
-                            "is_likely_regression": task in commit_push_data[2],
+                            "is_possible_regression": task in possible_regressions,
+                            "is_likely_regression": task in likely_regressions,
                         }
 
-                # We no longer need the push data for this node, we can free the memory.
-                del push_data[node]
-
-                push_num += 1
-
-            logger.info(f"commits linked to push data: {len(commits_with_data)}")
-
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
+            logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
+            logger.info(f"skipped {skipped_too_big_commits} (too big commits)")
+            logger.info(f"skipped {skipped_no_tasks} (no interesting tasks)")
 
         db.append(test_scheduling.TEST_SCHEDULING_DB, generate_data())
 

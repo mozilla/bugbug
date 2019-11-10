@@ -402,6 +402,19 @@ class types(object):
         return commit["types"]
 
 
+def merge_commits(commits):
+    return {
+        "nodes": tuple(commit["node"] for commit in commits),
+        "pushdate": commits[0]["pushdate"],
+        "types": tuple(set(sum((commit["types"] for commit in commits), []))),
+        "files": tuple(set(sum((commit["files"] for commit in commits), []))),
+        "directories": tuple(
+            set(sum((commit["directories"] for commit in commits), []))
+        ),
+        "components": tuple(set(sum((commit["components"] for commit in commits), []))),
+    }
+
+
 class CommitExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions):
         self.feature_extractors = feature_extractors
