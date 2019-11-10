@@ -89,7 +89,7 @@ def test_exp_queue():
     assert q[12] == 1
 
 
-def test_download_check_etag(tmp_path):
+def test_download_check_etag():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
@@ -109,7 +109,7 @@ def test_download_check_etag(tmp_path):
         assert f.read() == "prova"
 
 
-def test_download_check_etag_changed(tmp_path):
+def test_download_check_etag_changed():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
@@ -145,7 +145,7 @@ def test_download_check_etag_changed(tmp_path):
         assert f.read() == "prova2"
 
 
-def test_download_check_etag_unchanged(tmp_path):
+def test_download_check_etag_unchanged():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
@@ -181,7 +181,7 @@ def test_download_check_etag_unchanged(tmp_path):
         assert f.read() == "prova"
 
 
-def test_download_check_etag_fallback(tmp_path):
+def test_download_check_etag_fallback():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
@@ -214,7 +214,7 @@ def test_download_check_etag_fallback(tmp_path):
         assert f.read() == "prova"
 
 
-def test_download_check_missing(tmp_path):
+def test_download_check_missing():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
