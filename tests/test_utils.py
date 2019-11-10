@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import os
+from datetime import datetime
 
 import pytest
 import requests
@@ -248,3 +249,63 @@ def test_download_check_missing():
         utils.download_check_etag(url, "prova.txt")
 
     assert not os.path.exists("prova.txt")
+
+
+def test_get_last_modified():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD, url, status=200, headers={"Last-Modified": "2019-04-16",},
+    )
+
+    assert utils.get_last_modified(url) == datetime(2019, 4, 16, 0, 0)
+
+
+def test_get_last_modified_not_present():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD, url, status=200, headers={"ETag": "123"},
+    )
+
+    assert utils.get_last_modified(url) is None
+
+
+def test_get_last_modified_fallback():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD, url, status=404, headers={"Last-Modified": "2019-04-16"},
+    )
+
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+
+    responses.add(
+        responses.HEAD,
+        url_fallback,
+        status=200,
+        headers={"Last-Modified": "2018-04-16"},
+    )
+
+    assert utils.get_last_modified(url) == datetime(2018, 4, 16, 0, 0)
+
+
+def test_get_last_modified_missing():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD, url, status=404, headers={},
+    )
+
+    url_fallback = url.replace(
+        "https://community-tc.services.mozilla.com/api/index",
+        "https://index.taskcluster.net",
+    )
+    responses.add(
+        responses.HEAD, url_fallback, status=404, headers={},
+    )
+
+    assert utils.get_last_modified(url) is None
