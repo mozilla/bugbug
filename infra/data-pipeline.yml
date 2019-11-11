@@ -33,7 +33,7 @@ tasks:
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.data_commits.${version}
         - index.project.relman.bugbug.data_commits.latest
@@ -73,7 +73,7 @@ tasks:
       scopes:
         - "secrets:get:project/relman/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.data_bugs.${version}
         - index.project.relman.bugbug.data_bugs.latest
@@ -120,7 +120,7 @@ tasks:
       scopes:
         - "secrets:get:project/relman/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.data_test_scheduling_history_push_data.${version}
         - index.project.relman.bugbug.data_test_scheduling_history_push_data.latest
@@ -164,7 +164,7 @@ tasks:
       scopes:
         - "secrets:get:project/relman/bugbug/production"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.data_test_scheduling_history.${version}
         - index.project.relman.bugbug.data_test_scheduling_history.latest
@@ -191,7 +191,7 @@ tasks:
           - "python -c 'from bugbug import bugzilla, db; db.download(bugzilla.BUGS_DB)' &&
              python -m bugbug.bug_snapshot --verbose"
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug rollback test
@@ -225,7 +225,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_backout.${version}
         - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -263,7 +263,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_component.${version}
         - index.project.relman.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -301,7 +301,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_defectenhancementtask.${version}
         - index.project.relman.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -343,7 +343,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regression.${version}
         - index.project.relman.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -394,7 +394,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressor.${version}
         - index.project.relman.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -432,7 +432,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_tracking.${version}
         - index.project.relman.bugbug.train_tracking.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -474,7 +474,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_regressionrange.${version}
         - index.project.relman.bugbug.train_regressionrange.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -516,7 +516,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_stepstoreproduce.${version}
         - index.project.relman.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -554,7 +554,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_duplicate.${version}
         - index.project.relman.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -593,7 +593,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_testselect.${version}
         - index.project.relman.bugbug.train_testselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -632,7 +632,7 @@ tasks:
             type: file
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
         - index.project.relman.bugbug.train_similarity.${version}
         - index.project.relman.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
@@ -713,7 +713,7 @@ tasks:
         - docker-worker:capability:privileged
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http build
@@ -784,7 +784,7 @@ tasks:
           - push-artifact
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http push
@@ -816,7 +816,7 @@ tasks:
           - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar'"
 
       routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
       metadata:
         name: bugbug docker http service deploy

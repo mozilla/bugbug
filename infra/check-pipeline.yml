@@ -17,7 +17,7 @@ tasks:
         - component
 
     routes:
-      - notify.email.release-mgmt-analysis@mozilla.com.on-failed"
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed
       - notify.irc-channel.#bugbug.on-failed
     metadata:
       name: bugbug check component
