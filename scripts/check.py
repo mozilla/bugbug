@@ -4,10 +4,9 @@ import argparse
 import os
 import sys
 from logging import INFO, basicConfig, getLogger
-from urllib.request import urlretrieve
 
 from bugbug.models import load_model
-from bugbug.utils import zstd_decompress
+from bugbug.utils import download_check_etag, zstd_decompress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -15,7 +14,7 @@ logger = getLogger(__name__)
 
 def download_model(model_url, file_path):
     logger.info(f"Downloading model from {model_url!r} and save it in {file_path!r}")
-    urlretrieve(model_url, f"{file_path}.zst")
+    download_check_etag(model_url, f"{file_path}.zst")
 
     zstd_decompress(file_path)
     logger.info(f"Written model in {file_path}")
