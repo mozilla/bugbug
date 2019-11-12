@@ -70,7 +70,7 @@
             "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
-        "workerType": "ci-compute"
+        "workerType": "compute-large"
     },
     "triggerSchema": {
         "additionalProperties": false,

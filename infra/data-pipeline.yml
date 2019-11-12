@@ -13,7 +13,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -135,7 +135,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - test-scheduling-history-push_data-retrieval
       payload:
@@ -204,7 +204,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - commit-retrieval
       payload:
@@ -242,7 +242,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -280,7 +280,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -318,7 +318,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-large
       dependencies:
         - bugs-retrieval
       payload:
@@ -360,7 +360,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - commit-retrieval
       payload:
@@ -411,7 +411,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -449,7 +449,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -491,7 +491,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -533,7 +533,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -571,7 +571,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - test-scheduling-history-generator
@@ -610,7 +610,7 @@ tasks:
       deadline: {$fromNow: '118 hours'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: ci-compute
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
