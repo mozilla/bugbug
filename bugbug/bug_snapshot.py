@@ -382,7 +382,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
             field == "target_milestone"
             and bug_id in {11050, 19462, 106327, 107264, 144795, 306730}
         )
-        or (field == "product" and bug_id == 21438)
+        or (field == "product" and bug_id in {21438, 263013})
         or is_email(
             new_value
         )  # TODO: Users can change their email, try with all emails from a mapping file.
@@ -472,11 +472,18 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
                 1356114,
                 1360238,
                 1364598,
+                1367657,
                 1375319,
                 1382724,
                 1397981,
+                1401593,
                 1405744,
                 1416728,
+                1417293,
+                1428263,
+                1469747,
+                1522872,
+                1531758,
             )
         )
         or (
@@ -732,7 +739,8 @@ def rollback(bug, when=None, do_assert=False):
                         break
 
                 if obj is None:
-                    assert_or_log(f'Comment {change["comment_id"]} not found')
+                    if change["comment_id"] != 14096735:
+                        assert_or_log(f'Comment {change["comment_id"]} not found')
                     continue
 
                 if obj["count"] != change["comment_count"]:
