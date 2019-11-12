@@ -438,9 +438,11 @@ class RegressorFinder(object):
                 # Analyze up to 500 commits at a time, to avoid the task running out of time.
                 while len(bug_fixing_commits_queue) != 0 and num_analyzed != 500:
                     bug_introducing_commit_futures = []
-                    for _ in range(min(500 - num_analyzed, len(bug_fixing_commits))):
+                    for _ in range(
+                        min(500 - num_analyzed, len(bug_fixing_commits_queue))
+                    ):
                         bug_introducing_commit_futures.append(
-                            executor.submit(find_bic, bug_fixing_commits.pop())
+                            executor.submit(find_bic, bug_fixing_commits_queue.pop())
                         )
 
                     logger.info(
