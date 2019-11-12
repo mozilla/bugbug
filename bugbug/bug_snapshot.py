@@ -647,12 +647,6 @@ def rollback(bug, when=None, do_assert=False):
                     obj = bug
 
                 if change["added"]:
-                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
-                    if change["added"].startswith(", "):
-                        change["added"] = change["added"][2:]
-                    if change["added"].endswith(", "):
-                        change["added"] = change["added"][:-2]
-
                     for to_remove in change["added"].split(", "):
                         # TODO: Skip needinfo/reviews for now, we need a way to match them precisely when there are multiple needinfos/reviews requested.
                         is_question_flag = any(
@@ -715,12 +709,6 @@ def rollback(bug, when=None, do_assert=False):
                     if bug["id"] in [785931, 1_342_178]:
                         continue
 
-                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
-                    if change["removed"].startswith(", "):
-                        change["removed"] = change["removed"][2:]
-                    if change["removed"].endswith(", "):
-                        change["removed"] = change["removed"][:-2]
-
                     for to_add in change["removed"].split(", "):
                         name, status, requestee = parse_flag_change(to_add)
 
@@ -766,12 +754,6 @@ def rollback(bug, when=None, do_assert=False):
 
             if field in bug and isinstance(bug[field], list):
                 if change["added"]:
-                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
-                    if change["added"].startswith(", "):
-                        change["added"] = change["added"][2:]
-                    if change["added"].endswith(", "):
-                        change["added"] = change["added"][:-2]
-
                     for to_remove in change["added"].split(", "):
                         if field in FIELD_TYPES:
                             try:
@@ -791,12 +773,6 @@ def rollback(bug, when=None, do_assert=False):
                             )
 
                 if change["removed"]:
-                    # https://bugzilla.mozilla.org/show_bug.cgi?id=1556178
-                    if change["removed"].startswith(", "):
-                        change["removed"] = change["removed"][2:]
-                    if change["removed"].endswith(", "):
-                        change["removed"] = change["removed"][:-2]
-
                     for to_add in change["removed"].split(", "):
                         if field in FIELD_TYPES:
                             try:
