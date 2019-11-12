@@ -426,14 +426,14 @@ class RegressorFinder(object):
 
             return bug_introducing_commits
 
+        bug_fixing_commits_queue = bug_fixing_commits.copy()
+
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
 
             def results():
                 num_analyzed = 0
-
-                bug_fixing_commits_queue = bug_fixing_commits.copy()
 
                 # Analyze up to 500 commits at a time, to avoid the task running out of time.
                 while len(bug_fixing_commits_queue) != 0 and num_analyzed != 500:
@@ -458,12 +458,11 @@ class RegressorFinder(object):
                             num_analyzed += 1
                             yield from result
 
-                with open("done", "w") as f:
-                    f.write(str(1 if len(bug_fixing_commits_queue) == 0 else 0))
-
             db.append(db_path, results())
 
         zstd_compress(db_path)
+
+        return len(bug_fixing_commits_queue) == 0
 
 
 def evaluate(bug_introducing_commits):
@@ -591,15 +590,18 @@ def main():
 
     bug_fixing_commits = regressor_finder.find_bug_fixing_commits()
 
-    regressor_finder.find_bug_introducing_commits(
+    tokenized_done = regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, True
     )
     evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
 
-    regressor_finder.find_bug_introducing_commits(
+    done = regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, False
     )
     evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
+
+    with open("done", "w") as f:
+        f.write(str(1 if tokenized_done and done else 0))
 
 
 if __name__ == "__main__":
