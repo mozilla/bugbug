@@ -119,6 +119,7 @@ class RegressorFinder(object):
     def init_mapping(self):
         logger.info("Downloading Mercurial <-> git mapping file...")
         vcs_map.download_mapfile()
+        vcs_map.load_mapfile()
 
         (
             self.tokenized_git_to_mercurial,
