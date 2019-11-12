@@ -270,6 +270,7 @@ def test_download_support_file_zst(tmp_path, mock_zst):
 def test_is_old_version(tmp_path):
     url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url_version_fallback = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url_zst, 1, support_files=[])
@@ -277,9 +278,48 @@ def test_is_old_version(tmp_path):
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
 
     responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version_fallback, status=404)
     responses.add(responses.GET, url_version, status=424)
+    responses.add(responses.GET, url_version_fallback, status=424)
     responses.add(responses.GET, url_version, status=200, body="1")
     responses.add(responses.GET, url_version, status=200, body="42")
+
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_version(db_path)
+
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_version(db_path)
+
+    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
+    assert not db.is_old_version(db_path)
+
+    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
+    assert not db.is_old_version(db_path)
+
+    db.register(db_path, url_zst, 43, support_files=[])
+
+    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
+    assert db.is_old_version(db_path)
+
+
+def test_is_old_version_fallback(tmp_path):
+    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url_version_fallback = "https://index.taskcluster.net/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, url_zst, 1, support_files=[])
+
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
+
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version_fallback, status=404)
+    responses.add(responses.GET, url_version, status=424)
+    responses.add(responses.GET, url_version_fallback, status=424)
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version_fallback, status=200, body="1")
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version_fallback, status=200, body="42")
 
     # When the remote version file doesn't exist, we consider the db as being old.
     assert db.is_old_version(db_path)
