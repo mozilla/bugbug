@@ -97,7 +97,7 @@ class TestSelectModel(Model):
         classes = {}
 
         for test_data in test_scheduling.get_test_scheduling_history():
-            rev = test_data["rev"]
+            rev = test_data["revs"][0]
             name = test_data["name"]
 
             if not name.startswith("test-"):
