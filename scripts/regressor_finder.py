@@ -104,12 +104,14 @@ class RegressorFinder(object):
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
             retry(
-                lambda: subprocess.run(["git", "clone", repo_url, repo_dir], check=True)
+                lambda: subprocess.run(
+                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                )
             )
 
         retry(
             lambda: subprocess.run(
-                ["git", "pull", repo_url, "master"],
+                ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,

@@ -80,14 +80,14 @@ class MicroannotateGenerator(object):
     def clone_git_repo(self, git_repo_path):
         retry(
             lambda: subprocess.run(
-                ["git", "clone", self.repo_url, git_repo_path], check=True
+                ["git", "clone", "--quiet", self.repo_url, git_repo_path], check=True
             )
         )
 
         try:
             retry(
                 lambda: subprocess.run(
-                    ["git", "pull", self.repo_url, "master"],
+                    ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=git_repo_path,
                     capture_output=True,
                     check=True,
