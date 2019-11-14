@@ -83,7 +83,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                 "--from",
                 f"today-{TRAINING_MONTHS + 3}month",
                 "--to",
-                "today-2day",
+                "today-3day",
                 "--branch",
                 "autoland",
             ],
