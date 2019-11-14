@@ -35,11 +35,12 @@ PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/pro
 TRAINING_MONTHS = 6
 
 
-def filter_tasks(tasks):
+def filter_tasks(tasks, all_tasks):
     return tuple(
         task
         for task in tasks
-        if any(task.startswith(j) for j in JOBS_TO_CONSIDER)
+        if task in all_tasks
+        and any(task.startswith(j) for j in JOBS_TO_CONSIDER)
         and not any(task.startswith(j) for j in JOBS_TO_IGNORE)
     )
 
@@ -196,13 +197,19 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
             logger.info(f"push data nodes: {len(push_data)}")
 
+            # In the last 28 pushes, we definitely run all possible tasks.
+            all_tasks_set = set(
+                sum((push_tasks for _, push_tasks, _, _ in push_data[-28:]), [])
+            )
+            logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
+
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
 
             for i in tqdm(range(len(push_data))):
                 (
                     revisions,
-                    all_tasks,
+                    push_tasks,
                     possible_regressions,
                     likely_regressions,
                 ) = push_data.pop(0)
@@ -236,7 +243,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                     skipped_too_big_commits += 1
                     continue
 
-                tasks = filter_tasks(all_tasks)
+                tasks = filter_tasks(push_tasks, all_tasks_set)
 
                 if len(tasks) == 0:
                     skipped_no_tasks += 1
@@ -248,7 +255,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
-                for task in all_tasks:
+                for task in push_tasks:
                     is_regression = (
                         task in possible_regressions or task in likely_regressions
                     )
