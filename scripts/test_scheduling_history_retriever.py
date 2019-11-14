@@ -202,6 +202,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                 sum((push_tasks for _, push_tasks, _, _ in push_data[-28:]), [])
             )
             logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
+            all_tasks = list(all_tasks_set)
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
@@ -255,7 +256,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
-                for task in push_tasks:
+                for task in all_tasks:
                     is_regression = (
                         task in possible_regressions or task in likely_regressions
                     )
