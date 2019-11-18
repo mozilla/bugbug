@@ -10,7 +10,7 @@ db.register(
     TEST_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/test_scheduling_history.pickle.zst",
     4,
-    ["past_failures.shelve.db.zst"],
+    ["past_failures.lmdb.tar.zst"],
 )
 
 

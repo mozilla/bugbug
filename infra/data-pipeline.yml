@@ -154,8 +154,8 @@ tasks:
           public/test_scheduling_history.pickle.version:
             path: /data/test_scheduling_history.pickle.version
             type: file
-          public/past_failures.shelve.zst:
-            path: /data/past_failures.shelve.zst
+          public/past_failures.lmdb.tar.zst:
+            path: /data/past_failures.lmdb.tar.zst
             type: file
 
         features:

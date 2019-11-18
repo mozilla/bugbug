@@ -11,6 +11,7 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
+import lmdb
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -43,6 +44,26 @@ def filter_tasks(tasks, all_tasks):
         and any(task.startswith(j) for j in JOBS_TO_CONSIDER)
         and not any(task.startswith(j) for j in JOBS_TO_IGNORE)
     )
+
+
+class LMDBDict:
+    def __init__(self, path):
+        self.db = lmdb.open(path, map_size=68719476736, metasync=False, sync=False)
+        self.txn = self.db.begin(buffers=True, write=True)
+
+    def close(self):
+        self.txn.commit()
+        self.db.sync()
+        self.db.close()
+
+    def __contains__(self, key):
+        return self.txn.get(key) is not None
+
+    def __getitem__(self, key):
+        return self.txn.get(key)
+
+    def __setitem__(self, key, value):
+        self.txn.put(key, value, dupdata=False)
 
 
 class Retriever(object):
@@ -126,8 +147,8 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
         else:
             last_node = None
 
-        past_failures = shelve.open(
-            "data/past_failures.shelve",
+        past_failures = shelve.Shelf(
+            LMDBDict("data/past_failures.lmdb"),
             protocol=pickle.HIGHEST_PROTOCOL,
             writeback=True,
         )
@@ -373,7 +394,9 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         past_failures["push_num"] = push_num
         past_failures.close()
-        zstd_compress("data/past_failures.shelve")
+        with tarfile.open("data/past_failures.lmdb.tar", "w") as tar:
+            tar.add("data/past_failures.lmdb")
+        zstd_compress("data/past_failures.lmdb.tar")
 
 
 def main():
