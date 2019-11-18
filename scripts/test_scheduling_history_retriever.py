@@ -158,6 +158,11 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             all_tasks_set = set(all_tasks)
             logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
 
+            # Store all tasks in the past_failures DB so it can be used in the evaluation phase.
+            past_failures["all_tasks"] = all_tasks
+            # XXX: Should we recreate the DB from scratch if the previous all_tasks are not the
+            # same as the current ones?
+
             saved_nodes = set()
             skipped_no_commits = 0
             skipped_too_big_commits = 0
