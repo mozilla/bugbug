@@ -307,7 +307,8 @@ def _transform(commit):
             if size is not None:
                 other_sizes.append(size)
 
-            commit.types.add(type_)
+            if type_:
+                commit.types.add(type_)
 
     commit.total_source_code_file_size = sum(source_code_sizes)
     commit.average_source_code_file_size = (
