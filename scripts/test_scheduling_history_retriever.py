@@ -258,8 +258,8 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                     skipped_no_tasks += 1
                     continue
 
-                # Sync DB every 500 pushes, so we cleanup the shelve cache (we'd run OOM otherwise!).
-                if i % 500 == 0:
+                # Sync DB every 250 pushes, so we cleanup the shelve cache (we'd run OOM otherwise!).
+                if i % 250 == 0:
                     past_failures.sync()
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
