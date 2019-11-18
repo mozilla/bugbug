@@ -201,8 +201,10 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             all_tasks_set = set(
                 sum((push_tasks for _, push_tasks, _, _ in push_data[-28:]), [])
             )
+            # Filter tasks we don't need.
+            all_tasks = filter_tasks(list(all_tasks_set), all_tasks_set)
+            all_tasks_set = set(all_tasks)
             logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
-            all_tasks = list(all_tasks_set)
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
