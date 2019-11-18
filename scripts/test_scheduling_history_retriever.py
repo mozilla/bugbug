@@ -246,9 +246,15 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                     skipped_too_big_commits += 1
                     continue
 
-                tasks = filter_tasks(push_tasks, all_tasks_set)
+                # If we considered all_tasks, we'd generate a huge amount of data.
+                # So we consider only the tasks which run in this push, and the possible and likely regressions
+                # from this push.
+                tasks_to_consider = list(
+                    set(push_tasks + possible_regressions + likely_regressions)
+                )
+                tasks_to_consider = filter_tasks(tasks_to_consider, all_tasks_set)
 
-                if len(tasks) == 0:
+                if len(tasks_to_consider) == 0:
                     skipped_no_tasks += 1
                     continue
 
@@ -258,7 +264,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
-                for task in all_tasks:
+                for task in tasks_to_consider:
                     is_regression = (
                         task in possible_regressions or task in likely_regressions
                     )
