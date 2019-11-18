@@ -5,8 +5,10 @@
 
 import json
 import os
+import tarfile
 import time
 from collections import deque
+from contextlib import contextmanager
 
 import dateutil.parser
 import numpy as np
@@ -205,6 +207,15 @@ def zstd_decompress(path):
     with open(f"{path}.zst", "rb") as input_f:
         with open(path, "wb") as output_f:
             dctx.copy_stream(input_f, output_f)
+
+
+@contextmanager
+def open_tar_zst(path):
+    cctx = zstandard.ZstdCompressor()
+    with open(path, "wb") as f:
+        with cctx.stream_writer(f) as compressor:
+            with tarfile.open(mode="w|", fileobj=compressor) as tar:
+                yield tar
 
 
 class CustomJsonEncoder(json.JSONEncoder):

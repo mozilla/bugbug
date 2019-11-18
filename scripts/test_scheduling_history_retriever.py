@@ -16,7 +16,13 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import commit_features, db, repository, test_scheduling
-from bugbug.utils import ExpQueue, download_check_etag, zstd_compress, zstd_decompress
+from bugbug.utils import (
+    ExpQueue,
+    download_check_etag,
+    open_tar_zst,
+    zstd_compress,
+    zstd_decompress,
+)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -113,9 +119,8 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
 
-        with tarfile.open(ADR_CACHE_DB, "w") as tar:
+        with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
             tar.add(cache_path)
-        zstd_compress(ADR_CACHE_DB)
 
         zstd_compress("push_data.json")
 
@@ -394,9 +399,8 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         past_failures["push_num"] = push_num
         past_failures.close()
-        with tarfile.open("data/past_failures.lmdb.tar", "w") as tar:
+        with open_tar_zst("data/past_failures.lmdb.tar.zst") as tar:
             tar.add("data/past_failures.lmdb")
-        zstd_compress("data/past_failures.lmdb.tar")
 
 
 def main():
