@@ -3,21 +3,17 @@
 import argparse
 import json
 import os
-import pickle
-import shelve
 import subprocess
 import tarfile
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
-import lmdb
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
-    ExpQueue,
     download_check_etag,
     open_tar_zst,
     zstd_compress,
@@ -50,26 +46,6 @@ def filter_tasks(tasks, all_tasks):
         and any(task.startswith(j) for j in JOBS_TO_CONSIDER)
         and not any(task.startswith(j) for j in JOBS_TO_IGNORE)
     )
-
-
-class LMDBDict:
-    def __init__(self, path):
-        self.db = lmdb.open(path, map_size=68719476736, metasync=False, sync=False)
-        self.txn = self.db.begin(buffers=True, write=True)
-
-    def close(self):
-        self.txn.commit()
-        self.db.sync()
-        self.db.close()
-
-    def __contains__(self, key):
-        return self.txn.get(key) is not None
-
-    def __getitem__(self, key):
-        return self.txn.get(key)
-
-    def __setitem__(self, key, value):
-        self.txn.put(key, value, dupdata=False)
 
 
 class Retriever(object):
@@ -140,8 +116,6 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
-        HISTORICAL_TIMESPAN = 56
-
         if not db.is_old_version(test_scheduling.TEST_SCHEDULING_DB):
             db.download(test_scheduling.TEST_SCHEDULING_DB, support_files_too=True)
 
@@ -152,58 +126,10 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
         else:
             last_node = None
 
-        past_failures = shelve.Shelf(
-            LMDBDict("data/past_failures.lmdb"),
-            protocol=pickle.HIGHEST_PROTOCOL,
-            writeback=True,
-        )
+        def generate_all_data():
+            past_failures = test_scheduling.get_past_failures()
 
-        push_num = past_failures["push_num"] if "push_num" in past_failures else 0
-
-        def get_and_update_past_failures(type_, task, items, push_num, is_regression):
-            values_total = []
-            values_prev_7 = []
-            values_prev_14 = []
-            values_prev_28 = []
-            values_prev_56 = []
-
-            key = f"{type_}${task}$"
-
-            for item in items:
-                full_key = key + item
-
-                if full_key not in past_failures:
-                    cur = past_failures[full_key] = ExpQueue(
-                        push_num, HISTORICAL_TIMESPAN + 1, 0
-                    )
-                else:
-                    cur = past_failures[full_key]
-
-                value = cur[push_num]
-
-                values_total.append(value)
-                values_prev_7.append(value - cur[push_num - 7])
-                values_prev_14.append(value - cur[push_num - 14])
-                values_prev_28.append(value - cur[push_num - 28])
-                values_prev_56.append(value - cur[push_num - 56])
-
-                if is_regression:
-                    cur[push_num] = value + 1
-
-            return (
-                sum(values_total),
-                sum(values_prev_7),
-                sum(values_prev_14),
-                sum(values_prev_28),
-                sum(values_prev_56),
-            )
-
-        def generate_data():
-            nonlocal push_num
-            saved_nodes = set()
-            skipped_no_commits = 0
-            skipped_too_big_commits = 0
-            skipped_no_tasks = 0
+            push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
@@ -231,6 +157,11 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             all_tasks = filter_tasks(list(all_tasks_set), all_tasks_set)
             all_tasks_set = set(all_tasks)
             logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
+
+            saved_nodes = set()
+            skipped_no_commits = 0
+            skipped_too_big_commits = 0
+            skipped_no_tasks = 0
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
@@ -290,115 +221,31 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
-                for task in tasks_to_consider:
-                    is_regression = (
-                        task in possible_regressions or task in likely_regressions
-                    )
-
-                    (
-                        total_failures,
-                        past_7_pushes_failures,
-                        past_14_pushes_failures,
-                        past_28_pushes_failures,
-                        past_56_pushes_failures,
-                    ) = get_and_update_past_failures(
-                        "all", task, ["all"], push_num, is_regression
-                    )
-
-                    (
-                        total_types_failures,
-                        past_7_pushes_types_failures,
-                        past_14_pushes_types_failures,
-                        past_28_pushes_types_failures,
-                        past_56_pushes_types_failures,
-                    ) = get_and_update_past_failures(
-                        "type", task, merged_commits["types"], push_num, is_regression
-                    )
-
-                    (
-                        total_files_failures,
-                        past_7_pushes_files_failures,
-                        past_14_pushes_files_failures,
-                        past_28_pushes_files_failures,
-                        past_56_pushes_files_failures,
-                    ) = get_and_update_past_failures(
-                        "file", task, merged_commits["files"], push_num, is_regression
-                    )
-
-                    (
-                        total_directories_failures,
-                        past_7_pushes_directories_failures,
-                        past_14_pushes_directories_failures,
-                        past_28_pushes_directories_failures,
-                        past_56_pushes_directories_failures,
-                    ) = get_and_update_past_failures(
-                        "directory",
-                        task,
-                        merged_commits["directories"],
-                        push_num,
-                        is_regression,
-                    )
-
-                    (
-                        total_components_failures,
-                        past_7_pushes_components_failures,
-                        past_14_pushes_components_failures,
-                        past_28_pushes_components_failures,
-                        past_56_pushes_components_failures,
-                    ) = get_and_update_past_failures(
-                        "component",
-                        task,
-                        merged_commits["components"],
-                        push_num,
-                        is_regression,
-                    )
-
+                for data in test_scheduling.generate_data(
+                    past_failures,
+                    merged_commits,
+                    push_num,
+                    tasks_to_consider,
+                    possible_regressions,
+                    likely_regressions,
+                ):
                     if pushdate > HISTORY_DATE_START:
                         saved_nodes.add(i)
-
-                        yield {
-                            "revs": revisions,
-                            "name": task,
-                            "failures": total_failures,
-                            "failures_past_7_pushes": past_7_pushes_failures,
-                            "failures_past_14_pushes": past_14_pushes_failures,
-                            "failures_past_28_pushes": past_28_pushes_failures,
-                            "failures_past_56_pushes": past_56_pushes_failures,
-                            "failures_in_types": total_types_failures,
-                            "failures_past_7_pushes_in_types": past_7_pushes_types_failures,
-                            "failures_past_14_pushes_in_types": past_14_pushes_types_failures,
-                            "failures_past_28_pushes_in_types": past_28_pushes_types_failures,
-                            "failures_past_56_pushes_in_types": past_56_pushes_types_failures,
-                            "failures_in_files": total_files_failures,
-                            "failures_past_7_pushes_in_files": past_7_pushes_files_failures,
-                            "failures_past_14_pushes_in_files": past_14_pushes_files_failures,
-                            "failures_past_28_pushes_in_files": past_28_pushes_files_failures,
-                            "failures_past_56_pushes_in_files": past_56_pushes_files_failures,
-                            "failures_in_directories": total_directories_failures,
-                            "failures_past_7_pushes_in_directories": past_7_pushes_directories_failures,
-                            "failures_past_14_pushes_in_directories": past_14_pushes_directories_failures,
-                            "failures_past_28_pushes_in_directories": past_28_pushes_directories_failures,
-                            "failures_past_56_pushes_in_directories": past_56_pushes_directories_failures,
-                            "failures_in_components": total_components_failures,
-                            "failures_past_7_pushes_in_components": past_7_pushes_components_failures,
-                            "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
-                            "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
-                            "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
-                            "is_possible_regression": task in possible_regressions,
-                            "is_likely_regression": task in likely_regressions,
-                        }
+                        data["revisions"] = revisions
+                        yield data
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
             logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
             logger.info(f"skipped {skipped_too_big_commits} (too big commits)")
             logger.info(f"skipped {skipped_no_tasks} (no interesting tasks)")
 
-        db.append(test_scheduling.TEST_SCHEDULING_DB, generate_data())
+            past_failures["push_num"] = push_num
+            past_failures.close()
+
+        db.append(test_scheduling.TEST_SCHEDULING_DB, generate_all_data())
 
         zstd_compress(test_scheduling.TEST_SCHEDULING_DB)
 
-        past_failures["push_num"] = push_num
-        past_failures.close()
         with open_tar_zst("data/past_failures.lmdb.tar.zst") as tar:
             tar.add("data/past_failures.lmdb")
 

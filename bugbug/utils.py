@@ -11,6 +11,7 @@ from collections import deque
 from contextlib import contextmanager
 
 import dateutil.parser
+import lmdb
 import numpy as np
 import requests
 import scipy
@@ -282,3 +283,23 @@ class ExpQueue:
             assert False, "Can't insert in the past"
 
         assert day == self.last_day
+
+
+class LMDBDict:
+    def __init__(self, path):
+        self.db = lmdb.open(path, map_size=68719476736, metasync=False, sync=False)
+        self.txn = self.db.begin(buffers=True, write=True)
+
+    def close(self):
+        self.txn.commit()
+        self.db.sync()
+        self.db.close()
+
+    def __contains__(self, key):
+        return self.txn.get(key) is not None
+
+    def __getitem__(self, key):
+        return self.txn.get(key)
+
+    def __setitem__(self, key, value):
+        self.txn.put(key, value, dupdata=False)
