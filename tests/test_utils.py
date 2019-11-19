@@ -182,39 +182,6 @@ def test_download_check_etag_unchanged():
         assert f.read() == "prova"
 
 
-def test_download_check_etag_fallback():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
-
-    responses.add(
-        responses.HEAD,
-        url,
-        status=404,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
-    )
-
-    responses.add(
-        responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
-    )
-
-    url_fallback = url.replace(
-        "https://community-tc.services.mozilla.com/api/index",
-        "https://index.taskcluster.net",
-    )
-
-    responses.add(
-        responses.HEAD, url_fallback, status=200, headers={"ETag": "123"},
-    )
-
-    responses.add(responses.GET, url_fallback, status=200, body="prova")
-
-    utils.download_check_etag(url, "prova.txt")
-
-    assert os.path.exists("prova.txt")
-
-    with open("prova.txt", "r") as f:
-        assert f.read() == "prova"
-
-
 def test_download_check_missing():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
@@ -227,22 +194,6 @@ def test_download_check_missing():
 
     responses.add(
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
-    )
-
-    url_fallback = url.replace(
-        "https://community-tc.services.mozilla.com/api/index",
-        "https://index.taskcluster.net",
-    )
-
-    responses.add(
-        responses.HEAD, url_fallback, status=404, headers={"ETag": "123"},
-    )
-
-    responses.add(
-        responses.GET,
-        url_fallback,
-        status=404,
-        body=requests.exceptions.HTTPError("HTTP error"),
     )
 
     with pytest.raises(requests.exceptions.HTTPError, match="HTTP error"):
@@ -271,41 +222,11 @@ def test_get_last_modified_not_present():
     assert utils.get_last_modified(url) is None
 
 
-def test_get_last_modified_fallback():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
-
-    responses.add(
-        responses.HEAD, url, status=404, headers={"Last-Modified": "2019-04-16"},
-    )
-
-    url_fallback = url.replace(
-        "https://community-tc.services.mozilla.com/api/index",
-        "https://index.taskcluster.net",
-    )
-
-    responses.add(
-        responses.HEAD,
-        url_fallback,
-        status=200,
-        headers={"Last-Modified": "2018-04-16"},
-    )
-
-    assert utils.get_last_modified(url) == datetime(2018, 4, 16, 0, 0)
-
-
 def test_get_last_modified_missing():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD, url, status=404, headers={},
-    )
-
-    url_fallback = url.replace(
-        "https://community-tc.services.mozilla.com/api/index",
-        "https://index.taskcluster.net",
-    )
-    responses.add(
-        responses.HEAD, url_fallback, status=404, headers={},
     )
 
     assert utils.get_last_modified(url) is None
