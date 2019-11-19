@@ -43,7 +43,7 @@ def is_old_version(path):
     r = requests.get(url)
 
     if not r.ok:
-        print(f"Version file is not yet available to download for {path}")
+        logger.info(f"Version file is not yet available to download for {path}")
         return True
 
     prev_version = int(r.text)
