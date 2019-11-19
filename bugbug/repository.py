@@ -624,7 +624,7 @@ def download_component_mapping():
     global path_to_component
 
     utils.download_check_etag(
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         "data/component_mapping.json",
     )
 
