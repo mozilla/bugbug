@@ -10,11 +10,12 @@ from bugbug import db
 from bugbug.utils import ExpQueue, LMDBDict
 
 TEST_SCHEDULING_DB = "data/test_scheduling_history.pickle"
+PAST_FAILURES_DB = "past_failures.lmdb.tar.zst"
 db.register(
     TEST_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/test_scheduling_history.pickle.zst",
     4,
-    ["past_failures.lmdb.tar.zst"],
+    [PAST_FAILURES_DB],
 )
 
 HISTORICAL_TIMESPAN = 56

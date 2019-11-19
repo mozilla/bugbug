@@ -48,10 +48,11 @@
             },
             "command": [
                 "bugbug-classify-commit",
+                "regressor",
                 "/cache",
                 "${payload['DIFF_ID']}",
-                "/gecko-dev",
-                "/MethodDefectPredictor"
+                "--git_repo_dir=/gecko-dev",
+                "--method_defect_predictor_dir=/MethodDefectPredictor"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200

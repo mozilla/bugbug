@@ -19,8 +19,8 @@ from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
-from bugbug import db, repository
-from bugbug.models.regressor import RegressorModel
+from bugbug import db, repository, test_scheduling
+from bugbug.models import get_model_class
 from bugbug.utils import (
     download_check_etag,
     get_secret,
@@ -32,7 +32,7 @@ from bugbug.utils import (
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_regressor.latest/artifacts/public/{}"
+URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_name}model.zst"
 
 
 # ------------------------------------------------------------------------------
@@ -117,54 +117,67 @@ def replace_reviewers(commit_description, reviewers):
 
 
 class CommitClassifier(object):
-    def __init__(self, cache_root, git_repo_dir, method_defect_predictor_dir):
+    def __init__(
+        self, model_name, cache_root, git_repo_dir, method_defect_predictor_dir
+    ):
+        self.model_name = model_name
         self.cache_root = cache_root
 
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-        regressormodel_path = "regressormodel"
-        if not os.path.exists(regressormodel_path):
-            download_check_etag(
-                URL.format(f"{regressormodel_path}.zst"), f"{regressormodel_path}.zst"
-            )
-            zstd_decompress(regressormodel_path)
-            assert os.path.exists(regressormodel_path), "Decompressed model exists"
+        model_path = f"{model_name}model"
+        if not os.path.exists(model_path):
+            download_check_etag(URL.format(model_name=model_name), f"{model_path}.zst")
+            zstd_decompress(model_path)
+            assert os.path.exists(model_path), "Decompressed model exists"
 
-        regressormodel_data_X_path = "regressormodel_data_X"
-        if not os.path.exists(regressormodel_data_X_path):
-            download_check_etag(
-                URL.format(f"{regressormodel_data_X_path}.zst"),
-                f"{regressormodel_data_X_path}.zst",
-            )
-            zstd_decompress(regressormodel_data_X_path)
-            assert os.path.exists(
-                regressormodel_data_X_path
-            ), "Decompressed X dataset exists"
+        self.model = get_model_class(model_name).load(model_path)
 
-        regressormodel_data_y_path = "regressormodel_data_y"
-        if not os.path.exists(regressormodel_data_y_path):
-            download_check_etag(
-                URL.format(f"{regressormodel_data_y_path}.zst"),
-                f"{regressormodel_data_y_path}.zst",
-            )
-            zstd_decompress(regressormodel_data_y_path)
-            assert os.path.exists(
-                regressormodel_data_y_path
-            ), "Decompressed y dataset exists"
-
-        self.model = RegressorModel.load(regressormodel_path)
-        self.X = to_array(joblib.load(regressormodel_data_X_path))
-        self.y = to_array(joblib.load(regressormodel_data_y_path))
+        self.git_repo_dir = git_repo_dir
+        if git_repo_dir:
+            self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
-        self.clone_git_repo(
-            "https://github.com/lucapascarella/MethodDefectPredictor",
-            method_defect_predictor_dir,
-            "fa5269b959d8ddf7e97d1e92523bb64c17f9bbcd",
-        )
-        self.git_repo_dir = git_repo_dir
-        self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
+        if method_defect_predictor_dir:
+            self.clone_git_repo(
+                "https://github.com/lucapascarella/MethodDefectPredictor",
+                method_defect_predictor_dir,
+                "fa5269b959d8ddf7e97d1e92523bb64c17f9bbcd",
+            )
+
+        if model_name == "regressor":
+            self.use_test_history = False
+
+            model_data_X_path = f"{model_name}model_data_X"
+            if not os.path.exists(model_data_X_path):
+                download_check_etag(
+                    URL.format(f"{model_data_X_path}.zst"), f"{model_data_X_path}.zst",
+                )
+                zstd_decompress(model_data_X_path)
+                assert os.path.exists(
+                    model_data_X_path
+                ), "Decompressed X dataset exists"
+
+            model_data_y_path = f"{model_name}model_data_y"
+            if not os.path.exists(model_data_y_path):
+                download_check_etag(
+                    URL.format(f"{model_data_y_path}.zst"), f"{model_data_y_path}.zst",
+                )
+                zstd_decompress(model_data_y_path)
+                assert os.path.exists(
+                    model_data_y_path
+                ), "Decompressed y dataset exists"
+
+            self.X = to_array(joblib.load(model_data_X_path))
+            self.y = to_array(joblib.load(model_data_y_path))
+
+        if model_name == "testselect":
+            self.use_test_history = True
+            db.download_support_file(
+                test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
+            )
+            self.past_failures_data = test_scheduling.get_past_failures()
 
     def clone_git_repo(self, repo_url, repo_dir, rev="master"):
         logger.info(f"Cloning {repo_url}...")
@@ -326,56 +339,33 @@ class CommitClassifier(object):
                 user=f"{author_name} <{author_email}>".encode("utf-8"),
             )
 
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                temp_file = os.path.join(tmpdirname, "temp.patch")
-                with open(temp_file, "w") as f:
-                    f.write(patch.patch)
+            if self.git_repo_dir:
+                with tempfile.TemporaryDirectory() as tmpdirname:
+                    temp_file = os.path.join(tmpdirname, "temp.patch")
+                    with open(temp_file, "w") as f:
+                        f.write(patch.patch)
 
-                subprocess.run(
-                    ["git", "apply", "--3way", temp_file],
-                    check=True,
-                    cwd=self.git_repo_dir,
-                )
-                subprocess.run(
-                    [
-                        "git",
-                        "-c",
-                        f"user.name={author_name}",
-                        "-c",
-                        f"user.email={author_email}",
-                        "commit",
-                        "-am",
-                        message,
-                    ],
-                    check=True,
-                    cwd=self.git_repo_dir,
-                )
+                    subprocess.run(
+                        ["git", "apply", "--3way", temp_file],
+                        check=True,
+                        cwd=self.git_repo_dir,
+                    )
+                    subprocess.run(
+                        [
+                            "git",
+                            "-c",
+                            f"user.name={author_name}",
+                            "-c",
+                            f"user.email={author_email}",
+                            "commit",
+                            "-am",
+                            message,
+                        ],
+                        check=True,
+                        cwd=self.git_repo_dir,
+                    )
 
-    def classify(self, diff_id):
-        self.update_commit_db()
-
-        with hglib.open(self.repo_dir) as hg:
-            self.apply_phab(hg, diff_id)
-
-            patch_rev = hg.log(revrange="not public()")[0].node
-
-            # Analyze patch.
-            commits = repository.download_commits(
-                self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
-            )
-
-        # We use "clean" (or "dirty") commits as the background dataset for feature importance.
-        # This way, we can see the features which are most important in differentiating
-        # the current commit from the "clean" (or "dirty") commits.
-
-        probs, importance = self.model.classify(
-            commits[-1],
-            probabilities=True,
-            importances=True,
-            background_dataset=lambda v: self.X[self.y != v],
-            importance_cutoff=0.05,
-        )
-
+    def generate_feature_importance_data(self, probs, importance):
         pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
 
         features = []
@@ -525,12 +515,71 @@ class CommitClassifier(object):
 
             features.append(feature)
 
-        with open("probs.json", "w") as f:
-            json.dump(probs[0].tolist(), f)
-
         with open("importances.json", "w") as f:
             json.dump(features, f)
 
+    def classify(self, diff_id):
+        self.update_commit_db()
+
+        with hglib.open(self.repo_dir) as hg:
+            self.apply_phab(hg, diff_id)
+
+            patch_rev = hg.log(revrange="not public()")[0].node
+
+            # Analyze patch.
+            commits = repository.download_commits(
+                self.repo_dir, rev_start=patch_rev.decode("utf-8"), save=False
+            )
+
+        # We use "clean" (or "dirty") commits as the background dataset for feature importance.
+        # This way, we can see the features which are most important in differentiating
+        # the current commit from the "clean" (or "dirty") commits.
+
+        if not self.use_test_history:
+            probs, importance = self.model.classify(
+                commits[-1],
+                probabilities=True,
+                importances=True,
+                background_dataset=lambda v: self.X[self.y != v],
+                importance_cutoff=0.05,
+            )
+
+            self.generate_feature_importance_data(probs, importance)
+
+            with open("probs.json", "w") as f:
+                json.dump(probs[0].tolist(), f)
+
+            if self.model_name == "regressor" and self.method_defect_predictor_dir:
+                self.classify_methods()
+        else:
+            # TODO: Should we consider a merge of the commits of the stack?
+            commit = commits[-1]
+
+            push_num = self.past_failures_data["push_num"]
+
+            # XXX: Consider using mozilla-central built-in rules to filter some of these out, e.g. SCHEDULES.
+            # XXX: Consider using the runnable jobs artifact from the Gecko Decision task.
+            all_tasks = self.past_failures_data["all_tasks"]
+
+            selected_tasks = []
+            # TODO: Classify multiple commit/test at the same time.
+            for data in test_scheduling.generate_data(
+                self.past_failures_data, commit, push_num, all_tasks, [], []
+            ):
+                if not data["name"].startswith("test-"):
+                    continue
+
+                commit["test_job"] = data
+
+                probs = self.model.classify(commit, probabilities=True)
+
+                if probs[0][1] > 0.9:
+                    selected_tasks.append(data["name"])
+
+            with open("selected_tasks", "w") as f:
+                f.writelines(f"{selected_task}\n" for selected_task in selected_tasks)
+
+    def classify_methods(self):
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
         four_months_ago = datetime.utcnow() - relativedelta(months=4)
@@ -586,20 +635,21 @@ def main():
     description = "Classify a commit"
     parser = argparse.ArgumentParser(description=description)
 
+    parser.add_argument("model", help="Which model to use for evaluation")
     parser.add_argument("cache_root", help="Cache for repository clones.")
     parser.add_argument("diff_id", help="diff ID to analyze.", type=int)
     parser.add_argument(
-        "git_repo_dir", help="Path where the git repository will be cloned."
+        "--git_repo_dir", help="Path where the git repository will be cloned."
     )
     parser.add_argument(
-        "method_defect_predictor_dir",
+        "--method_defect_predictor_dir",
         help="Path where the git repository will be cloned.",
     )
 
     args = parser.parse_args()
 
     classifier = CommitClassifier(
-        args.cache_root, args.git_repo_dir, args.method_defect_predictor_dir
+        args.model, args.cache_root, args.git_repo_dir, args.method_defect_predictor_dir
     )
     classifier.classify(args.diff_id)
 
