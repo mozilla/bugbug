@@ -61,9 +61,9 @@ def is_old_version(path):
 def extract_file(path):
     inner_path, _ = os.path.splitext(path)
 
-    if path.endswith(".tar.zst"):
+    if str(path).endswith(".tar.zst"):
         extract_tar_zst(inner_path)
-    elif path.endswith(".zst"):
+    elif str(path).endswith(".zst"):
         zstd_decompress(inner_path)
     else:
         assert False, f"Unexpected compression type for {path}"
