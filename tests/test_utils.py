@@ -102,7 +102,7 @@ def test_download_check_etag():
 
     responses.add(responses.GET, url, status=200, body="prova")
 
-    utils.download_check_etag(url, "prova.txt")
+    assert utils.download_check_etag(url, "prova.txt")
 
     assert os.path.exists("prova.txt")
 
@@ -131,14 +131,14 @@ def test_download_check_etag_changed():
 
     responses.add(responses.GET, url, status=200, body="prova2")
 
-    utils.download_check_etag(url, "prova.txt")
+    assert utils.download_check_etag(url, "prova.txt")
 
     assert os.path.exists("prova.txt")
 
     with open("prova.txt", "r") as f:
         assert f.read() == "prova"
 
-    utils.download_check_etag(url, "prova.txt")
+    assert utils.download_check_etag(url, "prova.txt")
 
     assert os.path.exists("prova.txt")
 
@@ -167,14 +167,14 @@ def test_download_check_etag_unchanged():
 
     responses.add(responses.GET, url, status=200, body="prova2")
 
-    utils.download_check_etag(url, "prova.txt")
+    assert utils.download_check_etag(url, "prova.txt")
 
     assert os.path.exists("prova.txt")
 
     with open("prova.txt", "r") as f:
         assert f.read() == "prova"
 
-    utils.download_check_etag(url, "prova.txt")
+    assert not utils.download_check_etag(url, "prova.txt")
 
     assert os.path.exists("prova.txt")
 

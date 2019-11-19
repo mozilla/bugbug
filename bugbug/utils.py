@@ -145,16 +145,20 @@ def download_check_etag(url, path):
     except IOError:
         old_etag = None
 
-    if old_etag != new_etag:
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
+    if old_etag == new_etag:
+        return False
 
-        with open(path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=4096):
-                f.write(chunk)
+    r = requests.get(url, stream=True)
+    r.raise_for_status()
 
-        with open(f"{path}.etag", "w") as f:
-            f.write(new_etag)
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=4096):
+            f.write(chunk)
+
+    with open(f"{path}.etag", "w") as f:
+        f.write(new_etag)
+
+    return True
 
 
 def get_last_modified(url):
