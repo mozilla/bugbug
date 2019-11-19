@@ -409,6 +409,38 @@ tasks:
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
+          taskId: {$eval: as_slugid("update_hook_test_select")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-test-select
+            - assume:hook-id:project-relman/bugbug-test-select
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: proj-relman
+          workerType: ci
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: "${taskboot_image}"
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-test-select.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-test-select.json project-relman bugbug-test-select"
+          metadata:
+            name: bugbug update test select hook
+            description: bugbug update test select hook
+            owner: mcastelluccio@mozilla.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
       # It's the same task integration_test as in data-pipeline.yml
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:

@@ -21,6 +21,7 @@ parameters = [
     (os.path.realpath("infra/taskcluster-hook-pipeline-start.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-check-models-start.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-classify-patch.json"), {"DIFF_ID": 123}),
+    (os.path.realpath("infra/taskcluster-hook-test-select.json"), {"DIFF_ID": 123}),
 ]
 
 for f in os.listdir("infra"):
