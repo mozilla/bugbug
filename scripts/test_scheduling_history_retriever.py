@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import subprocess
-import tarfile
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
@@ -57,10 +56,6 @@ class Retriever(object):
         cache_path = os.path.splitext(ADR_CACHE_DB)[0]
         if not db.is_old_version(ADR_CACHE_DB):
             db.download(ADR_CACHE_DB)
-            if os.path.exists(ADR_CACHE_DB):
-                with tarfile.open(ADR_CACHE_DB, "r") as tar:
-                    tar.extractall()
-                assert os.path.exists(cache_path), "Decompressed adr cache exists"
 
         # Setup adr cache configuration.
         os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)

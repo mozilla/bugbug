@@ -219,6 +219,14 @@ def open_tar_zst(path):
                 yield tar
 
 
+def extract_tar_zst(path):
+    dctx = zstandard.ZstdDecompressor()
+    with open(f"{path}.zst", "rb") as f:
+        with dctx.stream_reader(f) as reader:
+            with tarfile.open(mode="r|", fileobj=reader) as tar:
+                tar.extractall()
+
+
 class CustomJsonEncoder(json.JSONEncoder):
     """ A custom Json Encoder to support Numpy types
     """

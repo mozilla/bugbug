@@ -16,7 +16,7 @@ import requests
 import zstandard
 
 from bugbug import utils
-from bugbug.utils import zstd_decompress
+from bugbug.utils import extract_tar_zst, zstd_decompress
 
 DATABASES = {}
 
@@ -59,12 +59,14 @@ def is_old_version(path):
 
 
 def extract_file(path):
-    path, compression_type = os.path.splitext(path)
+    inner_path, _ = os.path.splitext(path)
 
-    if compression_type == ".zst":
-        zstd_decompress(path)
+    if path.endswith(".tar.zst"):
+        extract_tar_zst(inner_path)
+    elif path.endswith(".zst"):
+        zstd_decompress(inner_path)
     else:
-        assert False, f"Unexpected compression type: {compression_type}"
+        assert False, f"Unexpected compression type for {path}"
 
 
 def download_support_file(path, file_name):
