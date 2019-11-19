@@ -17,8 +17,7 @@ class Retriever(object):
     def retrieve_bugs(self, limit=None):
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
-        if not db.is_old_version(bugzilla.BUGS_DB):
-            db.download(bugzilla.BUGS_DB)
+        db.download(bugzilla.BUGS_DB)
 
         # Get IDs of bugs changed since last run.
         last_modified = db.last_modified(bugzilla.BUGS_DB)
@@ -50,10 +49,7 @@ class Retriever(object):
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
-        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
-            repository.COMMITS_DB
-        ):
-            db.download(repository.COMMITS_DB, force=True)
+        assert db.download(repository.COMMITS_DB)
 
         # Get IDs of bugs linked to commits (used for some commit-based models, e.g. backout and regressor).
         start_date = datetime.now() - relativedelta(years=2, months=6)

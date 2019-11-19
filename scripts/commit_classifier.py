@@ -174,7 +174,7 @@ class CommitClassifier(object):
 
         if model_name == "testselect":
             self.use_test_history = True
-            db.download_support_file(
+            assert db.download_support_file(
                 test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
             )
             self.past_failures_data = test_scheduling.get_past_failures()
@@ -207,10 +207,7 @@ class CommitClassifier(object):
     def update_commit_db(self):
         repository.clone(self.repo_dir)
 
-        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
-            repository.COMMITS_DB
-        ):
-            db.download(repository.COMMITS_DB, force=True, support_files_too=True)
+        assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         for commit in repository.get_commits():
             pass

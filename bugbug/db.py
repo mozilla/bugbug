@@ -38,7 +38,7 @@ def exists(path):
     return os.path.exists(path)
 
 
-def is_old_version(path):
+def is_old_schema(path):
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     r = requests.get(url)
 
@@ -62,48 +62,54 @@ def extract_file(path):
         assert False, f"Unexpected compression type for {path}"
 
 
-def download_support_file(path, file_name, force=False):
+def download_support_file(path, file_name):
+    # If a DB with the current schema is not available yet, we can't download.
+    if is_old_schema(path):
+        return False
+
     try:
         url = urljoin(DATABASES[path]["url"], file_name)
         path = os.path.join(os.path.dirname(path), file_name)
 
-        if os.path.exists(path) and not force:
-            return
-
         logger.info(f"Downloading {url} to {path}")
-        utils.download_check_etag(url, path)
+        updated = utils.download_check_etag(url, path)
 
-        if path.endswith(".zst"):
+        if updated and path.endswith(".zst"):
             extract_file(path)
+
+        return True
     except requests.exceptions.HTTPError:
         logger.info(
             f"{file_name} is not yet available to download for {path}", exc_info=True
         )
+        return False
 
 
 # Download and extract databases.
-def download(path, force=False, support_files_too=False):
-    if os.path.exists(path) and not force:
-        return
+def download(path, support_files_too=False):
+    # If a DB with the current schema is not available yet, we can't download.
+    if is_old_schema(path):
+        return False
 
     zst_path = f"{path}.zst"
 
-    # Only download if the file is not there yet.
-    if not os.path.exists(zst_path) or force:
-        url = DATABASES[path]["url"]
-        try:
-            logger.info(f"Downloading {url} to {zst_path}")
-            utils.download_check_etag(url, zst_path)
+    url = DATABASES[path]["url"]
+    try:
+        logger.info(f"Downloading {url} to {zst_path}")
+        updated = utils.download_check_etag(url, zst_path)
 
-        except requests.exceptions.HTTPError:
-            logger.info(f"{url} is not yet available to download", exc_info=True)
-            return
+        if updated:
+            extract_file(zst_path)
 
-    extract_file(zst_path)
+        successful = True
+        if support_files_too:
+            for support_file in DATABASES[path]["support_files"]:
+                successful |= download_support_file(path, support_file)
 
-    if support_files_too:
-        for support_file in DATABASES[path]["support_files"]:
-            download_support_file(path, support_file, force)
+        return successful
+    except requests.exceptions.HTTPError:
+        logger.info(f"{url} is not yet available to download", exc_info=True)
+        return False
 
 
 def last_modified(path):

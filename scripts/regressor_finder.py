@@ -131,8 +131,7 @@ class RegressorFinder(object):
     # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
     def get_commits_to_ignore(self):
         logger.info("Download previous commits to ignore...")
-        if db.is_old_version(IGNORED_COMMITS_DB) or not db.exists(IGNORED_COMMITS_DB):
-            db.download(IGNORED_COMMITS_DB, force=True)
+        db.download(IGNORED_COMMITS_DB)
 
         logger.info("Get previously classified commits...")
         prev_commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
@@ -190,20 +189,13 @@ class RegressorFinder(object):
 
     def find_bug_fixing_commits(self):
         logger.info("Downloading commits database...")
-        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
-            repository.COMMITS_DB
-        ):
-            db.download(repository.COMMITS_DB, force=True)
+        assert db.download(repository.COMMITS_DB)
 
         logger.info("Downloading bugs database...")
-        if db.is_old_version(bugzilla.BUGS_DB) or not db.exists(bugzilla.BUGS_DB):
-            db.download(bugzilla.BUGS_DB, force=True)
+        assert db.download(bugzilla.BUGS_DB)
 
         logger.info("Download previous classifications...")
-        if db.is_old_version(BUG_FIXING_COMMITS_DB) or not db.exists(
-            BUG_FIXING_COMMITS_DB
-        ):
-            db.download(BUG_FIXING_COMMITS_DB, force=True)
+        db.download(BUG_FIXING_COMMITS_DB)
 
         logger.info("Get previously classified commits...")
         prev_bug_fixing_commits = list(db.read(BUG_FIXING_COMMITS_DB))
@@ -320,8 +312,7 @@ class RegressorFinder(object):
                 return vcs_map.mercurial_to_git(rev)
 
         logger.info("Download previously found bug-introducing commits...")
-        if db.is_old_version(db_path) or not db.exists(db_path):
-            db.download(db_path, force=True)
+        db.download(db_path)
 
         logger.info("Get previously found bug-introducing commits...")
         prev_bug_introducing_commits = list(db.read(db_path))

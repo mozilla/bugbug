@@ -24,15 +24,12 @@ class Retriever(object):
         if limit:
             # Mercurial revset supports negative integers starting from tip
             rev_start = -limit
-        elif not db.is_old_version(repository.COMMITS_DB):
+        else:
             db.download(repository.COMMITS_DB, support_files_too=True)
 
-            for commit in repository.get_commits():
-                pass
-
-            rev_start = f"children({commit['node']})"
-        else:
             rev_start = 0
+            for commit in repository.get_commits():
+                rev_start = f"children({commit['node']})"
 
         repository.download_commits(self.repo_dir, rev_start)
 

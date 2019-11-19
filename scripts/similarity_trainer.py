@@ -46,8 +46,7 @@ def main():
 
     logger.info("Downloading bugs database...")
 
-    if db.is_old_version(bugzilla.BUGS_DB) or not db.exists(bugzilla.BUGS_DB):
-        db.download(bugzilla.BUGS_DB, force=True)
+    assert db.download(bugzilla.BUGS_DB)
 
     if args.algorithm == "neighbors_tfidf_bigrams":
         model = similarity.model_name_to_class[args.algorithm](

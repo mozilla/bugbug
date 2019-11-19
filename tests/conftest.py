@@ -22,6 +22,8 @@ def mock_data(tmp_path_factory):
 
     for f in DBs:
         shutil.copyfile(os.path.join(FIXTURES_DIR, f), tmp_path / "data" / f)
+        with open(tmp_path / "data" / f"{f}.zst.etag", "w") as f:
+            f.write("etag")
 
     os.chdir(tmp_path)
 

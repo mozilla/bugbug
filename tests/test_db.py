@@ -125,11 +125,11 @@ def test_exists_db(tmp_path):
 
 @pytest.fixture
 def mock_zst():
-    def create_zst_file(db_path):
+    def create_zst_file(db_path, content=b'{"Hello": "World"}'):
         with open(db_path, "wb") as output_f:
             cctx = zstandard.ZstdCompressor()
             with cctx.stream_writer(output_f) as compressor:
-                compressor.write(b'{"Hello": "World"}')
+                compressor.write(content)
 
     return create_zst_file
 
@@ -157,11 +157,14 @@ def test_extract_db_bad_format(tmp_path):
         db.extract_file(db_path)
 
 
-def test_download_zst(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+def test_download(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
+
+    responses.add(responses.GET, url_version, status=200, body="1")
 
     responses.add(
         responses.HEAD,
@@ -180,7 +183,8 @@ def test_download_zst(tmp_path, mock_zst):
     with open(tmp_zst_path, "rb") as content:
         responses.add(responses.GET, url, status=200, body=content.read())
 
-    db.download(db_path)
+    assert db.download(db_path)
+    assert db.download(db_path)
 
     assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
@@ -189,8 +193,9 @@ def test_download_zst(tmp_path, mock_zst):
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
 
-def test_download_missing(tmp_path):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+def test_download_missing(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -206,20 +211,114 @@ def test_download_missing(tmp_path):
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
-    db.download(db_path)
+    responses.add(responses.GET, url_version, status=404)
+
+    assert not db.download(db_path)
     assert not os.path.exists(db_path)
 
     with pytest.raises(Exception, match="Last-Modified is not available"):
         db.last_modified(db_path)
 
 
-def test_download_support_file_zst(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+def test_download_old_schema(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, url, 2)
+
+    responses.add(responses.GET, url_version, status=200, body="1")
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={
+            "ETag": "123",
+            "Accept-Encoding": "zstd",
+            "Last-Modified": "2019-04-16",
+        },
+    )
+
+    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    mock_zst(tmp_zst_path)
+
+    with open(tmp_zst_path, "rb") as content:
+        responses.add(responses.GET, url, status=200, body=content.read())
+
+    assert not db.download(db_path)
+
+    assert db.last_modified(db_path) == datetime(2019, 4, 16)
+
+    assert not os.path.exists(db_path)
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
+
+
+def test_download_same_schema_new_db(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, url, 1)
+
+    responses.add(responses.GET, url_version, status=200, body="1")
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Accept-Encoding": "zstd",},
+    )
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "456", "Accept-Encoding": "zstd",},
+    )
+
+    tmp_zst_path1 = tmp_path / "prova_tmp.zst"
+    mock_zst(tmp_zst_path1, b"0")
+
+    with open(tmp_zst_path1, "rb") as content:
+        responses.add(responses.GET, url, status=200, body=content.read())
+
+    tmp_zst_path2 = tmp_path / "prova_tmp2.zst"
+    mock_zst(tmp_zst_path2, b"1")
+
+    with open(tmp_zst_path2, "rb") as content:
+        responses.add(responses.GET, url, status=200, body=content.read())
+
+    assert db.download(db_path)
+
+    assert os.path.exists(db_path)
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
+
+    with open(db_path, "r") as f:
+        assert f.read() == "0"
+
+    assert db.download(db_path)
+
+    assert os.path.exists(db_path)
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
+
+    with open(db_path, "r") as f:
+        assert f.read() == "1"
+
+
+def test_download_support_file(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
     support_filename = "support.zst"
     url_support = urljoin(url, support_filename)
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1, support_files=[support_filename])
+
+    responses.add(responses.GET, url_version, status=200, body="1")
 
     responses.add(
         responses.HEAD,
@@ -234,7 +333,7 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     with open(tmp_zst_path, "rb") as content:
         responses.add(responses.GET, url_support, status=200, body=content.read())
 
-    db.download_support_file(db_path, support_filename)
+    assert db.download_support_file(db_path, support_filename)
 
     assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
     assert os.path.exists(
@@ -248,45 +347,67 @@ def test_download_support_file_zst(tmp_path, mock_zst):
     )
 
 
-def test_is_old_version(tmp_path):
-    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+def test_download_with_support_files_too(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    support_filename = "support.zst"
+    url_support = urljoin(url, support_filename)
 
     db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 1, support_files=[])
+    db.register(db_path, url, 1, support_files=[support_filename])
 
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
-
-    responses.add(responses.GET, url_version, status=404)
-    responses.add(responses.GET, url_version, status=424)
     responses.add(responses.GET, url_version, status=200, body="1")
-    responses.add(responses.GET, url_version, status=200, body="42")
 
-    # When the remote version file doesn't exist, we consider the db as being old.
-    assert db.is_old_version(db_path)
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
 
-    # When the remote version file doesn't exist, we consider the db as being old.
-    assert db.is_old_version(db_path)
+    responses.add(
+        responses.HEAD,
+        url_support,
+        status=200,
+        headers={"ETag": "123", "Accept-Encoding": "zstd"},
+    )
 
-    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
-    assert not db.is_old_version(db_path)
+    tmp_zst_path = tmp_path / "prova_tmp.zst"
+    mock_zst(tmp_zst_path)
 
-    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
-    assert not db.is_old_version(db_path)
+    with open(tmp_zst_path, "rb") as content:
+        responses.add(responses.GET, url, status=200, body=content.read())
 
-    db.register(db_path, url_zst, 43, support_files=[])
+    with open(tmp_zst_path, "rb") as content:
+        responses.add(responses.GET, url_support, status=200, body=content.read())
 
-    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
-    assert db.is_old_version(db_path)
+    assert db.download(db_path, support_files_too=True)
+
+    assert os.path.exists(db_path)
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
+    assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
+    assert os.path.exists(
+        os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
+    )
+    assert os.path.exists(
+        os.path.join(
+            os.path.dirname(db_path),
+            os.path.splitext(support_filename)[0] + ".zst.etag",
+        )
+    )
 
 
 def test_download_support_file_missing(tmp_path, caplog):
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
     support_filename = "support_mock.zst"
     url_support = urljoin(url, support_filename)
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1, support_files=[support_filename])
+
+    responses.add(responses.GET, url_version, status=404)
 
     responses.add(
         responses.HEAD,
@@ -302,10 +423,39 @@ def test_download_support_file_missing(tmp_path, caplog):
         body=requests.exceptions.HTTPError("HTTP error"),
     )
 
-    db.download_support_file(db_path, support_filename)
+    assert not db.download_support_file(db_path, support_filename)
 
-    path = os.path.join(
-        os.path.dirname(db_path), f"{os.path.splitext(support_filename)[0]}.zst"
-    )
-    expected_message = f"{support_filename} is not yet available to download for {path}"
+    expected_message = f"Version file is not yet available to download for {db_path}"
     assert expected_message in caplog.text
+
+
+def test_is_old_schema(tmp_path):
+    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, url_zst, 1, support_files=[])
+
+    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".version"))
+
+    responses.add(responses.GET, url_version, status=404)
+    responses.add(responses.GET, url_version, status=424)
+    responses.add(responses.GET, url_version, status=200, body="1")
+    responses.add(responses.GET, url_version, status=200, body="42")
+
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_schema(db_path)
+
+    # When the remote version file doesn't exist, we consider the db as being old.
+    assert db.is_old_schema(db_path)
+
+    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
+    assert not db.is_old_schema(db_path)
+
+    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
+    assert not db.is_old_schema(db_path)
+
+    db.register(db_path, url_zst, 43, support_files=[])
+
+    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
+    assert db.is_old_schema(db_path)

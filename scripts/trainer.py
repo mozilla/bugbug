@@ -50,7 +50,7 @@ class Trainer(object):
 
         if args.download_db:
             for required_db in model_obj.required_dbs:
-                db.download(required_db)
+                assert db.download(required_db)
         else:
             logger.info("Skipping download of the databases")
 

@@ -54,8 +54,7 @@ class Retriever(object):
     def retrieve_push_data(self):
         # Download previous cache.
         cache_path = os.path.splitext(ADR_CACHE_DB)[0]
-        if not db.is_old_version(ADR_CACHE_DB):
-            db.download(ADR_CACHE_DB)
+        db.download(ADR_CACHE_DB)
 
         # Setup adr cache configuration.
         os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)
@@ -104,22 +103,15 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
             ), "Decompressed push data file exists"
 
         # Get the commits DB.
-        if db.is_old_version(repository.COMMITS_DB) or not db.exists(
-            repository.COMMITS_DB
-        ):
-            db.download(repository.COMMITS_DB, force=True)
+        assert db.download(repository.COMMITS_DB)
 
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
-        if not db.is_old_version(test_scheduling.TEST_SCHEDULING_DB):
-            db.download(test_scheduling.TEST_SCHEDULING_DB, support_files_too=True)
+        db.download(test_scheduling.TEST_SCHEDULING_DB, support_files_too=True)
 
-            for test_data in test_scheduling.get_test_scheduling_history():
-                pass
-
+        last_node = None
+        for test_data in test_scheduling.get_test_scheduling_history():
             last_node = test_data["revs"][0]
-        else:
-            last_node = None
 
         def generate_all_data():
             past_failures = test_scheduling.get_past_failures()
