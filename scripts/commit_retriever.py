@@ -21,7 +21,10 @@ class Retriever(object):
     def retrieve_commits(self, limit):
         repository.clone(self.repo_dir)
 
-        if not db.is_old_version(repository.COMMITS_DB) and not limit:
+        if limit:
+            # Mercurial revset supports negative integers starting from tip
+            rev_start = -limit
+        elif not db.is_old_version(repository.COMMITS_DB):
             db.download(repository.COMMITS_DB, support_files_too=True)
 
             for commit in repository.get_commits():
@@ -29,11 +32,7 @@ class Retriever(object):
 
             rev_start = f"children({commit['node']})"
         else:
-            if limit:
-                # Mercurial revset supports negative integers starting from tip
-                rev_start = -limit
-            else:
-                rev_start = 0
+            rev_start = 0
 
         repository.download_commits(self.repo_dir, rev_start)
 
