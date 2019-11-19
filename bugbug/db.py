@@ -69,10 +69,13 @@ def extract_file(path):
         assert False, f"Unexpected compression type for {path}"
 
 
-def download_support_file(path, file_name):
+def download_support_file(path, file_name, force=False):
     try:
         url = urljoin(DATABASES[path]["url"], file_name)
         path = os.path.join(os.path.dirname(path), file_name)
+
+        if os.path.exists(path) and not force:
+            return
 
         logger.info(f"Downloading {url} to {path}")
         utils.download_check_etag(url, path)
@@ -107,7 +110,7 @@ def download(path, force=False, support_files_too=False):
 
     if support_files_too:
         for support_file in DATABASES[path]["support_files"]:
-            download_support_file(path, support_file)
+            download_support_file(path, support_file, force)
 
 
 def last_modified(path):
