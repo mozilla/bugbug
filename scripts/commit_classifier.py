@@ -579,7 +579,9 @@ class CommitClassifier(object):
 
                 probs = self.model.classify(commit, probabilities=True)
 
-                if probs[0][1] > 0.9:
+                if probs[0][1] > float(
+                    get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD")
+                ):
                     selected_tasks.append(data["name"])
 
             with open("selected_tasks", "w") as f:
