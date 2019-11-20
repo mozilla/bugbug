@@ -32,7 +32,7 @@ from bugbug.utils import (
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
-URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_name}model.zst"
+URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{file_name}"
 
 
 # ------------------------------------------------------------------------------
@@ -128,7 +128,10 @@ class CommitClassifier(object):
 
         model_path = f"{model_name}model"
         if not os.path.exists(model_path):
-            download_check_etag(URL.format(model_name=model_name), f"{model_path}.zst")
+            download_check_etag(
+                URL.format(model_name=model_name, file_name=f"{model_path}.zst"),
+                f"{model_path}.zst",
+            )
             zstd_decompress(model_path)
             assert os.path.exists(model_path), "Decompressed model exists"
 
@@ -152,7 +155,10 @@ class CommitClassifier(object):
             model_data_X_path = f"{model_name}model_data_X"
             if not os.path.exists(model_data_X_path):
                 download_check_etag(
-                    URL.format(f"{model_data_X_path}.zst"), f"{model_data_X_path}.zst",
+                    URL.format(
+                        model_name=model_name, file_name=f"{model_data_X_path}.zst"
+                    ),
+                    f"{model_data_X_path}.zst",
                 )
                 zstd_decompress(model_data_X_path)
                 assert os.path.exists(
@@ -162,7 +168,10 @@ class CommitClassifier(object):
             model_data_y_path = f"{model_name}model_data_y"
             if not os.path.exists(model_data_y_path):
                 download_check_etag(
-                    URL.format(f"{model_data_y_path}.zst"), f"{model_data_y_path}.zst",
+                    URL.format(
+                        model_name=model_name, file_name=f"{model_data_y_path}.zst"
+                    ),
+                    f"{model_data_y_path}.zst",
                 )
                 zstd_decompress(model_data_y_path)
                 assert os.path.exists(
