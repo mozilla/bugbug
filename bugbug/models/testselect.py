@@ -26,7 +26,6 @@ class TestSelectModel(Model):
 
         self.required_dbs = [repository.COMMITS_DB, test_scheduling.TEST_SCHEDULING_DB]
 
-        self.calculate_importance = False
         self.cross_validation_enabled = False
 
         self.sampler = RandomUnderSampler(random_state=0)
