@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import base64
 import csv
 import io
 import json
@@ -13,7 +14,9 @@ from logging import INFO, basicConfig, getLogger
 
 import hglib
 import joblib
+import matplotlib
 import numpy as np
+import shap
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
@@ -373,13 +376,30 @@ class CommitClassifier(object):
                     )
 
     def generate_feature_importance_data(self, probs, importance):
+        X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
+
         pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
 
         features = []
         for i, (val, feature_index, is_positive) in enumerate(
             importance["importances"]["classes"][pred_class][0]
         ):
+            name = importance["feature_legend"][str(i + 1)]
             value = importance["importances"]["values"][0, int(feature_index)]
+
+            shap.summary_plot(
+                X_shap_values[:, int(feature_index)].reshape(self.X.shape[0], 1),
+                self.X[:, int(feature_index)].reshape(self.X.shape[0], 1),
+                feature_names=[name],
+                plot_type="layered_violin",
+                show=False,
+            )
+            matplotlib.pyplot.xlabel("Impact on model output")
+            img = io.BytesIO()
+            matplotlib.pyplot.savefig(img, bbox_inches="tight")
+            matplotlib.pyplot.clf()
+            img.seek(0)
+            base64_img = base64.b64encode(img.read()).decode("ascii")
 
             X = self.X[:, int(feature_index)]
             y = self.y[X != 0]
@@ -405,7 +425,7 @@ class CommitClassifier(object):
                 clean_X <= median
             ).sum() / clean_X.shape[0]
 
-            logger.info("Feature: {}".format(importance["feature_legend"][str(i + 1)]))
+            logger.info("Feature: {}".format(name))
             logger.info("Shap value: {}{}".format("+" if (is_positive) else "-", val))
             logger.info(f"spearman:  {spearman}")
             logger.info(f"value: {value}")
@@ -431,7 +451,7 @@ class CommitClassifier(object):
             features.append(
                 {
                     "index": i + 1,
-                    "name": importance["feature_legend"][str(i + 1)],
+                    "name": name,
                     "shap": float(f'{"+" if (is_positive) else "-"}{val}'),
                     "value": importance["importances"]["values"][0, int(feature_index)],
                     "spearman": spearman,
@@ -442,6 +462,7 @@ class CommitClassifier(object):
                     "perc_buggy_values_lower_than_median": perc_buggy_values_lower_than_median,
                     "perc_clean_values_higher_than_median": perc_clean_values_higher_than_median,
                     "perc_clean_values_lower_than_median": perc_clean_values_lower_than_median,
+                    "plot": base64_img,
                 }
             )
 
@@ -480,7 +501,7 @@ class CommitClassifier(object):
         # Pick a representative example from each group.
         features = []
         for feature_group in feature_groups:
-            shap = sum(f["shap"] for f in feature_group)
+            shap_sum = sum(f["shap"] for f in feature_group)
 
             # Only select easily explainable features from the group.
             selected = [
@@ -513,7 +534,7 @@ class CommitClassifier(object):
                     return f["perc_clean_values_higher_than_median"]
 
             feature = max(selected, key=feature_sort_key)
-            feature["shap"] = shap
+            feature["shap"] = shap_sum
 
             for attribute in attributes:
                 if feature["name"].startswith(attribute):
