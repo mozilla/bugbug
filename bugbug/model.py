@@ -398,6 +398,7 @@ class Model:
             )
 
             matplotlib.pyplot.savefig("feature_importance.png", bbox_inches="tight")
+            matplotlib.pyplot.clf()
 
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
