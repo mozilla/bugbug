@@ -311,14 +311,14 @@ def test_hg_log(fake_hg_repo):
 def test_download_component_mapping():
     responses.add(
         responses.HEAD,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         headers={"ETag": "100"},
     )
 
     responses.add(
         responses.GET,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         json={},
     )
@@ -329,14 +329,14 @@ def test_download_component_mapping():
     responses.reset()
     responses.add(
         responses.HEAD,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         headers={"ETag": "101"},
     )
 
     responses.add(
         responses.GET,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         json={
             "AUTHORS": ["mozilla.org", "Licensing"],
@@ -352,7 +352,7 @@ def test_download_component_mapping():
     responses.reset()
     responses.add(
         responses.HEAD,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         headers={"ETag": "101"},
     )
@@ -368,14 +368,14 @@ def test_download_commits(fake_hg_repo):
 
     responses.add(
         responses.HEAD,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         headers={"ETag": "123"},
     )
 
     responses.add(
         responses.GET,
-        "https://community-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         status=200,
         json={
             "file1": ["Firefox", "Menus"],
