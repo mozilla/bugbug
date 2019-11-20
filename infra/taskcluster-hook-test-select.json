@@ -54,11 +54,13 @@
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed",
             "index.project.relman.bugbug.test_select.latest",
-            "index.project.relman.bugbug.test_select.diff.${payload['DIFF_ID']}"
+            "index.project.relman.bugbug.test_select.diff.${payload['DIFF_ID']}",
+            "project.relman.bugbug.test_select"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-test-select"
+            "assume:hook-id:project-relman/bugbug-test-select",
+            "queue:route:project.relman.bugbug.test_select.*"
         ],
         "tags": {},
         "workerType": "compute-large"
