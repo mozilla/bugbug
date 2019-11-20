@@ -7,7 +7,7 @@ from logging import INFO, basicConfig, getLogger
 import numpy as np
 import requests
 
-from bugbug import bugzilla
+from bugbug import bugzilla, db
 from bugbug.models import get_model_class
 from bugbug.utils import download_check_etag, zstd_decompress
 
@@ -51,6 +51,7 @@ def classify_bugs(model_name, classifier, bug_id):
         bugs = bugzilla.get(bug_id).values()
         assert bugs, f"A bug with a bug id of {bug_id} was not found"
     else:
+        assert db.download(bugzilla.BUGS_DB)
         bugs = bugzilla.get_bugs()
 
     for bug in bugs:
