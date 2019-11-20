@@ -223,7 +223,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                 ):
                     if pushdate > HISTORY_DATE_START:
                         saved_nodes.add(i)
-                        data["revisions"] = revisions
+                        data["revs"] = revisions
                         yield data
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
