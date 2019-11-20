@@ -279,16 +279,17 @@ class CommitClassifier(object):
             hg.update(rev=hg_base, clean=True)
             logger.info(f"Updated repo to {hg_base}")
 
-            try:
-                self.git_base = vcs_map.mercurial_to_git(hg_base)
-                subprocess.run(
-                    ["git", "checkout", "-b", "analysis_branch", self.git_base],
-                    check=True,
-                    cwd=self.git_repo_dir,
-                )
-                logger.info(f"Updated git repo to {self.git_base}")
-            except Exception as e:
-                logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
+            if self.git_repo_dir:
+                try:
+                    self.git_base = vcs_map.mercurial_to_git(hg_base)
+                    subprocess.run(
+                        ["git", "checkout", "-b", "analysis_branch", self.git_base],
+                        check=True,
+                        cwd=self.git_repo_dir,
+                    )
+                    logger.info(f"Updated git repo to {self.git_base}")
+                except Exception as e:
+                    logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
 
         def load_user(phid):
             if phid.startswith("PHID-USER"):
