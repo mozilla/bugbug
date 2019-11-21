@@ -129,16 +129,8 @@ class CommitClassifier(object):
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-        model_path = f"{model_name}model"
-        if not os.path.exists(model_path):
-            download_check_etag(
-                URL.format(model_name=model_name, file_name=f"{model_path}.zst"),
-                f"{model_path}.zst",
-            )
-            zstd_decompress(model_path)
-            assert os.path.exists(model_path), "Decompressed model exists"
-
-        self.model = get_model_class(model_name).load(model_path)
+        self.model = self.load_model(model_name)
+        assert self.model is not None
 
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
@@ -190,6 +182,21 @@ class CommitClassifier(object):
                 test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
             )
             self.past_failures_data = test_scheduling.get_past_failures()
+
+            self.backout_model = self.load_model("backout")
+            assert self.backout_model is not None
+
+    def load_model(self, model_name):
+        model_path = f"{model_name}model"
+        if not os.path.exists(model_path):
+            download_check_etag(
+                URL.format(model_name=model_name, file_name=f"{model_path}.zst"),
+                f"{model_path}.zst",
+            )
+            zstd_decompress(model_path)
+            assert os.path.exists(model_path), "Decompressed model exists"
+
+        return get_model_class(model_name).load(model_path)
 
     def clone_git_repo(self, repo_url, repo_dir, rev="master"):
         logger.info(f"Cloning {repo_url}...")
@@ -580,6 +587,10 @@ class CommitClassifier(object):
             if self.model_name == "regressor" and self.method_defect_predictor_dir:
                 self.classify_methods()
         else:
+            backout_probs = self.backout_model.classify(commits[-1], probabilities=True)
+
+            logger.info(f"Backout risk: {backout_probs[0][1]}")
+
             commit_data = commit_features.merge_commits(commits)
 
             push_num = self.past_failures_data["push_num"]
@@ -604,6 +615,14 @@ class CommitClassifier(object):
                     get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD")
                 ):
                     selected_tasks.append(data["name"])
+
+            with open("failure_risk", "w") as f:
+                f.write(
+                    "1"
+                    if backout_probs[0][1]
+                    > float(get_secret("FAILURE_CONFIDENCE_THRESHOLD"))
+                    else "0"
+                )
 
             with open("selected_tasks", "w") as f:
                 f.writelines(f"{selected_task}\n" for selected_task in selected_tasks)

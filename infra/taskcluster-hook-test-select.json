@@ -26,6 +26,10 @@
                 "public/selected_tasks": {
                     "path": "/selected_tasks",
                     "type": "file"
+                },
+                "public/failure_risk": {
+                    "path": "/failure_risk",
+                    "type": "file"
                 }
             },
             "cache": {
