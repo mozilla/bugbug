@@ -22,7 +22,7 @@ from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
-from bugbug import db, repository, test_scheduling
+from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.models import get_model_class
 from bugbug.utils import (
     download_check_etag,
@@ -580,8 +580,7 @@ class CommitClassifier(object):
             if self.model_name == "regressor" and self.method_defect_predictor_dir:
                 self.classify_methods()
         else:
-            # TODO: Should we consider a merge of the commits of the stack?
-            commit = commits[-1]
+            commit_data = commit_features.merge_commits(commits)
 
             push_num = self.past_failures_data["push_num"]
 
@@ -592,14 +591,14 @@ class CommitClassifier(object):
             selected_tasks = []
             # TODO: Classify multiple commit/test at the same time.
             for data in test_scheduling.generate_data(
-                self.past_failures_data, commit, push_num, all_tasks, [], []
+                self.past_failures_data, commit_data, push_num, all_tasks, [], []
             ):
                 if not data["name"].startswith("test-"):
                     continue
 
-                commit["test_job"] = data
+                commit_data["test_job"] = data
 
-                probs = self.model.classify(commit, probabilities=True)
+                probs = self.model.classify(commit_data, probabilities=True)
 
                 if probs[0][1] > float(
                     get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD")
