@@ -98,7 +98,7 @@ class TestFailureModel(CommitModel):
 
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
                 classes[rev] = 1
-            else:
+            elif rev not in classes:
                 classes[rev] = 0
 
         print(
