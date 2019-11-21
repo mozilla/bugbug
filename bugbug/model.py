@@ -145,6 +145,8 @@ class Model:
 
         self.store_dataset = False
 
+        self.entire_dataset_training = False
+
     @property
     def le(self):
         """Classifier agnostic getter for the label encoder property"""
@@ -517,6 +519,19 @@ class Model:
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )
+
+        if self.entire_dataset_training:
+            print("Retraining on the entire dataset...")
+
+            if self.sampler is not None:
+                X_train, y_train = self.sampler.fit_resample(X, y)
+            else:
+                X_train = X
+                y_train = y
+
+            print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+
+            self.clf.fit(X_train, y_train)
 
         joblib.dump(self, self.__class__.__name__.lower())
         if self.store_dataset:
