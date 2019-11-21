@@ -100,12 +100,11 @@ class BackoutModel(CommitModel):
             years=2, months=6
         )
 
-        # when using bug_data we restrict the pushdate to get only those commits for which we have bug_data by keeping the dates in sync with bug_retriever
         for commit_data in repository.get_commits():
-            if self.bug_data:
-                pushdate = dateutil.parser.parse(commit_data["pushdate"])
-                if pushdate < two_years_and_six_months_ago:
-                    continue
+            pushdate = dateutil.parser.parse(commit_data["pushdate"])
+            if pushdate < two_years_and_six_months_ago:
+                continue
+
             classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
 
         print(
