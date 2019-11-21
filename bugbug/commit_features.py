@@ -412,6 +412,60 @@ def merge_commits(commits):
             set(sum((commit["directories"] for commit in commits), []))
         ),
         "components": tuple(set(sum((commit["components"] for commit in commits), []))),
+        "source_code_files_modified_num": sum(
+            commit["source_code_files_modified_num"] for commit in commits
+        ),
+        "other_files_modified_num": sum(
+            commit["other_files_modified_num"] for commit in commits
+        ),
+        "test_files_modified_num": sum(
+            commit["test_files_modified_num"] for commit in commits
+        ),
+        "total_source_code_file_size": sum(
+            commit["total_source_code_file_size"] for commit in commits
+        ),
+        "average_source_code_file_size": sum(
+            commit["total_source_code_file_size"] for commit in commits
+        )
+        / len(commits),
+        "maximum_source_code_file_size": max(
+            commit["maximum_source_code_file_size"] for commit in commits
+        ),
+        "minimum_source_code_file_size": min(
+            commit["minimum_source_code_file_size"] for commit in commits
+        ),
+        "total_other_file_size": sum(
+            commit["total_other_file_size"] for commit in commits
+        ),
+        "average_other_file_size": sum(
+            commit["total_other_file_size"] for commit in commits
+        )
+        / len(commits),
+        "maximum_other_file_size": max(
+            commit["maximum_other_file_size"] for commit in commits
+        ),
+        "minimum_other_file_size": min(
+            commit["minimum_other_file_size"] for commit in commits
+        ),
+        "total_test_file_size": sum(
+            commit["total_test_file_size"] for commit in commits
+        ),
+        "average_test_file_size": sum(
+            commit["total_test_file_size"] for commit in commits
+        )
+        / len(commits),
+        "maximum_test_file_size": max(
+            commit["maximum_test_file_size"] for commit in commits
+        ),
+        "minimum_test_file_size": min(
+            commit["minimum_test_file_size"] for commit in commits
+        ),
+        "source_code_added": sum(commit["source_code_added"] for commit in commits),
+        "other_added": sum(commit["other_added"] for commit in commits),
+        "test_added": sum(commit["test_added"] for commit in commits),
+        "source_code_deleted": sum(commit["source_code_deleted"] for commit in commits),
+        "other_deleted": sum(commit["other_deleted"] for commit in commits),
+        "test_deleted": sum(commit["test_deleted"] for commit in commits),
     }
 
 
@@ -472,7 +526,9 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
             for cleanup_function in self.cleanup_functions:
                 commit["desc"] = cleanup_function(commit["desc"])
 
-            result = {"data": data, "desc": commit["desc"]}
+            result = {"data": data}
+            if "desc" in commit:
+                result["desc"] = commit["desc"]
 
             results.append(result)
 

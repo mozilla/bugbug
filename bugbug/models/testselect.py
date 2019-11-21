@@ -77,20 +77,24 @@ class TestSelectModel(Model):
 
         assert len(commit_map) > 0
 
-        # TODO: Data from multiple commits in the same push should be merged.
         for test_data in test_scheduling.get_test_scheduling_history():
-            rev = test_data["revs"][0]
+            revs = test_data["revs"]
             name = test_data["name"]
 
-            if (rev, name) not in classes:
+            if (revs[0], name) not in classes:
                 continue
 
-            if rev not in commit_map:
+            commits = tuple(
+                commit_map[revision]
+                for revision in test_data["revs"]
+                if revision in commit_map
+            )
+            if len(commits) == 0:
                 continue
 
-            commit_data = commit_map[rev]
+            commit_data = commit_features.merge_commits(commits)
             commit_data["test_job"] = test_data
-            yield commit_data, classes[(rev, name)]
+            yield commit_data, classes[(revs[0], name)]
 
     def get_labels(self):
         classes = {}
