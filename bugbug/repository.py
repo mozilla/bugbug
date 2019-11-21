@@ -372,9 +372,9 @@ def hg_log(hg, revs):
         bug_id = int(rev[4].decode("ascii")) if rev[4] else None
 
         reviewers = (
-            set(sys.intern(r) for r in rev[8].decode("utf-8").split(" "))
+            list(set(sys.intern(r) for r in rev[8].decode("utf-8").split(" ")))
             if rev[8] != b""
-            else set()
+            else []
         )
 
         revs.append(
@@ -387,7 +387,7 @@ def hg_log(hg, revs):
                 bug_id=bug_id,
                 backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6].decode("utf-8"),
-                reviewers=tuple(reviewers),
+                reviewers=reviewers,
             )
         )
 
