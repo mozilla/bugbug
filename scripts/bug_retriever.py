@@ -49,7 +49,9 @@ class Retriever(object):
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
-        assert db.download(repository.COMMITS_DB)
+        # XXX: Temporarily avoid downloading the commits DB when a limit is set, to avoid the integration test fail when the commits DB is bumped.
+        if limit is None:
+            assert db.download(repository.COMMITS_DB)
 
         # Get IDs of bugs linked to commits (used for some commit-based models, e.g. backout and regressor).
         start_date = datetime.now() - relativedelta(years=2, months=6)
