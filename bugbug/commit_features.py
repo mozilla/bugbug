@@ -404,14 +404,15 @@ class types(object):
 
 def merge_commits(commits):
     return {
-        "nodes": tuple(commit["node"] for commit in commits),
+        "nodes": list(commit["node"] for commit in commits),
         "pushdate": commits[0]["pushdate"],
-        "types": tuple(set(sum((commit["types"] for commit in commits), []))),
-        "files": tuple(set(sum((commit["files"] for commit in commits), []))),
-        "directories": tuple(
+        "types": list(set(sum((commit["types"] for commit in commits), []))),
+        "files": list(set(sum((commit["files"] for commit in commits), []))),
+        "directories": list(
             set(sum((commit["directories"] for commit in commits), []))
         ),
-        "components": tuple(set(sum((commit["components"] for commit in commits), []))),
+        "components": list(set(sum((commit["components"] for commit in commits), []))),
+        "reviewers": list(set(sum((commit["reviewers"] for commit in commits), []))),
         "source_code_files_modified_num": sum(
             commit["source_code_files_modified_num"] for commit in commits
         ),

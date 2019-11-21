@@ -23,6 +23,7 @@ MODELS = {
     "regressor": "bugbug.models.regressor.RegressorModel",
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "testselect": "bugbug.models.testselect.TestSelectModel",
+    "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
 }
