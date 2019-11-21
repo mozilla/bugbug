@@ -77,6 +77,10 @@ OTHER_TYPES_TO_EXT = {
     "Build System File": [".build", ".mk", ".in"],
 }
 
+HARDCODED_TYPES = {
+    ".eslintrc.js": ".eslintrc.js",
+}
+
 TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
@@ -274,8 +278,12 @@ def _transform(commit):
                 if b"no such file in rev" not in e.err:
                     raise
 
-        ext = os.path.splitext(path)[1].lower()
-        type_ = EXT_TO_TYPES.get(ext, ext)
+        file_name = os.path.basename(path)
+        if file_name in HARDCODED_TYPES:
+            type_ = HARDCODED_TYPES[file_name]
+        else:
+            ext = os.path.splitext(path)[1].lower()
+            type_ = EXT_TO_TYPES.get(ext, ext)
 
         if is_test(path):
             commit.test_files_modified_num += 1
