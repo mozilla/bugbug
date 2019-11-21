@@ -229,7 +229,7 @@ def test_hg_log(fake_hg_repo):
     assert commits[0].bug_id is None
     assert commits[0].backedoutby == ""
     assert commits[0].author_email == "milla@mozilla.org"
-    assert commits[0].reviewers == tuple()
+    assert commits[0].reviewers == []
 
     assert commits[1].node == revision2
     assert commits[1].author == "Moz Illa <milla@mozilla.org>"
@@ -257,7 +257,7 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].bug_id is None
     assert commits[2].backedoutby == ""
     assert commits[2].author_email == "milla@mozilla.org"
-    assert commits[2].reviewers == tuple()
+    assert commits[2].reviewers == []
 
     assert commits[3].node == revision4
     assert commits[3].author == "Moz Illa <milla@mozilla.org>"
@@ -271,7 +271,7 @@ def test_hg_log(fake_hg_repo):
     assert commits[3].bug_id is None
     assert commits[3].backedoutby == revision5
     assert commits[3].author_email == "milla@mozilla.org"
-    assert commits[3].reviewers == tuple()
+    assert commits[3].reviewers == []
 
     assert commits[4].node == revision5
     assert commits[4].author == "sheriff"
@@ -285,7 +285,7 @@ def test_hg_log(fake_hg_repo):
     assert commits[4].bug_id is None
     assert commits[4].backedoutby == ""
     assert commits[4].author_email == "sheriff"
-    assert commits[4].reviewers == tuple()
+    assert commits[4].reviewers == []
 
     assert commits[5].node == revision6
     assert commits[5].author == "Moz Illa <milla@mozilla.org>"
@@ -299,7 +299,7 @@ def test_hg_log(fake_hg_repo):
     assert commits[5].bug_id is None
     assert commits[5].backedoutby == ""
     assert commits[5].author_email == "milla@mozilla.org"
-    assert commits[5].reviewers == tuple()
+    assert commits[5].reviewers == []
 
     commits = repository.hg_log(hg, [revs[1], revs[3]])
     assert len(commits) == 3, "hg log should return three commits"
