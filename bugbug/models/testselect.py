@@ -28,6 +28,8 @@ class TestSelectModel(Model):
 
         self.cross_validation_enabled = False
 
+        self.entire_dataset_training = True
+
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
