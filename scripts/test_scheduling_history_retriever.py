@@ -191,7 +191,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                 #  - Improve shelve perf and go back to consider all files;
                 #  - Consider only files which appear with a given frequency, like the "files" feature in commit_features;
                 #  - Keep a limit of number of files.
-                if len(merged_commits["files"]) > 20:
+                if len(merged_commits["files"]) > 50:
                     skipped_too_big_commits += 1
                     continue
 
