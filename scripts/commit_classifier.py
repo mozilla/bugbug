@@ -620,7 +620,7 @@ class CommitClassifier(object):
                 f.write(
                     "1"
                     if backout_probs[0][1]
-                    > float(get_secret("FAILURE_CONFIDENCE_THRESHOLD"))
+                    > float(get_secret("TEST_FAILURE_CONFIDENCE_THRESHOLD"))
                     else "0"
                 )
 
