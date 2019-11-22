@@ -1,5 +1,5 @@
 imbalanced-learn==0.5.0
-libmozdata==0.1.62
+libmozdata==0.1.63
 lmdb==0.98
 matplotlib==3.1.2
 microannotate==0.0.18
