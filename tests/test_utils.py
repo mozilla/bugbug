@@ -109,7 +109,7 @@ def test_download_check_etag():
     with open("prova.txt", "r") as f:
         assert f.read() == "prova"
 
-    assert utils.download_check_etag(url,"data/prova2.txt")
+    assert utils.download_check_etag(url, "data/prova2.txt")
 
     assert os.path.exists("data/prova2.txt")
 
