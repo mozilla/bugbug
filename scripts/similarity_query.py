@@ -37,7 +37,7 @@ def main(args):
     if not os.path.exists(model_file_name):
         logger.info(f"{model_file_name} does not exist. Downloading the model....")
         try:
-            download_check_etag(URL.format(model_file_name), f"{model_file_name}.zst")
+            download_check_etag(URL.format(model_file_name))
         except requests.HTTPError:
             logger.error(
                 f"A pre-trained model is not available, you will need to train it yourself using the trainer script"

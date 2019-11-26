@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 def download_model(model_url, file_path):
     logger.info(f"Downloading model from {model_url!r} and save it in {file_path!r}")
-    download_check_etag(model_url, f"{file_path}.zst")
+    download_check_etag(model_url)
 
     zstd_decompress(file_path)
     logger.info(f"Written model in {file_path}")

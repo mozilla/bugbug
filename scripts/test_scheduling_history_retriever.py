@@ -96,7 +96,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
     def generate_test_scheduling_history(self):
         if not os.path.exists("push_data.json"):
-            download_check_etag(PUSH_DATA_URL, "push_data.json.zst")
+            download_check_etag(PUSH_DATA_URL)
             zstd_decompress("push_data.json")
             assert os.path.exists(
                 "push_data.json"

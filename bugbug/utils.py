@@ -134,8 +134,11 @@ def get_secret(secret_id):
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
-def download_check_etag(url, path):
+def download_check_etag(url, path= None):
     r = requests.head(url, allow_redirects=True)
+
+    if(path is None):
+        path = url.split('/')[-1]
 
     new_etag = r.headers["ETag"]
 
