@@ -32,8 +32,7 @@ def classify_bugs(model_name, classifier, bug_id):
         logger.info(f"{model_file_name} does not exist. Downloading the model....")
         try:
             download_check_etag(
-                f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst",
-                f"{model_file_name}.zst",
+                f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_file_name}.zst"
             )
         except requests.HTTPError:
             logger.error(

@@ -61,7 +61,7 @@ def download_model(model_name):
     if not os.path.exists(f"{model_name}model"):
         url = BASE_URL.format(model_name=model_name)
         logger.info(f"Downloading {url}...")
-        download_check_etag(url, f"{model_name}model.zst")
+        download_check_etag(url)
         zstd_decompress(f"{model_name}model")
         assert os.path.exists(f"{model_name}model"), "Decompressed file exists"
 
