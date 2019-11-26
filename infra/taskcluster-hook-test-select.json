@@ -14,7 +14,9 @@
         "expires": {
             "$fromNow": "1 month"
         },
-        "extra": {},
+        "extra": {
+            "phabricator-diff-id": "${payload['DIFF_ID']}"
+        },
         "metadata": {
             "description": "",
             "name": "BugBug test select",
