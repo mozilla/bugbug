@@ -394,7 +394,7 @@ class CommitClassifier(object):
             shap.summary_plot(
                 X_shap_values[:, int(feature_index)].reshape(self.X.shape[0], 1),
                 self.X[:, int(feature_index)].reshape(self.X.shape[0], 1),
-                feature_names=[name],
+                feature_names=[""],
                 plot_type="layered_violin",
                 show=False,
             )
