@@ -203,7 +203,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
         )
         or (field == "severity" and new_value == "enhancement")
         or (field == "cf_blocking_20" and bug_id == 380637)
-        or (field == "cf_blocking_191" and bug_id == 607222)
+        or (field == "cf_blocking_191" and bug_id in (471015, 607222))
         or (field == "cf_blocking_192" and bug_id == 607222)
         or (field == "cf_status_firefox_esr45" and bug_id == 1292534)
         or (
@@ -520,6 +520,7 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
                 "blocking1.9+",
                 "blocking1.9.0.3?",
                 "blocking1.9.0.10+",
+                "blocking1.9.0.17+",
                 "wanted-firefox3.1?",
                 "approval1.7.x+",
                 "approval1.9.0.10+",
