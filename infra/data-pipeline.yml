@@ -605,6 +605,45 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
 
+    - ID: train-test-failure
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '118 hours'}
+      expires: {$fromNow: '1 year'}
+      provisionerId: proj-relman
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - test-scheduling-history-generator
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testfailure
+
+        artifacts:
+          public/testfailuremodel.zst:
+            expires: {$fromNow: '1 month'}
+            path: /testfailuremodel.zst
+            type: file
+          public/metrics.json:
+            expires: {$fromNow: '1 year'}
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.train_testfailure.${version}
+        - index.project.relman.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_testfailure.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_testfailure.latest
+      metadata:
+        name: bugbug train test failure model
+        description: bugbug train test failure model
+        owner: release-mgmt-analysis@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+
     - ID: train-similarity
       created: {$fromNow: ''}
       deadline: {$fromNow: '118 hours'}
@@ -660,6 +699,7 @@ tasks:
         - train-stepstoreproduce
         - train-tracking
         - train-test-select
+        - train-test-failure
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
