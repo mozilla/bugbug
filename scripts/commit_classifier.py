@@ -658,7 +658,6 @@ class CommitClassifier(object):
                 "--output",
                 os.path.abspath("method_level.csv"),
             ],
-            check=True,
             cwd=self.method_defect_predictor_dir,
         )
 
