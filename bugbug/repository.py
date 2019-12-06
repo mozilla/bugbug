@@ -568,9 +568,16 @@ def calculate_experiences(commits, first_pushdate, save=True):
                         day
                     ] = all_commit_lists[i] + (commit.node,)
 
+    prev_day = 0
+    prev_commit = commits[0]
     for i, commit in enumerate(tqdm(commits)):
         day = (commit.pushdate - first_pushdate).days
         assert day >= 0
+        assert (
+            day >= prev_day
+        ), f"Commit {commit.node} pushed on {commit.pushdate} should come after {prev_commit.node} pushed on {prev_commit.pushdate}"
+        prev_day = day
+        prev_commit = commit
 
         # When a file is moved/copied, copy original experience values to the copied path.
         if "file" in experiences:
