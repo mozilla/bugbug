@@ -144,6 +144,8 @@ def test_hg_modified_files(fake_hg_repo):
     revs = repository.get_revs(hg, revision1)
     commits = repository.hg_log(hg, revs)
 
+    repository.path_to_component = {}
+
     for c in commits:
         repository.hg_modified_files(hg, c)
 
