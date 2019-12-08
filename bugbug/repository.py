@@ -569,7 +569,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
                     ] = all_commit_lists[i] + (commit.node,)
 
     prev_day = 0
-    prev_commit = commits[0]
+    prev_commit = None
     for i, commit in enumerate(tqdm(commits)):
         day = (commit.pushdate - first_pushdate).days
         assert day >= 0
