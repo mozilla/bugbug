@@ -6,12 +6,14 @@
 import json
 import logging
 import os
+from typing import Dict
 from urllib.request import urlretrieve
 
 import requests
 from redis import Redis
 
 from bugbug import bugzilla, get_bugbug_version
+from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.utils import zstd_decompress
 
@@ -24,7 +26,7 @@ BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
-MODEL_CACHE = {}
+MODEL_CACHE: Dict[str, Model] = {}
 
 ALLOW_MISSING_MODELS = bool(int(os.environ.get("BUGBUG_ALLOW_MISSING_MODELS", "0")))
 

@@ -24,14 +24,14 @@ parameters = [
     (os.path.realpath("infra/taskcluster-hook-test-select.json"), {"DIFF_ID": 123}),
 ]
 
-for f in os.listdir("infra"):
-    if not f.startswith("taskcluster-hook-"):
+for infra_path in os.listdir("infra"):
+    if not infra_path.startswith("taskcluster-hook-"):
         continue
 
     assert any(
-        path == os.path.realpath(os.path.join("infra", f))
+        path == os.path.realpath(os.path.join("infra", infra_path))
         for path, payload in parameters
-    ), f"{f} not found"
+    ), f"{infra_path} not found"
 
 
 @pytest.mark.parametrize("hook_file,payload", parameters)

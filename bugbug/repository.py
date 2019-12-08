@@ -35,7 +35,7 @@ db.register(
     ["commit_experiences.pickle.zst"],
 )
 
-path_to_component = {}
+path_to_component = None
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
