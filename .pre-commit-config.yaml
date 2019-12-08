@@ -42,6 +42,10 @@ repos:
     rev: v0.0.3
     hooks:
     -   id: taskcluster_yml
+-   repo: https://github.com/asottile/yesqa
+    rev: v0.0.11
+    hooks:
+    -   id: yesqa
 -   repo: meta
     hooks:
     -   id: check-useless-excludes

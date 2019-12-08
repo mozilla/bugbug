@@ -52,7 +52,7 @@ LIST = r"[;,\/\\]\s*"
 IRC_NICK = r"[a-zA-Z0-9\-\_]+"
 
 # fmt: off
-REVIEWERS_RE = re.compile(  # noqa: E131
+REVIEWERS_RE = re.compile(
     r"([\s\(\.\[;,])"                   # before "r" delimiter
     + r"(" + SPECIFIER + r")"           # flag
     + r"("                              # capture all reviewers
