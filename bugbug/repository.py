@@ -19,13 +19,21 @@ from datetime import datetime
 import hglib
 from tqdm import tqdm
 
-from bugbug import db, utils
+from bugbug import db
+from bugbug import rust_code_analysis_server as rca
+from bugbug import utils
 
 logger = logging.getLogger(__name__)
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
 thread_local = threading.local()
+
+
+rust_code_analysis_server = rca.RustCodeAnalysisServer()
+if not rust_code_analysis_server.available:
+    sys.exit(1)
+
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -77,9 +85,7 @@ OTHER_TYPES_TO_EXT = {
     "Build System File": [".build", ".mk", ".in"],
 }
 
-HARDCODED_TYPES = {
-    ".eslintrc.js": ".eslintrc.js",
-}
+HARDCODED_TYPES = {".eslintrc.js": ".eslintrc.js"}
 
 TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 
@@ -378,6 +384,7 @@ def _transform(commit):
 
             if size is not None:
                 source_code_sizes.append(size)
+                # metrics = rust_code_analysis_server.metrics(path, after)
 
             commit.types.add(type_)
         else:
