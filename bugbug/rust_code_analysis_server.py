@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import subprocess
 import time
 
@@ -10,11 +11,12 @@ import requests
 
 from bugbug import utils
 
+logger = logging.getLogger(__name__)
+
 
 class RustCodeAnalysisServer:
     def __init__(self):
         self.addr = "localhost"
-        self.ok = False
         self.headers = {"Content-type": "application/octet-stream"}
 
         # run the server
@@ -31,31 +33,25 @@ class RustCodeAnalysisServer:
                         self.addr,
                     ]
                 )
+                if self.proc.poll() is None:
+                    break
             except FileNotFoundError:
                 raise Exception("rust-code-analysis is required for code analysis")
 
-    def ping(self):
         if self.proc.poll() is not None:
-            return
+            raise Exception("Unable to run rust-code-analysis server")
 
-        url = f"{self.base_url}/ping"
+        ping = f"{self.base_url}/ping"
         for _ in range(7):
             try:
-                r = requests.get(url)
+                r = requests.get(ping)
                 r.raise_for_status()
-                print("Rust code analysis server is ready to accept queries")
-                self.ok = True
+                logger.info("Rust code analysis server is ready to accept queries")
                 return
             except Exception:
                 time.sleep(1)
 
-    @property
-    def available(self):
-        if self.ok:
-            return True
-
-        self.ping()
-        return self.ok
+        raise Exception("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
@@ -69,7 +65,7 @@ class RustCodeAnalysisServer:
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"
         r = requests.post(url, data=code, headers=self.headers)
 
-        if r.status_code != 404:
+        if r.ok:
             return r.json()
         return {}
 
@@ -77,6 +73,6 @@ class RustCodeAnalysisServer:
         url = f"{self.base_url}/function?file_name={filename}"
         r = requests.post(url, data=code, headers=self.headers)
 
-        if r.status_code != 404:
+        if r.ok:
             return r.json()
         return {}
