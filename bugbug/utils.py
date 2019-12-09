@@ -5,6 +5,7 @@
 
 import json
 import os
+import socket
 import tarfile
 import time
 from collections import deque
@@ -300,3 +301,11 @@ class LMDBDict:
 
     def __setitem__(self, key, value):
         self.txn.put(key, value, dupdata=False)
+
+
+def get_free_tcp_port():
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(("", 0))
+    addr, port = tcp.getsockname()
+    tcp.close()
+    return port
