@@ -19,7 +19,7 @@ from datetime import datetime
 import hglib
 from tqdm import tqdm
 
-from bugbug import db, rust_code_analysis_server, utils
+from bugbug import db, utils
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +84,6 @@ HARDCODED_TYPES = {
 TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
-
-
-code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
 
 class Commit:
@@ -738,6 +735,11 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     global rs_parsepatch
     import rs_parsepatch
+
+    from bugbug import rust_code_analysis_server
+
+    global code_analysis_server
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
     with concurrent.futures.ProcessPoolExecutor(
         initializer=_init, initargs=(repo_dir,)
