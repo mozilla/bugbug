@@ -19,7 +19,7 @@ from datetime import datetime
 import hglib
 from tqdm import tqdm
 
-from bugbug import db, utils
+from bugbug import db, rust_code_analysis_server, utils
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,9 @@ TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
 
 
+code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+
 class Commit:
     def __init__(
         self,
@@ -118,6 +121,7 @@ class Commit:
         self.other_deleted = 0
         self.test_deleted = 0
         self.types = set()
+        self.functions = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
         self.average_source_code_file_size = 0
@@ -260,7 +264,7 @@ def _transform(commit):
     test_sizes = []
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
-    patch_data = rs_parsepatch.get_counts(patch)
+    patch_data = rs_parsepatch.get_lines(patch)
     for stats in patch_data:
         path = stats["filename"]
 
@@ -270,6 +274,7 @@ def _transform(commit):
             continue
 
         size = None
+        after = None
         if not stats["deleted"]:
             try:
                 after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
@@ -288,8 +293,8 @@ def _transform(commit):
         if is_test(path):
             commit.test_files_modified_num += 1
 
-            commit.test_added += stats["added_lines"]
-            commit.test_deleted += stats["deleted_lines"]
+            commit.test_added += len(stats["added_lines"])
+            commit.test_deleted += len(stats["deleted_lines"])
 
             if size is not None:
                 test_sizes.append(size)
@@ -299,8 +304,34 @@ def _transform(commit):
         elif type_ in SOURCE_CODE_TYPES_TO_EXT:
             commit.source_code_files_modified_num += 1
 
-            commit.source_code_added += stats["added_lines"]
-            commit.source_code_deleted += stats["deleted_lines"]
+            if after is not None:
+                function_data = code_analysis_server.function(path, after)
+                if function_data:
+                    touched_functions = set()
+                    function_spans = function_data["spans"]
+
+                    last_f = 0
+                    for added_line in stats["added_lines"]:
+                        for function in function_spans[last_f:]:
+                            if function["error"] or function["end_line"] < added_line:
+                                last_f += 1
+                                continue
+
+                            if function["start_line"] <= added_line:
+                                touched_functions.add(
+                                    (
+                                        function["name"],
+                                        function["start_line"],
+                                        function["end_line"],
+                                    )
+                                )
+                                break
+
+                    if len(touched_functions) > 0:
+                        commit.functions[path] = list(touched_functions)
+
+            commit.source_code_added += len(stats["added_lines"])
+            commit.source_code_deleted += len(stats["deleted_lines"])
 
             if size is not None:
                 source_code_sizes.append(size)
@@ -309,8 +340,8 @@ def _transform(commit):
         else:
             commit.other_files_modified_num += 1
 
-            commit.other_added += stats["added_lines"]
-            commit.other_deleted += stats["deleted_lines"]
+            commit.other_added += len(stats["added_lines"])
+            commit.other_deleted += len(stats["deleted_lines"])
 
             if size is not None:
                 other_sizes.append(size)
