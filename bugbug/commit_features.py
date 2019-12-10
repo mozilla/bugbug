@@ -105,6 +105,29 @@ class test_deleted(object):
         return commit["test_deleted"]
 
 
+class functions_touched_num(object):
+    name = "# of functions touched"
+
+    def __call__(self, commit, **kwargs):
+        return sum(1 for f_group in commit["functions"].values() for f in f_group)
+
+
+class functions_touched_size(object):
+    def __call__(self, commit, **kwargs):
+        function_sizes = [
+            f[2] - f[1] + 1 for f_group in commit["functions"].values() for f in f_group
+        ]
+
+        return {
+            "Total functions size": sum(function_sizes),
+            "Average functions size": sum(function_sizes) / len(function_sizes)
+            if len(function_sizes) > 0
+            else 0,
+            "Maximum functions size": max(function_sizes, default=0),
+            "Minimum functions size": min(function_sizes, default=0),
+        }
+
+
 def get_exps(exp_type, commit):
     items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
     items_num = len(commit[items_key])
