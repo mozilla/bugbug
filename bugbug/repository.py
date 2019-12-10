@@ -250,6 +250,34 @@ def hg_modified_files(hg, commit):
     )
 
 
+def get_touched_functions(path, lines, content):
+    if content is None:
+        return set()
+
+    function_data = code_analysis_server.function(path, content)
+    if not function_data:
+        return set()
+
+    touched_functions = set()
+
+    function_spans = function_data["spans"]
+
+    last_f = 0
+    for line in lines:
+        for function in function_spans[last_f:]:
+            if function["error"] or function["end_line"] < line:
+                last_f += 1
+                continue
+
+            if function["start_line"] <= line:
+                touched_functions.add(
+                    (function["name"], function["start_line"], function["end_line"])
+                )
+                break
+
+    return touched_functions
+
+
 def _transform(commit):
     hg_modified_files(HG, commit)
 
@@ -301,31 +329,9 @@ def _transform(commit):
         elif type_ in SOURCE_CODE_TYPES_TO_EXT:
             commit.source_code_files_modified_num += 1
 
-            if after is not None:
-                function_data = code_analysis_server.function(path, after)
-                if function_data:
-                    touched_functions = set()
-                    function_spans = function_data["spans"]
-
-                    last_f = 0
-                    for added_line in stats["added_lines"]:
-                        for function in function_spans[last_f:]:
-                            if function["error"] or function["end_line"] < added_line:
-                                last_f += 1
-                                continue
-
-                            if function["start_line"] <= added_line:
-                                touched_functions.add(
-                                    (
-                                        function["name"],
-                                        function["start_line"],
-                                        function["end_line"],
-                                    )
-                                )
-                                break
-
-                    if len(touched_functions) > 0:
-                        commit.functions[path] = list(touched_functions)
+            touched_functions = get_touched_functions(path, stats["added_lines"], after)
+            if len(touched_functions) > 0:
+                commit.functions[path] = list(touched_functions)
 
             commit.source_code_added += len(stats["added_lines"])
             commit.source_code_deleted += len(stats["deleted_lines"])
