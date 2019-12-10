@@ -181,8 +181,8 @@ class CommitClassifier(object):
             )
             self.past_failures_data = test_scheduling.get_past_failures()
 
-            self.backout_model = self.load_model("backout")
-            assert self.backout_model is not None
+            self.testfailure_model = self.load_model("testfailure")
+            assert self.testfailure_model is not None
 
     def load_model(self, model_name):
         model_path = f"{model_name}model"
@@ -584,9 +584,11 @@ class CommitClassifier(object):
             if self.model_name == "regressor" and self.method_defect_predictor_dir:
                 self.classify_methods()
         else:
-            backout_probs = self.backout_model.classify(commits[-1], probabilities=True)
+            testfailure_probs = self.testfailure_model.classify(
+                commits[-1], probabilities=True
+            )
 
-            logger.info(f"Backout risk: {backout_probs[0][1]}")
+            logger.info(f"Test failure risk: {testfailure_probs[0][1]}")
 
             commit_data = commit_features.merge_commits(commits)
 
@@ -616,7 +618,7 @@ class CommitClassifier(object):
             with open("failure_risk", "w") as f:
                 f.write(
                     "1"
-                    if backout_probs[0][1]
+                    if testfailure_probs[0][1]
                     > float(get_secret("TEST_FAILURE_CONFIDENCE_THRESHOLD"))
                     else "0"
                 )
