@@ -368,6 +368,9 @@ def test_download_component_mapping():
 def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://localhost")
+
     responses.add(
         responses.HEAD,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",

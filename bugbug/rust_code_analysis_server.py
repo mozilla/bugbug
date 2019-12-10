@@ -14,65 +14,77 @@ from bugbug import utils
 logger = logging.getLogger(__name__)
 
 
+START_RETRIES = 3
+HEADERS = {"Content-type": "application/octet-stream"}
+
+
 class RustCodeAnalysisServer:
     def __init__(self):
         self.addr = "localhost"
-        self.headers = {"Content-type": "application/octet-stream"}
 
-        # run the server
-        for _ in range(7):
-            try:
-                self.port = utils.get_free_tcp_port()
-                self.proc = subprocess.Popen(
-                    [
-                        "rust-code-analysis",
-                        "--serve",
-                        "--port",
-                        str(self.port),
-                        "--host",
-                        self.addr,
-                    ]
-                )
-                if self.proc.poll() is None:
-                    break
-            except FileNotFoundError:
-                raise Exception("rust-code-analysis is required for code analysis")
+        for _ in range(START_RETRIES):
+            self.start_process()
 
-        if self.proc.poll() is not None:
-            raise Exception("Unable to run rust-code-analysis server")
+            for _ in range(START_RETRIES):
+                if self.ping():
+                    logger.info("Rust code analysis server is ready to accept queries")
+                    return
+                else:
+                    if self.proc.poll() is not None:
+                        break
 
-        ping = f"{self.base_url}/ping"
-        for _ in range(7):
-            try:
-                r = requests.get(ping)
-                r.raise_for_status()
-                logger.info("Rust code analysis server is ready to accept queries")
-                return
-            except Exception:
-                time.sleep(1)
+                    time.sleep(1)
 
+        self.terminate()
         raise Exception("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
         return f"http://{self.addr}:{self.port}"
 
+    def start_process(self):
+        self.port = utils.get_free_tcp_port()
+
+        try:
+            self.proc = subprocess.Popen(
+                [
+                    "rust-code-analysis",
+                    "--serve",
+                    "--port",
+                    str(self.port),
+                    "--host",
+                    self.addr,
+                ]
+            )
+        except FileNotFoundError:
+            raise Exception("rust-code-analysis is required for code analysis")
+
+    def terminate(self):
+        if self.proc is not None:
+            self.proc.terminate()
+
     def __str__(self):
         return f"Server running at {self.base_url}"
+
+    def ping(self):
+        r = requests.get(f"{self.base_url}/ping")
+        return r.ok
 
     def metrics(self, filename, code, unit=True):
         unit = 1 if unit else 0
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"
-        r = requests.post(url, data=code, headers=self.headers)
+        r = requests.post(url, data=code, headers=HEADERS)
 
-        if r.ok:
-            return r.json()
-        return {}
+        if not r.ok:
+            return {}
+
+        return r.json()
 
     def function(self, filename, code):
         url = f"{self.base_url}/function?file_name={filename}"
-        r = requests.post(url, data=code, headers=self.headers)
+        r = requests.post(url, data=code, headers=HEADERS)
 
-        if r.ok:
-            return r.json()
-        return {}
+        if not r.ok:
+            return {}
+
+        return r.json()

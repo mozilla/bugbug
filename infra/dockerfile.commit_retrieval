@@ -12,7 +12,7 @@ RUN apt-get update && \
     git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /depot_tools && \
     cd /depot_tools && git -c advice.detachedHead=false checkout 73065b2067bc1516728a1e6251df751db98f0fba && git apply /root/git_hyper_blame_patch && cd .. && \
     rm -r /depot_tools/.git /depot_tools/recipes /depot_tools/tests /depot_tools/man /depot_tools/testing_support /depot_tools/win_toolchain /depot_tools/bootstrap /depot_tools/fetch_configs && \
-    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.2/rust-code-analysis-linux-x86_64.tar.bz2 | tar -C /usr/local/bin -xjv && \
+    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.4/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
     apt-get purge -y python-pip curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
