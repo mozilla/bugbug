@@ -748,6 +748,8 @@ def download_commits(repo_dir, rev_start=0, save=True):
         commits = tqdm(commits, total=commits_num)
         commits = list(commits)
 
+    code_analysis_server.terminate()
+
     calculate_experiences(commits, first_pushdate, save)
 
     commits = [commit.to_dict() for commit in commits if not commit.ignored]
