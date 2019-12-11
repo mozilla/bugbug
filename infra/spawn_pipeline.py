@@ -75,7 +75,8 @@ def main():
     with open(args.data_pipeline_json) as pipeline_file:
         raw_tasks = yaml.safe_load(pipeline_file.read())
 
-    context = {"version": os.getenv("TAG", "latest")}
+    version = os.getenv("TAG", "latest")
+    context = {"version": version}
     rendered = jsone.render(raw_tasks, context)
 
     for task in rendered["tasks"]:
@@ -93,6 +94,18 @@ def main():
 
         for key, value in keys.items():
             task[key] = value
+
+        task_payload = task["payload"]
+
+        if "env" in task_payload and task_payload["env"]:
+            if "$merge" not in task_payload["env"]:
+                task_payload["env"] = {"$merge": [task_payload["env"]]}
+
+            task_payload["env"]["$merge"].append({"TAG": version})
+        else:
+            task_payload["env"] = {
+                "TAG": version,
+            }
 
         # Process the dependencies
         new_dependencies = []
