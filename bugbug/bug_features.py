@@ -308,6 +308,11 @@ class num_words_title(single_bug_feature):
         return len(bug["summary"].split())
 
 
+class num_words_comments(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return sum(len(comment["text"].split()) for comment in bug["comments"])
+
+
 class has_image_attachment_at_bug_creation(single_bug_feature):
     name = "Image attachment present at bug creation"
 
