@@ -13,7 +13,7 @@ tasks:
       deadline: {$fromNow: '72 hours'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-large
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
