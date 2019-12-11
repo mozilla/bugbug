@@ -14,7 +14,7 @@ from bugbug import utils
 logger = logging.getLogger(__name__)
 
 
-START_RETRIES = 3
+START_RETRIES = 7
 HEADERS = {"Content-type": "application/octet-stream"}
 
 
