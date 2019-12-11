@@ -24,6 +24,7 @@ from bugbug import bugzilla, db, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
 from bugbug.models.regressor import (
+    BUG_FIXING_COMMITS_DB,
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
@@ -43,13 +44,6 @@ IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
     IGNORED_COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/ignored_commits.json.zst",
-    1,
-)
-
-BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
-db.register(
-    BUG_FIXING_COMMITS_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
     1,
 )
 

@@ -16,6 +16,13 @@ from sklearn.pipeline import Pipeline
 from bugbug import commit_features, db, feature_cleanup, repository
 from bugbug.model import CommitModel
 
+BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
+db.register(
+    BUG_FIXING_COMMITS_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/bug_fixing_commits.json.zst",
+    1,
+)
+
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
 db.register(
     BUG_INTRODUCING_COMMITS_DB,

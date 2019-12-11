@@ -56,6 +56,7 @@ setup(
             "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",
             "bugbug-analyze-training-metrics = scripts.analyze_training_metrics:main",
             "bugbug-check-all-metrics = scripts.check_all_metrics:main",
+            "bugbug-past-bugs-by-function = scripts.past_bugs_by_function:main",
         ]
     },
     classifiers=[
