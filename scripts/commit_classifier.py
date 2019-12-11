@@ -23,8 +23,8 @@ from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
 from bugbug import commit_features, db, repository, test_scheduling
-from bugbug.models import get_model_class
 from bugbug.utils import (
+    download_and_load_model,
     download_check_etag,
     get_secret,
     retry,
@@ -129,7 +129,7 @@ class CommitClassifier(object):
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
-        self.model = self.load_model(model_name)
+        self.model = download_and_load_model(model_name)
         assert self.model is not None
 
         self.git_repo_dir = git_repo_dir
@@ -181,19 +181,8 @@ class CommitClassifier(object):
             )
             self.past_failures_data = test_scheduling.get_past_failures()
 
-            self.testfailure_model = self.load_model("testfailure")
+            self.testfailure_model = download_and_load_model("testfailure")
             assert self.testfailure_model is not None
-
-    def load_model(self, model_name):
-        model_path = f"{model_name}model"
-        if not os.path.exists(model_path):
-            download_check_etag(
-                URL.format(model_name=model_name, file_name=f"{model_path}.zst")
-            )
-            zstd_decompress(model_path)
-            assert os.path.exists(model_path), "Decompressed model exists"
-
-        return get_model_class(model_name).load(model_path)
 
     def clone_git_repo(self, repo_url, repo_dir, rev="master"):
         logger.info(f"Cloning {repo_url}...")

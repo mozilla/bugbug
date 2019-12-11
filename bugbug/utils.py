@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import json
+import logging
 import os
 import socket
 import tarfile
@@ -21,6 +22,11 @@ import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
+
+from bugbug.models import get_model_class
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
 
@@ -172,6 +178,22 @@ def get_last_modified(url):
         return None
 
     return dateutil.parser.parse(r.headers["Last-Modified"])
+
+
+def download_model(model_name):
+    path = f"{model_name}model"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{path}.zst"
+    logger.info(f"Downloading {url}...")
+    updated = download_check_etag(url)
+    if updated:
+        zstd_decompress(path)
+    assert os.path.exists(path), "Decompressed file exists"
+    return path
+
+
+def download_and_load_model(model_name):
+    path = download_model(model_name)
+    return get_model_class(model_name).load(path)
 
 
 def retry(operation, retries=5, wait_between_retries=30):

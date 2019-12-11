@@ -9,9 +9,6 @@ tasks:
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-base
-      env:
-        MODEL_DOWNLOAD_URL: https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_component.latest/artifacts/public/componentmodel.zst
-        SHOULD_DOWNLOAD_MODEL: 1
       command:
         - bugbug-check
         - component

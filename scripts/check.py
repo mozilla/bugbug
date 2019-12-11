@@ -1,35 +1,19 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import os
 import sys
 from logging import INFO, basicConfig, getLogger
 
-from bugbug.models import load_model
-from bugbug.utils import download_check_etag, zstd_decompress
+from bugbug.utils import download_and_load_model
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def download_model(model_url, file_path):
-    logger.info(f"Downloading model from {model_url!r} and save it in {file_path!r}")
-    download_check_etag(model_url)
-
-    zstd_decompress(file_path)
-    logger.info(f"Written model in {file_path}")
-
-
 class ModelChecker:
     def go(self, model_name):
-        should_download_model = bool(os.getenv("SHOULD_DOWNLOAD_MODEL"))
-        download_url = os.getenv("MODEL_DOWNLOAD_URL")
-
-        if should_download_model and download_url:
-            download_url = download_model(download_url, f"{model_name}model")
-
         # Load the model
-        model = load_model(model_name)
+        model = download_and_load_model(model_name)
 
         # Then call the check method of the model
         success = model.check()

@@ -21,14 +21,12 @@ from pydriller import GitRepository
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
-from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
-from bugbug.models.regression import RegressionModel
 from bugbug.models.regressor import (
     BUG_FIXING_COMMITS_DB,
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import download_check_etag, retry, zstd_compress, zstd_decompress
+from bugbug.utils import download_and_load_model, retry, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -46,18 +44,6 @@ db.register(
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/ignored_commits.json.zst",
     1,
 )
-
-
-BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{model_name}model.zst"
-
-
-def download_model(model_name):
-    if not os.path.exists(f"{model_name}model"):
-        url = BASE_URL.format(model_name=model_name)
-        logger.info(f"Downloading {url}...")
-        download_check_etag(url)
-        zstd_decompress(f"{model_name}model")
-        assert os.path.exists(f"{model_name}model"), "Decompressed file exists"
 
 
 class RegressorFinder(object):
@@ -200,12 +186,10 @@ class RegressorFinder(object):
 
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
-        download_model("defectenhancementtask")
-        defect_model = DefectEnhancementTaskModel.load("defectenhancementtaskmodel")
+        defect_model = download_and_load_model("defectenhancementtask")
 
         logger.info("Downloading regression model...")
-        download_model("regression")
-        regression_model = RegressionModel.load("regressionmodel")
+        regression_model = download_and_load_model("regression")
 
         start_date = datetime.now() - RELATIVE_START_DATE
         end_date = datetime.now() - RELATIVE_END_DATE
