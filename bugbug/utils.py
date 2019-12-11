@@ -181,8 +181,10 @@ def get_last_modified(url):
 
 
 def download_model(model_name):
+    version = os.getenv("TAG", "latest")
+
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{path}.zst"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
     logger.info(f"Downloading {url}...")
     updated = download_check_etag(url)
     if updated:
