@@ -20,8 +20,6 @@ HEADERS = {"Content-type": "application/octet-stream"}
 
 class RustCodeAnalysisServer:
     def __init__(self):
-        self.addr = "localhost"
-
         for _ in range(START_RETRIES):
             self.start_process()
 
@@ -40,21 +38,14 @@ class RustCodeAnalysisServer:
 
     @property
     def base_url(self):
-        return f"http://{self.addr}:{self.port}"
+        return f"http://127.0.0.1:{self.port}"
 
     def start_process(self):
         self.port = utils.get_free_tcp_port()
 
         try:
             self.proc = subprocess.Popen(
-                [
-                    "rust-code-analysis",
-                    "--serve",
-                    "--port",
-                    str(self.port),
-                    "--host",
-                    self.addr,
-                ]
+                ["rust-code-analysis", "--serve", "--port", str(self.port),]
             )
         except FileNotFoundError:
             raise Exception("rust-code-analysis is required for code analysis")
