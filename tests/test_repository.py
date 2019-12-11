@@ -369,7 +369,7 @@ def test_download_commits(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
     # Allow using the local code analysis server.
-    responses.add_passthru("http://localhost")
+    responses.add_passthru("http://127.0.0.1")
 
     responses.add(
         responses.HEAD,
