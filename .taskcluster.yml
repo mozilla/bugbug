@@ -380,6 +380,40 @@ tasks:
 
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
+          taskId: {$eval: as_slugid("update_hook_past_bugs_by_function_pipeline")}
+          dependencies:
+            - {$eval: as_slugid("docker_push")}
+          scopes:
+            - hooks:modify-hook:project-relman/bugbug-past-bugs-by-function
+            - assume:hook-id:project-relman/bugbug-past-bugs-by-function
+          created: {$fromNow: ''}
+          deadline: {$fromNow: '5 hours'}
+          provisionerId: proj-relman
+          workerType: ci
+          payload:
+            features:
+              taskclusterProxy:
+                true
+            maxRunTime: 3600
+            image: "${taskboot_image}"
+            env:
+              VERSION: {$eval: 'head_branch[10:]'}
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                 cd bugbug &&
+                 git -c advice.detachedHead=false checkout ${head_rev} &&
+                 python infra/set_hook_version.py $VERSION infra/taskcluster-hook-past-bugs-by-function.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-past-bugs-by-function.json project-relman bugbug-past-bugs-by-function"
+          metadata:
+            name: bugbug update past bugs by function hook
+            description: bugbug update past bugs by function hook
+            owner: mcastelluccio@mozilla.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+        then:
           taskId: {$eval: as_slugid("update_hook_classify_patch")}
           dependencies:
             - {$eval: as_slugid("docker_push")}

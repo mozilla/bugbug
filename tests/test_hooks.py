@@ -20,6 +20,7 @@ parameters = [
     (os.path.realpath("infra/taskcluster-hook-annotate.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-pipeline-start.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-check-models-start.json"), {}),
+    (os.path.realpath("infra/taskcluster-hook-past-bugs-by-function.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-classify-patch.json"), {"DIFF_ID": 123}),
     (os.path.realpath("infra/taskcluster-hook-test-select.json"), {"DIFF_ID": 123}),
 ]
