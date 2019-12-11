@@ -96,3 +96,13 @@ class SpamBugModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for (i, bug) in enumerate(bugs):
+            if "@mozilla" in bug["creator"]:
+                if probabilities:
+                    classes[i] = [1.0, 0.0]
+                else:
+                    classes[i] = 0
+
+        return classes
