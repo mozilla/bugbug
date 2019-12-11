@@ -7,6 +7,8 @@ tasks:
     hour: {$eval: 'now[11:13]'}
     minute: {$eval: 'now[14:16]'}
     second: {$eval: 'now[17:19]'}
+    repository: https://github.com/mozilla/bugbug
+    taskboot_image: mozilla/taskboot:0.1.10
   in:
     - ID: commit-retrieval
       created: {$fromNow: ''}
@@ -41,7 +43,7 @@ tasks:
         name: bugbug commit retrieval
         description: bugbug commit retrieval
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: bugs-retrieval
       created: {$fromNow: ''}
@@ -81,7 +83,7 @@ tasks:
         name: bugbug bugs retrieval
         description: bugbug bugs retrieval
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-scheduling-history-push_data-retrieval
       created: {$fromNow: ''}
@@ -99,7 +101,7 @@ tasks:
         command:
           - "/bin/bash"
           - "-cx"
-          - "wget https://github.com/mozilla/bugbug/raw/${version}/scripts/test_scheduling_history_retriever.py &&
+          - "wget ${repository}/raw/${version}/scripts/test_scheduling_history_retriever.py &&
              pip install --disable-pip-version-check --quiet --no-cache-dir bugbug==${version} &&
              python test_scheduling_history_retriever.py retrieve"
 
@@ -128,7 +130,7 @@ tasks:
         name: bugbug test scheduling history push data retrieval
         description: bugbug test scheduling history push data retrieval
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: test-scheduling-history-generator
       created: {$fromNow: ''}
@@ -172,7 +174,7 @@ tasks:
         name: bugbug test scheduling history retrieval
         description: bugbug test scheduling history retrieval
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: rollback-test-task
       created: {$fromNow: ''}
@@ -197,7 +199,7 @@ tasks:
         name: bugbug rollback test
         description: bugbug rollback test
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-backout
       created: {$fromNow: ''}
@@ -235,7 +237,7 @@ tasks:
         name: bugbug train backout model
         description: bugbug train backout model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-component
       created: {$fromNow: ''}
@@ -273,7 +275,7 @@ tasks:
         name: bugbug train component model
         description: bugbug train component model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-defectenhancementtask
       created: {$fromNow: ''}
@@ -311,7 +313,7 @@ tasks:
         name: bugbug train defect/enhancement/task model
         description: bugbug train defect/enhancement/task model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regression
       created: {$fromNow: ''}
@@ -353,7 +355,7 @@ tasks:
         name: bugbug train regression model
         description: bugbug train regression model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regressor
       created: {$fromNow: ''}
@@ -404,7 +406,7 @@ tasks:
         name: bugbug train regressor model
         description: bugbug train regressor model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-tracking
       created: {$fromNow: ''}
@@ -442,7 +444,7 @@ tasks:
         name: bugbug train tracking model
         description: bugbug train tracking model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-regressionrange
       created: {$fromNow: ''}
@@ -484,7 +486,7 @@ tasks:
         name: bugbug train regressionrange model
         description: bugbug train regressionrange model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-stepstoreproduce
       created: {$fromNow: ''}
@@ -526,7 +528,7 @@ tasks:
         name: bugbug train stepstoreproduce model
         description: bugbug train stepstoreproduce model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-duplicate
       created: {$fromNow: ''}
@@ -564,7 +566,7 @@ tasks:
         name: bugbug train duplicate model
         description: bugbug train duplicate model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-select
       created: {$fromNow: ''}
@@ -603,7 +605,7 @@ tasks:
         name: bugbug train test selection model
         description: bugbug train test selection model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-failure
       created: {$fromNow: ''}
@@ -642,7 +644,7 @@ tasks:
         name: bugbug train test failure model
         description: bugbug train test failure model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-similarity
       created: {$fromNow: ''}
@@ -681,7 +683,7 @@ tasks:
         name: bugbug train similarity model
         description: bugbug train similarity model
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: check_metrics
       created: {$fromNow: ''}
@@ -718,7 +720,7 @@ tasks:
         name: bugbug check_metrics
         description: bugbug check_metrics
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: docker-build
       created: {$fromNow: ''}
@@ -735,11 +737,11 @@ tasks:
         capabilities:
           privileged: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.9
+        image: ${taskboot_image}
         command:
           - "/bin/sh"
           - "-lcxe"
-          - "git clone --quiet https://github.com/mozilla/bugbug /code &&
+          - "git clone --quiet ${repository} /code &&
              cd /code &&
              git checkout ${version} &&
              taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
@@ -759,7 +761,7 @@ tasks:
         name: bugbug docker http build
         description: bugbug docker http build
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     # It's the same task integration_test as in .taskcluster.yml
     - ID: integration-test
@@ -787,7 +789,7 @@ tasks:
           - "-lcx"
           - "apt-get -qq update &&
             apt-get -qq install -y redis-server &&
-            git clone --quiet https://github.com/mozilla/bugbug &&
+            git clone --quiet ${repository} &&
             cd bugbug &&
             git checkout ${version} &&
             python -c 'import os; print(os.environ.keys())' &&
@@ -798,7 +800,162 @@ tasks:
         name: bugbug integration test
         description: bugbug integration test
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: update_hook_annotate_pipeline
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '120 hours'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - integration-test
+      scopes:
+        - hooks:modify-hook:project-relman/bugbug-annotate
+        - assume:hook-id:project-relman/bugbug-annotate
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-annotate.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
+      metadata:
+        name: bugbug update annotate hook
+        description: bugbug update annotate hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: update_hook_check_pipeline
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '120 hours'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - integration-test
+      scopes:
+        - hooks:modify-hook:project-relman/bugbug-checks
+        - assume:hook-id:project-relman/bugbug-checks
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-check-models-start.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
+      metadata:
+        name: bugbug update check hook
+        description: bugbug update check hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: update_hook_past_bugs_by_function_pipeline
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '120 hours'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - integration-test
+      scopes:
+        - hooks:modify-hook:project-relman/bugbug-past-bugs-by-function
+        - assume:hook-id:project-relman/bugbug-past-bugs-by-function
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-past-bugs-by-function.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-past-bugs-by-function.json project-relman bugbug-past-bugs-by-function"
+      metadata:
+        name: bugbug update past bugs by function hook
+        description: bugbug update past bugs by function hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: update_hook_classify_patch
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '120 hours'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - integration-test
+      scopes:
+        - hooks:modify-hook:project-relman/bugbug-classify-patch
+        - assume:hook-id:project-relman/bugbug-classify-patch
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-classify-patch.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-relman bugbug-classify-patch"
+      metadata:
+        name: bugbug update classify patch hook
+        description: bugbug update classify patch hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: update_hook_test_select
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '120 hours'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - integration-test
+      scopes:
+          - hooks:modify-hook:project-relman/bugbug-test-select
+          - assume:hook-id:project-relman/bugbug-test-select
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-test-select.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-test-select.json project-relman bugbug-test-select"
+      metadata:
+        name: bugbug update test select hook
+        description: bugbug update test select hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: docker-push
       dependencies:
@@ -816,7 +973,7 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.9
+        image: ${taskboot_image}
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
@@ -830,7 +987,7 @@ tasks:
         name: bugbug docker http push
         description: bugbug docker http push
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: http-deploy
       dependencies:
@@ -847,7 +1004,7 @@ tasks:
           taskclusterProxy:
             true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.1.9
+        image: ${taskboot_image}
         env:
           TASKCLUSTER_SECRET: project/relman/bugbug/deploy
         command:
@@ -862,4 +1019,4 @@ tasks:
         name: bugbug docker http service deploy
         description: bugbug docker http service deploy
         owner: release-mgmt-analysis@mozilla.com
-        source: https://github.com/mozilla/bugbug/raw/master/data-pipeline.yml
+        source: ${repository}/raw/master/data-pipeline.yml
