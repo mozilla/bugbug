@@ -22,4 +22,16 @@ def test_jsone_validates(pipeline_file):
     with open(pipeline_file, "r") as f:
         yaml_content = yaml.safe_load(f.read())
 
-    jsone.render(yaml_content, context={"version": "42.0"})
+    result = jsone.render(yaml_content, context={"version": "42.0"})
+    tasks = result["tasks"]
+
+    all_ids = [task["ID"] for task in tasks]
+
+    # Make sure there are no duplicate IDs.
+    assert len(all_ids) == len(set(all_ids))
+
+    # Make sure all dependencies are present.
+    for task in tasks:
+        assert "dependencies" not in task or all(
+            dependency in all_ids for dependency in task["dependencies"]
+        )
