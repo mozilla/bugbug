@@ -807,7 +807,8 @@ tasks:
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
       dependencies:
-        - integration-test
+        - train-defectenhancementtask
+        - train-regression
       scopes:
         - hooks:modify-hook:project-relman/bugbug-annotate
         - assume:hook-id:project-relman/bugbug-annotate
@@ -869,7 +870,7 @@ tasks:
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
       dependencies:
-        - integration-test
+        - commit-retrieval
       scopes:
         - hooks:modify-hook:project-relman/bugbug-past-bugs-by-function
         - assume:hook-id:project-relman/bugbug-past-bugs-by-function
@@ -900,7 +901,7 @@ tasks:
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
       dependencies:
-        - integration-test
+        - train-regressor
       scopes:
         - hooks:modify-hook:project-relman/bugbug-classify-patch
         - assume:hook-id:project-relman/bugbug-classify-patch
@@ -931,7 +932,8 @@ tasks:
       deadline: {$fromNow: '120 hours'}
       expires: {$fromNow: '1 month'}
       dependencies:
-        - integration-test
+        - train-test-failure
+        - train-test-select
       scopes:
           - hooks:modify-hook:project-relman/bugbug-test-select
           - assume:hook-id:project-relman/bugbug-test-select
