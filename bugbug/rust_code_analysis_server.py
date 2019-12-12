@@ -58,8 +58,11 @@ class RustCodeAnalysisServer:
         return f"Server running at {self.base_url}"
 
     def ping(self):
-        r = requests.get(f"{self.base_url}/ping")
-        return r.ok
+        try:
+            r = requests.get(f"{self.base_url}/ping")
+            return r.ok
+        except requests.exceptions.ConnectionError:
+            return False
 
     def metrics(self, filename, code, unit=True):
         unit = 1 if unit else 0
