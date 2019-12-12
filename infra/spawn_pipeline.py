@@ -98,10 +98,7 @@ def main():
         task_payload = task["payload"]
 
         if "env" in task_payload and task_payload["env"]:
-            if "$merge" not in task_payload["env"]:
-                task_payload["env"] = {"$merge": [task_payload["env"]]}
-
-            task_payload["env"]["$merge"].append({"TAG": version})
+            task_payload["env"]["TAG"] = version
         else:
             task_payload["env"] = {
                 "TAG": version,
