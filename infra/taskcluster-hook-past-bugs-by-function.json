@@ -40,7 +40,7 @@
             "command": [
                 "bugbug-past-bugs-by-function"
             ],
-            "image": "mozilla/bugbug",
+            "image": "mozilla/bugbug-base",
             "maxRunTime": 7200
         },
         "priority": "normal",
