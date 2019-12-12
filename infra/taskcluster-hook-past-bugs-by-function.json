@@ -27,7 +27,7 @@
         "payload": {
             "artifacts": {
                 "public/past_bugs_by_function.pickle.zst": {
-                    "path": "/past_bugs_by_function.pickle.zst",
+                    "path": "/data/past_bugs_by_function.pickle.zst",
                     "type": "file"
                 }
             },
