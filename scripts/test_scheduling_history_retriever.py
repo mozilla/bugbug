@@ -70,7 +70,9 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
         subprocess.run(
             [
                 "run-adr",
-                "ahal/ci-recipes",
+                "--ref",
+                "13b5ff5adb6c0b3cc320522f9cbb70e13ee72fae",
+                "mozilla/ci-recipes",
                 "recipe",
                 "-o",
                 os.path.abspath("push_data.json"),
