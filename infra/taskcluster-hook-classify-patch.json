@@ -61,7 +61,7 @@
         "provisionerId": "proj-relman",
         "retries": 5,
         "routes": [
-            "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
+            "notify.email.mcastelluccio@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed",
             "index.project.relman.bugbug.classify_patch.latest",
             "index.project.relman.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
