@@ -1,4 +1,4 @@
-coverage==4.5.4
+coverage==5.0
 jsonschema==3.2.0
 pre-commit==1.20.0
 pytest==5.3.2
