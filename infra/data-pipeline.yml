@@ -45,6 +45,33 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: past-bugs-by-function
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '2 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      payload:
+        maxRunTime: 7200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "bugbug-past-bugs-by-function"
+
+        artifacts:
+          public/past_bugs_by_function.pickle.zst:
+            path: /data/past_bugs_by_function.pickle.zst
+            type: file
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.past_bugs_by_function.${version}
+        - index.project.relman.bugbug.past_bugs_by_function.latest
+      metadata:
+        name: bugbug past bugs by function
+        description: bugbug past bugs by function
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: bugs-retrieval
       created: {$fromNow: ''}
       deadline: {$fromNow: '2 days'}
@@ -862,37 +889,6 @@ tasks:
       metadata:
         name: bugbug update check hook
         description: bugbug update check hook
-        owner: mcastelluccio@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: update_hook_past_bugs_by_function_pipeline
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '2 days'}
-      expires: {$fromNow: '1 month'}
-      dependencies:
-        - commit-retrieval
-      scopes:
-        - hooks:modify-hook:project-relman/bugbug-past-bugs-by-function
-        - assume:hook-id:project-relman/bugbug-past-bugs-by-function
-      provisionerId: proj-relman
-      workerType: ci
-      payload:
-        features:
-          taskclusterProxy:
-            true
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        command:
-          - "/bin/sh"
-          - "-lcxe"
-          - "git clone --quiet ${repository} &&
-             cd bugbug &&
-             git -c advice.detachedHead=false checkout ${version} &&
-             python infra/set_hook_version.py ${version} infra/taskcluster-hook-past-bugs-by-function.json &&
-             taskboot --target . build-hook infra/taskcluster-hook-past-bugs-by-function.json project-relman bugbug-past-bugs-by-function"
-      metadata:
-        name: bugbug update past bugs by function hook
-        description: bugbug update past bugs by function hook
         owner: mcastelluccio@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
