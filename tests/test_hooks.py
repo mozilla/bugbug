@@ -17,7 +17,6 @@ with open(os.path.join("VERSION")) as f:
     version = f.read().strip()
 
 parameters = [
-    (os.path.realpath("infra/taskcluster-hook-annotate.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-data-pipeline.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-check-models-start.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-classify-patch.json"), {"DIFF_ID": 123}),

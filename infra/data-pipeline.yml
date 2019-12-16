@@ -10,6 +10,106 @@ tasks:
     repository: https://github.com/mozilla/bugbug
     taskboot_image: mozilla/taskboot:0.1.10
   in:
+    - ID: microannotate-generate-tokenize
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '4 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 345600
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-wordified
+          - --tokenize
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate tokenized repository generator
+        description: bugbug microannotate tokenized repository generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: microannotate-generate-remove-comments
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '4 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 345600
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-comments-removed
+          - --remove-comments
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate repository with comments removed generator
+        description: bugbug microannotate repository with comments removed generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: microannotate-generate-tokenize-and-remove-comments
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '4 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: ci
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 345600
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-microannotate-generate
+          - /cache/
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - --tokenize
+          - --remove-comments
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+      metadata:
+        name: bugbug microannotate tokenized repository with comments removed generator
+        description: bugbug microannotate tokenized repository with comments removed generator
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: commit-retrieval
       created: {$fromNow: ''}
       deadline: {$fromNow: '1 day'}
@@ -82,6 +182,70 @@ tasks:
       metadata:
         name: bugbug bugs retrieval
         description: bugbug bugs retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: regressor-finder
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '5 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      dependencies:
+        - commit-retrieval
+        - microannotate-generate-tokenize
+        - microannotate-generate-remove-comments
+        - microannotate-generate-tokenize-and-remove-comments
+        - bugs-retrieval
+      payload:
+        maxRunTime: 259200
+        image: mozilla/bugbug-commit-retrieval:${version}
+        command:
+          - bugbug-regressor-finder
+          - /cache/
+          - https://github.com/mozilla/gecko-dev
+          - gecko-dev
+          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - gecko-dev-wordified-and-comments-removed
+        artifacts:
+          public/ignored_commits.json.zst:
+            path: /data/ignored_commits.json.zst
+            type: file
+          public/ignored_commits.json.version:
+            path: /data/ignored_commits.json.version
+            type: file
+          public/bug_fixing_commits.json.zst:
+            path: /data/bug_fixing_commits.json.zst
+            type: file
+          public/bug_fixing_commits.json.version:
+            path: /data/bug_fixing_commits.json.version
+            type: file
+          public/bug_introducing_commits.json.zst:
+            path: /data/bug_introducing_commits.json.zst
+            type: file
+          public/bug_introducing_commits.json.version:
+            path: /data/bug_introducing_commits.json.version
+            type: file
+          public/tokenized_bug_introducing_commits.json.zst:
+            path: /data/tokenized_bug_introducing_commits.json.zst
+            type: file
+          public/tokenized_bug_introducing_commits.json.version:
+            path: /data/tokenized_bug_introducing_commits.json.version
+            type: file
+        cache:
+          bugbug-mercurial-repository: /cache
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "docker-worker:cache:bugbug-mercurial-repository"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder.latest
+      metadata:
+        name: bugbug regressor finder
+        description: bugbug regressor finder
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -389,12 +553,13 @@ tasks:
 
     - ID: train-regressor
       created: {$fromNow: ''}
-      deadline: {$fromNow: '2 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
       dependencies:
         - commit-retrieval
+        - regressor-finder
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
@@ -717,7 +882,7 @@ tasks:
 
     - ID: check_metrics
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       provisionerId: proj-relman
       workerType: ci
       dependencies:
@@ -830,38 +995,6 @@ tasks:
         name: bugbug integration test
         description: bugbug integration test
         owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: update_hook_annotate_pipeline
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
-      expires: {$fromNow: '1 month'}
-      dependencies:
-        - train-defectenhancementtask
-        - train-regression
-      scopes:
-        - hooks:modify-hook:project-relman/bugbug-annotate
-        - assume:hook-id:project-relman/bugbug-annotate
-      provisionerId: proj-relman
-      workerType: ci
-      payload:
-        features:
-          taskclusterProxy:
-            true
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        command:
-          - "/bin/sh"
-          - "-lcxe"
-          - "git clone --quiet ${repository} &&
-             cd bugbug &&
-             git -c advice.detachedHead=false checkout ${version} &&
-             python infra/set_hook_version.py ${version} infra/taskcluster-hook-annotate.json &&
-             taskboot --target . build-hook infra/taskcluster-hook-annotate.json project-relman bugbug-annotate"
-      metadata:
-        name: bugbug update annotate hook
-        description: bugbug update annotate hook
-        owner: mcastelluccio@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: update_hook_check_pipeline
