@@ -10,7 +10,7 @@ tasks:
   in:
     - ID: microannotate-generate-tokenize
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -47,7 +47,7 @@ tasks:
 
     - ID: microannotate-generate-remove-comments
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -84,7 +84,7 @@ tasks:
 
     - ID: microannotate-generate-tokenize-and-remove-comments
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
