@@ -150,28 +150,20 @@ class CommitClassifier(object):
             self.use_test_history = False
 
             model_data_X_path = f"{model_name}model_data_X"
-            if not os.path.exists(model_data_X_path):
-                download_check_etag(
-                    URL.format(
-                        model_name=model_name, file_name=f"{model_data_X_path}.zst"
-                    )
-                )
+            updated = download_check_etag(
+                URL.format(model_name=model_name, file_name=f"{model_data_X_path}.zst")
+            )
+            if updated:
                 zstd_decompress(model_data_X_path)
-                assert os.path.exists(
-                    model_data_X_path
-                ), "Decompressed X dataset exists"
+            assert os.path.exists(model_data_X_path), "Decompressed X dataset exists"
 
             model_data_y_path = f"{model_name}model_data_y"
-            if not os.path.exists(model_data_y_path):
-                download_check_etag(
-                    URL.format(
-                        model_name=model_name, file_name=f"{model_data_y_path}.zst"
-                    )
-                )
+            updated = download_check_etag(
+                URL.format(model_name=model_name, file_name=f"{model_data_y_path}.zst")
+            )
+            if updated:
                 zstd_decompress(model_data_y_path)
-                assert os.path.exists(
-                    model_data_y_path
-                ), "Decompressed y dataset exists"
+            assert os.path.exists(model_data_y_path), "Decompressed y dataset exists"
 
             self.X = to_array(joblib.load(model_data_X_path))
             self.y = to_array(joblib.load(model_data_y_path))
