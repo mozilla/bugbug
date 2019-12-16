@@ -900,6 +900,7 @@ tasks:
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
+        - past-bugs-by-function
         - train-regressor
       scopes:
         - hooks:modify-hook:project-relman/bugbug-classify-patch
