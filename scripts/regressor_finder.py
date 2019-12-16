@@ -398,43 +398,29 @@ class RegressorFinder(object):
 
             return bug_introducing_commits
 
-        bug_fixing_commits_queue = bug_fixing_commits.copy()
-
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
 
             def results():
-                num_analyzed = 0
+                bug_introducing_commit_futures = [
+                    executor.submit(find_bic, bug_fixing_commit)
+                    for bug_fixing_commit in bug_fixing_commits
+                ]
 
-                # Analyze up to 500 commits at a time, to avoid the task running out of time.
-                while len(bug_fixing_commits_queue) != 0 and num_analyzed != 500:
-                    bug_introducing_commit_futures = []
-                    for _ in range(
-                        min(500 - num_analyzed, len(bug_fixing_commits_queue))
-                    ):
-                        bug_introducing_commit_futures.append(
-                            executor.submit(find_bic, bug_fixing_commits_queue.pop())
-                        )
+                logger.info(f"Analyzing {len(bug_introducing_commit_futures)} commits")
 
-                    logger.info(
-                        f"Analyzing a chunk of {len(bug_introducing_commit_futures)} commits"
-                    )
-
-                    for future in tqdm(
-                        concurrent.futures.as_completed(bug_introducing_commit_futures),
-                        total=len(bug_introducing_commit_futures),
-                    ):
-                        result = future.result()
-                        if result is not None:
-                            num_analyzed += 1
-                            yield from result
+                for future in tqdm(
+                    concurrent.futures.as_completed(bug_introducing_commit_futures),
+                    total=len(bug_introducing_commit_futures),
+                ):
+                    result = future.result()
+                    if result is not None:
+                        yield from result
 
             db.append(db_path, results())
 
         zstd_compress(db_path)
-
-        return len(bug_fixing_commits_queue) == 0
 
 
 def evaluate(bug_introducing_commits):
@@ -562,18 +548,15 @@ def main():
 
     bug_fixing_commits = regressor_finder.find_bug_fixing_commits()
 
-    tokenized_done = regressor_finder.find_bug_introducing_commits(
+    regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, True
     )
     evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
 
-    done = regressor_finder.find_bug_introducing_commits(
+    regressor_finder.find_bug_introducing_commits(
         bug_fixing_commits, commits_to_ignore, False
     )
     evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
-
-    with open("done", "w") as f:
-        f.write(str(1 if tokenized_done and done else 0))
 
 
 if __name__ == "__main__":

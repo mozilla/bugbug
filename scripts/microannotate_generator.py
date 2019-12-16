@@ -15,8 +15,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-TOTAL_COMMITS = 20000
-STEPS = 20
+COMMITS_STEP = 5000
 
 
 class MicroannotateGenerator(object):
@@ -52,19 +51,15 @@ class MicroannotateGenerator(object):
             )
         )
 
-        for i in range(STEPS):
-            logger.info(f"Step {i} out of {STEPS}")
-
+        done = False
+        while not done:
             done = generator.generate(
                 self.repo_dir,
                 git_repo_path,
-                limit=TOTAL_COMMITS // STEPS,
+                limit=COMMITS_STEP,
                 tokenize=self.tokenize,
                 remove_comments=self.remove_comments,
             )
-
-            with open("done", "w") as f:
-                f.write(str(1 if done else 0))
 
             retry(
                 lambda: subprocess.run(
@@ -73,9 +68,6 @@ class MicroannotateGenerator(object):
                     check=True,
                 )
             )
-
-            if done:
-                break
 
     def clone_git_repo(self, git_repo_path):
         retry(
