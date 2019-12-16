@@ -19,7 +19,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 345600
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -52,7 +52,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 345600
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -85,7 +85,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 345600
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -198,7 +198,7 @@ tasks:
         - microannotate-generate-tokenize-and-remove-comments
         - bugs-retrieval
       payload:
-        maxRunTime: 259200
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-regressor-finder
