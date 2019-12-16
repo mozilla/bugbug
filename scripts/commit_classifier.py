@@ -617,7 +617,9 @@ class CommitClassifier(object):
 
             # XXX: For now, only restrict to test-linux64 tasks.
             selected_tasks = [
-                t for t in selected_tasks if t.startswith("test-linux64/")
+                t
+                for t in selected_tasks
+                if t.startswith("test-linux64/") and "test-verify" not in t
             ]
             # It isn't worth running the build associated to the tests, if we only run three test tasks.
             if len(selected_tasks) < 3:
