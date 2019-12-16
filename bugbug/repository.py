@@ -250,7 +250,7 @@ def hg_modified_files(hg, commit):
     )
 
 
-def get_touched_functions(path, lines, content):
+def get_touched_functions(path, deleted_lines, added_lines, content):
     if content is None:
         return set()
 
@@ -259,21 +259,53 @@ def get_touched_functions(path, lines, content):
         return set()
 
     touched_functions = set()
+    touched_function_names = set()
 
-    function_spans = function_data["spans"]
+    functions = function_data["spans"]
 
-    last_f = 0
-    for line in lines:
-        for function in function_spans[last_f:]:
-            if function["error"] or function["end_line"] < line:
-                last_f += 1
-                continue
+    def get_touched(functions, lines):
+        last_f = 0
+        for line in lines:
+            for function in functions[last_f:]:
+                if function["error"] or function["end_line"] < line:
+                    last_f += 1
+                    continue
 
-            if function["start_line"] <= line:
-                touched_functions.add(
-                    (function["name"], function["start_line"], function["end_line"])
-                )
-                break
+                if function["start_line"] <= line:
+                    touched_function_names.add(function["name"])
+                    break
+
+    # Get functions touched by added lines.
+    get_touched(functions, added_lines)
+
+    # Map functions to their positions before the patch.
+    prev_functions = copy.deepcopy(functions)
+
+    for line in added_lines:
+        for func in prev_functions:
+            if line < func["start_line"]:
+                func["start_line"] -= 1
+
+            if line < func["end_line"]:
+                func["end_line"] -= 1
+
+    for line in deleted_lines:
+        for func in prev_functions:
+            if line < func["start_line"]:
+                func["start_line"] += 1
+
+            if line < func["end_line"]:
+                func["end_line"] += 1
+
+    # Get functions touched by removed lines.
+    get_touched(prev_functions, deleted_lines)
+
+    # Return touched functions, with their new positions.
+    for function in functions:
+        if function["name"] in touched_function_names:
+            touched_functions.add(
+                (function["name"], function["start_line"], function["end_line"])
+            )
 
     return touched_functions
 
@@ -329,7 +361,9 @@ def _transform(commit):
         elif type_ in SOURCE_CODE_TYPES_TO_EXT:
             commit.source_code_files_modified_num += 1
 
-            touched_functions = get_touched_functions(path, stats["added_lines"], after)
+            touched_functions = get_touched_functions(
+                path, stats["deleted_lines"], stats["added_lines"], after
+            )
             if len(touched_functions) > 0:
                 commit.functions[path] = list(touched_functions)
 

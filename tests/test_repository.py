@@ -13,7 +13,7 @@ import pytest
 import responses
 from dateutil.relativedelta import relativedelta
 
-from bugbug import repository
+from bugbug import repository, rust_code_analysis_server
 
 
 @pytest.fixture
@@ -795,3 +795,78 @@ def test_calculate_experiences():
     assert commits["commit6"].touched_prev_90_days_component_sum == 2
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+
+def test_get_touched_functions():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    # No function touched.
+    touched_functions = repository.get_touched_functions(
+        "file.cpp",
+        [],
+        [],
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+    )
+
+    assert touched_functions == set()
+
+    # A function touched by adding a line.
+    touched_functions = repository.get_touched_functions(
+        "file.cpp",
+        [],
+        [1],
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+    )
+
+    assert touched_functions == {("func1", 1, 3)}
+
+    # A function touched by removing a line, another function touched by adding a line.
+    touched_functions = repository.get_touched_functions(
+        "file.cpp",
+        [2, 5, 6, 7, 8],
+        [6],
+        """void func1() {
+    int i = 1;
+}
+
+void func3() {
+    int i = 3;
+}
+
+void func4() {
+    int i = 4;
+}""",
+    )
+
+    assert touched_functions == {("func3", 5, 7), ("func1", 1, 3)}
+
+    # A function touched by replacing a line.
+    touched_functions = repository.get_touched_functions(
+        "file.cpp",
+        [6],
+        [6],
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+    )
+
+    assert touched_functions == {("func2", 5, 7)}
