@@ -615,6 +615,14 @@ class CommitClassifier(object):
                     else "0"
                 )
 
+            # XXX: For now, only restrict to test-linux64 tasks.
+            selected_tasks = [
+                t for t in selected_tasks if t.startswith("test-linux64/")
+            ]
+            # It isn't worth running the build associated to the tests, if we only run three test tasks.
+            if len(selected_tasks) < 3:
+                selected_tasks = []
+
             with open("selected_tasks", "w") as f:
                 f.writelines(f"{selected_task}\n" for selected_task in selected_tasks)
 
