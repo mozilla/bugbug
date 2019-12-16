@@ -6,6 +6,7 @@ import csv
 import io
 import json
 import os
+import pickle
 import re
 import subprocess
 import tempfile
@@ -36,6 +37,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{file_name}"
+PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.past_bugs_by_function.latest/artifacts/public/past_bugs_by_function.pickle.zst"
 
 
 # ------------------------------------------------------------------------------
@@ -173,6 +175,15 @@ class CommitClassifier(object):
 
             self.X = to_array(joblib.load(model_data_X_path))
             self.y = to_array(joblib.load(model_data_y_path))
+
+            past_bugs_by_function_path = "data/past_bugs_by_function.pickle"
+            download_check_etag(
+                PAST_BUGS_BY_FUNCTION_URL, path=f"{past_bugs_by_function_path}.zst"
+            )
+            zstd_decompress(past_bugs_by_function_path)
+            assert os.path.exists(past_bugs_by_function_path)
+            with open(past_bugs_by_function_path, "rb") as f:
+                self.past_bugs_by_function = pickle.load(f)
 
         if model_name == "testselect":
             self.use_test_history = True
@@ -571,7 +582,7 @@ class CommitClassifier(object):
                 json.dump(probs[0].tolist(), f)
 
             if self.model_name == "regressor" and self.method_defect_predictor_dir:
-                self.classify_methods()
+                self.classify_methods(commits[-1])
         else:
             testfailure_probs = self.testfailure_model.classify(
                 commits[-1], probabilities=True
@@ -615,7 +626,7 @@ class CommitClassifier(object):
             with open("selected_tasks", "w") as f:
                 f.writelines(f"{selected_task}\n" for selected_task in selected_tasks)
 
-    def classify_methods(self):
+    def classify_methods(self, commit):
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
         four_months_ago = datetime.utcnow() - relativedelta(months=4)
@@ -657,10 +668,28 @@ class CommitClassifier(object):
             with open("method_level.csv", "r") as f:
                 reader = csv.DictReader(f)
                 for item in reader:
+                    item["past_bugs"] = []
                     method_level_results.append(item)
         except FileNotFoundError:
             # No methods were classified.
             pass
+
+        for method_level_result in method_level_results:
+            for path, functions in commit["functions"].items():
+                if method_level_result["file_name"] != path:
+                    continue
+
+                if path not in self.past_bugs_by_function:
+                    continue
+
+                for function_name, _, _ in functions:
+                    if function_name not in self.past_bugs_by_function[path]:
+                        continue
+
+                    if method_level_result["method_name"].endswith(function_name):
+                        method_level_results["past_bugs"] = list(
+                            self.past_bugs_by_function[path][function_name]["bugs"]
+                        )
 
         with open("method_level.json", "w") as f:
             json.dump(method_level_results, f)
