@@ -197,6 +197,8 @@ tasks:
         - microannotate-generate-remove-comments
         - microannotate-generate-tokenize-and-remove-comments
         - bugs-retrieval
+        - train-defectenhancementtask
+        - train-regression
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
