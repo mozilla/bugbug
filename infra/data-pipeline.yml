@@ -12,7 +12,7 @@ tasks:
   in:
     - ID: commit-retrieval
       created: {$fromNow: ''}
-      deadline: {$fromNow: '72 hours'}
+      deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: compute-large
@@ -47,7 +47,7 @@ tasks:
 
     - ID: bugs-retrieval
       created: {$fromNow: ''}
-      deadline: {$fromNow: '72 hours'}
+      deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -87,7 +87,7 @@ tasks:
 
     - ID: test-scheduling-history-push_data-retrieval
       created: {$fromNow: ''}
-      deadline: {$fromNow: '72 hours'}
+      deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -134,7 +134,7 @@ tasks:
 
     - ID: test-scheduling-history-generator
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: compute-large
@@ -203,7 +203,7 @@ tasks:
 
     - ID: train-backout
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -241,7 +241,7 @@ tasks:
 
     - ID: train-component
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -279,7 +279,7 @@ tasks:
 
     - ID: train-defectenhancementtask
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -317,7 +317,7 @@ tasks:
 
     - ID: train-regression
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-large
@@ -359,7 +359,7 @@ tasks:
 
     - ID: train-regressor
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -410,7 +410,7 @@ tasks:
 
     - ID: train-tracking
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -448,7 +448,7 @@ tasks:
 
     - ID: train-regressionrange
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -490,7 +490,7 @@ tasks:
 
     - ID: train-stepstoreproduce
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -532,7 +532,7 @@ tasks:
 
     - ID: train-duplicate
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -570,7 +570,7 @@ tasks:
 
     - ID: train-test-select
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-super-large
@@ -609,7 +609,7 @@ tasks:
 
     - ID: train-test-failure
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-large
@@ -648,7 +648,7 @@ tasks:
 
     - ID: train-similarity
       created: {$fromNow: ''}
-      deadline: {$fromNow: '118 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -687,7 +687,7 @@ tasks:
 
     - ID: check_metrics
       created: {$fromNow: ''}
-      deadline: {$fromNow: '119 hours'}
+      deadline: {$fromNow: '5 days'}
       provisionerId: proj-relman
       workerType: ci
       dependencies:
@@ -724,7 +724,7 @@ tasks:
 
     - ID: docker-build
       created: {$fromNow: ''}
-      deadline: {$fromNow: '119 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -766,7 +766,7 @@ tasks:
     # It's the same task integration_test as in .taskcluster.yml
     - ID: integration-test
       created: {$fromNow: ''}
-      deadline: {$fromNow: '119 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -804,7 +804,7 @@ tasks:
 
     - ID: update_hook_annotate_pipeline
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
         - train-defectenhancementtask
@@ -836,7 +836,7 @@ tasks:
 
     - ID: update_hook_check_pipeline
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
         - integration-test
@@ -867,7 +867,7 @@ tasks:
 
     - ID: update_hook_past_bugs_by_function_pipeline
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
         - commit-retrieval
@@ -898,7 +898,7 @@ tasks:
 
     - ID: update_hook_classify_patch
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
         - train-regressor
@@ -929,7 +929,7 @@ tasks:
 
     - ID: update_hook_test_select
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       dependencies:
         - train-test-failure
@@ -966,7 +966,7 @@ tasks:
       scopes:
         - secrets:get:project/relman/bugbug/deploy
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -997,7 +997,7 @@ tasks:
       scopes:
         - secrets:get:project/relman/bugbug/deploy
       created: {$fromNow: ''}
-      deadline: {$fromNow: '120 hours'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
