@@ -302,8 +302,8 @@ tasks:
               - "git clone --quiet ${repository} &&
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-pipeline-start.json &&
-                 taskboot --target . build-hook infra/taskcluster-hook-pipeline-start.json project-relman bugbug"
+                 python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
+                 taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-relman bugbug"
           routes:
             - project.relman.bugbug.deploy_ending
           metadata:
