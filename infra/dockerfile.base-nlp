@@ -6,7 +6,7 @@ ADD extra-nlp-requirements.txt /
 RUN apt-get update && \
 		apt-get install -y --no-install-recommends gcc g++ libgomp1 && \
 		pip install --disable-pip-version-check --quiet --no-cache-dir -r /extra-nlp-requirements.txt && \
-		apt-get remove -y gcc g++ && \
+		apt-get purge -y gcc g++ && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
 
