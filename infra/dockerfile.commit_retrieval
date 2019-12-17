@@ -4,7 +4,7 @@ FROM mozilla/bugbug-base:latest
 # git is required by the annotate pipeline.
 RUN apt-get update && \
     apt-get install -y python python-pip git curl && \
-    python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.1 && \
+    python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.2 && \
     hg clone -r eb02c21a764e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.4/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
