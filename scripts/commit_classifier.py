@@ -689,7 +689,7 @@ class CommitClassifier(object):
                         continue
 
                     if method_level_result["method_name"].endswith(function_name):
-                        method_level_results["past_bugs"] = list(
+                        method_level_result["past_bugs"] = list(
                             self.past_bugs_by_function[path][function_name]["bugs"]
                         )
 
