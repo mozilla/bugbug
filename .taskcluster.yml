@@ -89,9 +89,9 @@ tasks:
             - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
-               apt-get -qq install -y python-pip libhdf5-dev &&
-               python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.2 &&
-               git clone --quiet https://github.com/mozilla/version-control-tools.git &&
+               apt-get -qq install -y libhdf5-dev &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.2 &&
+               hg clone -r fa93e7223185 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.4/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
