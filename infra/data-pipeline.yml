@@ -988,7 +988,7 @@ tasks:
             apt-get -qq install -y redis-server &&
             git clone --quiet ${repository} &&
             cd bugbug &&
-            git checkout ${version} &&
+            git -c advice.detachedHead=false checkout ${version} &&
             python -c 'import os; print(os.environ.keys())' &&
             bash ./scripts/integration_test.sh"
         cache:
