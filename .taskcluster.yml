@@ -306,7 +306,6 @@ tasks:
                 git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
-                pip install --disable-pip-version-check --quiet --no-cache-dir . &&
                 python -c 'import os; print(os.environ.keys())' &&
                 bash ./scripts/integration_test.sh"
             cache:
