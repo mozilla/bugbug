@@ -1,7 +1,5 @@
 FROM mozilla/bugbug-base:latest
 
-COPY infra/git_hyper_blame_patch /root/git_hyper_blame_patch
-
 # Mercurial needs Python2 :(
 # git is required by the annotate pipeline.
 RUN apt-get update && \
