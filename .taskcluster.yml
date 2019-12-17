@@ -336,7 +336,7 @@ tasks:
               - "/bin/bash"
               - "-lcx"
               - "apt-get -qq update &&
-                apt-get -qq install -y python-pip redis-server &&
+                apt-get -qq install -y redis-server &&
                 git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
