@@ -649,7 +649,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 return {
                     "data": data,
                     "title": bug["summary"],
-                    "first_comment": bug["comments"][0]["text"],
+                    "first_comment": ""
+                    if len(bug["comments"]) == 0
+                    else bug["comments"][0]["text"],
                     "comments": " ".join([c["text"] for c in bug["comments"]]),
                 }
 
