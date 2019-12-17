@@ -294,7 +294,7 @@ tasks:
               taskclusterProxy:
                 true
             maxRunTime: 10800
-            image: mozilla/bugbug-commit-retrieval:latest
+            image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
             env:
               TC_SECRET_ID: project/relman/bugbug/integration
               CACHE_DIR: "/cache"
