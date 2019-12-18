@@ -5,6 +5,7 @@
 
 from collections import defaultdict
 
+import joblib
 import matplotlib
 import numpy as np
 import shap
@@ -16,7 +17,6 @@ from imblearn.metrics import (
 )
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
-from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.classification import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split

@@ -10,9 +10,9 @@ import re
 from collections import defaultdict
 from itertools import chain
 
+import joblib
 import numpy as np
 from pyemd import emd
-from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
