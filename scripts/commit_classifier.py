@@ -677,11 +677,12 @@ class CommitClassifier(object):
             pass
 
         for method_level_result in method_level_results:
-            for path, functions in commit["functions"].items():
-                if method_level_result["file_name"] != path:
-                    continue
+            method_level_result_path = method_level_result["file_name"]
+            if method_level_result_path not in self.past_bugs_by_function:
+                continue
 
-                if path not in self.past_bugs_by_function:
+            for path, functions in commit["functions"].items():
+                if method_level_result_path != path:
                     continue
 
                 for function_name, _, _ in functions:
