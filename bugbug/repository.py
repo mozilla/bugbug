@@ -280,7 +280,6 @@ def get_touched_functions(path, deleted_lines, added_lines, content):
                 # If the line belongs to this function, add the function to the set of touched functions.
                 if function["start_line"] <= line:
                     touched_function_names.add(function["name"])
-                    break
 
     # Get functions touched by added lines.
     get_touched(functions, added_lines)
