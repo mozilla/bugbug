@@ -262,18 +262,24 @@ def get_touched_functions(path, deleted_lines, added_lines, content):
     touched_function_names = set()
 
     functions = function_data["spans"]
+    functions = [
+        function
+        for function in functions
+        if not function["error"] and function["name"] != "<anonymous>"
+    ]
 
     def get_touched(functions, lines):
         last_f = 0
         for line in lines:
             for function in functions[last_f:]:
-                if function["error"] or function["end_line"] < line:
+                # Skip functions which we already passed.
+                if function["end_line"] < line:
                     last_f += 1
-                    continue
 
-                if function["start_line"] <= line:
+                # If the line belongs to this function, add the function to the set of touched functions.
+                elif function["start_line"] <= line:
                     touched_function_names.add(function["name"])
-                    break
+                    last_f += 1
 
     # Get functions touched by added lines.
     get_touched(functions, added_lines)
