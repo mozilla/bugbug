@@ -84,7 +84,8 @@ class PastBugsCollector(object):
                     else:
                         bugs_deque = past_bugs_by_function[path][f[0]]["bugs"]
 
-                    bugs_deque.append(bug_str)
+                    if bug_str not in bugs_deque:
+                        bugs_deque.append(bug_str)
 
                     past_bugs_by_function[path][f[0]] = {
                         "start": f[1],
