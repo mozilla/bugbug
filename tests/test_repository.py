@@ -870,3 +870,47 @@ void func2() {
     )
 
     assert touched_functions == {("func2", 5, 7)}
+
+    # top-level and a JavaScript function touched.
+    touched_functions = repository.get_touched_functions(
+        "file.js",
+        [],
+        [1, 4],
+        """let j = 0;
+
+function func() {
+let i = 0;
+}""",
+    )
+
+    assert touched_functions == {("func", 3, 5)}
+
+    # An anonymous function touched inside another function.
+    touched_functions = repository.get_touched_functions(
+        "file.jsm",
+        [],
+        [4],
+        """function outer_func() {
+let i = 0;
+let f = function() {
+  let j = 0;
+}();
+}""",
+    )
+
+    assert touched_functions == {("outer_func", 1, 6)}
+
+    # A function touched inside another function.
+    touched_functions = repository.get_touched_functions(
+        "file.jsm",
+        [],
+        [4],
+        """function outer_func() {
+let i = 0;
+function inner_func() {
+  let j = 0;
+}
+}""",
+    )
+
+    assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
