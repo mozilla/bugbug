@@ -128,6 +128,25 @@ class functions_touched_size(object):
         }
 
 
+class source_code_file_metrics(object):
+    name = "metrics on source code file"
+
+    def __call__(self, commit, **kwargs):
+        return {
+            "Average cyclomatic": commit["average_cyclomatic"],
+            "Average number of unique operands": commit[
+                "average_halstead_unique_operands"
+            ],
+            "Average number of operands": commit["average_halstead_operands"],
+            "Average number of unique operators": commit[
+                "average_halstead_unique_operators"
+            ],
+            "Average number of operators": commit["average_halstead_operators"],
+            "Average number of source loc": commit["average_source_loc"],
+            "Average number of logical loc": commit["average_logical_loc"],
+        }
+
+
 def get_exps(exp_type, commit):
     items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
     items_num = len(commit[items_key])
@@ -490,6 +509,28 @@ def merge_commits(commits):
         "source_code_deleted": sum(commit["source_code_deleted"] for commit in commits),
         "other_deleted": sum(commit["other_deleted"] for commit in commits),
         "test_deleted": sum(commit["test_deleted"] for commit in commits),
+        "average_cyclomatic": sum(commit["average_cyclomatic"] for commit in commits)
+        / len(commits),
+        "average_halstead_unique_operands": sum(
+            commit["average_halstead_unique_operands"] for commit in commits
+        )
+        / len(commits),
+        "average_halstead_operands": sum(
+            commit["average_halstead_operands"] for commit in commits
+        )
+        / len(commits),
+        "average_halstead_unique_operators": sum(
+            commit["average_halstead_unique_operators"] for commit in commits
+        )
+        / len(commits),
+        "average_halstead_operators": sum(
+            commit["average_halstead_operators"] for commit in commits
+        )
+        / len(commits),
+        "average_source_loc": sum(commit["average_source_loc"] for commit in commits)
+        / len(commits),
+        "average_logical_loc": sum(commit["average_logical_loc"] for commit in commits)
+        / len(commits),
     }
 
 

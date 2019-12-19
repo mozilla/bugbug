@@ -19,21 +19,13 @@ from datetime import datetime
 import hglib
 from tqdm import tqdm
 
-from bugbug import db
-from bugbug import rust_code_analysis_server as rca
-from bugbug import utils
+from bugbug import db, utils
 
 logger = logging.getLogger(__name__)
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
 thread_local = threading.local()
-
-
-rust_code_analysis_server = rca.RustCodeAnalysisServer()
-if not rust_code_analysis_server.available:
-    sys.exit(1)
-
 
 COMMITS_DB = "data/commits.json"
 db.register(
@@ -141,6 +133,13 @@ class Commit:
         self.maximum_test_file_size = 0
         self.minimum_test_file_size = 0
         self.test_files_modified_num = 0
+        self.average_cyclomatic = 0.0
+        self.average_halstead_operands = 0.0
+        self.average_halstead_unique_operands = 0.0
+        self.average_halstead_operators = 0.0
+        self.average_halstead_unique_operators = 0.0
+        self.average_source_loc = 0.0
+        self.average_logical_loc = 0.0
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -331,6 +330,7 @@ def _transform(commit):
     source_code_sizes = []
     other_sizes = []
     test_sizes = []
+    metrics_file_count = 0
 
     patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_lines(patch)
@@ -384,7 +384,23 @@ def _transform(commit):
 
             if size is not None:
                 source_code_sizes.append(size)
-                # metrics = rust_code_analysis_server.metrics(path, after)
+                metrics = code_analysis_server.metrics(path, after)
+                if "error" in metrics:
+                    metrics_file_count += 1
+                    metrics = metrics["spaces"]["metrics"]
+                    commit.average_cyclomatic += metrics["cyclomatic"]
+                    commit.average_halstead_unique_operands += metrics["halstead"][
+                        "unique_operands"
+                    ]
+                    commit.average_halstead_operands += metrics["halstead"]["operands"]
+                    commit.average_halstead_unique_operators += metrics["halstead"][
+                        "unique_operators"
+                    ]
+                    commit.average_halstead_operators += metrics["halstead"][
+                        "operators"
+                    ]
+                    commit.average_source_loc += metrics["loc"]["sloc"]
+                    commit.average_logical_loc += metrics["loc"]["lloc"]
 
             commit.types.add(type_)
         else:
@@ -421,6 +437,15 @@ def _transform(commit):
     )
     commit.maximum_test_file_size = max(test_sizes, default=0)
     commit.minimum_test_file_size = min(test_sizes, default=0)
+
+    if metrics_file_count:
+        commit.average_cyclomatic /= metrics_file_count
+        commit.average_halstead_unique_operands /= metrics_file_count
+        commit.average_halstead_operands /= metrics_file_count
+        commit.average_halstead_unique_operators /= metrics_file_count
+        commit.average_halstead_operators /= metrics_file_count
+        commit.average_source_loc /= metrics_file_count
+        commit.average_logical_loc /= metrics_file_count
 
     return commit
 

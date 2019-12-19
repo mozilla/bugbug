@@ -37,6 +37,7 @@ class TestSelectModel(Model):
             commit_features.other_files_modified_num(),
             commit_features.test_files_modified_num(),
             commit_features.source_code_file_size(),
+            commit_features.source_code_file_metrics(),
             commit_features.other_file_size(),
             commit_features.test_file_size(),
             commit_features.source_code_added(),
