@@ -80,7 +80,7 @@ class PastBugsCollector(object):
 
                 for f in f_group:
                     if f[0] not in past_bugs_by_function[path]:
-                        bugs_deque = deque([bug_str], maxlen=3)
+                        bugs_deque = deque(maxlen=3)
                     else:
                         bugs_deque = past_bugs_by_function[path][f[0]]["bugs"]
 
