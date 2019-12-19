@@ -3,7 +3,7 @@ joblib==0.14.1
 libmozdata==0.1.63
 lmdb==0.98
 matplotlib==3.1.2
-microannotate==0.0.18
+microannotate==0.0.19
 numpy==1.17.4
 orjson==2.1.3
 pandas==0.25.3
