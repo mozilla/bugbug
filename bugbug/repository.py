@@ -275,10 +275,9 @@ def get_touched_functions(path, deleted_lines, added_lines, content):
                 # Skip functions which we already passed.
                 if function["end_line"] < line:
                     last_f += 1
-                    continue
 
                 # If the line belongs to this function, add the function to the set of touched functions.
-                if function["start_line"] <= line:
+                elif function["start_line"] <= line:
                     touched_function_names.add(function["name"])
                     last_f += 1
 
