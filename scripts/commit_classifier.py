@@ -215,7 +215,7 @@ class CommitClassifier(object):
     def update_commit_db(self):
         repository.clone(self.repo_dir)
 
-        assert db.download(repository.COMMITS_DB, support_files_too=True)
+        # assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         for commit in repository.get_commits():
             pass
@@ -597,22 +597,24 @@ class CommitClassifier(object):
                 if t.startswith("test-linux64/") and "test-verify" not in t
             ]
 
-            selected_tasks = []
-            # TODO: Classify multiple commit/test at the same time.
+            commit_tests = []
             for data in test_scheduling.generate_data(
                 self.past_failures_data, commit_data, push_num, all_tasks, [], []
             ):
                 if not data["name"].startswith("test-"):
                     continue
 
-                commit_data["test_job"] = data
+                commit_test = commit_data.copy()
+                commit_test["test_job"] = data
+                commit_tests.append(commit_test)
 
-                probs = self.model.classify(commit_data, probabilities=True)
-
-                if probs[0][1] > float(
-                    get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD")
-                ):
-                    selected_tasks.append(data["name"])
+            probs = self.model.classify(commit_tests, probabilities=True)
+            selected_indexes = np.argwhere(
+                probs[:, 1] > float(get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD"))
+            )[:, 0]
+            selected_tasks = [
+                commit_tests[i]["test_job"]["name"] for i in selected_indexes
+            ]
 
             with open("failure_risk", "w") as f:
                 f.write(
