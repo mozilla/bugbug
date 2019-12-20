@@ -590,6 +590,13 @@ class CommitClassifier(object):
             # XXX: Consider using the runnable jobs artifact from the Gecko Decision task.
             all_tasks = self.past_failures_data["all_tasks"]
 
+            # XXX: For now, only restrict to test-linux64 tasks.
+            all_tasks = [
+                t
+                for t in all_tasks
+                if t.startswith("test-linux64/") and "test-verify" not in t
+            ]
+
             selected_tasks = []
             # TODO: Classify multiple commit/test at the same time.
             for data in test_scheduling.generate_data(
@@ -615,12 +622,6 @@ class CommitClassifier(object):
                     else "0"
                 )
 
-            # XXX: For now, only restrict to test-linux64 tasks.
-            selected_tasks = [
-                t
-                for t in selected_tasks
-                if t.startswith("test-linux64/") and "test-verify" not in t
-            ]
             # It isn't worth running the build associated to the tests, if we only run three test tasks.
             if len(selected_tasks) < 3:
                 selected_tasks = []
