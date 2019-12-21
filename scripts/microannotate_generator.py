@@ -8,13 +8,17 @@ from logging import INFO, basicConfig, getLogger
 
 from microannotate import generator
 
-from bugbug import repository
+from bugbug import db, repository
 from bugbug.utils import get_secret, retry
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
+# When updating the version, the git repositories will be recreated from scratch.
+# This is useful when new meaningful versions of rust-code-analysis or microannotate
+# are used.
+VERSION = 1
 COMMITS_STEP = 5000
 
 
@@ -30,6 +34,12 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
+        db.register(
+            self.git_repo_path,
+            f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.microannotate_{self.git_repo_path}.latest/artifacts/public/",
+            VERSION,
+        )
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
             cloner.add_done_callback(

@@ -26,6 +26,10 @@ tasks:
           - /cache/
           - https://github.com/marco-c/gecko-dev-wordified
           - --tokenize
+        artifacts:
+          public/gecko-dev-wordified.version:
+            path: /data/gecko-dev-wordified.version
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
         features:
@@ -61,6 +65,10 @@ tasks:
           - /cache/
           - https://github.com/marco-c/gecko-dev-comments-removed
           - --remove-comments
+        artifacts:
+          public/gecko-dev-comments-removed.version:
+            path: /data/gecko-dev-comments-removed.version
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
         features:
@@ -97,6 +105,10 @@ tasks:
           - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
           - --tokenize
           - --remove-comments
+        artifacts:
+          public/gecko-dev-wordified-and-comments-removed.version:
+            path: /data/gecko-dev-wordified-and-comments-removed.version
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
         features:
