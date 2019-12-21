@@ -22,6 +22,7 @@ class MicroannotateGenerator(object):
     def __init__(self, cache_root, repo_url, tokenize, remove_comments):
         self.cache_root = cache_root
         self.repo_url = repo_url
+        self.git_repo_path = os.path.basename(self.repo_url)
         self.tokenize = tokenize
         self.remove_comments = remove_comments
 
@@ -41,9 +42,8 @@ class MicroannotateGenerator(object):
             repo_push_url = self.repo_url.replace(
                 "https://", f"https://{git_user}:{git_password}@"
             )
-            git_repo_path = os.path.basename(self.repo_url)
 
-            executor.submit(self.clone_git_repo, git_repo_path)
+            executor.submit(self.clone_git_repo)
 
         retry(
             lambda: subprocess.run(
@@ -55,8 +55,8 @@ class MicroannotateGenerator(object):
         while not done:
             done = generator.generate(
                 self.repo_dir,
-                git_repo_path,
-                limit=COMMITS_STEP,
+                self.git_repo_path,
+                limit=1,
                 tokenize=self.tokenize,
                 remove_comments=self.remove_comments,
             )
@@ -64,15 +64,16 @@ class MicroannotateGenerator(object):
             retry(
                 lambda: subprocess.run(
                     ["git", "push", repo_push_url, "master"],
-                    cwd=git_repo_path,
+                    cwd=self.git_repo_path,
                     check=True,
                 )
             )
 
-    def clone_git_repo(self, git_repo_path):
+    def clone_git_repo(self):
         retry(
             lambda: subprocess.run(
-                ["git", "clone", "--quiet", self.repo_url, git_repo_path], check=True
+                ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
+                check=True,
             )
         )
 
@@ -80,7 +81,7 @@ class MicroannotateGenerator(object):
             retry(
                 lambda: subprocess.run(
                     ["git", "pull", "--quiet", self.repo_url, "master"],
-                    cwd=git_repo_path,
+                    cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
                 )
