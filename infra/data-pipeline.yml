@@ -727,6 +727,48 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-spambug
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '3 days'}
+      expires: {$fromNow: '1 year'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - spambug
+
+        artifacts:
+          public/spambugmodel.zst:
+            expires: {$fromNow: '1 month'}
+            path: /spambugmodel.zst
+            type: file
+          public/metrics.json:
+            expires: {$fromNow: '1 year'}
+            path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            expires: {$fromNow: '1 year'}
+            path: /feature_importance.png
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.train_spambug.${version}
+        - index.project.relman.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_spambug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_spambug.latest
+      metadata:
+        name: bugbug train spambug model
+        description: bugbug train spambug model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-duplicate
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
@@ -895,6 +937,7 @@ tasks:
         - train-regression
         - train-regressionrange
         - train-regressor
+        - train-spambug
         - train-stepstoreproduce
         - train-tracking
         - train-test-select
