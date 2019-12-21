@@ -37,6 +37,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.microannotate_gecko-dev-wordified.${version}
+        - index.project.relman.bugbug.microannotate_gecko-dev-wordified.latest
       metadata:
         name: bugbug microannotate tokenized repository generator
         description: bugbug microannotate tokenized repository generator
@@ -70,6 +72,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.microannotate_gecko-dev-comments-removed.${version}
+        - index.project.relman.bugbug.microannotate_gecko-dev-comments-removed.latest
       metadata:
         name: bugbug microannotate repository with comments removed generator
         description: bugbug microannotate repository with comments removed generator
@@ -104,6 +108,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
+        - index.project.relman.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
       metadata:
         name: bugbug microannotate tokenized repository with comments removed generator
         description: bugbug microannotate tokenized repository with comments removed generator
