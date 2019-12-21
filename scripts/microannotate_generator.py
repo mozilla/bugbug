@@ -35,7 +35,7 @@ class MicroannotateGenerator(object):
 
     def generate(self):
         db.register(
-            self.git_repo_path,
+            os.path.join("data", self.git_repo_path),
             f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.microannotate_{self.git_repo_path}.latest/artifacts/public/",
             VERSION,
         )
