@@ -33,11 +33,14 @@ class MicroannotateGenerator(object):
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 
     def generate(self):
+        db_path = os.path.join("data", self.git_repo_path)
         db.register(
-            os.path.join("data", self.git_repo_path),
+            db_path,
             f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.microannotate_{self.git_repo_path}.latest/artifacts/public/",
             VERSION,
         )
+
+        is_old_version = db.is_old_schema(db_path)
 
         with ThreadPoolExecutorResult(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
@@ -52,13 +55,20 @@ class MicroannotateGenerator(object):
                 "https://", f"https://{git_user}:{git_password}@"
             )
 
-            executor.submit(self.clone_git_repo)
+            if not is_old_version:
+                executor.submit(self.clone_git_repo)
+            else:
+                executor.submit(self.init_git_repo)
 
         retry(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
             )
         )
+
+        push_args = ["git", "push", repo_push_url, "master"]
+        if is_old_version:
+            push_args.append("--force")
 
         done = False
         while not done:
@@ -70,13 +80,16 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(
-                lambda: subprocess.run(
-                    ["git", "push", repo_push_url, "master"],
-                    cwd=self.git_repo_path,
-                    check=True,
-                )
-            )
+            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+
+    def init_git_repo(self):
+        subprocess.run(["git", "init", self.git_repo_path], check=True)
+
+        subprocess.run(
+            ["git", "remote", "add", "origin", self.repo_url],
+            cwd=self.git_repo_path,
+            check=True,
+        )
 
     def clone_git_repo(self):
         retry(
