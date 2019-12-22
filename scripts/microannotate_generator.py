@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import concurrent.futures
 import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
@@ -9,7 +8,7 @@ from logging import INFO, basicConfig, getLogger
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import get_secret, retry
+from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -40,7 +39,7 @@ class MicroannotateGenerator(object):
             VERSION,
         )
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutorResult(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
             cloner.add_done_callback(
                 lambda future: logger.info("mozilla-central cloned")
