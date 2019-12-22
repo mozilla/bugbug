@@ -93,7 +93,7 @@ tasks:
                python2 -m pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.2 &&
                hg clone -r fa93e7223185 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
-               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.4/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
+               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.7/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /root/.hgrc &&
