@@ -17,7 +17,7 @@ logger = getLogger(__name__)
 # When updating the version, the git repositories will be recreated from scratch.
 # This is useful when new meaningful versions of rust-code-analysis or microannotate
 # are used.
-VERSION = 1
+VERSION = 2
 COMMITS_STEP = 5000
 
 
