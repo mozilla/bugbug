@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import concurrent.futures
 import json
 import logging
 import os
@@ -333,3 +334,24 @@ def get_free_tcp_port():
     addr, port = tcp.getsockname()
     tcp.close()
     return port
+
+
+class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
+    def __init__(self, *args, **kwargs):
+        self.futures = []
+        super(ThreadPoolExecutorResult, self).__init__(*args, **kwargs)
+
+    def submit(self, *args, **kwargs):
+        future = super(ThreadPoolExecutorResult, self).submit(*args, **kwargs)
+        self.futures.append(future)
+        return future
+
+    def __exit__(self, *args):
+        try:
+            for future in concurrent.futures.as_completed(self.futures):
+                future.result()
+        except Exception as e:
+            for future in self.futures:
+                future.cancel()
+            raise e
+        return super(ThreadPoolExecutorResult, self).__exit__(*args)
