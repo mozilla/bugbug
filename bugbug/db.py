@@ -82,12 +82,14 @@ def download_support_file(path, file_name):
         logger.info(
             f"{file_name} is not yet available to download for {path}", exc_info=True
         )
-        return False
+
+    return False
 
 
 # Download and extract databases.
 def download(path, support_files_too=False):
     # If a DB with the current schema is not available yet, we can't download.
+    print("Path: ", path)
     if is_old_schema(path):
         return False
 
@@ -101,6 +103,22 @@ def download(path, support_files_too=False):
         if updated:
             extract_file(zst_path)
 
+        # getting the current db version
+        try:
+            with open(f"{path}.version", "r") as f:
+                download_version = f.read()
+        except IOError:
+            download_version = None
+        try:
+            with open(f"{os.path.basename(path)}.version", "r") as f:
+                current_version = f.read()
+        except IOError:
+            current_version = None
+
+        if current_version > download_version:
+            os.remove(path)
+            return False
+
         successful = True
         if support_files_too:
             for support_file in DATABASES[path]["support_files"]:
@@ -109,7 +127,7 @@ def download(path, support_files_too=False):
         return successful
     except requests.exceptions.HTTPError:
         logger.info(f"{url} is not yet available to download", exc_info=True)
-        return False
+    return False
 
 
 def last_modified(path):
