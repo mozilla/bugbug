@@ -40,7 +40,8 @@ class MicroannotateGenerator(object):
             VERSION,
         )
 
-        is_old_version = db.is_old_schema(db_path)
+        # TODO: Check the version again once we can run tasks for longer (https://bugzilla.mozilla.org/show_bug.cgi?id=1604175).
+        is_old_version = False  # db.is_old_schema(db_path)
 
         with ThreadPoolExecutorResult(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
