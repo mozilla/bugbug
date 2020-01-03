@@ -85,6 +85,17 @@ class SpamBugModel(BugModel):
             ):
                 classes[bug_id] = 1
 
+        print(
+            "{} bugs are classified as non-spam".format(
+                sum(1 for label in classes.values() if label == 0)
+            )
+        )
+        print(
+            "{} bugs are classified as spam".format(
+                sum(1 for label in classes.values() if label == 1)
+            )
+        )
+
         return classes, [0, 1]
 
     def items_gen(self, classes):
