@@ -991,6 +991,7 @@ tasks:
         - train-regression
         - train-defectenhancementtask
         - train-component
+        - train-spambug
       payload:
         capabilities:
           privileged: true
