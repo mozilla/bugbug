@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import logging
-
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
@@ -13,10 +11,6 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
-
-logging.basicConfig(level=logging.INFO)
-LOGGER = logging.getLogger()
-
 
 class SpamBugModel(BugModel):
     def __init__(self, lemmatization=False):
@@ -82,7 +76,6 @@ class SpamBugModel(BugModel):
             # Legitimate bugs
             if bug_data["resolution"] == "FIXED":
                 classes[bug_id] = 0
-                LOGGER.info(f"bug {bug_id} classified as non-spam")
 
             # Spam bugs
             elif (
@@ -90,9 +83,19 @@ class SpamBugModel(BugModel):
                 and bug_data["component"] == "General"
             ):
                 classes[bug_id] = 1
-                LOGGER.info(f"bug {bug_id} classified as spam")
+        print(
+            "{} bugs are classified as non-spam".format(
+                sum(1 for label in classes.values() if label == 0)
+            )
+        )
+        print(
+            "{} bugs are classified as spam".format(
+                sum(1 for label in classes.values() if label == 1)
+            )
+        )
 
         return classes, [0, 1]
+    
 
     def items_gen(self, classes):
         # Overwriting this method to add include_invalid=True to get_bugs to
