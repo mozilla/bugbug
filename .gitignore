@@ -43,3 +43,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 cache/
+
+# Logs
+*.log
+# Desktop Service Store
+*.DS_Store

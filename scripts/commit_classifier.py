@@ -215,7 +215,7 @@ class CommitClassifier(object):
     def update_commit_db(self):
         repository.clone(self.repo_dir)
 
-        # assert db.download(repository.COMMITS_DB, support_files_too=True)
+        assert db.download(repository.COMMITS_DB, support_files_too=True)
 
         for commit in repository.get_commits():
             pass
