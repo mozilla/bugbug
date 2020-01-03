@@ -84,6 +84,7 @@ class SpamBugModel(BugModel):
                 and bug_data["component"] == "General"
             ):
                 classes[bug_id] = 1
+
         print(
             "{} bugs are classified as non-spam".format(
                 sum(1 for label in classes.values() if label == 0)
