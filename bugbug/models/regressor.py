@@ -34,7 +34,7 @@ TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.j
 db.register(
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug_annotate.regressor_finder.latest/artifacts/public/tokenized_bug_introducing_commits.json.zst",
-    2,
+    3,
 )
 
 
