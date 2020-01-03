@@ -1,4 +1,3 @@
-default_stages: [commit, push]
 repos:
 -   repo: https://github.com/asottile/seed-isort-config
     rev: v1.9.3
