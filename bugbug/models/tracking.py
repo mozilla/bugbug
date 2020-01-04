@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -100,13 +101,28 @@ class TrackingModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            for entry in bug_data["history"]:
-                for change in entry["changes"]:
-                    if change["field_name"].startswith("cf_tracking_firefox"):
-                        if change["added"] in ["blocking", "+"]:
-                            classes[bug_id] = 1
-                        elif change["added"] == "-":
-                            classes[bug_id] = 0
+            flag_found = False
+            tracking_flags = [
+                flag
+                for flag in bug_data.keys()
+                if flag.startswith("cf_tracking_firefox")
+            ]
+            for tracker in tracking_flags:
+                if bug_data[tracker] in ["blocking", "+"]:
+                    classes[bug_id] = 1
+                    flag_found = True
+                elif bug_data[tracker] == "-":
+                    classes[bug_id] = 0
+                    flag_found = True
+
+            if not flag_found:
+                for entry in bug_data["history"]:
+                    for change in entry["changes"]:
+                        if change["field_name"].startswith("cf_tracking_firefox"):
+                            if change["added"] in ["blocking", "+"]:
+                                classes[bug_id] = 1
+                            elif change["added"] == "-":
+                                classes[bug_id] = 0
 
             if bug_data["resolution"] in ["INVALID", "DUPLICATE"]:
                 continue
