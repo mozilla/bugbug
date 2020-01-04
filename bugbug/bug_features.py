@@ -12,7 +12,7 @@ from dateutil import parser
 from libmozdata import versions
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository,feature_cleanup
+from bugbug import bug_snapshot, repository, feature_cleanup
 
 
 def field(bug, field):
@@ -539,62 +539,63 @@ class couple_common_keywords(couple_bug_feature):
             if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
         ]
 
+
 FEATURE_CLASSES = [
-            had_severity_enhancement,
-            is_reporter_a_developer,
-            op_sys,
-            platform,
-            components_touched_num,
-            components_touched,
-            commit_no_of_backouts,
-            commit_reviewer_experience_90_days,
-            commit_reviewer_experience,
-            commit_author_experience_90_days,
-            commit_author_experience,
-            commit_files_modified_num,
-            commit_types,
-            commit_deleted,
-            commit_added,
-            has_image_attachment,
-            has_image_attachment_at_bug_creation,
-            num_words_comments,
-            num_words_title,
-            affected_then_unaffected,
-            ever_affected,
-            reporter_experience,
-            comment_length,
-            comment_count,
-            has_cve_in_alias,
-            priority,
-            blocked_bugs_number,
-            delta_request_merge,
-            bug_reporter,
-            is_mozillian,
-            component,
-            product,
-            landings,
-            patches,
-            whiteboard,
-            has_github_url,
-            has_w3c_url,
-            has_url,
-            is_coverity_issue,
-            number_of_bug_dependencies,
-            severity,
-            keywords,
-            has_crash_signature,
-            has_regression_range,
-            has_str,
-            couple_common_whiteboard_keywords,
-            is_same_product,
-            is_same_component,
-            is_same_platform,
-            is_same_version,
-            is_same_os,
-            is_same_target_milestone,
-            is_first_affected_same,
-            couple_delta_creation_date,
-            couple_common_keywords,
+    had_severity_enhancement,
+    is_reporter_a_developer,
+    op_sys,
+    platform,
+    components_touched_num,
+    components_touched,
+    commit_no_of_backouts,
+    commit_reviewer_experience_90_days,
+    commit_reviewer_experience,
+    commit_author_experience_90_days,
+    commit_author_experience,
+    commit_files_modified_num,
+    commit_types,
+    commit_deleted,
+    commit_added,
+    has_image_attachment,
+    has_image_attachment_at_bug_creation,
+    num_words_comments,
+    num_words_title,
+    affected_then_unaffected,
+    ever_affected,
+    reporter_experience,
+    comment_length,
+    comment_count,
+    has_cve_in_alias,
+    priority,
+    blocked_bugs_number,
+    delta_request_merge,
+    bug_reporter,
+    is_mozillian,
+    component,
+    product,
+    landings,
+    patches,
+    whiteboard,
+    has_github_url,
+    has_w3c_url,
+    has_url,
+    is_coverity_issue,
+    number_of_bug_dependencies,
+    severity,
+    keywords,
+    has_crash_signature,
+    has_regression_range,
+    has_str,
+    couple_common_whiteboard_keywords,
+    is_same_product,
+    is_same_component,
+    is_same_platform,
+    is_same_version,
+    is_same_os,
+    is_same_target_milestone,
+    is_first_affected_same,
+    couple_delta_creation_date,
+    couple_common_keywords,
 ]
 
 CLEANUP_FUNCTIONS = [
@@ -604,7 +605,7 @@ CLEANUP_FUNCTIONS = [
     feature_cleanup.hex,
     feature_cleanup.dll,
     feature_cleanup.synonyms,
-    feature_cleanup.crash
+    feature_cleanup.crash,
 ]
 
 
@@ -626,27 +627,27 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         merge_data=True,
     ):
         self.feature_extractors = []
-        used_features=[]
+        used_features = []
         for feature_extractor in feature_extractors:
             for x in FEATURE_CLASSES:
-                if isinstance(feature_extractor,x):
+                if isinstance(feature_extractor, x):
                     if x not in used_features:
                         used_features.append(x)
                         self.feature_extractors.append(feature_extractor)
-                    else :
-                        assert False,("Duplicate extractors used")
-        
+                    else:
+                        assert False, "Duplicate extractors used"
+
         self.cleanup_functions = []
-        used_functions=[]
+        used_functions = []
         for cleanup_function in cleanup_functions:
             for function in FEATURE_CLASSES:
-                if isinstance(cleanup_function,function):
+                if isinstance(cleanup_function, function):
                     if function not in used_functions:
                         used_functions.append(function)
                         self.cleanup_functions.append(cleanup_function)
-                    else :
-                        assert False,("Duplicate cleanup_functions used")
-    
+                    else:
+                        assert False, "Duplicate cleanup_functions used"
+
         self.rollback = rollback
         self.rollback_when = rollback_when
         self.commit_data = commit_data

@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
 from collections import defaultdict
-from bugbug import bug_features,feature_cleanup
+from bugbug import bug_features, feature_cleanup
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -492,62 +492,63 @@ def merge_commits(commits):
         "test_deleted": sum(commit["test_deleted"] for commit in commits),
     }
 
+
 FEATURE_CLASSES = [
-            bug_features.had_severity_enhancement,
-            bug_features.is_reporter_a_developer,
-            bug_features.op_sys,
-            bug_features.platform,
-            bug_features.components_touched_num,
-            bug_features.components_touched,
-            bug_features.commit_no_of_backouts,
-            bug_features.commit_reviewer_experience_90_days,
-            bug_features.commit_reviewer_experience,
-            bug_features.commit_author_experience_90_days,
-            bug_features.commit_author_experience,
-            bug_features.commit_files_modified_num,
-            bug_features.commit_types,
-            bug_features.commit_deleted,
-            bug_features.commit_added,
-            bug_features.has_image_attachment,
-            bug_features.has_image_attachment_at_bug_creation,
-            bug_features.num_words_comments,
-            bug_features.num_words_title,
-            bug_features.affected_then_unaffected,
-            bug_features.ever_affected,
-            bug_features.reporter_experience,
-            bug_features.comment_length,
-            bug_features.comment_count,
-            bug_features.has_cve_in_alias,
-            bug_features.priority,
-            bug_features.blocked_bugs_number,
-            bug_features.delta_request_merge,
-            bug_features.bug_reporter,
-            bug_features.is_mozillian,
-            bug_features.component,
-            bug_features.product,
-            bug_features.landings,
-            bug_features.patches,
-            bug_features.whiteboard,
-            bug_features.has_github_url,
-            bug_features.has_w3c_url,
-            bug_features.has_url,
-            bug_features.is_coverity_issue,
-            bug_features.number_of_bug_dependencies,
-            bug_features.severity,
-            bug_features.keywords,
-            bug_features.has_crash_signature,
-            bug_features.has_regression_range,
-            bug_features.has_str,
-            bug_features.couple_common_whiteboard_keywords,
-            bug_features.is_same_product,
-            bug_features.is_same_component,
-            bug_features.is_same_platform,
-            bug_features.is_same_version,
-            bug_features.is_same_os,
-            bug_features.is_same_target_milestone,
-            bug_features.is_first_affected_same,
-            bug_features.couple_delta_creation_date,
-            bug_features.couple_common_keywords,
+    bug_features.had_severity_enhancement,
+    bug_features.is_reporter_a_developer,
+    bug_features.op_sys,
+    bug_features.platform,
+    bug_features.components_touched_num,
+    bug_features.components_touched,
+    bug_features.commit_no_of_backouts,
+    bug_features.commit_reviewer_experience_90_days,
+    bug_features.commit_reviewer_experience,
+    bug_features.commit_author_experience_90_days,
+    bug_features.commit_author_experience,
+    bug_features.commit_files_modified_num,
+    bug_features.commit_types,
+    bug_features.commit_deleted,
+    bug_features.commit_added,
+    bug_features.has_image_attachment,
+    bug_features.has_image_attachment_at_bug_creation,
+    bug_features.num_words_comments,
+    bug_features.num_words_title,
+    bug_features.affected_then_unaffected,
+    bug_features.ever_affected,
+    bug_features.reporter_experience,
+    bug_features.comment_length,
+    bug_features.comment_count,
+    bug_features.has_cve_in_alias,
+    bug_features.priority,
+    bug_features.blocked_bugs_number,
+    bug_features.delta_request_merge,
+    bug_features.bug_reporter,
+    bug_features.is_mozillian,
+    bug_features.component,
+    bug_features.product,
+    bug_features.landings,
+    bug_features.patches,
+    bug_features.whiteboard,
+    bug_features.has_github_url,
+    bug_features.has_w3c_url,
+    bug_features.has_url,
+    bug_features.is_coverity_issue,
+    bug_features.number_of_bug_dependencies,
+    bug_features.severity,
+    bug_features.keywords,
+    bug_features.has_crash_signature,
+    bug_features.has_regression_range,
+    bug_features.has_str,
+    bug_features.couple_common_whiteboard_keywords,
+    bug_features.is_same_product,
+    bug_features.is_same_component,
+    bug_features.is_same_platform,
+    bug_features.is_same_version,
+    bug_features.is_same_os,
+    bug_features.is_same_target_milestone,
+    bug_features.is_first_affected_same,
+    bug_features.couple_delta_creation_date,
+    bug_features.couple_common_keywords,
 ]
 
 CLEANUP_FUNCTIONS = [
@@ -557,33 +558,33 @@ CLEANUP_FUNCTIONS = [
     feature_cleanup.hex,
     feature_cleanup.dll,
     feature_cleanup.synonyms,
-    feature_cleanup.crash
+    feature_cleanup.crash,
 ]
+
 
 class CommitExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions):
         self.feature_extractors = []
-        used_features=[]
+        used_features = []
         for feature_extractor in feature_extractors:
             for x in FEATURE_CLASSES:
-                if isinstance(feature_extractor,x):
+                if isinstance(feature_extractor, x):
                     if x not in used_features:
                         used_features.append(x)
                         self.feature_extractors.append(feature_extractor)
-                    else :
-                        assert False,("Duplicate extractors used")
-        
+                    else:
+                        assert False, "Duplicate extractors used"
+
         self.cleanup_functions = []
-        used_functions=[]
+        used_functions = []
         for cleanup_function in cleanup_functions:
             for function in FEATURE_CLASSES:
-                if isinstance(cleanup_function,function):
+                if isinstance(cleanup_function, function):
                     if function not in used_functions:
                         used_functions.append(function)
                         self.cleanup_functions.append(cleanup_function)
-                    else :
-                        assert False,("Duplicate cleanup_functions used")
-
+                    else:
+                        assert False, "Duplicate cleanup_functions used"
 
     def fit(self, x, y=None):
         for feature in self.feature_extractors:
