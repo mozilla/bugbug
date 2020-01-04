@@ -100,13 +100,27 @@ class TrackingModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            for entry in bug_data["history"]:
-                for change in entry["changes"]:
-                    if change["field_name"].startswith("cf_tracking_firefox"):
-                        if change["added"] in ["blocking", "+"]:
-                            classes[bug_id] = 1
-                        elif change["added"] == "-":
-                            classes[bug_id] = 0
+            flag = False
+            keys = bug_data.keys()
+            tracking_list = [
+                ele for ele in keys if ele.startswith("cf_tracking_firefox")
+            ]
+            for tracker in tracking_list:
+                if bug_data[tracker] in ["blocking", "+"]:
+                    classes[bug_id] = 1
+                    flag = True
+                elif bug_data[tracker] == "-":
+                    classes[bug_id] = 0
+                    flag = True
+
+            if not flag:
+                for entry in bug_data["history"]:
+                    for change in entry["changes"]:
+                        if change["field_name"].startswith("cf_tracking_firefox"):
+                            if change["added"] in ["blocking", "+"]:
+                                classes[bug_id] = 1
+                            elif change["added"] == "-":
+                                classes[bug_id] = 0
 
             if bug_data["resolution"] in ["INVALID", "DUPLICATE"]:
                 continue
