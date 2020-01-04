@@ -12,7 +12,7 @@ from dateutil import parser
 from libmozdata import versions
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository, feature_cleanup
+from bugbug import bug_snapshot, feature_cleanup, repository
 
 
 def field(bug, field):

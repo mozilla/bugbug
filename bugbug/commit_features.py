@@ -4,9 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
 from collections import defaultdict
-from bugbug import bug_features, feature_cleanup
+
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from bugbug import bug_features, feature_cleanup
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
