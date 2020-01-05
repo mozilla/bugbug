@@ -100,20 +100,21 @@ class TrackingModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            flag = False
-            keys = bug_data.keys()
-            tracking_list = [
-                ele for ele in keys if ele.startswith("cf_tracking_firefox")
+            flag_found = False
+            tracking_flags = [
+                flag
+                for flag in bug_data.keys()
+                if flag.startswith("cf_tracking_firefox")
             ]
-            for tracker in tracking_list:
+            for tracker in tracking_flags:
                 if bug_data[tracker] in ["blocking", "+"]:
                     classes[bug_id] = 1
-                    flag = True
+                    flag_found = True
                 elif bug_data[tracker] == "-":
                     classes[bug_id] = 0
-                    flag = True
+                    flag_found = True
 
-            if not flag:
+            if not flag_found:
                 for entry in bug_data["history"]:
                     for change in entry["changes"]:
                         if change["field_name"].startswith("cf_tracking_firefox"):
