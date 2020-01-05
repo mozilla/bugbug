@@ -106,11 +106,11 @@ class TrackingModel(BugModel):
                 for flag in bug_data.keys()
                 if flag.startswith("cf_tracking_firefox")
             ]
-            for tracker in tracking_flags:
-                if bug_data[tracker] in ["blocking", "+"]:
+            for tracking_flag in tracking_flags:
+                if bug_data[tracking_flag] in ["blocking", "+"]:
                     classes[bug_id] = 1
                     flag_found = True
-                elif bug_data[tracker] == "-":
+                elif bug_data[tracking_flag] == "-":
                     classes[bug_id] = 0
                     flag_found = True
 
