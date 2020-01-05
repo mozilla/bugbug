@@ -18,6 +18,7 @@ http_service/models/*model*
 data/
 sheets/
 
+.mypy_cache/
 .pytest_cache/
 *.pyc
 .coverage
