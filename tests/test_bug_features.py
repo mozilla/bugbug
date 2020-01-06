@@ -7,9 +7,13 @@ import json
 import os
 
 import pytest
-
+from bugbug.feature_cleanup import(
+        fileref,
+        url
+        )
 from bugbug.bug_features import (
     blocked_bugs_number,
+    BugExtractor,
     bug_reporter,
     comment_count,
     comment_length,
@@ -161,6 +165,23 @@ def test_comment_count(read):
 
 def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
+
+def test_bug_extractor():
+    feature_extractors=[
+        blocked_bugs_number(),
+        bug_reporter(),
+        bug_reporter()
+        ]
+    cleanup_functions=[
+            fileref(),
+            url(),
+            url(),
+        ]
+    try:
+        BugExtractor(feature_extractors,cleanup_functions)
+    except AssertionError:
+        print("exception handled")
+    
 
 
 PRODUCT_PARAMS = [

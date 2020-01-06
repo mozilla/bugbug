@@ -495,23 +495,11 @@ def merge_commits(commits):
 
 class CommitExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions):
-        self.feature_extractors = []
-        used_features = []
-        for feature_extractor in feature_extractors:
-            if type(feature_extractor) not in used_features:
-                used_features.append(type(feature_extractor))
-                self.feature_extractors.append(feature_extractor)
-            else:
-                assert False, "Duplicate features are used"
+        assert len(set(type(fe) for fe in feature_extractors))==len(feature_extractors),"Duplicate Feature Extractors"
+        self.feature_extractors = feature_extractors
 
-        self.cleanup_functions = []
-        used_functions = []
-        for cleanup_function in cleanup_functions:
-            if type(cleanup_function) not in used_functions:
-                used_functions.append(cleanup_function)
-                self.cleanup_functions.append(cleanup_function)
-            else:
-                assert False, "Duplicate cleanup_functions used"
+        assert len(set(type(cf) for cf in cleanup_functions ))==len(cleanup_functions),"Duplicate Cleanup Functions"
+        self.cleanup_functions = cleanup_functions
 
     def fit(self, x, y=None):
         for feature in self.feature_extractors:
