@@ -7,10 +7,10 @@ import json
 import os
 
 import pytest
-from bugbug.feature_cleanup import fileref, url
+
 from bugbug.bug_features import (
-    blocked_bugs_number,
     BugExtractor,
+    blocked_bugs_number,
     bug_reporter,
     comment_count,
     comment_length,
@@ -38,6 +38,7 @@ from bugbug.bug_features import (
     severity,
     whiteboard,
 )
+from bugbug.feature_cleanup import fileref, url
 
 
 @pytest.fixture
