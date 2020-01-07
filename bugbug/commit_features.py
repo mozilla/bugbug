@@ -553,6 +553,36 @@ def merge_commits(commits):
         / len(commits),
         "average_logical_loc": sum(commit["average_logical_loc"] for commit in commits)
         / len(commits),
+        "maximum_cyclomatic": max(commit["maximum_cyclomatic"] for commit in commits),
+        "maximum_halstead_unique_operands": max(
+            commit["maximum_halstead_unique_operands"] for commit in commits
+        ),
+        "maximum_halstead_operands": max(
+            commit["maximum_halstead_operands"] for commit in commits
+        ),
+        "maximum_halstead_unique_operators": max(
+            commit["maximum_halstead_unique_operators"] for commit in commits
+        ),
+        "maximum_halstead_operators": max(
+            commit["maximum_halstead_operators"] for commit in commits
+        ),
+        "maximum_source_loc": max(commit["maximum_source_loc"] for commit in commits),
+        "maximum_logical_loc": max(commit["maximum_logical_loc"] for commit in commits),
+        "minimum_cyclomatic": min(commit["minimum_cyclomatic"] for commit in commits),
+        "minimum_halstead_unique_operands": min(
+            commit["minimum_halstead_unique_operands"] for commit in commits
+        ),
+        "minimum_halstead_operands": min(
+            commit["minimum_halstead_operands"] for commit in commits
+        ),
+        "minimum_halstead_unique_operators": min(
+            commit["minimum_halstead_unique_operators"] for commit in commits
+        ),
+        "minimum_halstead_operators": min(
+            commit["minimum_halstead_operators"] for commit in commits
+        ),
+        "minimum_source_loc": min(commit["minimum_source_loc"] for commit in commits),
+        "minimum_logical_loc": min(commit["minimum_logical_loc"] for commit in commits),
     }
 
 
