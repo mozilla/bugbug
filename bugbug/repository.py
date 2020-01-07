@@ -140,6 +140,20 @@ class Commit:
         self.average_halstead_unique_operators = 0.0
         self.average_source_loc = 0.0
         self.average_logical_loc = 0.0
+        self.maximum_cyclomatic = 0
+        self.maximum_halstead_operands = 0
+        self.maximum_halstead_unique_operands = 0
+        self.maximum_halstead_operators = 0
+        self.maximum_halstead_unique_operators = 0
+        self.maximum_source_loc = 0
+        self.maximum_logical_loc = 0
+        self.minimum_cyclomatic = sys.maxsize
+        self.minimum_halstead_operands = sys.maxsize
+        self.minimum_halstead_unique_operands = sys.maxsize
+        self.minimum_halstead_operators = sys.maxsize
+        self.minimum_halstead_unique_operators = sys.maxsize
+        self.minimum_source_loc = sys.maxsize
+        self.minimum_logical_loc = sys.maxsize
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -321,6 +335,73 @@ def get_touched_functions(path, deleted_lines, added_lines, content):
     return touched_functions
 
 
+def get_metrics(commit, metrics_space):
+    if metrics_space["kind"] == "function":
+        metrics = metrics_space["metrics"]
+        commit.average_cyclomatic += metrics["cyclomatic"]
+        commit.average_halstead_unique_operands += metrics["halstead"][
+            "unique_operands"
+        ]
+        commit.average_halstead_operands += metrics["halstead"]["operands"]
+        commit.average_halstead_unique_operators += metrics["halstead"][
+            "unique_operators"
+        ]
+        commit.average_halstead_operators += metrics["halstead"]["operators"]
+        commit.average_source_loc += metrics["loc"]["sloc"]
+        commit.average_logical_loc += metrics["loc"]["lloc"]
+
+        commit.maximum_cyclomatic = max(
+            commit.maximum_cyclomatic, metrics["cyclomatic"]
+        )
+        commit.maximum_halstead_unique_operands = max(
+            commit.maximum_halstead_unique_operands,
+            metrics["halstead"]["unique_operands"],
+        )
+        commit.maximum_halstead_operands = max(
+            metrics["halstead"]["operands"], commit.maximum_halstead_operands
+        )
+        commit.maximum_halstead_unique_operators = max(
+            metrics["halstead"]["unique_operators"],
+            commit.maximum_halstead_unique_operators,
+        )
+        commit.maximum_halstead_operators = max(
+            metrics["halstead"]["operators"], commit.maximum_halstead_operators
+        )
+        commit.maximum_source_loc = max(
+            metrics["loc"]["sloc"], commit.maximum_source_loc
+        )
+        commit.maximum_logical_loc = max(
+            metrics["loc"]["lloc"], commit.maximum_logical_loc
+        )
+
+        commit.minimum_cyclomatic = min(
+            commit.minimum_cyclomatic, metrics["cyclomatic"]
+        )
+        commit.minimum_halstead_unique_operands = min(
+            commit.minimum_halstead_unique_operands,
+            metrics["halstead"]["unique_operands"],
+        )
+        commit.minimum_halstead_operands = min(
+            metrics["halstead"]["operands"], commit.minimum_halstead_operands
+        )
+        commit.minimum_halstead_unique_operators = min(
+            metrics["halstead"]["unique_operators"],
+            commit.minimum_halstead_unique_operators,
+        )
+        commit.minimum_halstead_operators = min(
+            metrics["halstead"]["operators"], commit.minimum_halstead_operators
+        )
+        commit.minimum_source_loc = min(
+            metrics["loc"]["sloc"], commit.minimum_source_loc
+        )
+        commit.minimum_logical_loc = min(
+            metrics["loc"]["lloc"], commit.minimum_logical_loc
+        )
+
+    for space in metrics_space["spaces"]:
+        get_metrics(commit, space)
+
+
 def _transform(commit):
     hg_modified_files(HG, commit)
 
@@ -384,23 +465,9 @@ def _transform(commit):
 
             if size is not None:
                 source_code_sizes.append(size)
-                metrics = code_analysis_server.metrics(path, after)
-                if "error" in metrics:
-                    metrics_file_count += 1
-                    metrics = metrics["spaces"]["metrics"]
-                    commit.average_cyclomatic += metrics["cyclomatic"]
-                    commit.average_halstead_unique_operands += metrics["halstead"][
-                        "unique_operands"
-                    ]
-                    commit.average_halstead_operands += metrics["halstead"]["operands"]
-                    commit.average_halstead_unique_operators += metrics["halstead"][
-                        "unique_operators"
-                    ]
-                    commit.average_halstead_operators += metrics["halstead"][
-                        "operators"
-                    ]
-                    commit.average_source_loc += metrics["loc"]["sloc"]
-                    commit.average_logical_loc += metrics["loc"]["lloc"]
+                metrics = code_analysis_server.metrics(path, after, unit=False)
+                if metrics.get("spaces"):
+                    get_metrics(commit, metrics["spaces"])
 
             commit.types.add(type_)
         else:
@@ -446,6 +513,14 @@ def _transform(commit):
         commit.average_halstead_operators /= metrics_file_count
         commit.average_source_loc /= metrics_file_count
         commit.average_logical_loc /= metrics_file_count
+    else:
+        commit.minimum_cyclomatic = 0
+        commit.minimum_halstead_operands = 0
+        commit.minimum_halstead_unique_operands = 0
+        commit.minimum_halstead_operators = 0
+        commit.minimum_halstead_unique_operators = 0
+        commit.minimum_source_loc = 0
+        commit.minimum_logical_loc = 0
 
     return commit
 

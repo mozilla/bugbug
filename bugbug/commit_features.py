@@ -144,6 +144,28 @@ class source_code_file_metrics(object):
             "Average number of operators": commit["average_halstead_operators"],
             "Average number of source loc": commit["average_source_loc"],
             "Average number of logical loc": commit["average_logical_loc"],
+            "Maximum cyclomatic": commit["maximum_cyclomatic"],
+            "Maximum number of unique operands": commit[
+                "maximum_halstead_unique_operands"
+            ],
+            "Maximum number of operands": commit["maximum_halstead_operands"],
+            "Maximum number of unique operators": commit[
+                "maximum_halstead_unique_operators"
+            ],
+            "Maximum number of operators": commit["maximum_halstead_operators"],
+            "Maximum number of source loc": commit["maximum_source_loc"],
+            "Maximum number of logical loc": commit["maximum_logical_loc"],
+            "Minimum cyclomatic": commit["minimum_cyclomatic"],
+            "Minimum number of unique operands": commit[
+                "minimum_halstead_unique_operands"
+            ],
+            "Minimum number of operands": commit["minimum_halstead_operands"],
+            "Minimum number of unique operators": commit[
+                "minimum_halstead_unique_operators"
+            ],
+            "Minimum number of operators": commit["minimum_halstead_operators"],
+            "Minimum number of source loc": commit["minimum_source_loc"],
+            "Minimum number of logical loc": commit["minimum_logical_loc"],
         }
 
 
