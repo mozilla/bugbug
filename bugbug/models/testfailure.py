@@ -23,7 +23,6 @@ class TestFailureModel(CommitModel):
 
         feature_extractors = [
             commit_features.source_code_file_size(),
-            commit_features.source_code_file_metrics(),
             commit_features.other_file_size(),
             commit_features.test_file_size(),
             commit_features.source_code_added(),
