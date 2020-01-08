@@ -165,19 +165,6 @@ def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
 
 
-def test_bug_extractor():
-    feature_extractors = [blocked_bugs_number(), bug_reporter(), bug_reporter()]
-    cleanup_functions = [
-        fileref(),
-        url(),
-        url(),
-    ]
-    try:
-        BugExtractor(feature_extractors, cleanup_functions)
-    except AssertionError:
-        print("exception handled")
-
-
 PRODUCT_PARAMS = [
     ([{"product": "Firefox"}, {"product": "Firefox"}], True),
     ([{"product": "Firefox"}, {"product": "Firefox for Android"}], False),
@@ -281,3 +268,16 @@ FIRST_AFFECTED_PARAMS = [
 @pytest.mark.parametrize("test_data, expected", FIRST_AFFECTED_PARAMS)
 def test_is_first_affected_same(test_data, expected):
     assert is_first_affected_same()(test_data) == expected
+
+
+BUG_EXTRACTOR_PARAMS = [
+    ([has_str, has_url], [fileref, url]),
+    ([has_str, has_str], [fileref, url]),
+    ([has_str, has_url], [fileref, fileref]),
+]
+
+
+@pytest.mark.parameterize("feature_extractors,cleanup_functions", BUG_EXTRACTOR_PARAMS)
+def test_BugExtractor(feature_extractors, cleanup_functions):
+    with pytest.raises(AssertionError):
+        BugExtractor(feature_extractors, cleanup_functions)
