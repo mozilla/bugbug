@@ -10,7 +10,7 @@ COMMIT_EXTRACTOR_PARAMS = [
 ]
 
 
-@pytest.mark.parameterize(
+@pytest.mark.parametrize(
     "feature_extractors,cleanup_functions", COMMIT_EXTRACTOR_PARAMS
 )
 def test_CommitExtractor(feature_extractors, cleanup_functions):

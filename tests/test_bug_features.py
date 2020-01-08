@@ -277,7 +277,7 @@ BUG_EXTRACTOR_PARAMS = [
 ]
 
 
-@pytest.mark.parameterize("feature_extractors,cleanup_functions", BUG_EXTRACTOR_PARAMS)
+@pytest.mark.parametrize("feature_extractors,cleanup_functions", BUG_EXTRACTOR_PARAMS)
 def test_BugExtractor(feature_extractors, cleanup_functions):
     with pytest.raises(AssertionError):
         BugExtractor(feature_extractors, cleanup_functions)
