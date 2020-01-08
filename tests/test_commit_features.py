@@ -1,7 +1,8 @@
 import pytest
 
 from bugbug.bug_features import has_str, has_url
-from bugbug.commit_features import CommitExtractor, fileref, url
+from bugbug.commit_features import CommitExtractor
+from bugbug.feature_cleanup import fileref, url
 
 COMMIT_EXTRACTOR_PARAMS = [
     ([has_str, has_url], [fileref, url]),
