@@ -85,10 +85,6 @@ class MicroannotateGenerator(object):
                 lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True)
             )
 
-            retrying(
-                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True)
-            )
-
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
 
