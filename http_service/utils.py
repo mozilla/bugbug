@@ -8,7 +8,8 @@
 import requests
 from libmozdata import config
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+
+from bugbug.utils import retrying
 
 
 def get_bugzilla_http_client():
@@ -16,7 +17,7 @@ def get_bugzilla_http_client():
     """
     http_client = requests.Session()
     status_forcelist = [429]
-    retries = Retry(total=256, backoff_factor=1, status_forcelist=status_forcelist)
+    retries = retrying(total=256, backoff_factor=1, status_forcelist=status_forcelist)
     bugzilla_url = config.get("Bugzilla", "URL", "https://bugzilla.mozilla.org")
     bugzilla_api_url = bugzilla_url + "/rest/bug"
     http_client.mount(bugzilla_url, HTTPAdapter(max_retries=retries))

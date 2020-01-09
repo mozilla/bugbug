@@ -8,7 +8,7 @@ from logging import INFO, basicConfig, getLogger
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
+from bugbug.utils import ThreadPoolExecutorResult, get_secret, retrying
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -61,7 +61,7 @@ class MicroannotateGenerator(object):
             else:
                 executor.submit(self.init_git_repo)
 
-        retry(
+        retrying(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
             )
@@ -81,7 +81,9 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+            retrying(
+                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True)
+            )
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
@@ -93,7 +95,7 @@ class MicroannotateGenerator(object):
         )
 
     def clone_git_repo(self):
-        retry(
+        retrying(
             lambda: subprocess.run(
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
@@ -101,7 +103,7 @@ class MicroannotateGenerator(object):
         )
 
         try:
-            retry(
+            retrying(
                 lambda: subprocess.run(
                     ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=self.git_repo_path,

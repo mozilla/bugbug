@@ -9,7 +9,6 @@ import logging
 import os
 import socket
 import tarfile
-import time
 from collections import deque
 from contextlib import contextmanager
 
@@ -23,6 +22,7 @@ import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from bugbug.models import get_model_class
 
@@ -199,16 +199,12 @@ def download_and_load_model(model_name):
     return get_model_class(model_name).load(path)
 
 
-def retry(operation, retries=5, wait_between_retries=30):
+def retrying(operation):
     while True:
         try:
             return operation()
         except Exception:
-            retries -= 1
-            if retries == 0:
-                raise
-
-            time.sleep(wait_between_retries)
+            retry(wait=wait_fixed(30), stop=stop_after_attempt(5))
 
 
 def zstd_compress(path):
