@@ -5,14 +5,12 @@
 
 import pytest
 
-from bugbug.bug_features import has_str, has_url
-from bugbug.commit_features import CommitExtractor
+from bugbug.commit_features import CommitExtractor, author_experience, reviewers_num
 from bugbug.feature_cleanup import fileref, url
 
 COMMIT_EXTRACTOR_PARAMS = [
-    ([has_str, has_url], [fileref, url]),
-    ([has_str, has_str], [fileref, url]),
-    ([has_str, has_url], [fileref, fileref]),
+    ([author_experience, author_experience], [fileref, url]),
+    ([reviewers_num, author_experience], [fileref, fileref]),
 ]
 
 
@@ -20,5 +18,6 @@ COMMIT_EXTRACTOR_PARAMS = [
     "feature_extractors,cleanup_functions", COMMIT_EXTRACTOR_PARAMS
 )
 def test_CommitExtractor(feature_extractors, cleanup_functions):
+    CommitExtractor([reviewers_num, author_experience], [fileref, url])
     with pytest.raises(AssertionError):
         CommitExtractor(feature_extractors, cleanup_functions)
