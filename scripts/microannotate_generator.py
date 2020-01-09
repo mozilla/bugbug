@@ -81,9 +81,7 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retrying(
-                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True)
-            )
+            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)

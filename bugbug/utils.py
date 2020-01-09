@@ -9,6 +9,7 @@ import logging
 import os
 import socket
 import tarfile
+import time
 from collections import deque
 from contextlib import contextmanager
 
@@ -22,7 +23,6 @@ import zstandard
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
-from tenacity import retry, stop_after_attempt, wait_fixed
 
 from bugbug.models import get_model_class
 
