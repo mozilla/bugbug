@@ -18,6 +18,6 @@ COMMIT_EXTRACTOR_PARAMS = [
     "feature_extractors,cleanup_functions", COMMIT_EXTRACTOR_PARAMS
 )
 def test_CommitExtractor(feature_extractors, cleanup_functions):
-    CommitExtractor([reviewers_num, author_experience], [fileref, url])
+    CommitExtractor([reviewers_num(), author_experience()], [fileref(), url()])
     with pytest.raises(AssertionError):
         CommitExtractor(feature_extractors, cleanup_functions)
