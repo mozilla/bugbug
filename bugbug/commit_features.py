@@ -496,7 +496,7 @@ def merge_commits(commits):
 class CommitExtractor(BaseEstimator, TransformerMixin):
     def __init__(self, feature_extractors, cleanup_functions):
         print(feature_extractors)
-        print(type(feature_extractor[0]))
+        print(type(feature_extractors[0]))
         print(set(type(fe) for fe in feature_extractors))
         assert len(set(type(fe) for fe in feature_extractors)) == len(
             feature_extractors
