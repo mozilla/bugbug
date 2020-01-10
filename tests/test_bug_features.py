@@ -270,7 +270,7 @@ def test_is_first_affected_same(test_data, expected):
     assert is_first_affected_same()(test_data) == expected
 
 
-def test_BugExtractor(feature_extractors, cleanup_functions):
+def test_BugExtractor():
     BugExtractor([has_str(), has_url()], [fileref(), url()])
     with pytest.raises(AssertionError):
         BugExtractor([has_str(), has_str()], [fileref(), url()])
