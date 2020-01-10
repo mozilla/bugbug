@@ -274,4 +274,5 @@ def test_BugExtractor():
     BugExtractor([has_str(), has_url()], [fileref(), url()])
     with pytest.raises(AssertionError):
         BugExtractor([has_str(), has_str()], [fileref(), url()])
+    with pytest.raises(AssertionError):    
         BugExtractor([has_str(), has_url()], [fileref(), fileref()])
