@@ -271,13 +271,13 @@ def test_is_first_affected_same(test_data, expected):
 
 
 BUG_EXTRACTOR_PARAMS = [
-    ([has_str, has_url], [fileref, url]),
-    ([has_str, has_str], [fileref, url]),
-    ([has_str, has_url], [fileref, fileref]),
+    ([has_str(), has_str()], [fileref(), url()]),
+    ([has_str(), has_url()], [fileref(), fileref()]),
 ]
 
 
 @pytest.mark.parametrize("feature_extractors,cleanup_functions", BUG_EXTRACTOR_PARAMS)
 def test_BugExtractor(feature_extractors, cleanup_functions):
+    BugExtractor([has_str(), has_url()], [fileref(), url()])
     with pytest.raises(AssertionError):
         BugExtractor(feature_extractors, cleanup_functions)

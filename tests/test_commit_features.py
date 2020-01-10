@@ -9,8 +9,8 @@ from bugbug.commit_features import CommitExtractor, author_experience, reviewers
 from bugbug.feature_cleanup import fileref, url
 
 COMMIT_EXTRACTOR_PARAMS = [
-    ([author_experience, author_experience], [fileref, url]),
-    ([reviewers_num, author_experience], [fileref, fileref]),
+    ([author_experience(), author_experience()], [fileref(), url()]),
+    ([reviewers_num(), author_experience()], [fileref(), fileref()]),
 ]
 
 
