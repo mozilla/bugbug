@@ -13,5 +13,5 @@ def test_CommitExtractor():
     CommitExtractor([reviewers_num(), author_experience()], [fileref(), url()])
     with pytest.raises(AssertionError):
         CommitExtractor([reviewers_num(), author_experience()], [fileref(), fileref()])
-    with pytest.raises(AssertionError):    
+    with pytest.raises(AssertionError):
         CommitExtractor([author_experience(), author_experience()], [fileref(), url()])
