@@ -9,6 +9,7 @@ import os
 import pytest
 
 from bugbug.bug_features import (
+    BugExtractor,
     blocked_bugs_number,
     bug_reporter,
     comment_count,
@@ -37,6 +38,7 @@ from bugbug.bug_features import (
     severity,
     whiteboard,
 )
+from bugbug.feature_cleanup import fileref, url
 
 
 @pytest.fixture
@@ -266,3 +268,11 @@ FIRST_AFFECTED_PARAMS = [
 @pytest.mark.parametrize("test_data, expected", FIRST_AFFECTED_PARAMS)
 def test_is_first_affected_same(test_data, expected):
     assert is_first_affected_same()(test_data) == expected
+
+
+def test_BugExtractor():
+    BugExtractor([has_str(), has_url()], [fileref(), url()])
+    with pytest.raises(AssertionError):
+        BugExtractor([has_str(), has_str()], [fileref(), url()])
+    with pytest.raises(AssertionError):
+        BugExtractor([has_str(), has_url()], [fileref(), fileref()])
