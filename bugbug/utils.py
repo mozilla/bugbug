@@ -199,12 +199,16 @@ def download_and_load_model(model_name):
     return get_model_class(model_name).load(path)
 
 
-def retrying(operation):
+def retry(operation, retries=5, wait_between_retries=30):
     while True:
         try:
             return operation()
         except Exception:
-            retry(wait=wait_fixed(30), stop=stop_after_attempt(5))
+            retries -= 1
+            if retries == 0:
+                raise
+
+            time.sleep(wait_between_retries)
 
 
 def zstd_compress(path):

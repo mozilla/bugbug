@@ -26,7 +26,7 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import download_and_load_model, retrying, zstd_compress
+from bugbug.utils import download_and_load_model, retry, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -83,13 +83,13 @@ class RegressorFinder(object):
 
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
-            retrying(
+            retry(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 )
             )
 
-        retrying(
+        retry(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
