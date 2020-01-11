@@ -5,8 +5,8 @@ import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
 
+import tenacity
 from microannotate import generator
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from bugbug import db, repository
 from bugbug.utils import ThreadPoolExecutorResult, get_secret
@@ -62,13 +62,12 @@ class MicroannotateGenerator(object):
             else:
                 executor.submit(self.init_git_repo)
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
             ),
-            retry=retry_if_exception_type(Exception),
-            wait=wait_fixed(30),
-            stop=stop_after_attempt(5),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5),
         )
 
         push_args = ["git", "push", repo_push_url, "master"]
@@ -85,11 +84,10 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
-                retry=retry_if_exception_type(Exception),
-                wait=wait_fixed(30),
-                stop=stop_after_attempt(5),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5),
             )
 
     def init_git_repo(self):
@@ -102,27 +100,25 @@ class MicroannotateGenerator(object):
         )
 
     def clone_git_repo(self):
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
             ),
-            retry=retry_if_exception_type(Exception),
-            wait=wait_fixed(30),
-            stop=stop_after_attempt(5),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5),
         )
 
         try:
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(
                     ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
                 ),
-                retry=retry_if_exception_type(Exception),
-                wait=wait_fixed(30),
-                stop=stop_after_attempt(5),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5),
             )
         except subprocess.CalledProcessError as e:
             # When the repo is empty.
