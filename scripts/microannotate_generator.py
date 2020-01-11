@@ -6,10 +6,10 @@ import subprocess
 from logging import INFO, basicConfig, getLogger
 
 from microannotate import generator
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from bugbug import db, repository
 from bugbug.utils import ThreadPoolExecutorResult, get_secret
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
