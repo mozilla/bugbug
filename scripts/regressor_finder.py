@@ -14,11 +14,11 @@ from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import hglib
+import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from microannotate import utils as microannotate_utils
 from pydriller import GitRepository
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
@@ -84,25 +84,23 @@ class RegressorFinder(object):
 
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
-                retry=retry_if_exception_type(Exception),
-                wait=wait_fixed(30),
-                stop=stop_after_attempt(5),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5),
             )
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
             ),
-            retry=retry_if_exception_type(Exception),
-            wait=wait_fixed(30),
-            stop=stop_after_attempt(5),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5),
         )
 
     def init_mapping(self):
