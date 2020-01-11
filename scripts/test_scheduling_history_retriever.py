@@ -97,12 +97,10 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
         zstd_compress("push_data.json")
 
     def generate_test_scheduling_history(self):
-        if not os.path.exists("push_data.json"):
-            download_check_etag(PUSH_DATA_URL)
+        updated = download_check_etag(PUSH_DATA_URL)
+        if updated:
             zstd_decompress("push_data.json")
-            assert os.path.exists(
-                "push_data.json"
-            ), "Decompressed push data file exists"
+        assert os.path.exists("push_data.json"), "Decompressed push data file exists"
 
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
