@@ -18,6 +18,7 @@ class SpamBugModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         self.sampler = RandomUnderSampler(random_state=0)
+        self.calculate_importance = False
 
         feature_extractors = [
             bug_features.has_str(),
