@@ -8,7 +8,8 @@ from logging import INFO, basicConfig, getLogger
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
+from bugbug.utils import ThreadPoolExecutorResult, get_secret
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -81,7 +82,11 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+            retry(
+                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
+                wait=wait_fixed(30),
+                stop=stop_after_attempt(5),
+            )
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
@@ -97,7 +102,9 @@ class MicroannotateGenerator(object):
             lambda: subprocess.run(
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
-            )
+            ),
+            wait=wait_fixed(30),
+            stop=stop_after_attempt(5),
         )
 
         try:
@@ -107,7 +114,9 @@ class MicroannotateGenerator(object):
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
-                )
+                ),
+                wait=wait_fixed(30),
+                stop=stop_after_attempt(5),
             )
         except subprocess.CalledProcessError as e:
             # When the repo is empty.

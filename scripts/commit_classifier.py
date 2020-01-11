@@ -28,10 +28,10 @@ from bugbug.utils import (
     download_and_load_model,
     download_check_etag,
     get_secret,
-    retry,
     to_array,
     zstd_decompress,
 )
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -194,7 +194,9 @@ class CommitClassifier(object):
             retry(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
+                ),
+                wait=wait_fixed(30),
+                stop=stop_after_attempt(5),
             )
 
         retry(
@@ -203,13 +205,17 @@ class CommitClassifier(object):
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
-            )
+            ),
+            wait=wait_fixed(30),
+            stop=stop_after_attempt(5),
         )
 
         retry(
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
-            )
+            ),
+            wait=wait_fixed(30),
+            stop=stop_after_attempt(5),
         )
 
     def update_commit_db(self):
