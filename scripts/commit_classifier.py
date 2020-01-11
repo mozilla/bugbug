@@ -31,7 +31,7 @@ from bugbug.utils import (
     to_array,
     zstd_decompress,
 )
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -195,6 +195,7 @@ class CommitClassifier(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
+                retry=retry_if_exception_type(Exception),
                 wait=wait_fixed(30),
                 stop=stop_after_attempt(5),
             )

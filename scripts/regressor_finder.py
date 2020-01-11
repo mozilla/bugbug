@@ -27,7 +27,7 @@ from bugbug.models.regressor import (
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
 from bugbug.utils import download_and_load_model, zstd_compress
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -88,6 +88,7 @@ class RegressorFinder(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
+                retry=retry_if_exception_type(Exception),
                 wait=wait_fixed(30),
                 stop=stop_after_attempt(5),
             )
@@ -99,6 +100,7 @@ class RegressorFinder(object):
                 capture_output=True,
                 check=True,
             ),
+            retry=retry_if_exception_type(Exception),
             wait=wait_fixed(30),
             stop=stop_after_attempt(5),
         )

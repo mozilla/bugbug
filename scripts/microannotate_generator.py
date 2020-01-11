@@ -9,7 +9,7 @@ from microannotate import generator
 
 from bugbug import db, repository
 from bugbug.utils import ThreadPoolExecutorResult, get_secret
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -65,7 +65,10 @@ class MicroannotateGenerator(object):
         retry(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
-            )
+            ),
+            retry=retry_if_exception_type(Exception),
+            wait=wait_fixed(30),
+            stop=stop_after_attempt(5),
         )
 
         push_args = ["git", "push", repo_push_url, "master"]
@@ -84,6 +87,7 @@ class MicroannotateGenerator(object):
 
             retry(
                 lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
+                retry=retry_if_exception_type(Exception),
                 wait=wait_fixed(30),
                 stop=stop_after_attempt(5),
             )
@@ -103,6 +107,7 @@ class MicroannotateGenerator(object):
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
             ),
+            retry=retry_if_exception_type(Exception),
             wait=wait_fixed(30),
             stop=stop_after_attempt(5),
         )
@@ -115,6 +120,7 @@ class MicroannotateGenerator(object):
                     capture_output=True,
                     check=True,
                 ),
+                retry=retry_if_exception_type(Exception),
                 wait=wait_fixed(30),
                 stop=stop_after_attempt(5),
             )
