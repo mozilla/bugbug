@@ -22,6 +22,7 @@ from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
@@ -31,7 +32,6 @@ from bugbug.utils import (
     to_array,
     zstd_decompress,
 )
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -207,6 +207,7 @@ class CommitClassifier(object):
                 capture_output=True,
                 check=True,
             ),
+            retry=retry_if_exception_type(Exception),
             wait=wait_fixed(30),
             stop=stop_after_attempt(5),
         )
@@ -215,6 +216,7 @@ class CommitClassifier(object):
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
             ),
+            retry=retry_if_exception_type(Exception),
             wait=wait_fixed(30),
             stop=stop_after_attempt(5),
         )
