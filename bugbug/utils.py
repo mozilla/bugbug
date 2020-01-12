@@ -19,10 +19,12 @@ import requests
 import scipy
 import taskcluster
 import zstandard
+from pkg_resources import DistributionNotFound
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
+from bugbug import get_bugbug_version
 from bugbug.models import get_model_class
 
 logging.basicConfig(level=logging.INFO)
@@ -181,7 +183,10 @@ def get_last_modified(url):
 
 
 def download_model(model_name):
-    version = os.getenv("TAG", "latest")
+    try:
+        version = f"v{get_bugbug_version()}"
+    except DistributionNotFound:
+        version = os.getenv("TAG", "latest")
 
     path = f"{model_name}model"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
