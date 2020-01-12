@@ -987,10 +987,10 @@ tasks:
       provisionerId: proj-relman
       workerType: ci
       dependencies:
-        - train-tracking
-        - train-regression
         - train-defectenhancementtask
         - train-component
+        - train-regression
+        - train-stepstoreproduce
         - train-spambug
       payload:
         capabilities:
