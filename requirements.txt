@@ -17,7 +17,7 @@ scikit-learn==0.22.1
 scipy==1.4.1
 shap[plots]==0.33.0
 tabulate==0.8.6
-taskcluster==24.1.2
+taskcluster==24.1.10
 tenacity==6.0.0
 tqdm==4.41.1
 xgboost==0.90
