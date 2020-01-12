@@ -69,7 +69,7 @@
             "queue:route:project.relman.bugbug.test_select.*"
         ],
         "tags": {},
-        "workerType": "compute-large"
+        "workerType": "compute-small"
     },
     "triggerSchema": {
         "additionalProperties": false,
