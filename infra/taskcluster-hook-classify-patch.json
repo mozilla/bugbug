@@ -71,7 +71,7 @@
             "assume:hook-id:project-relman/bugbug-classify-patch"
         ],
         "tags": {},
-        "workerType": "compute-large"
+        "workerType": "compute-small"
     },
     "triggerSchema": {
         "additionalProperties": false,
