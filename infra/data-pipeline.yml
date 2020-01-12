@@ -510,7 +510,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - microannotate-generate-tokenize
