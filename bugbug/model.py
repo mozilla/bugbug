@@ -583,7 +583,7 @@ class Model:
                 explainer = shap.TreeExplainer(
                     self.clf,
                     to_array(background_dataset(pred_class)),
-                    feature_dependence="independent",
+                    feature_perturbation="interventional",
                 )
 
             shap_values = explainer.shap_values(to_array(X))
