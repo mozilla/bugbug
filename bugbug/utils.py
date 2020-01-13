@@ -310,7 +310,7 @@ class ExpQueue:
 
 class LMDBDict:
     def __init__(self, path):
-        self.db = lmdb.open(path, map_size=68_719_476_736, metasync=False, sync=False)
+        self.db = lmdb.open(path, map_size=68719476736, metasync=False, sync=False)
         self.txn = self.db.begin(buffers=True, write=True)
 
     def close(self):
