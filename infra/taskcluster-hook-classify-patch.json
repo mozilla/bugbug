@@ -51,6 +51,7 @@
                 "regressor",
                 "/cache",
                 "${payload['DIFF_ID']}",
+                "${payload['PHABRICATOR_DEPLOYMENT']}",
                 "--git_repo_dir=/gecko-dev",
                 "--method_defect_predictor_dir=/MethodDefectPredictor"
             ],
@@ -76,6 +77,10 @@
     "triggerSchema": {
         "additionalProperties": false,
         "properties": {
+            "PHABRICATOR_DEPLOYMENT": {
+                "type": "string",
+                "enum": ["prod", "dev"]
+            },
             "DIFF_ID": {
                 "type": "number"
             }

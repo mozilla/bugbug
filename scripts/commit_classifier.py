@@ -38,6 +38,8 @@ logger = getLogger(__name__)
 
 URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.latest/artifacts/public/{file_name}"
 PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.past_bugs_by_function.latest/artifacts/public/past_bugs_by_function.pickle.zst"
+PHAB_PROD = "prod"
+PHAB_DEV = "dev"
 
 
 # ------------------------------------------------------------------------------
@@ -224,7 +226,7 @@ class CommitClassifier(object):
 
         repository.download_commits(self.repo_dir, rev_start)
 
-    def apply_phab(self, hg, diff_id):
+    def apply_phab(self, hg, phabricator_deployment, diff_id):
         def has_revision(revision):
             if not revision:
                 return False
@@ -234,9 +236,14 @@ class CommitClassifier(object):
             except hglib.error.CommandError:
                 return False
 
-        phabricator_api = PhabricatorAPI(
-            api_key=get_secret("PHABRICATOR_TOKEN"), url=get_secret("PHABRICATOR_URL")
-        )
+        if phabricator_deployment == PHAB_PROD:
+            api_key = get_secret("PHABRICATOR_TOKEN")
+            url = get_secret("PHABRICATOR_URL")
+        else:
+            api_key = get_secret("PHABRICATOR_DEV_TOKEN")
+            url = get_secret("PHABRICATOR_DEV_URL")
+
+        phabricator_api = PhabricatorAPI(api_key=api_key, url=url)
 
         # Get the stack of patches
         stack = phabricator_api.load_patches_stack(diff_id)
@@ -542,11 +549,11 @@ class CommitClassifier(object):
         with open("importances.json", "w") as f:
             json.dump(features, f)
 
-    def classify(self, diff_id):
+    def classify(self, phabricator_deployment, diff_id):
         self.update_commit_db()
 
         with hglib.open(self.repo_dir) as hg:
-            self.apply_phab(hg, diff_id)
+            self.apply_phab(hg, phabricator_deployment, diff_id)
 
             patch_rev = hg.log(revrange="not public()")[0].node
 
@@ -708,6 +715,13 @@ def main():
     parser.add_argument("model", help="Which model to use for evaluation")
     parser.add_argument("cache_root", help="Cache for repository clones.")
     parser.add_argument("diff_id", help="diff ID to analyze.", type=int)
+    # TODO: The "" choice can be removed when all users have been updated to pass a correct phabricator_deployment.
+    parser.add_argument(
+        "phabricator_deployment",
+        help="Which Phabricator deployment to hit.",
+        type=str,
+        choices=["", PHAB_PROD, PHAB_DEV],
+    )
     parser.add_argument(
         "--git_repo_dir", help="Path where the git repository will be cloned."
     )
@@ -718,10 +732,15 @@ def main():
 
     args = parser.parse_args()
 
+    # TODO: This can be removed when all users have been updated to pass a correct phabricator_deployment.
+    args.phabricator_deployment = (
+        args.phabricator_deployment if args.phabricator_deployment else PHAB_PROD
+    )
+
     classifier = CommitClassifier(
         args.model, args.cache_root, args.git_repo_dir, args.method_defect_predictor_dir
     )
-    classifier.classify(args.diff_id)
+    classifier.classify(args.phabricator_deployment, args.diff_id)
 
 
 if __name__ == "__main__":
