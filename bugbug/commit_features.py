@@ -166,6 +166,13 @@ class source_code_file_metrics(object):
             "Minimum number of operators": commit["minimum_halstead_operators"],
             "Minimum number of source loc": commit["minimum_source_loc"],
             "Minimum number of logical loc": commit["minimum_logical_loc"],
+            "Sum of number of operands": commit["sum_halstead_operands"],
+            "Sum of number of unique operators": commit[
+                "sum_halstead_unique_operators"
+            ],
+            "Sum of number of operators": commit["sum_halstead_operators"],
+            "Sum of number of source loc": commit["sum_source_loc"],
+            "Sum of number of logical loc": commit["sum_logical_loc"],
         }
 
 
