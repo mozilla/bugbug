@@ -590,6 +590,20 @@ def merge_commits(commits):
         ),
         "minimum_source_loc": min(commit["minimum_source_loc"] for commit in commits),
         "minimum_logical_loc": min(commit["minimum_logical_loc"] for commit in commits),
+        "sum_halstead_unique_operands": sum(
+            commit["sum_halstead_unique_operands"] for commit in commits
+        ),
+        "sum_halstead_operands": sum(
+            commit["sum_halstead_operands"] for commit in commits
+        ),
+        "sum_halstead_unique_operators": sum(
+            commit["sum_halstead_unique_operators"] for commit in commits
+        ),
+        "sum_halstead_operators": sum(
+            commit["sum_halstead_operators"] for commit in commits
+        ),
+        "sum_source_loc": sum(commit["sum_source_loc"] for commit in commits),
+        "sum_logical_loc": sum(commit["sum_logical_loc"] for commit in commits),
     }
 
 
