@@ -15,7 +15,7 @@ requests==2.22.0
 rs_parsepatch==0.2.8
 scikit-learn==0.22.1
 scipy==1.4.1
-shap[plots]==0.33.0
+shap[plots]==0.34.0
 tabulate==0.8.6
 taskcluster==24.1.10
 tqdm==4.41.1
