@@ -74,6 +74,7 @@ bug_id,label
 492557,enhancement
 499593,task
 500500,enhancement
+502515,enhancement
 504048,enhancement
 504049,enhancement
 504733,enhancement
@@ -108,6 +109,7 @@ bug_id,label
 598468,enhancement
 598587,enhancement
 599611,enhancement
+601933,task
 605748,enhancement
 610380,enhancement
 616605,enhancement
@@ -131,6 +133,7 @@ bug_id,label
 669070,enhancement
 670457,task
 670898,enhancement
+672395,task
 674292,task
 674371,enhancement
 674925,enhancement
@@ -146,11 +149,13 @@ bug_id,label
 693483,enhancement
 694304,enhancement
 696472,enhancement
+698783,task
 698841,task
 699785,task
 702845,enhancement
 703217,enhancement
 704252,enhancement
+707106,task
 710285,enhancement
 710890,task
 710966,task
@@ -166,6 +171,7 @@ bug_id,label
 721859,task
 724052,enhancement
 724963,enhancement
+725646,task
 726433,task
 727420,enhancement
 731892,task
@@ -177,6 +183,7 @@ bug_id,label
 737804,enhancement
 738799,enhancement
 738970,enhancement
+740284,task
 741393,enhancement
 741643,enhancement
 742634,enhancement
@@ -194,7 +201,9 @@ bug_id,label
 765723,enhancement
 766458,enhancement
 766599,enhancement
+769207,task
 769733,enhancement
+770560,task
 771339,enhancement
 771597,task
 772154,enhancement
@@ -271,6 +280,7 @@ bug_id,label
 840640,enhancement
 842423,enhancement
 842937,enhancement
+845245,task
 846323,enhancement
 847184,task
 847376,enhancement
@@ -281,6 +291,7 @@ bug_id,label
 852130,enhancement
 852259,enhancement
 853978,enhancement
+854884,task
 856337,enhancement
 859040,enhancement
 859371,enhancement
@@ -312,6 +323,7 @@ bug_id,label
 876655,enhancement
 877321,enhancement
 878048,enhancement
+878155,task
 879155,enhancement
 881048,enhancement
 882297,enhancement
@@ -442,12 +454,15 @@ bug_id,label
 978570,task
 979423,task
 979811,enhancement
+979846,enhancement
 980150,task
 980442,enhancement
 980749,enhancement
 980892,enhancement
 982738,enhancement
 982970,enhancement
+983090,task
+984461,task
 984617,task
 984748,enhancement
 985051,enhancement
@@ -502,6 +517,7 @@ bug_id,label
 1021376,enhancement
 1021795,defect
 1021925,enhancement
+1024312,task
 1025129,enhancement
 1025493,enhancement
 1026871,enhancement
@@ -520,6 +536,7 @@ bug_id,label
 1040250,enhancement
 1042606,enhancement
 1043825,enhancement
+1044407,task
 1044552,enhancement
 1045385,enhancement
 1045562,enhancement
@@ -562,6 +579,7 @@ bug_id,label
 1074114,defect
 1074182,task
 1074210,enhancement
+1074244,enhancement
 1074351,enhancement
 1074448,task
 1074488,task
@@ -605,6 +623,8 @@ bug_id,label
 1098647,enhancement
 1098939,enhancement
 1099455,task
+1102584,task
+1103158,task
 1105570,enhancement
 1105633,enhancement
 1105868,enhancement
@@ -632,6 +652,7 @@ bug_id,label
 1119514,task
 1119554,task
 1119558,enhancement
+1119718,task
 1119864,enhancement
 1119948,enhancement
 1120223,enhancement
@@ -663,6 +684,7 @@ bug_id,label
 1132061,enhancement
 1132065,enhancement
 1133170,enhancement
+1133174,task
 1133414,enhancement
 1134512,enhancement
 1134760,enhancement
@@ -717,12 +739,13 @@ bug_id,label
 1161404,enhancement
 1161828,enhancement
 1162777,task
-1163631,defect
+1163631,task
 1164003,defect
 1164187,enhancement
 1164213,enhancement
 1164839,task
 1165211,task
+1165213,task
 1166208,enhancement
 1167051,enhancement
 1167556,enhancement
@@ -746,6 +769,7 @@ bug_id,label
 1171927,enhancement
 1172394,task
 1173873,enhancement
+1174097,task
 1175203,task
 1175472,enhancement
 1175958,enhancement
@@ -773,6 +797,7 @@ bug_id,label
 1187958,task
 1188199,enhancement
 1188202,task
+1188277,task
 1188411,task
 1188428,task
 1188660,enhancement
@@ -826,6 +851,7 @@ bug_id,label
 1208858,enhancement
 1209335,enhancement
 1209353,task
+1209829,task
 1210094,task
 1210726,task
 1210727,enhancement
@@ -868,6 +894,7 @@ bug_id,label
 1225720,task
 1225902,enhancement
 1226021,enhancement
+1226116,task
 1226173,enhancement
 1226285,enhancement
 1226362,task
@@ -877,7 +904,9 @@ bug_id,label
 1226914,enhancement
 1226983,enhancement
 1227521,task
+1227524,task
 1228662,enhancement
+1228850,task
 1229092,task
 1229173,enhancement
 1229464,task
@@ -903,6 +932,7 @@ bug_id,label
 1235983,enhancement
 1236652,task
 1236928,enhancement
+1237059,task
 1237148,enhancement
 1237178,enhancement
 1237180,enhancement
@@ -928,6 +958,7 @@ bug_id,label
 1241283,task
 1241290,task
 1241291,task
+1241543,task
 1241885,task
 1241904,enhancement
 1241961,enhancement
@@ -956,6 +987,7 @@ bug_id,label
 1247720,task
 1248611,enhancement
 1248631,task
+1249225,task
 1251795,enhancement
 1252010,enhancement
 1252277,enhancement
@@ -969,6 +1001,7 @@ bug_id,label
 1253773,enhancement
 1254240,enhancement
 1254428,enhancement
+1254928,task
 1254929,task
 1256578,task
 1257155,enhancement
@@ -978,6 +1011,7 @@ bug_id,label
 1258845,task
 1260287,enhancement
 1260291,enhancement
+1260720,task
 1260877,enhancement
 1260900,task
 1261339,enhancement
@@ -987,6 +1021,7 @@ bug_id,label
 1262859,task
 1262944,defect
 1263487,enhancement
+1264175,task
 1264180,enhancement
 1264543,enhancement
 1264667,task
@@ -1013,6 +1048,7 @@ bug_id,label
 1271476,enhancement
 1271553,enhancement
 1271851,task
+1272136,task
 1272193,defect
 1272409,enhancement
 1272458,enhancement
@@ -1035,6 +1071,7 @@ bug_id,label
 1276214,enhancement
 1276335,enhancement
 1276381,task
+1276576,task
 1276711,enhancement
 1276712,enhancement
 1276715,enhancement
@@ -1053,8 +1090,10 @@ bug_id,label
 1279600,enhancement
 1279789,task
 1279790,task
+1279936,task
 1280315,enhancement
 1280368,task
+1280414,enhancement
 1280552,task
 1280893,enhancement
 1281057,enhancement
@@ -1073,6 +1112,7 @@ bug_id,label
 1283322,task
 1283388,enhancement
 1283819,task
+1284103,enhancement
 1284106,enhancement
 1284245,defect
 1284380,enhancement
@@ -1093,7 +1133,9 @@ bug_id,label
 1286665,task
 1286727,enhancement
 1286748,enhancement
+1286822,task
 1286912,task
+1286953,enhancement
 1287672,enhancement
 1287683,task
 1287750,task
@@ -1105,8 +1147,10 @@ bug_id,label
 1289540,task
 1289716,task
 1289886,task
+1289905,enhancement
 1290223,enhancement
 1290643,task
+1290936,task
 1290958,enhancement
 1291419,enhancement
 1291467,enhancement
@@ -1122,6 +1166,8 @@ bug_id,label
 1293594,enhancement
 1293800,enhancement
 1294313,enhancement
+1294360,task
+1294362,task
 1294490,enhancement
 1294514,enhancement
 1294771,task
@@ -1132,8 +1178,10 @@ bug_id,label
 1296313,enhancement
 1296388,enhancement
 1296390,enhancement
+1296400,task
 1298867,enhancement
 1298871,enhancement
+1299271,task
 1299398,enhancement
 1299435,enhancement
 1299870,enhancement
@@ -1147,6 +1195,7 @@ bug_id,label
 1300023,task
 1300024,enhancement
 1300455,enhancement
+1300896,task
 1300934,enhancement
 1301170,task
 1301174,task
@@ -1157,7 +1206,7 @@ bug_id,label
 1302392,task
 1302627,enhancement
 1302685,enhancement
-1302693,enhancement
+1302693,task
 1302705,enhancement
 1302722,enhancement
 1303097,task
@@ -1191,12 +1240,14 @@ bug_id,label
 1306684,task
 1307191,enhancement
 1307227,enhancement
+1307628,task
 1307765,enhancement
 1307876,task
 1307902,task
 1307916,task
 1307935,task
 1308216,task
+1308512,task
 1308550,enhancement
 1308975,enhancement
 1309329,task
@@ -1209,6 +1260,8 @@ bug_id,label
 1310716,task
 1310752,task
 1310831,enhancement
+1311726,task
+1311728,task
 1311790,enhancement
 1311797,task
 1311800,task
@@ -1284,6 +1337,7 @@ bug_id,label
 1322254,task
 1322426,task
 1322515,enhancement
+1322517,task
 1322663,enhancement
 1322708,enhancement
 1322944,enhancement
@@ -1305,6 +1359,7 @@ bug_id,label
 1324552,enhancement
 1324902,task
 1325023,task
+1325110,task
 1325169,enhancement
 1325637,task
 1325772,enhancement
@@ -1343,6 +1398,7 @@ bug_id,label
 1330608,task
 1330635,enhancement
 1330638,task
+1330888,task
 1330948,enhancement
 1331130,task
 1331138,task
@@ -1374,7 +1430,11 @@ bug_id,label
 1336058,task
 1336208,enhancement
 1336227,enhancement
+1336399,task
 1336401,task
+1336402,task
+1336403,task
+1336404,task
 1336676,enhancement
 1336678,enhancement
 1336917,task
@@ -1383,6 +1443,7 @@ bug_id,label
 1337241,task
 1337278,enhancement
 1337383,task
+1337435,enhancement
 1337723,enhancement
 1337868,task
 1338012,enhancement
@@ -1443,9 +1504,11 @@ bug_id,label
 1353270,task
 1353524,enhancement
 1353729,enhancement
+1354500,task
 1355245,task
 1355476,task
 1355507,enhancement
+1355683,task
 1355767,enhancement
 1355941,task
 1355956,enhancement
@@ -1490,6 +1553,7 @@ bug_id,label
 1367146,task
 1367170,defect
 1367514,task
+1367562,task
 1367719,task
 1368580,defect
 1368591,task
@@ -1506,6 +1570,7 @@ bug_id,label
 1371687,task
 1372033,enhancement
 1372181,enhancement
+1372276,task
 1372631,enhancement
 1373089,enhancement
 1376453,enhancement
@@ -1514,6 +1579,7 @@ bug_id,label
 1376646,enhancement
 1378651,enhancement
 1378836,enhancement
+1379050,task
 1379334,defect
 1379338,task
 1380336,defect
@@ -1540,6 +1606,8 @@ bug_id,label
 1388371,defect
 1388619,enhancement
 1388658,defect
+1388910,task
+1388931,task
 1389818,task
 1389892,enhancement
 1390112,enhancement
@@ -1591,6 +1659,7 @@ bug_id,label
 1407215,task
 1407262,defect
 1408102,task
+1409200,task
 1409569,task
 1410430,task
 1410540,task
@@ -1711,6 +1780,7 @@ bug_id,label
 1427922,task
 1427937,enhancement
 1428194,task
+1428302,task
 1428555,task
 1428647,task
 1428690,defect
@@ -1771,6 +1841,7 @@ bug_id,label
 1437246,enhancement
 1437247,task
 1437359,defect
+1437399,task
 1437469,task
 1437493,task
 1437512,task
@@ -1782,6 +1853,7 @@ bug_id,label
 1438107,enhancement
 1438475,defect
 1438713,enhancement
+1438788,task
 1438872,task
 1439369,task
 1439379,defect
@@ -1793,6 +1865,7 @@ bug_id,label
 1439852,defect
 1440014,enhancement
 1440146,task
+1440253,task
 1440275,task
 1440383,task
 1440391,task
@@ -1869,6 +1942,7 @@ bug_id,label
 1446804,defect
 1446830,task
 1446961,task
+1448045,task
 1448046,task
 1448126,task
 1448213,task
@@ -1878,6 +1952,7 @@ bug_id,label
 1448807,task
 1448919,task
 1448949,defect
+1449753,task
 1449785,defect
 1449797,task
 1449979,task
@@ -1918,6 +1993,7 @@ bug_id,label
 1452624,task
 1452626,task
 1452731,defect
+1453013,task
 1453040,defect
 1453281,task
 1453473,enhancement
@@ -1939,6 +2015,7 @@ bug_id,label
 1456290,task
 1456358,task
 1456405,task
+1456410,defect
 1456467,enhancement
 1456469,enhancement
 1456611,task
@@ -2042,6 +2119,7 @@ bug_id,label
 1470264,enhancement
 1470298,defect
 1470301,defect
+1470304,defect
 1470369,enhancement
 1470661,task
 1470702,enhancement
@@ -2272,6 +2350,7 @@ bug_id,label
 1491758,task
 1491850,defect
 1492003,task
+1492005,task
 1492046,task
 1492326,task
 1492378,enhancement
@@ -2338,7 +2417,10 @@ bug_id,label
 1495808,task
 1495810,task
 1495861,task
+1495868,task
 1496035,defect
+1496047,task
+1496065,task
 1496242,task
 1496267,defect
 1496367,enhancement
@@ -2391,6 +2473,7 @@ bug_id,label
 1499448,enhancement
 1499476,task
 1499515,defect
+1499547,task
 1499592,enhancement
 1499674,defect
 1499697,task
@@ -2408,6 +2491,7 @@ bug_id,label
 1500201,task
 1500260,task
 1500268,task
+1500343,task
 1500347,task
 1500424,task
 1500464,enhancement
@@ -2417,12 +2501,14 @@ bug_id,label
 1500626,task
 1500631,task
 1500716,task
+1500782,task
 1500846,task
 1500887,task
 1501223,enhancement
 1501236,task
 1501252,task
 1501309,task
+1501311,defect
 1501360,task
 1501560,task
 1501589,task
@@ -2458,6 +2544,7 @@ bug_id,label
 1503591,enhancement
 1503654,task
 1503735,task
+1503753,task
 1503824,task
 1503826,task
 1503827,task
@@ -2474,6 +2561,7 @@ bug_id,label
 1504644,task
 1504981,task
 1504986,task
+1505265,task
 1505282,enhancement
 1505288,task
 1505291,task
@@ -2496,6 +2584,7 @@ bug_id,label
 1506265,task
 1506355,task
 1506391,task
+1506392,task
 1506411,task
 1506465,task
 1506529,task
@@ -2512,6 +2601,8 @@ bug_id,label
 1507272,task
 1507282,task
 1507287,task
+1507375,task
+1507381,task
 1507466,task
 1507666,defect
 1507704,task
@@ -2715,6 +2806,7 @@ bug_id,label
 1518164,task
 1518185,task
 1518233,task
+1518234,task
 1518291,task
 1518305,task
 1518408,task
@@ -2814,6 +2906,7 @@ bug_id,label
 1521666,defect
 1521671,task
 1521698,defect
+1521792,task
 1521847,task
 1521883,task
 1521954,task
@@ -2856,6 +2949,7 @@ bug_id,label
 1523109,task
 1523137,defect
 1523172,defect
+1523179,enhancement
 1523276,task
 1523303,defect
 1523321,enhancement
@@ -2870,6 +2964,7 @@ bug_id,label
 1523714,task
 1523718,task
 1523722,task
+1523736,task
 1523755,task
 1523814,enhancement
 1523865,task
@@ -3039,6 +3134,7 @@ bug_id,label
 1529330,task
 1529365,task
 1529406,task
+1529424,task
 1529505,task
 1529509,task
 1529532,task
@@ -3100,6 +3196,7 @@ bug_id,label
 1531060,defect
 1531065,task
 1531092,task
+1531166,enhancement
 1531214,enhancement
 1531225,defect
 1531254,task
@@ -3120,6 +3217,7 @@ bug_id,label
 1531741,task
 1531782,defect
 1531786,enhancement
+1531812,task
 1531834,task
 1531858,task
 1531870,task
@@ -3189,6 +3287,7 @@ bug_id,label
 1534081,enhancement
 1534103,task
 1534163,task
+1534199,task
 1534249,task
 1534280,enhancement
 1534292,enhancement
@@ -3323,9 +3422,11 @@ bug_id,label
 1536893,task
 1536902,enhancement
 1536935,task
+1537534,defect
 1537561,enhancement
 1537729,task
 1537753,task
+1537766,task
 1537881,task
 1537895,task
 1537902,task
@@ -4437,6 +4538,7 @@ bug_id,label
 1544143,enhancement
 1544149,enhancement
 1544172,task
+1544177,defect
 1544189,task
 1544204,task
 1544205,task
@@ -4447,7 +4549,7 @@ bug_id,label
 1544222,enhancement
 1544226,enhancement
 1544232,task
-1544233,task
+1544233,defect
 1544246,defect
 1544257,enhancement
 1544268,task
@@ -4943,6 +5045,7 @@ bug_id,label
 1545928,enhancement
 1545939,enhancement
 1545941,task
+1545945,enhancement
 1545950,enhancement
 1545960,enhancement
 1545962,task
@@ -5785,7 +5888,7 @@ bug_id,label
 1548467,enhancement
 1548468,task
 1548469,enhancement
-1548471,enhancement
+1548471,task
 1548472,enhancement
 1548473,task
 1548474,task
@@ -6441,6 +6544,7 @@ bug_id,label
 1550537,task
 1550538,task
 1550542,enhancement
+1550547,task
 1550549,task
 1550550,task
 1550551,task
@@ -6834,6 +6938,7 @@ bug_id,label
 1551773,enhancement
 1551779,task
 1551782,task
+1551788,defect
 1551789,enhancement
 1551792,task
 1551795,task
@@ -8275,7 +8380,7 @@ bug_id,label
 1556217,task
 1556219,task
 1556222,enhancement
-1556223,enhancement
+1556223,task
 1556228,task
 1556229,task
 1556238,enhancement
@@ -10007,6 +10112,7 @@ bug_id,label
 1561854,task
 1561859,enhancement
 1561860,enhancement
+1561863,task
 1561866,task
 1561873,enhancement
 1561876,task
@@ -11873,6 +11979,7 @@ bug_id,label
 1568779,task
 1568806,defect
 1568818,enhancement
+1568831,task
 1568886,task
 1568893,defect
 1568932,task
@@ -12090,6 +12197,7 @@ bug_id,label
 1574435,defect
 1574447,enhancement
 1574472,defect
+1574475,task
 1574487,task
 1574489,task
 1574565,task
@@ -12195,6 +12303,7 @@ bug_id,label
 1579312,defect
 1579321,task
 1579322,defect
+1579386,defect
 1579411,enhancement
 1579454,task
 1579479,defect
@@ -12217,6 +12326,7 @@ bug_id,label
 1579974,enhancement
 1579990,task
 1580103,defect
+1580122,defect
 1580127,defect
 1580225,enhancement
 1580393,task
@@ -12249,6 +12359,7 @@ bug_id,label
 1581681,enhancement
 1581703,task
 1581704,task
+1581729,task
 1581753,defect
 1581799,defect
 1581938,enhancement
@@ -12264,6 +12375,7 @@ bug_id,label
 1582517,task
 1582535,enhancement
 1582582,enhancement
+1582602,defect
 1582686,enhancement
 1582714,task
 1582716,enhancement
@@ -12327,6 +12439,7 @@ bug_id,label
 1585592,task
 1585593,task
 1585595,enhancement
+1585620,enhancement
 1585637,enhancement
 1585646,enhancement
 1585650,enhancement
@@ -12439,6 +12552,7 @@ bug_id,label
 1589383,task
 1589399,task
 1589422,task
+1589429,defect
 1589500,enhancement
 1589509,enhancement
 1589554,enhancement
@@ -12466,6 +12580,7 @@ bug_id,label
 1590723,task
 1590750,defect
 1590754,defect
+1590765,task
 1590786,task
 1590810,task
 1590854,enhancement
@@ -12478,6 +12593,7 @@ bug_id,label
 1591184,enhancement
 1591205,enhancement
 1591218,enhancement
+1591230,task
 1591263,defect
 1591276,defect
 1591302,enhancement
@@ -12560,6 +12676,8 @@ bug_id,label
 1594559,task
 1594566,task
 1594605,enhancement
+1594726,enhancement
+1594728,enhancement
 1594766,task
 1594785,defect
 1594815,enhancement
@@ -12567,6 +12685,7 @@ bug_id,label
 1595098,task
 1595113,task
 1595133,task
+1595142,enhancement
 1595151,enhancement
 1595155,defect
 1595302,defect
@@ -12637,6 +12756,7 @@ bug_id,label
 1597285,defect
 1597330,enhancement
 1597334,enhancement
+1597516,enhancement
 1597611,enhancement
 1597625,enhancement
 1597642,enhancement
@@ -12662,6 +12782,7 @@ bug_id,label
 1598277,task
 1598291,enhancement
 1598299,enhancement
+1598309,defect
 1598319,task
 1598348,task
 1598390,task
@@ -12714,6 +12835,7 @@ bug_id,label
 1599653,defect
 1599713,defect
 1599739,enhancement
+1599775,task
 1599779,enhancement
 1599788,task
 1599910,enhancement
@@ -12729,6 +12851,7 @@ bug_id,label
 1600301,task
 1600303,enhancement
 1600358,enhancement
+1600365,defect
 1600399,task
 1600443,task
 1600456,task
@@ -12759,6 +12882,7 @@ bug_id,label
 1601330,enhancement
 1601342,defect
 1601349,task
+1601366,enhancement
 1601376,task
 1601391,task
 1601408,enhancement
@@ -12790,6 +12914,8 @@ bug_id,label
 1602401,task
 1602414,task
 1602415,task
+1602434,enhancement
+1602454,enhancement
 1602464,defect
 1602619,task
 1602653,enhancement
@@ -12806,6 +12932,7 @@ bug_id,label
 1602830,enhancement
 1602865,enhancement
 1602892,defect
+1602968,enhancement
 1602999,task
 1603071,enhancement
 1603080,enhancement
@@ -12813,6 +12940,7 @@ bug_id,label
 1603143,defect
 1603187,task
 1603194,task
+1603200,enhancement
 1603231,defect
 1603267,task
 1603308,enhancement
@@ -12825,6 +12953,8 @@ bug_id,label
 1603782,task
 1603851,enhancement
 1603904,enhancement
+1603929,defect
+1603988,defect
 1604037,enhancement
 1604063,task
 1604113,defect
@@ -12832,6 +12962,75 @@ bug_id,label
 1604125,task
 1604176,defect
 1604317,enhancement
+1604349,defect
+1604353,enhancement
+1604397,task
 1604451,defect
 1604480,enhancement
 1604501,task
+1604581,task
+1604642,enhancement
+1604646,enhancement
+1604855,task
+1604860,task
+1604924,enhancement
+1605013,task
+1605016,task
+1605019,task
+1605060,enhancement
+1605063,defect
+1605106,defect
+1605140,enhancement
+1605244,task
+1605377,task
+1605491,enhancement
+1605500,defect
+1605512,task
+1605599,enhancement
+1605750,enhancement
+1605823,task
+1605825,defect
+1605838,defect
+1605908,enhancement
+1605965,defect
+1605983,defect
+1606036,enhancement
+1606038,enhancement
+1606100,defect
+1606197,enhancement
+1606306,defect
+1606369,enhancement
+1606379,task
+1606383,enhancement
+1606450,defect
+1606486,enhancement
+1606528,enhancement
+1606554,defect
+1606578,enhancement
+1606620,task
+1606710,enhancement
+1606762,enhancement
+1606811,task
+1606832,enhancement
+1606847,enhancement
+1606957,task
+1607026,enhancement
+1607241,defect
+1607380,defect
+1607392,defect
+1607403,enhancement
+1607406,enhancement
+1607483,enhancement
+1607591,enhancement
+1607596,enhancement
+1607673,task
+1607771,enhancement
+1607832,enhancement
+1608079,defect
+1608154,enhancement
+1608202,task
+1608230,defect
+1608359,enhancement
+1608361,enhancement
+1608467,task
+1608663,enhancement
