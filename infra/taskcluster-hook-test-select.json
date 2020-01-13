@@ -15,6 +15,7 @@
             "$fromNow": "1 month"
         },
         "extra": {
+            "phabricator-deployment": "${payload['PHABRICATOR_DEPLOYMENT']}",
             "phabricator-diff-id": "${payload['DIFF_ID']}"
         },
         "metadata": {
@@ -48,7 +49,8 @@
                 "bugbug-classify-commit",
                 "testselect",
                 "/cache",
-                "${payload['DIFF_ID']}"
+                "${payload['DIFF_ID']}",
+                "${payload['PHABRICATOR_DEPLOYMENT']}"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
@@ -74,6 +76,10 @@
     "triggerSchema": {
         "additionalProperties": false,
         "properties": {
+            "PHABRICATOR_DEPLOYMENT": {
+                "type": "string",
+                "enum": ["prod", "dev"]
+            },
             "DIFF_ID": {
                 "type": "number"
             }
