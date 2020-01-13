@@ -166,13 +166,13 @@ class source_code_file_metrics(object):
             "Minimum number of operators": commit["minimum_halstead_operators"],
             "Minimum number of source loc": commit["minimum_source_loc"],
             "Minimum number of logical loc": commit["minimum_logical_loc"],
-            "Sum of number of operands": commit["sum_halstead_operands"],
-            "Sum of number of unique operators": commit[
-                "sum_halstead_unique_operators"
+            "Total of number of operands": commit["total_halstead_operands"],
+            "Total of number of unique operators": commit[
+                "total_halstead_unique_operators"
             ],
-            "Sum of number of operators": commit["sum_halstead_operators"],
-            "Sum of number of source loc": commit["sum_source_loc"],
-            "Sum of number of logical loc": commit["sum_logical_loc"],
+            "Total of number of operators": commit["total_halstead_operators"],
+            "Total of number of source loc": commit["total_source_loc"],
+            "Total of number of logical loc": commit["total_logical_loc"],
         }
 
 
@@ -590,20 +590,20 @@ def merge_commits(commits):
         ),
         "minimum_source_loc": min(commit["minimum_source_loc"] for commit in commits),
         "minimum_logical_loc": min(commit["minimum_logical_loc"] for commit in commits),
-        "sum_halstead_unique_operands": sum(
-            commit["sum_halstead_unique_operands"] for commit in commits
+        "total_halstead_unique_operands": sum(
+            commit["total_halstead_unique_operands"] for commit in commits
         ),
-        "sum_halstead_operands": sum(
-            commit["sum_halstead_operands"] for commit in commits
+        "total_halstead_operands": sum(
+            commit["total_halstead_operands"] for commit in commits
         ),
-        "sum_halstead_unique_operators": sum(
-            commit["sum_halstead_unique_operators"] for commit in commits
+        "total_halstead_unique_operators": sum(
+            commit["total_halstead_unique_operators"] for commit in commits
         ),
-        "sum_halstead_operators": sum(
-            commit["sum_halstead_operators"] for commit in commits
+        "total_halstead_operators": sum(
+            commit["total_halstead_operators"] for commit in commits
         ),
-        "sum_source_loc": sum(commit["sum_source_loc"] for commit in commits),
-        "sum_logical_loc": sum(commit["sum_logical_loc"] for commit in commits),
+        "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
+        "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
     }
 
 
