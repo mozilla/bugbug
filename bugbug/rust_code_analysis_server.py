@@ -45,7 +45,7 @@ class RustCodeAnalysisServer:
 
         try:
             self.proc = subprocess.Popen(
-                ["rust-code-analysis", "--serve", "--port", str(self.port),]
+                ["rust-code-analysis", "--serve", "--port", str(self.port)]
             )
         except FileNotFoundError:
             raise Exception("rust-code-analysis is required for code analysis")
@@ -65,6 +65,10 @@ class RustCodeAnalysisServer:
             return False
 
     def metrics(self, filename, code, unit=True):
+        """
+        When unit is True, then only metrics for top-level is returned,
+        when False, then we get detailed metrics for all classes, functions, nested functions, ...
+        """
         unit = 1 if unit else 0
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"
         r = requests.post(url, data=code, headers=HEADERS)
