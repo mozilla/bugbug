@@ -170,9 +170,9 @@ class source_code_file_metrics(object):
             "Total of number of unique operators": commit[
                 "total_halstead_unique_operators"
             ],
-            "Total of number of operators": commit["total_halstead_operators"],
-            "Total of number of source loc": commit["total_source_loc"],
-            "Total of number of logical loc": commit["total_logical_loc"],
+            "Total number of operators": commit["total_halstead_operators"],
+            "Total number of source loc": commit["total_source_loc"],
+            "Total number of logical loc": commit["total_logical_loc"],
         }
 
 
