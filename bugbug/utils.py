@@ -28,6 +28,8 @@ from sklearn.preprocessing import OrdinalEncoder
 from bugbug import get_bugbug_version
 from bugbug.models import get_model_class
 
+from tenacity import *
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -204,16 +206,13 @@ def download_and_load_model(model_name):
     return get_model_class(model_name).load(path)
 
 
-def retry(operation, retries=5, wait_between_retries=30):
-    while True:
-        try:
-            return operation()
-        except Exception:
-            retries -= 1
-            if retries == 0:
-                raise
 
-            time.sleep(wait_between_retries)
+@retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+def retry_for(operation):
+    try:
+        return operation()
+    except Exception:
+        raise
 
 
 def zstd_compress(path):
@@ -282,7 +281,7 @@ class ExpQueue:
 
     def __getitem__(self, day):
         assert (
-            day >= self.start_day
+                day >= self.start_day
         ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
 
         if day < 0:

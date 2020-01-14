@@ -28,7 +28,7 @@ from bugbug.utils import (
     download_and_load_model,
     download_check_etag,
     get_secret,
-    retry,
+    retry_for,
     to_array,
     zstd_decompress,
 )
@@ -193,13 +193,13 @@ class CommitClassifier(object):
         logger.info(f"Cloning {repo_url}...")
 
         if not os.path.exists(repo_dir):
-            retry(
+            retry_for(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 )
             )
 
-        retry(
+        retry_for(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
@@ -208,7 +208,7 @@ class CommitClassifier(object):
             )
         )
 
-        retry(
+        retry_for(
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
             )
