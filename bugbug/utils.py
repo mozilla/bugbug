@@ -144,6 +144,73 @@ def get_secret(secret_id):
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
+def upload_artifacts():
+    task_id = os.environ.get("TASK_ID")
+    if task_id is None:
+        return
+
+    run_id = os.environ["RUN_ID"]
+
+    # Get details about myself.
+    queue = taskcluster.Queue(get_taskcluster_options())
+    task = queue.task(task_id)
+
+    artifacts = task["payload"].get("artifacts")
+    if artifacts is None:
+        return
+
+    for artifact_name, artifact_data in artifacts.items():
+        assert artifact_data["type"] == "file", "Only 'file' type is supported"
+
+        expires = (
+            artifact_data["expires"] if "expires" in artifact_data else task["expires"]
+        )
+
+        if artifact_name.endswith(".json"):
+            content_type = "application/json"
+        else:
+            content_type = "application/octet-stream"
+
+        resp = queue.createArtifact(
+            task_id,
+            run_id,
+            artifact_name,
+            {"storageType": "s3", "expires": expires, "contentType": content_type},
+        )
+        assert resp["storageType"] == "s3", "Not a s3 storage"
+        assert "putUrl" in resp, "Missing putUrl"
+        assert "contentType" in resp, "Missing contentType"
+
+        headers = {"Content-Type": resp["contentType"]}
+        with open(artifact_data["path"], "r") as f:
+            push = requests.put(url=resp["putUrl"], headers=headers, data=f.read())
+            push.raise_for_status()
+
+
+def index_task():
+    task_id = os.environ.get("TASK_ID")
+    if task_id is None:
+        return
+
+    # Get details about myself.
+    queue = taskcluster.Queue(get_taskcluster_options())
+    task = queue.task(task_id)
+
+    # Get the routes on which I will be indexed.
+    namespaces = [
+        route[len("index.") :] for route in task["routes"] if route.startswith("index.")
+    ]
+
+    # Index myself.
+    index = taskcluster.Index(get_taskcluster_options())
+
+    for namespace in namespaces:
+        index.insertTask(
+            namespace,
+            {"taskId": task_id, "rank": 0, "data": {}, "expires": task["expires"],},
+        )
+
+
 def download_check_etag(url, path=None):
     r = requests.head(url, allow_redirects=True)
 

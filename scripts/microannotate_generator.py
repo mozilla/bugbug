@@ -8,7 +8,13 @@ from logging import INFO, basicConfig, getLogger
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
+from bugbug.utils import (
+    ThreadPoolExecutorResult,
+    get_secret,
+    index_task,
+    retry,
+    upload_artifacts,
+)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -82,6 +88,11 @@ class MicroannotateGenerator(object):
             )
 
             retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+
+            # Upload artifacts and index task "manually". If we don't finish in time, we
+            # don't want the next run to start from scratch.
+            upload_artifacts()
+            index_task()
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
