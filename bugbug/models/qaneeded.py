@@ -81,7 +81,8 @@ class QANeededModel(BugModel):
 
         found_qa = False
         if any(
-            bug_data["keywords"].startswith(label)
+            keyword.startswith(label)
+            for keyword in bug_data["keywords"]
             for label in ["qawanted", "qe-verify", "qaurgent"]
         ):
             classes[bug_id] = 1
