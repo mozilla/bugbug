@@ -95,8 +95,8 @@ class QANeededModel(BugModel):
                             for label in ["qawanted", "qe-verify", "qaurgent"]
                         ):
                             classes[bug_id] = 1
-                if bug_id not in classes:
-                    classes[bug_id] = 0
+            if bug_id not in classes:
+                classes[bug_id] = 0
 
         return classes, [0, 1]
 
