@@ -79,13 +79,23 @@ class QANeededModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            for entry in bug_data["history"]:
-                for change in entry["changes"]:
-                    if any(
-                        change["added"].startswith(label)
-                        for label in ["qawanted", "qe-verify", "qaurgent"]
-                    ):
-                        classes[bug_id] = 1
+            found_qa = False
+            if any(
+                keyword.startswith(label)
+                for keyword in bug_data["keywords"]
+                for label in ["qawanted", "qe-verify", "qaurgent"]
+            ):
+                classes[bug_id] = 1
+                found_qa = True
+
+            if not found_qa:
+                for entry in bug_data["history"]:
+                    for change in entry["changes"]:
+                        if any(
+                            change["added"].startswith(label)
+                            for label in ["qawanted", "qe-verify", "qaurgent"]
+                        ):
+                            classes[bug_id] = 1
             if bug_id not in classes:
                 classes[bug_id] = 0
 
