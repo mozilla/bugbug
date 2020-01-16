@@ -8,7 +8,9 @@ from logging import INFO, basicConfig, getLogger
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
+from bugbug.utils import ThreadPoolExecutorResult, get_secret
+
+from tenacity import *
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -61,11 +63,15 @@ class MicroannotateGenerator(object):
             else:
                 executor.submit(self.init_git_repo)
 
-        retry(
-            lambda: subprocess.run(
-                ["git", "config", "--global", "http.postBuffer", "12M"], check=True
-            )
-        )
+        @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+        def unreliable():
+            try:
+                lambda: subprocess.run(
+                    ["git", "config", "--global", "http.postBuffer", "12M"], check=True
+                )
+            except Exception:
+                raise
+        unreliable()
 
         push_args = ["git", "push", repo_push_url, "master"]
         if is_old_version:
@@ -81,7 +87,13 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+            @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+            def unreliable():
+                try:
+                    lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True)
+                except Exception:
+                    raise
+            unreliable()
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
@@ -93,22 +105,31 @@ class MicroannotateGenerator(object):
         )
 
     def clone_git_repo(self):
-        retry(
-            lambda: subprocess.run(
-                ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
-                check=True,
-            )
-        )
-
-        try:
-            retry(
+        @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+        def unreliable():
+            try:
                 lambda: subprocess.run(
-                    ["git", "pull", "--quiet", self.repo_url, "master"],
-                    cwd=self.git_repo_path,
-                    capture_output=True,
+                    ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                     check=True,
                 )
-            )
+            except Exception:
+                raise
+        unreliable()
+
+        try:
+            @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+            def unreliable():
+                try:
+                    lambda: subprocess.run(
+                        ["git", "pull", "--quiet", self.repo_url, "master"],
+                        cwd=self.git_repo_path,
+                        capture_output=True,
+                        check=True,
+                    )
+                except Exception:
+                    raise
+            unreliable()
+
         except subprocess.CalledProcessError as e:
             # When the repo is empty.
             if b"Couldn't find remote ref master" in e.stdout:

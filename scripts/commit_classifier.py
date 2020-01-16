@@ -28,10 +28,11 @@ from bugbug.utils import (
     download_and_load_model,
     download_check_etag,
     get_secret,
-    retry,
     to_array,
     zstd_decompress,
 )
+
+from tenacity import *
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -193,26 +194,38 @@ class CommitClassifier(object):
         logger.info(f"Cloning {repo_url}...")
 
         if not os.path.exists(repo_dir):
-            retry(
+            @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+            def unreliable():
+                try:
+                    lambda: subprocess.run(
+                        ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                    )
+                except Exception:
+                    raise
+            unreliable()
+
+        @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+        def unreliable():
+            try:
                 lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                    ["git", "pull", "--quiet", repo_url, "master"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    check=True,
                 )
-            )
+            except Exception:
+                raise
+        unreliable()
 
-        retry(
-            lambda: subprocess.run(
-                ["git", "pull", "--quiet", repo_url, "master"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
-            )
-        )
-
-        retry(
-            lambda: subprocess.run(
-                ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
-            )
-        )
+        @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+        def unreliable():
+            try:
+                lambda: subprocess.run(
+                    ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
+                )
+            except Exception:
+                raise
+        unreliable()
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)

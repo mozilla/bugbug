@@ -26,7 +26,9 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import download_and_load_model, retry, zstd_compress
+from bugbug.utils import download_and_load_model, zstd_compress
+
+from tenacity import *
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -83,20 +85,28 @@ class RegressorFinder(object):
 
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
-            retry(
-                lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
-            )
+            @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+            def unreliable():
+                try:
+                    lambda: subprocess.run(
+                        ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                    )
+                except Exception:
+                    raise
+            unreliable()
 
-        retry(
-            lambda: subprocess.run(
-                ["git", "pull", "--quiet", repo_url, "master"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
-            )
-        )
+        @retry(stop=stop_after_attempt(5), wait=wait_fixed(30))
+        def unreliable():
+            try:
+                lambda: subprocess.run(
+                    ["git", "pull", "--quiet", repo_url, "master"],
+                    cwd=repo_dir,
+                    capture_output=True,
+                    check=True,
+                )
+            except Exception:
+                raise
+        unreliable()
 
     def init_mapping(self):
         logger.info("Downloading Mercurial <-> git mapping file...")
