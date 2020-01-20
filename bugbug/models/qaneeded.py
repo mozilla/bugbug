@@ -96,6 +96,16 @@ class QANeededModel(BugModel):
                             for label in ["qawanted", "qe-verify", "qaurgent"]
                         ):
                             classes[bug_id] = 1
+            
+            if not found_qa:
+                for entry in bug_data["history"]:
+                    for change in entry["changes"]:
+                        if any(
+                            change["removed"].startswith(label)
+                            for label in ["qawanted", "qe-verify", "qaurgent"]
+                        ):
+                            classes[bug_id] = 0
+
             if bug_id not in classes:
                 classes[bug_id] = 0
 
