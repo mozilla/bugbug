@@ -96,6 +96,12 @@ class QANeededModel(BugModel):
                             for label in ["qawanted", "qe-verify", "qaurgent"]
                         ):
                             classes[bug_id] = 1
+                        elif any(
+                            change["removed"].startswith(label)
+                            for label in ["qawanted", "qe-verify", "qaurgent"]
+                        ):
+                            classes[bug_id] = 0
+
             if bug_id not in classes:
                 classes[bug_id] = 0
 
