@@ -520,7 +520,7 @@ tasks:
         - train-defectenhancementtask
         - train-regression
       payload:
-        maxRunTime: 86400
+        maxRunTime: 604800
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-regressor-finder
