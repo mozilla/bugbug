@@ -2,6 +2,8 @@
 
 Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks.
 
+Chat with us in the [bugbug](https://chat.mozilla.org/#/room/#bugbug:mozilla.org) Matrix room.
+
 More information on the Mozilla hacks blog:
 https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
