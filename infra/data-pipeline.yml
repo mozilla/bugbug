@@ -12,14 +12,14 @@ tasks:
   in:
     - ID: microannotate-generate-tokenize
       created: {$fromNow: ''}
-      deadline: {$fromNow: '4 days'}
+      deadline: {$fromNow: '7 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 86400
+        maxRunTime: 604800
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -51,14 +51,14 @@ tasks:
 
     - ID: microannotate-generate-remove-comments
       created: {$fromNow: ''}
-      deadline: {$fromNow: '4 days'}
+      deadline: {$fromNow: '7 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 86400
+        maxRunTime: 604800
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -90,14 +90,14 @@ tasks:
 
     - ID: microannotate-generate-tokenize-and-remove-comments
       created: {$fromNow: ''}
-      deadline: {$fromNow: '4 days'}
+      deadline: {$fromNow: '7 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 86400
+        maxRunTime: 604800
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
