@@ -28,7 +28,7 @@ def get_test_scheduling_history():
 def get_past_failures():
     return shelve.Shelf(
         LMDBDict("data/past_failures.lmdb"),
-        protocol=pickle.HIGHEST_PROTOCOL,
+        protocol=pickle.DEFAULT_PROTOCOL,
         writeback=True,
     )
 

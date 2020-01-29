@@ -94,7 +94,7 @@ class PastBugsCollector(object):
                     }
 
         with open("data/past_bugs_by_function.pickle", "wb") as f:
-            pickle.dump(past_bugs_by_function, f, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(past_bugs_by_function, f)
         zstd_compress("data/past_bugs_by_function.pickle")
 
 
