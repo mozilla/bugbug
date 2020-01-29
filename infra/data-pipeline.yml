@@ -507,7 +507,7 @@ tasks:
 
     - ID: regressor-finder
       created: {$fromNow: ''}
-      deadline: {$fromNow: '5 days'}
+      deadline: {$fromNow: '7 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: compute-large
