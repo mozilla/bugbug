@@ -212,6 +212,7 @@ tasks:
       dependencies:
         - commit-retrieval
         - bugs-retrieval
+        - regressor-finder
       payload:
         maxRunTime: 7200
         image: mozilla/bugbug-base:${version}
