@@ -49,8 +49,8 @@
                 "bugbug-classify-commit",
                 "testselect",
                 "/cache/mozilla-central",
-                "${payload['DIFF_ID']}",
-                "${payload['PHABRICATOR_DEPLOYMENT']}",
+                "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
+                "--diff-id=${payload['DIFF_ID']}",
                 "--runnable-jobs=${payload['RUNNABLE_JOBS']}"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
