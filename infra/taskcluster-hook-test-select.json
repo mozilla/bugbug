@@ -89,6 +89,7 @@
             }
         },
         "required": [
+            "PHABRICATOR_DEPLOYMENT",
             "DIFF_ID"
         ],
         "type": "object"

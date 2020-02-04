@@ -751,12 +751,11 @@ def main():
     parser.add_argument("model", help="Which model to use for evaluation")
     parser.add_argument("cache_root", help="Cache for repository clones.")
     parser.add_argument("diff_id", help="diff ID to analyze.", type=int)
-    # TODO: The "" choice can be removed when all users have been updated to pass a correct phabricator_deployment.
     parser.add_argument(
         "phabricator_deployment",
         help="Which Phabricator deployment to hit.",
         type=str,
-        choices=["", PHAB_PROD, PHAB_DEV],
+        choices=[PHAB_PROD, PHAB_DEV],
     )
     parser.add_argument(
         "--runnable-jobs",
@@ -772,11 +771,6 @@ def main():
     )
 
     args = parser.parse_args()
-
-    # TODO: This can be removed when all users have been updated to pass a correct phabricator_deployment.
-    args.phabricator_deployment = (
-        args.phabricator_deployment if args.phabricator_deployment else PHAB_PROD
-    )
 
     classifier = CommitClassifier(
         args.model, args.cache_root, args.git_repo_dir, args.method_defect_predictor_dir
