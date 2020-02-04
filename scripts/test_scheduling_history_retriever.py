@@ -47,6 +47,11 @@ def filter_tasks(tasks, all_tasks):
     )
 
 
+# Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
+def rename_tasks(tasks):
+    return [task.replace("test-linux64-", "test-linux1804-64-") for task in tasks]
+
+
 class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
@@ -135,6 +140,16 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
                 push_data = json.load(f)[1:]
 
             logger.info(f"push data nodes: {len(push_data)}")
+
+            push_data = [
+                (
+                    revisions,
+                    rename_tasks(push_tasks),
+                    rename_tasks(possible_regressions),
+                    rename_tasks(likely_regressions),
+                )
+                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+            ]
 
             # In the last 28 pushes, we definitely run all possible tasks.
             all_tasks_set = set(
