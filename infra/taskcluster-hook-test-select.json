@@ -48,7 +48,7 @@
             "command": [
                 "bugbug-classify-commit",
                 "testselect",
-                "/cache",
+                "/cache/mozilla-central",
                 "${payload['DIFF_ID']}",
                 "${payload['PHABRICATOR_DEPLOYMENT']}",
                 "--runnable-jobs=${payload['RUNNABLE_JOBS']}"

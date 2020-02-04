@@ -49,7 +49,7 @@
             "command": [
                 "bugbug-classify-commit",
                 "regressor",
-                "/cache",
+                "/cache/mozilla-central",
                 "${payload['DIFF_ID']}",
                 "${payload['PHABRICATOR_DEPLOYMENT']}",
                 "--git_repo_dir=/gecko-dev",
