@@ -50,7 +50,8 @@
                 "testselect",
                 "/cache",
                 "${payload['DIFF_ID']}",
-                "${payload['PHABRICATOR_DEPLOYMENT']}"
+                "${payload['PHABRICATOR_DEPLOYMENT']}",
+                "--runnable-jobs=${payload['RUNNABLE_JOBS']}"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
@@ -82,6 +83,9 @@
             },
             "DIFF_ID": {
                 "type": "number"
+            },
+            "RUNNABLE_JOBS": {
+                "type": "string"
             }
         },
         "required": [

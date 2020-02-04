@@ -29,6 +29,14 @@ parameters = [
         os.path.realpath("infra/taskcluster-hook-test-select.json"),
         {"PHABRICATOR_DEPLOYMENT": "dev", "DIFF_ID": 123},
     ),
+    (
+        os.path.realpath("infra/taskcluster-hook-test-select.json"),
+        {
+            "PHABRICATOR_DEPLOYMENT": "prod",
+            "DIFF_ID": 123,
+            "RUNNABLE_JOBS": "http://localhost",
+        },
+    ),
 ]
 
 for infra_path in os.listdir("infra"):
