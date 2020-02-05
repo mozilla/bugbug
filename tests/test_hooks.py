@@ -19,8 +19,6 @@ with open(os.path.join("VERSION")) as f:
 parameters = [
     (os.path.realpath("infra/taskcluster-hook-data-pipeline.json"), {}),
     (os.path.realpath("infra/taskcluster-hook-check-models-start.json"), {}),
-    (os.path.realpath("infra/taskcluster-hook-classify-patch.json"), {"DIFF_ID": 123}),
-    (os.path.realpath("infra/taskcluster-hook-test-select.json"), {"DIFF_ID": 123}),
     (
         os.path.realpath("infra/taskcluster-hook-classify-patch.json"),
         {"PHABRICATOR_DEPLOYMENT": "prod", "DIFF_ID": 123},
@@ -28,6 +26,14 @@ parameters = [
     (
         os.path.realpath("infra/taskcluster-hook-test-select.json"),
         {"PHABRICATOR_DEPLOYMENT": "dev", "DIFF_ID": 123},
+    ),
+    (
+        os.path.realpath("infra/taskcluster-hook-test-select.json"),
+        {
+            "PHABRICATOR_DEPLOYMENT": "prod",
+            "DIFF_ID": 123,
+            "RUNNABLE_JOBS": "http://localhost",
+        },
     ),
 ]
 
