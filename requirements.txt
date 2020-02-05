@@ -18,6 +18,7 @@ scipy==1.4.1
 shap[plots]==0.34.0
 tabulate==0.8.6
 taskcluster==24.2.0
+tenacity==6.0.0
 tqdm==4.42.1
 xgboost==0.90
 zstandard==0.13.0
