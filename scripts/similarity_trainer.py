@@ -48,20 +48,26 @@ def main():
 
     assert db.download(bugzilla.BUGS_DB)
 
-    if args.algorithm == "neighbors_tfidf_bigrams":
-        model = similarity.model_name_to_class[args.algorithm](
-            vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
-            cleanup_urls=args.cleanup_urls,
-            nltk_tokenizer=args.nltk_tokenizer,
-        )
-    else:
+    if args.algorithm == "elasticsearch":
         model = similarity.model_name_to_class[args.algorithm](
             cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
         )
+        model.index()
+    else:
+        if args.algorithm == "neighbors_tfidf_bigrams":
+            model = similarity.model_name_to_class[args.algorithm](
+                vectorizer=TfidfVectorizer(ngram_range=(1, 2)),
+                cleanup_urls=args.cleanup_urls,
+                nltk_tokenizer=args.nltk_tokenizer,
+            )
+        else:
+            model = similarity.model_name_to_class[args.algorithm](
+                cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
+            )
 
-    path = model.save()
-    assert os.path.exists(path)
-    zstd_compress(path)
+        path = model.save()
+        assert os.path.exists(path)
+        zstd_compress(path)
 
 
 if __name__ == "__main__":

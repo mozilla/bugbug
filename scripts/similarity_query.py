@@ -32,24 +32,27 @@ def parse_args(args):
 
 def main(args):
 
-    model_file_name = f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
+    if args.algorithm == "elasticsearch":
+        model = similarity.model_name_to_class[args.algorithm]()
+    else:
+        model_file_name = f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
 
-    if not os.path.exists(model_file_name):
-        logger.info(f"{model_file_name} does not exist. Downloading the model....")
-        try:
-            download_check_etag(URL.format(model_file_name))
-        except requests.HTTPError:
-            logger.error(
-                f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
-            )
-            raise SystemExit(1)
+        if not os.path.exists(model_file_name):
+            logger.info(f"{model_file_name} does not exist. Downloading the model....")
+            try:
+                download_check_etag(URL.format(model_file_name))
+            except requests.HTTPError:
+                logger.error(
+                    f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
+                )
+                raise SystemExit(1)
 
-        zstd_decompress(model_file_name)
-        assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
+            zstd_decompress(model_file_name)
+            assert os.path.exists(model_file_name), "Decompressed file doesn't exist"
 
-    model = similarity.model_name_to_class[args.algorithm].load(
-        f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
-    )
+        model = similarity.model_name_to_class[args.algorithm].load(
+            f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
+        )
 
     bug_ids = model.get_similar_bugs(bugzilla.get(args.bug_id)[args.bug_id])
 

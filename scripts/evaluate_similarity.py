@@ -31,6 +31,11 @@ def parse_args(args):
         dest="nltk_tokenizer",
         default=False,
     )
+    parser.add_argument(
+        "--index",
+        help="Create/Recreate a database in Elastic Search",
+        action="store_true",
+    )
     return parser.parse_args(args)
 
 
@@ -45,6 +50,8 @@ def main(args):
         model = similarity.model_name_to_class[args.algorithm](
             cleanup_urls=args.cleanup_urls, nltk_tokenizer=args.nltk_tokenizer
         )
+    if args.algorithm == "elasticsearch" and args.index:
+        model.index()
 
     model.evaluation()
 
