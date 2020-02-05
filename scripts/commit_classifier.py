@@ -10,6 +10,7 @@ import pickle
 import re
 import subprocess
 import tempfile
+import tenacity
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
@@ -28,7 +29,6 @@ from bugbug.utils import (
     download_and_load_model,
     download_check_etag,
     get_secret,
-    retry,
     to_array,
     zstd_decompress,
 )
@@ -193,26 +193,32 @@ class CommitClassifier(object):
         logger.info(f"Cloning {repo_url}...")
 
         if not os.path.exists(repo_dir):
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
-            )
+                ),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5)
+            )()
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
-            )
-        )
+            ),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5)
+        )()
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
-            )
-        )
+            ),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5)
+        )()
 
     def update_commit_db(self):
         repository.clone(self.repo_dir)

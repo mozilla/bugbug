@@ -8,6 +8,7 @@ import concurrent.futures
 import os
 import subprocess
 import threading
+import tenacity
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -26,7 +27,7 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import download_and_load_model, retry, zstd_compress
+from bugbug.utils import download_and_load_model, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -83,20 +84,24 @@ class RegressorFinder(object):
 
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                )
-            )
+                ),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5)
+            )()
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
-            )
-        )
+            ),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5)
+        )()
 
     def init_mapping(self):
         logger.info("Downloading Mercurial <-> git mapping file...")
