@@ -64,10 +64,15 @@ class BaseSimilarity(abc.ABC):
 
         self.nltk_tokenizer = nltk_tokenizer
 
-    def get_text(self, bug):
-        return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
+    def get_text(self, bug, all_comments=False):
+        if all_comments:
+            comments = " ".join(comment["text"] for comment in bug["comments"])
+        else:
+            comments = bug["comments"][0]["text"]
 
-    def text_preprocess(self, text, lemmatization=False, join=False):
+        return "{} {}".format(bug["summary"], comments)
+
+    def text_preprocess(self, text, stemming=True, lemmatization=False, join=False):
 
         for func in self.cleanup_functions:
             text = func(text)
@@ -76,7 +81,7 @@ class BaseSimilarity(abc.ABC):
 
         if lemmatization:
             text = [word.lemma_ for word in nlp(text)]
-        else:
+        elif stemming:
             ps = PorterStemmer()
             tokenized_text = (
                 word_tokenize(text.lower())
@@ -88,6 +93,8 @@ class BaseSimilarity(abc.ABC):
                 for word in tokenized_text
                 if word not in set(stopwords.words("english")) and len(word) > 1
             ]
+        else:
+            text = text.split()
 
         if join:
             return " ".join(word for word in text)
@@ -636,25 +643,15 @@ class ElasticSearchSimilarity(BaseSimilarity):
             self.elastic_search.ping()
         ), "Check if Elastic Search Server is running by visiting http://localhost:9200"
 
-    def get_text(self, bug):
-        return "{} {}".format(
-            bug["summary"], " ".join([comment["text"] for comment in bug["comments"]])
-        )
-
-    def text_preprocess(self, text):
-        for func in self.cleanup_functions:
-            text = func(text)
-
-        text = re.sub("[^a-zA-Z0-9]", " ", text)
-        return text
-
     def make_documents(self):
         for bug in bugzilla.get_bugs():
             yield {
                 "_index": "bugbug",
                 "_type": "_doc",
                 "bug_id": bug["id"],
-                "description": self.text_preprocess(self.get_text(bug)),
+                "description": self.text_preprocess(
+                    self.get_text(bug, all_comments=True), stemming=False, join=True
+                ),
             }
 
     def index(self):
@@ -662,7 +659,9 @@ class ElasticSearchSimilarity(BaseSimilarity):
         bulk(self.elastic_search, self.make_documents())
 
     def get_similar_bugs(self, query):
-        find_similar = self.text_preprocess(self.get_text(query))
+        find_similar = self.text_preprocess(
+            self.get_text(query, all_comments=True), stemming=False, join=True
+        )
 
         es_query = {
             "more_like_this": {
