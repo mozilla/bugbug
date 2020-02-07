@@ -48,9 +48,10 @@
             "command": [
                 "bugbug-classify-commit",
                 "testselect",
-                "/cache",
-                "${payload['DIFF_ID']}",
-                "${payload['PHABRICATOR_DEPLOYMENT']}"
+                "/cache/mozilla-central",
+                "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
+                "--diff-id=${payload['DIFF_ID']}",
+                "--runnable-jobs=${payload['RUNNABLE_JOBS']}"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
             "maxRunTime": 7200
@@ -82,9 +83,13 @@
             },
             "DIFF_ID": {
                 "type": "number"
+            },
+            "RUNNABLE_JOBS": {
+                "type": "string"
             }
         },
         "required": [
+            "PHABRICATOR_DEPLOYMENT",
             "DIFF_ID"
         ],
         "type": "object"

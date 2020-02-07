@@ -49,9 +49,9 @@
             "command": [
                 "bugbug-classify-commit",
                 "regressor",
-                "/cache",
-                "${payload['DIFF_ID']}",
-                "${payload['PHABRICATOR_DEPLOYMENT']}",
+                "/cache/mozilla-central",
+                "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
+                "--diff-id=${payload['DIFF_ID']}",
                 "--git_repo_dir=/gecko-dev",
                 "--method_defect_predictor_dir=/MethodDefectPredictor"
             ],
@@ -86,6 +86,7 @@
             }
         },
         "required": [
+            "PHABRICATOR_DEPLOYMENT",
             "DIFF_ID"
         ],
         "type": "object"
