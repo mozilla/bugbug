@@ -5,10 +5,11 @@ import os
 import subprocess
 from logging import INFO, basicConfig, getLogger
 
+import tenacity
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret, retry
+from bugbug.utils import ThreadPoolExecutorResult, get_secret
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -61,11 +62,13 @@ class MicroannotateGenerator(object):
             else:
                 executor.submit(self.init_git_repo)
 
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
-            )
-        )
+            ),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5),
+        )()
 
         push_args = ["git", "push", repo_push_url, "master"]
         if is_old_version:
@@ -81,7 +84,11 @@ class MicroannotateGenerator(object):
                 remove_comments=self.remove_comments,
             )
 
-            retry(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))
+            tenacity.retry(
+                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5),
+            )()
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
@@ -93,22 +100,26 @@ class MicroannotateGenerator(object):
         )
 
     def clone_git_repo(self):
-        retry(
+        tenacity.retry(
             lambda: subprocess.run(
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
-            )
-        )
+            ),
+            wait=tenacity.wait_fixed(30),
+            stop=tenacity.stop_after_attempt(5),
+        )()
 
         try:
-            retry(
+            tenacity.retry(
                 lambda: subprocess.run(
                     ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
-                )
-            )
+                ),
+                wait=tenacity.wait_fixed(30),
+                stop=tenacity.stop_after_attempt(5),
+            )()
         except subprocess.CalledProcessError as e:
             # When the repo is empty.
             if b"Couldn't find remote ref master" in e.stdout:
