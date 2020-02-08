@@ -205,7 +205,7 @@ tasks:
 
     - ID: past-bugs-by-function
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '7 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
