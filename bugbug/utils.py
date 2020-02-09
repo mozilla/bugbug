@@ -9,7 +9,6 @@ import logging
 import os
 import socket
 import tarfile
-import time
 from collections import deque
 from contextlib import contextmanager
 
@@ -202,18 +201,6 @@ def download_model(model_name):
 def download_and_load_model(model_name):
     path = download_model(model_name)
     return get_model_class(model_name).load(path)
-
-
-def retry(operation, retries=5, wait_between_retries=30):
-    while True:
-        try:
-            return operation()
-        except Exception:
-            retries -= 1
-            if retries == 0:
-                raise
-
-            time.sleep(wait_between_retries)
 
 
 def zstd_compress(path):
