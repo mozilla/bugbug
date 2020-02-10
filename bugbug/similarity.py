@@ -33,6 +33,8 @@ try:
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.summarization.bm25 import BM25
     from gensim.corpora import Dictionary
+    from elasticsearch.helpers import bulk
+    from elasticsearch import Elasticsearch
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
     from nltk.tokenize import word_tokenize
@@ -62,10 +64,15 @@ class BaseSimilarity(abc.ABC):
 
         self.nltk_tokenizer = nltk_tokenizer
 
-    def get_text(self, bug):
-        return "{} {}".format(bug["summary"], bug["comments"][0]["text"])
+    def get_text(self, bug, all_comments=False):
+        if all_comments:
+            comments = " ".join(comment["text"] for comment in bug["comments"])
+        else:
+            comments = bug["comments"][0]["text"]
 
-    def text_preprocess(self, text, lemmatization=False, join=False):
+        return "{} {}".format(bug["summary"], comments)
+
+    def text_preprocess(self, text, stemming=True, lemmatization=False, join=False):
 
         for func in self.cleanup_functions:
             text = func(text)
@@ -74,7 +81,7 @@ class BaseSimilarity(abc.ABC):
 
         if lemmatization:
             text = [word.lemma_ for word in nlp(text)]
-        else:
+        elif stemming:
             ps = PorterStemmer()
             tokenized_text = (
                 word_tokenize(text.lower())
@@ -86,6 +93,8 @@ class BaseSimilarity(abc.ABC):
                 for word in tokenized_text
                 if word not in set(stopwords.words("english")) and len(word) > 1
             ]
+        else:
+            text = text.split()
 
         if join:
             return " ".join(word for word in text)
@@ -626,6 +635,57 @@ class LDASimilarity(BaseSimilarity):
         raise NotImplementedError
 
 
+class ElasticSearchSimilarity(BaseSimilarity):
+    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        self.elastic_search = Elasticsearch()
+        assert (
+            self.elastic_search.ping()
+        ), "Check if Elastic Search Server is running by visiting http://localhost:9200"
+
+    def make_documents(self):
+        for bug in bugzilla.get_bugs():
+            yield {
+                "_index": "bugbug",
+                "_type": "_doc",
+                "bug_id": bug["id"],
+                "description": self.text_preprocess(
+                    self.get_text(bug, all_comments=True), stemming=False, join=True
+                ),
+            }
+
+    def index(self):
+        self.elastic_search.indices.delete(index="bugbug", ignore=[400, 404])
+        bulk(self.elastic_search, self.make_documents())
+
+    def get_similar_bugs(self, query):
+        find_similar = self.text_preprocess(
+            self.get_text(query, all_comments=True), stemming=False, join=True
+        )
+
+        es_query = {
+            "more_like_this": {
+                "fields": ["description"],
+                "like": find_similar,
+                "min_term_freq": 1,
+                "max_query_terms": 25,
+                "min_doc_freq": 2,
+            }
+        }
+
+        result = self.elastic_search.search(index="bugbug", body={"query": es_query})
+
+        top_similar = [
+            result["hits"]["hits"][i]["_source"]["bug_id"]
+            for i in range(len(result["hits"]["hits"]))
+            if result["hits"]["hits"][i]["_source"]["bug_id"] != query["id"]
+        ]
+        return top_similar
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
+
 model_name_to_class = {
     "lsi": LSISimilarity,
     "neighbors_tfidf": NeighborsSimilarity,
@@ -635,4 +695,5 @@ model_name_to_class = {
     "word2vec_softcos": Word2VecSoftCosSimilarity,
     "bm25": BM25Similarity,
     "lda": LDASimilarity,
+    "elasticsearch": ElasticSearchSimilarity,
 }
