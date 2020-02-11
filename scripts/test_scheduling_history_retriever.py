@@ -29,10 +29,11 @@ ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
     ADR_CACHE_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.zst",
-    2,
+    3,
     support_files=[],
 )
-PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data.json.zst"
+PUSH_DATA_LABEL_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst"
+PUSH_DATA_GROUP_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_group.json.zst"
 
 TRAINING_MONTHS = 6
 
@@ -56,6 +57,33 @@ class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
 
+    def run_ci_recipes(self, runnable, from_months):
+        subprocess.run(
+            [
+                "run-adr",
+                "--ref",
+                "27bdf2c8a928bee8ef22daffb088bd1c358ed30e",
+                "mozilla/ci-recipes",
+                "recipe",
+                "-o",
+                os.path.abspath(f"push_data_{runnable}.json"),
+                "-f",
+                "json",
+                "push_data",
+                "--",
+                "--from",
+                f"today-{from_months}month",
+                "--to",
+                "today-3day",
+                "--branch",
+                "autoland",
+                "--runnable",
+                runnable,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
+        )
+
     def retrieve_push_data(self):
         # Download previous cache.
         cache_path = os.path.splitext(ADR_CACHE_DB)[0]
@@ -72,40 +100,26 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use 3 months more than that to calculate the failure statistics.
-        subprocess.run(
-            [
-                "run-adr",
-                "--ref",
-                "13b5ff5adb6c0b3cc320522f9cbb70e13ee72fae",
-                "mozilla/ci-recipes",
-                "recipe",
-                "-o",
-                os.path.abspath("push_data.json"),
-                "-f",
-                "json",
-                "push_data",
-                "--",
-                "--from",
-                f"today-{TRAINING_MONTHS + 3}month",
-                "--to",
-                "today-3day",
-                "--branch",
-                "autoland",
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
-        )
+        self.run_ci_recipes("label", TRAINING_MONTHS + 3)
+
+        # For groups, we only have 12 weeks in ActiveData. Getting previous data
+        # from task artifacts is slow, so for now we only get what we can get from
+        # ActiveData and we'll see if it's enough to train a satisfying model.
+        self.run_ci_recipes("group", 3)
 
         with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
             tar.add(cache_path)
 
-        zstd_compress("push_data.json")
+        zstd_compress("push_data_label.json")
+        zstd_compress("push_data_group.json")
 
     def generate_test_scheduling_history(self):
-        updated = download_check_etag(PUSH_DATA_URL)
+        updated = download_check_etag(PUSH_DATA_LABEL_URL)
         if updated:
-            zstd_decompress("push_data.json")
-        assert os.path.exists("push_data.json"), "Decompressed push data file exists"
+            zstd_decompress("push_data_label.json")
+        assert os.path.exists(
+            "push_data_label.json"
+        ), "Decompressed push data file exists"
 
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
@@ -136,7 +150,7 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
 
                 commit_map[commit_data["node"]] = commit_data
 
-            with open("push_data.json", "r") as f:
+            with open("push_data_label.json", "r") as f:
                 push_data = json.load(f)[1:]
 
             logger.info(f"push data nodes: {len(push_data)}")

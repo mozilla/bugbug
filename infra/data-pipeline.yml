@@ -261,8 +261,11 @@ tasks:
           public/adr_cache.tar.version:
             path: /builds/worker/data/adr_cache.tar.version
             type: file
-          public/push_data.json.zst:
-            path: /builds/worker/push_data.json.zst
+          public/push_data_label.json.zst:
+            path: /builds/worker/push_data_label.json.zst
+            type: file
+          public/push_data_group.json.zst:
+            path: /builds/worker/push_data_group.json.zst
             type: file
 
         features:
