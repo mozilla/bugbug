@@ -169,6 +169,7 @@ class RegressorFinder(object):
 
         db.append(IGNORED_COMMITS_DB, commits_to_ignore)
         zstd_compress(IGNORED_COMMITS_DB)
+        db.upload(IGNORED_COMMITS_DB)
 
         return prev_commits_to_ignore + commits_to_ignore
 
@@ -264,6 +265,7 @@ class RegressorFinder(object):
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
         zstd_compress(BUG_FIXING_COMMITS_DB)
+        db.upload(BUG_FIXING_COMMITS_DB)
 
         bug_fixing_commits = prev_bug_fixing_commits + bug_fixing_commits
         return [
@@ -403,6 +405,10 @@ class RegressorFinder(object):
 
             return bug_introducing_commits
 
+        def compress_and_upload():
+            zstd_compress(db_path)
+            db.upload(db_path)
+
         with concurrent.futures.ThreadPoolExecutor(
             initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
         ) as executor:
@@ -415,17 +421,22 @@ class RegressorFinder(object):
 
                 logger.info(f"Analyzing {len(bug_introducing_commit_futures)} commits")
 
-                for future in tqdm(
-                    concurrent.futures.as_completed(bug_introducing_commit_futures),
-                    total=len(bug_introducing_commit_futures),
+                for i, future in enumerate(
+                    tqdm(
+                        concurrent.futures.as_completed(bug_introducing_commit_futures),
+                        total=len(bug_introducing_commit_futures),
+                    )
                 ):
                     result = future.result()
                     if result is not None:
                         yield from result
 
+                    if i % 1000 == 0:
+                        compress_and_upload()
+
             db.append(db_path, results())
 
-        zstd_compress(db_path)
+        compress_and_upload()
 
 
 def evaluate(bug_introducing_commits):
