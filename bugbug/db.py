@@ -112,6 +112,14 @@ def download(path, support_files_too=False):
         return False
 
 
+def upload(path):
+    support_files_paths = [
+        os.path.join(os.path.dirname(path), support_file_path)
+        for support_file_path in DATABASES[path]["support_files"]
+    ]
+    utils.upload_s3([f"{path}.zst", f"{path}.version"] + support_files_paths)
+
+
 def last_modified(path):
     url = DATABASES[path]["url"]
     last_modified = utils.get_last_modified(url)
