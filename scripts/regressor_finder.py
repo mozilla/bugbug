@@ -92,6 +92,10 @@ class RegressorFinder(object):
                 stop=tenacity.stop_after_attempt(5),
             )()
 
+            logger.info(f"{repo_dir} cloned")
+
+        logger.info(f"Pulling and updating {repo_dir}")
+
         tenacity.retry(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
@@ -102,6 +106,8 @@ class RegressorFinder(object):
             wait=tenacity.wait_fixed(30),
             stop=tenacity.stop_after_attempt(5),
         )()
+
+        logger.info(f"{repo_dir} pulled and updated")
 
     def init_mapping(self):
         logger.info("Downloading Mercurial <-> git mapping file...")
