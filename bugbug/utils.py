@@ -158,7 +158,8 @@ def upload_s3(paths):
     transfer = boto3.s3.transfer.S3Transfer(client)
 
     for path in paths:
-        transfer.upload_file(path, "communitytc-bugbug", f"data/{path}")
+        assert path.startswith("data/")
+        transfer.upload_file(path, "communitytc-bugbug", path)
 
 
 def download_check_etag(url, path=None):
