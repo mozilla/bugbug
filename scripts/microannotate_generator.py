@@ -9,7 +9,7 @@ import tenacity
 from microannotate import generator
 
 from bugbug import db, repository
-from bugbug.utils import ThreadPoolExecutorResult, get_secret
+from bugbug.utils import ThreadPoolExecutorResult, get_secret, upload_s3
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -89,6 +89,9 @@ class MicroannotateGenerator(object):
                 wait=tenacity.wait_fixed(30),
                 stop=tenacity.stop_after_attempt(5),
             )()
+
+            # We are not using db.upload as we don't need to upload the git repo.
+            upload_s3([f"{db_path}.version"])
 
     def init_git_repo(self):
         subprocess.run(["git", "init", self.git_repo_path], check=True)
