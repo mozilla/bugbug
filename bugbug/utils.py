@@ -12,6 +12,7 @@ import tarfile
 from collections import deque
 from contextlib import contextmanager
 
+import boto3
 import dateutil.parser
 import lmdb
 import numpy as np
@@ -141,6 +142,23 @@ def get_secret(secret_id):
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
+
+
+def upload_s3(paths):
+    auth = taskcluster.Auth(get_taskcluster_options())
+    response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
+    credentials = response["credentials"]
+
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=credentials["accessKeyId"],
+        aws_secret_access_key=credentials["secretAccessKey"],
+        aws_session_token=credentials["sessionToken"],
+    )
+    transfer = boto3.s3.transfer.S3Transfer(client)
+
+    for path in paths:
+        transfer.upload_file(path, "communitytc-bugbug", f"data/{path}")
 
 
 def download_check_etag(url, path=None):
