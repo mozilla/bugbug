@@ -362,8 +362,13 @@ class RegressorFinder(object):
                 f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
             )
 
+        git_init_lock = threading.Lock()
+
         def _init(git_repo_dir):
-            thread_local.git = GitRepository(git_repo_dir)
+            with git_init_lock:
+                thread_local.git = GitRepository(git_repo_dir)
+                # Call get_head in order to make pydriller initialize the repository.
+                thread_local.git.get_head()
 
         def find_bic(bug_fixing_commit):
             logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
