@@ -131,28 +131,31 @@ class RegressorFinder(object):
         prev_commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
         logger.info(f"Already found {len(prev_commits_to_ignore)} commits to ignore...")
 
+        # When we already have some analyzed commits, re-analyze the last 3500 to make sure
+        # we didn't miss back-outs that happened since the last analysis.
         if len(prev_commits_to_ignore) > 0:
-            rev_start = "children({})".format(prev_commits_to_ignore[-1]["rev"])
+            first_commit_to_reanalyze = (
+                -3500 if len(prev_commits_to_ignore) >= 3500 else 0
+            )
+            rev_start = "children({})".format(
+                prev_commits_to_ignore[first_commit_to_reanalyze]["rev"]
+            )
         else:
             rev_start = 0
 
-        # 2 days more than the end date, so we can know if a commit was backed-out.
-        # We have to do this as recent commits might be missing in the mercurial <-> git map,
-        # otherwise we could just use "tip".
-        end_date = datetime.now() - RELATIVE_END_DATE + relativedelta(2)
         with hglib.open(self.mercurial_repo_dir) as hg:
-            revs = repository.get_revs(
-                hg, rev_start, "pushdate('{}')".format(end_date.strftime("%Y-%m-%d"))
-            )
+            revs = repository.get_revs(hg, rev_start)
 
-        # Given that we use the pushdate, there might be cases where the starting commit is returned too (e.g. if we rerun the task on the same day).
-        if len(prev_commits_to_ignore) > 0:
-            found_prev = -1
-            for i, rev in enumerate(revs):
-                if rev.decode("utf-8") == prev_commits_to_ignore[-1]["rev"]:
-                    found_prev = i
-                    break
-            revs = revs[found_prev + 1 :]
+        # Drop commits which are not yet present in the mercurial <-> git mapping.
+        while len(revs) > 0:
+            try:
+                vcs_map.mercurial_to_git(revs[-1].decode("ascii"))
+                break
+            except Exception as e:
+                if not str(e).startswith("Missing mercurial commit in the VCS map"):
+                    raise
+
+                revs.pop()
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
