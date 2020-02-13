@@ -196,7 +196,7 @@ tasks:
 
     - ID: test-scheduling-history-push_data-retrieval
       created: {$fromNow: ''}
-      deadline: {$fromNow: '1 day'}
+      deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
@@ -205,7 +205,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-        maxRunTime: 86400
+        maxRunTime: 259200
         image: ahal/adr
         command:
           - "/bin/bash"
@@ -246,7 +246,7 @@ tasks:
 
     - ID: test-scheduling-history-generator
       created: {$fromNow: ''}
-      deadline: {$fromNow: '2 days'}
+      deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: compute-small
@@ -798,7 +798,7 @@ tasks:
 
     - ID: train-test-select
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-super-large
@@ -837,7 +837,7 @@ tasks:
 
     - ID: train-test-failure
       created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
+      deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
       workerType: compute-large
