@@ -436,6 +436,10 @@ class RegressorFinder(object):
                         total=len(bug_introducing_commit_futures),
                     )
                 ):
+                    if future.exception() is not None:
+                        for f in bug_introducing_commit_futures:
+                            f.cancel()
+
                     result = future.result()
                     if result is not None:
                         yield from result
