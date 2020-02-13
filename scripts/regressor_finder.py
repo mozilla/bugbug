@@ -27,7 +27,11 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import download_and_load_model, zstd_compress
+from bugbug.utils import (
+    ThreadPoolExecutorResult,
+    download_and_load_model,
+    zstd_compress,
+)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -62,8 +66,7 @@ class RegressorFinder(object):
         self.tokenized_git_repo_url = tokenized_git_repo_url
         self.tokenized_git_repo_dir = tokenized_git_repo_dir
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-
+        with ThreadPoolExecutorResult(max_workers=3) as executor:
             logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
             executor.submit(repository.clone, self.mercurial_repo_dir)
 
