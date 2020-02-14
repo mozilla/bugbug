@@ -62,7 +62,7 @@ class Retriever(object):
             [
                 "run-adr",
                 "--ref",
-                "8d9d2c32113a50e54143f56da01b521aa749f47b",
+                "4fd382257c0dc3cbc6d49bf9eb06aed7412e1546",
                 "mozilla/ci-recipes",
                 "recipe",
                 "-o",
