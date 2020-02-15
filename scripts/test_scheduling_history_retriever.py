@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import subprocess
+import time
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
@@ -56,9 +57,16 @@ def rename_tasks(tasks):
 class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
+        self.cache_path = os.path.splitext(ADR_CACHE_DB)[0]
 
     def run_ci_recipes(self, runnable, from_months):
-        subprocess.run(
+        def upload_adr_cache():
+            with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
+                tar.add(self.cache_path)
+
+            db.upload(ADR_CACHE_DB)
+
+        proc = subprocess.Popen(
             [
                 "run-adr",
                 "--ref",
@@ -80,13 +88,20 @@ class Retriever(object):
                 "--runnable",
                 runnable,
             ],
-            check=True,
             stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
         )
 
+        elapsed = 0
+        while proc.poll() is None:
+            time.sleep(6)
+            elapsed += 6
+            if elapsed % 3600 == 0:
+                upload_adr_cache()
+
+        upload_adr_cache()
+
     def retrieve_push_data(self):
         # Download previous cache.
-        cache_path = os.path.splitext(ADR_CACHE_DB)[0]
         db.download(ADR_CACHE_DB)
 
         # Setup adr cache configuration.
@@ -94,7 +109,7 @@ class Retriever(object):
         with open(os.path.expanduser("~/.config/adr/config.toml"), "w") as f:
             f.write(
                 f"""[adr.cache.stores]
-file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
+file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
 """
             )
 
@@ -106,9 +121,6 @@ file = {{ driver = "file", path = "{os.path.abspath(cache_path)}" }}
         # from task artifacts is slow, so for now we only get what we can get from
         # ActiveData and we'll see if it's enough to train a satisfying model.
         self.run_ci_recipes("group", 3)
-
-        with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
-            tar.add(cache_path)
 
         zstd_compress("push_data_label.json")
         zstd_compress("push_data_group.json")
