@@ -227,6 +227,7 @@ tasks:
             true
       scopes:
         - "secrets:get:project/relman/bugbug/production"
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
