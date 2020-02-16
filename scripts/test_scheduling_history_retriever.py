@@ -29,7 +29,7 @@ JOBS_TO_IGNORE = ("build-docker-image-",)
 ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
     ADR_CACHE_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/adr_cache.tar.zst",
+    "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/adr_cache.tar.zst",
     3,
 )
 PUSH_DATA_LABEL_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst"
