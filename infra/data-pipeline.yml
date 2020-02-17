@@ -159,7 +159,7 @@ tasks:
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       dependencies:
         - commit-retrieval
       payload:
@@ -199,7 +199,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       dependencies:
         - commit-retrieval
       payload:
@@ -288,7 +288,7 @@ tasks:
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       dependencies:
         - bugs-retrieval
       payload:
@@ -511,7 +511,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       dependencies:
         - commit-retrieval
         - bugs-retrieval
@@ -912,7 +912,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       dependencies:
         - train-backout
         - train-component
@@ -1037,7 +1037,7 @@ tasks:
         - hooks:modify-hook:project-relman/bugbug-checks
         - assume:hook-id:project-relman/bugbug-checks
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         features:
           taskclusterProxy:
@@ -1069,7 +1069,7 @@ tasks:
         - hooks:modify-hook:project-relman/bugbug-classify-patch
         - assume:hook-id:project-relman/bugbug-classify-patch
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         features:
           taskclusterProxy:
@@ -1101,7 +1101,7 @@ tasks:
           - hooks:modify-hook:project-relman/bugbug-test-select
           - assume:hook-id:project-relman/bugbug-test-select
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         features:
           taskclusterProxy:
@@ -1132,7 +1132,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         features:
           taskclusterProxy:
@@ -1163,7 +1163,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         features:
           taskclusterProxy:

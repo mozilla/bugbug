@@ -58,7 +58,7 @@ tasks:
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
           provisionerId: proj-relman
-          workerType: ci
+          workerType: batch
           payload:
             maxRunTime: 3600
             image: python:3.7
@@ -222,7 +222,7 @@ tasks:
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
           provisionerId: proj-relman
-          workerType: ci
+          workerType: batch
           payload:
             features:
               taskclusterProxy:
@@ -256,7 +256,7 @@ tasks:
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
           provisionerId: proj-relman
-          workerType: ci
+          workerType: batch
           payload:
             features:
               taskclusterProxy:
@@ -328,7 +328,7 @@ tasks:
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
           provisionerId: proj-relman
-          workerType: ci
+          workerType: batch
           payload:
             features:
               taskclusterProxy:
