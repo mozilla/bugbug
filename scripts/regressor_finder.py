@@ -452,7 +452,7 @@ class RegressorFinder(object):
                     if result is not None:
                         yield from result
 
-                    if i % 1000 == 0:
+                    if i % 500 == 0:
                         compress_and_upload()
 
             db.append(db_path, results())
