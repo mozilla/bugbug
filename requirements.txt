@@ -1,4 +1,4 @@
-boto3==1.11.15
+boto3==1.12.1
 imbalanced-learn==0.6.1
 joblib==0.14.1
 libmozdata==0.1.64
