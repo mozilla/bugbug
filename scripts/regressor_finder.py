@@ -19,6 +19,7 @@ from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from microannotate import utils as microannotate_utils
 from pydriller import GitRepository
+from pydriller.domain.commit import ModificationType
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
@@ -384,9 +385,30 @@ class RegressorFinder(object):
                 )
                 return None
 
-            bug_introducing_modifications = thread_local.git.get_commits_last_modified_lines(
-                commit, hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore")
-            )
+            def get_modification_path(mod):
+                path = mod.new_path
+                if (
+                    mod.change_type == ModificationType.RENAME
+                    or mod.change_type == ModificationType.DELETE
+                ):
+                    path = mod.old_path
+                return path
+
+            bug_introducing_modifications = {}
+            for modification in commit.modifications:
+                if (
+                    get_modification_path(modification)
+                    == "testing/web-platform/meta/MANIFEST.json"
+                ):
+                    continue
+
+                bug_introducing_modifications.update(
+                    thread_local.git.get_commits_last_modified_lines(
+                        commit,
+                        modification=modification,
+                        hashes_to_ignore_path=os.path.realpath("git_hashes_to_ignore"),
+                    )
+                )
 
             logger.info(
                 "Found {} for {}".format(
