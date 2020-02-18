@@ -426,8 +426,13 @@ class RegressorFinder(object):
             zstd_compress(db_path)
             db.upload(db_path)
 
+        workers = os.cpu_count() + 1
+        logger.info(
+            f"Analyzing {len(bug_fixing_commits)} commits using {workers} workers..."
+        )
+
         with concurrent.futures.ThreadPoolExecutor(
-            initializer=_init, initargs=(repo_dir,), max_workers=os.cpu_count() + 1
+            initializer=_init, initargs=(repo_dir,), max_workers=workers
         ) as executor:
 
             def results():
@@ -435,8 +440,6 @@ class RegressorFinder(object):
                     executor.submit(find_bic, bug_fixing_commit)
                     for bug_fixing_commit in bug_fixing_commits
                 ]
-
-                logger.info(f"Analyzing {len(bug_introducing_commit_futures)} commits")
 
                 for i, future in enumerate(
                     tqdm(
