@@ -447,7 +447,13 @@ class RegressorFinder(object):
                         total=len(bug_introducing_commit_futures),
                     )
                 ):
-                    if future.exception() is not None:
+                    exc = future.exception()
+                    if exc is not None:
+                        logger.info(
+                            "Exception {} while analyzing {}".format(
+                                exc, bug_fixing_commits[i]["rev"]
+                            )
+                        )
                         for f in bug_introducing_commit_futures:
                             f.cancel()
 
