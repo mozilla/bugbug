@@ -524,7 +524,7 @@ tasks:
         command:
           - bugbug-regressor-finder
           - to_ignore
-          - --repo_dir=/cache/mozilla-central/
+          - --repo_dir=/cache/mozilla-central
         cache:
           bugbug-mercurial-repository: /cache
         features:
