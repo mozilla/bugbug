@@ -464,30 +464,21 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: regressor-finder
+    - ID: regressor-finder-commits-to-ignore
       created: {$fromNow: ''}
-      deadline: {$fromNow: '5 days'}
+      deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-large
+      workerType: compute-small
       dependencies:
-        - commit-retrieval
-        - microannotate-generate-tokenize
-        - microannotate-generate-remove-comments
-        - microannotate-generate-tokenize-and-remove-comments
-        - bugs-retrieval
-        - train-defectenhancementtask
-        - train-regression
+        - commits-retrieval
       payload:
-        maxRunTime: 432000
+        maxRunTime: 25200
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-regressor-finder
-          - /cache/
-          - https://github.com/mozilla/gecko-dev
-          - gecko-dev
-          - https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
-          - gecko-dev-wordified-and-comments-removed
+          - to_ignore
+          - --repo_dir=/cache/mozilla-central/
         cache:
           bugbug-mercurial-repository: /cache
         features:
@@ -499,23 +490,129 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder.latest
+        - index.project.relman.bugbug_annotate.regressor_finder_commits_to_ignore.latest
       metadata:
-        name: bugbug regressor finder
-        description: bugbug regressor finder
+        name: bugbug regressor finder (commits to ignore)
+        description: bugbug regressor finder (commits to ignore)
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: regressor-finder-bug-fixing-commits
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '1 day'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      dependencies:
+        - commit-retrieval
+        - bugs-retrieval
+        - train-defectenhancementtask
+        - train-regression
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-regressor-finder
+          - bug_fixing
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
+      metadata:
+        name: bugbug regressor finder (bug-fixing commits)
+        description: bugbug regressor finder (bug-fixing commits)
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: regressor-finder-tokenized-bug-introducing
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '5 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - microannotate-generate-tokenize
+        - microannotate-generate-remove-comments
+        - microannotate-generate-tokenize-and-remove-comments
+        - bugs-retrieval
+        - regressor-finder-commits-to-ignore
+        - regressor-finder-bug-fixing-commits
+      payload:
+        maxRunTime: 432000
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-regressor-finder
+          - bug_introducing
+          - --tokenized_git_repo_url=https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+          - --tokenized_git_repo_dir=gecko-dev-wordified-and-comments-removed
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
+      metadata:
+        name: bugbug regressor finder (tokenized bug-introducing commits)
+        description: bugbug regressor finder (tokenized bug-introducing commits)
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: regressor-finder-bug-introducing
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '5 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-large
+      dependencies:
+        - commit-retrieval
+        - microannotate-generate-tokenize
+        - microannotate-generate-remove-comments
+        - microannotate-generate-tokenize-and-remove-comments
+        - bugs-retrieval
+        - regressor-finder-commits-to-ignore
+        - regressor-finder-bug-fixing-commits
+      payload:
+        maxRunTime: 432000
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-regressor-finder
+          - bug_introducing
+          - --git_repo_url=https://github.com/mozilla/gecko-dev
+          - --git_repo_dir=gecko-dev
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
+      metadata:
+        name: bugbug regressor finder (bug-introducing commits)
+        description: bugbug regressor finder (bug-introducing commits)
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: past-bugs-by-function
       created: {$fromNow: ''}
-      deadline: {$fromNow: '5 days'}
+      deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: batch
       dependencies:
         - commit-retrieval
         - bugs-retrieval
-        - regressor-finder
+        - regressor-finder-bug-fixing
       payload:
         maxRunTime: 7200
         image: mozilla/bugbug-base:${version}
@@ -545,7 +642,7 @@ tasks:
       workerType: compute-small
       dependencies:
         - commit-retrieval
-        - regressor-finder
+        - regressor-finder-bug-introducing
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}

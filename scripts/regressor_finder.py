@@ -55,33 +55,40 @@ db.register(
 class RegressorFinder(object):
     def __init__(
         self,
-        cache_root,
-        git_repo_url,
-        git_repo_dir,
-        tokenized_git_repo_url,
-        tokenized_git_repo_dir,
+        mercurial_repo_dir=None,
+        git_repo_url=None,
+        git_repo_dir=None,
+        tokenized_git_repo_url=None,
+        tokenized_git_repo_dir=None,
     ):
-        self.mercurial_repo_dir = os.path.join(cache_root, "mozilla-central")
+        self.mercurial_repo_dir = mercurial_repo_dir
         self.git_repo_url = git_repo_url
         self.git_repo_dir = git_repo_dir
         self.tokenized_git_repo_url = tokenized_git_repo_url
         self.tokenized_git_repo_dir = tokenized_git_repo_dir
 
         with ThreadPoolExecutorResult(max_workers=3) as executor:
-            logger.info(f"Cloning mercurial repository to {self.mercurial_repo_dir}...")
-            executor.submit(repository.clone, self.mercurial_repo_dir)
+            if self.mercurial_repo_dir is not None:
+                logger.info(
+                    f"Cloning mercurial repository to {self.mercurial_repo_dir}..."
+                )
+                executor.submit(repository.clone, self.mercurial_repo_dir)
 
-            logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
-            executor.submit(self.clone_git_repo, self.git_repo_url, self.git_repo_dir)
+            if self.git_repo_url is not None:
+                logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
+                executor.submit(
+                    self.clone_git_repo, self.git_repo_url, self.git_repo_dir
+                )
 
-            logger.info(
-                f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
-            )
-            executor.submit(
-                self.clone_git_repo,
-                self.tokenized_git_repo_url,
-                self.tokenized_git_repo_dir,
-            )
+            if self.tokenized_git_repo_url is not None:
+                logger.info(
+                    f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
+                )
+                executor.submit(
+                    self.clone_git_repo,
+                    self.tokenized_git_repo_url,
+                    self.tokenized_git_repo_dir,
+                )
 
         logger.info(f"Initializing mapping between git and mercurial commits...")
         self.init_mapping()
@@ -118,10 +125,11 @@ class RegressorFinder(object):
         vcs_map.download_mapfile()
         vcs_map.load_mapfile()
 
-        (
-            self.tokenized_git_to_mercurial,
-            self.mercurial_to_tokenized_git,
-        ) = microannotate_utils.get_commit_mapping(self.tokenized_git_repo_dir)
+        if self.tokenized_git_repo_url is not None:
+            (
+                self.tokenized_git_to_mercurial,
+                self.mercurial_to_tokenized_git,
+            ) = microannotate_utils.get_commit_mapping(self.tokenized_git_repo_dir)
 
     # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
     def get_commits_to_ignore(self):
@@ -183,8 +191,6 @@ class RegressorFinder(object):
         db.append(IGNORED_COMMITS_DB, commits_to_ignore)
         zstd_compress(IGNORED_COMMITS_DB)
         db.upload(IGNORED_COMMITS_DB)
-
-        return prev_commits_to_ignore + commits_to_ignore
 
     def find_bug_fixing_commits(self):
         logger.info("Downloading commits database...")
@@ -280,22 +286,23 @@ class RegressorFinder(object):
         zstd_compress(BUG_FIXING_COMMITS_DB)
         db.upload(BUG_FIXING_COMMITS_DB)
 
-        bug_fixing_commits = prev_bug_fixing_commits + bug_fixing_commits
-        return [
+    def find_bug_introducing_commits(self, repo_dir, tokenized):
+        logger.info("Download commits to ignore...")
+        assert db.download(IGNORED_COMMITS_DB)
+        commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
+
+        logger.info("Download bug-fixing classifications...")
+        assert db.download(BUG_FIXING_COMMITS_DB)
+        bug_fixing_commits = [
             bug_fixing_commit
-            for bug_fixing_commit in bug_fixing_commits
+            for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
             if bug_fixing_commit["type"] in ["r", "d"]
         ]
 
-    def find_bug_introducing_commits(
-        self, bug_fixing_commits, commits_to_ignore, tokenized
-    ):
         if tokenized:
             db_path = TOKENIZED_BUG_INTRODUCING_COMMITS_DB
-            repo_dir = self.tokenized_git_repo_dir
         else:
             db_path = BUG_INTRODUCING_COMMITS_DB
-            repo_dir = self.git_repo_dir
 
         def git_to_mercurial(rev):
             if tokenized:
@@ -492,6 +499,12 @@ class RegressorFinder(object):
 
 
 def evaluate(bug_introducing_commits):
+    logger.info("Downloading commits database...")
+    assert db.download(repository.COMMITS_DB)
+
+    logger.info("Downloading bugs database...")
+    assert db.download(bugzilla.BUGS_DB)
+
     logger.info("Building bug -> commits map...")
     bug_to_commits_map = defaultdict(list)
     for commit in tqdm(repository.get_commits()):
@@ -586,45 +599,54 @@ def main():
     description = "Find bug-introducing commits from bug-fixing commits"
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument("cache_root", help="Cache for repository clones.")
+    parser.add_argument("what", choices=["to_ignore", "bug_fixing", "bug_introducing"])
     parser.add_argument(
-        "git_repo_url", help="URL to the git repository on which to run SZZ."
+        "--repo_dir",
+        help="Path to a Gecko repository. If no repository exists, it will be cloned to this location.",
     )
     parser.add_argument(
-        "git_repo_dir", help="Path where the git repository will be cloned."
+        "--git_repo_url", help="URL to the git repository on which to run SZZ."
     )
     parser.add_argument(
-        "tokenized_git_repo_url",
+        "--git_repo_dir", help="Path where the git repository will be cloned."
+    )
+    parser.add_argument(
+        "--tokenized_git_repo_url",
         help="URL to the tokenized git repository on which to run SZZ.",
     )
     parser.add_argument(
-        "tokenized_git_repo_dir",
+        "--tokenized_git_repo_dir",
         help="Path where the tokenized git repository will be cloned.",
     )
 
     args = parser.parse_args()
 
     regressor_finder = RegressorFinder(
-        args.cache_root,
+        args.repo_dir,
         args.git_repo_url,
         args.git_repo_dir,
         args.tokenized_git_repo_url,
         args.tokenized_git_repo_dir,
     )
 
-    commits_to_ignore = regressor_finder.get_commits_to_ignore()
+    if args.what == "to_ignore":
+        regressor_finder.get_commits_to_ignore()
+    elif args.what == "bug_fixing":
+        regressor_finder.find_bug_fixing_commits()
+    elif args.what == "bug_introducing":
+        assert args.git_repo_url or args.tokenized_git_repo_url
 
-    bug_fixing_commits = regressor_finder.find_bug_fixing_commits()
+        if args.git_repo_url:
+            assert not args.tokenized_git_repo_url
+            regressor_finder.find_bug_introducing_commits(args.git_repo_dir, False)
+            evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
 
-    regressor_finder.find_bug_introducing_commits(
-        bug_fixing_commits, commits_to_ignore, True
-    )
-    evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
-
-    regressor_finder.find_bug_introducing_commits(
-        bug_fixing_commits, commits_to_ignore, False
-    )
-    evaluate(db.read(BUG_INTRODUCING_COMMITS_DB))
+        if args.tokenized_git_repo_url:
+            assert not args.git_repo_url
+            regressor_finder.find_bug_introducing_commits(
+                args.tokenized_git_repo_dir, True
+            )
+            evaluate(db.read(TOKENIZED_BUG_INTRODUCING_COMMITS_DB))
 
 
 if __name__ == "__main__":
