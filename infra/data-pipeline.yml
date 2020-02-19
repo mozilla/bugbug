@@ -517,7 +517,7 @@ tasks:
       provisionerId: proj-relman
       workerType: compute-small
       dependencies:
-        - commits-retrieval
+        - commit-retrieval
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-commit-retrieval:${version}
@@ -658,7 +658,7 @@ tasks:
       dependencies:
         - commit-retrieval
         - bugs-retrieval
-        - regressor-finder-bug-fixing
+        - regressor-finder-bug-fixing-commits
       payload:
         maxRunTime: 7200
         image: mozilla/bugbug-base:${version}
