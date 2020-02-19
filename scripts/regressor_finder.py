@@ -18,8 +18,6 @@ import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
 from microannotate import utils as microannotate_utils
-from pydriller import GitRepository
-from pydriller.domain.commit import ModificationType
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
@@ -296,6 +294,9 @@ class RegressorFinder(object):
         db.upload(BUG_FIXING_COMMITS_DB)
 
     def find_bug_introducing_commits(self, repo_dir, tokenized):
+        from pydriller import GitRepository
+        from pydriller.domain.commit import ModificationType
+
         logger.info("Download commits to ignore...")
         assert db.download(IGNORED_COMMITS_DB)
         commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
