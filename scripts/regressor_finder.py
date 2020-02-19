@@ -169,8 +169,9 @@ class RegressorFinder(object):
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
         repository.set_commits_to_ignore(self.mercurial_repo_dir, commits)
-        commits_to_ignore = []
 
+        chosen_commits = set()
+        commits_to_ignore = []
         for commit in commits:
             if commit.ignored or commit.backedoutby:
                 commits_to_ignore.append(
@@ -179,8 +180,16 @@ class RegressorFinder(object):
                         "type": "backedout" if commit.backedoutby else "",
                     }
                 )
+                chosen_commits.add(commit.node)
 
         logger.info(f"{len(commits_to_ignore)} new commits to ignore...")
+
+        for prev_commit in prev_commits_to_ignore[::-1]:
+            if prev_commit["rev"] not in chosen_commits:
+                commits_to_ignore.append(prev_commit)
+                chosen_commits.add(prev_commit["rev"])
+
+        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
 
         logger.info(
             "...of which {} are backed-out".format(
@@ -188,7 +197,7 @@ class RegressorFinder(object):
             )
         )
 
-        db.append(IGNORED_COMMITS_DB, commits_to_ignore)
+        db.write(IGNORED_COMMITS_DB, commits_to_ignore)
         zstd_compress(IGNORED_COMMITS_DB)
         db.upload(IGNORED_COMMITS_DB)
 
