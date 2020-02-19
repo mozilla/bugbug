@@ -3,38 +3,62 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
 import pickle
 import shelve
 
 from bugbug import db
 from bugbug.utils import ExpQueue, LMDBDict
 
-TEST_SCHEDULING_DB = "data/test_scheduling_history.pickle"
-PAST_FAILURES_DB = "past_failures.lmdb.tar.zst"
+TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
+PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
 db.register(
-    TEST_SCHEDULING_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history.latest/artifacts/public/test_scheduling_history.pickle.zst",
+    TEST_LABEL_SCHEDULING_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
     7,
-    [PAST_FAILURES_DB],
+    [PAST_FAILURES_LABEL_DB],
+)
+
+TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
+PAST_FAILURES_GROUP_DB = "past_failures_group.lmdb.tar.zst"
+db.register(
+    TEST_GROUP_SCHEDULING_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
+    7,
+    [PAST_FAILURES_GROUP_DB],
 )
 
 HISTORICAL_TIMESPAN = 56
 
 
-def get_test_scheduling_history():
-    return db.read(TEST_SCHEDULING_DB)
+def get_test_scheduling_history(granularity):
+    if granularity == "label":
+        test_scheduling_db = TEST_LABEL_SCHEDULING_DB
+    elif granularity == "group":
+        test_scheduling_db = TEST_GROUP_SCHEDULING_DB
+    else:
+        raise Exception(f"{granularity} granularity unsupported")
+
+    return db.read(test_scheduling_db)
 
 
-def get_past_failures():
+def get_past_failures(granularity):
+    if granularity == "label":
+        past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
+    elif granularity == "group":
+        past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
+    else:
+        raise Exception(f"{granularity} granularity unsupported")
+
     return shelve.Shelf(
-        LMDBDict("data/past_failures.lmdb"),
+        LMDBDict(past_failures_db[: -len(".tar.zst")]),
         protocol=pickle.DEFAULT_PROTOCOL,
         writeback=True,
     )
 
 
 def _read_and_update_past_failures(
-    past_failures, type_, task, items, push_num, is_regression
+    past_failures, type_, runnable, items, push_num, is_regression
 ):
     values_total = []
     values_prev_7 = []
@@ -42,7 +66,7 @@ def _read_and_update_past_failures(
     values_prev_28 = []
     values_prev_56 = []
 
-    key = f"{type_}${task}$"
+    key = f"{type_}${runnable}$"
 
     for item in items:
         full_key = key + item
@@ -75,10 +99,12 @@ def _read_and_update_past_failures(
 
 
 def generate_data(
-    past_failures, commit, push_num, tasks, possible_regressions, likely_regressions
+    past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
 ):
-    for task in tasks:
-        is_regression = task in possible_regressions or task in likely_regressions
+    for runnable in runnables:
+        is_regression = (
+            runnable in possible_regressions or runnable in likely_regressions
+        )
 
         (
             total_failures,
@@ -87,7 +113,7 @@ def generate_data(
             past_28_pushes_failures,
             past_56_pushes_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "all", task, ["all"], push_num, is_regression
+            past_failures, "all", runnable, ["all"], push_num, is_regression
         )
 
         (
@@ -97,7 +123,7 @@ def generate_data(
             past_28_pushes_types_failures,
             past_56_pushes_types_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "type", task, commit["types"], push_num, is_regression,
+            past_failures, "type", runnable, commit["types"], push_num, is_regression,
         )
 
         (
@@ -107,7 +133,7 @@ def generate_data(
             past_28_pushes_files_failures,
             past_56_pushes_files_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "file", task, commit["files"], push_num, is_regression,
+            past_failures, "file", runnable, commit["files"], push_num, is_regression,
         )
 
         (
@@ -119,7 +145,7 @@ def generate_data(
         ) = _read_and_update_past_failures(
             past_failures,
             "directory",
-            task,
+            runnable,
             commit["directories"],
             push_num,
             is_regression,
@@ -134,14 +160,14 @@ def generate_data(
         ) = _read_and_update_past_failures(
             past_failures,
             "component",
-            task,
+            runnable,
             commit["components"],
             push_num,
             is_regression,
         )
 
         yield {
-            "name": task,
+            "name": runnable,
             "failures": total_failures,
             "failures_past_7_pushes": past_7_pushes_failures,
             "failures_past_14_pushes": past_14_pushes_failures,
@@ -167,6 +193,6 @@ def generate_data(
             "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
             "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
             "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
-            "is_possible_regression": task in possible_regressions,
-            "is_likely_regression": task in likely_regressions,
+            "is_possible_regression": runnable in possible_regressions,
+            "is_likely_regression": runnable in likely_regressions,
         }

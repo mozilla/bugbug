@@ -79,7 +79,7 @@ class TestSelectModel(Model):
 
         assert len(commit_map) > 0
 
-        for test_data in test_scheduling.get_test_scheduling_history():
+        for test_data in test_scheduling.get_test_scheduling_history("label"):
             revs = test_data["revs"]
             name = test_data["name"]
 
@@ -101,7 +101,7 @@ class TestSelectModel(Model):
     def get_labels(self):
         classes = {}
 
-        for test_data in test_scheduling.get_test_scheduling_history():
+        for test_data in test_scheduling.get_test_scheduling_history("label"):
             rev = test_data["revs"][0]
             name = test_data["name"]
 

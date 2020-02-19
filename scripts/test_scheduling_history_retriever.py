@@ -32,19 +32,23 @@ db.register(
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/adr_cache.tar.zst",
     3,
 )
-PUSH_DATA_LABEL_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst"
-PUSH_DATA_GROUP_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_group.json.zst"
+PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
 
 TRAINING_MONTHS = 6
 
 
-def filter_tasks(tasks, all_tasks):
+def filter_runnables(runnables, all_runnables, granularity):
     return tuple(
-        task
-        for task in tasks
-        if task in all_tasks
-        and any(task.startswith(j) for j in JOBS_TO_CONSIDER)
-        and not any(task.startswith(j) for j in JOBS_TO_IGNORE)
+        runnable
+        for runnable in runnables
+        if runnable in all_runnables
+        and (
+            granularity == "group"
+            or (
+                any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
+                and not any(runnable.startswith(j) for j in JOBS_TO_IGNORE)
+            )
+        )
     )
 
 
@@ -124,27 +128,37 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
         zstd_compress("push_data_label.json")
         zstd_compress("push_data_group.json")
 
-    def generate_test_scheduling_history(self):
-        updated = download_check_etag(PUSH_DATA_LABEL_URL)
+    def generate_test_scheduling_history(self, granularity):
+        push_data_path = f"push_data_{granularity}.json"
+        updated = download_check_etag(PUSH_DATA_URL.format(granularity=granularity))
         if updated:
-            zstd_decompress("push_data_label.json")
-        assert os.path.exists(
-            "push_data_label.json"
-        ), "Decompressed push data file exists"
+            zstd_decompress(push_data_path)
+        assert os.path.exists(push_data_path), "Decompressed push data file exists"
 
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
 
         HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
 
-        db.download(test_scheduling.TEST_SCHEDULING_DB, support_files_too=True)
+        if granularity == "label":
+            test_scheduling_db = test_scheduling.TEST_LABEL_SCHEDULING_DB
+            past_failures_db = os.path.join(
+                "data", test_scheduling.PAST_FAILURES_LABEL_DB
+            )
+        elif granularity == "group":
+            test_scheduling_db = test_scheduling.TEST_GROUP_SCHEDULING_DB
+            past_failures_db = os.path.join(
+                "data", test_scheduling.PAST_FAILURES_GROUP_DB
+            )
+
+        db.download(test_scheduling_db, support_files_too=True)
 
         last_node = None
-        for test_data in test_scheduling.get_test_scheduling_history():
+        for test_data in test_scheduling.get_test_scheduling_history(granularity):
             last_node = test_data["revs"][0]
 
         def generate_all_data():
-            past_failures = test_scheduling.get_past_failures()
+            past_failures = test_scheduling.get_past_failures(granularity)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
@@ -161,39 +175,42 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
 
                 commit_map[commit_data["node"]] = commit_data
 
-            with open("push_data_label.json", "r") as f:
+            with open(push_data_path, "r") as f:
                 push_data = json.load(f)[1:]
 
             logger.info(f"push data nodes: {len(push_data)}")
 
-            push_data = [
-                (
-                    revisions,
-                    rename_tasks(push_tasks),
-                    rename_tasks(possible_regressions),
-                    rename_tasks(likely_regressions),
-                )
-                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
-            ]
+            if granularity == "label":
+                push_data = [
+                    (
+                        revisions,
+                        rename_tasks(push_tasks),
+                        rename_tasks(possible_regressions),
+                        rename_tasks(likely_regressions),
+                    )
+                    for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+                ]
 
-            # In the last 28 pushes, we definitely run all possible tasks.
-            all_tasks_set = set(
-                sum((push_tasks for _, push_tasks, _, _ in push_data[-28:]), [])
+            # In the last 28 pushes, we definitely run all possible runnables.
+            all_runnables_set = set(
+                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
             )
-            # Filter tasks we don't need.
-            all_tasks = filter_tasks(list(all_tasks_set), all_tasks_set)
-            all_tasks_set = set(all_tasks)
-            logger.info(f"{len(all_tasks_set)} tasks run in the last 28 pushes")
+            # Filter runnables we don't need.
+            all_runnables = filter_runnables(
+                list(all_runnables_set), all_runnables_set, granularity
+            )
+            all_runnables_set = set(all_runnables_set)
+            logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
 
-            # Store all tasks in the past_failures DB so it can be used in the evaluation phase.
-            past_failures["all_tasks"] = all_tasks
-            # XXX: Should we recreate the DB from scratch if the previous all_tasks are not the
+            # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
+            past_failures["all_runnables"] = all_runnables
+            # XXX: Should we recreate the DB from scratch if the previous all_runnables are not the
             # same as the current ones?
 
             saved_nodes = set()
             skipped_no_commits = 0
             skipped_too_big_commits = 0
-            skipped_no_tasks = 0
+            skipped_no_runnables = 0
 
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
@@ -201,7 +218,7 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
             for i in tqdm(range(len(push_data))):
                 (
                     revisions,
-                    push_tasks,
+                    push_runnables,
                     possible_regressions,
                     likely_regressions,
                 ) = push_data.pop(0)
@@ -235,16 +252,18 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
                     skipped_too_big_commits += 1
                     continue
 
-                # If we considered all_tasks, we'd generate a huge amount of data.
-                # So we consider only the tasks which run in this push, and the possible and likely regressions
+                # If we considered all_runnables, we'd generate a huge amount of data.
+                # So we consider only the runnables which run in this push, and the possible and likely regressions
                 # from this push.
-                tasks_to_consider = list(
-                    set(push_tasks + possible_regressions + likely_regressions)
+                runnables_to_consider = list(
+                    set(push_runnables + possible_regressions + likely_regressions)
                 )
-                tasks_to_consider = filter_tasks(tasks_to_consider, all_tasks_set)
+                runnables_to_consider = filter_runnables(
+                    runnables_to_consider, all_runnables_set, granularity
+                )
 
-                if len(tasks_to_consider) == 0:
-                    skipped_no_tasks += 1
+                if len(runnables_to_consider) == 0:
+                    skipped_no_runnables += 1
                     continue
 
                 # Sync DB every 250 pushes, so we cleanup the shelve cache (we'd run OOM otherwise!).
@@ -257,7 +276,7 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
                     past_failures,
                     merged_commits,
                     push_num,
-                    tasks_to_consider,
+                    runnables_to_consider,
                     possible_regressions,
                     likely_regressions,
                 ):
@@ -269,17 +288,17 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
             logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
             logger.info(f"skipped {skipped_too_big_commits} (too big commits)")
-            logger.info(f"skipped {skipped_no_tasks} (no interesting tasks)")
+            logger.info(f"skipped {skipped_no_runnables} (no interesting runnables)")
 
             past_failures["push_num"] = push_num
             past_failures.close()
 
-        db.append(test_scheduling.TEST_SCHEDULING_DB, generate_all_data())
+        db.append(test_scheduling_db, generate_all_data())
 
-        zstd_compress(test_scheduling.TEST_SCHEDULING_DB)
+        zstd_compress(test_scheduling_db)
 
-        with open_tar_zst("data/past_failures.lmdb.tar.zst") as tar:
-            tar.add("data/past_failures.lmdb")
+        with open_tar_zst(past_failures_db) as tar:
+            tar.add(past_failures_db[: -len(".tar.zst")])
 
 
 def main():
@@ -289,6 +308,11 @@ def main():
     parser.add_argument(
         "op", help="Which operation to perform.", choices=["retrieve", "generate"]
     )
+    parser.add_argument(
+        "--granularity",
+        help="Which test granularity to use.",
+        choices=["label", "group"],
+    )
 
     args = parser.parse_args()
 
@@ -296,7 +320,8 @@ def main():
     if args.op == "retrieve":
         retriever.retrieve_push_data()
     elif args.op == "generate":
-        retriever.generate_test_scheduling_history()
+        assert args.granularity is not None
+        retriever.generate_test_scheduling_history(args.granularity)
 
 
 if __name__ == "__main__":

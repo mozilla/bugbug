@@ -239,7 +239,7 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: test-scheduling-history-generator
+    - ID: test-label-scheduling-history-generator
       created: {$fromNow: ''}
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
@@ -255,16 +255,17 @@ tasks:
         command:
           - bugbug-data-test-scheduling-history
           - generate
+          - --granularity=label
 
         artifacts:
-          public/test_scheduling_history.pickle.zst:
-            path: /data/test_scheduling_history.pickle.zst
+          public/test_label_scheduling_history.pickle.zst:
+            path: /data/test_label_scheduling_history.pickle.zst
             type: file
-          public/test_scheduling_history.pickle.version:
-            path: /data/test_scheduling_history.pickle.version
+          public/test_label_scheduling_history.pickle.version:
+            path: /data/test_label_scheduling_history.pickle.version
             type: file
-          public/past_failures.lmdb.tar.zst:
-            path: /data/past_failures.lmdb.tar.zst
+          public/past_failures_label.lmdb.tar.zst:
+            path: /data/past_failures_label.lmdb.tar.zst
             type: file
 
         features:
@@ -275,11 +276,56 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_scheduling_history.${version}
-        - index.project.relman.bugbug.data_test_scheduling_history.latest
+        - index.project.relman.bugbug.data_test_label_scheduling_history.${version}
+        - index.project.relman.bugbug.data_test_label_scheduling_history.latest
       metadata:
-        name: bugbug test scheduling history retrieval
-        description: bugbug test scheduling history retrieval
+        name: bugbug test label scheduling history retrieval
+        description: bugbug test label scheduling history retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: test-group-scheduling-history-generator
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '4 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      dependencies:
+        - test-scheduling-history-push_data-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-test-scheduling-history
+          - generate
+          - --granularity=group
+
+        artifacts:
+          public/test_group_scheduling_history.pickle.zst:
+            path: /data/test_group_scheduling_history.pickle.zst
+            type: file
+          public/test_group_scheduling_history.pickle.version:
+            path: /data/test_group_scheduling_history.pickle.version
+            type: file
+          public/past_failures_group.lmdb.tar.zst:
+            path: /data/past_failures_group.lmdb.tar.zst
+            type: file
+
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.data_test_group_scheduling_history.${version}
+        - index.project.relman.bugbug.data_test_group_scheduling_history.latest
+      metadata:
+        name: bugbug test group scheduling history retrieval
+        description: bugbug test group scheduling history retrieval
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -896,7 +942,7 @@ tasks:
       workerType: compute-super-large
       dependencies:
         - commit-retrieval
-        - test-scheduling-history-generator
+        - test-label-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}
@@ -935,7 +981,7 @@ tasks:
       workerType: compute-large
       dependencies:
         - commit-retrieval
-        - test-scheduling-history-generator
+        - test-label-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}

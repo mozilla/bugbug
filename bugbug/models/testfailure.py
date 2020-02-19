@@ -70,7 +70,7 @@ class TestFailureModel(CommitModel):
         assert len(commit_map) > 0
 
         done = set()
-        for test_data in test_scheduling.get_test_scheduling_history():
+        for test_data in test_scheduling.get_test_scheduling_history("label"):
             revs = test_data["revs"]
 
             if revs[0] in done:
@@ -93,7 +93,7 @@ class TestFailureModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        for test_data in test_scheduling.get_test_scheduling_history():
+        for test_data in test_scheduling.get_test_scheduling_history("label"):
             rev = test_data["revs"][0]
 
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
