@@ -21,10 +21,16 @@ from bugbug.model import Model
 
 
 class TestSelectModel(Model):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, granularity="label"):
         Model.__init__(self, lemmatization)
 
-        self.required_dbs = [repository.COMMITS_DB, test_scheduling.TEST_SCHEDULING_DB]
+        self.granularity = granularity
+
+        self.required_dbs = [repository.COMMITS_DB]
+        if granularity == "label":
+            self.required_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
+        elif granularity == "group":
+            self.required_dbs.append(test_scheduling.TEST_GROUP_SCHEDULING_DB)
 
         self.cross_validation_enabled = False
 
@@ -46,11 +52,15 @@ class TestSelectModel(Model):
             commit_features.other_deleted(),
             commit_features.test_deleted(),
             test_scheduling_features.name(),
-            test_scheduling_features.platform(),
-            test_scheduling_features.chunk(),
-            test_scheduling_features.suite(),
             test_scheduling_features.prev_failures(),
         ]
+
+        if granularity == "label":
+            feature_extractors += [
+                test_scheduling_features.platform(),
+                test_scheduling_features.chunk(),
+                test_scheduling_features.suite(),
+            ]
 
         self.extraction_pipeline = Pipeline(
             [
@@ -79,7 +89,7 @@ class TestSelectModel(Model):
 
         assert len(commit_map) > 0
 
-        for test_data in test_scheduling.get_test_scheduling_history("label"):
+        for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             revs = test_data["revs"]
             name = test_data["name"]
 
@@ -101,11 +111,11 @@ class TestSelectModel(Model):
     def get_labels(self):
         classes = {}
 
-        for test_data in test_scheduling.get_test_scheduling_history("label"):
+        for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
             name = test_data["name"]
 
-            if not name.startswith("test-"):
+            if self.granularity == "label" and not name.startswith("test-"):
                 continue
 
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
