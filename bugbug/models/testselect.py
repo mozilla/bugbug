@@ -64,6 +64,7 @@ class TestSelectModel(Model):
         elif granularity == "group":
             feature_extractors += [
                 test_scheduling_features.path_distance(),
+                test_scheduling_features.common_path_components(),
             ]
 
         self.extraction_pipeline = Pipeline(

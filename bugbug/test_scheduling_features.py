@@ -148,3 +148,12 @@ class path_distance(object):
                 distances.append(movement.count("/") + 1)
 
         return min(distances, default=None)
+
+
+class common_path_components(object):
+    def __call__(self, test_job, commit, **kwargs):
+        test_components = set(test_job["name"].split("/"))
+        common_components_numbers = [
+            len(set(path.split("/")) & test_components) for path in commit["files"]
+        ]
+        return max(common_components_numbers, default=None)
