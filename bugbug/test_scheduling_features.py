@@ -2,6 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
+import os
 
 
 class name(object):
@@ -132,3 +133,18 @@ class arch(object):
             archs, test_job["name"]
         )
         return archs.pop()
+
+
+class path_distance(object):
+    def __call__(self, test_job, commit, **kwargs):
+        distances = []
+        for path in commit["files"]:
+            movement = os.path.relpath(
+                os.path.dirname(test_job["name"]), os.path.dirname(path)
+            )
+            if movement == ".":
+                distances.append(0)
+            else:
+                distances.append(movement.count("/") + 1)
+
+        return min(distances, default=None)
