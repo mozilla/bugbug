@@ -9,7 +9,6 @@ import os
 import pickle
 import re
 import subprocess
-import tempfile
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
@@ -355,30 +354,28 @@ class CommitClassifier(object):
             )
 
             if self.git_repo_dir:
-                with tempfile.TemporaryDirectory() as tmpdirname:
-                    temp_file = os.path.join(tmpdirname, "temp.patch")
-                    with open(temp_file, "w") as f:
-                        f.write(patch.patch)
+                patch_proc = subprocess.Popen(
+                    ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
+                    stdin=subprocess.PIPE,
+                    cwd=self.git_repo_dir,
+                )
+                patch_proc.communicate(patch.patch.encode("utf-8"))
+                assert patch_proc.returncode == 0, "Failed to apply patch"
 
-                    subprocess.run(
-                        ["git", "apply", "--3way", temp_file],
-                        check=True,
-                        cwd=self.git_repo_dir,
-                    )
-                    subprocess.run(
-                        [
-                            "git",
-                            "-c",
-                            f"user.name={author_name}",
-                            "-c",
-                            f"user.email={author_email}",
-                            "commit",
-                            "-am",
-                            message,
-                        ],
-                        check=True,
-                        cwd=self.git_repo_dir,
-                    )
+                subprocess.run(
+                    [
+                        "git",
+                        "-c",
+                        f"user.name={author_name}",
+                        "-c",
+                        f"user.email={author_email}",
+                        "commit",
+                        "-am",
+                        message,
+                    ],
+                    check=True,
+                    cwd=self.git_repo_dir,
+                )
 
     def generate_feature_importance_data(self, probs, importance):
         X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
