@@ -287,7 +287,7 @@ class CommitClassifier(object):
             hg.update(rev=hg_base, clean=True)
             logger.info(f"Updated repo to {hg_base}")
 
-            if self.git_repo_dir:
+            if self.git_repo_dir and hg_base != "tip":
                 try:
                     self.git_base = vcs_map.mercurial_to_git(hg_base)
                     subprocess.run(
