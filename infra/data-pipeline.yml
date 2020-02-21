@@ -973,6 +973,45 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-test-group-select
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '5 days'}
+      expires: {$fromNow: '1 year'}
+      provisionerId: proj-relman
+      workerType: compute-super-large
+      dependencies:
+        - commit-retrieval
+        - test-group-scheduling-history-generator
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - testgroupselect
+
+        artifacts:
+          public/testgroupselectmodel.zst:
+            expires: {$fromNow: '1 month'}
+            path: /testgroupselectmodel.zst
+            type: file
+          public/metrics.json:
+            expires: {$fromNow: '1 year'}
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.train_testgroupselect.${version}
+        - index.project.relman.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_testgroupselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_testgroupselect.latest
+      metadata:
+        name: bugbug train test group selection model
+        description: bugbug train test group selection model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: train-test-failure
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
@@ -1068,6 +1107,7 @@ tasks:
         - train-stepstoreproduce
         - train-tracking
         - train-test-label-select
+        - train-test-group-select
         - train-test-failure
       payload:
         maxRunTime: 3600
