@@ -934,7 +934,7 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: train-test-select
+    - ID: train-test-label-select
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
@@ -948,12 +948,12 @@ tasks:
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-train
-          - testselect
+          - testlabelselect
 
         artifacts:
-          public/testselectmodel.zst:
+          public/testlabelselectmodel.zst:
             expires: {$fromNow: '1 month'}
-            path: /testselectmodel.zst
+            path: /testlabelselectmodel.zst
             type: file
           public/metrics.json:
             expires: {$fromNow: '1 year'}
@@ -963,13 +963,13 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_testselect.${version}
-        - index.project.relman.bugbug.train_testselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_testselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_testselect.latest
+        - index.project.relman.bugbug.train_testlabelselect.${version}
+        - index.project.relman.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.relman.bugbug.train_testlabelselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.relman.bugbug.train_testlabelselect.latest
       metadata:
-        name: bugbug train test selection model
-        description: bugbug train test selection model
+        name: bugbug train test label selection model
+        description: bugbug train test label selection model
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -1067,7 +1067,7 @@ tasks:
         - train-spambug
         - train-stepstoreproduce
         - train-tracking
-        - train-test-select
+        - train-test-label-select
         - train-test-failure
       payload:
         maxRunTime: 3600
@@ -1239,7 +1239,7 @@ tasks:
       expires: {$fromNow: '1 month'}
       dependencies:
         - train-test-failure
-        - train-test-select
+        - train-test-label-select
       scopes:
           - hooks:modify-hook:project-relman/bugbug-test-select
           - assume:hook-id:project-relman/bugbug-test-select

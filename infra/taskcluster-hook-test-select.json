@@ -47,7 +47,7 @@
             },
             "command": [
                 "bugbug-classify-commit",
-                "testselect",
+                "testlabelselect",
                 "/cache/mozilla-central",
                 "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
                 "--diff-id=${payload['DIFF_ID']}",

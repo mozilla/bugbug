@@ -45,8 +45,6 @@ class Trainer(object):
             model_obj = model_class(
                 args.training_set_size, args.lemmatization, args.cleanup_urls
             )
-        elif args.model == "testselect":
-            model_obj = model_class(args.lemmatization, args.test_granularity)
         else:
             model_obj = model_class(args.lemmatization)
 
@@ -130,12 +128,6 @@ def parse_args(args):
         "--interpretable",
         help="""Only use human-interpretable features. Only used for regressor task.""",
         action="store_true",
-    )
-    parser.add_argument(
-        "--test-granularity",
-        help="Granularity to use for test selection (label or group).",
-        choices=["label", "group"],
-        default="label",
     )
     return parser.parse_args(args)
 

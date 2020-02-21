@@ -143,3 +143,13 @@ class TestSelectModel(Model):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+
+class TestLabelSelectModel(TestSelectModel):
+    def __init__(self, lemmatization=False):
+        TestSelectModel.__init__(self, lemmatization, "label")
+
+
+class TestGroupSelectModel(TestSelectModel):
+    def __init__(self, lemmatization=False):
+        TestSelectModel.__init__(self, lemmatization, "group")

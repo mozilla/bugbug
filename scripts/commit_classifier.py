@@ -175,7 +175,7 @@ class CommitClassifier(object):
             with open(past_bugs_by_function_path, "rb") as f:
                 self.past_bugs_by_function = pickle.load(f)
 
-        if model_name == "testselect":
+        if model_name == "testlabelselect":
             self.use_test_history = True
             assert db.download_support_file(
                 test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
