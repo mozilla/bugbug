@@ -53,7 +53,7 @@
             "assume:hook-id:project-relman/bugbug"
         ],
         "tags": {},
-        "workerType": "ci"
+        "workerType": "batch"
     },
     "triggerSchema": {
         "additionalProperties": false,

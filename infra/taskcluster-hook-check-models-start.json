@@ -52,7 +52,7 @@
             "assume:hook-id:project-relman/bugbug-checks"
         ],
         "tags": {},
-        "workerType": "ci"
+        "workerType": "batch"
     },
     "triggerSchema": {
         "additionalProperties": false,
