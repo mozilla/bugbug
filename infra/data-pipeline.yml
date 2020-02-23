@@ -1340,6 +1340,7 @@ tasks:
     - ID: http-deploy
       dependencies:
         - docker-build
+        - integration-test
       scopes:
         - secrets:get:project/relman/bugbug/deploy
       created: {$fromNow: ''}
