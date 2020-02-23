@@ -5,7 +5,7 @@ tasks:
     deadline: {$fromNow: '12 hours'}
     expires: {$fromNow: '1 week'}
     provisionerId: proj-relman
-    workerType: ci
+    workerType: batch
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-base
