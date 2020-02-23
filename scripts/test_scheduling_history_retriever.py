@@ -103,6 +103,8 @@ class Retriever(object):
 
         upload_adr_cache()
 
+        assert proc.returncode == 0, "Failed to run ci-recipes"
+
     def retrieve_push_data(self):
         # Download previous cache.
         db.download(ADR_CACHE_DB)
