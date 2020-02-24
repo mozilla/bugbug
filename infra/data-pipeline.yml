@@ -206,13 +206,10 @@ tasks:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
         maxRunTime: 259200
-        image: ahal/adr
+        image: mozilla/bugbug-base:${version}
         command:
-          - "/bin/bash"
-          - "-cx"
-          - "wget ${repository}/raw/${version}/scripts/test_scheduling_history_retriever.py &&
-             pip install --disable-pip-version-check --quiet --no-cache-dir bugbug==${version} &&
-             python test_scheduling_history_retriever.py retrieve"
+          - bugbug-data-test-scheduling-history
+          - retrieve
 
         artifacts:
           public/push_data_label.json.zst:

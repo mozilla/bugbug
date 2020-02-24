@@ -3,12 +3,14 @@
 import argparse
 import json
 import os
-import subprocess
 import time
+import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
+import adr
 import dateutil.parser
+import mozci
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -62,48 +64,65 @@ class Retriever(object):
         os.makedirs("data", exist_ok=True)
         self.cache_path = os.path.splitext(ADR_CACHE_DB)[0]
 
-    def run_ci_recipes(self, runnable, from_months):
+    def generate_push_data(self, runnable, from_months):
         def upload_adr_cache():
             with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
                 tar.add(self.cache_path)
 
             db.upload(ADR_CACHE_DB)
 
-        proc = subprocess.Popen(
-            [
-                "run-adr",
-                "--ref",
-                "5b17ddb7fd1caa460faff2d076a4d0a25c4acf32",
-                "mozilla/ci-recipes",
-                "recipe",
-                "-o",
-                os.path.abspath(f"push_data_{runnable}.json"),
-                "-f",
-                "json",
-                "push_data",
-                "--",
-                "--from",
-                f"today-{from_months}month",
-                "--to",
-                "today-3day",
-                "--branch",
-                "autoland",
-                "--runnable",
-                runnable,
-            ],
-            stdout=subprocess.DEVNULL,  # Redirect to /dev/null, as the logs are too big otherwise.
+        pushes = mozci.push.make_push_objects(
+            from_date=f"today-{from_months}month",
+            to_date="today-3day",
+            branch="autoland",
         )
 
-        elapsed = 0
-        while proc.poll() is None:
-            time.sleep(6)
-            elapsed += 6
-            if elapsed % 3600 == 0:
+        start_time = time.monotonic()
+
+        num_cached = 0
+
+        push_data = []
+
+        for push in tqdm(pushes):
+            key = f"push_data.{runnable}.{push.rev}"
+
+            logger.info(f"Analyzing {push.rev} at the {runnable} level...")
+
+            if adr.config.cache.has(key):
+                num_cached += 1
+                push_data.append(adr.config.cache.get(key))
+            else:
+                try:
+                    if runnable == "label":
+                        runnables = push.task_labels
+                    elif runnable == "group":
+                        runnables = push.group_summaries.keys()
+
+                    value = [
+                        push.revs,
+                        list(runnables),
+                        list(push.get_possible_regressions(runnable)),
+                        list(push.get_likely_regressions(runnable)),
+                    ]
+                    push_data.append(value)
+                    adr.config.cache.forever(key, value)
+                except adr.errors.MissingDataError:
+                    logger.warning(
+                        f"Tasks for push {push.rev} can't be found on ActiveData"
+                    )
+                except Exception:
+                    traceback.print_exc()
+
+            if time.monotonic() - start_time >= 3600:
                 upload_adr_cache()
+                start_time = time.monotonic()
+
+        logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
 
         upload_adr_cache()
 
-        assert proc.returncode == 0, "Failed to run ci-recipes"
+        with open(f"push_data_{runnable}.json", "w") as f:
+            json.dump(push_data, f)
 
     def retrieve_push_data(self):
         # Download previous cache.
@@ -120,12 +139,12 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
 
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use 3 months more than that to calculate the failure statistics.
-        self.run_ci_recipes("label", TRAINING_MONTHS + 3)
+        self.generate_push_data("label", TRAINING_MONTHS + 3)
 
         # For groups, we only have 12 weeks in ActiveData. Getting previous data
         # from task artifacts is slow, so for now we only get what we can get from
         # ActiveData and we'll see if it's enough to train a satisfying model.
-        self.run_ci_recipes("group", 3)
+        self.generate_push_data("group", 3)
 
         zstd_compress("push_data_label.json")
         zstd_compress("push_data_group.json")
@@ -178,7 +197,7 @@ file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
                 commit_map[commit_data["node"]] = commit_data
 
             with open(push_data_path, "r") as f:
-                push_data = json.load(f)[1:]
+                push_data = json.load(f)
 
             logger.info(f"push data nodes: {len(push_data)}")
 
