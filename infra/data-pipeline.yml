@@ -617,9 +617,6 @@ tasks:
       workerType: compute-large
       dependencies:
         - commit-retrieval
-        - microannotate-generate-tokenize
-        - microannotate-generate-remove-comments
-        - microannotate-generate-tokenize-and-remove-comments
         - bugs-retrieval
         - regressor-finder-commits-to-ignore
         - regressor-finder-bug-fixing-commits
