@@ -7,7 +7,7 @@ RUN echo 'deb http://deb.debian.org/debian testing main non-free contrib' > /etc
 # git is required by the annotate pipeline.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -t testing git && \
-    apt-get install -y gcc curl && \
+    apt-get install -y --no-install-recommends gcc curl && \
     pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.2 && \
     hg clone -r 102106f53cb2 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
