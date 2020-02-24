@@ -8,6 +8,7 @@ import concurrent.futures
 import os
 import subprocess
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -475,6 +476,8 @@ class RegressorFinder(object):
         ) as executor:
 
             def results():
+                start_time = time.monotonic()
+
                 bug_introducing_commit_futures = [
                     executor.submit(find_bic, bug_fixing_commit)
                     for bug_fixing_commit in bug_fixing_commits
@@ -500,8 +503,9 @@ class RegressorFinder(object):
                     if result is not None:
                         yield from result
 
-                    if i % 250 == 0:
+                    if time.monotonic() - start_time >= 3600:
                         compress_and_upload()
+                        start_time = time.monotonic()
 
             db.append(db_path, results())
 
