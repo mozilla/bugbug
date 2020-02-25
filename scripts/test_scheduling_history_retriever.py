@@ -10,7 +10,7 @@ from logging import INFO, basicConfig, getLogger
 
 import adr
 import dateutil.parser
-import mozci
+import mozci.push
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
