@@ -478,25 +478,22 @@ class RegressorFinder(object):
             def results():
                 start_time = time.monotonic()
 
-                bug_introducing_commit_futures = [
-                    executor.submit(find_bic, bug_fixing_commit)
+                futures = {
+                    executor.submit(find_bic, bug_fixing_commit): bug_fixing_commit[
+                        "rev"
+                    ]
                     for bug_fixing_commit in bug_fixing_commits
-                ]
+                }
 
-                for i, future in enumerate(
-                    tqdm(
-                        concurrent.futures.as_completed(bug_introducing_commit_futures),
-                        total=len(bug_introducing_commit_futures),
-                    )
+                for future in tqdm(
+                    concurrent.futures.as_completed(futures), total=len(futures),
                 ):
                     exc = future.exception()
                     if exc is not None:
                         logger.info(
-                            "Exception {} while analyzing {}".format(
-                                exc, bug_fixing_commits[i]["rev"]
-                            )
+                            f"Exception {exc} while analyzing {futures[future]}"
                         )
-                        for f in bug_introducing_commit_futures:
+                        for f in futures:
                             f.cancel()
 
                     result = future.result()
