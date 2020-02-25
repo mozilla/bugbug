@@ -1,0 +1,2 @@
+[adr.cache.stores]
+file = { driver = "file", path = "/data/adr_cache" }

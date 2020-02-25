@@ -62,12 +62,16 @@ def rename_tasks(tasks):
 class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
-        self.cache_path = os.path.splitext(ADR_CACHE_DB)[0]
 
     def generate_push_data(self, runnable, from_months):
         def upload_adr_cache():
+            cache_path = os.path.splitext(ADR_CACHE_DB)[0]
+            assert os.path.abspath(
+                adr.config["cache"]["stores"]["file"]["path"]
+            ) == os.path.abspath(cache_path)
+
             with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
-                tar.add(self.cache_path)
+                tar.add(cache_path)
 
             db.upload(ADR_CACHE_DB)
 
@@ -127,15 +131,6 @@ class Retriever(object):
     def retrieve_push_data(self):
         # Download previous cache.
         db.download(ADR_CACHE_DB)
-
-        # Setup adr cache configuration.
-        os.makedirs(os.path.expanduser("~/.config/adr"), exist_ok=True)
-        with open(os.path.expanduser("~/.config/adr/config.toml"), "w") as f:
-            f.write(
-                f"""[adr.cache.stores]
-file = {{ driver = "file", path = "{os.path.abspath(self.cache_path)}" }}
-"""
-            )
 
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use 3 months more than that to calculate the failure statistics.

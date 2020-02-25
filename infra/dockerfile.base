@@ -9,5 +9,7 @@ RUN apt-get update && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
 
+COPY infra/adr_config.toml /root/.config/adr/config.toml
+
 COPY . /tmp/bugbug
 RUN pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
