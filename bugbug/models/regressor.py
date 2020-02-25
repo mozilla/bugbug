@@ -74,6 +74,7 @@ class RegressorModel(CommitModel):
             commit_features.test_files_modified_num(),
             commit_features.functions_touched_num(),
             commit_features.functions_touched_size(),
+            commit_features.source_code_file_metrics(),
         ]
 
         cleanup_functions = [
