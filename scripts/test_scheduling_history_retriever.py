@@ -128,6 +128,8 @@ class Retriever(object):
         with open(f"push_data_{runnable}.json", "w") as f:
             json.dump(push_data, f)
 
+        zstd_compress(f"push_data_{runnable}.json")
+
     def retrieve_push_data(self):
         # Download previous cache.
         db.download(ADR_CACHE_DB)
@@ -140,9 +142,6 @@ class Retriever(object):
         # from task artifacts is slow, so for now we only get what we can get from
         # ActiveData and we'll see if it's enough to train a satisfying model.
         self.generate_push_data("group", 3)
-
-        zstd_compress("push_data_label.json")
-        zstd_compress("push_data_group.json")
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
