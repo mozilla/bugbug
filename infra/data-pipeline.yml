@@ -1309,7 +1309,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: batch
+      workerType: ci
       payload:
         features:
           taskclusterProxy:
