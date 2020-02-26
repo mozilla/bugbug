@@ -45,7 +45,7 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
-               pre-commit run -a"
+               pre-commit run -a --show-diff-on-failure"
         metadata:
           name: bugbug lint
           description: bugbug lint
