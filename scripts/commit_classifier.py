@@ -710,6 +710,15 @@ class CommitClassifier(object):
 
         stop_hash = p.stdout.decode().strip()
 
+        p = subprocess.run(
+            ["git", "rev-list", "-n", "1", "HEAD",],
+            check=True,
+            capture_output=True,
+            cwd=self.git_repo_dir,
+        )
+
+        start_hash = p.stdout.decode().strip()
+
         # Run the method-level analyzer.
         subprocess.run(
             [
@@ -718,7 +727,7 @@ class CommitClassifier(object):
                 "--repo",
                 self.git_repo_dir,
                 "--start",
-                "HEAD",
+                start_hash,
                 "--stop",
                 stop_hash,
                 "--output",
