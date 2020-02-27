@@ -140,7 +140,7 @@ class CommitClassifier(object):
             self.clone_git_repo(
                 "https://github.com/lucapascarella/MethodDefectPredictor",
                 method_defect_predictor_dir,
-                "fa5269b959d8ddf7e97d1e92523bb64c17f9bbcd",
+                "8cc47f47ffb686a29324435a0151b5fabd37f865",
             )
 
         if model_name == "regressor":
