@@ -200,8 +200,6 @@ tasks:
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
       workerType: ci
-      dependencies:
-        - commit-retrieval
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
