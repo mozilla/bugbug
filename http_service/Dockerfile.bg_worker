@@ -1,6 +1,6 @@
 ARG BUGBUG_VERSION=latest
 
-FROM mozilla/bugbug-base:$BUGBUG_VERSION
+FROM mozilla/bugbug-commit-retrieval:$BUGBUG_VERSION
 
 # Install dependencies first
 COPY requirements.txt /requirements-http.txt

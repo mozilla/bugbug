@@ -10,6 +10,7 @@ import sys
 from redis import Redis
 from rq import Connection, Worker
 
+import bugbug_http.boot
 import bugbug_http.models
 
 
@@ -17,6 +18,9 @@ def main():
 
     # Preload libraries
     bugbug_http.models.preload_models()
+
+    # Bootstrap the worker assets
+    bugbug_http.boot.boot_worker()
 
     # Provide queue names to listen to as arguments to this script,
     # similar to rq worker
