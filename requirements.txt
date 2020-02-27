@@ -1,8 +1,8 @@
 adr==0.17.5
-boto3==1.12.6
+boto3==1.12.8
 imbalanced-learn==0.6.2
 joblib==0.14.1
-libmozdata==0.1.64
+libmozdata==0.1.65
 lmdb==0.98
 matplotlib==3.1.3
 microannotate==0.0.19
@@ -10,7 +10,7 @@ mozci==1.2.6
 numpy==1.18.1
 orjson==2.5.1
 pandas==1.0.1
-pydriller==1.11
+pydriller==1.11.1
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.8.1
 python-hglib==2.6.1
@@ -20,8 +20,8 @@ scikit-learn==0.22.1
 scipy==1.4.1
 shap[plots]==0.34.0
 tabulate==0.8.6
-taskcluster==25.3.0
-tenacity==6.0.0
+taskcluster==25.4.0
+tenacity==6.1.0
 tqdm==4.43.0
 xgboost==0.90
 zstandard==0.13.0

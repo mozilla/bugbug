@@ -12,6 +12,7 @@ import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
+import dateutil.parser
 import hglib
 import joblib
 import matplotlib
@@ -140,7 +141,7 @@ class CommitClassifier(object):
             self.clone_git_repo(
                 "https://github.com/lucapascarella/MethodDefectPredictor",
                 method_defect_predictor_dir,
-                "fa5269b959d8ddf7e97d1e92523bb64c17f9bbcd",
+                "8cc47f47ffb686a29324435a0151b5fabd37f865",
             )
 
         if model_name == "regressor":
@@ -693,22 +694,22 @@ class CommitClassifier(object):
     def classify_methods(self, commit):
         # Get commit hash from 4 months before the analysis time.
         # The method-level analyzer needs 4 months of history.
+        stop_hash = None
         four_months_ago = datetime.utcnow() - relativedelta(months=4)
+        for commit in repository.get_commits():
+            if dateutil.parser.parse(commit["pushdate"]) >= four_months_ago:
+                stop_hash = vcs_map.mercurial_to_git(commit["node"])
+                break
+        assert stop_hash is not None
+
         p = subprocess.run(
-            [
-                "git",
-                "rev-list",
-                "-n",
-                "1",
-                "--until={}".format(four_months_ago.strftime("%Y-%m-%d")),
-                "HEAD",
-            ],
+            ["git", "rev-list", "-n", "1", "HEAD",],
             check=True,
             capture_output=True,
             cwd=self.git_repo_dir,
         )
 
-        stop_hash = p.stdout.decode().strip()
+        start_hash = p.stdout.decode().strip()
 
         # Run the method-level analyzer.
         subprocess.run(
@@ -718,7 +719,7 @@ class CommitClassifier(object):
                 "--repo",
                 self.git_repo_dir,
                 "--start",
-                "HEAD",
+                start_hash,
                 "--stop",
                 stop_hash,
                 "--output",
