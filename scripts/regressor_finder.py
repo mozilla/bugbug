@@ -98,7 +98,7 @@ class RegressorFinder(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
-                wait=tenacity.wait_fixed(30),
+                wait=tenacity.wait_exponential(multiplier=1, min=16, max=128),
                 stop=tenacity.stop_after_attempt(5),
             )()
 
@@ -113,7 +113,7 @@ class RegressorFinder(object):
                 capture_output=True,
                 check=True,
             ),
-            wait=tenacity.wait_fixed(30),
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=128),
             stop=tenacity.stop_after_attempt(5),
         )()
 
