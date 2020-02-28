@@ -130,7 +130,7 @@ tasks:
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --disable-pip-version-check --quiet --no-cache-dir . &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r http_service/requirements.txt &&
+               pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service &&
                pytest --cov=http_service http_service/tests/ -vvv &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:

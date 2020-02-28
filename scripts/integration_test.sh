@@ -58,11 +58,11 @@ sleep 1
 redis-cli -n 4 FLUSHDB
 
 # Start the http server
-gunicorn -b 127.0.0.1:8000 http_service.app --preload --timeout 30 -w 3 &
+gunicorn -b 127.0.0.1:8000 bugbug_http.app --preload --timeout 30 -w 3 &
 gunicorn_pid=$!
 
 # Start the background worker
-env BUGBUG_ALLOW_MISSING_MODELS=1 python http_service/worker.py high default low &
+env BUGBUG_ALLOW_MISSING_MODELS=1 bugbug-http-worker high default low &
 worker_pid=$!
 
 # Ensure we take down the containers at the end

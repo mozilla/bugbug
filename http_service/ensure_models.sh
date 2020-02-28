@@ -8,13 +8,11 @@
 
 set -eox pipefail
 
-CURRENT_DIR=$(dirname "$0")
-
 if [ "$CHECK_MODELS" == "0" ]; then
     echo "Skipping downloading and checking models!"
     exit 0;
 fi
 
-python "$CURRENT_DIR/download_models.py"
+python -m bugbug_http.download_models
 
-python "$CURRENT_DIR/check_models.py"
+python -m bugbug_http.check_models
