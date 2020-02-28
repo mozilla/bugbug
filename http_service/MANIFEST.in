@@ -1,0 +1,1 @@
+include bugbug_http/templates/*.html

@@ -7,10 +7,7 @@ import json
 
 import pytest
 
-from http_service.app import (  # TODO: Move http_service under bugbug to solve this import name
-    API_TOKEN,
-    application,
-)
+from bugbug_http.app import API_TOKEN, application
 
 
 @pytest.fixture

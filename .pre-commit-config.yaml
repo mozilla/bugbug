@@ -50,6 +50,15 @@ repos:
     rev: v0.761
     hooks:
     -   id: mypy
+        name: mypy-bugbug
+        files: ^bugbug/
+        entry: mypy bugbug/
+        pass_filenames: false
+    -   id: mypy
+        name: mypy-bugbug-http
+        files: ^http_service/
+        entry: mypy http_service/
+        pass_filenames: false
 -   repo: meta
     hooks:
     -   id: check-useless-excludes

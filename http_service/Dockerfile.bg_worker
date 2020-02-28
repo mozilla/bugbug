@@ -2,11 +2,13 @@ ARG BUGBUG_VERSION=latest
 
 FROM mozilla/bugbug-base:$BUGBUG_VERSION
 
-COPY requirements.txt /code/http_service/
+# Install dependencies first
+COPY requirements.txt /requirements-http.txt
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements-http.txt
 
-RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /code/http_service/requirements.txt
-
-COPY . /code/http_service/
+# Setup http service as package
+COPY . /code/http_service
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir /code/http_service
 
 # Load the models
 WORKDIR /code/
@@ -16,4 +18,4 @@ ENV CHECK_MODELS="${CHECK_MODELS}"
 
 RUN bash /code/http_service/ensure_models.sh
 
-CMD python /code/http_service/worker.py high default low
+CMD bugbug-http-worker high default low

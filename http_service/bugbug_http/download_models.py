@@ -3,8 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Non-relative imports might be brittle
-from models import MODELS_NAMES, retrieve_model
+from bugbug_http.models import MODELS_NAMES, retrieve_model
 
 
 def preload_models():

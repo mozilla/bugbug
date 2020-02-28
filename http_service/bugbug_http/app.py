@@ -22,9 +22,8 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
 from bugbug import get_bugbug_version
-
-from .models import MODELS_NAMES, change_time_key, classify_bug, result_key
-from .utils import get_bugzilla_http_client
+from bugbug_http.models import MODELS_NAMES, change_time_key, classify_bug, result_key
+from bugbug_http.utils import get_bugzilla_http_client
 
 API_TOKEN = "X-Api-Key"
 

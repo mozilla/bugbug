@@ -7,8 +7,7 @@ import logging
 import os
 import sys
 
-# Non-relative imports might be brittle
-from models import MODELS_NAMES, get_model
+from bugbug_http.models import MODELS_NAMES, get_model
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
