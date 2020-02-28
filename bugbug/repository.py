@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import pickle
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -965,11 +966,7 @@ def clone(repo_dir):
 
     cmd.insert(0, hglib.HGPATH)
 
-    proc = hglib.util.popen(cmd)
-    out, err = proc.communicate()
-    if proc.returncode:
-        raise hglib.error.CommandError(cmd, proc.returncode, out, err)
-
+    subprocess.check_output(cmd)
     logger.info("mozilla-central cloned")
 
     # Remove pushlog DB to make sure it's regenerated.
