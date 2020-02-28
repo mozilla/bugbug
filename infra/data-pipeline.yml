@@ -1333,6 +1333,7 @@ tasks:
       dependencies:
         - docker-build
         - integration-test
+        - test-label-scheduling-history-generator
       scopes:
         - secrets:get:project/relman/bugbug/deploy
       created: {$fromNow: ''}
