@@ -23,7 +23,7 @@ def integration_test():
         if response.status_code == 200:
             break
 
-        time.sleep(1)
+        time.sleep(30)
 
     if not response:
         raise Exception("Couldn't get an answer in 900 seconds")
@@ -46,7 +46,7 @@ def integration_test():
         if response.status_code == 200:
             break
 
-        time.sleep(1)
+        time.sleep(30)
 
     if not response:
         raise Exception("Couldn't get an answer in 100 seconds")
