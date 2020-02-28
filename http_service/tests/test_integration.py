@@ -15,7 +15,7 @@ def integration_test():
     # First try to classify a single bug
     single_bug_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406"
     response = None
-    for i in range(100):
+    for i in range(600):
         response = requests.get(single_bug_url, headers={"X-Api-Key": "Test"})
 
         if response.status_code == 200:
