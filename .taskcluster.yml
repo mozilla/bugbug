@@ -103,6 +103,7 @@ tasks:
                pip install --disable-pip-version-check --quiet --no-cache-dir -r infra/spawn_pipeline_requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                python -m pytest --cov=./ tests/test_*.py &&
+               python -m pytest --cov=./ http_service/tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug tests
