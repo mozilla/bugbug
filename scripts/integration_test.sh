@@ -6,7 +6,8 @@ set -euox pipefail
 
 # Supposed to be run from the repository root directory
 
-cd http_service/models/;
+mkdir -p models
+cd models
 
 # Remove the models and any old data
 rm defectenhancementtaskmodel* || true;
@@ -41,10 +42,9 @@ bugbug-train --limit 30000 --no-download backout
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
 # up on Taskcluster
 cd ../
-pip install -r requirements.txt
-cd ../
+pip install ./http_service
 pwd
-ls http_service/models/
+ls models
 
 export REDIS_URL=redis://localhost:6379/4
 
