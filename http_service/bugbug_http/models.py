@@ -27,7 +27,7 @@ MODELS_NAMES = [
     "stepstoreproduce",
     "spambug",
 ]
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+MODELS_DIR = "models"
 BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
