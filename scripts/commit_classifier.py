@@ -178,7 +178,8 @@ class CommitClassifier(object):
         if model_name == "testlabelselect":
             self.use_test_history = True
             assert db.download_support_file(
-                test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
+                test_scheduling.TEST_LABEL_SCHEDULING_DB,
+                test_scheduling.PAST_FAILURES_LABEL_DB,
             )
             self.past_failures_data = test_scheduling.get_past_failures()
 

@@ -17,7 +17,7 @@ class TestFailureModel(CommitModel):
     def __init__(self, lemmatization=False):
         CommitModel.__init__(self, lemmatization)
 
-        self.required_dbs.append(test_scheduling.TEST_SCHEDULING_DB)
+        self.required_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
 
         self.sampler = RandomUnderSampler(random_state=0)
 
