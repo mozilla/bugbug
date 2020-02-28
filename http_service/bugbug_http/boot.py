@@ -15,9 +15,9 @@ def boot_worker():
     repo_dir = os.path.join(tempfile.gettempdir(), "bugbug-hg")
     repository.clone(repo_dir)
 
-    # Download test scheduling DB
+    # Download databases
     assert db.download_support_file(
-        test_scheduling.TEST_SCHEDULING_DB, test_scheduling.PAST_FAILURES_DB
+        test_scheduling.TEST_LABEL_SCHEDULING_DB, test_scheduling.PAST_FAILURES_LABEL_DB
     )
 
     # Download commits DB
