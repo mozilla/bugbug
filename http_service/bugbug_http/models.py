@@ -16,6 +16,7 @@ from bugbug import bugzilla, get_bugbug_version
 from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.utils import zstd_decompress
+from bugbug_http import ALLOW_MISSING_MODELS
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -33,8 +34,6 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
 MODEL_CACHE: Dict[str, Model] = {}
-
-ALLOW_MISSING_MODELS = bool(int(os.environ.get("BUGBUG_ALLOW_MISSING_MODELS", "0")))
 
 
 def result_key(model_name, bug_id):

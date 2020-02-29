@@ -8,6 +8,7 @@ import os
 import tempfile
 
 from bugbug import db, repository, test_scheduling
+from bugbug_http import ALLOW_MISSING_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -21,21 +22,28 @@ def boot_worker():
 
     # Download databases
     logger.info("Downloading test scheduling DB support file...")
-    db.download_support_file(
-        test_scheduling.TEST_LABEL_SCHEDULING_DB, test_scheduling.PAST_FAILURES_LABEL_DB
+    assert (
+        db.download_support_file(
+            test_scheduling.TEST_LABEL_SCHEDULING_DB,
+            test_scheduling.PAST_FAILURES_LABEL_DB,
+        )
+        or ALLOW_MISSING_MODELS
     )
 
     # Download commits DB
     logger.info("Downloading commits DB...")
-    assert db.download(repository.COMMITS_DB, support_files_too=True)
+    commits_db_downloaded = db.download(repository.COMMITS_DB, support_files_too=True)
+    if not ALLOW_MISSING_MODELS:
+        assert commits_db_downloaded
 
-    # And update it
-    logger.info("Browsing all commits...")
-    for commit in repository.get_commits():
-        pass
+    if commits_db_downloaded:
+        # And update it
+        logger.info("Browsing all commits...")
+        for commit in repository.get_commits():
+            pass
 
-    rev_start = "children({})".format(commit["node"])
-    logger.info("Updating commits DB...")
-    repository.download_commits(repo_dir, rev_start)
+        rev_start = "children({})".format(commit["node"])
+        logger.info("Updating commits DB...")
+        repository.download_commits(repo_dir, rev_start)
 
     logger.info("Worker boot done")
