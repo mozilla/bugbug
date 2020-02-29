@@ -572,42 +572,42 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: regressor-finder-tokenized-bug-introducing
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '5 days'}
-      expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
-      workerType: compute-large
-      dependencies:
-        - commit-retrieval
-        - microannotate-generate-tokenize
-        - microannotate-generate-remove-comments
-        - microannotate-generate-tokenize-and-remove-comments
-        - bugs-retrieval
-        - regressor-finder-commits-to-ignore
-        - regressor-finder-bug-fixing-commits
-      payload:
-        maxRunTime: 432000
-        image: mozilla/bugbug-commit-retrieval:${version}
-        command:
-          - bugbug-regressor-finder
-          - bug_introducing
-          - --tokenized_git_repo_url=https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
-          - --tokenized_git_repo_dir=gecko-dev-wordified-and-comments-removed
-        features:
-          taskclusterProxy:
-            true
-      scopes:
-        - "auth:aws-s3:read-write:communitytc-bugbug/*"
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
-      metadata:
-        name: bugbug regressor finder (tokenized bug-introducing commits)
-        description: bugbug regressor finder (tokenized bug-introducing commits)
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
+#    - ID: regressor-finder-tokenized-bug-introducing
+#      created: {$fromNow: ''}
+#      deadline: {$fromNow: '5 days'}
+#      expires: {$fromNow: '1 month'}
+#      provisionerId: proj-relman
+#      workerType: compute-large
+#      dependencies:
+#        - commit-retrieval
+#        - microannotate-generate-tokenize
+#        - microannotate-generate-remove-comments
+#        - microannotate-generate-tokenize-and-remove-comments
+#        - bugs-retrieval
+#        - regressor-finder-commits-to-ignore
+#        - regressor-finder-bug-fixing-commits
+#      payload:
+#        maxRunTime: 432000
+#        image: mozilla/bugbug-commit-retrieval:${version}
+#        command:
+#          - bugbug-regressor-finder
+#          - bug_introducing
+#          - --tokenized_git_repo_url=https://github.com/marco-c/gecko-dev-wordified-and-comments-removed
+#          - --tokenized_git_repo_dir=gecko-dev-wordified-and-comments-removed
+#        features:
+#          taskclusterProxy:
+#            true
+#      scopes:
+#        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+#      routes:
+#        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+#        - notify.irc-channel.#bugbug.on-failed
+#        - index.project.relman.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
+#      metadata:
+#        name: bugbug regressor finder (tokenized bug-introducing commits)
+#        description: bugbug regressor finder (tokenized bug-introducing commits)
+#        owner: release-mgmt-analysis@mozilla.com
+#        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: regressor-finder-bug-introducing
       created: {$fromNow: ''}
