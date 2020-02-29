@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import time
 import traceback
@@ -36,7 +37,14 @@ db.register(
 )
 PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
 
-TRAINING_MONTHS = 6
+TRAINING_MONTHS = {
+    "label": 6,
+    # For groups, we only have 12 weeks in ActiveData. Getting previous data
+    # from task artifacts is slow, so for now we only get a bit more of what
+    # we can get from ActiveData and we'll see if it's enough to train a
+    # satisfying model.
+    "group": 3,
+}
 
 
 def filter_runnables(runnables, all_runnables, granularity):
@@ -63,7 +71,7 @@ class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
 
-    def generate_push_data(self, runnable, from_months):
+    def generate_push_data(self, runnable):
         def upload_adr_cache():
             cache_path = os.path.splitext(ADR_CACHE_DB)[0]
             assert os.path.abspath(
@@ -74,6 +82,13 @@ class Retriever(object):
                 tar.add(cache_path)
 
             db.upload(ADR_CACHE_DB)
+
+        # We'll use the past TRAINING_MONTHS months only for training the model,
+        # but we use half TRAINING_MONTHS months more than that to calculate the
+        # failure statistics.
+        from_months = TRAINING_MONTHS[runnable] + math.floor(
+            TRAINING_MONTHS[runnable] / 2
+        )
 
         pushes = mozci.push.make_push_objects(
             from_date=f"today-{from_months}month",
@@ -133,15 +148,8 @@ class Retriever(object):
     def retrieve_push_data(self):
         # Download previous cache.
         db.download(ADR_CACHE_DB)
-
-        # We'll use the past TRAINING_MONTHS months only for training the model,
-        # but we use 3 months more than that to calculate the failure statistics.
-        self.generate_push_data("label", TRAINING_MONTHS + 3)
-
-        # For groups, we only have 12 weeks in ActiveData. Getting previous data
-        # from task artifacts is slow, so for now we only get what we can get from
-        # ActiveData and we'll see if it's enough to train a satisfying model.
-        self.generate_push_data("group", 3)
+        self.generate_push_data("label")
+        self.generate_push_data("group")
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
@@ -153,7 +161,9 @@ class Retriever(object):
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
 
-        HISTORY_DATE_START = datetime.now() - relativedelta(months=TRAINING_MONTHS)
+        HISTORY_DATE_START = datetime.now() - relativedelta(
+            months=TRAINING_MONTHS[granularity]
+        )
 
         if granularity == "label":
             test_scheduling_db = test_scheduling.TEST_LABEL_SCHEDULING_DB
