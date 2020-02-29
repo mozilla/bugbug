@@ -15,7 +15,7 @@ def integration_test():
     # First try to classify a single bug
     single_bug_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406"
     response = None
-    for i in range(900):
+    for i in range(600):
         response = requests.get(
             single_bug_url, headers={"X-Api-Key": "integration_test_single"}
         )
@@ -26,7 +26,7 @@ def integration_test():
         time.sleep(30)
 
     if not response:
-        raise Exception("Couldn't get an answer in 900 seconds")
+        raise Exception("Couldn't get an answer in 600 seconds")
 
     response_json = response.json()
     print("Response for bug 1376406", response_json)
