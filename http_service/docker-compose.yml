@@ -25,6 +25,7 @@ services:
       - BUGBUG_BUGZILLA_TOKEN
       - REDIS_URL=redis://redis:6379/0
       - BUGBUG_ALLOW_MISSING_MODELS
+      - BUGBUG_REPO_DIR
     depends_on:
       - redis
 

@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 def boot_worker():
 
     # Clone mozilla central
-    repo_dir = os.path.join(tempfile.gettempdir(), "bugbug-hg")
+    repo_dir = os.environ.get(
+        "BUGBUG_REPO_DIR", os.path.join(tempfile.gettempdir(), "bugbug-hg")
+    )
     logger.info(f"Cloning mozilla-central in {repo_dir}...")
     repository.clone(repo_dir)
 
