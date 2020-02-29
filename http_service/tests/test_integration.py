@@ -11,13 +11,12 @@ import requests
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000/")
 
 
-def integration_test():
-    # First try to classify a single bug
-    single_bug_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406"
-    response = None
-    for i in range(600):
+# Test classifying a single bug.
+def integration_test_single():
+    for _ in range(600):
         response = requests.get(
-            single_bug_url, headers={"X-Api-Key": "integration_test_single"}
+            f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406",
+            headers={"X-Api-Key": "integration_test_single"},
         )
 
         if response.status_code == 200:
@@ -25,22 +24,22 @@ def integration_test():
 
         time.sleep(30)
 
-    if not response:
-        raise Exception("Couldn't get an answer in 600 seconds")
-
     response_json = response.json()
+
+    if not response.ok:
+        raise Exception(f"Couldn't get an answer in 600 seconds: {response_json}")
+
     print("Response for bug 1376406", response_json)
     assert response_json["class"] is not None
 
-    # Then try to classify a batch
-    batch_url = f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/batch"
-    bug_ids = [1_376_544, 1_376_412]
-    response = None
-    for i in range(100):
+
+# Test classifying a batch of bugs.
+def integration_test_batch():
+    for _ in range(100):
         response = requests.post(
-            batch_url,
+            f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/batch",
             headers={"X-Api-Key": "integration_test_batch"},
-            json={"bugs": bug_ids},
+            json={"bugs": [1376544, 1376412]},
         )
 
         if response.status_code == 200:
@@ -48,10 +47,11 @@ def integration_test():
 
         time.sleep(30)
 
-    if not response:
-        raise Exception("Couldn't get an answer in 100 seconds")
-
     response_json = response.json()
+
+    if not response.ok:
+        raise Exception(f"Couldn't get an answer in 100 seconds: {response_json}")
+
     response_1376544 = response_json["bugs"]["1376544"]
     print("Response for bug 1376544", response_1376544)
     assert response_1376544["class"] is not None
@@ -61,4 +61,5 @@ def integration_test():
 
 
 if __name__ == "__main__":
-    integration_test()
+    integration_test_single()
+    integration_test_batch()
