@@ -26,8 +26,8 @@ ls -lh data
 rm data/commit*
 
 # Then retrieve a subset of commit data
-mkdir -p cache
 bugbug-data-commits --limit 500 "${CACHE_DIR:-cache}"
+test -d ${CACHE_DIR:-cache}/mozilla-central
 ls -lh
 ls -lh data
 
@@ -62,7 +62,7 @@ gunicorn -b 127.0.0.1:8000 bugbug_http.app --preload --timeout 30 -w 3 &
 gunicorn_pid=$!
 
 # Start the background worker
-env BUGBUG_ALLOW_MISSING_MODELS=1 bugbug-http-worker high default low &
+env BUGBUG_ALLOW_MISSING_MODELS=1 BUGBUG_REPO_DIR=${CACHE_DIR:-cache}/mozilla-central bugbug-http-worker high default low &
 worker_pid=$!
 
 # Ensure we take down the containers at the end
