@@ -1135,6 +1135,8 @@ tasks:
         - train-regression
         - train-stepstoreproduce
         - train-spambug
+        - train-test-label-select
+        - train-test-group-select
       payload:
         capabilities:
           privileged: true

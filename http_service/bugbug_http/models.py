@@ -29,6 +29,8 @@ MODELS_NAMES = [
     "regression",
     "stepstoreproduce",
     "spambug",
+    "testlabelselect",
+    "testgroupselect",
 ]
 MODELS_TO_PRELOAD = ["component"]
 MODELS_DIR = "models"
