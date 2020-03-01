@@ -32,7 +32,11 @@ MODELS_NAMES = [
     "testlabelselect",
     "testgroupselect",
 ]
-MODELS_TO_PRELOAD = ["component"]
+MODELS_TO_PRELOAD = [
+    "component",
+    "testlabelselect",
+    "testgroupselect",
+]
 MODELS_DIR = "models"
 BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
