@@ -28,6 +28,7 @@ MODELS_NAMES = [
     "stepstoreproduce",
     "spambug",
 ]
+MODELS_TO_PRELOAD = ["component"]
 MODELS_DIR = "models"
 BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
@@ -66,7 +67,7 @@ def get_model(model_name):
 
 
 def preload_models():
-    for model in MODELS_NAMES:
+    for model in MODELS_TO_PRELOAD:
         get_model(model)
 
 
