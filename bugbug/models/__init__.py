@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import importlib
 import logging
-import os
 
 LOGGER = logging.getLogger()
 
@@ -51,13 +50,10 @@ def get_model_class(model_name):
     return load_model_class(full_qualified_class_name)
 
 
-def load_model(model_name, model_dir=None):
+def load_model(model_name):
     model_class = get_model_class(model_name)
 
-    if model_dir is None:
-        model_dir = "."
-
-    model_file_path = os.path.join(model_dir, f"{model_name}model")
+    model_file_path = f"{model_name}model"
 
     LOGGER.info(f"Lookup model in {model_file_path}")
     model = model_class.load(model_file_path)
