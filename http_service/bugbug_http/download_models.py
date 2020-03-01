@@ -3,12 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from bugbug_http.models import MODELS_NAMES, retrieve_model
+from bugbug import utils
+from bugbug_http.models import MODELS_NAMES
 
 
 def preload_models():
     for model_name in MODELS_NAMES:
-        retrieve_model(model_name)
+        utils.download_model(model_name)
 
 
 if __name__ == "__main__":

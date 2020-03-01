@@ -8,16 +8,13 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict
-from urllib.request import urlretrieve
 
-import requests
 from dateutil.relativedelta import relativedelta
 from redis import Redis
 
-from bugbug import bugzilla, get_bugbug_version
+from bugbug import bugzilla
 from bugbug.model import Model
 from bugbug.models import load_model
-from bugbug.utils import zstd_decompress
 from bugbug_http import ALLOW_MISSING_MODELS
 
 logging.basicConfig(level=logging.INFO)
@@ -37,8 +34,6 @@ MODELS_TO_PRELOAD = [
     "testlabelselect",
     "testgroupselect",
 ]
-MODELS_DIR = "models"
-BASE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{}.latest/artifacts/public"
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
@@ -58,7 +53,7 @@ def get_model(model_name):
     if model_name not in MODEL_CACHE:
         print("Recreating the %r model in cache" % model_name)
         try:
-            model = load_model(model_name, MODELS_DIR)
+            model = load_model(model_name)
         except FileNotFoundError:
             if ALLOW_MISSING_MODELS:
                 print(
@@ -84,41 +79,6 @@ def get_model(model_name):
 def preload_models():
     for model in MODELS_TO_PRELOAD:
         get_model(model)
-
-
-def retrieve_model(name):
-    os.makedirs(MODELS_DIR, exist_ok=True)
-
-    file_name = f"{name}model"
-    file_path = os.path.join(MODELS_DIR, file_name)
-
-    base_model_url = BASE_URL.format(name, f"v{get_bugbug_version()}")
-    model_url = f"{base_model_url}/{file_name}.zst"
-    LOGGER.info(f"Checking ETAG of {model_url}")
-
-    r = requests.head(model_url, allow_redirects=True)
-    r.raise_for_status()
-    new_etag = r.headers["ETag"]
-
-    try:
-        with open(f"{file_path}.etag", "r") as f:
-            old_etag = f.read()
-    except IOError:
-        old_etag = None
-
-    if old_etag != new_etag:
-        LOGGER.info(f"Downloading the model from {model_url}")
-        urlretrieve(model_url, f"{file_path}.zst")
-
-        zstd_decompress(file_path)
-        LOGGER.info(f"Written model in {file_path}")
-
-        with open(f"{file_path}.etag", "w") as f:
-            f.write(new_etag)
-    else:
-        LOGGER.info(f"ETAG for {model_url} is ok")
-
-    return file_path
 
 
 def classify_bug(
