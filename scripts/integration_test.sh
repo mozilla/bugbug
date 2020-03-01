@@ -42,7 +42,7 @@ bugbug-train --limit 30000 --no-download backout
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
 # up on Taskcluster
 cd ../
-pip install ./http_service
+pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service
 pwd
 ls models
 
