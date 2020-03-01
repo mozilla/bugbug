@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 
+import bugbug_http.models
 from bugbug import db, repository, test_scheduling
 from bugbug_http import ALLOW_MISSING_MODELS
 
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 def boot_worker():
+    # Preload models
+    bugbug_http.models.preload_models()
 
     # Clone mozilla central
     repo_dir = os.environ.get(
