@@ -65,8 +65,7 @@ class MicroannotateGenerator(object):
             lambda: subprocess.run(
                 ["git", "config", "--global", "http.postBuffer", "12M"], check=True
             ),
-            wait=tenacity.wait_exponential(),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
         )()
 
         push_args = ["git", "push", repo_push_url, "master"]
@@ -85,8 +84,7 @@ class MicroannotateGenerator(object):
 
             tenacity.retry(
                 lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
-                wait=tenacity.wait_exponential(),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
             )()
 
             # We are not using db.upload as we don't need to upload the git repo.
@@ -107,8 +105,7 @@ class MicroannotateGenerator(object):
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
             ),
-            wait=tenacity.wait_exponential(),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
         )()
 
         try:
@@ -119,8 +116,7 @@ class MicroannotateGenerator(object):
                     capture_output=True,
                     check=True,
                 ),
-                wait=tenacity.wait_exponential(),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
             )()
         except subprocess.CalledProcessError as e:
             # When the repo is empty.

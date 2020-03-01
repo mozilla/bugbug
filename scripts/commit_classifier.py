@@ -192,8 +192,7 @@ class CommitClassifier(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
-                wait=tenacity.wait_exponential(),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
             )()
 
         tenacity.retry(
@@ -203,16 +202,14 @@ class CommitClassifier(object):
                 capture_output=True,
                 check=True,
             ),
-            wait=tenacity.wait_exponential(),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
         )()
 
         tenacity.retry(
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
             ),
-            wait=tenacity.wait_exponential(),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
         )()
 
     def update_commit_db(self):

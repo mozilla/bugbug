@@ -98,8 +98,7 @@ class RegressorFinder(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
-                wait=tenacity.wait_exponential(),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
             )()
 
             logger.info(f"{repo_dir} cloned")
@@ -113,8 +112,7 @@ class RegressorFinder(object):
                 capture_output=True,
                 check=True,
             ),
-            wait=tenacity.wait_exponential(),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=150),
         )()
 
         logger.info(f"{repo_dir} pulled and updated")
