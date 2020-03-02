@@ -16,6 +16,9 @@ WORKDIR /code/
 ARG CHECK_MODELS
 ENV CHECK_MODELS="${CHECK_MODELS}"
 
+ARG TAG
+ENV TAG="${TAG}"
+
 RUN bash /code/http_service/ensure_models.sh
 
 CMD bugbug-http-worker high default low
