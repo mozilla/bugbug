@@ -13,7 +13,8 @@ BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000
 
 # Test classifying a single bug.
 def integration_test_single():
-    for _ in range(600):
+    timeout = 600
+    for _ in range(timeout):
         response = requests.get(
             f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406",
             headers={"X-Api-Key": "integration_test_single"},
@@ -22,12 +23,12 @@ def integration_test_single():
         if response.status_code == 200:
             break
 
-        time.sleep(30)
+        time.sleep(1)
 
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in 600 seconds: {response_json}")
+        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
     print("Response for bug 1376406", response_json)
     assert response_json["class"] is not None
@@ -35,7 +36,8 @@ def integration_test_single():
 
 # Test classifying a batch of bugs.
 def integration_test_batch():
-    for _ in range(100):
+    timeout = 100
+    for _ in range(timeout):
         response = requests.post(
             f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/batch",
             headers={"X-Api-Key": "integration_test_batch"},
@@ -45,12 +47,12 @@ def integration_test_batch():
         if response.status_code == 200:
             break
 
-        time.sleep(30)
+        time.sleep(1)
 
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in 100 seconds: {response_json}")
+        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
     response_1376544 = response_json["bugs"]["1376544"]
     print("Response for bug 1376544", response_1376544)
