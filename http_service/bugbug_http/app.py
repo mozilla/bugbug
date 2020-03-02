@@ -118,26 +118,26 @@ def schedule_bug_classification(model_name, bug_ids):
     q.enqueue(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN, job_id=job_id)
 
 
-def is_running(model_name, bug_id):
+def is_pending(model_name, bug_id):
     # Check if there is a job
     mapping_key = get_mapping_key(model_name, bug_id)
 
     job_id = redis_conn.get(mapping_key)
 
     if not job_id:
-        LOGGER.debug("No job ID mapping %s, False", job_id)
+        LOGGER.debug(f"No job ID mapping {job_id}, False")
         return False
 
     try:
         job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
     except NoSuchJobError:
-        LOGGER.debug("No job in DB for %s, False", job_id)
+        LOGGER.debug(f"No job in DB for {job_id}, False")
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
-    if job_status == "started":
-        LOGGER.debug("Job running %s, True", job_id)
+    if job_status in ("started", "queued"):
+        LOGGER.debug(f"Job {job_id} has status {job_status}, True")
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
@@ -148,11 +148,11 @@ def is_running(model_name, bug_id):
         job.cancel()
         job.cleanup()
 
-        LOGGER.debug("Job timeout %s, False", job_id)
+        LOGGER.debug(f"Job timeout {job_id}, False")
 
         return False
 
-    LOGGER.debug("Job status %s, False", job_status)
+    LOGGER.debug(f"Job {job_id} has status {job_status}, False")
 
     return False
 
@@ -274,7 +274,7 @@ def model_prediction(model_name, bug_id):
     data = get_bug_classification(model_name, bug_id)
 
     if not data:
-        if not is_running(model_name, bug_id):
+        if not is_pending(model_name, bug_id):
             schedule_bug_classification(model_name, [bug_id])
         status_code = 202
         data = {"ready": False}
@@ -438,7 +438,7 @@ def batch_prediction(model_name):
 
         data[str(bug_id)] = get_bug_classification(model_name, bug_id)
         if not data[str(bug_id)]:
-            if not is_running(model_name, bug_id):
+            if not is_pending(model_name, bug_id):
                 missing_bugs.append(bug_id)
             status_code = 202
             data[str(bug_id)] = {"ready": False}
