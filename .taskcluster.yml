@@ -96,7 +96,7 @@ tasks:
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.8/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               cp infra/hgrc /root/.hgrc &&
+               cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nlp-requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nn-requirements.txt &&
