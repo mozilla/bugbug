@@ -202,10 +202,12 @@ def get_last_modified(url):
 
 
 def download_model(model_name):
-    try:
-        version = f"v{get_bugbug_version()}"
-    except DistributionNotFound:
-        version = os.getenv("TAG", "latest")
+    version = os.getenv("TAG")
+    if not version:
+        try:
+            version = f"v{get_bugbug_version()}"
+        except DistributionNotFound:
+            version = "latest"
 
     path = f"{model_name}model"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
