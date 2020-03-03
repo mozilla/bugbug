@@ -258,7 +258,7 @@ def model_prediction(model_name, bug_id):
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify(UnauthorizedError().dump({}).data), 401
+        return jsonify(UnauthorizedError().dump({})), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
@@ -404,7 +404,7 @@ def batch_prediction(model_name):
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify(UnauthorizedError().dump({}).data), 401
+        return jsonify(UnauthorizedError().dump({})), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
