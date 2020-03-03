@@ -18,7 +18,7 @@ requests==2.23.0
 rs_parsepatch==0.2.8
 scikit-learn==0.22.2
 scipy==1.4.1
-shap[plots]==0.34.0
+shap[plots]==0.35.0
 tabulate==0.8.6
 taskcluster==25.4.0
 tenacity==6.1.0
