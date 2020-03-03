@@ -5,14 +5,7 @@
 
 import json
 
-import pytest
-
-from bugbug_http.app import API_TOKEN, application
-
-
-@pytest.fixture
-def client():
-    yield application.test_client()
+from bugbug_http.app import API_TOKEN
 
 
 def test_empty_batch(client):

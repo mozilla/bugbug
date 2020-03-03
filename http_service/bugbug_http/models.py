@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from typing import Dict
 
+import requests
 from dateutil.relativedelta import relativedelta
 from redis import Redis
 
@@ -39,14 +40,6 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 MODEL_LAST_LOADED: Dict[str, datetime] = {}
 MODEL_CACHE: Dict[str, Model] = {}
-
-
-def result_key(model_name, bug_id):
-    return f"result_{model_name}_{bug_id}"
-
-
-def change_time_key(model_name, bug_id):
-    return f"bugbug:change_time_{model_name}_{bug_id}"
 
 
 def get_model(model_name):
@@ -84,6 +77,8 @@ def preload_models():
 def classify_bug(
     model_name, bug_ids, bugzilla_token, expiration=DEFAULT_EXPIRATION_TTL
 ):
+    from bugbug_http.app import JobInfo
+
     # This should be called in a process worker so it should be safe to set
     # the token here
     bug_ids_set = set(map(int, bug_ids))
@@ -135,13 +130,55 @@ def classify_bug(
 
         encoded_data = json.dumps(data)
 
-        redis_key = result_key(model_name, bug_id)
+        job = JobInfo(classify_bug, model_name, bug_id)
+        redis_key = job.result_key
 
         redis.set(redis_key, encoded_data)
         redis.expire(redis_key, expiration)
 
         # Save the bug last change
-        change_key = change_time_key(model_name, bug_id)
-        redis.set(change_key, bugs[bug_id]["last_change_time"])
+        redis.set(job.change_time_key, bugs[bug_id]["last_change_time"])
+
+    return "OK"
+
+
+def schedule_tests(branch, rev, expiration=DEFAULT_EXPIRATION_TTL):
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(schedule_tests, branch, rev)
+    LOGGER.debug("Processing {job}")
+
+    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{rev}"
+    r = requests.get(url)
+
+    if r.status_code == 404:
+        LOGGER.warning(f"Push not found at {url}!")
+        return "NOK"
+
+    first_rev = r.json()["changesets"][0]["node"]
+    if first_rev != rev:
+        revset = f"{first_rev}::{rev}"
+    else:
+        revset = rev
+
+    # TODO Return real data based on 'revset'
+    def get_data(revset):
+        return {
+            "tasks": ["test-macosx1014-64/debug-gtest-1proc"],
+            "groups": [
+                "caps/test/unit/xpcshell.ini",
+                "dom/indexedDB/test/mochitest.ini",
+            ],
+        }
+
+    data = get_data(revset)
+    encoded_data = json.dumps(data)
+
+    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
+
+    redis_key = job.result_key
+    redis = Redis.from_url(redis_url)
+    redis.set(redis_key, encoded_data)
+    redis.expire(redis_key, expiration)
 
     return "OK"
