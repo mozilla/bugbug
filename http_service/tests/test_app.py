@@ -66,3 +66,16 @@ def test_non_int_batch(client):
             ]
         }
     }
+
+
+def test_no_api_key(client):
+    """Start with an empty database,"""
+
+    bugs = [1, 2, 3]
+
+    rv = client.post(
+        "/component/predict/batch", data=json.dumps({"bugs": bugs}), headers={},
+    )
+
+    assert rv.status_code == 401
+    assert rv.json == {"message": "Error, missing X-API-KEY"}
