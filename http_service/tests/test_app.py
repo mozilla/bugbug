@@ -61,6 +61,21 @@ def test_non_int_batch(client):
     }
 
 
+def test_unknown_model(client):
+    """Start with  a blank database,"""
+    bugs = [1, 2, 3]
+    unknown_model = "unknown_model"
+
+    rv = client.post(
+        f"/{unknown_model}/predict/batch",
+        data=json.dumps({"bugs": bugs}),
+        headers={API_TOKEN: "test"},
+    )
+
+    assert rv.status_code == 404
+    assert rv.json == {"error": f"Model {unknown_model} doesn't exist"}
+
+
 def test_no_api_key(client):
     """Start with an empty database,"""
 

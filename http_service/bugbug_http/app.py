@@ -315,6 +315,9 @@ def model_prediction(model_name, bug_id):
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
+
     # Get the latest change from Bugzilla for the bug
     bug = get_bugs_last_change_time([bug_id])
 
@@ -458,6 +461,9 @@ def batch_prediction(model_name):
         return jsonify(UnauthorizedError().dump({})), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
+
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
 
     # TODO Check is JSON is valid and validate against a request schema
     batch_body = json.loads(request.data)
