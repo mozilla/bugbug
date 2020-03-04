@@ -8,7 +8,7 @@ tasks:
     minute: {$eval: 'now[14:16]'}
     second: {$eval: 'now[17:19]'}
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.1.10
+    taskboot_image: mozilla/taskboot:0.2.2
   in:
     - ID: microannotate-generate-tokenize
       created: {$fromNow: ''}

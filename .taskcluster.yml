@@ -26,7 +26,7 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
-    taskboot_image: "mozilla/taskboot:0.1.10"
+    taskboot_image: "mozilla/taskboot:0.2.2"
   in:
     $if: 'tasks_for in ["github-pull-request", "github-push"]'
     then:
