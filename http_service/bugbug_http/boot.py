@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 def boot_worker():
-    # Preload models
-    bugbug_http.models.preload_models()
-
     # Clone mozilla central
     repo_dir = os.environ.get(
         "BUGBUG_REPO_DIR", os.path.join(tempfile.gettempdir(), "bugbug-hg")
@@ -50,5 +47,8 @@ def boot_worker():
         rev_start = "children({})".format(commit["node"])
         logger.info("Updating commits DB...")
         repository.download_commits(repo_dir, rev_start)
+
+    # Preload models
+    bugbug_http.models.preload_models()
 
     logger.info("Worker boot done")
