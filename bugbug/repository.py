@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import pickle
+import shelve
 import sys
 import threading
 from datetime import datetime
@@ -20,6 +21,7 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
+from bugbug.utils import LMDBDict
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
     8,
-    ["commit_experiences.pickle.zst"],
+    ["commit_experiences.lmdb.tar.zst"],
 )
 
 path_to_component = None
@@ -609,22 +611,52 @@ def get_revs(hg, rev_start=0, rev_end="tip"):
     return x.splitlines()
 
 
+class Experiences:
+    def __init__(self, save):
+        self.save = save
+        self.db_experiences = shelve.Shelf(
+            LMDBDict("data/commit_experiences.lmdb"),
+            protocol=pickle.DEFAULT_PROTOCOL,
+            writeback=save,
+        )
+        if not save:
+            self.mem_experiences = {}
+
+    def __contains__(self, key):
+        if self.save:
+            return key in self.db_experiences
+        else:
+            return key in self.mem_experiences or key in self.db_experiences
+
+    def __getitem__(self, key):
+        if self.save:
+            return self.db_experiences[key]
+        else:
+            return (
+                self.mem_experiences[key]
+                if key in self.mem_experiences
+                else self.db_experiences[key]
+            )
+
+    def __setitem__(self, key, value):
+        if self.save:
+            self.db_experiences[key] = value
+        else:
+            self.mem_experiences[key] = value
+
+
 def calculate_experiences(commits, first_pushdate, save=True):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    try:
-        with open("data/commit_experiences.pickle", "rb") as f:
-            experiences, first_commit_time = pickle.load(f)
-    except FileNotFoundError:
-        experiences = {}
-        first_commit_time = {}
+    experiences = Experiences(save)
 
     for commit in tqdm(commits):
-        if commit.author not in first_commit_time:
-            first_commit_time[commit.author] = commit.pushdate
+        key = f"first_commit_time${commit.author}"
+        if key not in experiences:
+            experiences[key] = commit.pushdate
             commit.seniority_author = 0
         else:
-            time_lapse = commit.pushdate - first_commit_time[commit.author]
+            time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
@@ -632,19 +664,17 @@ def calculate_experiences(commits, first_pushdate, save=True):
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
 
+    def get_key(exp_type, commit_type, item):
+        return f"{exp_type}${commit_type}${item}"
+
     def get_experience(exp_type, commit_type, item, day, default):
-        if exp_type not in experiences:
-            experiences[exp_type] = {}
+        key = get_key(exp_type, commit_type, item)
+        if key not in experiences:
+            experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
+        return experiences[key][day]
 
-        if commit_type not in experiences[exp_type]:
-            experiences[exp_type][commit_type] = {}
-
-        if item not in experiences[exp_type][commit_type]:
-            experiences[exp_type][commit_type][item] = utils.ExpQueue(
-                day, EXPERIENCE_TIMESPAN + 1, default
-            )
-
-        return experiences[exp_type][commit_type][item][day]
+    def set_experience(exp_type, commit_type, item, day, val):
+        experiences[get_key(exp_type, commit_type, item)][day] = val
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -688,8 +718,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][day] = (
-                        total_exps[i] + 1
+                    set_experience(
+                        experience_type, commit_type, item, day, total_exps[i] + 1
                     )
 
     def update_complex_experiences(experience_type, day, items):
@@ -761,9 +791,13 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][
-                        day
-                    ] = all_commit_lists[i] + (commit.node,)
+                    set_experience(
+                        experience_type,
+                        commit_type,
+                        item,
+                        day,
+                        all_commit_lists[i] + (commit.node,),
+                    )
 
     # prev_day = 0
     # prev_commit = None
@@ -779,18 +813,17 @@ def calculate_experiences(commits, first_pushdate, save=True):
         # prev_commit = commit
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        if "file" in experiences:
-            xp_file = experiences["file"]
-            for orig, copied in commit.file_copies.items():
-                for commit_type in ["", "backout"]:
-                    if orig in xp_file[commit_type]:
-                        xp_file[commit_type][copied] = copy.deepcopy(
-                            xp_file[commit_type][orig]
-                        )
-                    else:
-                        print(
-                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
-                        )
+        for orig, copied in commit.file_copies.items():
+            for commit_type in ["", "backout"]:
+                orig_key = get_key("file", commit_type, orig)
+                if orig_key in experiences:
+                    experiences[get_key("file", commit_type, copied)] = copy.deepcopy(
+                        experiences[orig_key]
+                    )
+                else:
+                    print(
+                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                    )
 
         if not commit.ignored:
             update_experiences("author", day, [commit.author])
@@ -799,10 +832,6 @@ def calculate_experiences(commits, first_pushdate, save=True):
             update_complex_experiences("file", day, commit.files)
             update_complex_experiences("directory", day, commit.directories)
             update_complex_experiences("component", day, commit.components)
-
-    if save:
-        with open("data/commit_experiences.pickle", "wb") as f:
-            pickle.dump((experiences, first_commit_time), f)
 
 
 def set_commits_to_ignore(repo_dir, commits):

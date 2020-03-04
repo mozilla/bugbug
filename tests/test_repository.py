@@ -441,13 +441,13 @@ def test_download_commits(fake_hg_repo):
     assert commits[1]["seniority_author"] > commits[0]["seniority_author"]
 
     os.remove("data/commits.json")
-    os.remove("data/commit_experiences.pickle")
+    shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(local, f"children({revision2})")
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
-    os.remove("data/commit_experiences.pickle")
+    shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(local)
     assert len(list(repository.get_commits())) == 2
 
@@ -796,11 +796,6 @@ def test_calculate_experiences():
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
 
-    with pytest.raises(
-        Exception, match=r"Can't get a day \(0\) from earlier than start day \(275\)"
-    ):
-        repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
-
     commits["commit1"].pushdate = datetime(2020, 1, 4)
     commits["commit1"].node = "commit1copy"
     commits["commitbackedout"].pushdate = datetime(2020, 1, 4)
@@ -993,6 +988,11 @@ def test_calculate_experiences():
     assert commits["commit6"].touched_prev_90_days_component_sum == 2
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    with pytest.raises(
+        Exception, match=r"Can't get a day \(368\) from earlier than start day \(644\)"
+    ):
+        repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
 
 
 def test_calculate_experiences_no_save():
