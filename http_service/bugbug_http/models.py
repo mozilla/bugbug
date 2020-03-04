@@ -42,6 +42,9 @@ MODEL_LAST_LOADED: Dict[str, datetime] = {}
 MODEL_CACHE: Dict[str, Model] = {}
 
 
+redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
+
+
 def get_model(model_name):
     if model_name not in MODEL_CACHE:
         print("Recreating the %r model in cache" % model_name)
@@ -74,9 +77,15 @@ def preload_models():
         get_model(model)
 
 
-def classify_bug(
-    model_name, bug_ids, bugzilla_token, expiration=DEFAULT_EXPIRATION_TTL
-):
+def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
+    LOGGER.debug(f"Storing data at {key}: {value}")
+    redis.set(key, value)
+
+    if expiration > 0:
+        redis.expire(key, expiration)
+
+
+def classify_bug(model_name, bug_ids, bugzilla_token):
     from bugbug_http.app import JobInfo
 
     # This should be called in a process worker so it should be safe to set
@@ -85,19 +94,14 @@ def classify_bug(
     bugzilla.set_token(bugzilla_token)
     bugs = bugzilla.get(bug_ids)
 
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
-    redis = Redis.from_url(redis_url)
-
     missing_bugs = bug_ids_set.difference(bugs.keys())
 
     for bug_id in missing_bugs:
-        redis_key = f"result_{model_name}_{bug_id}"
+        job = JobInfo(classify_bug, model_name, bug_id)
 
         # TODO: Find a better error format
         encoded_data = json.dumps({"available": False})
-
-        redis.set(redis_key, encoded_data)
-        redis.expire(redis_key, expiration)
+        setkey(job.result_key, encoded_data)
 
     if not bugs:
         return "NOK"
@@ -131,18 +135,15 @@ def classify_bug(
         encoded_data = json.dumps(data)
 
         job = JobInfo(classify_bug, model_name, bug_id)
-        redis_key = job.result_key
-
-        redis.set(redis_key, encoded_data)
-        redis.expire(redis_key, expiration)
+        setkey(job.result_key, encoded_data)
 
         # Save the bug last change
-        redis.set(job.change_time_key, bugs[bug_id]["last_change_time"])
+        setkey(job.change_time_key, bugs[bug_id]["last_change_time"], expiration=0)
 
     return "OK"
 
 
-def schedule_tests(branch, rev, expiration=DEFAULT_EXPIRATION_TTL):
+def schedule_tests(branch, rev):
     from bugbug_http.app import JobInfo
 
     job = JobInfo(schedule_tests, branch, rev)
@@ -173,12 +174,6 @@ def schedule_tests(branch, rev, expiration=DEFAULT_EXPIRATION_TTL):
 
     data = get_data(revset)
     encoded_data = json.dumps(data)
-
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
-
-    redis_key = job.result_key
-    redis = Redis.from_url(redis_url)
-    redis.set(redis_key, encoded_data)
-    redis.expire(redis_key, expiration)
+    setkey(job.result_key, encoded_data)
 
     return "OK"

@@ -261,7 +261,7 @@ def clean_prediction_cache(job):
 
 
 def get_result(job):
-    LOGGER.debug(f"Checking for existing results for {job}")
+    LOGGER.debug(f"Checking for existing results at {job.result_key}")
     result = redis_conn.get(job.result_key)
 
     if result:
