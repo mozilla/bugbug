@@ -22,12 +22,20 @@ def boot_worker():
     logger.info(f"Cloning mozilla-central in {repo_dir}...")
     repository.clone(repo_dir)
 
-    # Download databases
-    logger.info("Downloading test scheduling DB support file...")
+    # Download test scheduling DB support files.
+    logger.info("Downloading test scheduling DB support files...")
     assert (
         db.download_support_file(
             test_scheduling.TEST_LABEL_SCHEDULING_DB,
             test_scheduling.PAST_FAILURES_LABEL_DB,
+        )
+        or ALLOW_MISSING_MODELS
+    )
+
+    assert (
+        db.download_support_file(
+            test_scheduling.TEST_GROUP_SCHEDULING_DB,
+            test_scheduling.PAST_FAILURES_GROUP_DB,
         )
         or ALLOW_MISSING_MODELS
     )
