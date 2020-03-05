@@ -156,7 +156,11 @@ def schedule_tests(branch, rev):
         return "NOK"
 
     # Apply the stack on the local repository
-    apply_stack(REPO_DIR, stack, branch)
+    try:
+        apply_stack(REPO_DIR, stack, branch)
+    except Exception as e:
+        LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
+        return "NOK"
 
     first_rev = stack[0]["node"]
     if first_rev != rev:
