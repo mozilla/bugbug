@@ -33,7 +33,7 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    8,
+    9,
     ["commit_experiences.lmdb.tar.zst"],
 )
 
