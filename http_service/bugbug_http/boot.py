@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def boot_worker():
-    # Clone mozilla central
-    logger.info(f"Cloning mozilla-central in {REPO_DIR}...")
-    repository.clone(REPO_DIR)
+    # Clone autoland
+    logger.info(f"Cloning mozilla autoland in {REPO_DIR}...")
+    repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
 
     # Download test scheduling DB support files.
     logger.info("Downloading test scheduling DB support files...")
