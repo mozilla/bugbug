@@ -43,7 +43,7 @@ TRAINING_MONTHS = {
     # from task artifacts is slow, so for now we only get a bit more of what
     # we can get from ActiveData and we'll see if it's enough to train a
     # satisfying model.
-    "group": 3,
+    "group": 4,
 }
 
 
