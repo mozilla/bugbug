@@ -6,6 +6,7 @@
 import argparse
 import concurrent.futures
 import copy
+import io
 import itertools
 import json
 import logging
@@ -21,7 +22,7 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
-from bugbug.utils import LMDBDict
+from bugbug.utils import LMDBDict, hgmo_patch
 
 logger = logging.getLogger(__name__)
 
@@ -1009,6 +1010,48 @@ def clone(repo_dir):
 
     # Pull and update, to make sure the pushlog is generated.
     clean(repo_dir)
+
+
+def apply_stack(repo_dir, stack, branch):
+    """Apply a stack of patches on a repository"""
+
+    def has_revision(revision):
+        try:
+            hg.identify(revision)
+            return True
+        except hglib.error.CommandError:
+            return False
+
+    with hglib.open(repo_dir) as hg:
+
+        # Find the last parent available
+        # or apply on tip
+        base = "tip"
+        patches = []
+        for rev in stack:
+            node = rev["node"]
+
+            # Check if revision is available in repository
+            if has_revision(node):
+                logger.info(f"Found parent revision {node}")
+                base = node
+            else:
+                # Load the patch to apply from HGMO
+                logger.info(f"Loading patch for {node}")
+                patches.append((node, hgmo_patch(branch, node)))
+
+        if not patches:
+            logger.info("All patches are already applied")
+            return
+
+        # Update to base revision
+        logger.info(f"Will apply stack on {base}")
+        hg.update(base, clean=True)
+
+        # Import all the remaining patches
+        for node, patch in patches:
+            logger.info(f"Applying patch for {node}")
+            hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
 
 
 if __name__ == "__main__":

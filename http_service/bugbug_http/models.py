@@ -16,7 +16,9 @@ from redis import Redis
 from bugbug import bugzilla
 from bugbug.model import Model
 from bugbug.models import load_model
+from bugbug.repository import apply_stack
 from bugbug_http import ALLOW_MISSING_MODELS
+from bugbug_http.utils import hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -30,11 +32,7 @@ MODELS_NAMES = [
     "testlabelselect",
     "testgroupselect",
 ]
-MODELS_TO_PRELOAD = [
-    "component",
-    "testlabelselect",
-    "testgroupselect",
-]
+MODELS_TO_PRELOAD = ["component", "testlabelselect", "testgroupselect"]
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
@@ -145,18 +143,22 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
 
 def schedule_tests(branch, rev):
     from bugbug_http.app import JobInfo
+    from bugbug_http import REPO_DIR
 
     job = JobInfo(schedule_tests, branch, rev)
-    LOGGER.debug("Processing {job}")
+    LOGGER.debug(f"Processing {job}")
 
-    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{rev}"
-    r = requests.get(url)
-
-    if r.status_code == 404:
-        LOGGER.warning(f"Push not found at {url}!")
+    # Load the full stack of patches leading to that revision
+    try:
+        stack = hgmo_stack(branch, rev)
+    except requests.exceptions.RequestException:
+        LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
-    first_rev = r.json()["changesets"][0]["node"]
+    # Apply the stack on the local repository
+    apply_stack(REPO_DIR, stack, branch)
+
+    first_rev = stack[0]["node"]
     if first_rev != rev:
         revset = f"{first_rev}::{rev}"
     else:
