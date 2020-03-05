@@ -1012,8 +1012,9 @@ def clone(repo_dir):
     clean(repo_dir)
 
 
-def apply_stack(repo_dir, stack, branch):
+def apply_stack(repo_dir, stack, branch, default_base="tip"):
     """Apply a stack of patches on a repository"""
+    assert len(stack) > 0, "Empty stack"
 
     def has_revision(revision):
         try:
@@ -1024,33 +1025,25 @@ def apply_stack(repo_dir, stack, branch):
 
     with hglib.open(repo_dir) as hg:
 
-        # Find the last parent available
-        # or apply on tip
-        base = "tip"
-        patches = []
-        for rev in stack:
-            node = rev["node"]
-
-            # Check if revision is available in repository
-            if has_revision(node):
-                logger.info(f"Found parent revision {node}")
-                base = node
-            else:
-                # Load the patch to apply from HGMO
-                logger.info(f"Loading patch for {node}")
-                patches.append((node, get_hgmo_patch(branch, node)))
-
-        if not patches:
-            logger.info("All patches are already applied")
-            return
+        # Find the base revision to apply all the patches onto
+        # Use first parent from first patch if all its parents are available
+        # Otherwise fallback on tip
+        parents = stack[0]["parents"]
+        assert len(parents) > 0, "No parents found for first patch"
+        if all(map(has_revision, parents)):
+            base = parents[0]
+        else:
+            base = default_base
 
         # Update to base revision
         logger.info(f"Will apply stack on {base}")
         hg.update(base, clean=True)
 
-        # Import all the remaining patches
-        for node, patch in patches:
+        # Apply all the patches in the stack
+        for rev in stack:
+            node = rev["node"]
             logger.info(f"Applying patch for {node}")
+            patch = get_hgmo_patch(branch, node)
             hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
 
 

@@ -179,7 +179,10 @@ def mock_hgmo(get_fixture_path):
         repo = "-".join(repo)
 
         # TODO: also support revision with different nodes
-        resp = {"changesets": [{"node": revision, "parents": []}], "visible": True}
+        resp = {
+            "changesets": [{"node": revision, "parents": [f"parent{revision[:4]}"]}],
+            "visible": True,
+        }
 
         return (200, {"Content-Type": "application/json"}, json.dumps(resp))
 
