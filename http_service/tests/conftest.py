@@ -5,13 +5,32 @@
 
 import json
 import logging
+import os
+import re
 from collections import defaultdict
 from datetime import datetime
 
+import hglib
 import pytest
+import responses
 from rq.exceptions import NoSuchJobError
 
+import bugbug.repository
+import bugbug_http
+import bugbug_http.models
 from bugbug_http import app
+
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+@pytest.fixture
+def get_fixture_path():
+    def _get_fixture_path(path):
+        path = os.path.join(FIXTURES_DIR, path)
+        assert os.path.exists(path), f"Missing fixture {path}"
+        return path
+
+    return _get_fixture_path
 
 
 @pytest.fixture
@@ -41,6 +60,7 @@ def patch_resources(monkeypatch, jobs):
 
         def __init__(self):
             self.data = {}
+            self.expirations = {}
 
         def set(self, k, v):
             # keep track of job ids for testing purposes
@@ -66,6 +86,9 @@ def patch_resources(monkeypatch, jobs):
 
         def ping(self):
             pass
+
+        def expire(self, key, expiration):
+            self.expirations[key] = expiration
 
     class QueueMock:
         """Mock class to mimic rq.Queue."""
@@ -108,7 +131,9 @@ def patch_resources(monkeypatch, jobs):
             pass
 
     app.LOGGER.setLevel(logging.DEBUG)
-    monkeypatch.setattr(app, "redis_conn", RedisMock())
+    _redis = RedisMock()
+    monkeypatch.setattr(app, "redis_conn", _redis)
+    monkeypatch.setattr(bugbug_http.models, "redis", _redis)
     monkeypatch.setattr(app, "q", QueueMock())
     monkeypatch.setattr(app, "Job", JobMock)
 
@@ -131,3 +156,78 @@ def add_change_time():
         app.redis_conn.set(change_time_key, change_time)
 
     return inner
+
+
+@pytest.fixture
+def mock_hgmo(get_fixture_path, mock_repo):
+    """Mock HGMO API to get patches to apply"""
+
+    def fake_raw_rev(request):
+        *repo, _, revision = request.path_url[1:].split("/")
+        repo = "-".join(repo)
+
+        assert repo != "None", "Missing repo"
+        assert revision != "None", "Missing revision"
+
+        mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.diff")
+        with open(mock_path) as f:
+            content = f.read()
+
+        return (200, {"Content-Type": "text/plain"}, content)
+
+    def fake_json_relevance(request):
+        *repo, _, revision = request.path_url[1:].split("/")
+        repo = "-".join(repo)
+
+        assert repo != "None", "Missing repo"
+        assert revision != "None", "Missing revision"
+
+        mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.json")
+        with open(mock_path) as f:
+            content = f.read()
+
+        # Patch the hardcoded revisions
+        for log in mock_repo[1].log():
+            log_id = log.rev.decode("utf-8")
+            node = log.node.decode("utf-8")
+            content = content.replace(f"BASE_HISTORY_{log_id}", node)
+
+        return (200, {"Content-Type": "application/json"}, content)
+
+    responses.add_callback(
+        responses.GET,
+        re.compile(r"^https?://(hgmo|hg\.mozilla\.org)/[\w\-\/]+/raw-rev/(\w+)"),
+        callback=fake_raw_rev,
+    )
+    responses.add_callback(
+        responses.GET,
+        re.compile(
+            r"^https?://(hgmo|hg\.mozilla\.org)/[\w\-\/]+/json-automationrelevance/(\w+)"
+        ),
+        callback=fake_json_relevance,
+    )
+
+
+@pytest.fixture
+def mock_repo(tmpdir, monkeypatch):
+    """Create an empty mercurial repo"""
+    repo_dir = tmpdir / "repo"
+
+    # Setup the worker env to use that repo dir
+    monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
+
+    # Silence the clean method
+    monkeypatch.setattr(bugbug.repository, "clean", lambda repo_dir: True)
+
+    # Create the repo
+    hglib.init(str(repo_dir))
+
+    # Add several commits on a test file to create some history
+    test_file = repo_dir / "test.txt"
+    repo = hglib.open(str(repo_dir))
+    for i in range(4):
+        test_file.write_text(f"Version {i}", encoding="utf-8")
+        repo.add([str(test_file).encode("utf-8")])
+        repo.commit(f"Base history {i}", user="bugbug")
+
+    return repo_dir, repo

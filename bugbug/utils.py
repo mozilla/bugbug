@@ -370,3 +370,11 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
                 future.cancel()
             raise e
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
+
+
+def get_hgmo_patch(branch: str, revision: str) -> str:
+    """Load a patch for a given revision"""
+    url = f"https://hg.mozilla.org/{branch}/raw-rev/{revision}"
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.text

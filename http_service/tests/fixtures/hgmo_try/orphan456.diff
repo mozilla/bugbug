@@ -1,0 +1,8 @@
+Orphan 456
+
+diff --git a/hello.txt b/hello.txt
+new file mode 100644
+--- /dev/null
++++ b/hello.txt
+@@ -0,0 +1,1 @@
++Hello from try - single orphan
