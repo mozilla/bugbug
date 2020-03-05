@@ -216,7 +216,7 @@ def mock_repo(tmpdir, monkeypatch):
     # Setup the worker env to use that repo dir
     monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
 
-    # Silent the clean method
+    # Silence the clean method
     monkeypatch.setattr(bugbug.repository, "clean", lambda repo_dir: True)
 
     # Create the repo
