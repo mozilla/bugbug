@@ -4,7 +4,7 @@ diff --git a/test.txt b/test.txt
 --- a/test.txt
 +++ b/test.txt
 @@ -1,1 +1,2 @@
--Line 1
+-Version 3
 \ No newline at end of file
-+Line 1
-+Line 2
++Version 3
++This is a new line

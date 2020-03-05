@@ -158,12 +158,11 @@ def add_change_time():
 
 
 @pytest.fixture
-def mock_hgmo(get_fixture_path):
+def mock_hgmo(get_fixture_path, mock_repo):
     """Mock HGMO API to get patches to apply"""
 
     def fake_raw_rev(request):
-        repo, _, revision, *path = request.path_url[1:].split("/")
-        path = "/".join(path)
+        repo, _, revision = request.path_url[1:].split("/")
 
         assert repo != "None", "Missing repo"
         assert revision != "None", "Missing revision"
@@ -178,13 +177,21 @@ def mock_hgmo(get_fixture_path):
         *repo, _, revision = request.path_url[1:].split("/")
         repo = "-".join(repo)
 
-        # TODO: also support revision with different nodes
-        resp = {
-            "changesets": [{"node": revision, "parents": [f"parent{revision[:4]}"]}],
-            "visible": True,
-        }
+        assert repo != "None", "Missing repo"
+        assert revision != "None", "Missing revision"
 
-        return (200, {"Content-Type": "application/json"}, json.dumps(resp))
+        mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.json")
+        with open(mock_path) as f:
+            content = f.read()
+
+        # Patch the hardcoded revisions
+        for log in mock_repo[1].log():
+            log_id = log.rev.decode("utf-8")
+            node = log.node.decode("utf-8")
+            print(log_id, node)
+            content = content.replace(f"BASE_HISTORY_{log_id}", node)
+
+        return (200, {"Content-Type": "application/json"}, content)
 
     responses.add_callback(
         responses.GET,
@@ -211,11 +218,12 @@ def mock_repo(tmpdir, monkeypatch):
     # Create the repo
     hglib.init(str(repo_dir))
 
-    # Commit a test file
+    # Add several commits on a test file to create some history
     test_file = repo_dir / "test.txt"
-    test_file.write_text("Line 1", encoding="utf-8")
     repo = hglib.open(str(repo_dir))
-    repo.add([str(test_file).encode("utf-8")])
-    repo.commit("Initial test file", user="bugbug")
+    for i in range(4):
+        test_file.write_text(f"Version {i}", encoding="utf-8")
+        repo.add([str(test_file).encode("utf-8")])
+        repo.commit(f"Base history {i}", user="bugbug")
 
     return repo_dir, repo
