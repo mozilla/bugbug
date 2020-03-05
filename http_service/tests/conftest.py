@@ -15,6 +15,7 @@ import pytest
 import responses
 from rq.exceptions import NoSuchJobError
 
+import bugbug.repository
 import bugbug_http
 import bugbug_http.models
 from bugbug_http import app
@@ -162,7 +163,8 @@ def mock_hgmo(get_fixture_path, mock_repo):
     """Mock HGMO API to get patches to apply"""
 
     def fake_raw_rev(request):
-        repo, _, revision = request.path_url[1:].split("/")
+        *repo, _, revision = request.path_url[1:].split("/")
+        repo = "-".join(repo)
 
         assert repo != "None", "Missing repo"
         assert revision != "None", "Missing revision"
@@ -188,14 +190,13 @@ def mock_hgmo(get_fixture_path, mock_repo):
         for log in mock_repo[1].log():
             log_id = log.rev.decode("utf-8")
             node = log.node.decode("utf-8")
-            print(log_id, node)
             content = content.replace(f"BASE_HISTORY_{log_id}", node)
 
         return (200, {"Content-Type": "application/json"}, content)
 
     responses.add_callback(
         responses.GET,
-        re.compile(r"^https?://(hgmo|hg\.mozilla\.org)/[\w-]+/raw-rev/(\w+)"),
+        re.compile(r"^https?://(hgmo|hg\.mozilla\.org)/[\w\-\/]+/raw-rev/(\w+)"),
         callback=fake_raw_rev,
     )
     responses.add_callback(
@@ -214,6 +215,9 @@ def mock_repo(tmpdir, monkeypatch):
 
     # Setup the worker env to use that repo dir
     monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
+
+    # Silent the clean method
+    monkeypatch.setattr(bugbug.repository, "clean", lambda repo_dir: True)
 
     # Create the repo
     hglib.init(str(repo_dir))

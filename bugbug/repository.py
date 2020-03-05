@@ -1012,9 +1012,12 @@ def clone(repo_dir):
     clean(repo_dir)
 
 
-def apply_stack(repo_dir, stack, branch, default_base="tip"):
+def apply_stack(repo_dir, stack, branch, default_base):
     """Apply a stack of patches on a repository"""
     assert len(stack) > 0, "Empty stack"
+
+    # Start by updating the repository
+    clean(repo_dir)
 
     def has_revision(revision):
         try:
@@ -1033,6 +1036,10 @@ def apply_stack(repo_dir, stack, branch, default_base="tip"):
         if all(map(has_revision, parents)):
             base = parents[0]
         else:
+            # Some repositories need to have the exact parent to apply
+            if default_base is None:
+                raise Exception("Parents are not available, cannot apply this stack")
+
             base = default_base
 
         # Update to base revision

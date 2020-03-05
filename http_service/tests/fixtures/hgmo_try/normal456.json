@@ -1,0 +1,17 @@
+{
+    "changesets": [
+        {
+            "node": "localParent456",
+            "parents": [
+                "BASE_HISTORY_1"
+            ]
+        },
+        {
+            "node": "normal456",
+            "parents": [
+                "localParent456"
+            ]
+        }
+    ],
+    "visible": true
+}

@@ -18,7 +18,7 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
     assert test_txt.read_text("utf-8") == "Version 3"
 
     # Scheduling a test on a revision should apply changes in the repo
-    schedule_tests("mozilla-central", "12345deadbeef")
+    assert schedule_tests("mozilla-central", "12345deadbeef") == "OK"
 
     # Check changes have been applied
     assert len(repo.log()) == 5
@@ -26,30 +26,50 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
 
 
 @pytest.mark.parametrize(
-    "branch, revision, final_log",
+    "branch, revision, result, final_log",
     [
         # patch from autoland based on local parent n°0
-        ("autoland", "normal123", ["Target patch", "Parent 123", "Base history 0"]),
+        (
+            "integration/autoland",
+            "normal123",
+            "OK",
+            ["Target patch", "Parent 123", "Base history 0"],
+        ),
         # patch from autoland where parent is not available
+        # so the patch is rejected as we need the parents on autoland
+        # and no changes is made on the repository
+        (
+            "integration/autoland",
+            "orphan123",
+            "NOK",
+            ["Base history 3", "Base history 2", "Base history 1", "Base history 0"],
+        ),
+        # patch from try based on local parent n°1
+        (
+            "try",
+            "normal456",
+            "OK",
+            ["Target patch", "Parent 456", "Base history 1", "Base history 0"],
+        ),
+        # patch from try where parent is not available
         # so the patch is applied on top of tip
         (
-            "autoland",
-            "orphan123",
+            "try",
+            "orphan456",
+            "OK",
             [
-                "Orphan 123",
+                "Orphan 456",
                 "Base history 3",
                 "Base history 2",
                 "Base history 1",
                 "Base history 0",
             ],
         ),
-        # patch from try
-        # ("try", "normal567"),
-        # patch from try where parent is not available
-        # ("try", "orpahn567"),
     ],
 )
-def test_schedule(branch, revision, final_log, patch_resources, mock_hgmo, mock_repo):
+def test_schedule(
+    branch, revision, result, final_log, patch_resources, mock_hgmo, mock_repo
+):
 
     # The repo should only have the base commits
     repo_dir, repo = mock_repo
@@ -63,7 +83,7 @@ def test_schedule(branch, revision, final_log, patch_resources, mock_hgmo, mock_
     ]
 
     # Schedule tests for parametrized revision
-    schedule_tests(branch, revision)
+    assert schedule_tests(branch, revision) == result
 
     # Now check the log has evolved
     assert final_log == [l.desc.decode("utf-8") for l in repo.log(follow=True)]
