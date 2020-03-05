@@ -309,6 +309,9 @@ tasks:
           public/past_failures_group.lmdb.tar.zst:
             path: /data/past_failures_group.lmdb.tar.zst
             type: file
+          public/touched_together.lmdb.tar.zst:
+            path: /data/touched_together.lmdb.tar.zst
+            type: file
 
         features:
           taskclusterProxy:

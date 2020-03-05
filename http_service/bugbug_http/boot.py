@@ -35,6 +35,14 @@ def boot_worker():
         or ALLOW_MISSING_MODELS
     )
 
+    assert (
+        db.download_support_file(
+            test_scheduling.TEST_GROUP_SCHEDULING_DB,
+            test_scheduling.TOUCHED_TOGETHER_DB,
+        )
+        or ALLOW_MISSING_MODELS
+    )
+
     # Download commits DB
     logger.info("Downloading commits DB...")
     commits_db_downloaded = db.download(repository.COMMITS_DB, support_files_too=True)
