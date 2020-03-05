@@ -65,6 +65,15 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
                 "Base history 0",
             ],
         ),
+        # bad patch that does not apply
+        # The repository is updated to the local base revision
+        # even if the patch does not apply afterward
+        (
+            "try",
+            "bad123",
+            "NOK",
+            ["Base history 2", "Base history 1", "Base history 0"],
+        ),
     ],
 )
 def test_schedule(
