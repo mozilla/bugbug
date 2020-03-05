@@ -1000,7 +1000,7 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     if proc.returncode:
         raise hglib.error.CommandError(cmd, proc.returncode, out, err)
 
-    logger.info(f"{url} cloned")
+    logger.info(f"{repo_dir} cloned")
 
     # Remove pushlog DB to make sure it's regenerated.
     try:
