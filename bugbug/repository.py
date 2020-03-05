@@ -973,19 +973,19 @@ def clean(repo_dir):
                 raise
 
         # Pull and update.
-        logger.info("Pulling and updating mozilla-central")
+        logger.info(f"Pulling and updating {repo_dir}")
         hg.pull(update=True)
-        logger.info("mozilla-central pulled and updated")
+        logger.info("{repo_dir} pulled and updated")
 
 
-def clone(repo_dir):
+def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     if os.path.exists(repo_dir):
         clean(repo_dir)
         return
 
     cmd = hglib.util.cmdbuilder(
         "robustcheckout",
-        "https://hg.mozilla.org/mozilla-central",
+        url,
         repo_dir,
         purge=True,
         sharebase=repo_dir + "-shared",
@@ -1000,7 +1000,7 @@ def clone(repo_dir):
     if proc.returncode:
         raise hglib.error.CommandError(cmd, proc.returncode, out, err)
 
-    logger.info("mozilla-central cloned")
+    logger.info(f"{repo_dir} cloned")
 
     # Remove pushlog DB to make sure it's regenerated.
     try:
