@@ -24,7 +24,7 @@ def get_bugzilla_http_client():
     return http_client, bugzilla_api_url
 
 
-def hgmo_stack(branch: str, revision: str) -> list:
+def get_hgmo_stack(branch: str, revision: str) -> list:
     """Load descriptions of patches in the stack for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = requests.get(url)

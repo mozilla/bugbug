@@ -18,7 +18,7 @@ from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.repository import apply_stack
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.utils import hgmo_stack
+from bugbug_http.utils import get_hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -150,7 +150,7 @@ def schedule_tests(branch, rev):
 
     # Load the full stack of patches leading to that revision
     try:
-        stack = hgmo_stack(branch, rev)
+        stack = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"

@@ -22,7 +22,7 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
-from bugbug.utils import LMDBDict, hgmo_patch
+from bugbug.utils import LMDBDict, get_hgmo_patch
 
 logger = logging.getLogger(__name__)
 
@@ -1038,7 +1038,7 @@ def apply_stack(repo_dir, stack, branch):
             else:
                 # Load the patch to apply from HGMO
                 logger.info(f"Loading patch for {node}")
-                patches.append((node, hgmo_patch(branch, node)))
+                patches.append((node, get_hgmo_patch(branch, node)))
 
         if not patches:
             logger.info("All patches are already applied")

@@ -372,7 +372,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
 
 
-def hgmo_patch(branch: str, revision: str) -> str:
+def get_hgmo_patch(branch: str, revision: str) -> str:
     """Load a patch for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/raw-rev/{revision}"
     r = requests.get(url)
