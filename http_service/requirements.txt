@@ -5,6 +5,6 @@ Flask==1.1.1
 flask-apispec==0.8.6
 flask-cors==3.0.8
 gunicorn==20.0.4
-marshmallow==3.5.0
+marshmallow==3.5.1
 rq==1.2.2
 rq-dashboard==0.6.1
