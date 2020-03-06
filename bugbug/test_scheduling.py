@@ -136,6 +136,9 @@ def update_touched_together():
 
             continue
 
+        if commit["ever_backedout"]:
+            continue
+
         touched_together["last_analyzed"] = commit["node"]
 
         # As in the test scheduling history retriever script, for now skip commits which are too large.
