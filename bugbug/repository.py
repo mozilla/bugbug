@@ -975,7 +975,7 @@ def clean(repo_dir):
         # Pull and update.
         logger.info(f"Pulling and updating {repo_dir}")
         hg.pull(update=True)
-        logger.info("{repo_dir} pulled and updated")
+        logger.info(f"{repo_dir} pulled and updated")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
