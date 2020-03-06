@@ -8,7 +8,7 @@ tasks:
     minute: {$eval: 'now[14:16]'}
     second: {$eval: 'now[17:19]'}
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.1.10
+    taskboot_image: mozilla/taskboot:0.2.2
   in:
     - ID: microannotate-generate-tokenize
       created: {$fromNow: ''}
@@ -136,8 +136,8 @@ tasks:
           public/commits.json.version:
             path: /data/commits.json.version
             type: file
-          public/commit_experiences.pickle.zst:
-            path: /data/commit_experiences.pickle.zst
+          public/commit_experiences.lmdb.tar.zst:
+            path: /data/commit_experiences.lmdb.tar.zst
             type: file
         cache:
           bugbug-mercurial-repository: /cache
@@ -308,6 +308,9 @@ tasks:
             type: file
           public/past_failures_group.lmdb.tar.zst:
             path: /data/past_failures_group.lmdb.tar.zst
+            type: file
+          public/touched_together.lmdb.tar.zst:
+            path: /data/touched_together.lmdb.tar.zst
             type: file
 
         features:
@@ -1343,7 +1346,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: batch
+      workerType: ci
       payload:
         features:
           taskclusterProxy:

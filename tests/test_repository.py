@@ -441,13 +441,13 @@ def test_download_commits(fake_hg_repo):
     assert commits[1]["seniority_author"] > commits[0]["seniority_author"]
 
     os.remove("data/commits.json")
-    os.remove("data/commit_experiences.pickle")
+    shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(local, f"children({revision2})")
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
-    os.remove("data/commit_experiences.pickle")
+    shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(local)
     assert len(list(repository.get_commits())) == 2
 
@@ -621,6 +621,658 @@ def test_calculate_experiences():
     }
 
     repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+
+    assert commits["commit1"].seniority_author == 0
+    assert commits["commitbackedout"].seniority_author == 0
+    assert commits["commit2"].seniority_author == 0
+    assert commits["commit3"].seniority_author == 0
+    assert commits["commit4"].seniority_author == 86400.0 * 365
+    assert commits["commit5"].seniority_author == 0
+    assert commits["commit6"].seniority_author == 86400.0
+
+    assert commits["commit1"].touched_prev_total_author_sum == 0
+    assert commits["commit2"].touched_prev_total_author_sum == 0
+    assert commits["commit3"].touched_prev_total_author_sum == 1
+    assert commits["commit4"].touched_prev_total_author_sum == 1
+    assert commits["commit5"].touched_prev_total_author_sum == 0
+    assert commits["commit6"].touched_prev_total_author_sum == 1
+
+    assert commits["commit1"].touched_prev_90_days_author_sum == 0
+    assert commits["commit2"].touched_prev_90_days_author_sum == 0
+    assert commits["commit3"].touched_prev_90_days_author_sum == 1
+    assert commits["commit4"].touched_prev_90_days_author_sum == 0
+    assert commits["commit5"].touched_prev_90_days_author_sum == 0
+    assert commits["commit6"].touched_prev_90_days_author_sum == 1
+
+    assert commits["commit1"].touched_prev_total_reviewer_sum == 0
+    assert commits["commit1"].touched_prev_total_reviewer_max == 0
+    assert commits["commit1"].touched_prev_total_reviewer_min == 0
+    assert commits["commit2"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit2"].touched_prev_total_reviewer_max == 1
+    assert commits["commit2"].touched_prev_total_reviewer_min == 1
+    assert commits["commit3"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit3"].touched_prev_total_reviewer_max == 1
+    assert commits["commit3"].touched_prev_total_reviewer_min == 1
+    assert commits["commit4"].touched_prev_total_reviewer_sum == 4
+    assert commits["commit4"].touched_prev_total_reviewer_max == 2
+    assert commits["commit4"].touched_prev_total_reviewer_min == 2
+    assert commits["commit5"].touched_prev_total_reviewer_sum == 0
+    assert commits["commit5"].touched_prev_total_reviewer_max == 0
+    assert commits["commit5"].touched_prev_total_reviewer_min == 0
+    assert commits["commit6"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit6"].touched_prev_total_reviewer_max == 1
+    assert commits["commit6"].touched_prev_total_reviewer_min == 1
+
+    assert commits["commit1"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit1"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit1"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit2"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit2"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit2"].touched_prev_90_days_reviewer_min == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_min == 1
+    assert commits["commit4"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit6"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_min == 1
+
+    assert commits["commit1"].touched_prev_total_file_sum == 0
+    assert commits["commit1"].touched_prev_total_file_max == 0
+    assert commits["commit1"].touched_prev_total_file_min == 0
+    assert commits["commit2"].touched_prev_total_file_sum == 1
+    assert commits["commit2"].touched_prev_total_file_max == 1
+    assert commits["commit2"].touched_prev_total_file_min == 1
+    assert commits["commit3"].touched_prev_total_file_sum == 1
+    assert commits["commit3"].touched_prev_total_file_max == 1
+    assert commits["commit3"].touched_prev_total_file_min == 0
+    assert commits["commit4"].touched_prev_total_file_sum == 2
+    assert commits["commit4"].touched_prev_total_file_max == 2
+    assert commits["commit4"].touched_prev_total_file_min == 0
+    assert commits["commit5"].touched_prev_total_file_sum == 3
+    assert commits["commit5"].touched_prev_total_file_max == 3
+    assert commits["commit5"].touched_prev_total_file_min == 3
+    assert commits["commit6"].touched_prev_total_file_sum == 4
+    assert commits["commit6"].touched_prev_total_file_max == 4
+    assert commits["commit6"].touched_prev_total_file_min == 3
+
+    assert commits["commit1"].touched_prev_90_days_file_sum == 0
+    assert commits["commit1"].touched_prev_90_days_file_max == 0
+    assert commits["commit1"].touched_prev_90_days_file_min == 0
+    assert commits["commit2"].touched_prev_90_days_file_sum == 1
+    assert commits["commit2"].touched_prev_90_days_file_max == 1
+    assert commits["commit2"].touched_prev_90_days_file_min == 1
+    assert commits["commit3"].touched_prev_90_days_file_sum == 1
+    assert commits["commit3"].touched_prev_90_days_file_max == 1
+    assert commits["commit3"].touched_prev_90_days_file_min == 0
+    assert commits["commit4"].touched_prev_90_days_file_sum == 0
+    assert commits["commit4"].touched_prev_90_days_file_max == 0
+    assert commits["commit4"].touched_prev_90_days_file_min == 0
+    assert commits["commit5"].touched_prev_90_days_file_sum == 1
+    assert commits["commit5"].touched_prev_90_days_file_max == 1
+    assert commits["commit5"].touched_prev_90_days_file_min == 1
+    assert commits["commit6"].touched_prev_90_days_file_sum == 2
+    assert commits["commit6"].touched_prev_90_days_file_max == 2
+    assert commits["commit6"].touched_prev_90_days_file_min == 1
+
+    assert commits["commit1"].touched_prev_total_directory_sum == 0
+    assert commits["commit1"].touched_prev_total_directory_max == 0
+    assert commits["commit1"].touched_prev_total_directory_min == 0
+    assert commits["commit2"].touched_prev_total_directory_sum == 1
+    assert commits["commit2"].touched_prev_total_directory_max == 1
+    assert commits["commit2"].touched_prev_total_directory_min == 1
+    assert commits["commit3"].touched_prev_total_directory_sum == 2
+    assert commits["commit3"].touched_prev_total_directory_max == 2
+    assert commits["commit3"].touched_prev_total_directory_min == 1
+    assert commits["commit4"].touched_prev_total_directory_sum == 3
+    assert commits["commit4"].touched_prev_total_directory_max == 3
+    assert commits["commit4"].touched_prev_total_directory_min == 2
+    assert commits["commit5"].touched_prev_total_directory_sum == 4
+    assert commits["commit5"].touched_prev_total_directory_max == 4
+    assert commits["commit5"].touched_prev_total_directory_min == 4
+    assert commits["commit6"].touched_prev_total_directory_sum == 5
+    assert commits["commit6"].touched_prev_total_directory_max == 5
+    assert commits["commit6"].touched_prev_total_directory_min == 5
+
+    assert commits["commit1"].touched_prev_90_days_directory_sum == 0
+    assert commits["commit1"].touched_prev_90_days_directory_max == 0
+    assert commits["commit1"].touched_prev_90_days_directory_min == 0
+    assert commits["commit2"].touched_prev_90_days_directory_sum == 1
+    assert commits["commit2"].touched_prev_90_days_directory_max == 1
+    assert commits["commit2"].touched_prev_90_days_directory_min == 1
+    assert commits["commit3"].touched_prev_90_days_directory_sum == 2
+    assert commits["commit3"].touched_prev_90_days_directory_max == 2
+    assert commits["commit3"].touched_prev_90_days_directory_min == 1
+    assert commits["commit4"].touched_prev_90_days_directory_sum == 0
+    assert commits["commit4"].touched_prev_90_days_directory_max == 0
+    assert commits["commit4"].touched_prev_90_days_directory_min == 0
+    assert commits["commit5"].touched_prev_90_days_directory_sum == 1
+    assert commits["commit5"].touched_prev_90_days_directory_max == 1
+    assert commits["commit5"].touched_prev_90_days_directory_min == 1
+    assert commits["commit6"].touched_prev_90_days_directory_sum == 2
+    assert commits["commit6"].touched_prev_90_days_directory_max == 2
+    assert commits["commit6"].touched_prev_90_days_directory_min == 2
+
+    assert commits["commit1"].touched_prev_total_component_sum == 0
+    assert commits["commit1"].touched_prev_total_component_max == 0
+    assert commits["commit1"].touched_prev_total_component_min == 0
+    assert commits["commit2"].touched_prev_total_component_sum == 1
+    assert commits["commit2"].touched_prev_total_component_max == 1
+    assert commits["commit2"].touched_prev_total_component_min == 1
+    assert commits["commit3"].touched_prev_total_component_sum == 1
+    assert commits["commit3"].touched_prev_total_component_max == 1
+    assert commits["commit3"].touched_prev_total_component_min == 0
+    assert commits["commit4"].touched_prev_total_component_sum == 3
+    assert commits["commit4"].touched_prev_total_component_max == 2
+    assert commits["commit4"].touched_prev_total_component_min == 2
+    assert commits["commit5"].touched_prev_total_component_sum == 3
+    assert commits["commit5"].touched_prev_total_component_max == 3
+    assert commits["commit5"].touched_prev_total_component_min == 3
+    assert commits["commit6"].touched_prev_total_component_sum == 4
+    assert commits["commit6"].touched_prev_total_component_max == 4
+    assert commits["commit6"].touched_prev_total_component_min == 4
+
+    assert commits["commit1"].touched_prev_90_days_component_sum == 0
+    assert commits["commit1"].touched_prev_90_days_component_max == 0
+    assert commits["commit1"].touched_prev_90_days_component_min == 0
+    assert commits["commit2"].touched_prev_90_days_component_sum == 1
+    assert commits["commit2"].touched_prev_90_days_component_max == 1
+    assert commits["commit2"].touched_prev_90_days_component_min == 1
+    assert commits["commit3"].touched_prev_90_days_component_sum == 1
+    assert commits["commit3"].touched_prev_90_days_component_max == 1
+    assert commits["commit3"].touched_prev_90_days_component_min == 0
+    assert commits["commit4"].touched_prev_90_days_component_sum == 0
+    assert commits["commit4"].touched_prev_90_days_component_max == 0
+    assert commits["commit4"].touched_prev_90_days_component_min == 0
+    assert commits["commit5"].touched_prev_90_days_component_sum == 1
+    assert commits["commit5"].touched_prev_90_days_component_max == 1
+    assert commits["commit5"].touched_prev_90_days_component_min == 1
+    assert commits["commit6"].touched_prev_90_days_component_sum == 2
+    assert commits["commit6"].touched_prev_90_days_component_max == 2
+    assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    commits["commit1"].pushdate = datetime(2020, 1, 4)
+    commits["commit1"].node = "commit1copy"
+    commits["commitbackedout"].pushdate = datetime(2020, 1, 4)
+    commits["commitbackedout"].node = "commitbackedoutcopy"
+    commits["commit2"].pushdate = datetime(2020, 1, 4)
+    commits["commit2"].node = "commit2copy"
+    commits["commit2refactoring"].pushdate = datetime(2020, 1, 4)
+    commits["commit2refactoring"].node = "commit2refactoringcopy"
+    commits["commit3"].pushdate = datetime(2020, 1, 4)
+    commits["commit3"].node = "commit3copy"
+    commits["commit4"].pushdate = datetime(2021, 1, 4)
+    commits["commit4"].node = "commit4copy"
+    commits["commit5"].pushdate = datetime(2021, 1, 5)
+    commits["commit5"].node = "commit5copy"
+    commits["commit6"].pushdate = datetime(2021, 1, 6)
+    commits["commit6"].node = "commit6copy"
+
+    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+
+    assert commits["commit1"].seniority_author == 86400.0 * 368
+    assert commits["commitbackedout"].seniority_author == 86400.0 * 368
+    assert commits["commit2"].seniority_author == 86400.0 * 368
+    assert commits["commit3"].seniority_author == 86400.0 * 368
+    assert commits["commit4"].seniority_author == 86400.0 * 734
+    assert commits["commit5"].seniority_author == 86400.0 * 369
+    assert commits["commit6"].seniority_author == 86400.0 * 370
+
+    assert commits["commit1"].touched_prev_total_author_sum == 2
+    assert commits["commit2"].touched_prev_total_author_sum == 2
+    assert commits["commit3"].touched_prev_total_author_sum == 3
+    assert commits["commit4"].touched_prev_total_author_sum == 3
+    assert commits["commit5"].touched_prev_total_author_sum == 2
+    assert commits["commit6"].touched_prev_total_author_sum == 3
+
+    assert commits["commit1"].touched_prev_90_days_author_sum == 0
+    assert commits["commit2"].touched_prev_90_days_author_sum == 1
+    assert commits["commit3"].touched_prev_90_days_author_sum == 1
+    assert commits["commit4"].touched_prev_90_days_author_sum == 0
+    assert commits["commit5"].touched_prev_90_days_author_sum == 0
+    assert commits["commit6"].touched_prev_90_days_author_sum == 1
+
+    assert commits["commit1"].touched_prev_total_reviewer_sum == 6
+    assert commits["commit1"].touched_prev_total_reviewer_max == 3
+    assert commits["commit1"].touched_prev_total_reviewer_min == 3
+    assert commits["commit2"].touched_prev_total_reviewer_sum == 4
+    assert commits["commit2"].touched_prev_total_reviewer_max == 4
+    assert commits["commit2"].touched_prev_total_reviewer_min == 4
+    assert commits["commit3"].touched_prev_total_reviewer_sum == 4
+    assert commits["commit3"].touched_prev_total_reviewer_max == 4
+    assert commits["commit3"].touched_prev_total_reviewer_min == 4
+    assert commits["commit4"].touched_prev_total_reviewer_sum == 10
+    assert commits["commit4"].touched_prev_total_reviewer_max == 5
+    assert commits["commit4"].touched_prev_total_reviewer_min == 5
+    assert commits["commit5"].touched_prev_total_reviewer_sum == 2
+    assert commits["commit5"].touched_prev_total_reviewer_max == 2
+    assert commits["commit5"].touched_prev_total_reviewer_min == 2
+    assert commits["commit6"].touched_prev_total_reviewer_sum == 3
+    assert commits["commit6"].touched_prev_total_reviewer_max == 3
+    assert commits["commit6"].touched_prev_total_reviewer_min == 3
+
+    assert commits["commit1"].touched_prev_90_days_reviewer_sum == 2
+    assert commits["commit1"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit1"].touched_prev_90_days_reviewer_min == 1
+    assert commits["commit2"].touched_prev_90_days_reviewer_sum == 2
+    assert commits["commit2"].touched_prev_90_days_reviewer_max == 2
+    assert commits["commit2"].touched_prev_90_days_reviewer_min == 2
+    assert commits["commit3"].touched_prev_90_days_reviewer_sum == 2
+    assert commits["commit3"].touched_prev_90_days_reviewer_max == 2
+    assert commits["commit3"].touched_prev_90_days_reviewer_min == 2
+    assert commits["commit4"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit6"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_min == 1
+
+    assert commits["commit1"].touched_prev_total_file_sum == 6
+    assert commits["commit1"].touched_prev_total_file_max == 5
+    assert commits["commit1"].touched_prev_total_file_min == 2
+    assert commits["commit2"].touched_prev_total_file_sum == 6
+    assert commits["commit2"].touched_prev_total_file_max == 6
+    assert commits["commit2"].touched_prev_total_file_min == 6
+    assert commits["commit3"].touched_prev_total_file_sum == 3
+    assert commits["commit3"].touched_prev_total_file_max == 3
+    assert commits["commit3"].touched_prev_total_file_min == 1
+    assert commits["commit4"].touched_prev_total_file_sum == 7
+    assert commits["commit4"].touched_prev_total_file_max == 7
+    assert commits["commit4"].touched_prev_total_file_min == 1
+    assert commits["commit5"].touched_prev_total_file_sum == 8
+    assert commits["commit5"].touched_prev_total_file_max == 8
+    assert commits["commit5"].touched_prev_total_file_min == 8
+    assert commits["commit6"].touched_prev_total_file_sum == 9
+    assert commits["commit6"].touched_prev_total_file_max == 9
+    assert commits["commit6"].touched_prev_total_file_min == 8
+
+    assert commits["commit1"].touched_prev_90_days_file_sum == 3
+    assert commits["commit1"].touched_prev_90_days_file_max == 3
+    assert commits["commit1"].touched_prev_90_days_file_min == 0
+    assert commits["commit2"].touched_prev_90_days_file_sum == 4
+    assert commits["commit2"].touched_prev_90_days_file_max == 4
+    assert commits["commit2"].touched_prev_90_days_file_min == 4
+    assert commits["commit3"].touched_prev_90_days_file_sum == 1
+    assert commits["commit3"].touched_prev_90_days_file_max == 1
+    assert commits["commit3"].touched_prev_90_days_file_min == 0
+    assert commits["commit4"].touched_prev_90_days_file_sum == 0
+    assert commits["commit4"].touched_prev_90_days_file_max == 0
+    assert commits["commit4"].touched_prev_90_days_file_min == 0
+    assert commits["commit5"].touched_prev_90_days_file_sum == 1
+    assert commits["commit5"].touched_prev_90_days_file_max == 1
+    assert commits["commit5"].touched_prev_90_days_file_min == 1
+    assert commits["commit6"].touched_prev_90_days_file_sum == 2
+    assert commits["commit6"].touched_prev_90_days_file_max == 2
+    assert commits["commit6"].touched_prev_90_days_file_min == 1
+
+    assert commits["commit1"].touched_prev_total_directory_sum == 6
+    assert commits["commit1"].touched_prev_total_directory_max == 6
+    assert commits["commit1"].touched_prev_total_directory_min == 3
+    assert commits["commit2"].touched_prev_total_directory_sum == 7
+    assert commits["commit2"].touched_prev_total_directory_max == 7
+    assert commits["commit2"].touched_prev_total_directory_min == 7
+    assert commits["commit3"].touched_prev_total_directory_sum == 8
+    assert commits["commit3"].touched_prev_total_directory_max == 8
+    assert commits["commit3"].touched_prev_total_directory_min == 4
+    assert commits["commit4"].touched_prev_total_directory_sum == 9
+    assert commits["commit4"].touched_prev_total_directory_max == 9
+    assert commits["commit4"].touched_prev_total_directory_min == 5
+    assert commits["commit5"].touched_prev_total_directory_sum == 10
+    assert commits["commit5"].touched_prev_total_directory_max == 10
+    assert commits["commit5"].touched_prev_total_directory_min == 10
+    assert commits["commit6"].touched_prev_total_directory_sum == 11
+    assert commits["commit6"].touched_prev_total_directory_max == 11
+    assert commits["commit6"].touched_prev_total_directory_min == 11
+
+    assert commits["commit1"].touched_prev_90_days_directory_sum == 3
+    assert commits["commit1"].touched_prev_90_days_directory_max == 3
+    assert commits["commit1"].touched_prev_90_days_directory_min == 1
+    assert commits["commit2"].touched_prev_90_days_directory_sum == 4
+    assert commits["commit2"].touched_prev_90_days_directory_max == 4
+    assert commits["commit2"].touched_prev_90_days_directory_min == 4
+    assert commits["commit3"].touched_prev_90_days_directory_sum == 5
+    assert commits["commit3"].touched_prev_90_days_directory_max == 5
+    assert commits["commit3"].touched_prev_90_days_directory_min == 2
+    assert commits["commit4"].touched_prev_90_days_directory_sum == 0
+    assert commits["commit4"].touched_prev_90_days_directory_max == 0
+    assert commits["commit4"].touched_prev_90_days_directory_min == 0
+    assert commits["commit5"].touched_prev_90_days_directory_sum == 1
+    assert commits["commit5"].touched_prev_90_days_directory_max == 1
+    assert commits["commit5"].touched_prev_90_days_directory_min == 1
+    assert commits["commit6"].touched_prev_90_days_directory_sum == 2
+    assert commits["commit6"].touched_prev_90_days_directory_max == 2
+    assert commits["commit6"].touched_prev_90_days_directory_min == 2
+
+    assert commits["commit1"].touched_prev_total_component_sum == 6
+    assert commits["commit1"].touched_prev_total_component_max == 5
+    assert commits["commit1"].touched_prev_total_component_min == 3
+    assert commits["commit2"].touched_prev_total_component_sum == 6
+    assert commits["commit2"].touched_prev_total_component_max == 6
+    assert commits["commit2"].touched_prev_total_component_min == 6
+    assert commits["commit3"].touched_prev_total_component_sum == 4
+    assert commits["commit3"].touched_prev_total_component_max == 4
+    assert commits["commit3"].touched_prev_total_component_min == 1
+    assert commits["commit4"].touched_prev_total_component_sum == 9
+    assert commits["commit4"].touched_prev_total_component_max == 7
+    assert commits["commit4"].touched_prev_total_component_min == 5
+    assert commits["commit5"].touched_prev_total_component_sum == 8
+    assert commits["commit5"].touched_prev_total_component_max == 8
+    assert commits["commit5"].touched_prev_total_component_min == 8
+    assert commits["commit6"].touched_prev_total_component_sum == 9
+    assert commits["commit6"].touched_prev_total_component_max == 9
+    assert commits["commit6"].touched_prev_total_component_min == 9
+
+    assert commits["commit1"].touched_prev_90_days_component_sum == 3
+    assert commits["commit1"].touched_prev_90_days_component_max == 3
+    assert commits["commit1"].touched_prev_90_days_component_min == 1
+    assert commits["commit2"].touched_prev_90_days_component_sum == 4
+    assert commits["commit2"].touched_prev_90_days_component_max == 4
+    assert commits["commit2"].touched_prev_90_days_component_min == 4
+    assert commits["commit3"].touched_prev_90_days_component_sum == 2
+    assert commits["commit3"].touched_prev_90_days_component_max == 2
+    assert commits["commit3"].touched_prev_90_days_component_min == 0
+    assert commits["commit4"].touched_prev_90_days_component_sum == 0
+    assert commits["commit4"].touched_prev_90_days_component_max == 0
+    assert commits["commit4"].touched_prev_90_days_component_min == 0
+    assert commits["commit5"].touched_prev_90_days_component_sum == 1
+    assert commits["commit5"].touched_prev_90_days_component_max == 1
+    assert commits["commit5"].touched_prev_90_days_component_min == 1
+    assert commits["commit6"].touched_prev_90_days_component_sum == 2
+    assert commits["commit6"].touched_prev_90_days_component_max == 2
+    assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    with pytest.raises(
+        Exception, match=r"Can't get a day \(368\) from earlier than start day \(644\)"
+    ):
+        repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+
+
+def test_calculate_experiences_no_save():
+    repository.path_to_component = {
+        "dom/file1.cpp": "Core::DOM",
+        "dom/file1copied.cpp": "Core::DOM",
+        "dom/file2.cpp": "Core::Layout",
+        "apps/file1.jsm": "Firefox::Boh",
+        "apps/file2.jsm": "Firefox::Boh",
+    }
+
+    commits = {
+        "commit1": repository.Commit(
+            node="commit1",
+            author="author1",
+            desc="commit1",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
+        "commitbackedout": repository.Commit(
+            node="commitbackedout",
+            author="author1",
+            desc="commitbackedout",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="commitbackout",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
+        "commit2": repository.Commit(
+            node="commit2",
+            author="author2",
+            desc="commit2",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1",),
+        ).set_files(["dom/file1.cpp"], {}),
+        "commit2refactoring": repository.Commit(
+            node="commit2refactoring",
+            author="author2",
+            desc="commit2refactoring",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1",),
+            ignored=True,
+        ).set_files(["dom/file1.cpp"], {}),
+        "commit3": repository.Commit(
+            node="commit3",
+            author="author1",
+            desc="commit3",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2019, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author1@mozilla.org",
+            reviewers=("reviewer2",),
+        ).set_files(["dom/file2.cpp", "apps/file1.jsm"], {}),
+        "commit4": repository.Commit(
+            node="commit4",
+            author="author2",
+            desc="commit4",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 1),
+            bug_id=123,
+            backedoutby="",
+            author_email="author2@mozilla.org",
+            reviewers=("reviewer1", "reviewer2"),
+        ).set_files(["dom/file1.cpp", "apps/file2.jsm"], {}),
+        "commit5": repository.Commit(
+            node="commit5",
+            author="author3",
+            desc="commit5",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 2),
+            bug_id=123,
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            reviewers=("reviewer3",),
+        ).set_files(["dom/file1.cpp"], {"dom/file1.cpp": "dom/file1copied.cpp"}),
+        "commit6": repository.Commit(
+            node="commit6",
+            author="author3",
+            desc="commit6",
+            date=datetime(2019, 1, 1),
+            pushdate=datetime(2020, 1, 3),
+            bug_id=123,
+            backedoutby="",
+            author_email="author3@mozilla.org",
+            reviewers=("reviewer3",),
+        ).set_files(["dom/file1.cpp", "dom/file1copied.cpp"], {}),
+    }
+
+    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1), save=False)
+
+    assert commits["commit1"].seniority_author == 0
+    assert commits["commitbackedout"].seniority_author == 0
+    assert commits["commit2"].seniority_author == 0
+    assert commits["commit3"].seniority_author == 0
+    assert commits["commit4"].seniority_author == 86400.0 * 365
+    assert commits["commit5"].seniority_author == 0
+    assert commits["commit6"].seniority_author == 86400.0
+
+    assert commits["commit1"].touched_prev_total_author_sum == 0
+    assert commits["commit2"].touched_prev_total_author_sum == 0
+    assert commits["commit3"].touched_prev_total_author_sum == 1
+    assert commits["commit4"].touched_prev_total_author_sum == 1
+    assert commits["commit5"].touched_prev_total_author_sum == 0
+    assert commits["commit6"].touched_prev_total_author_sum == 1
+
+    assert commits["commit1"].touched_prev_90_days_author_sum == 0
+    assert commits["commit2"].touched_prev_90_days_author_sum == 0
+    assert commits["commit3"].touched_prev_90_days_author_sum == 1
+    assert commits["commit4"].touched_prev_90_days_author_sum == 0
+    assert commits["commit5"].touched_prev_90_days_author_sum == 0
+    assert commits["commit6"].touched_prev_90_days_author_sum == 1
+
+    assert commits["commit1"].touched_prev_total_reviewer_sum == 0
+    assert commits["commit1"].touched_prev_total_reviewer_max == 0
+    assert commits["commit1"].touched_prev_total_reviewer_min == 0
+    assert commits["commit2"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit2"].touched_prev_total_reviewer_max == 1
+    assert commits["commit2"].touched_prev_total_reviewer_min == 1
+    assert commits["commit3"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit3"].touched_prev_total_reviewer_max == 1
+    assert commits["commit3"].touched_prev_total_reviewer_min == 1
+    assert commits["commit4"].touched_prev_total_reviewer_sum == 4
+    assert commits["commit4"].touched_prev_total_reviewer_max == 2
+    assert commits["commit4"].touched_prev_total_reviewer_min == 2
+    assert commits["commit5"].touched_prev_total_reviewer_sum == 0
+    assert commits["commit5"].touched_prev_total_reviewer_max == 0
+    assert commits["commit5"].touched_prev_total_reviewer_min == 0
+    assert commits["commit6"].touched_prev_total_reviewer_sum == 1
+    assert commits["commit6"].touched_prev_total_reviewer_max == 1
+    assert commits["commit6"].touched_prev_total_reviewer_min == 1
+
+    assert commits["commit1"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit1"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit1"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit2"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit2"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit2"].touched_prev_90_days_reviewer_min == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit3"].touched_prev_90_days_reviewer_min == 1
+    assert commits["commit4"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit4"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_sum == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_max == 0
+    assert commits["commit5"].touched_prev_90_days_reviewer_min == 0
+    assert commits["commit6"].touched_prev_90_days_reviewer_sum == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_max == 1
+    assert commits["commit6"].touched_prev_90_days_reviewer_min == 1
+
+    assert commits["commit1"].touched_prev_total_file_sum == 0
+    assert commits["commit1"].touched_prev_total_file_max == 0
+    assert commits["commit1"].touched_prev_total_file_min == 0
+    assert commits["commit2"].touched_prev_total_file_sum == 1
+    assert commits["commit2"].touched_prev_total_file_max == 1
+    assert commits["commit2"].touched_prev_total_file_min == 1
+    assert commits["commit3"].touched_prev_total_file_sum == 1
+    assert commits["commit3"].touched_prev_total_file_max == 1
+    assert commits["commit3"].touched_prev_total_file_min == 0
+    assert commits["commit4"].touched_prev_total_file_sum == 2
+    assert commits["commit4"].touched_prev_total_file_max == 2
+    assert commits["commit4"].touched_prev_total_file_min == 0
+    assert commits["commit5"].touched_prev_total_file_sum == 3
+    assert commits["commit5"].touched_prev_total_file_max == 3
+    assert commits["commit5"].touched_prev_total_file_min == 3
+    assert commits["commit6"].touched_prev_total_file_sum == 4
+    assert commits["commit6"].touched_prev_total_file_max == 4
+    assert commits["commit6"].touched_prev_total_file_min == 3
+
+    assert commits["commit1"].touched_prev_90_days_file_sum == 0
+    assert commits["commit1"].touched_prev_90_days_file_max == 0
+    assert commits["commit1"].touched_prev_90_days_file_min == 0
+    assert commits["commit2"].touched_prev_90_days_file_sum == 1
+    assert commits["commit2"].touched_prev_90_days_file_max == 1
+    assert commits["commit2"].touched_prev_90_days_file_min == 1
+    assert commits["commit3"].touched_prev_90_days_file_sum == 1
+    assert commits["commit3"].touched_prev_90_days_file_max == 1
+    assert commits["commit3"].touched_prev_90_days_file_min == 0
+    assert commits["commit4"].touched_prev_90_days_file_sum == 0
+    assert commits["commit4"].touched_prev_90_days_file_max == 0
+    assert commits["commit4"].touched_prev_90_days_file_min == 0
+    assert commits["commit5"].touched_prev_90_days_file_sum == 1
+    assert commits["commit5"].touched_prev_90_days_file_max == 1
+    assert commits["commit5"].touched_prev_90_days_file_min == 1
+    assert commits["commit6"].touched_prev_90_days_file_sum == 2
+    assert commits["commit6"].touched_prev_90_days_file_max == 2
+    assert commits["commit6"].touched_prev_90_days_file_min == 1
+
+    assert commits["commit1"].touched_prev_total_directory_sum == 0
+    assert commits["commit1"].touched_prev_total_directory_max == 0
+    assert commits["commit1"].touched_prev_total_directory_min == 0
+    assert commits["commit2"].touched_prev_total_directory_sum == 1
+    assert commits["commit2"].touched_prev_total_directory_max == 1
+    assert commits["commit2"].touched_prev_total_directory_min == 1
+    assert commits["commit3"].touched_prev_total_directory_sum == 2
+    assert commits["commit3"].touched_prev_total_directory_max == 2
+    assert commits["commit3"].touched_prev_total_directory_min == 1
+    assert commits["commit4"].touched_prev_total_directory_sum == 3
+    assert commits["commit4"].touched_prev_total_directory_max == 3
+    assert commits["commit4"].touched_prev_total_directory_min == 2
+    assert commits["commit5"].touched_prev_total_directory_sum == 4
+    assert commits["commit5"].touched_prev_total_directory_max == 4
+    assert commits["commit5"].touched_prev_total_directory_min == 4
+    assert commits["commit6"].touched_prev_total_directory_sum == 5
+    assert commits["commit6"].touched_prev_total_directory_max == 5
+    assert commits["commit6"].touched_prev_total_directory_min == 5
+
+    assert commits["commit1"].touched_prev_90_days_directory_sum == 0
+    assert commits["commit1"].touched_prev_90_days_directory_max == 0
+    assert commits["commit1"].touched_prev_90_days_directory_min == 0
+    assert commits["commit2"].touched_prev_90_days_directory_sum == 1
+    assert commits["commit2"].touched_prev_90_days_directory_max == 1
+    assert commits["commit2"].touched_prev_90_days_directory_min == 1
+    assert commits["commit3"].touched_prev_90_days_directory_sum == 2
+    assert commits["commit3"].touched_prev_90_days_directory_max == 2
+    assert commits["commit3"].touched_prev_90_days_directory_min == 1
+    assert commits["commit4"].touched_prev_90_days_directory_sum == 0
+    assert commits["commit4"].touched_prev_90_days_directory_max == 0
+    assert commits["commit4"].touched_prev_90_days_directory_min == 0
+    assert commits["commit5"].touched_prev_90_days_directory_sum == 1
+    assert commits["commit5"].touched_prev_90_days_directory_max == 1
+    assert commits["commit5"].touched_prev_90_days_directory_min == 1
+    assert commits["commit6"].touched_prev_90_days_directory_sum == 2
+    assert commits["commit6"].touched_prev_90_days_directory_max == 2
+    assert commits["commit6"].touched_prev_90_days_directory_min == 2
+
+    assert commits["commit1"].touched_prev_total_component_sum == 0
+    assert commits["commit1"].touched_prev_total_component_max == 0
+    assert commits["commit1"].touched_prev_total_component_min == 0
+    assert commits["commit2"].touched_prev_total_component_sum == 1
+    assert commits["commit2"].touched_prev_total_component_max == 1
+    assert commits["commit2"].touched_prev_total_component_min == 1
+    assert commits["commit3"].touched_prev_total_component_sum == 1
+    assert commits["commit3"].touched_prev_total_component_max == 1
+    assert commits["commit3"].touched_prev_total_component_min == 0
+    assert commits["commit4"].touched_prev_total_component_sum == 3
+    assert commits["commit4"].touched_prev_total_component_max == 2
+    assert commits["commit4"].touched_prev_total_component_min == 2
+    assert commits["commit5"].touched_prev_total_component_sum == 3
+    assert commits["commit5"].touched_prev_total_component_max == 3
+    assert commits["commit5"].touched_prev_total_component_min == 3
+    assert commits["commit6"].touched_prev_total_component_sum == 4
+    assert commits["commit6"].touched_prev_total_component_max == 4
+    assert commits["commit6"].touched_prev_total_component_min == 4
+
+    assert commits["commit1"].touched_prev_90_days_component_sum == 0
+    assert commits["commit1"].touched_prev_90_days_component_max == 0
+    assert commits["commit1"].touched_prev_90_days_component_min == 0
+    assert commits["commit2"].touched_prev_90_days_component_sum == 1
+    assert commits["commit2"].touched_prev_90_days_component_max == 1
+    assert commits["commit2"].touched_prev_90_days_component_min == 1
+    assert commits["commit3"].touched_prev_90_days_component_sum == 1
+    assert commits["commit3"].touched_prev_90_days_component_max == 1
+    assert commits["commit3"].touched_prev_90_days_component_min == 0
+    assert commits["commit4"].touched_prev_90_days_component_sum == 0
+    assert commits["commit4"].touched_prev_90_days_component_max == 0
+    assert commits["commit4"].touched_prev_90_days_component_min == 0
+    assert commits["commit5"].touched_prev_90_days_component_sum == 1
+    assert commits["commit5"].touched_prev_90_days_component_max == 1
+    assert commits["commit5"].touched_prev_90_days_component_min == 1
+    assert commits["commit6"].touched_prev_90_days_component_sum == 2
+    assert commits["commit6"].touched_prev_90_days_component_max == 2
+    assert commits["commit6"].touched_prev_90_days_component_min == 2
+
+    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1), save=False)
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0

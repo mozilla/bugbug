@@ -6,12 +6,14 @@
 import argparse
 import concurrent.futures
 import copy
+import io
 import itertools
 import json
 import logging
 import math
 import os
 import pickle
+import shelve
 import sys
 import threading
 from datetime import datetime
@@ -20,6 +22,7 @@ import hglib
 from tqdm import tqdm
 
 from bugbug import db, utils
+from bugbug.utils import LMDBDict, get_hgmo_patch
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +34,8 @@ COMMITS_DB = "data/commits.json"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    8,
-    ["commit_experiences.pickle.zst"],
+    9,
+    ["commit_experiences.lmdb.tar.zst"],
 )
 
 path_to_component = None
@@ -609,22 +612,52 @@ def get_revs(hg, rev_start=0, rev_end="tip"):
     return x.splitlines()
 
 
+class Experiences:
+    def __init__(self, save):
+        self.save = save
+        self.db_experiences = shelve.Shelf(
+            LMDBDict("data/commit_experiences.lmdb"),
+            protocol=pickle.DEFAULT_PROTOCOL,
+            writeback=save,
+        )
+        if not save:
+            self.mem_experiences = {}
+
+    def __contains__(self, key):
+        if self.save:
+            return key in self.db_experiences
+        else:
+            return key in self.mem_experiences or key in self.db_experiences
+
+    def __getitem__(self, key):
+        if self.save:
+            return self.db_experiences[key]
+        else:
+            return (
+                self.mem_experiences[key]
+                if key in self.mem_experiences
+                else self.db_experiences[key]
+            )
+
+    def __setitem__(self, key, value):
+        if self.save:
+            self.db_experiences[key] = value
+        else:
+            self.mem_experiences[key] = value
+
+
 def calculate_experiences(commits, first_pushdate, save=True):
     print(f"Analyzing experiences from {len(commits)} commits...")
 
-    try:
-        with open("data/commit_experiences.pickle", "rb") as f:
-            experiences, first_commit_time = pickle.load(f)
-    except FileNotFoundError:
-        experiences = {}
-        first_commit_time = {}
+    experiences = Experiences(save)
 
     for commit in tqdm(commits):
-        if commit.author not in first_commit_time:
-            first_commit_time[commit.author] = commit.pushdate
+        key = f"first_commit_time${commit.author}"
+        if key not in experiences:
+            experiences[key] = commit.pushdate
             commit.seniority_author = 0
         else:
-            time_lapse = commit.pushdate - first_commit_time[commit.author]
+            time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
@@ -632,19 +665,17 @@ def calculate_experiences(commits, first_pushdate, save=True):
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
 
+    def get_key(exp_type, commit_type, item):
+        return f"{exp_type}${commit_type}${item}"
+
     def get_experience(exp_type, commit_type, item, day, default):
-        if exp_type not in experiences:
-            experiences[exp_type] = {}
+        key = get_key(exp_type, commit_type, item)
+        if key not in experiences:
+            experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
+        return experiences[key][day]
 
-        if commit_type not in experiences[exp_type]:
-            experiences[exp_type][commit_type] = {}
-
-        if item not in experiences[exp_type][commit_type]:
-            experiences[exp_type][commit_type][item] = utils.ExpQueue(
-                day, EXPERIENCE_TIMESPAN + 1, default
-            )
-
-        return experiences[exp_type][commit_type][item][day]
+    def set_experience(exp_type, commit_type, item, day, val):
+        experiences[get_key(exp_type, commit_type, item)][day] = val
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
@@ -688,8 +719,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][day] = (
-                        total_exps[i] + 1
+                    set_experience(
+                        experience_type, commit_type, item, day, total_exps[i] + 1
                     )
 
     def update_complex_experiences(experience_type, day, items):
@@ -761,9 +792,13 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 and commit.ever_backedout
             ):
                 for i, item in enumerate(items):
-                    experiences[experience_type][commit_type][item][
-                        day
-                    ] = all_commit_lists[i] + (commit.node,)
+                    set_experience(
+                        experience_type,
+                        commit_type,
+                        item,
+                        day,
+                        all_commit_lists[i] + (commit.node,),
+                    )
 
     # prev_day = 0
     # prev_commit = None
@@ -779,18 +814,17 @@ def calculate_experiences(commits, first_pushdate, save=True):
         # prev_commit = commit
 
         # When a file is moved/copied, copy original experience values to the copied path.
-        if "file" in experiences:
-            xp_file = experiences["file"]
-            for orig, copied in commit.file_copies.items():
-                for commit_type in ["", "backout"]:
-                    if orig in xp_file[commit_type]:
-                        xp_file[commit_type][copied] = copy.deepcopy(
-                            xp_file[commit_type][orig]
-                        )
-                    else:
-                        print(
-                            f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
-                        )
+        for orig, copied in commit.file_copies.items():
+            for commit_type in ["", "backout"]:
+                orig_key = get_key("file", commit_type, orig)
+                if orig_key in experiences:
+                    experiences[get_key("file", commit_type, copied)] = copy.deepcopy(
+                        experiences[orig_key]
+                    )
+                else:
+                    print(
+                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                    )
 
         if not commit.ignored:
             update_experiences("author", day, [commit.author])
@@ -799,10 +833,6 @@ def calculate_experiences(commits, first_pushdate, save=True):
             update_complex_experiences("file", day, commit.files)
             update_complex_experiences("directory", day, commit.directories)
             update_complex_experiences("component", day, commit.components)
-
-    if save:
-        with open("data/commit_experiences.pickle", "wb") as f:
-            pickle.dump((experiences, first_commit_time), f)
 
 
 def set_commits_to_ignore(repo_dir, commits):
@@ -943,19 +973,19 @@ def clean(repo_dir):
                 raise
 
         # Pull and update.
-        logger.info("Pulling and updating mozilla-central")
+        logger.info(f"Pulling and updating {repo_dir}")
         hg.pull(update=True)
-        logger.info("mozilla-central pulled and updated")
+        logger.info("{repo_dir} pulled and updated")
 
 
-def clone(repo_dir):
+def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     if os.path.exists(repo_dir):
         clean(repo_dir)
         return
 
     cmd = hglib.util.cmdbuilder(
         "robustcheckout",
-        "https://hg.mozilla.org/mozilla-central",
+        url,
         repo_dir,
         purge=True,
         sharebase=repo_dir + "-shared",
@@ -970,7 +1000,7 @@ def clone(repo_dir):
     if proc.returncode:
         raise hglib.error.CommandError(cmd, proc.returncode, out, err)
 
-    logger.info("mozilla-central cloned")
+    logger.info(f"{repo_dir} cloned")
 
     # Remove pushlog DB to make sure it's regenerated.
     try:
@@ -980,6 +1010,48 @@ def clone(repo_dir):
 
     # Pull and update, to make sure the pushlog is generated.
     clean(repo_dir)
+
+
+def apply_stack(repo_dir, stack, branch, default_base):
+    """Apply a stack of patches on a repository"""
+    assert len(stack) > 0, "Empty stack"
+
+    # Start by updating the repository
+    clean(repo_dir)
+
+    def has_revision(revision):
+        try:
+            hg.identify(revision)
+            return True
+        except hglib.error.CommandError:
+            return False
+
+    with hglib.open(repo_dir) as hg:
+
+        # Find the base revision to apply all the patches onto
+        # Use first parent from first patch if all its parents are available
+        # Otherwise fallback on tip
+        parents = stack[0]["parents"]
+        assert len(parents) > 0, "No parents found for first patch"
+        if all(map(has_revision, parents)):
+            base = parents[0]
+        else:
+            # Some repositories need to have the exact parent to apply
+            if default_base is None:
+                raise Exception("Parents are not available, cannot apply this stack")
+
+            base = default_base
+
+        # Update to base revision
+        logger.info(f"Will apply stack on {base}")
+        hg.update(base, clean=True)
+
+        # Apply all the patches in the stack
+        for rev in stack:
+            node = rev["node"]
+            logger.info(f"Applying patch for {node}")
+            patch = get_hgmo_patch(branch, node)
+            hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
 
 
 if __name__ == "__main__":

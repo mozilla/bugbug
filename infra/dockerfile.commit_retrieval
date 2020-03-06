@@ -16,6 +16,6 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
 
-COPY infra/hgrc /root/.hgrc
+COPY infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc
 
 CMD bugbug-data-commits /cache/

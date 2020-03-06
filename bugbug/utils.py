@@ -202,10 +202,12 @@ def get_last_modified(url):
 
 
 def download_model(model_name):
-    try:
-        version = f"v{get_bugbug_version()}"
-    except DistributionNotFound:
-        version = os.getenv("TAG", "latest")
+    version = os.getenv("TAG")
+    if not version:
+        try:
+            version = f"v{get_bugbug_version()}"
+        except DistributionNotFound:
+            version = "latest"
 
     path = f"{model_name}model"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
@@ -321,7 +323,9 @@ class ExpQueue:
 
 class LMDBDict:
     def __init__(self, path):
-        self.db = lmdb.open(path, map_size=68719476736, metasync=False, sync=False)
+        self.db = lmdb.open(
+            path, map_size=68719476736, metasync=False, sync=False, meminit=False
+        )
         self.txn = self.db.begin(buffers=True, write=True)
 
     def close(self):
@@ -366,3 +370,11 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
                 future.cancel()
             raise e
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
+
+
+def get_hgmo_patch(branch: str, revision: str) -> str:
+    """Load a patch for a given revision"""
+    url = f"https://hg.mozilla.org/{branch}/raw-rev/{revision}"
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.text

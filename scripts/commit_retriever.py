@@ -5,7 +5,7 @@ import os
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import db, repository
-from bugbug.utils import zstd_compress
+from bugbug.utils import open_tar_zst, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -36,7 +36,8 @@ class Retriever(object):
         logger.info("commit data extracted from repository")
 
         zstd_compress("data/commits.json")
-        zstd_compress("data/commit_experiences.pickle")
+        with open_tar_zst("data/commit_experiences.lmdb.tar.zst") as tar:
+            tar.add("data/commit_experiences.lmdb")
 
 
 def main():

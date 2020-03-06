@@ -26,7 +26,7 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
-    taskboot_image: "mozilla/taskboot:0.1.10"
+    taskboot_image: "mozilla/taskboot:0.2.2"
   in:
     $if: 'tasks_for in ["github-pull-request", "github-push"]'
     then:
@@ -96,7 +96,7 @@ tasks:
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.8/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               cp infra/hgrc /root/.hgrc &&
+               cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nlp-requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nn-requirements.txt &&

@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any, Callable, List
 
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
@@ -22,7 +24,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
 from bugbug import get_bugbug_version
-from bugbug_http.models import MODELS_NAMES, change_time_key, classify_bug, result_key
+from bugbug_http.models import MODELS_NAMES, classify_bug, schedule_tests
 from bugbug_http.utils import get_bugzilla_http_client
 
 API_TOKEN = "X-Api-Key"
@@ -73,7 +75,7 @@ class BugPrediction(Schema):
     extra_data = fields.Dict()
 
 
-class BugPredictionNotAvailableYet(Schema):
+class NotAvailableYet(Schema):
     ready = fields.Boolean(enum=[False])
 
 
@@ -85,59 +87,116 @@ class UnauthorizedError(Schema):
     message = fields.Str(default="Error, missing X-API-KEY")
 
 
+class BranchName(Schema):
+    branch = fields.Str(example="autoland")
+
+
+class Schedules(Schema):
+    tasks = fields.List(fields.Str)
+    groups = fields.List(fields.Str)
+
+
 spec.components.schema(BugPrediction.__name__, schema=BugPrediction)
-spec.components.schema(
-    BugPredictionNotAvailableYet.__name__, schema=BugPredictionNotAvailableYet
-)
+spec.components.schema(NotAvailableYet.__name__, schema=NotAvailableYet)
 spec.components.schema(ModelName.__name__, schema=ModelName)
 spec.components.schema(UnauthorizedError.__name__, schema=UnauthorizedError)
+spec.components.schema(BranchName.__name__, schema=BranchName)
+spec.components.schema(Schedules.__name__, schema=Schedules)
 
 
 api_key_scheme = {"type": "apiKey", "in": "header", "name": "X-API-Key"}
 spec.components.security_scheme("api_key", api_key_scheme)
 
 
+@dataclass(init=False, frozen=True)
+class JobInfo:
+    func: Callable[..., str]
+    args: List[Any] = field(default_factory=list)
+
+    def __init__(self, func, *args):
+        # Custom __init__ is needed to support *args, and object.__setattr__ is
+        # needed for 'frozen=True'.
+        object.__setattr__(self, "func", func)
+        object.__setattr__(self, "args", args)
+
+    def __str__(self):
+        return f"{self.func.__name__}:{'_'.join(map(str, self.args))}"
+
+    @property
+    def mapping_key(self):
+        """The mapping key for this job.
+
+        Returns:
+            (str) A key to be used to for job ids.
+        """
+        return f"bugbug:job_id:{self}"
+
+    @property
+    def result_key(self):
+        """The result key for this job.
+
+        Returns:
+            (str) A key to be used to for job results.
+        """
+        return f"bugbug:job_result:{self}"
+
+    @property
+    def change_time_key(self):
+        """The change time key for this job.
+
+        Returns:
+            (str) A key to be used to for job change time.
+        """
+        return f"bugbug:change_time:{self}"
+
+
 def get_job_id():
     return uuid.uuid4().hex
 
 
-def get_mapping_key(model_name, bug_id):
-    return f"bugbug:mapping_{model_name}_{bug_id}"
+def schedule_job(job, job_id=None):
+    job_id = job_id or get_job_id()
+
+    redis_conn.mset({job.mapping_key: job_id})
+    q.enqueue(job.func, *job.args, job_id=job_id)
 
 
 def schedule_bug_classification(model_name, bug_ids):
     """ Schedule the classification of a bug_id list
     """
-
     job_id = get_job_id()
 
     # Set the mapping before queuing to avoid some race conditions
-    job_id_mapping = {get_mapping_key(model_name, bug_id): job_id for bug_id in bug_ids}
+    job_id_mapping = {}
+    for bug_id in bug_ids:
+        key = JobInfo(classify_bug, model_name, bug_id).mapping_key
+        job_id_mapping[key] = job_id
+
     redis_conn.mset(job_id_mapping)
 
-    q.enqueue(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN, job_id=job_id)
+    schedule_job(
+        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN), job_id=job_id
+    )
 
 
-def is_running(model_name, bug_id):
+def is_pending(job):
     # Check if there is a job
-    mapping_key = get_mapping_key(model_name, bug_id)
-
-    job_id = redis_conn.get(mapping_key)
+    job_id = redis_conn.get(job.mapping_key)
 
     if not job_id:
-        LOGGER.debug("No job ID mapping %s, False", job_id)
+        LOGGER.debug(f"No job ID mapping {job_id}, False")
         return False
 
     try:
         job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
     except NoSuchJobError:
-        LOGGER.debug("No job in DB for %s, False", job_id)
+        LOGGER.debug(f"No job in DB for {job_id}, False")
         # The job might have expired from redis
         return False
 
     job_status = job.get_status()
-    if job_status == "started":
-        LOGGER.debug("Job running %s, True", job_id)
+    if job_status in ("started", "queued"):
+        LOGGER.debug(f"Job {job_id} has status {job_status}, True")
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
@@ -148,11 +207,11 @@ def is_running(model_name, bug_id):
         job.cancel()
         job.cleanup()
 
-        LOGGER.debug("Job timeout %s, False", job_id)
+        LOGGER.debug(f"Job timeout {job_id}, False")
 
         return False
 
-    LOGGER.debug("Job status %s, False", job_status)
+    LOGGER.debug(f"Job {job_id} has status {job_status}, False")
 
     return False
 
@@ -178,16 +237,14 @@ def get_bugs_last_change_time(bug_ids):
     return bugs
 
 
-def is_prediction_invalidated(model_name, bug_id, change_time):
+def is_prediction_invalidated(job, change_time):
     # First get the saved change time
-    change_key = change_time_key(model_name, bug_id)
-
-    saved_change_time = redis_conn.get(change_key)
+    saved_change_time = redis_conn.get(job.change_time_key)
 
     # If we have no last changed time, the bug was not classified yet or the bug was classified by an old worker
     if not saved_change_time:
         # We can have a result without a cache time
-        if redis_conn.exists(result_key(model_name, bug_id)):
+        if redis_conn.exists(job.result_key):
             return True
 
         return False
@@ -195,19 +252,20 @@ def is_prediction_invalidated(model_name, bug_id, change_time):
     return saved_change_time.decode("utf-8") != change_time
 
 
-def clean_prediction_cache(model_name, bug_id):
+def clean_prediction_cache(job):
     # If the bug was modified since last time we classified it, clear the cache to avoid stale answer
-    LOGGER.debug("Cleaning results for bug id %s and model %s", bug_id, model_name)
+    LOGGER.debug(f"Cleaning results for {job}")
 
-    redis_conn.delete(result_key(model_name, bug_id))
-    redis_conn.delete(change_time_key(model_name, bug_id))
+    redis_conn.delete(job.result_key)
+    redis_conn.delete(job.change_time_key)
 
 
-def get_bug_classification(model_name, bug_id):
-    redis_key = f"result_{model_name}_{bug_id}"
-    result = redis_conn.get(redis_key)
+def get_result(job):
+    LOGGER.debug(f"Checking for existing results at {job.result_key}")
+    result = redis_conn.get(job.result_key)
 
     if result:
+        LOGGER.debug(f"Found {result}")
         return json.loads(result)
 
     return None
@@ -240,12 +298,7 @@ def model_prediction(model_name, bug_id):
           description: A temporary answer for the bug being processed
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  ready:
-                    type: boolean
-                    enum: [False]
+              schema: NotAvailableYet
         401:
           description: API key is missing
           content:
@@ -258,23 +311,27 @@ def model_prediction(model_name, bug_id):
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify(UnauthorizedError().dump({}).data), 401
+        return jsonify(UnauthorizedError().dump({})), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
+
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
 
     # Get the latest change from Bugzilla for the bug
     bug = get_bugs_last_change_time([bug_id])
 
     # Change time could be None if it's a security bug
+    job = JobInfo(classify_bug, model_name, bug_id)
     bug_change_time = bug.get(bug_id, None)
-    if bug_change_time and is_prediction_invalidated(model_name, bug_id, bug[bug_id]):
-        clean_prediction_cache(model_name, bug_id)
+    if bug_change_time and is_prediction_invalidated(job, bug[bug_id]):
+        clean_prediction_cache(job)
 
     status_code = 200
-    data = get_bug_classification(model_name, bug_id)
+    data = get_result(job)
 
     if not data:
-        if not is_running(model_name, bug_id):
+        if not is_pending(job):
             schedule_bug_classification(model_name, [bug_id])
         status_code = 202
         data = {"ready": False}
@@ -401,9 +458,12 @@ def batch_prediction(model_name):
     auth = headers.get(API_TOKEN)
 
     if not auth:
-        return jsonify(UnauthorizedError().dump({}).data), 401
+        return jsonify(UnauthorizedError().dump({})), 401
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
+
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
 
     # TODO Check is JSON is valid and validate against a request schema
     batch_body = json.loads(request.data)
@@ -430,15 +490,16 @@ def batch_prediction(model_name):
     bug_change_dates = get_bugs_last_change_time(bugs)
 
     for bug_id in bugs:
+        job = JobInfo(classify_bug, model_name, bug_id)
 
         change_time = bug_change_dates.get(int(bug_id), None)
         # Change time could be None if it's a security bug
-        if change_time and is_prediction_invalidated(model_name, bug_id, change_time):
-            clean_prediction_cache(model_name, bug_id)
+        if change_time and is_prediction_invalidated(job, change_time):
+            clean_prediction_cache(job)
 
-        data[str(bug_id)] = get_bug_classification(model_name, bug_id)
+        data[str(bug_id)] = get_result(job)
         if not data[str(bug_id)]:
-            if not is_running(model_name, bug_id):
+            if not is_pending(job):
                 missing_bugs.append(bug_id)
             status_code = 202
             data[str(bug_id)] = {"ready": False}
@@ -450,6 +511,65 @@ def batch_prediction(model_name):
         schedule_bug_classification(model_name, missing_bugs)
 
     return jsonify({"bugs": data}), status_code
+
+
+@application.route("/push/<path:branch>/<rev>/schedules")
+@cross_origin()
+def push_schedules(branch, rev):
+    """
+    ---
+    get:
+      description: Determine which tests and tasks a push should schedule.
+      summary: Get which tests and tasks to schedule.
+      parameters:
+      - name: branch
+        in: path
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+    redis_conn.ping()
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    job = JobInfo(schedule_tests, branch, rev)
+    data = get_result(job)
+    if data:
+        return jsonify(data), 200
+
+    if not is_pending(job):
+        schedule_job(job)
+    return jsonify({"ready": False}), 202
 
 
 @application.route("/swagger")

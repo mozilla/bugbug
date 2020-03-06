@@ -43,7 +43,7 @@ TRAINING_MONTHS = {
     # from task artifacts is slow, so for now we only get a bit more of what
     # we can get from ActiveData and we'll see if it's enough to train a
     # satisfying model.
-    "group": 3,
+    "group": 4,
 }
 
 
@@ -175,6 +175,9 @@ class Retriever(object):
             past_failures_db = os.path.join(
                 "data", test_scheduling.PAST_FAILURES_GROUP_DB
             )
+            touched_together_db = os.path.join(
+                "data", test_scheduling.TOUCHED_TOGETHER_DB
+            )
 
         db.download(test_scheduling_db, support_files_too=True)
 
@@ -240,6 +243,10 @@ class Retriever(object):
             # We can start once we get to the last revision we added in the previous run.
             can_start = True if last_node is None else False
 
+            if granularity == "group":
+                update_touched_together_gen = test_scheduling.update_touched_together()
+                next(update_touched_together_gen)
+
             for i in tqdm(range(len(push_data))):
                 (
                     revisions,
@@ -297,6 +304,9 @@ class Retriever(object):
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
+                if granularity == "group":
+                    update_touched_together_gen.send(commits[0]["node"])
+
                 for data in test_scheduling.generate_data(
                     past_failures,
                     merged_commits,
@@ -324,6 +334,10 @@ class Retriever(object):
 
         with open_tar_zst(past_failures_db) as tar:
             tar.add(past_failures_db[: -len(".tar.zst")])
+
+        if granularity == "group":
+            with open_tar_zst(touched_together_db) as tar:
+                tar.add(touched_together_db[: -len(".tar.zst")])
 
 
 def main():

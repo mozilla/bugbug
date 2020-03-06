@@ -22,3 +22,11 @@ def get_bugzilla_http_client():
     http_client.mount(bugzilla_url, HTTPAdapter(max_retries=retries))
 
     return http_client, bugzilla_api_url
+
+
+def get_hgmo_stack(branch: str, revision: str) -> list:
+    """Load descriptions of patches in the stack for a given revision"""
+    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.json()["changesets"]

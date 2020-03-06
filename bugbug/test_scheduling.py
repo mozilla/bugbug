@@ -3,11 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 import os
 import pickle
 import shelve
 
-from bugbug import db
+from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
@@ -21,11 +22,12 @@ db.register(
 
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
 PAST_FAILURES_GROUP_DB = "past_failures_group.lmdb.tar.zst"
+TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    8,
-    [PAST_FAILURES_GROUP_DB],
+    10,
+    [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
 HISTORICAL_TIMESPAN = 56
@@ -55,6 +57,107 @@ def get_past_failures(granularity):
         protocol=pickle.DEFAULT_PROTOCOL,
         writeback=True,
     )
+
+
+touched_together = None
+
+
+def get_touched_together_db():
+    global touched_together
+    if touched_together is None:
+        touched_together = shelve.Shelf(
+            LMDBDict(os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])),
+            protocol=pickle.DEFAULT_PROTOCOL,
+            writeback=True,
+        )
+    return touched_together
+
+
+def get_touched_together_key(f1, f2):
+    # Always sort in lexographical order, so we are sure the output key is consistently
+    # the same with the same two files as input, no matter their order.
+    if f2 < f1:
+        f1, f2 = f2, f1
+
+    return f"{f1}${f2}"
+
+
+def get_touched_together(f1, f2):
+    touched_together = get_touched_together_db()
+
+    key = get_touched_together_key(f1, f2)
+
+    if key not in touched_together:
+        return 0
+
+    return touched_together[key]
+
+
+def set_touched_together(f1, f2):
+    touched_together = get_touched_together_db()
+
+    key = get_touched_together_key(f1, f2)
+
+    if key not in touched_together:
+        touched_together[key] = 1
+    else:
+        touched_together[key] += 1
+
+
+def update_touched_together():
+    touched_together = get_touched_together_db()
+    last_analyzed = (
+        touched_together["last_analyzed"]
+        if "last_analyzed" in touched_together
+        else None
+    )
+
+    # We can start once we get to the last revision we added in the previous run.
+    can_start = True if last_analyzed is None else False
+
+    seen = set()
+
+    end_revision = yield
+
+    i = 0
+
+    for commit in repository.get_commits():
+        seen.add(commit["node"])
+
+        if commit["ever_backedout"]:
+            continue
+
+        if can_start:
+            touched_together["last_analyzed"] = commit["node"]
+
+            # As in the test scheduling history retriever script, for now skip commits which are too large.
+            if len(commit["files"]) > 50:
+                continue
+
+            # Number of times a source file was touched together with a directory.
+            for f1 in commit["files"]:
+                for d2 in set(os.path.dirname(f) for f in commit["files"] if f != f1):
+                    set_touched_together(f1, d2)
+
+            # Number of times a directory was touched together with another directory.
+            for d1, d2 in itertools.combinations(
+                list(set(os.path.dirname(f) for f in commit["files"])), 2
+            ):
+                set_touched_together(d1, d2)
+
+            i += 1
+            if i % 5000:
+                touched_together.sync()
+        elif last_analyzed == commit["node"]:
+            can_start = True
+
+        if commit["node"] == end_revision:
+            # Some commits could be in slightly different order between mozilla-central and autoland.
+            # It's a small detail that shouldn't affect the features, but we need to take it into account.
+            while end_revision in seen:
+                end_revision = yield
+
+    touched_together.close()
 
 
 def _read_and_update_past_failures(
@@ -102,6 +205,17 @@ def generate_data(
     past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
 ):
     for runnable in runnables:
+        touched_together_files = sum(
+            get_touched_together(source_file, os.path.dirname(runnable))
+            for source_file in commit["files"]
+        )
+        touched_together_directories = sum(
+            get_touched_together(
+                os.path.dirname(source_file), os.path.dirname(runnable)
+            )
+            for source_file in commit["files"]
+        )
+
         is_regression = (
             runnable in possible_regressions or runnable in likely_regressions
         )
@@ -193,6 +307,8 @@ def generate_data(
             "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
             "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
             "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
+            "touched_together_files": touched_together_files,
+            "touched_together_directories": touched_together_directories,
             "is_possible_regression": runnable in possible_regressions,
             "is_likely_regression": runnable in likely_regressions,
         }
