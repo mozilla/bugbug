@@ -13,7 +13,7 @@ BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000
 
 # Test classifying a single bug.
 def integration_test_single():
-    timeout = 600
+    timeout = 900
     for _ in range(timeout):
         response = requests.get(
             f"{BUGBUG_HTTP_SERVER}/defectenhancementtask/predict/1376406",
