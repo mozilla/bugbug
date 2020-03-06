@@ -14,6 +14,7 @@ import math
 import os
 import pickle
 import shelve
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -995,10 +996,7 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
 
     cmd.insert(0, hglib.HGPATH)
 
-    proc = hglib.util.popen(cmd)
-    out, err = proc.communicate()
-    if proc.returncode:
-        raise hglib.error.CommandError(cmd, proc.returncode, out, err)
+    subprocess.run(cmd, check=True)
 
     logger.info(f"{repo_dir} cloned")
 
