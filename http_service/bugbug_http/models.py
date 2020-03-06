@@ -45,12 +45,12 @@ redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
 def get_model(model_name):
     if model_name not in MODEL_CACHE:
-        print("Recreating the %r model in cache" % model_name)
+        LOGGER.info("Recreating the %r model in cache" % model_name)
         try:
             model = load_model(model_name)
         except FileNotFoundError:
             if ALLOW_MISSING_MODELS:
-                print(
+                LOGGER.info(
                     "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
                     % model_name
                 )
@@ -107,7 +107,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
     model = get_model(model_name)
 
     if not model:
-        print("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting" % model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()
