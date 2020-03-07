@@ -74,4 +74,6 @@ class IdleTTLCache(Generic[Key, Value]):
 
     def start_ttl_thread(self):
         self.purge_expired_entries()
-        threading.Timer(self.ttl.total_seconds(), self.start_ttl_thread).start()
+        timer = threading.Timer(self.ttl.total_seconds(), self.start_ttl_thread)
+        timer.setDaemon(True)
+        timer.start()
