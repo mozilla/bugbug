@@ -6,11 +6,10 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict
 
 import requests
-from dateutil.relativedelta import relativedelta
 from redis import Redis
 
 from bugbug import bugzilla
@@ -18,7 +17,7 @@ from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.repository import apply_stack
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.utils import get_hgmo_stack
+from bugbug_http.utils import IdleTTLCache, get_hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -37,7 +36,8 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
 MODEL_LAST_LOADED: Dict[str, datetime] = {}
-MODEL_CACHE: Dict[str, Model] = {}
+MODEL_CACHE: IdleTTLCache[str, Model] = IdleTTLCache(timedelta(hours=2))
+MODEL_CACHE.start_ttl_thread()
 
 
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
@@ -61,7 +61,7 @@ def get_model(model_name):
         # Cache the model only if it was last used less than two hours ago.
         if model_name in MODEL_LAST_LOADED and MODEL_LAST_LOADED[
             model_name
-        ] > datetime.now() - relativedelta(hours=2):
+        ] > datetime.now() - timedelta(hours=2):
             MODEL_CACHE[model_name] = model
     else:
         model = MODEL_CACHE[model_name]

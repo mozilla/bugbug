@@ -5,6 +5,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+import datetime
+import threading
+from datetime import timedelta
+from typing import Dict, Generic, TypeVar
+
 import requests
 from libmozdata import config
 from requests.adapters import HTTPAdapter
@@ -30,3 +35,45 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
     r = requests.get(url)
     r.raise_for_status()
     return r.json()["changesets"]
+
+
+# A simple TTL cache to use with models. Because we expect the number of models
+# in the service to not be very large, simplicity of implementation is
+# preferred to algorithmic efficiency of operations.
+#
+# Called an 'Idle' TTL cache because TTL of items is reset after every get
+Key = TypeVar("Key")
+Value = TypeVar("Value")
+
+
+class IdleTTLCache(Generic[Key, Value]):
+    def __init__(self, ttl: timedelta):
+        self.ttl = ttl
+        self.items_last_touched: Dict[Key, datetime.datetime] = {}
+        self.items: Dict[Key, Value] = {}
+
+    def __setitem__(self, key, item):
+        self.items[key] = item
+        self.items_last_touched[key] = datetime.datetime.now()
+
+    def __getitem__(self, key):
+        item = self.items[key]
+        self.items_last_touched[key] = datetime.datetime.now()
+        return item
+
+    def __contains__(self, key):
+        return key in self.items
+
+    def purge_expired_entries(self):
+        purge_entries_before = datetime.datetime.now() - self.ttl
+        for (key, time_last_touched) in list(self.items_last_touched.items()):
+            print(time_last_touched)
+            if time_last_touched < purge_entries_before:
+                del self.items_last_touched[key]
+                del self.items[key]
+
+    def start_ttl_thread(self):
+        self.purge_expired_entries()
+        timer = threading.Timer(self.ttl.total_seconds(), self.start_ttl_thread)
+        timer.setDaemon(True)
+        timer.start()
