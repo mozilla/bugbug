@@ -125,7 +125,15 @@ def replace_reviewers(commit_description, reviewers):
 
 
 class CommitClassifier(object):
-    def __init__(self, model_name, repo_dir, git_repo_dir, method_defect_predictor_dir):
+    def __init__(
+        self,
+        model_name,
+        repo_dir,
+        git_repo_dir,
+        method_defect_predictor_dir,
+        phabricator_deployment=None,
+        diff_id=None,
+    ):
         self.model_name = model_name
         self.repo_dir = repo_dir
 
@@ -135,6 +143,10 @@ class CommitClassifier(object):
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
             self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
+
+        with hglib.open(self.repo_dir) as hg:
+            if phabricator_deployment is not None and diff_id is not None:
+                self.apply_phab(hg, phabricator_deployment, diff_id)
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
@@ -551,26 +563,13 @@ class CommitClassifier(object):
             json.dump(features, f)
 
     def classify(
-        self,
-        revision=None,
-        phabricator_deployment=None,
-        diff_id=None,
-        runnable_jobs_path=None,
+        self, revision=None, runnable_jobs_path=None,
     ):
-        if revision is not None:
-            assert phabricator_deployment is None
-            assert diff_id is None
-
-        if diff_id is not None:
-            assert phabricator_deployment is not None
-            assert revision is None
 
         self.update_commit_db()
 
         with hglib.open(self.repo_dir) as hg:
-            if phabricator_deployment is not None and diff_id is not None:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
-
+            if revision is None:
                 revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
             # Analyze patch.
@@ -795,11 +794,14 @@ def main():
     args = parser.parse_args()
 
     classifier = CommitClassifier(
-        args.model, args.repo_dir, args.git_repo_dir, args.method_defect_predictor_dir
+        args.model,
+        args.repo_dir,
+        args.git_repo_dir,
+        args.method_defect_predictor_dir,
+        args.phabricator_deployment,
+        args.diff_id,
     )
-    classifier.classify(
-        args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
-    )
+    classifier.classify(args.revision, args.runnable_jobs)
 
 
 if __name__ == "__main__":
