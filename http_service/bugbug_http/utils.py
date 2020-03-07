@@ -8,7 +8,7 @@
 import datetime
 import threading
 from datetime import timedelta
-from typing import Dict
+from typing import Dict, Generic, TypeVar
 
 import requests
 from libmozdata import config
@@ -42,11 +42,15 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
 # preferred to algorithmic efficiency of operations.
 #
 # Called an 'Idle' TTL cache because TTL of items is reset after every get
-class IdleTTLCache:
+Key = TypeVar("Key")
+Value = TypeVar("Value")
+
+
+class IdleTTLCache(Generic[Key, Value]):
     def __init__(self, ttl: timedelta):
         self.ttl = ttl
-        self.items_last_touched: Dict[str, datetime.datetime] = {}
-        self.items: Dict[str, object] = {}
+        self.items_last_touched: Dict[Key, datetime.datetime] = {}
+        self.items: Dict[Key, Value] = {}
 
     def __setitem__(self, key, item):
         self.items[key] = item

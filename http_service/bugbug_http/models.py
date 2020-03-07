@@ -36,7 +36,7 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
 MODEL_LAST_LOADED: Dict[str, datetime] = {}
-MODEL_CACHE = IdleTTLCache(timedelta(hours=2))
+MODEL_CACHE: IdleTTLCache[str, Model] = IdleTTLCache(timedelta(hours=2))
 MODEL_CACHE.start_ttl_thread()
 
 
