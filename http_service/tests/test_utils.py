@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import datetime, timedelta
-
 from unittest.mock import patch
 
 from bugbug_http.utils import IdleTTLCache
