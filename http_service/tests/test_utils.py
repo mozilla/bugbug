@@ -5,7 +5,7 @@
 
 from datetime import datetime, timedelta
 
-from mock import patch
+from unittest.mock import patch
 
 from bugbug_http.utils import IdleTTLCache
 
