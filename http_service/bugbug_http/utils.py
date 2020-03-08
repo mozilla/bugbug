@@ -67,7 +67,6 @@ class IdleTTLCache(Generic[Key, Value]):
     def purge_expired_entries(self):
         purge_entries_before = datetime.datetime.now() - self.ttl
         for (key, time_last_touched) in list(self.items_last_touched.items()):
-            print(time_last_touched)
             if time_last_touched < purge_entries_before:
                 del self.items_last_touched[key]
                 del self.items[key]
