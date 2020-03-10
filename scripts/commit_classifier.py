@@ -615,7 +615,7 @@ class CommitClassifier(object):
         push_num = self.past_failures_data["push_num"]
 
         # XXX: Consider using mozilla-central built-in rules to filter some of these out, e.g. SCHEDULES.
-        all_tasks = self.past_failures_data["all_tasks"]
+        all_tasks = self.past_failures_data["all_runnables"]
 
         if not runnable_jobs_path:
             runnable_jobs = {task for task in all_tasks}
