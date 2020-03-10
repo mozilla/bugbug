@@ -181,7 +181,7 @@ class CommitClassifier(object):
                 test_scheduling.TEST_LABEL_SCHEDULING_DB,
                 test_scheduling.PAST_FAILURES_LABEL_DB,
             )
-            self.past_failures_data = test_scheduling.get_past_failures()
+            self.past_failures_data = test_scheduling.get_past_failures("label")
 
             self.testfailure_model = download_and_load_model("testfailure")
             assert self.testfailure_model is not None
