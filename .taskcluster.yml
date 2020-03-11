@@ -123,9 +123,7 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "apt-get -qq update &&
-               apt-get -qq install -y python-pip &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
+            - "pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
                hg clone -r ce06125e4728 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.8/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
