@@ -1011,10 +1011,9 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     clean(repo_dir)
 
 
-def apply_stack(repo_dir, stack, branch, default_base="tip"):
+def apply_stack(repo_dir, stack, branch):
     """Apply a stack of patches on a repository"""
     assert len(stack) > 0, "Empty stack"
-    assert isinstance(default_base, str)
 
     def has_revision(revision):
         try:
@@ -1047,7 +1046,7 @@ def apply_stack(repo_dir, stack, branch, default_base="tip"):
         if all(map(has_revision, parents)):
             return parents[0]
 
-        return default_base
+        return "tip"
 
     # Start by cleaning the repo, without pulling
     clean(repo_dir, pull=False)
@@ -1066,7 +1065,7 @@ def apply_stack(repo_dir, stack, branch, default_base="tip"):
             return
 
         # We tried to apply on the valid parent and failed: cannot try another revision
-        if base != default_base:
+        if base != "tip":
             raise Exception(f"Failed to apply on valid parent {base}")
 
         # We tried to apply on tip, let's try to find the valid parent after pulling
