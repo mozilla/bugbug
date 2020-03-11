@@ -36,13 +36,18 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             ["Target patch", "Parent 123", "Base history 0"],
         ),
         # patch from autoland where parent is not available
-        # so the patch is rejected as we need the parents on autoland
-        # and no changes is made on the repository
+        # so the patch is applied on top of tip
         (
             "integration/autoland",
             "orphan123",
-            "NOK",
-            ["Base history 3", "Base history 2", "Base history 1", "Base history 0"],
+            "OK",
+            [
+                "Orphan 123",
+                "Base history 3",
+                "Base history 2",
+                "Base history 1",
+                "Base history 0",
+            ],
         ),
         # patch from try based on local parent n°1
         (

@@ -1011,9 +1011,10 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     clean(repo_dir)
 
 
-def apply_stack(repo_dir, stack, branch, default_base):
+def apply_stack(repo_dir, stack, branch, default_base="tip"):
     """Apply a stack of patches on a repository"""
     assert len(stack) > 0, "Empty stack"
+    assert isinstance(default_base, str)
 
     def has_revision(revision):
         try:
@@ -1046,10 +1047,6 @@ def apply_stack(repo_dir, stack, branch, default_base):
         if all(map(has_revision, parents)):
             return parents[0]
 
-        # Some repositories need to have the exact parent to apply
-        if default_base is None:
-            raise Exception("Parents are not available, cannot apply this stack")
-
         return default_base
 
     # Start by cleaning the repo, without pulling
@@ -1073,7 +1070,7 @@ def apply_stack(repo_dir, stack, branch, default_base):
             raise Exception(f"Failed to apply on valid parent {base}")
 
         # We tried to apply on tip, let's try to find the valid parent after pulling
-        clean(repo_dir)
+        clean(repo_dir, pull=True)
 
         # Check if the valid base is now available
         new_base = get_base()

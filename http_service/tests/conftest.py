@@ -236,9 +236,12 @@ def mock_repo(tmpdir, monkeypatch):
     initial = repo.identify(id=True).strip()
 
     # Add a new file when pulling from remote repo
-    def _clean(*args):
+    def _clean(*args, pull=True):
         # Revert to initial state
         repo.update(initial, clean=True)
+
+        if not pull:
+            return
 
         # Then create a new "remote" file to emulate a pull
         remote = repo_dir / "remote.txt"
