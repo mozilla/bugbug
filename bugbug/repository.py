@@ -1048,6 +1048,9 @@ def apply_stack(repo_dir, stack, branch):
 
         return "tip"
 
+    def first_in_stack():
+        return hg.log(revrange=f"-{len(stack)}")[0].node.decode("utf-8")
+
     # Start by cleaning the repo, without pulling
     clean(repo_dir, pull=False)
 
@@ -1062,7 +1065,7 @@ def apply_stack(repo_dir, stack, branch):
         # Apply all the patches in the stack on current base
         if apply_patches(base, patches):
             logger.info(f"Stack applied successfully on {base}")
-            return
+            return first_in_stack()
 
         # We tried to apply on the valid parent and failed: cannot try another revision
         if base != "tip":
@@ -1080,6 +1083,8 @@ def apply_stack(repo_dir, stack, branch):
             raise Exception("Failed to apply stack on second try")
 
         logger.info(f"Stack applied successfully on {new_base}")
+
+        return first_in_stack()
 
 
 if __name__ == "__main__":
