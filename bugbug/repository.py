@@ -260,7 +260,7 @@ def hg_modified_files(hg, commit):
         template=template,
         no_merges=True,
         rev=commit.node.encode("ascii"),
-        branch="central",
+        branch="tip",
     )
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
@@ -553,7 +553,7 @@ def hg_log(hg, revs):
         template=template,
         no_merges=True,
         rev=revs[0] + b":" + revs[-1],
-        branch="central",
+        branch="tip",
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -606,7 +606,7 @@ def get_revs(hg, rev_start=0, rev_end="tip"):
         b"log",
         template="{node}\n",
         no_merges=True,
-        branch="central",
+        branch="tip",
         rev=f"{rev_start}:{rev_end}",
     )
     x = hg.rawcommand(args)
