@@ -1057,7 +1057,7 @@ def apply_stack(repo_dir, stack, branch):
 
         # Load all the patches in the stack
         patches = [(rev["node"], get_hgmo_patch(branch, rev["node"])) for rev in stack]
-        logger.info(f"Loaded {len(patches)} for the stack")
+        logger.info(f"Loaded {len(patches)} patches for the stack")
 
         # Apply all the patches in the stack on current base
         if apply_patches(base, patches):

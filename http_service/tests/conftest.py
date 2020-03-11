@@ -185,16 +185,12 @@ def mock_hgmo(get_fixture_path, mock_repo):
         with open(mock_path) as f:
             content = f.read()
 
-        # Patch the hardcoded revisions
-        revs = {
-            0: "Base history 0",
-            1: "Base history 1",
-            2: "Base history 2",
-            3: "Base history 3",
-            4: "Pulled from remote",
-        }
-        for node, desc in revs.items():
-            content = content.replace(desc.replace(" ", "_").upper(), str(node))
+        # Patch the hardcoded revisions using the remote repo
+        with hglib.open(str(mock_repo[1])) as repo:
+            for log in repo.log():
+                desc = log.desc.decode("utf-8")
+                node = log.node.decode("utf-8")
+                content = content.replace(desc.replace(" ", "_").upper(), node)
 
         return (200, {"Content-Type": "application/json"}, content)
 
@@ -246,4 +242,4 @@ def mock_repo(tmpdir, monkeypatch):
         repo.add([str(remote).encode("utf-8")])
         repo.commit("Pulled from remote", user="bugbug")
 
-    return local_dir
+    return local_dir, remote_dir
