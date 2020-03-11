@@ -1,4 +1,4 @@
-Orphan 123
+Bug 123 - Orphan 123
 
 diff --git a/hello.txt b/hello.txt
 new file mode 100644
