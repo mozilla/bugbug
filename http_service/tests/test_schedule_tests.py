@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import hglib
 import pytest
 
 from bugbug_http.models import schedule_tests
@@ -11,7 +12,8 @@ from bugbug_http.models import schedule_tests
 def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
 
     # The repo should be almost empty at first
-    repo_dir, repo = mock_repo
+    repo_dir = mock_repo
+    repo = hglib.open(str(repo_dir))
     assert len(repo.log()) == 4
     test_txt = repo_dir / "test.txt"
     assert test_txt.exists()
@@ -100,7 +102,8 @@ def test_schedule(
 ):
 
     # The repo should only have the base commits
-    repo_dir, repo = mock_repo
+    repo_dir = mock_repo
+    repo = hglib.open(str(repo_dir))
     logs = repo.log(follow=True)
     assert len(logs) == 4
     assert [l.desc.decode("utf-8") for l in logs] == [

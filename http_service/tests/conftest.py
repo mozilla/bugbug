@@ -15,7 +15,6 @@ import pytest
 import responses
 from rq.exceptions import NoSuchJobError
 
-import bugbug.repository
 import bugbug_http
 import bugbug_http.models
 from bugbug_http import app
@@ -216,39 +215,35 @@ def mock_hgmo(get_fixture_path, mock_repo):
 @pytest.fixture
 def mock_repo(tmpdir, monkeypatch):
     """Create an empty mercurial repo"""
-    repo_dir = tmpdir / "repo"
+    local_dir = tmpdir / "local"
+    remote_dir = tmpdir / "remote"
 
     # Setup the worker env to use that repo dir
-    monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
+    monkeypatch.setattr(bugbug_http, "REPO_DIR", str(local_dir))
 
     # Create the repo
-    hglib.init(str(repo_dir))
+    hglib.init(str(local_dir))
 
     # Add several commits on a test file to create some history
-    test_file = repo_dir / "test.txt"
-    repo = hglib.open(str(repo_dir))
-    for i in range(4):
-        test_file.write_text(f"Version {i}", encoding="utf-8")
-        repo.add([str(test_file).encode("utf-8")])
-        repo.commit(f"Base history {i}", user="bugbug")
+    test_file = local_dir / "test.txt"
+    with hglib.open(str(local_dir)) as repo:
+        for i in range(4):
+            test_file.write_text(f"Version {i}", encoding="utf-8")
+            repo.add([str(test_file).encode("utf-8")])
+            repo.commit(f"Base history {i}", user="bugbug")
 
-    # Save initial state for later cleanup
-    initial = repo.identify(id=True).strip()
+    # Copy initialized repo as remote
+    local_dir.copy(remote_dir)
 
-    # Add a new file when pulling from remote repo
-    def _clean(*args, pull=True):
-        # Revert to initial state
-        repo.update(initial, clean=True)
+    # Configure remote on local
+    hgrc = local_dir / ".hg" / "hgrc"
+    hgrc.write_text("\n".join(["[paths]", f"default = {remote_dir}"]), "utf-8")
 
-        if not pull:
-            return
-
-        # Then create a new "remote" file to emulate a pull
-        remote = repo_dir / "remote.txt"
+    # Add extra commit on remote
+    with hglib.open(str(remote_dir)) as repo:
+        remote = remote_dir / "remote.txt"
         remote.write_text("New remote file !", encoding="utf-8")
         repo.add([str(remote).encode("utf-8")])
         repo.commit("Pulled from remote", user="bugbug")
 
-    monkeypatch.setattr(bugbug.repository, "clean", _clean)
-
-    return repo_dir, repo
+    return local_dir
