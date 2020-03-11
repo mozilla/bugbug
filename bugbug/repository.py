@@ -960,7 +960,7 @@ def download_commits(repo_dir, rev_start=0, save=True):
     return commits
 
 
-def clean(repo_dir):
+def clean(repo_dir, pull=True):
     with hglib.open(repo_dir) as hg:
         hg.revert(repo_dir.encode("utf-8"), all=True)
 
@@ -974,9 +974,10 @@ def clean(repo_dir):
                 raise
 
         # Pull and update.
-        logger.info(f"Pulling and updating {repo_dir}")
-        hg.pull(update=True)
-        logger.info(f"{repo_dir} pulled and updated")
+        if pull:
+            logger.info(f"Pulling and updating {repo_dir}")
+            hg.pull(update=True)
+            logger.info(f"{repo_dir} pulled and updated")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
@@ -1050,6 +1051,9 @@ def apply_stack(repo_dir, stack, branch, default_base):
             raise Exception("Parents are not available, cannot apply this stack")
 
         return default_base
+
+    # Start by cleaning the repo, without pulling
+    clean(repo_dir, pull=False)
 
     with hglib.open(repo_dir) as hg:
         # Get initial base revision
