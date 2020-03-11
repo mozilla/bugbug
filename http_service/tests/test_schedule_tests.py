@@ -35,7 +35,7 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             "integration/autoland",
             "normal123",
             "OK",
-            ["Target patch", "Parent 123", "Base history 0"],
+            ["Bug 123 - Target patch", "Bug 123 - Parent 123", "Base history 0"],
         ),
         # patch from autoland where parent is not available
         # so the patch is applied on top of tip
@@ -71,7 +71,12 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             "try",
             "normal456",
             "OK",
-            ["Target patch", "Parent 456", "Base history 1", "Base history 0"],
+            [
+                "Bug 123 - Target patch",
+                "Bug 123 - Parent 456",
+                "Base history 1",
+                "Base history 0",
+            ],
         ),
         # patch from try where parent is not available
         # so the patch is applied on top of tip
@@ -80,7 +85,7 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             "orphan456",
             "OK",
             [
-                "Orphan 456",
+                "Bug 123 - Orphan 456",
                 "Base history 3",
                 "Base history 2",
                 "Base history 1",

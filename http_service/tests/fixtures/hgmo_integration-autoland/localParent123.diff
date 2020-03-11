@@ -1,4 +1,4 @@
-Parent 123
+Bug 123 - Parent 123
 
 diff --git a/hello.txt b/hello.txt
 new file mode 100644

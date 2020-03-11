@@ -1,4 +1,4 @@
-On top of remote + local
+Bug 123 - On top of remote + local
 
 diff --git a/remote.txt b/remote.txt
 --- a/remote.txt

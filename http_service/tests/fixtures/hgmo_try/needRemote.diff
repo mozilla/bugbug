@@ -1,4 +1,4 @@
-Depends on remote
+Bug 123 - Depends on remote
 
 diff --git a/remote.txt b/remote.txt
 --- a/remote.txt

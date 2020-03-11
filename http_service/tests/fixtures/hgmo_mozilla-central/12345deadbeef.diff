@@ -1,4 +1,4 @@
-Bug XYZ - Dummy patch
+Bug 123 - Dummy patch
 
 diff --git a/test.txt b/test.txt
 --- a/test.txt
