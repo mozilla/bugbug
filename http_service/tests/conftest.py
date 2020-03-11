@@ -11,12 +11,14 @@ from collections import defaultdict
 from datetime import datetime
 
 import hglib
+import numpy as np
 import pytest
 import responses
 from rq.exceptions import NoSuchJobError
 
 import bugbug_http
 import bugbug_http.models
+from bugbug import test_scheduling
 from bugbug_http import app
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -220,6 +222,8 @@ def mock_repo(tmpdir, monkeypatch):
     # Create the repo
     hglib.init(str(local_dir))
 
+    (local_dir / ".hg-annotate-ignore-revs").write_text("", encoding="ascii")
+
     # Add several commits on a test file to create some history
     test_file = local_dir / "test.txt"
     with hglib.open(str(local_dir)) as repo:
@@ -242,4 +246,69 @@ def mock_repo(tmpdir, monkeypatch):
         repo.add([str(remote).encode("utf-8")])
         repo.commit("Pulled from remote", user="bugbug")
 
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
     return local_dir, remote_dir
+
+
+@pytest.fixture
+def mock_component_taskcluster_artifact():
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        headers={"ETag": "100"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        status=200,
+        json={},
+    )
+
+
+@pytest.fixture
+def mock_schedule_tests_classify(tmpdir, monkeypatch):
+    os.chdir(tmpdir)
+    os.makedirs("data")
+
+    # Initialize a mock past failures DB.
+    for granularity in ("label", "group"):
+        past_failures_data = test_scheduling.get_past_failures(granularity)
+        past_failures_data["push_num"] = 1
+        past_failures_data["all_runnables"] = [
+            f"test-{granularity}1",
+            f"test-{granularity}2",
+        ]
+        past_failures_data.close()
+
+    def do_mock(labels_to_choose, groups_to_choose):
+        # Add a mock test selection model.
+        class Model:
+            def __init__(self, name):
+                self.name = name
+
+            def classify(self, items, probabilities=False):
+                assert probabilities
+                results = []
+                for item in items:
+                    if self.name == "testlabelselect":
+                        if item["test_job"]["name"] in labels_to_choose:
+                            results.append([0.1, 0.9])
+                        else:
+                            results.append([0.9, 0.1])
+                    elif self.name == "testgroupselect":
+                        if item["test_job"]["name"] in groups_to_choose:
+                            results.append([0.1, 0.9])
+                        else:
+                            results.append([0.9, 0.1])
+                return np.array(results)
+
+        def mock_get_model(modelname):
+            return Model(modelname)
+
+        monkeypatch.setattr(bugbug_http.models, "get_model", mock_get_model)
+
+    return do_mock
