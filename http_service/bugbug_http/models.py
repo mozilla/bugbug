@@ -156,10 +156,8 @@ def schedule_tests(branch, rev):
         return "NOK"
 
     # Apply the stack on the local repository
-    # Autoland should always rebase on top of parents, never on tip
-    default_base = "tip" if branch != "integration/autoland" else None
     try:
-        apply_stack(REPO_DIR, stack, branch, default_base)
+        apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"

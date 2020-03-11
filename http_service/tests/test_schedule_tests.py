@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import hglib
 import pytest
 
 from bugbug_http.models import schedule_tests
@@ -11,7 +12,8 @@ from bugbug_http.models import schedule_tests
 def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
 
     # The repo should be almost empty at first
-    repo_dir, repo = mock_repo
+    repo_dir, _ = mock_repo
+    repo = hglib.open(str(repo_dir))
     assert len(repo.log()) == 4
     test_txt = repo_dir / "test.txt"
     assert test_txt.exists()
@@ -36,13 +38,33 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             ["Target patch", "Parent 123", "Base history 0"],
         ),
         # patch from autoland where parent is not available
-        # so the patch is rejected as we need the parents on autoland
-        # and no changes is made on the repository
+        # so the patch is applied on top of tip
         (
             "integration/autoland",
             "orphan123",
-            "NOK",
-            ["Base history 3", "Base history 2", "Base history 1", "Base history 0"],
+            "OK",
+            [
+                "Orphan 123",
+                "Base history 3",
+                "Base history 2",
+                "Base history 1",
+                "Base history 0",
+            ],
+        ),
+        # patch on autoland that only applies after a pull has been done
+        (
+            "integration/autoland",
+            "needRemote",
+            "OK",
+            [
+                "On top of remote + local",
+                "Based on remote",
+                "Pulled from remote",
+                "Base history 3",
+                "Base history 2",
+                "Base history 1",
+                "Base history 0",
+            ],
         ),
         # patch from try based on local parent n°1
         (
@@ -74,6 +96,20 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             "NOK",
             ["Base history 2", "Base history 1", "Base history 0"],
         ),
+        # patch on try that only applies after a pull has been done
+        (
+            "try",
+            "needRemote",
+            "OK",
+            [
+                "Depends on remote",
+                "Pulled from remote",
+                "Base history 3",
+                "Base history 2",
+                "Base history 1",
+                "Base history 0",
+            ],
+        ),
     ],
 )
 def test_schedule(
@@ -81,7 +117,8 @@ def test_schedule(
 ):
 
     # The repo should only have the base commits
-    repo_dir, repo = mock_repo
+    repo_dir, _ = mock_repo
+    repo = hglib.open(str(repo_dir))
     logs = repo.log(follow=True)
     assert len(logs) == 4
     assert [l.desc.decode("utf-8") for l in logs] == [

@@ -15,7 +15,6 @@ import pytest
 import responses
 from rq.exceptions import NoSuchJobError
 
-import bugbug.repository
 import bugbug_http
 import bugbug_http.models
 from bugbug_http import app
@@ -186,11 +185,12 @@ def mock_hgmo(get_fixture_path, mock_repo):
         with open(mock_path) as f:
             content = f.read()
 
-        # Patch the hardcoded revisions
-        for log in mock_repo[1].log():
-            log_id = log.rev.decode("utf-8")
-            node = log.node.decode("utf-8")
-            content = content.replace(f"BASE_HISTORY_{log_id}", node)
+        # Patch the hardcoded revisions using the remote repo
+        with hglib.open(str(mock_repo[1])) as repo:
+            for log in repo.log():
+                desc = log.desc.decode("utf-8")
+                node = log.node.decode("utf-8")
+                content = content.replace(desc.replace(" ", "_").upper(), node)
 
         return (200, {"Content-Type": "application/json"}, content)
 
@@ -211,23 +211,35 @@ def mock_hgmo(get_fixture_path, mock_repo):
 @pytest.fixture
 def mock_repo(tmpdir, monkeypatch):
     """Create an empty mercurial repo"""
-    repo_dir = tmpdir / "repo"
+    local_dir = tmpdir / "local"
+    remote_dir = tmpdir / "remote"
 
     # Setup the worker env to use that repo dir
-    monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
-
-    # Silence the clean method
-    monkeypatch.setattr(bugbug.repository, "clean", lambda repo_dir: True)
+    monkeypatch.setattr(bugbug_http, "REPO_DIR", str(local_dir))
 
     # Create the repo
-    hglib.init(str(repo_dir))
+    hglib.init(str(local_dir))
 
     # Add several commits on a test file to create some history
-    test_file = repo_dir / "test.txt"
-    repo = hglib.open(str(repo_dir))
-    for i in range(4):
-        test_file.write_text(f"Version {i}", encoding="utf-8")
-        repo.add([str(test_file).encode("utf-8")])
-        repo.commit(f"Base history {i}", user="bugbug")
+    test_file = local_dir / "test.txt"
+    with hglib.open(str(local_dir)) as repo:
+        for i in range(4):
+            test_file.write_text(f"Version {i}", encoding="utf-8")
+            repo.add([str(test_file).encode("utf-8")])
+            repo.commit(f"Base history {i}", user="bugbug")
 
-    return repo_dir, repo
+    # Copy initialized repo as remote
+    local_dir.copy(remote_dir)
+
+    # Configure remote on local
+    hgrc = local_dir / ".hg" / "hgrc"
+    hgrc.write_text("\n".join(["[paths]", f"default = {remote_dir}"]), "utf-8")
+
+    # Add extra commit on remote
+    with hglib.open(str(remote_dir)) as repo:
+        remote = remote_dir / "remote.txt"
+        remote.write_text("New remote file !", encoding="utf-8")
+        repo.add([str(remote).encode("utf-8")])
+        repo.commit("Pulled from remote", user="bugbug")
+
+    return local_dir, remote_dir
