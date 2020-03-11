@@ -74,6 +74,20 @@ def test_simple_schedule(patch_resources, mock_hgmo, mock_repo):
             "NOK",
             ["Base history 2", "Base history 1", "Base history 0"],
         ),
+        # patch that only applies after a pull has been done
+        (
+            "try",
+            "needRemote",
+            "OK",
+            [
+                "Depends on remote",
+                "Pulled from remote",
+                "Base history 3",
+                "Base history 2",
+                "Base history 1",
+                "Base history 0",
+            ],
+        ),
     ],
 )
 def test_schedule(

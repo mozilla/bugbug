@@ -187,10 +187,15 @@ def mock_hgmo(get_fixture_path, mock_repo):
             content = f.read()
 
         # Patch the hardcoded revisions
-        for log in mock_repo[1].log():
-            log_id = log.rev.decode("utf-8")
-            node = log.node.decode("utf-8")
-            content = content.replace(f"BASE_HISTORY_{log_id}", node)
+        revs = {
+            0: "Base history 0",
+            1: "Base history 1",
+            2: "Base history 2",
+            3: "Base history 3",
+            4: "Pulled from remote",
+        }
+        for node, desc in revs.items():
+            content = content.replace(desc.replace(" ", "_").upper(), str(node))
 
         return (200, {"Content-Type": "application/json"}, content)
 
@@ -216,9 +221,6 @@ def mock_repo(tmpdir, monkeypatch):
     # Setup the worker env to use that repo dir
     monkeypatch.setattr(bugbug_http, "REPO_DIR", str(repo_dir))
 
-    # Silence the clean method
-    monkeypatch.setattr(bugbug.repository, "clean", lambda repo_dir: True)
-
     # Create the repo
     hglib.init(str(repo_dir))
 
@@ -229,5 +231,21 @@ def mock_repo(tmpdir, monkeypatch):
         test_file.write_text(f"Version {i}", encoding="utf-8")
         repo.add([str(test_file).encode("utf-8")])
         repo.commit(f"Base history {i}", user="bugbug")
+
+    # Save initial state for later cleanup
+    initial = repo.identify(id=True).strip()
+
+    # Add a new file when pulling from remote repo
+    def _clean(*args):
+        # Revert to initial state
+        repo.update(initial, clean=True)
+
+        # Then create a new "remote" file to emulate a pull
+        remote = repo_dir / "remote.txt"
+        remote.write_text("New remote file !", encoding="utf-8")
+        repo.add([str(remote).encode("utf-8")])
+        repo.commit("Pulled from remote", user="bugbug")
+
+    monkeypatch.setattr(bugbug.repository, "clean", _clean)
 
     return repo_dir, repo
