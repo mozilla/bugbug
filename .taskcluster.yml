@@ -126,6 +126,7 @@ tasks:
             - "apt-get -qq update &&
                apt-get -qq install -y python-pip &&
                git clone --quiet ${repository} &&
+               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.8/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                pip install --disable-pip-version-check --quiet --no-cache-dir . &&
