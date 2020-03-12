@@ -149,7 +149,7 @@ class CommitClassifier(object):
         with hglib.open(self.repo_dir) as hg:
             if phabricator_deployment is not None and diff_id is not None:
                 self.apply_phab(hg, phabricator_deployment, diff_id)
-        
+
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
             self.clone_git_repo(
