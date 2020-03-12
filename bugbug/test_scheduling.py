@@ -26,7 +26,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    10,
+    11,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
@@ -153,6 +153,9 @@ def update_touched_together():
             # It's a small detail that shouldn't affect the features, but we need to take it into account.
             while end_revision in seen:
                 end_revision = yield
+
+            if end_revision is None:
+                break
 
     touched_together.close()
 
