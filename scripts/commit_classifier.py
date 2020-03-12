@@ -144,10 +144,12 @@ class CommitClassifier(object):
         if git_repo_dir:
             self.clone_git_repo("https://github.com/mozilla/gecko-dev", git_repo_dir)
 
+        repository.clone(self.repo_dir)
+
         with hglib.open(self.repo_dir) as hg:
             if phabricator_deployment is not None and diff_id is not None:
                 self.apply_phab(hg, phabricator_deployment, diff_id)
-
+        
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
             self.clone_git_repo(
@@ -565,7 +567,6 @@ class CommitClassifier(object):
     def classify(
         self, revision=None, runnable_jobs_path=None,
     ):
-
         self.update_commit_db()
 
         with hglib.open(self.repo_dir) as hg:
