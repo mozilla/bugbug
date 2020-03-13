@@ -680,23 +680,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
         key = get_key(exp_type, commit_type, item)
         if key not in experiences:
             experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
-        return experiences[key][day]
-
-    def set_experience(exp_type, commit_type, item, day, val):
-        experiences[get_key(exp_type, commit_type, item)][day] = val
+        return experiences[key]
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
-            total_exps = [
+            exp_queues = [
                 get_experience(experience_type, commit_type, item, day, 0)
                 for item in items
             ]
+            total_exps = [exp_queues[i][day] for i in range(len(items))]
             timespan_exps = [
-                exp
-                - get_experience(
-                    experience_type, commit_type, item, day - EXPERIENCE_TIMESPAN, 0
-                )
-                for exp, item in zip(total_exps, items)
+                exp - exp_queues[i][day - EXPERIENCE_TIMESPAN]
+                for exp, i in zip(total_exps, range(len(items)))
             ]
 
             total_exps_sum = sum(total_exps)
@@ -726,26 +721,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 or commit_type == "backout"
                 and commit.ever_backedout
             ):
-                for i, item in enumerate(items):
-                    set_experience(
-                        experience_type, commit_type, item, day, total_exps[i] + 1
-                    )
+                for i in range(len(items)):
+                    exp_queues[i][day] = total_exps[i] + 1
 
     def update_complex_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
-            all_commit_lists = [
+            exp_queues = [
                 get_experience(experience_type, commit_type, item, day, tuple())
                 for item in items
             ]
+            all_commit_lists = [exp_queues[i][day] for i in range(len(items))]
             before_commit_lists = [
-                get_experience(
-                    experience_type,
-                    commit_type,
-                    item,
-                    day - EXPERIENCE_TIMESPAN,
-                    tuple(),
-                )
-                for item in items
+                exp_queues[i][day - EXPERIENCE_TIMESPAN] for i in range(len(items))
             ]
             timespan_commit_lists = [
                 commit_list[len(before_commit_list) :]
@@ -799,14 +786,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 or commit_type == "backout"
                 and commit.ever_backedout
             ):
-                for i, item in enumerate(items):
-                    set_experience(
-                        experience_type,
-                        commit_type,
-                        item,
-                        day,
-                        all_commit_lists[i] + (commit.node,),
-                    )
+                for i in range(len(items)):
+                    exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
     # prev_day = 0
     # prev_commit = None
