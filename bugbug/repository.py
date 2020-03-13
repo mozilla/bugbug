@@ -227,8 +227,8 @@ def _init(repo_dir):
     HG = hglib.open(".")
 
 
-def _init_thread():
-    hg_server = hglib.open(".")
+def _init_thread(repo_dir):
+    hg_server = hglib.open(repo_dir)
     thread_local.hg = hg_server
     with hg_servers_lock:
         hg_servers.append(hg_server)
@@ -883,9 +883,6 @@ def hg_log_multi(repo_dir, revs):
     if len(revs) == 0:
         return []
 
-    cwd = os.getcwd()
-    os.chdir(repo_dir)
-
     threads_num = os.cpu_count() + 1
     REVS_COUNT = len(revs)
     CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
@@ -895,13 +892,11 @@ def hg_log_multi(repo_dir, revs):
     ]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread, max_workers=threads_num
+        initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
         commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
-
-    os.chdir(cwd)
 
     while len(hg_servers) > 0:
         hg_server = hg_servers.pop()
