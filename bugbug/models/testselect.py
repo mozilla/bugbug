@@ -161,12 +161,12 @@ class TestSelectModel(Model):
         }
 
         print(
-            "{} commit/jobs failed".format(
+            "{} push/jobs failed".format(
                 sum(1 for label in classes.values() if label == 1)
             )
         )
         print(
-            "{} commit/jobs did not fail".format(
+            "{} push/jobs did not fail".format(
                 sum(1 for label in classes.values() if label == 0)
             )
         )
