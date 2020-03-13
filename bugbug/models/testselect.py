@@ -160,6 +160,7 @@ class TestSelectModel(Model):
             for name, val in by_name.items()
         }
 
+        print("{} pushes considered".format(len(classes_by_rev)))
         print(
             "{} push/jobs failed".format(
                 sum(1 for label in classes.values() if label == 1)
