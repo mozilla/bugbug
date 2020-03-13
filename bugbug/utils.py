@@ -337,7 +337,10 @@ class LMDBDict:
         return self.txn.get(key) is not None
 
     def __getitem__(self, key):
-        return self.txn.get(key)
+        val = self.txn.get(key)
+        if val is None:
+            raise KeyError
+        return val
 
     def __setitem__(self, key, value):
         self.txn.put(key, value, dupdata=False)
