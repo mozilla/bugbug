@@ -1,4 +1,4 @@
-This patch will not apply cleanly
+Bug 123 - This patch will not apply cleanly
 
 diff --git a/hello.txt b/hello.txt
 --- a/hello.txt

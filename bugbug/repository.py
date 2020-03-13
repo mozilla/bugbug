@@ -260,7 +260,7 @@ def hg_modified_files(hg, commit):
         template=template,
         no_merges=True,
         rev=commit.node.encode("ascii"),
-        branch="central",
+        branch="tip",
     )
     x = hg.rawcommand(args)
     files_str, file_copies_str = x.split(b"\x00")[:-1]
@@ -553,7 +553,7 @@ def hg_log(hg, revs):
         template=template,
         no_merges=True,
         rev=revs[0] + b":" + revs[-1],
-        branch="central",
+        branch="tip",
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -606,7 +606,7 @@ def get_revs(hg, rev_start=0, rev_end="tip"):
         b"log",
         template="{node}\n",
         no_merges=True,
-        branch="central",
+        branch="tip",
         rev=f"{rev_start}:{rev_end}",
     )
     x = hg.rawcommand(args)
@@ -960,7 +960,7 @@ def download_commits(repo_dir, rev_start=0, save=True):
     return commits
 
 
-def clean(repo_dir):
+def clean(repo_dir, pull=True):
     with hglib.open(repo_dir) as hg:
         hg.revert(repo_dir.encode("utf-8"), all=True)
 
@@ -974,9 +974,10 @@ def clean(repo_dir):
                 raise
 
         # Pull and update.
-        logger.info(f"Pulling and updating {repo_dir}")
-        hg.pull(update=True)
-        logger.info(f"{repo_dir} pulled and updated")
+        if pull:
+            logger.info(f"Pulling and updating {repo_dir}")
+            hg.pull(update=True)
+            logger.info(f"{repo_dir} pulled and updated")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
@@ -1010,12 +1011,9 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
     clean(repo_dir)
 
 
-def apply_stack(repo_dir, stack, branch, default_base):
+def apply_stack(repo_dir, stack, branch):
     """Apply a stack of patches on a repository"""
     assert len(stack) > 0, "Empty stack"
-
-    # Start by updating the repository
-    clean(repo_dir)
 
     def has_revision(revision):
         try:
@@ -1024,32 +1022,69 @@ def apply_stack(repo_dir, stack, branch, default_base):
         except hglib.error.CommandError:
             return False
 
-    with hglib.open(repo_dir) as hg:
+    def apply_patches(base, patches):
 
-        # Find the base revision to apply all the patches onto
-        # Use first parent from first patch if all its parents are available
-        # Otherwise fallback on tip
+        # Update to base revision
+        logger.info(f"Updating {repo_dir} to {base}")
+        hg.update(base, clean=True)
+
+        # Then apply each patch in the stack
+        try:
+            for node, patch in patches:
+                hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
+        except hglib.error.CommandError as e:
+            logger.warning(f"Failed to apply patch {node}: {e.err}")
+            return False
+        return True
+
+    # Find the base revision to apply all the patches onto
+    # Use first parent from first patch if all its parents are available
+    # Otherwise fallback on tip
+    def get_base():
         parents = stack[0]["parents"]
         assert len(parents) > 0, "No parents found for first patch"
         if all(map(has_revision, parents)):
-            base = parents[0]
-        else:
-            # Some repositories need to have the exact parent to apply
-            if default_base is None:
-                raise Exception("Parents are not available, cannot apply this stack")
+            return parents[0]
 
-            base = default_base
+        return "tip"
 
-        # Update to base revision
-        logger.info(f"Will apply stack on {base}")
-        hg.update(base, clean=True)
+    def first_in_stack():
+        return hg.log(revrange=f"-{len(stack)}")[0].node.decode("utf-8")
 
-        # Apply all the patches in the stack
-        for rev in stack:
-            node = rev["node"]
-            logger.info(f"Applying patch for {node}")
-            patch = get_hgmo_patch(branch, node)
-            hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
+    # Start by cleaning the repo, without pulling
+    clean(repo_dir, pull=False)
+
+    with hglib.open(repo_dir) as hg:
+        # Get initial base revision
+        base = get_base()
+
+        # Load all the patches in the stack
+        patches = [(rev["node"], get_hgmo_patch(branch, rev["node"])) for rev in stack]
+        logger.info(f"Loaded {len(patches)} patches for the stack")
+
+        # Apply all the patches in the stack on current base
+        if apply_patches(base, patches):
+            logger.info(f"Stack applied successfully on {base}")
+            return first_in_stack()
+
+        # We tried to apply on the valid parent and failed: cannot try another revision
+        if base != "tip":
+            raise Exception(f"Failed to apply on valid parent {base}")
+
+        # We tried to apply on tip, let's try to find the valid parent after pulling
+        clean(repo_dir, pull=True)
+
+        # Check if the valid base is now available
+        new_base = get_base()
+        if base == new_base:
+            raise Exception("No valid parent found for the stack")
+
+        if not apply_patches(new_base, patches):
+            raise Exception("Failed to apply stack on second try")
+
+        logger.info(f"Stack applied successfully on {new_base}")
+
+        return first_in_stack()
 
 
 if __name__ == "__main__":
