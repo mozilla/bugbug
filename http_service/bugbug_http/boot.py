@@ -45,9 +45,7 @@ def boot_worker():
 
     # Download commits DB
     logger.info("Downloading commits DB...")
-    commits_db_downloaded = db.download(
-        repository.COMMITS_DB, support_files_too=True, use_single_process=True
-    )
+    commits_db_downloaded = db.download(repository.COMMITS_DB, support_files_too=True)
     if not ALLOW_MISSING_MODELS:
         assert commits_db_downloaded
 
@@ -59,7 +57,7 @@ def boot_worker():
 
         rev_start = "children({})".format(commit["node"])
         logger.info("Updating commits DB...")
-        repository.download_commits(REPO_DIR, rev_start)
+        repository.download_commits(REPO_DIR, rev_start, use_single_process=True)
 
     # Preload models
     bugbug_http.models.preload_models()
