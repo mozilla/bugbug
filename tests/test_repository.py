@@ -365,7 +365,8 @@ def test_download_component_mapping():
     assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
 
-def test_download_commits(fake_hg_repo):
+@pytest.mark.parametrize("use_single_process", [True, False])
+def test_download_commits(fake_hg_repo, use_single_process):
     hg, local, remote = fake_hg_repo
 
     # Allow using the local code analysis server.
@@ -400,7 +401,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -413,7 +414,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -429,7 +430,9 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, revision3)
+    commits = repository.download_commits(
+        local, revision3, use_single_process=use_single_process
+    )
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
@@ -442,13 +445,15 @@ def test_download_commits(fake_hg_repo):
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local, f"children({revision2})")
+    commits = repository.download_commits(
+        local, f"children({revision2})", use_single_process=use_single_process
+    )
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(list(repository.get_commits())) == 2
 
 

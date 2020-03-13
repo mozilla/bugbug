@@ -912,7 +912,7 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
-def download_commits(repo_dir, rev_start=0, save=True):
+def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False):
     with hglib.open(repo_dir) as hg:
         revs = get_revs(hg, rev_start)
         if len(revs) == 0:
@@ -921,9 +921,14 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
         first_pushdate = hg_log(hg, [b"0"])[0].pushdate
 
-    print(f"Mining {len(revs)} commits using {os.cpu_count()} processes...")
+    print(f"Mining {len(revs)} commits...")
 
-    commits = hg_log_multi(repo_dir, revs)
+    if not use_single_process:
+        print(f"Using {os.cpu_count()} processes...")
+        commits = hg_log_multi(repo_dir, revs)
+    else:
+        with hglib.open(repo_dir) as hg:
+            commits = hg_log(hg, revs)
 
     print("Downloading file->component mapping...")
 
@@ -933,7 +938,7 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     commits_num = len(commits)
 
-    print(f"Mining {commits_num} commits using {os.cpu_count()} processes...")
+    print(f"Mining {commits_num} commits...")
 
     global rs_parsepatch
     import rs_parsepatch
@@ -943,12 +948,16 @@ def download_commits(repo_dir, rev_start=0, save=True):
     global code_analysis_server
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init_process, initargs=(repo_dir,)
-    ) as executor:
-        commits = executor.map(_transform, commits, chunksize=64)
-        commits = tqdm(commits, total=commits_num)
-        commits = list(commits)
+    if not use_single_process:
+        with concurrent.futures.ProcessPoolExecutor(
+            initializer=_init_process, initargs=(repo_dir,)
+        ) as executor:
+            commits = executor.map(_transform, commits, chunksize=64)
+            commits = tqdm(commits, total=commits_num)
+            commits = list(commits)
+    else:
+        with hglib.open(repo_dir) as hg:
+            commits = [transform(hg, repo_dir, c) for c in commits]
 
     code_analysis_server.terminate()
 
