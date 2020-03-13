@@ -22,7 +22,7 @@ from datetime import datetime
 import hglib
 from tqdm import tqdm
 
-from bugbug import db, utils
+from bugbug import db, rust_code_analysis_server, utils
 from bugbug.utils import LMDBDict, get_hgmo_patch
 
 logger = logging.getLogger(__name__)
@@ -923,8 +923,6 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
 
     global rs_parsepatch
     import rs_parsepatch
-
-    from bugbug import rust_code_analysis_server
 
     global code_analysis_server
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
