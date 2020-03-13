@@ -328,6 +328,7 @@ def test_download_component_mapping():
     repository.download_component_mapping()
     assert len(repository.path_to_component) == 0
 
+    repository.path_to_component = None
     responses.reset()
     responses.add(
         responses.HEAD,
@@ -351,6 +352,13 @@ def test_download_component_mapping():
     assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
     assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
 
+    responses.reset()
+    repository.download_component_mapping()
+    assert len(repository.path_to_component) == 2
+    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
+    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+
+    repository.path_to_component = None
     responses.reset()
     responses.add(
         responses.HEAD,
