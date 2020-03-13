@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
+from functools import lru_cache
 
 import hglib
 from tqdm import tqdm
@@ -896,6 +897,12 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
+@lru_cache(maxsize=None)
+def get_first_pushdate(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        return hg_log(hg, [b"0"])[0].pushdate
+
+
 def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False):
     with hglib.open(repo_dir) as hg:
         revs = get_revs(hg, rev_start)
@@ -903,7 +910,7 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
             print("No commits to analyze")
             return []
 
-        first_pushdate = hg_log(hg, [b"0"])[0].pushdate
+    first_pushdate = get_first_pushdate(repo_dir)
 
     print(f"Mining {len(revs)} commits...")
 
