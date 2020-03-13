@@ -221,10 +221,10 @@ def get_commits():
     return db.read(COMMITS_DB)
 
 
-def _init(repo_dir):
-    global HG
-    os.chdir(repo_dir)
-    HG = hglib.open(".")
+def _init_process(repo_dir):
+    global HG, REPO_DIR
+    REPO_DIR = repo_dir
+    HG = hglib.open(REPO_DIR)
 
 
 def _init_thread(repo_dir):
@@ -411,8 +411,8 @@ def get_metrics(commit, metrics_space):
         get_metrics(commit, space)
 
 
-def _transform(commit):
-    hg_modified_files(HG, commit)
+def transform(hg, repo_dir, commit):
+    hg_modified_files(hg, commit)
 
     if commit.ignored:
         return commit
@@ -422,7 +422,7 @@ def _transform(commit):
     test_sizes = []
     metrics_file_count = 0
 
-    patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
+    patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_lines(patch)
     for stats in patch_data:
         path = stats["filename"]
@@ -436,7 +436,10 @@ def _transform(commit):
         after = None
         if not stats["deleted"]:
             try:
-                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
+                after = hg.cat(
+                    [os.path.join(repo_dir, path).encode("utf-8")],
+                    rev=commit.node.encode("ascii"),
+                )
                 size = after.count(b"\n")
             except hglib.error.CommandError as e:
                 if b"no such file in rev" not in e.err:
@@ -543,6 +546,10 @@ def _transform(commit):
         commit.minimum_logical_loc = 0
 
     return commit
+
+
+def _transform(commit):
+    return transform(HG, REPO_DIR, commit)
 
 
 def hg_log(hg, revs):
@@ -937,7 +944,7 @@ def download_commits(repo_dir, rev_start=0, save=True):
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
     with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init, initargs=(repo_dir,)
+        initializer=_init_process, initargs=(repo_dir,)
     ) as executor:
         commits = executor.map(_transform, commits, chunksize=64)
         commits = tqdm(commits, total=commits_num)
