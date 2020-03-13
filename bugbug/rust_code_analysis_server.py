@@ -14,7 +14,7 @@ from bugbug import utils
 logger = logging.getLogger(__name__)
 
 
-START_RETRIES = 7
+START_RETRIES = 14
 HEADERS = {"Content-type": "application/octet-stream"}
 
 
@@ -31,7 +31,7 @@ class RustCodeAnalysisServer:
                     if self.proc.poll() is not None:
                         break
 
-                    time.sleep(1)
+                    time.sleep(0.35)
 
         self.terminate()
         raise Exception("Unable to run rust-code-analysis server")
