@@ -39,11 +39,7 @@ PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/pro
 
 TRAINING_MONTHS = {
     "label": 6,
-    # For groups, we only have 12 weeks in ActiveData. Getting previous data
-    # from task artifacts is slow, so for now we only get a bit more of what
-    # we can get from ActiveData and we'll see if it's enough to train a
-    # satisfying model.
-    "group": 4,
+    "group": 5,
 }
 
 
