@@ -18,11 +18,12 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
+from functools import lru_cache
 
 import hglib
 from tqdm import tqdm
 
-from bugbug import db, utils
+from bugbug import db, rust_code_analysis_server, utils
 from bugbug.utils import LMDBDict, get_hgmo_patch
 
 logger = logging.getLogger(__name__)
@@ -221,14 +222,14 @@ def get_commits():
     return db.read(COMMITS_DB)
 
 
-def _init(repo_dir):
-    global HG
-    os.chdir(repo_dir)
-    HG = hglib.open(".")
+def _init_process(repo_dir):
+    global HG, REPO_DIR
+    REPO_DIR = repo_dir
+    HG = hglib.open(REPO_DIR)
 
 
-def _init_thread():
-    hg_server = hglib.open(".")
+def _init_thread(repo_dir):
+    hg_server = hglib.open(repo_dir)
     thread_local.hg = hg_server
     with hg_servers_lock:
         hg_servers.append(hg_server)
@@ -411,8 +412,8 @@ def get_metrics(commit, metrics_space):
         get_metrics(commit, space)
 
 
-def _transform(commit):
-    hg_modified_files(HG, commit)
+def transform(hg, repo_dir, commit):
+    hg_modified_files(hg, commit)
 
     if commit.ignored:
         return commit
@@ -422,7 +423,7 @@ def _transform(commit):
     test_sizes = []
     metrics_file_count = 0
 
-    patch = HG.export(revs=[commit.node.encode("ascii")], git=True)
+    patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
     patch_data = rs_parsepatch.get_lines(patch)
     for stats in patch_data:
         path = stats["filename"]
@@ -436,7 +437,10 @@ def _transform(commit):
         after = None
         if not stats["deleted"]:
             try:
-                after = HG.cat([path.encode("utf-8")], rev=commit.node.encode("ascii"))
+                after = hg.cat(
+                    [os.path.join(repo_dir, path).encode("utf-8")],
+                    rev=commit.node.encode("ascii"),
+                )
                 size = after.count(b"\n")
             except hglib.error.CommandError as e:
                 if b"no such file in rev" not in e.err:
@@ -543,6 +547,10 @@ def _transform(commit):
         commit.minimum_logical_loc = 0
 
     return commit
+
+
+def _transform(commit):
+    return transform(HG, REPO_DIR, commit)
 
 
 def hg_log(hg, revs):
@@ -673,23 +681,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
         key = get_key(exp_type, commit_type, item)
         if key not in experiences:
             experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
-        return experiences[key][day]
-
-    def set_experience(exp_type, commit_type, item, day, val):
-        experiences[get_key(exp_type, commit_type, item)][day] = val
+        return experiences[key]
 
     def update_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
-            total_exps = [
+            exp_queues = [
                 get_experience(experience_type, commit_type, item, day, 0)
                 for item in items
             ]
+            total_exps = [exp_queues[i][day] for i in range(len(items))]
             timespan_exps = [
-                exp
-                - get_experience(
-                    experience_type, commit_type, item, day - EXPERIENCE_TIMESPAN, 0
-                )
-                for exp, item in zip(total_exps, items)
+                exp - exp_queues[i][day - EXPERIENCE_TIMESPAN]
+                for exp, i in zip(total_exps, range(len(items)))
             ]
 
             total_exps_sum = sum(total_exps)
@@ -719,26 +722,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 or commit_type == "backout"
                 and commit.ever_backedout
             ):
-                for i, item in enumerate(items):
-                    set_experience(
-                        experience_type, commit_type, item, day, total_exps[i] + 1
-                    )
+                for i in range(len(items)):
+                    exp_queues[i][day] = total_exps[i] + 1
 
     def update_complex_experiences(experience_type, day, items):
         for commit_type in ["", "backout"]:
-            all_commit_lists = [
+            exp_queues = [
                 get_experience(experience_type, commit_type, item, day, tuple())
                 for item in items
             ]
+            all_commit_lists = [exp_queues[i][day] for i in range(len(items))]
             before_commit_lists = [
-                get_experience(
-                    experience_type,
-                    commit_type,
-                    item,
-                    day - EXPERIENCE_TIMESPAN,
-                    tuple(),
-                )
-                for item in items
+                exp_queues[i][day - EXPERIENCE_TIMESPAN] for i in range(len(items))
             ]
             timespan_commit_lists = [
                 commit_list[len(before_commit_list) :]
@@ -792,14 +787,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 or commit_type == "backout"
                 and commit.ever_backedout
             ):
-                for i, item in enumerate(items):
-                    set_experience(
-                        experience_type,
-                        commit_type,
-                        item,
-                        day,
-                        all_commit_lists[i] + (commit.node,),
-                    )
+                for i in range(len(items)):
+                    exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
     # prev_day = 0
     # prev_commit = None
@@ -866,6 +855,9 @@ def set_commits_to_ignore(repo_dir, commits):
 def download_component_mapping():
     global path_to_component
 
+    if path_to_component is not None:
+        return
+
     utils.download_check_etag(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
         "data/component_mapping.json",
@@ -883,9 +875,6 @@ def hg_log_multi(repo_dir, revs):
     if len(revs) == 0:
         return []
 
-    cwd = os.getcwd()
-    os.chdir(repo_dir)
-
     threads_num = os.cpu_count() + 1
     REVS_COUNT = len(revs)
     CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
@@ -895,13 +884,11 @@ def hg_log_multi(repo_dir, revs):
     ]
 
     with concurrent.futures.ThreadPoolExecutor(
-        initializer=_init_thread, max_workers=threads_num
+        initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
         commits = executor.map(_hg_log, revs_groups)
         commits = tqdm(commits, total=len(revs_groups))
         commits = list(itertools.chain.from_iterable(commits))
-
-    os.chdir(cwd)
 
     while len(hg_servers) > 0:
         hg_server = hg_servers.pop()
@@ -910,18 +897,29 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
-def download_commits(repo_dir, rev_start=0, save=True):
+@lru_cache(maxsize=None)
+def get_first_pushdate(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        return hg_log(hg, [b"0"])[0].pushdate
+
+
+def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False):
     with hglib.open(repo_dir) as hg:
         revs = get_revs(hg, rev_start)
         if len(revs) == 0:
             print("No commits to analyze")
             return []
 
-        first_pushdate = hg_log(hg, [b"0"])[0].pushdate
+    first_pushdate = get_first_pushdate(repo_dir)
 
-    print(f"Mining {len(revs)} commits using {os.cpu_count()} processes...")
+    print(f"Mining {len(revs)} commits...")
 
-    commits = hg_log_multi(repo_dir, revs)
+    if not use_single_process:
+        print(f"Using {os.cpu_count()} processes...")
+        commits = hg_log_multi(repo_dir, revs)
+    else:
+        with hglib.open(repo_dir) as hg:
+            commits = hg_log(hg, revs)
 
     print("Downloading file->component mapping...")
 
@@ -931,22 +929,24 @@ def download_commits(repo_dir, rev_start=0, save=True):
 
     commits_num = len(commits)
 
-    print(f"Mining {commits_num} commits using {os.cpu_count()} processes...")
+    print(f"Mining {commits_num} commits...")
 
     global rs_parsepatch
     import rs_parsepatch
 
-    from bugbug import rust_code_analysis_server
-
     global code_analysis_server
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    with concurrent.futures.ProcessPoolExecutor(
-        initializer=_init, initargs=(repo_dir,)
-    ) as executor:
-        commits = executor.map(_transform, commits, chunksize=64)
-        commits = tqdm(commits, total=commits_num)
-        commits = list(commits)
+    if not use_single_process:
+        with concurrent.futures.ProcessPoolExecutor(
+            initializer=_init_process, initargs=(repo_dir,)
+        ) as executor:
+            commits = executor.map(_transform, commits, chunksize=64)
+            commits = tqdm(commits, total=commits_num)
+            commits = list(commits)
+    else:
+        with hglib.open(repo_dir) as hg:
+            commits = [transform(hg, repo_dir, c) for c in commits]
 
     code_analysis_server.terminate()
 

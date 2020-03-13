@@ -167,7 +167,9 @@ def schedule_tests(branch, rev):
     )
 
     # Analyze patches.
-    commits = repository.download_commits(REPO_DIR, rev_start=first_rev, save=False)
+    commits = repository.download_commits(
+        REPO_DIR, rev_start=first_rev, save=False, use_single_process=True
+    )
 
     commit_data = commit_features.merge_commits(commits)
 

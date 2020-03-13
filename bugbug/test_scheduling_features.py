@@ -24,22 +24,20 @@ class platform(object):
         return platforms[0]
 
 
+NAME_PARTS_TO_SKIP = ("opt", "debug", "e10s", "1proc")
+
+
 def get_chunk(name):
-    if name.startswith("build-"):
+    if name.startswith("build-signing-"):
+        return "build-signing"
+    elif name.startswith("build-"):
         return "build"
 
     assert name.startswith("test-"), f"{name} should start with test-"
 
-    if "/debug-" in name:
-        name = name[name.index("/debug-") + 7 :]
-    elif "/opt-" in name:
-        name = name[name.index("/opt-") + 5 :]
-    elif "/pgo-" in name:
-        name = name[name.index("/pgo-") + 5 :]
-    else:
-        assert False, f"{name} should be either debug or opt"
+    name = name.split("/")[1]
 
-    return "-".join(p for p in name.split("-") if p != "e10s")
+    return "-".join([p for p in name.split("-") if p not in NAME_PARTS_TO_SKIP])
 
 
 class chunk(object):
