@@ -316,10 +316,11 @@ class Retriever(object):
                         data["revs"] = revisions
                         yield data
 
-            try:
-                update_touched_together_gen.send(None)
-            except StopIteration:
-                pass
+            if granularity == "group":
+                try:
+                    update_touched_together_gen.send(None)
+                except StopIteration:
+                    pass
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
             logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
