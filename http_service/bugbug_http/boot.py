@@ -57,7 +57,21 @@ def boot_worker():
 
         rev_start = "children({})".format(commit["node"])
         logger.info("Updating commits DB...")
-        repository.download_commits(REPO_DIR, rev_start, use_single_process=True)
+        commits = repository.download_commits(
+            REPO_DIR, rev_start, use_single_process=True
+        )
+
+        if len(commits) > 0:
+            # Update the touched together DB.
+            update_touched_together_gen = test_scheduling.update_touched_together()
+            next(update_touched_together_gen)
+
+            update_touched_together_gen.send(commits[-1]["node"])
+
+            try:
+                update_touched_together_gen.send(None)
+            except StopIteration:
+                pass
 
     # Preload models
     bugbug_http.models.preload_models()
