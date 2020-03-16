@@ -79,6 +79,10 @@ class Retriever(object):
 
             db.upload(ADR_CACHE_DB)
 
+        # We keep in the cache the fact that we failed to analyze a push for 10
+        # days, so if we re-run often we don't retry the same pushes many times.
+        MISSING_CACHE_RETENTION = 10 * 24 * 60
+
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use half TRAINING_MONTHS months more than that to calculate the
         # failure statistics.
@@ -105,7 +109,9 @@ class Retriever(object):
 
             if adr.config.cache.has(key):
                 num_cached += 1
-                push_data.append(adr.config.cache.get(key))
+                value = adr.config.cache.get(key)
+                if value is not None:
+                    push_data.append(value)
             else:
                 try:
                     if runnable == "label":
@@ -125,8 +131,10 @@ class Retriever(object):
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
                     )
+                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
                 except Exception:
                     traceback.print_exc()
+                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
 
             if time.monotonic() - start_time >= 3600:
                 upload_adr_cache()

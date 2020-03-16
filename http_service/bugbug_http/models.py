@@ -58,10 +58,10 @@ def get_model(model_name, force_cache=False):
             else:
                 raise
 
-        # Cache the model only if it was last used less than two hours ago.
+        # Cache the model only if it was last used less than one hour ago.
         if force_cache or (
             model_name in MODEL_LAST_LOADED
-            and MODEL_LAST_LOADED[model_name] > datetime.now() - relativedelta(hours=2)
+            and MODEL_LAST_LOADED[model_name] > datetime.now() - relativedelta(hours=1)
         ):
             MODEL_CACHE[model_name] = model
     else:
