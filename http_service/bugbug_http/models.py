@@ -32,7 +32,7 @@ MODELS_NAMES = [
     "testlabelselect",
     "testgroupselect",
 ]
-MODELS_TO_PRELOAD = ["component", "testlabelselect", "testgroupselect"]
+MODELS_TO_PRELOAD = ["testlabelselect", "testgroupselect"]
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
