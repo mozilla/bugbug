@@ -9,14 +9,14 @@ import os
 from datetime import datetime
 from typing import Dict
 
+import numpy as np
 import requests
 from dateutil.relativedelta import relativedelta
 from redis import Redis
 
-from bugbug import bugzilla
+from bugbug import bugzilla, commit_features, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.models import load_model
-from bugbug.repository import apply_stack
 from bugbug_http import ALLOW_MISSING_MODELS
 from bugbug_http.utils import get_hgmo_stack
 
@@ -156,32 +156,50 @@ def schedule_tests(branch, rev):
         return "NOK"
 
     # Apply the stack on the local repository
-    # Autoland should always rebase on top of parents, never on tip
-    default_base = "tip" if branch != "integration/autoland" else None
     try:
-        apply_stack(REPO_DIR, stack, branch, default_base)
+        first_rev = repository.apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
 
-    first_rev = stack[0]["node"]
-    if first_rev != rev:
-        revset = f"{first_rev}::{rev}"
-    else:
-        revset = rev
+    test_selection_threshold = float(
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+    )
 
-    # TODO Return real data based on 'revset'
-    def get_data(revset):
-        return {
-            "tasks": ["test-macosx1014-64/debug-gtest-1proc"],
-            "groups": [
-                "caps/test/unit/xpcshell.ini",
-                "dom/indexedDB/test/mochitest.ini",
-            ],
-        }
+    # Analyze patches.
+    commits = repository.download_commits(
+        REPO_DIR, rev_start=first_rev, save=False, use_single_process=True
+    )
 
-    data = get_data(revset)
-    encoded_data = json.dumps(data)
-    setkey(job.result_key, encoded_data)
+    commit_data = commit_features.merge_commits(commits)
+
+    def get_runnables(granularity):
+        past_failures_data = test_scheduling.get_past_failures(granularity)
+
+        push_num = past_failures_data["push_num"]
+        all_runnables = past_failures_data["all_runnables"]
+
+        commit_tests = []
+        for data in test_scheduling.generate_data(
+            past_failures_data, commit_data, push_num, all_runnables, [], []
+        ):
+            if granularity == "label" and not data["name"].startswith("test-"):
+                continue
+
+            commit_test = commit_data.copy()
+            commit_test["test_job"] = data
+            commit_tests.append(commit_test)
+
+        probs = get_model(f"test{granularity}select").classify(
+            commit_tests, probabilities=True
+        )
+        selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]
+        return [commit_tests[i]["test_job"]["name"] for i in selected_indexes]
+
+    data = {
+        "tasks": get_runnables("label"),
+        "groups": get_runnables("group"),
+    }
+    setkey(job.result_key, json.dumps(data))
 
     return "OK"

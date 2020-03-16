@@ -45,7 +45,9 @@ def boot_worker():
 
     # Download commits DB
     logger.info("Downloading commits DB...")
-    commits_db_downloaded = db.download(repository.COMMITS_DB, support_files_too=True)
+    commits_db_downloaded = db.download(
+        repository.COMMITS_DB, support_files_too=True, use_single_process=True
+    )
     if not ALLOW_MISSING_MODELS:
         assert commits_db_downloaded
 

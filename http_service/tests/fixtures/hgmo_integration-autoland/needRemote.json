@@ -1,0 +1,18 @@
+{
+    "changesets": [
+        {
+            "node": "localOnRemote",
+            "parents": [
+                "PULLED_FROM_REMOTE"
+            ]
+        },
+        {
+            "node": "needRemote",
+            "parents": [
+                "localOnRemote"
+            ]
+        }
+    ],
+    "visible": true
+}
+

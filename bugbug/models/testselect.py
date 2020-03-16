@@ -4,6 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import math
+import random
+from collections import defaultdict
 
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
@@ -21,10 +23,13 @@ from bugbug.model import Model
 
 
 class TestSelectModel(Model):
-    def __init__(self, lemmatization=False, granularity="label"):
+    def __init__(self, lemmatization=False, granularity="label", use_subset=False):
         Model.__init__(self, lemmatization)
 
         self.granularity = granularity
+        # This is useful for development purposes, it avoids using too much memory
+        # by using a subset of the dataset (dropping some passing runnables).
+        self.use_subset = use_subset
 
         self.required_dbs = [repository.COMMITS_DB]
         if granularity == "label":
@@ -115,26 +120,54 @@ class TestSelectModel(Model):
 
     def get_labels(self):
         classes = {}
+        classes_by_rev = defaultdict(dict)
 
+        random.seed(0)
+
+        revs = set()
         for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
             name = test_data["name"]
+
+            revs.add(rev)
 
             if self.granularity == "label" and not name.startswith("test-"):
                 continue
 
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
-                classes[(rev, name)] = 1
+                classes_by_rev[rev][name] = 1
             else:
-                classes[(rev, name)] = 0
+                classes_by_rev[rev][name] = 0
 
+        if self.use_subset:
+            for rev, by_name in classes_by_rev.items():
+                passing_names = [name for name, val in by_name.items() if val == 0]
+                if len(passing_names) == 0:
+                    continue
+
+                chosen_passing_names = random.sample(
+                    passing_names, math.ceil(len(passing_names) / 10)
+                )
+                assert len(chosen_passing_names) > 0
+
+                to_delete = set(passing_names) - set(chosen_passing_names)
+                for name in to_delete:
+                    del by_name[name]
+
+        classes = {
+            (rev, name): val
+            for rev, by_name in classes_by_rev.items()
+            for name, val in by_name.items()
+        }
+
+        print("{} pushes considered".format(len(classes_by_rev)))
         print(
-            "{} commit/jobs failed".format(
+            "{} push/jobs failed".format(
                 sum(1 for label in classes.values() if label == 1)
             )
         )
         print(
-            "{} commit/jobs did not fail".format(
+            "{} push/jobs did not fail".format(
                 sum(1 for label in classes.values() if label == 0)
             )
         )
