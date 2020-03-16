@@ -70,6 +70,7 @@ class TestSelectModel(Model):
             feature_extractors += [
                 test_scheduling_features.path_distance(),
                 test_scheduling_features.common_path_components(),
+                test_scheduling_features.touched_together(),
             ]
 
         self.extraction_pipeline = Pipeline(
