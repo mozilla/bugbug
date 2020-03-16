@@ -33,11 +33,12 @@ hg_servers_lock = threading.Lock()
 thread_local = threading.local()
 
 COMMITS_DB = "data/commits.json"
+COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
     9,
-    ["commit_experiences.lmdb.tar.zst"],
+    [COMMIT_EXPERIENCES_DB],
 )
 
 path_to_component = None
