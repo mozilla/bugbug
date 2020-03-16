@@ -109,6 +109,14 @@ class prev_failures(object):
         }
 
 
+class touched_together(object):
+    def __call__(self, test_job, **kwargs):
+        return {
+            "touched_together_files": test_job["touched_together_files"],
+            "touched_together_directories": test_job["touched_together_directories"],
+        }
+
+
 class arch(object):
     def __call__(self, test_job, **kwargs):
         if "build-" in test_job["name"]:
