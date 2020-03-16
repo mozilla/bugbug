@@ -43,7 +43,7 @@ MODEL_CACHE: Dict[str, Model] = {}
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
 
-def get_model(model_name):
+def get_model(model_name, force_cache=False):
     if model_name not in MODEL_CACHE:
         LOGGER.info("Recreating the %r model in cache" % model_name)
         try:
@@ -59,9 +59,10 @@ def get_model(model_name):
                 raise
 
         # Cache the model only if it was last used less than two hours ago.
-        if model_name in MODEL_LAST_LOADED and MODEL_LAST_LOADED[
-            model_name
-        ] > datetime.now() - relativedelta(hours=2):
+        if force_cache or (
+            model_name in MODEL_LAST_LOADED
+            and MODEL_LAST_LOADED[model_name] > datetime.now() - relativedelta(hours=2)
+        ):
             MODEL_CACHE[model_name] = model
     else:
         model = MODEL_CACHE[model_name]
@@ -72,7 +73,7 @@ def get_model(model_name):
 
 def preload_models():
     for model in MODELS_TO_PRELOAD:
-        get_model(model)
+        get_model(model, force_cache=True)
 
 
 def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
