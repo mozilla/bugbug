@@ -225,7 +225,7 @@ def download_and_load_model(model_name):
 
 
 def zstd_compress(path):
-    cctx = zstandard.ZstdCompressor()
+    cctx = zstandard.ZstdCompressor(threads=-1)
     with open(path, "rb") as input_f:
         with open(f"{path}.zst", "wb") as output_f:
             cctx.copy_stream(input_f, output_f)
@@ -240,7 +240,7 @@ def zstd_decompress(path):
 
 @contextmanager
 def open_tar_zst(path):
-    cctx = zstandard.ZstdCompressor()
+    cctx = zstandard.ZstdCompressor(threads=-1)
     with open(path, "wb") as f:
         with cctx.stream_writer(f) as compressor:
             with tarfile.open(mode="w|", fileobj=compressor) as tar:
