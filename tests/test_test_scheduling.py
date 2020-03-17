@@ -227,7 +227,8 @@ def test_touched_together_restart(monkeypatch):
     except StopIteration:
         pass
 
-    test_scheduling.touched_together = None
+    # Ensure we can still read the DB after closing.
+    assert test_scheduling.get_touched_together("dom", "layout/tests") == 1
 
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)

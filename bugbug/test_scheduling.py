@@ -73,6 +73,12 @@ def get_touched_together_db():
     return touched_together
 
 
+def close_touched_together_db():
+    global touched_together
+    touched_together.close()
+    touched_together = None
+
+
 def get_touched_together_key(f1, f2):
     # Always sort in lexographical order, so we are sure the output key is consistently
     # the same with the same two files as input, no matter their order.
@@ -157,7 +163,7 @@ def update_touched_together():
             if end_revision is None:
                 break
 
-    touched_together.close()
+    close_touched_together_db()
 
 
 def _read_and_update_past_failures(
