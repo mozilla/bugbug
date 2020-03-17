@@ -6,7 +6,6 @@
 import concurrent.futures
 import logging
 
-import bugbug_http.models
 from bugbug import db, repository, test_scheduling
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
@@ -132,8 +131,5 @@ def boot_worker():
         # Make sure all downloads complete successfully.
         for future in concurrent.futures.as_completed(futures):
             future.result()
-
-    # Preload models
-    bugbug_http.models.preload_models()
 
     logger.info("Worker boot done")
