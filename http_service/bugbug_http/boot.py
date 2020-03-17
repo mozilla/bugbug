@@ -81,10 +81,6 @@ def boot_worker():
         download_touched_together_future = executor.submit(download_touched_together)
         futures.append(download_touched_together_future)
 
-        futures.append(executor.submit(download_past_failures_label))
-
-        futures.append(executor.submit(download_past_failures_group))
-
         commits_db_downloaded = download_commits_future.result()
         if commits_db_downloaded:
             # Update the commits DB.
@@ -130,5 +126,8 @@ def boot_worker():
         # Make sure all downloads complete successfully.
         for future in concurrent.futures.as_completed(futures):
             future.result()
+
+    download_past_failures_label()
+    download_past_failures_group()
 
     logger.info("Worker boot done")
