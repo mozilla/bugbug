@@ -52,9 +52,8 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 
-JOB_TIMEOUT = 1800  # 30 minutes in seconds
 q = Queue(
-    connection=redis_conn, default_timeout=JOB_TIMEOUT
+    connection=redis_conn, default_timeout=5 * 60
 )  # no args implies the default queue
 VALIDATOR = Validator()
 
