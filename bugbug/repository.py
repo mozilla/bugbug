@@ -1096,4 +1096,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    download_commits(args.repository_dir, args.rev_start)
+    download_commits(args.repository_dir, args.rev_start, save=False)
