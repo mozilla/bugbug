@@ -63,18 +63,13 @@ def extract_file(path):
 
 
 def download_support_file(path, file_name):
-    logger.info(f"download_support_file1 {path} {file_name}")
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
-    logger.info(f"download_support_file2 {path} {file_name}")
 
     try:
-        logger.info(f"download_support_file3 {path} {file_name}")
         url = urljoin(DATABASES[path]["url"], file_name)
-        logger.info(f"download_support_file4 {path} {file_name}")
         path = os.path.join(os.path.dirname(path), file_name)
-        logger.info(f"download_support_file5 {path} {file_name}")
 
         logger.info(f"Downloading {url} to {path}")
         updated = utils.download_check_etag(url, path)

@@ -57,7 +57,6 @@ def boot_worker():
         return commits_db_downloaded
 
     def download_commit_experiences():
-        logger.info("download_commit_experiences")
         assert (
             db.download_support_file(
                 repository.COMMITS_DB, repository.COMMIT_EXPERIENCES_DB,
