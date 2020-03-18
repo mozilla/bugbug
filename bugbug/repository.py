@@ -179,7 +179,11 @@ class Commit:
         self.files = files
         self.file_copies = file_copies
         self.components = list(
-            set(path_to_component[path] for path in files if path in path_to_component)
+            set(
+                path_to_component[path.encode("utf-8")].tobytes().decode("utf-8")
+                for path in files
+                if path.encode("utf-8") in path_to_component
+            )
         )
         self.directories = get_directories(files)
         return self
@@ -853,23 +857,29 @@ def set_commits_to_ignore(repo_dir, commits):
         commit.ignored = should_ignore(commit)
 
 
-def download_component_mapping():
+def download_component_mapping(save=True):
     global path_to_component
+    path_to_component = LMDBDict("data/component_mapping.lmdb")
 
-    if path_to_component is not None:
-        return
+    if save:
+        utils.download_check_etag(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+            "data/component_mapping.json",
+        )
 
-    utils.download_check_etag(
-        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-        "data/component_mapping.json",
-    )
+        with open("data/component_mapping.json", "r") as f:
+            data = json.load(f)
 
-    with open("data/component_mapping.json", "r") as f:
-        path_to_component = json.load(f)
+        for path, component in data.items():
+            path_to_component[path.encode("utf-8")] = "::".join(component).encode(
+                "utf-8"
+            )
 
-    path_to_component = {
-        path: "::".join(component) for path, component in path_to_component.items()
-    }
+
+def close_component_mapping():
+    global path_to_component
+    path_to_component.close()
+    path_to_component = None
 
 
 def hg_log_multi(repo_dir, revs):
@@ -924,7 +934,7 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
 
     print("Downloading file->component mapping...")
 
-    download_component_mapping()
+    download_component_mapping(save)
 
     set_commits_to_ignore(repo_dir, commits)
 
@@ -957,6 +967,8 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
 
     if save:
         db.append(COMMITS_DB, commits)
+
+    close_component_mapping()
 
     return commits
 

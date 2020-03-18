@@ -325,8 +325,8 @@ def test_download_component_mapping():
         json={},
     )
 
-    repository.download_component_mapping()
-    assert len(repository.path_to_component) == 0
+    repository.download_component_mapping(True)
+    repository.close_component_mapping()
 
     repository.path_to_component = None
     responses.reset()
@@ -348,15 +348,19 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
-    assert len(repository.path_to_component) == 2
-    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
-    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+    repository.close_component_mapping()
 
     responses.reset()
-    repository.download_component_mapping()
-    assert len(repository.path_to_component) == 2
-    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
-    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+    repository.download_component_mapping(False)
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+    repository.close_component_mapping()
 
     repository.path_to_component = None
     responses.reset()
@@ -367,10 +371,12 @@ def test_download_component_mapping():
         headers={"ETag": "101"},
     )
 
-    repository.download_component_mapping()
-    assert len(repository.path_to_component) == 2
-    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
-    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+    repository.download_component_mapping(True)
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+    repository.close_component_mapping()
 
 
 @pytest.mark.parametrize("use_single_process", [True, False])
@@ -489,6 +495,8 @@ def test_get_directories():
 def test_set_commits_to_ignore(tmpdir):
     tmp_path = tmpdir.strpath
 
+    repository.path_to_component = {}
+
     with open(os.path.join(tmp_path, ".hg-annotate-ignore-revs"), "w") as f:
         f.write("commit1\ncommit2\n8ba995b74e18334ab3707f27e9eb8f4e37ba3d29\n")
 
@@ -534,11 +542,11 @@ def test_set_commits_to_ignore(tmpdir):
 
 def test_calculate_experiences():
     repository.path_to_component = {
-        "dom/file1.cpp": "Core::DOM",
-        "dom/file1copied.cpp": "Core::DOM",
-        "dom/file2.cpp": "Core::Layout",
-        "apps/file1.jsm": "Firefox::Boh",
-        "apps/file2.jsm": "Firefox::Boh",
+        b"dom/file1.cpp": memoryview(b"Core::DOM"),
+        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
+        b"dom/file2.cpp": memoryview(b"Core::Layout"),
+        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
+        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
     }
 
     commits = {
@@ -1010,11 +1018,11 @@ def test_calculate_experiences():
 
 def test_calculate_experiences_no_save():
     repository.path_to_component = {
-        "dom/file1.cpp": "Core::DOM",
-        "dom/file1copied.cpp": "Core::DOM",
-        "dom/file2.cpp": "Core::Layout",
-        "apps/file1.jsm": "Firefox::Boh",
-        "apps/file2.jsm": "Firefox::Boh",
+        b"dom/file1.cpp": memoryview(b"Core::DOM"),
+        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
+        b"dom/file2.cpp": memoryview(b"Core::Layout"),
+        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
+        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
     }
 
     commits = {
