@@ -488,6 +488,15 @@ def transform(hg, repo_dir, commit):
                     metrics_file_count += 1
                     get_metrics(commit, metrics["spaces"])
 
+                # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
+                # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
+                # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
+                # the additional information that it is an Objective-C/C++ file.
+                if type_ == "C/C++" and (
+                    metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
+                ):
+                    commit.types.add("Objective-C/C++")
+
             commit.types.add(type_)
         else:
             commit.other_files_modified_num += 1
