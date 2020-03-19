@@ -18,7 +18,7 @@ from rq.exceptions import NoSuchJobError
 
 import bugbug_http
 import bugbug_http.models
-from bugbug import test_scheduling
+from bugbug import repository, test_scheduling
 from bugbug_http import app
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -253,6 +253,12 @@ def mock_repo(tmpdir, monkeypatch):
 
 
 @pytest.fixture
+def mock_data(tmp_path):
+    os.mkdir(tmp_path / "data")
+    os.chdir(tmp_path)
+
+
+@pytest.fixture
 def mock_component_taskcluster_artifact():
     responses.add(
         responses.HEAD,
@@ -268,12 +274,11 @@ def mock_component_taskcluster_artifact():
         json={},
     )
 
+    repository.download_component_mapping()
+
 
 @pytest.fixture
-def mock_schedule_tests_classify(tmpdir, monkeypatch):
-    os.chdir(tmpdir)
-    os.makedirs("data")
-
+def mock_schedule_tests_classify(monkeypatch):
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):
         past_failures_data = test_scheduling.get_past_failures(granularity)
