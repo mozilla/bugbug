@@ -322,15 +322,22 @@ class ExpQueue:
 
 
 class LMDBDict:
-    def __init__(self, path):
+    def __init__(self, path, readonly=False):
+        self.readonly = readonly
         self.db = lmdb.open(
-            path, map_size=68719476736, metasync=False, sync=False, meminit=False
+            path,
+            map_size=68719476736,
+            metasync=False,
+            sync=False,
+            meminit=False,
+            readonly=readonly,
         )
-        self.txn = self.db.begin(buffers=True, write=True)
+        self.txn = self.db.begin(buffers=True, write=not readonly)
 
     def close(self):
         self.txn.commit()
-        self.db.sync()
+        if not self.readonly:
+            self.db.sync()
         self.db.close()
 
     def __contains__(self, key):
