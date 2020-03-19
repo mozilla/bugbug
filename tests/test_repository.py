@@ -325,10 +325,8 @@ def test_download_component_mapping():
         json={},
     )
 
-    repository.download_component_mapping(True)
-    repository.close_component_mapping()
+    repository.download_component_mapping()
 
-    repository.path_to_component = None
     responses.reset()
     responses.add(
         responses.HEAD,
@@ -348,21 +346,20 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
+    repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
         repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
     )
-    repository.close_component_mapping()
 
     responses.reset()
-    repository.download_component_mapping(False)
+    repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
         repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
     )
     repository.close_component_mapping()
 
-    repository.path_to_component = None
     responses.reset()
     responses.add(
         responses.HEAD,
@@ -371,7 +368,8 @@ def test_download_component_mapping():
         headers={"ETag": "101"},
     )
 
-    repository.download_component_mapping(True)
+    repository.download_component_mapping()
+    repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
         repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"

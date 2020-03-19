@@ -232,6 +232,7 @@ def _init_process(repo_dir):
     global HG, REPO_DIR
     REPO_DIR = repo_dir
     HG = hglib.open(REPO_DIR)
+    get_component_mapping()
 
 
 def _init_thread(repo_dir):
@@ -875,23 +876,27 @@ def set_commits_to_ignore(repo_dir, commits):
         commit.ignored = should_ignore(commit)
 
 
-def download_component_mapping(save=True):
+def download_component_mapping():
+    path_to_component = get_component_mapping(False)
+
+    utils.download_check_etag(
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
+        "data/component_mapping.json",
+    )
+
+    with open("data/component_mapping.json", "r") as f:
+        data = json.load(f)
+
+    for path, component in data.items():
+        path_to_component[path.encode("utf-8")] = "::".join(component).encode("utf-8")
+
+    close_component_mapping()
+
+
+def get_component_mapping(readonly=True):
     global path_to_component
-    path_to_component = LMDBDict("data/component_mapping.lmdb", readonly=not save)
-
-    if save:
-        utils.download_check_etag(
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
-            "data/component_mapping.json",
-        )
-
-        with open("data/component_mapping.json", "r") as f:
-            data = json.load(f)
-
-        for path, component in data.items():
-            path_to_component[path.encode("utf-8")] = "::".join(component).encode(
-                "utf-8"
-            )
+    path_to_component = LMDBDict("data/component_mapping.lmdb", readonly=readonly)
+    return path_to_component
 
 
 def close_component_mapping():
@@ -952,7 +957,8 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
 
     print("Downloading file->component mapping...")
 
-    download_component_mapping(save)
+    if save:
+        download_component_mapping()
 
     set_commits_to_ignore(repo_dir, commits)
 
@@ -974,8 +980,12 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
             commits = tqdm(commits, total=commits_num)
             commits = list(commits)
     else:
+        get_component_mapping()
+
         with hglib.open(repo_dir) as hg:
             commits = [transform(hg, repo_dir, c) for c in commits]
+
+        close_component_mapping()
 
     code_analysis_server.terminate()
 
@@ -985,8 +995,6 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
 
     if save:
         db.append(COMMITS_DB, commits)
-
-    close_component_mapping()
 
     return commits
 
