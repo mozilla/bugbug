@@ -21,6 +21,7 @@ from datetime import datetime
 from functools import lru_cache
 
 import hglib
+import lmdb
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -638,11 +639,19 @@ def get_revs(hg, rev_start=0, rev_end="tip"):
 class Experiences:
     def __init__(self, save):
         self.save = save
-        self.db_experiences = shelve.Shelf(
-            LMDBDict("data/commit_experiences.lmdb"),
-            protocol=pickle.DEFAULT_PROTOCOL,
-            writeback=save,
-        )
+
+        try:
+            self.db_experiences = shelve.Shelf(
+                LMDBDict("data/commit_experiences.lmdb", readonly=not save),
+                protocol=pickle.DEFAULT_PROTOCOL,
+                writeback=save,
+            )
+        except lmdb.Error as e:
+            if not save and "No such file or directory" in str(e):
+                self.db_experiences = {}
+            else:
+                raise
+
         if not save:
             self.mem_experiences = {}
 
@@ -868,7 +877,7 @@ def set_commits_to_ignore(repo_dir, commits):
 
 def download_component_mapping(save=True):
     global path_to_component
-    path_to_component = LMDBDict("data/component_mapping.lmdb")
+    path_to_component = LMDBDict("data/component_mapping.lmdb", readonly=not save)
 
     if save:
         utils.download_check_etag(
