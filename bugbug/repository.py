@@ -284,7 +284,7 @@ def hg_modified_files(hg, commit):
         file_copies[sys.intern(orig)] = sys.intern(copied)
 
     commit.set_files(
-        [sys.intern(f) for f in files_str.decode("utf-8").split("|")], file_copies
+        [sys.intern(f) for f in files_str.decode("utf-8").split("|") if f], file_copies
     )
 
 

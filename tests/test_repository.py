@@ -53,7 +53,17 @@ def add_file(hg, repo_dir, name, contents):
     hg.add(files=[bytes(path, "ascii")])
 
 
-def commit(hg, commit_message=None, date=datetime(2019, 4, 16, tzinfo=timezone.utc)):
+def remove_file(hg, repo_dir, name):
+    path = os.path.join(repo_dir, name)
+    hg.remove(files=[bytes(path, "ascii")])
+
+
+def commit(
+    hg,
+    commit_message=None,
+    date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    amend=False,
+):
     commit_message = (
         commit_message
         if commit_message is not None
@@ -65,7 +75,10 @@ def commit(hg, commit_message=None, date=datetime(2019, 4, 16, tzinfo=timezone.u
     )
 
     i, revision = hg.commit(
-        message=commit_message, user="Moz Illa <milla@mozilla.org>", date=date
+        message=commit_message,
+        user="Moz Illa <milla@mozilla.org>",
+        date=date,
+        amend=amend,
     )
 
     return str(revision, "ascii")
@@ -140,6 +153,11 @@ def test_hg_modified_files(fake_hg_repo):
     )
     revision4 = commit(hg, "Move")
 
+    add_file(hg, local, "f3", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg, "tmp")
+    remove_file(hg, local, "f3")
+    revision5 = commit(hg, "Empty", amend=True)
+
     hg.push(dest=bytes(remote, "ascii"))
     revs = repository.get_revs(hg, revision1)
     commits = repository.hg_log(hg, revs)
@@ -164,6 +182,10 @@ def test_hg_modified_files(fake_hg_repo):
     assert commits[3].node == revision4
     assert commits[3].files == ["f2copy", "f2copymove"]
     assert commits[3].file_copies == {"f2copy": "f2copymove"}
+
+    assert commits[4].node == revision5
+    assert commits[4].files == []
+    assert commits[4].file_copies == {}
 
 
 def test_hg_log(fake_hg_repo):
