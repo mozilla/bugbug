@@ -6,8 +6,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Dict
+from datetime import timedelta
 
 import requests
 from redis import Redis
@@ -17,7 +16,7 @@ from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.repository import apply_stack
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.utils import IdleTTLCache, get_hgmo_stack
+from bugbug_http.utils import ReadthroughTTLCache, get_hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -35,44 +34,36 @@ MODELS_TO_PRELOAD = ["component", "testlabelselect", "testgroupselect"]
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 
 
-MODEL_LAST_LOADED: Dict[str, datetime] = {}
-MODEL_CACHE: IdleTTLCache[str, Model] = IdleTTLCache(timedelta(hours=2))
-MODEL_CACHE.start_ttl_thread()
-
-
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
 
+def load_model_for_service(model_name):
+    try:
+        return load_model(model_name)
+    except FileNotFoundError:
+        if ALLOW_MISSING_MODELS:
+            LOGGER.info(
+                "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
+                % model_name
+            )
+            return None
+        else:
+            raise
+
+
+MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
+    timedelta(hours=2), load_model_for_service
+)
+MODEL_CACHE.start_ttl_thread()
+
+
 def get_model(model_name):
-    if model_name not in MODEL_CACHE:
-        LOGGER.info("Recreating the %r model in cache" % model_name)
-        try:
-            model = load_model(model_name)
-        except FileNotFoundError:
-            if ALLOW_MISSING_MODELS:
-                LOGGER.info(
-                    "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
-                    % model_name
-                )
-                return None
-            else:
-                raise
-
-        # Cache the model only if it was last used less than two hours ago.
-        if model_name in MODEL_LAST_LOADED and MODEL_LAST_LOADED[
-            model_name
-        ] > datetime.now() - timedelta(hours=2):
-            MODEL_CACHE[model_name] = model
-    else:
-        model = MODEL_CACHE[model_name]
-
-    MODEL_LAST_LOADED[model_name] = datetime.now()
-    return model
+    return MODEL_CACHE.get(model_name)
 
 
 def preload_models():
-    for model in MODELS_TO_PRELOAD:
-        get_model(model)
+    for model_name in MODELS_TO_PRELOAD:
+        MODEL_CACHE.force_store(model_name)
 
 
 def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):

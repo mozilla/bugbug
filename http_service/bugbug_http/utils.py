@@ -7,8 +7,9 @@
 
 import datetime
 import threading
+import time
 from datetime import timedelta
-from typing import Dict, Generic, TypeVar
+from typing import Callable, Dict, Generic, TypeVar
 
 import requests
 from libmozdata import config
@@ -76,3 +77,50 @@ class IdleTTLCache(Generic[Key, Value]):
         timer = threading.Timer(self.ttl.total_seconds(), self.start_ttl_thread)
         timer.setDaemon(True)
         timer.start()
+
+
+class ReadthroughTTLCache(Generic[Key, Value]):
+    def __init__(self, ttl: timedelta, load_item_function: Callable[[Key], Value]):
+        self.ttl = ttl
+        self.load_item_function = load_item_function
+        self.items_last_accessed: Dict[Key, datetime.datetime] = {}
+        self.items_storage: Dict[Key, Value] = {}
+
+    def __contains__(self, key):
+        return key in self.items_storage
+
+    def get(self, key):
+        item = None
+        if item in self.items_storage:
+            item = self.items_storage[key]
+        else:
+            item = self.load_item_function(key)
+            # Cache the item only if it was last accessed within the past TTL seconds
+            # Note that all entries in items_last_accessed are purged if item was not
+            # accessed in the last TTL seconds.
+            if key in self.items_last_accessed:
+                self.items_storage[key] = item
+
+        self.items_last_accessed[key] = datetime.datetime.now()
+        return item
+
+    def force_store(self, key):
+        self.items_storage[key] = self.load_item_function(key)
+        self.items_last_accessed[key] = datetime.datetime.now()
+
+    def purge_expired_entries(self):
+        purge_entries_before = datetime.datetime.now() - self.ttl
+        for (key, time_last_touched) in list(self.items_last_accessed.items()):
+            if time_last_touched < purge_entries_before:
+                del self.items_last_accessed[key]
+                del self.items_storage[key]
+
+    def start_ttl_thread(self):
+        def purge_expired_entries_with_wait():
+            while True:
+                self.purge_expired_entries()
+                time.sleep(self.ttl.total_seconds())
+
+        thread = threading.Thread(target=purge_expired_entries_with_wait)
+        thread.setDaemon(True)
+        thread.start()

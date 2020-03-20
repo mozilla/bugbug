@@ -8,19 +8,22 @@ import sys
 import time
 from datetime import timedelta
 
-from bugbug_http.utils import IdleTTLCache
+from bugbug_http.utils import ReadthroughTTLCache
 
 # to load bugbug_http.utils, when running from project root
 sys.path.append(".")
 
 
 def integration_test_cache_thread():
-    cache = IdleTTLCache(timedelta(seconds=5))
-    cache["test_key"] = "payload"
+    TTL_SECONDS = 5
+    cache = ReadthroughTTLCache(timedelta(seconds=TTL_SECONDS), lambda key: "payload")
+
+    cache.force_store("test_key")
+
     cache.start_ttl_thread()
-    time.sleep(2)
+    time.sleep(TTL_SECONDS / 2)
     assert "test_key" in cache
-    time.sleep(5)
+    time.sleep(TTL_SECONDS)
     assert "test_key" not in cache
     print("test succeeded")
 
