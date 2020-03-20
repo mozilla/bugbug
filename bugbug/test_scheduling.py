@@ -26,7 +26,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    10,
+    11,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
@@ -71,6 +71,12 @@ def get_touched_together_db():
             writeback=True,
         )
     return touched_together
+
+
+def close_touched_together_db():
+    global touched_together
+    touched_together.close()
+    touched_together = None
 
 
 def get_touched_together_key(f1, f2):
@@ -124,30 +130,27 @@ def update_touched_together():
     for commit in repository.get_commits():
         seen.add(commit["node"])
 
-        if commit["ever_backedout"]:
-            continue
-
         if can_start:
             touched_together["last_analyzed"] = commit["node"]
 
             # As in the test scheduling history retriever script, for now skip commits which are too large.
-            if len(commit["files"]) > 50:
-                continue
+            if len(commit["files"]) <= 50 and not commit["ever_backedout"]:
+                # Number of times a source file was touched together with a directory.
+                for f1 in commit["files"]:
+                    for d2 in set(
+                        os.path.dirname(f) for f in commit["files"] if f != f1
+                    ):
+                        set_touched_together(f1, d2)
 
-            # Number of times a source file was touched together with a directory.
-            for f1 in commit["files"]:
-                for d2 in set(os.path.dirname(f) for f in commit["files"] if f != f1):
-                    set_touched_together(f1, d2)
+                # Number of times a directory was touched together with another directory.
+                for d1, d2 in itertools.combinations(
+                    list(set(os.path.dirname(f) for f in commit["files"])), 2
+                ):
+                    set_touched_together(d1, d2)
 
-            # Number of times a directory was touched together with another directory.
-            for d1, d2 in itertools.combinations(
-                list(set(os.path.dirname(f) for f in commit["files"])), 2
-            ):
-                set_touched_together(d1, d2)
-
-            i += 1
-            if i % 5000:
-                touched_together.sync()
+                i += 1
+                if i % 5000:
+                    touched_together.sync()
         elif last_analyzed == commit["node"]:
             can_start = True
 
@@ -157,7 +160,10 @@ def update_touched_together():
             while end_revision in seen:
                 end_revision = yield
 
-    touched_together.close()
+            if end_revision is None:
+                break
+
+    close_touched_together_db()
 
 
 def _read_and_update_past_failures(

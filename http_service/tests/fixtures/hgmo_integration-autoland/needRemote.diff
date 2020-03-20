@@ -1,0 +1,9 @@
+Bug 123 - On top of remote + local
+
+diff --git a/remote.txt b/remote.txt
+--- a/remote.txt
++++ b/remote.txt
+@@ -1,2 +1,3 @@
+ New remote file !
+ On top of remote - autoland
++This is the new top !

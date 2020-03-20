@@ -52,9 +52,8 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 
-JOB_TIMEOUT = 1800  # 30 minutes in seconds
 q = Queue(
-    connection=redis_conn, default_timeout=JOB_TIMEOUT
+    connection=redis_conn, default_timeout=5 * 60
 )  # no args implies the default queue
 VALIDATOR = Validator()
 
@@ -195,8 +194,8 @@ def is_pending(job):
         return False
 
     job_status = job.get_status()
-    if job_status in ("started", "queued"):
-        LOGGER.debug(f"Job {job_id} has status {job_status}, True")
+    if job_status == "started":
+        LOGGER.debug(f"Job {job_id} is running, True")
         return True
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
@@ -210,6 +209,10 @@ def is_pending(job):
         LOGGER.debug(f"Job timeout {job_id}, False")
 
         return False
+
+    if job_status == "queued":
+        LOGGER.debug(f"Job {job_id} is queued, True")
+        return True
 
     LOGGER.debug(f"Job {job_id} has status {job_status}, False")
 

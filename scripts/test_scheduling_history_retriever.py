@@ -38,12 +38,8 @@ db.register(
 PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
 
 TRAINING_MONTHS = {
-    "label": 6,
-    # For groups, we only have 12 weeks in ActiveData. Getting previous data
-    # from task artifacts is slow, so for now we only get a bit more of what
-    # we can get from ActiveData and we'll see if it's enough to train a
-    # satisfying model.
-    "group": 4,
+    "label": 7,
+    "group": 5,
 }
 
 
@@ -83,6 +79,10 @@ class Retriever(object):
 
             db.upload(ADR_CACHE_DB)
 
+        # We keep in the cache the fact that we failed to analyze a push for 10
+        # days, so if we re-run often we don't retry the same pushes many times.
+        MISSING_CACHE_RETENTION = 10 * 24 * 60
+
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use half TRAINING_MONTHS months more than that to calculate the
         # failure statistics.
@@ -109,7 +109,9 @@ class Retriever(object):
 
             if adr.config.cache.has(key):
                 num_cached += 1
-                push_data.append(adr.config.cache.get(key))
+                value = adr.config.cache.get(key)
+                if value is not None:
+                    push_data.append(value)
             else:
                 try:
                     if runnable == "label":
@@ -129,8 +131,10 @@ class Retriever(object):
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
                     )
+                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
                 except Exception:
                     traceback.print_exc()
+                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
 
             if time.monotonic() - start_time >= 3600:
                 upload_adr_cache()
@@ -319,6 +323,12 @@ class Retriever(object):
                         saved_nodes.add(i)
                         data["revs"] = revisions
                         yield data
+
+            if granularity == "group":
+                try:
+                    update_touched_together_gen.send(None)
+                except StopIteration:
+                    pass
 
             logger.info(f"saved push data nodes: {len(saved_nodes)}")
             logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")

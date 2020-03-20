@@ -225,7 +225,7 @@ def download_and_load_model(model_name):
 
 
 def zstd_compress(path):
-    cctx = zstandard.ZstdCompressor()
+    cctx = zstandard.ZstdCompressor(threads=-1)
     with open(path, "rb") as input_f:
         with open(f"{path}.zst", "wb") as output_f:
             cctx.copy_stream(input_f, output_f)
@@ -240,7 +240,7 @@ def zstd_decompress(path):
 
 @contextmanager
 def open_tar_zst(path):
-    cctx = zstandard.ZstdCompressor()
+    cctx = zstandard.ZstdCompressor(threads=-1)
     with open(path, "wb") as f:
         with cctx.stream_writer(f) as compressor:
             with tarfile.open(mode="w|", fileobj=compressor) as tar:
@@ -322,22 +322,32 @@ class ExpQueue:
 
 
 class LMDBDict:
-    def __init__(self, path):
+    def __init__(self, path, readonly=False):
+        self.readonly = readonly
         self.db = lmdb.open(
-            path, map_size=68719476736, metasync=False, sync=False, meminit=False
+            path,
+            map_size=68719476736,
+            metasync=False,
+            sync=False,
+            meminit=False,
+            readonly=readonly,
         )
-        self.txn = self.db.begin(buffers=True, write=True)
+        self.txn = self.db.begin(buffers=True, write=not readonly)
 
     def close(self):
         self.txn.commit()
-        self.db.sync()
+        if not self.readonly:
+            self.db.sync()
         self.db.close()
 
     def __contains__(self, key):
         return self.txn.get(key) is not None
 
     def __getitem__(self, key):
-        return self.txn.get(key)
+        val = self.txn.get(key)
+        if val is None:
+            raise KeyError
+        return val
 
     def __setitem__(self, key, value):
         self.txn.put(key, value, dupdata=False)

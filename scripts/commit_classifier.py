@@ -181,7 +181,7 @@ class CommitClassifier(object):
                 test_scheduling.TEST_LABEL_SCHEDULING_DB,
                 test_scheduling.PAST_FAILURES_LABEL_DB,
             )
-            self.past_failures_data = test_scheduling.get_past_failures()
+            self.past_failures_data = test_scheduling.get_past_failures("label")
 
             self.testfailure_model = download_and_load_model("testfailure")
             assert self.testfailure_model is not None
@@ -615,7 +615,7 @@ class CommitClassifier(object):
         push_num = self.past_failures_data["push_num"]
 
         # XXX: Consider using mozilla-central built-in rules to filter some of these out, e.g. SCHEDULES.
-        all_tasks = self.past_failures_data["all_tasks"]
+        all_tasks = self.past_failures_data["all_runnables"]
 
         if not runnable_jobs_path:
             runnable_jobs = {task for task in all_tasks}

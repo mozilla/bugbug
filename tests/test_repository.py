@@ -53,7 +53,17 @@ def add_file(hg, repo_dir, name, contents):
     hg.add(files=[bytes(path, "ascii")])
 
 
-def commit(hg, commit_message=None, date=datetime(2019, 4, 16, tzinfo=timezone.utc)):
+def remove_file(hg, repo_dir, name):
+    path = os.path.join(repo_dir, name)
+    hg.remove(files=[bytes(path, "ascii")])
+
+
+def commit(
+    hg,
+    commit_message=None,
+    date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+    amend=False,
+):
     commit_message = (
         commit_message
         if commit_message is not None
@@ -65,7 +75,10 @@ def commit(hg, commit_message=None, date=datetime(2019, 4, 16, tzinfo=timezone.u
     )
 
     i, revision = hg.commit(
-        message=commit_message, user="Moz Illa <milla@mozilla.org>", date=date
+        message=commit_message,
+        user="Moz Illa <milla@mozilla.org>",
+        date=date,
+        amend=amend,
     )
 
     return str(revision, "ascii")
@@ -140,6 +153,11 @@ def test_hg_modified_files(fake_hg_repo):
     )
     revision4 = commit(hg, "Move")
 
+    add_file(hg, local, "f3", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg, "tmp")
+    remove_file(hg, local, "f3")
+    revision5 = commit(hg, "Empty", amend=True)
+
     hg.push(dest=bytes(remote, "ascii"))
     revs = repository.get_revs(hg, revision1)
     commits = repository.hg_log(hg, revs)
@@ -164,6 +182,10 @@ def test_hg_modified_files(fake_hg_repo):
     assert commits[3].node == revision4
     assert commits[3].files == ["f2copy", "f2copymove"]
     assert commits[3].file_copies == {"f2copy": "f2copymove"}
+
+    assert commits[4].node == revision5
+    assert commits[4].files == []
+    assert commits[4].file_copies == {}
 
 
 def test_hg_log(fake_hg_repo):
@@ -326,7 +348,6 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
-    assert len(repository.path_to_component) == 0
 
     responses.reset()
     responses.add(
@@ -347,9 +368,19 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
-    assert len(repository.path_to_component) == 2
-    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
-    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+    repository.get_component_mapping()
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+
+    responses.reset()
+    repository.get_component_mapping()
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+    repository.close_component_mapping()
 
     responses.reset()
     responses.add(
@@ -360,12 +391,16 @@ def test_download_component_mapping():
     )
 
     repository.download_component_mapping()
-    assert len(repository.path_to_component) == 2
-    assert repository.path_to_component["AUTHORS"] == "mozilla.org::Licensing"
-    assert repository.path_to_component["Cargo.lock"] == "Firefox Build System::General"
+    repository.get_component_mapping()
+    assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
+    assert (
+        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+    )
+    repository.close_component_mapping()
 
 
-def test_download_commits(fake_hg_repo):
+@pytest.mark.parametrize("use_single_process", [True, False])
+def test_download_commits(fake_hg_repo, use_single_process):
     hg, local, remote = fake_hg_repo
 
     # Allow using the local code analysis server.
@@ -400,7 +435,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -413,7 +448,7 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -429,7 +464,9 @@ def test_download_commits(fake_hg_repo):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, revision3)
+    commits = repository.download_commits(
+        local, revision3, use_single_process=use_single_process
+    )
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 2
@@ -442,13 +479,15 @@ def test_download_commits(fake_hg_repo):
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local, f"children({revision2})")
+    commits = repository.download_commits(
+        local, f"children({revision2})", use_single_process=use_single_process
+    )
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local)
+    commits = repository.download_commits(local, use_single_process=use_single_process)
     assert len(list(repository.get_commits())) == 2
 
 
@@ -475,6 +514,8 @@ def test_get_directories():
 
 def test_set_commits_to_ignore(tmpdir):
     tmp_path = tmpdir.strpath
+
+    repository.path_to_component = {}
 
     with open(os.path.join(tmp_path, ".hg-annotate-ignore-revs"), "w") as f:
         f.write("commit1\ncommit2\n8ba995b74e18334ab3707f27e9eb8f4e37ba3d29\n")
@@ -521,11 +562,11 @@ def test_set_commits_to_ignore(tmpdir):
 
 def test_calculate_experiences():
     repository.path_to_component = {
-        "dom/file1.cpp": "Core::DOM",
-        "dom/file1copied.cpp": "Core::DOM",
-        "dom/file2.cpp": "Core::Layout",
-        "apps/file1.jsm": "Firefox::Boh",
-        "apps/file2.jsm": "Firefox::Boh",
+        b"dom/file1.cpp": memoryview(b"Core::DOM"),
+        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
+        b"dom/file2.cpp": memoryview(b"Core::Layout"),
+        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
+        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
     }
 
     commits = {
@@ -997,11 +1038,11 @@ def test_calculate_experiences():
 
 def test_calculate_experiences_no_save():
     repository.path_to_component = {
-        "dom/file1.cpp": "Core::DOM",
-        "dom/file1copied.cpp": "Core::DOM",
-        "dom/file2.cpp": "Core::Layout",
-        "apps/file1.jsm": "Firefox::Boh",
-        "apps/file2.jsm": "Firefox::Boh",
+        b"dom/file1.cpp": memoryview(b"Core::DOM"),
+        b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
+        b"dom/file2.cpp": memoryview(b"Core::Layout"),
+        b"apps/file1.jsm": memoryview(b"Firefox::Boh"),
+        b"apps/file2.jsm": memoryview(b"Firefox::Boh"),
     }
 
     commits = {
