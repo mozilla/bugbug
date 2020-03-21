@@ -937,12 +937,17 @@ def get_first_pushdate(repo_dir):
         return hg_log(hg, [b"0"])[0].pushdate
 
 
-def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False):
-    with hglib.open(repo_dir) as hg:
-        revs = get_revs(hg, rev_start)
-        if len(revs) == 0:
-            logger.info("No commits to analyze")
-            return []
+def download_commits(
+    repo_dir, rev_start=None, revs=None, save=True, use_single_process=False
+):
+    assert revs is not None or rev_start is not None
+
+    if revs is None:
+        with hglib.open(repo_dir) as hg:
+            revs = get_revs(hg, rev_start)
+            if len(revs) == 0:
+                logger.info("No commits to analyze")
+                return []
 
     first_pushdate = get_first_pushdate(repo_dir)
 
@@ -1086,8 +1091,8 @@ def apply_stack(repo_dir, stack, branch):
 
         return "tip"
 
-    def first_in_stack():
-        return hg.log(revrange=f"-{len(stack)}")[0].node.decode("utf-8")
+    def stack_nodes():
+        return get_revs(hg, f"-{len(stack)}")
 
     # Start by cleaning the repo, without pulling
     clean(repo_dir, pull=False)
@@ -1103,7 +1108,7 @@ def apply_stack(repo_dir, stack, branch):
         # Apply all the patches in the stack on current base
         if apply_patches(base, patches):
             logger.info(f"Stack applied successfully on {base}")
-            return first_in_stack()
+            return stack_nodes()
 
         # We tried to apply on the valid parent and failed: cannot try another revision
         if base != "tip":
@@ -1122,7 +1127,7 @@ def apply_stack(repo_dir, stack, branch):
 
         logger.info(f"Stack applied successfully on {new_base}")
 
-        return first_in_stack()
+        return stack_nodes()
 
 
 if __name__ == "__main__":

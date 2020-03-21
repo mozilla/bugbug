@@ -435,7 +435,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -448,7 +450,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -465,7 +469,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
     copy_pushlog_database(remote, local)
 
     commits = repository.download_commits(
-        local, revision3, use_single_process=use_single_process
+        local, rev_start=revision3, use_single_process=use_single_process
     )
     assert len(commits) == 1
     commits = list(repository.get_commits())
@@ -480,14 +484,26 @@ def test_download_commits(fake_hg_repo, use_single_process):
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(
-        local, f"children({revision2})", use_single_process=use_single_process
+        local, rev_start=f"children({revision2})", use_single_process=use_single_process
     )
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local,
+        revs=[revision2.encode("ascii"), revision3.encode("ascii")],
+        use_single_process=use_single_process,
+    )
+    assert len(commits) == 2
+    assert len(list(repository.get_commits())) == 2
+
+    os.remove("data/commits.json")
+    shutil.rmtree("data/commit_experiences.lmdb")
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(list(repository.get_commits())) == 2
 
 

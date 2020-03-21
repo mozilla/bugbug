@@ -151,7 +151,7 @@ def schedule_tests(branch, rev):
 
     # Apply the stack on the local repository
     try:
-        first_rev = repository.apply_stack(REPO_DIR, stack, branch)
+        revs = repository.apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
@@ -162,7 +162,7 @@ def schedule_tests(branch, rev):
 
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, rev_start=first_rev, save=False, use_single_process=True
+        REPO_DIR, revs=revs, save=False, use_single_process=True
     )
 
     commit_data = commit_features.merge_commits(commits)

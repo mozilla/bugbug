@@ -225,9 +225,9 @@ class CommitClassifier(object):
         for commit in repository.get_commits():
             pass
 
-        rev_start = "children({})".format(commit["node"])
-
-        repository.download_commits(self.repo_dir, rev_start)
+        repository.download_commits(
+            self.repo_dir, rev_start="children({})".format(commit["node"])
+        )
 
     def has_revision(self, hg, revision):
         if not revision:
