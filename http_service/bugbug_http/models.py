@@ -30,8 +30,11 @@ MODELS_NAMES = [
     "testlabelselect",
     "testgroupselect",
 ]
+
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
+
+
 def load_model_for_service(model_name):
     LOGGER.info("Recreating the %r model in cache" % model_name)
     try:
@@ -46,19 +49,16 @@ def load_model_for_service(model_name):
         else:
             raise
 
+
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
     timedelta(hours=2), load_model_for_service
 )
 MODEL_CACHE.start_ttl_thread()
 
 
-
 def get_model(model_name):
     return MODEL_CACHE.get(model_name)
 
-def preload_models():
-    for model_name in MODELS_TO_PRELOAD:
-        MODEL_CACHE.force_store(model_name)
 
 def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
     LOGGER.debug(f"Storing data at {key}: {value}")
