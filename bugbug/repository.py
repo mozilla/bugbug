@@ -680,7 +680,7 @@ class Experiences:
 
 
 def calculate_experiences(commits, first_pushdate, save=True):
-    logger.info(f"Analyzing experiences from {len(commits)} commits...")
+    logger.info(f"Analyzing seniorities from {len(commits)} commits...")
 
     experiences = Experiences(save)
 
@@ -692,6 +692,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
         else:
             time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
+
+    logger.info(f"Analyzing experiences from {len(commits)} commits...")
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
@@ -968,7 +970,7 @@ def download_commits(
 
     commits_num = len(commits)
 
-    logger.info(f"Mining {commits_num} commits...")
+    logger.info(f"Mining {commits_num} patches...")
 
     global rs_parsepatch
     import rs_parsepatch
@@ -995,6 +997,8 @@ def download_commits(
 
     calculate_experiences(commits, first_pushdate, save)
 
+    logger.info(f"Applying final commits filtering...")
+
     commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
     if save:
@@ -1005,8 +1009,10 @@ def download_commits(
 
 def clean(repo_dir, pull=True):
     with hglib.open(repo_dir) as hg:
+        logger.info("Restoring files to their checkout state...")
         hg.revert(repo_dir.encode("utf-8"), all=True)
 
+        logger.info("Stripping non-public commits...")
         try:
             cmd = hglib.util.cmdbuilder(
                 b"strip", rev=b"roots(outgoing())", force=True, backup=False
@@ -1066,12 +1072,12 @@ def apply_stack(repo_dir, stack, branch):
             return False
 
     def apply_patches(base, patches):
-
         # Update to base revision
         logger.info(f"Updating {repo_dir} to {base}")
         hg.update(base, clean=True)
 
         # Then apply each patch in the stack
+        logger.info(f"Applying {len(patches)}...")
         try:
             for node, patch in patches:
                 hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
@@ -1096,6 +1102,7 @@ def apply_stack(repo_dir, stack, branch):
 
     # Start by cleaning the repo, without pulling
     clean(repo_dir, pull=False)
+    logger.info("Repository cleaned")
 
     with hglib.open(repo_dir) as hg:
         # Get initial base revision
@@ -1125,7 +1132,7 @@ def apply_stack(repo_dir, stack, branch):
         if not apply_patches(new_base, patches):
             raise Exception("Failed to apply stack on second try")
 
-        logger.info(f"Stack applied successfully on {new_base}")
+        logger.info(f"Stack applied successfully on second try on {new_base}")
 
         return stack_nodes()
 
