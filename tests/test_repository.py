@@ -84,6 +84,40 @@ def commit(
     return str(revision, "ascii")
 
 
+def test_clone(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    tmp_repo_dir = "ciao"
+
+    repository.clone(tmp_repo_dir, url=remote)
+
+    # Assert we have the commit from the remote repository.
+    remote_revs = repository.get_revs(hg)
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        assert repository.get_revs(tmp_hg) == remote_revs
+
+    # Commit in the temporary repository.
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        add_file(tmp_hg, tmp_repo_dir, "file1", "1\n2\n3\n")
+        commit(tmp_hg)
+
+    # Commit in the remote repository.
+    add_file(hg, local, "file1", "1\n2\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    # Repository already exists, it will just be cleaned and pulled.
+    repository.clone(tmp_repo_dir, url=remote)
+    # Assert we only have the commits from the remote repository.
+    remote_revs = repository.get_revs(hg)
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        assert repository.get_revs(tmp_hg) == remote_revs
+
+
 def test_get_revs(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
