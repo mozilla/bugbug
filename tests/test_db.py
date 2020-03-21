@@ -189,7 +189,7 @@ def test_download(tmp_path, mock_zst):
     assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
 
@@ -293,7 +293,7 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
     assert db.download(db_path)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
     with open(db_path, "r") as f:
@@ -302,7 +302,7 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
     assert db.download(db_path)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
     with open(db_path, "r") as f:
@@ -335,7 +335,7 @@ def test_download_support_file(tmp_path, mock_zst):
 
     assert db.download_support_file(db_path, support_filename)
 
-    assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
+    assert not os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
     assert os.path.exists(
         os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
     )
@@ -384,9 +384,9 @@ def test_download_with_support_files_too(tmp_path, mock_zst):
     assert db.download(db_path, support_files_too=True)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
-    assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
+    assert not os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
     assert os.path.exists(
         os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
     )
