@@ -76,6 +76,7 @@ def download_support_file(path, file_name):
 
         if updated and path.endswith(".zst"):
             extract_file(path)
+            os.remove(path)
 
         return True
     except requests.exceptions.HTTPError:
@@ -100,6 +101,7 @@ def download(path, support_files_too=False):
 
         if updated:
             extract_file(zst_path)
+            os.remove(zst_path)
 
         successful = True
         if support_files_too:

@@ -215,6 +215,7 @@ def download_model(model_name):
     updated = download_check_etag(url)
     if updated:
         zstd_decompress(path)
+        os.remove(f"{path}.zst")
     assert os.path.exists(path), "Decompressed file exists"
     return path
 
