@@ -1007,32 +1007,36 @@ def download_commits(
     return commits
 
 
-def clean(repo_dir, pull=True):
-    with hglib.open(repo_dir) as hg:
-        logger.info("Restoring files to their checkout state...")
-        hg.revert(repo_dir.encode("utf-8"), all=True)
+def clean(hg, repo_dir, pull=True):
+    logger.info("Restoring files to their checkout state...")
+    hg.revert(repo_dir.encode("utf-8"), all=True)
 
-        logger.info("Stripping non-public commits...")
-        try:
-            cmd = hglib.util.cmdbuilder(
-                b"strip", rev=b"roots(outgoing())", force=True, backup=False
-            )
-            hg.rawcommand(cmd)
-        except hglib.error.CommandError as e:
-            if b"abort: empty revision set" not in e.err:
-                raise
+    logger.info("Stripping non-public commits...")
+    try:
+        cmd = hglib.util.cmdbuilder(
+            b"strip", rev=b"roots(outgoing())", force=True, backup=False
+        )
+        hg.rawcommand(cmd)
+    except hglib.error.CommandError as e:
+        if b"abort: empty revision set" not in e.err:
+            raise
 
-        # Pull and update.
-        if pull:
-            logger.info(f"Pulling and updating {repo_dir}")
-            hg.pull(update=True)
-            logger.info(f"{repo_dir} pulled and updated")
+    # Pull and update.
+    if pull:
+        logger.info(f"Pulling and updating {repo_dir}")
+        hg.pull(update=True)
+        logger.info(f"{repo_dir} pulled and updated")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
-    if os.path.exists(repo_dir):
-        clean(repo_dir)
+    try:
+        with hglib.open(repo_dir) as hg:
+            clean(hg, repo_dir)
+
         return
+    except hglib.error.ServerError as e:
+        if "abort: repository" not in str(e) and b"not found" not in str(e):
+            raise
 
     cmd = hglib.util.cmdbuilder(
         "robustcheckout",
@@ -1057,7 +1061,8 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
         logger.info("pushlog database doesn't exist")
 
     # Pull and update, to make sure the pushlog is generated.
-    clean(repo_dir)
+    with hglib.open(repo_dir) as hg:
+        clean(hg, repo_dir)
 
 
 def apply_stack(repo_dir, stack, branch):
@@ -1100,11 +1105,11 @@ def apply_stack(repo_dir, stack, branch):
     def stack_nodes():
         return get_revs(hg, f"-{len(stack)}")
 
-    # Start by cleaning the repo, without pulling
-    clean(repo_dir, pull=False)
-    logger.info("Repository cleaned")
-
     with hglib.open(repo_dir) as hg:
+        # Start by cleaning the repo, without pulling
+        clean(hg, repo_dir, pull=False)
+        logger.info("Repository cleaned")
+
         # Get initial base revision
         base = get_base()
 
@@ -1122,7 +1127,7 @@ def apply_stack(repo_dir, stack, branch):
             raise Exception(f"Failed to apply on valid parent {base}")
 
         # We tried to apply on tip, let's try to find the valid parent after pulling
-        clean(repo_dir, pull=True)
+        clean(hg, repo_dir, pull=True)
 
         # Check if the valid base is now available
         new_base = get_base()
