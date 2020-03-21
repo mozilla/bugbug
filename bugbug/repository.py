@@ -944,54 +944,52 @@ def download_commits(
 ):
     assert revs is not None or rev_start is not None
 
-    if revs is None:
-        with hglib.open(repo_dir) as hg:
+    with hglib.open(repo_dir) as hg:
+        if revs is None:
             revs = get_revs(hg, rev_start)
             if len(revs) == 0:
                 logger.info("No commits to analyze")
                 return []
 
-    first_pushdate = get_first_pushdate(repo_dir)
+        first_pushdate = get_first_pushdate(repo_dir)
 
-    logger.info(f"Mining {len(revs)} commits...")
+        logger.info(f"Mining {len(revs)} commits...")
 
-    if not use_single_process:
-        logger.info(f"Using {os.cpu_count()} processes...")
-        commits = hg_log_multi(repo_dir, revs)
-    else:
-        with hglib.open(repo_dir) as hg:
+        if not use_single_process:
+            logger.info(f"Using {os.cpu_count()} processes...")
+            commits = hg_log_multi(repo_dir, revs)
+        else:
             commits = hg_log(hg, revs)
 
-    if save:
-        logger.info("Downloading file->component mapping...")
-        download_component_mapping()
+        if save:
+            logger.info("Downloading file->component mapping...")
+            download_component_mapping()
 
-    set_commits_to_ignore(repo_dir, commits)
+        set_commits_to_ignore(repo_dir, commits)
 
-    commits_num = len(commits)
+        commits_num = len(commits)
 
-    logger.info(f"Mining {commits_num} patches...")
+        logger.info(f"Mining {commits_num} patches...")
 
-    global rs_parsepatch
-    import rs_parsepatch
+        global rs_parsepatch
+        import rs_parsepatch
 
-    global code_analysis_server
-    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+        global code_analysis_server
+        code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    if not use_single_process:
-        with concurrent.futures.ProcessPoolExecutor(
-            initializer=_init_process, initargs=(repo_dir,)
-        ) as executor:
-            commits = executor.map(_transform, commits, chunksize=64)
-            commits = tqdm(commits, total=commits_num)
-            commits = list(commits)
-    else:
-        get_component_mapping()
+        if not use_single_process:
+            with concurrent.futures.ProcessPoolExecutor(
+                initializer=_init_process, initargs=(repo_dir,)
+            ) as executor:
+                commits = executor.map(_transform, commits, chunksize=64)
+                commits = tqdm(commits, total=commits_num)
+                commits = list(commits)
+        else:
+            get_component_mapping()
 
-        with hglib.open(repo_dir) as hg:
             commits = [transform(hg, repo_dir, c) for c in commits]
 
-        close_component_mapping()
+            close_component_mapping()
 
     code_analysis_server.terminate()
 
