@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, List
 
+import libmozdata
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
@@ -23,9 +24,8 @@ from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
-from bugbug import get_bugbug_version
+from bugbug import get_bugbug_version, utils
 from bugbug_http.models import MODELS_NAMES, classify_bug, schedule_tests
-from bugbug_http.utils import get_bugzilla_http_client
 
 API_TOKEN = "X-Api-Key"
 
@@ -58,9 +58,10 @@ q = Queue(
 VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
-
-# Keep an HTTP client around for persistent connections
-BUGBUG_HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
+BUGZILLA_API_URL = (
+    libmozdata.config.get("Bugzilla", "URL", "https://bugzilla.mozilla.org")
+    + "/rest/bug"
+)
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -225,7 +226,7 @@ def get_bugs_last_change_time(bug_ids):
         "include_fields": ["last_change_time", "id"],
     }
     header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
-    response = BUGBUG_HTTP_CLIENT.get(
+    response = utils.get_session("bugzilla").get(
         BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
     )
     response.raise_for_status()

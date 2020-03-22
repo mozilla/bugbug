@@ -17,8 +17,8 @@ from redis import Redis
 from bugbug import bugzilla, commit_features, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.models import load_model
+from bugbug.utils import get_hgmo_stack
 from bugbug_http import ALLOW_MISSING_MODELS
-from bugbug_http.utils import get_hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()

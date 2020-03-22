@@ -59,7 +59,7 @@ class RustCodeAnalysisServer:
 
     def ping(self):
         try:
-            r = requests.get(f"{self.base_url}/ping")
+            r = utils.get_session("code_analysis").get(f"{self.base_url}/ping")
             return r.ok
         except requests.exceptions.ConnectionError:
             return False
@@ -71,7 +71,7 @@ class RustCodeAnalysisServer:
         """
         unit = 1 if unit else 0
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"
-        r = requests.post(url, data=code, headers=HEADERS)
+        r = utils.get_session("code_analysis").post(url, data=code, headers=HEADERS)
 
         if not r.ok:
             return {}
@@ -80,7 +80,7 @@ class RustCodeAnalysisServer:
 
     def function(self, filename, code):
         url = f"{self.base_url}/function?file_name={filename}"
-        r = requests.post(url, data=code, headers=HEADERS)
+        r = utils.get_session("code_analysis").post(url, data=code, headers=HEADERS)
 
         if not r.ok:
             return {}

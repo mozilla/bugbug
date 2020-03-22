@@ -11,6 +11,7 @@ import socket
 import tarfile
 from collections import deque
 from contextlib import contextmanager
+from functools import lru_cache
 
 import boto3
 import dateutil.parser
@@ -21,6 +22,7 @@ import scipy
 import taskcluster
 import zstandard
 from pkg_resources import DistributionNotFound
+from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
@@ -383,9 +385,37 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
 
 
+@lru_cache(maxsize=None)
+def get_session(name):
+    session = requests.Session()
+
+    retry = Retry(
+        total=7, backoff_factor=0.1, status_forcelist=[429, 500, 502, 503, 504]
+    )
+
+    # Default HTTPAdapter uses 10 connections. Mount custom adapter to increase
+    # that limit. Connections are established as needed, so using a large value
+    # should not negatively impact performance.
+    http_adapter = requests.adapters.HTTPAdapter(
+        pool_connections=50, pool_maxsize=50, max_retries=retry
+    )
+    session.mount("https://", http_adapter)
+    session.mount("http://", http_adapter)
+
+    return session
+
+
+def get_hgmo_stack(branch: str, revision: str) -> list:
+    """Load descriptions of patches in the stack for a given revision"""
+    url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
+    r = get_session("hgmo").get(url)
+    r.raise_for_status()
+    return r.json()["changesets"]
+
+
 def get_hgmo_patch(branch: str, revision: str) -> str:
     """Load a patch for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/raw-rev/{revision}"
-    r = requests.get(url)
+    r = get_session("hgmo").get(url)
     r.raise_for_status()
     return r.text
