@@ -311,9 +311,10 @@ def mock_schedule_tests_classify(monkeypatch):
                             results.append([0.9, 0.1])
                 return np.array(results)
 
-        def mock_get_model(modelname):
-            return Model(modelname)
+        class MockModelCache:
+            def get(self, model_name):
+                return Model(model_name)
 
-        monkeypatch.setattr(bugbug_http.models, "get_model", mock_get_model)
+        monkeypatch.setattr(bugbug_http.models, "MODEL_CACHE", MockModelCache())
 
     return do_mock

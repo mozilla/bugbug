@@ -6,6 +6,8 @@
 import json
 import logging
 import os
+import sys
+import traceback
 from datetime import timedelta
 
 import numpy as np
@@ -15,7 +17,6 @@ from redis import Redis
 from bugbug import bugzilla, commit_features, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.models import load_model
-from bugbug_http import ALLOW_MISSING_MODELS
 from bugbug_http.utils import ReadthroughTTLCache, get_hgmo_stack
 
 logging.basicConfig(level=logging.INFO)
@@ -34,30 +35,10 @@ MODELS_NAMES = [
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
-
-def load_model_for_service(model_name):
-    LOGGER.info("Recreating the %r model in cache" % model_name)
-    try:
-        return load_model(model_name)
-    except FileNotFoundError:
-        if ALLOW_MISSING_MODELS:
-            LOGGER.info(
-                "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
-                % model_name
-            )
-            return None
-        else:
-            raise
-
-
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
-    timedelta(hours=2), load_model_for_service
+    timedelta(hours=1), load_model
 )
 MODEL_CACHE.start_ttl_thread()
-
-
-def get_model(model_name):
-    return MODEL_CACHE.get(model_name)
 
 
 def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
@@ -89,7 +70,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
     if not bugs:
         return "NOK"
 
-    model = get_model(model_name)
+    model = MODEL_CACHE.get(model_name)
 
     if not model:
         LOGGER.info("Missing model %r, aborting" % model_name)
@@ -137,6 +118,7 @@ def schedule_tests(branch, rev):
     try:
         stack = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
+        traceback.print_exc(file=sys.stdout)
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
@@ -144,6 +126,7 @@ def schedule_tests(branch, rev):
     try:
         first_rev = repository.apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
+        traceback.print_exc(file=sys.stdout)
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
 
@@ -175,7 +158,7 @@ def schedule_tests(branch, rev):
             commit_test["test_job"] = data
             commit_tests.append(commit_test)
 
-        probs = get_model(f"test{granularity}select").classify(
+        probs = MODEL_CACHE.get(f"test{granularity}select").classify(
             commit_tests, probabilities=True
         )
         selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]

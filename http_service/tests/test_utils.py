@@ -20,6 +20,22 @@ class MockDatetime:
         self.mock_now = new_mock_now
 
 
+class MockSleep:
+    def __init__(self, mock_datetime):
+        self.mock_datetime = mock_datetime
+
+        # count variable used to ensure that context switch into
+        # thread claling sleep occurred
+        self.context_switch_total = 0
+
+    def sleep(self, sleep_seconds):
+        self.wakeup_time = self.mock_datetime.now() + timedelta(seconds=sleep_seconds)
+        while self.mock_datetime.now() < self.wakeup_time:
+            self.context_switch_total = (
+                self.context_switch_total + 1 % 1000000
+            )  # <- to make sure we don't take up too much memory
+
+
 def test_doesnt_cache_unless_accessed_within_ttl():
     mockdatetime = MockDatetime(datetime(2019, 4, 1, 10))
     cache = ReadthroughTTLCache(timedelta(hours=4), lambda x: "payload")
@@ -86,3 +102,28 @@ def test_force_store():
     cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
     cache.force_store("key_a")
     assert "key_a" in cache
+
+
+def test_cache_thread():
+    mockdatetime = MockDatetime(datetime(2019, 4, 1, 10))
+    cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+    mocksleep = MockSleep(mockdatetime)
+    with patch("datetime.datetime", mockdatetime):
+        with patch("time.sleep", mocksleep.sleep):
+            cache.force_store("key_a")
+
+            cache.start_ttl_thread()
+
+            # after one hour
+            context_switch_count = mocksleep.context_switch_total
+            mockdatetime.set_now(datetime(2019, 4, 1, 11))
+            while context_switch_count == mocksleep.context_switch_total:
+                pass
+            assert "key_a" in cache
+
+            # after two hours one minute
+            context_switch_count = mocksleep.context_switch_total
+            mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
+            while context_switch_count == mocksleep.context_switch_total:
+                pass
+            assert "key_a" not in cache
