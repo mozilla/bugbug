@@ -7,7 +7,7 @@ lmdb==0.98
 matplotlib==3.2.0
 microannotate==0.0.20
 mozci==1.2.9
-numpy==1.18.1
+numpy==1.18.2
 orjson==2.6.0
 pandas==1.0.2
 pydriller==1.12
