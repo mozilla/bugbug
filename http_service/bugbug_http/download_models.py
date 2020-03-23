@@ -7,7 +7,7 @@ from bugbug import db, repository, test_scheduling, utils
 from bugbug_http.models import MODELS_NAMES, get_model
 
 
-def preload_models():
+def download_models():
     for model_name in MODELS_NAMES:
         utils.download_model(model_name)
         # Try loading the model
@@ -39,4 +39,4 @@ def preload_models():
 
 
 if __name__ == "__main__":
-    preload_models()
+    download_models()
