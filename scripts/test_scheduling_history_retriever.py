@@ -39,7 +39,7 @@ PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/pro
 
 TRAINING_MONTHS = {
     "label": 7,
-    "group": 5,
+    "group": 6,
 }
 
 
