@@ -310,7 +310,6 @@ def model_prediction(model_name, bug_id):
               schema: UnauthorizedError
     """
     headers = request.headers
-    redis_conn.ping()
 
     auth = headers.get(API_TOKEN)
 
@@ -553,7 +552,6 @@ def push_schedules(branch, rev):
               schema: UnauthorizedError
     """
     headers = request.headers
-    redis_conn.ping()
 
     auth = headers.get(API_TOKEN)
 

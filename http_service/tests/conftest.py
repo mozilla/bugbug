@@ -88,9 +88,6 @@ def patch_resources(monkeypatch, jobs):
             if self.exists(k):
                 del self.data[k]
 
-        def ping(self):
-            pass
-
         def expire(self, key, expiration):
             self.expirations[key] = expiration
 
