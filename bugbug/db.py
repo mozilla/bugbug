@@ -62,7 +62,7 @@ def extract_file(path):
         assert False, f"Unexpected compression type for {path}"
 
 
-def download_support_file(path, file_name):
+def download_support_file(path, file_name, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -74,7 +74,7 @@ def download_support_file(path, file_name):
         logger.info(f"Downloading {url} to {path}")
         updated = utils.download_check_etag(url, path)
 
-        if updated and path.endswith(".zst"):
+        if extract and updated and path.endswith(".zst"):
             extract_file(path)
             os.remove(path)
 
@@ -87,7 +87,7 @@ def download_support_file(path, file_name):
 
 
 # Download and extract databases.
-def download(path, support_files_too=False):
+def download(path, support_files_too=False, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -99,7 +99,7 @@ def download(path, support_files_too=False):
         logger.info(f"Downloading {url} to {zst_path}")
         updated = utils.download_check_etag(url, zst_path)
 
-        if updated:
+        if extract and updated:
             extract_file(zst_path)
             os.remove(zst_path)
 
