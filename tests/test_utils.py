@@ -3,7 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import os
+import pickle
 from datetime import datetime
 
 import pytest
@@ -239,3 +241,26 @@ def test_get_last_modified_missing():
     )
 
     assert utils.get_last_modified(url) is None
+
+
+def test_extract_db_zst(tmp_path, mock_zst):
+    path = tmp_path / f"prova.zst"
+
+    mock_zst(path)
+
+    utils.extract_file(path)
+
+    with open(f"{os.path.splitext(path)[0]}", "rb") as f:
+        file_decomp = json.load(f)
+
+    assert file_decomp == {"Hello": "World"}
+
+
+def test_extract_db_bad_format(tmp_path):
+    path = tmp_path / "prova.pickle"
+
+    with open(path, "wb") as output_f:
+        pickle.dump({"Hello": "World"}, output_f)
+
+    with pytest.raises(AssertionError):
+        utils.extract_file(path)

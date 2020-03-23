@@ -7,6 +7,7 @@ import os
 import shutil
 
 import pytest
+import zstandard
 
 from bugbug import bugzilla, repository
 
@@ -35,3 +36,14 @@ def get_fixture_path():
         return path
 
     return _get_fixture_path
+
+
+@pytest.fixture
+def mock_zst():
+    def create_zst_file(db_path, content=b'{"Hello": "World"}'):
+        with open(db_path, "wb") as output_f:
+            cctx = zstandard.ZstdCompressor()
+            with cctx.stream_writer(output_f) as compressor:
+                compressor.write(content)
+
+    return create_zst_file

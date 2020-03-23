@@ -16,7 +16,6 @@ import requests
 import zstandard
 
 from bugbug import utils
-from bugbug.utils import extract_tar_zst, zstd_decompress
 
 DATABASES = {}
 
@@ -51,17 +50,6 @@ def is_old_schema(path):
     return DATABASES[path]["version"] > prev_version
 
 
-def extract_file(path):
-    inner_path, _ = os.path.splitext(path)
-
-    if str(path).endswith(".tar.zst"):
-        extract_tar_zst(inner_path)
-    elif str(path).endswith(".zst"):
-        zstd_decompress(inner_path)
-    else:
-        assert False, f"Unexpected compression type for {path}"
-
-
 def download_support_file(path, file_name, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
@@ -75,7 +63,7 @@ def download_support_file(path, file_name, extract=True):
         updated = utils.download_check_etag(url, path)
 
         if extract and updated and path.endswith(".zst"):
-            extract_file(path)
+            utils.extract_file(path)
             os.remove(path)
 
         return True
@@ -100,7 +88,7 @@ def download(path, support_files_too=False, extract=True):
         updated = utils.download_check_etag(url, zst_path)
 
         if extract and updated:
-            extract_file(zst_path)
+            utils.extract_file(zst_path)
             os.remove(zst_path)
 
         successful = True

@@ -258,6 +258,17 @@ def extract_tar_zst(path):
                 tar.extractall()
 
 
+def extract_file(path: str) -> None:
+    inner_path, _ = os.path.splitext(path)
+
+    if str(path).endswith(".tar.zst"):
+        extract_tar_zst(inner_path)
+    elif str(path).endswith(".zst"):
+        zstd_decompress(inner_path)
+    else:
+        assert False, f"Unexpected compression type for {path}"
+
+
 class CustomJsonEncoder(json.JSONEncoder):
     """ A custom Json Encoder to support Numpy types
     """
