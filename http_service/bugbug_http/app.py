@@ -188,7 +188,7 @@ def is_pending(job):
         return False
 
     try:
-        job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
+        job = Job.fetch(job_id.decode("ascii"), connection=redis_conn)
     except NoSuchJobError:
         LOGGER.debug(f"No job in DB for {job_id}, False")
         # The job might have expired from redis
