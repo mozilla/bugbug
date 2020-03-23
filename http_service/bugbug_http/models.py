@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+import math
 import os
 from datetime import datetime
 from typing import Dict
@@ -155,7 +156,7 @@ def schedule_tests(branch, rev):
         return "NOK"
 
     test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.3)
     )
 
     # Analyze patches.
@@ -186,7 +187,10 @@ def schedule_tests(branch, rev):
             commit_tests, probabilities=True
         )
         selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]
-        return [commit_tests[i]["test_job"]["name"] for i in selected_indexes]
+        return {
+            commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
+            for i in selected_indexes
+        }
 
     data = {
         "tasks": get_runnables("label"),
