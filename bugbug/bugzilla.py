@@ -4,8 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import csv
-import json
-import os
 from datetime import datetime
 
 from dateutil.relativedelta import relativedelta
@@ -59,20 +57,6 @@ ATTACHMENT_INCLUDE_FIELDS = [
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
-
-
-def get_bug_fields():
-    os.makedirs("data", exist_ok=True)
-
-    try:
-        with open("data/bug_fields.json", "r") as f:
-            return json.load(f)
-    except IOError:
-        pass
-
-    r = utils.get_session("bugzilla").get("https://bugzilla.mozilla.org/rest/field/bug")
-    r.raise_for_status()
-    return r.json()["fields"]
 
 
 def get_bugs(include_invalid=False):
