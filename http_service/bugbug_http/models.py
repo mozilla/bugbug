@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import logging
 import os
 from datetime import datetime
 from typing import Dict
 
 import numpy as np
+import orjson
 import requests
 from dateutil.relativedelta import relativedelta
 from redis import Redis
@@ -92,7 +92,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
         job = JobInfo(classify_bug, model_name, bug_id)
 
         # TODO: Find a better error format
-        encoded_data = json.dumps({"available": False})
+        encoded_data = orjson.dumps({"available": False})
         setkey(job.result_key, encoded_data)
 
     if not bugs:
@@ -124,10 +124,8 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
             "extra_data": model_extra_data,
         }
 
-        encoded_data = json.dumps(data)
-
         job = JobInfo(classify_bug, model_name, bug_id)
-        setkey(job.result_key, encoded_data)
+        setkey(job.result_key, orjson.dumps(data))
 
         # Save the bug last change
         setkey(job.change_time_key, bugs[bug_id]["last_change_time"], expiration=0)
@@ -194,6 +192,6 @@ def schedule_tests(branch, rev):
         "tasks": get_runnables("label"),
         "groups": get_runnables("group"),
     }
-    setkey(job.result_key, json.dumps(data))
+    setkey(job.result_key, orjson.dumps(data))
 
     return "OK"

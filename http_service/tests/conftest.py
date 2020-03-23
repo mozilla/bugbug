@@ -69,7 +69,10 @@ def patch_resources(monkeypatch, jobs):
                 key = k.split(":", 2)[-1]
                 jobs[v].append(key)
 
-            self.data[k] = v.encode("utf-8")
+            if not isinstance(v, bytes):
+                v = v.encode("ascii")
+
+            self.data[k] = v
 
         def mset(self, d):
             for k, v in d.items():

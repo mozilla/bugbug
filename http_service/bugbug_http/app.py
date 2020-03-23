@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import logging
 import os
 import uuid
@@ -12,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, List
 
 import libmozdata
+import orjson
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
@@ -270,7 +270,7 @@ def get_result(job):
 
     if result:
         LOGGER.debug(f"Found {result}")
-        return json.loads(result)
+        return orjson.loads(result)
 
     return None
 
@@ -470,7 +470,7 @@ def batch_prediction(model_name):
         return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
 
     # TODO Check is JSON is valid and validate against a request schema
-    batch_body = json.loads(request.data)
+    batch_body = orjson.loads(request.data)
 
     # Validate
     schema = {
