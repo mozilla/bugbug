@@ -76,13 +76,13 @@ def boot_worker():
                 pass
             logger.info("All commits browsed.")
 
-            # Wait repository to be cloned, as it's required to call repository.extract_commits.
+            # Wait repository to be cloned, as it's required to call repository.download_commits.
             logger.info("Waiting autoland to be cloned...")
             clone_autoland_future.result()
 
             rev_start = "children({})".format(commit["node"])
             logger.info("Updating commits DB...")
-            commits = repository.extract_commits(
+            commits = repository.download_commits(
                 REPO_DIR, rev_start, use_single_process=True
             )
             logger.info("Commits DB updated.")
