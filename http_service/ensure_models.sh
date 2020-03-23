@@ -14,5 +14,3 @@ if [ "$CHECK_MODELS" == "0" ]; then
 fi
 
 python -m bugbug_http.download_models
-
-python -m bugbug_http.check_models
