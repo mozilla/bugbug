@@ -6,8 +6,6 @@
 import json
 import logging
 import os
-import sys
-import traceback
 from datetime import timedelta
 
 import numpy as np
@@ -118,7 +116,6 @@ def schedule_tests(branch, rev):
     try:
         stack = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
-        traceback.print_exc(file=sys.stdout)
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
@@ -126,7 +123,6 @@ def schedule_tests(branch, rev):
     try:
         first_rev = repository.apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
-        traceback.print_exc(file=sys.stdout)
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
 

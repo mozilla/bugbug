@@ -84,7 +84,6 @@ class ReadthroughTTLCache(Generic[Key, Value]):
         self.items_last_accessed[key] = datetime.datetime.now()
 
     def purge_expired_entries(self):
-        print("thread did a thing")
         purge_entries_before = datetime.datetime.now() - self.ttl
         for key, time_last_touched in list(self.items_last_accessed.items()):
             if time_last_touched < purge_entries_before:
