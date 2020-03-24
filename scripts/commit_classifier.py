@@ -194,7 +194,7 @@ class CommitClassifier(object):
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
                 ),
-                wait=tenacity.wait_fixed(30),
+                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
             )()
 
@@ -205,7 +205,7 @@ class CommitClassifier(object):
                 capture_output=True,
                 check=True,
             ),
-            wait=tenacity.wait_fixed(30),
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
             stop=tenacity.stop_after_attempt(5),
         )()
 
@@ -213,7 +213,7 @@ class CommitClassifier(object):
             lambda: subprocess.run(
                 ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
             ),
-            wait=tenacity.wait_fixed(30),
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
             stop=tenacity.stop_after_attempt(5),
         )()
 
@@ -225,9 +225,9 @@ class CommitClassifier(object):
         for commit in repository.get_commits():
             pass
 
-        rev_start = "children({})".format(commit["node"])
-
-        repository.download_commits(self.repo_dir, rev_start)
+        repository.download_commits(
+            self.repo_dir, rev_start="children({})".format(commit["node"])
+        )
 
     def has_revision(self, hg, revision):
         if not revision:

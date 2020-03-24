@@ -4,16 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import csv
-import json
-import os
 from datetime import datetime
 
-import requests
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 
 BUGS_DB = "data/bugs.json"
 db.register(
@@ -60,20 +57,6 @@ ATTACHMENT_INCLUDE_FIELDS = [
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
-
-
-def get_bug_fields():
-    os.makedirs("data", exist_ok=True)
-
-    try:
-        with open("data/bug_fields.json", "r") as f:
-            return json.load(f)
-    except IOError:
-        pass
-
-    r = requests.get("https://bugzilla.mozilla.org/rest/field/bug")
-    r.raise_for_status()
-    return r.json()["fields"]
 
 
 def get_bugs(include_invalid=False):
@@ -223,7 +206,9 @@ def delete_bugs(match):
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
 
-    r = requests.get("https://bugzilla.mozilla.org/rest/bug", params=bug_query_params)
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/bug", params=bug_query_params
+    )
     r.raise_for_status()
     count = r.json()["bug_count"]
 
@@ -254,7 +239,7 @@ def get_product_component_count():
     given full components. Full component with 0 bugs are returned.
     """
     url, params = get_product_component_csv_report()
-    csv_file = requests.get(url, params=params)
+    csv_file = utils.get_session("bugzilla").get(url, params=params)
     csv_file.raise_for_status()
     content = csv_file.text
 

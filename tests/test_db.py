@@ -3,16 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import os
-import pickle
 from datetime import datetime
 from urllib.parse import urljoin
 
 import pytest
 import requests
 import responses
-import zstandard
 
 from bugbug import db
 
@@ -123,40 +120,6 @@ def test_exists_db(tmp_path):
     assert db.exists(db_path)
 
 
-@pytest.fixture
-def mock_zst():
-    def create_zst_file(db_path, content=b'{"Hello": "World"}'):
-        with open(db_path, "wb") as output_f:
-            cctx = zstandard.ZstdCompressor()
-            with cctx.stream_writer(output_f) as compressor:
-                compressor.write(content)
-
-    return create_zst_file
-
-
-def test_extract_db_zst(tmp_path, mock_zst):
-    db_path = tmp_path / f"prova.zst"
-
-    mock_zst(db_path)
-
-    db.extract_file(db_path)
-
-    with open(f"{os.path.splitext(db_path)[0]}", "rb") as f:
-        file_decomp = json.load(f)
-
-    assert file_decomp == {"Hello": "World"}
-
-
-def test_extract_db_bad_format(tmp_path):
-    db_path = tmp_path / "prova.pickle"
-
-    with open(db_path, "wb") as output_f:
-        pickle.dump({"Hello": "World"}, output_f)
-
-    with pytest.raises(AssertionError):
-        db.extract_file(db_path)
-
-
 def test_download(tmp_path, mock_zst):
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
@@ -189,7 +152,7 @@ def test_download(tmp_path, mock_zst):
     assert db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
 
@@ -293,7 +256,7 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
     assert db.download(db_path)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
     with open(db_path, "r") as f:
@@ -302,7 +265,7 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
     assert db.download(db_path)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
 
     with open(db_path, "r") as f:
@@ -335,7 +298,7 @@ def test_download_support_file(tmp_path, mock_zst):
 
     assert db.download_support_file(db_path, support_filename)
 
-    assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
+    assert not os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
     assert os.path.exists(
         os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
     )
@@ -384,9 +347,9 @@ def test_download_with_support_files_too(tmp_path, mock_zst):
     assert db.download(db_path, support_files_too=True)
 
     assert os.path.exists(db_path)
-    assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
+    assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
     assert os.path.exists(db_path.with_suffix(db_path.suffix + ".zst.etag"))
-    assert os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
+    assert not os.path.exists(os.path.join(os.path.dirname(db_path), support_filename))
     assert os.path.exists(
         os.path.join(os.path.dirname(db_path), os.path.splitext(support_filename)[0])
     )

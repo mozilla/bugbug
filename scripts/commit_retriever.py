@@ -31,7 +31,7 @@ class Retriever(object):
             for commit in repository.get_commits():
                 rev_start = f"children({commit['node']})"
 
-        repository.download_commits(self.repo_dir, rev_start)
+        repository.download_commits(self.repo_dir, rev_start=rev_start)
 
         logger.info("commit data extracted from repository")
 

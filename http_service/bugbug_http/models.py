@@ -3,19 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import logging
+import math
 import os
 from datetime import timedelta
 
 import numpy as np
+import orjson
 import requests
 from redis import Redis
 
 from bugbug import bugzilla, commit_features, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.models import load_model
-from bugbug_http.utils import ReadthroughTTLCache, get_hgmo_stack
+from bugbug.utils import get_hgmo_stack
+from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -62,7 +64,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
         job = JobInfo(classify_bug, model_name, bug_id)
 
         # TODO: Find a better error format
-        encoded_data = json.dumps({"available": False})
+        encoded_data = orjson.dumps({"available": False})
         setkey(job.result_key, encoded_data)
 
     if not bugs:
@@ -94,10 +96,8 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
             "extra_data": model_extra_data,
         }
 
-        encoded_data = json.dumps(data)
-
         job = JobInfo(classify_bug, model_name, bug_id)
-        setkey(job.result_key, encoded_data)
+        setkey(job.result_key, orjson.dumps(data))
 
         # Save the bug last change
         setkey(job.change_time_key, bugs[bug_id]["last_change_time"], expiration=0)
@@ -121,18 +121,18 @@ def schedule_tests(branch, rev):
 
     # Apply the stack on the local repository
     try:
-        first_rev = repository.apply_stack(REPO_DIR, stack, branch)
+        revs = repository.apply_stack(REPO_DIR, stack, branch)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
 
     test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.3)
     )
 
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, rev_start=first_rev, save=False, use_single_process=True
+        REPO_DIR, revs=revs, save=False, use_single_process=True
     )
 
     commit_data = commit_features.merge_commits(commits)
@@ -158,12 +158,15 @@ def schedule_tests(branch, rev):
             commit_tests, probabilities=True
         )
         selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]
-        return [commit_tests[i]["test_job"]["name"] for i in selected_indexes]
+        return {
+            commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
+            for i in selected_indexes
+        }
 
     data = {
         "tasks": get_runnables("label"),
         "groups": get_runnables("group"),
     }
-    setkey(job.result_key, json.dumps(data))
+    setkey(job.result_key, orjson.dumps(data))
 
     return "OK"

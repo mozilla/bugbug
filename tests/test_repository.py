@@ -84,6 +84,40 @@ def commit(
     return str(revision, "ascii")
 
 
+def test_clone(fake_hg_repo):
+    hg, local, remote = fake_hg_repo
+
+    add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    tmp_repo_dir = "ciao"
+
+    repository.clone(tmp_repo_dir, url=remote)
+
+    # Assert we have the commit from the remote repository.
+    remote_revs = repository.get_revs(hg)
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        assert repository.get_revs(tmp_hg) == remote_revs
+
+    # Commit in the temporary repository.
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        add_file(tmp_hg, tmp_repo_dir, "file1", "1\n2\n3\n")
+        commit(tmp_hg)
+
+    # Commit in the remote repository.
+    add_file(hg, local, "file1", "1\n2\n")
+    commit(hg)
+    hg.push(dest=bytes(remote, "ascii"))
+
+    # Repository already exists, it will just be cleaned and pulled.
+    repository.clone(tmp_repo_dir, url=remote)
+    # Assert we only have the commits from the remote repository.
+    remote_revs = repository.get_revs(hg)
+    with hglib.open(tmp_repo_dir) as tmp_hg:
+        assert repository.get_revs(tmp_hg) == remote_revs
+
+
 def test_get_revs(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
@@ -435,7 +469,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(commits) == 0
     commits = list(repository.get_commits())
     assert len(commits) == 0
@@ -448,7 +484,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(commits) == 1
     commits = list(repository.get_commits())
     assert len(commits) == 1
@@ -465,7 +503,7 @@ def test_download_commits(fake_hg_repo, use_single_process):
     copy_pushlog_database(remote, local)
 
     commits = repository.download_commits(
-        local, revision3, use_single_process=use_single_process
+        local, rev_start=revision3, use_single_process=use_single_process
     )
     assert len(commits) == 1
     commits = list(repository.get_commits())
@@ -480,14 +518,26 @@ def test_download_commits(fake_hg_repo, use_single_process):
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(
-        local, f"children({revision2})", use_single_process=use_single_process
+        local, rev_start=f"children({revision2})", use_single_process=use_single_process
     )
     assert len(commits) == 1
     assert len(list(repository.get_commits())) == 1
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
-    commits = repository.download_commits(local, use_single_process=use_single_process)
+    commits = repository.download_commits(
+        local,
+        revs=[revision2.encode("ascii"), revision3.encode("ascii")],
+        use_single_process=use_single_process,
+    )
+    assert len(commits) == 2
+    assert len(list(repository.get_commits())) == 2
+
+    os.remove("data/commits.json")
+    shutil.rmtree("data/commit_experiences.lmdb")
+    commits = repository.download_commits(
+        local, rev_start=0, use_single_process=use_single_process
+    )
     assert len(list(repository.get_commits())) == 2
 
 

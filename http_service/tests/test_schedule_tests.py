@@ -15,13 +15,13 @@ from bugbug_http import models
     "labels_to_choose, groups_to_choose",
     [
         # one from label, one from group
-        (["test-label1"], ["test-group2"],),
+        ({"test-label1": 0.9}, {"test-group2": 0.9},),
         # one from label, none from group
-        (["test-label1"], [],),
+        ({"test-label1": 0.9}, {"test-group2": 0.9},),
         # none from label, one from group
-        ([], ["test-group1"],),
+        ({}, {"test-group1": 0.9},),
         # two from label, one from group
-        (["test-label1", "test-label2"], ["test-group2"],),
+        ({"test-label1": 0.9, "test-label2": 0.4}, {"test-group2": 0.9},),
     ],
 )
 def test_simple_schedule(
@@ -172,7 +172,7 @@ def test_schedule(
         "Base history 0",
     ]
 
-    mock_schedule_tests_classify(["test-label1"], ["test-group2"])
+    mock_schedule_tests_classify({"test-label1": 0.9}, {"test-group2": 0.9})
 
     # Schedule tests for parametrized revision
     assert models.schedule_tests(branch, revision) == result
@@ -184,4 +184,4 @@ def test_schedule(
         # Assert the test selection result is stored in Redis.
         assert json.loads(
             models.redis.get(f"bugbug:job_result:schedule_tests:{branch}_{revision}")
-        ) == {"tasks": ["test-label1"], "groups": ["test-group2"],}
+        ) == {"tasks": {"test-label1": 0.9}, "groups": {"test-group2": 0.9},}

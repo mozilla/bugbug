@@ -69,7 +69,10 @@ def patch_resources(monkeypatch, jobs):
                 key = k.split(":", 2)[-1]
                 jobs[v].append(key)
 
-            self.data[k] = v.encode("utf-8")
+            if not isinstance(v, bytes):
+                v = v.encode("ascii")
+
+            self.data[k] = v
 
         def mset(self, d):
             for k, v in d.items():
@@ -84,9 +87,6 @@ def patch_resources(monkeypatch, jobs):
         def delete(self, k):
             if self.exists(k):
                 del self.data[k]
-
-        def ping(self):
-            pass
 
         def expire(self, key, expiration):
             self.expirations[key] = expiration
@@ -299,14 +299,25 @@ def mock_schedule_tests_classify(monkeypatch):
                 assert probabilities
                 results = []
                 for item in items:
+                    runnable_name = item["test_job"]["name"]
                     if self.name == "testlabelselect":
-                        if item["test_job"]["name"] in labels_to_choose:
-                            results.append([0.1, 0.9])
+                        if runnable_name in labels_to_choose:
+                            results.append(
+                                [
+                                    1 - labels_to_choose[runnable_name],
+                                    labels_to_choose[runnable_name],
+                                ]
+                            )
                         else:
                             results.append([0.9, 0.1])
                     elif self.name == "testgroupselect":
-                        if item["test_job"]["name"] in groups_to_choose:
-                            results.append([0.1, 0.9])
+                        if runnable_name in groups_to_choose:
+                            results.append(
+                                [
+                                    1 - groups_to_choose[runnable_name],
+                                    groups_to_choose[runnable_name],
+                                ]
+                            )
                         else:
                             results.append([0.9, 0.1])
                 return np.array(results)

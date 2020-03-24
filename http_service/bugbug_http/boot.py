@@ -6,7 +6,7 @@
 import concurrent.futures
 import logging
 
-from bugbug import db, repository, test_scheduling
+from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
 logger = logging.getLogger(__name__)
@@ -18,81 +18,63 @@ def boot_worker():
         logger.info(f"Cloning autoland in {REPO_DIR}...")
         repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
 
-    # Download test scheduling DB support files.
-    def download_past_failures_label():
-        assert (
-            db.download_support_file(
-                test_scheduling.TEST_LABEL_SCHEDULING_DB,
-                test_scheduling.PAST_FAILURES_LABEL_DB,
-            )
-            or ALLOW_MISSING_MODELS
-        )
-        logger.info("Label-level past failures DB downloaded.")
+    def extract_past_failures_label():
+        try:
+            utils.extract_file(test_scheduling.PAST_FAILURES_LABEL_DB)
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
 
-    def download_past_failures_group():
-        assert (
-            db.download_support_file(
-                test_scheduling.TEST_GROUP_SCHEDULING_DB,
-                test_scheduling.PAST_FAILURES_GROUP_DB,
-            )
-            or ALLOW_MISSING_MODELS
-        )
-        logger.info("Group-level past failures DB downloaded.")
+        logger.info("Label-level past failures DB extracted.")
 
-    def download_touched_together():
-        assert (
-            db.download_support_file(
-                test_scheduling.TEST_GROUP_SCHEDULING_DB,
-                test_scheduling.TOUCHED_TOGETHER_DB,
-            )
-            or ALLOW_MISSING_MODELS
-        )
-        logger.info("Touched together DB downloaded.")
+    def extract_past_failures_group():
+        try:
+            utils.extract_file(test_scheduling.PAST_FAILURES_GROUP_DB)
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
 
-    def download_commits():
-        commits_db_downloaded = db.download(repository.COMMITS_DB)
-        if not ALLOW_MISSING_MODELS:
-            assert commits_db_downloaded
-        logger.info("Commits DB downloaded.")
-        return commits_db_downloaded
+        logger.info("Group-level past failures DB extracted.")
 
-    def download_commit_experiences():
-        assert (
-            db.download_support_file(
-                repository.COMMITS_DB, repository.COMMIT_EXPERIENCES_DB,
-            )
-            or ALLOW_MISSING_MODELS
-        )
-        logger.info("Commit experiences DB downloaded.")
+    def extract_touched_together():
+        try:
+            utils.extract_file(test_scheduling.TOUCHED_TOGETHER_DB)
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
+
+        logger.info("Touched together DB extracted.")
+
+    def extract_commits():
+        try:
+            utils.extract_file(f"{repository.COMMITS_DB}.zst")
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
+            return False
+
+        logger.info("Commits DB extracted.")
+        return True
+
+    def extract_commit_experiences():
+        try:
+            utils.extract_file(repository.COMMIT_EXPERIENCES_DB)
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
+
+        logger.info("Commit experiences DB extracted.")
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
-
-        download_commits_future = executor.submit(download_commits)
-        futures.append(download_commits_future)
-        download_commit_experiences_future = executor.submit(
-            download_commit_experiences
-        )
-        futures.append(download_commit_experiences_future)
-
         clone_autoland_future = executor.submit(clone_autoland)
-        futures.append(clone_autoland_future)
 
-        download_touched_together_future = executor.submit(download_touched_together)
-        futures.append(download_touched_together_future)
+        commits_db_extracted = extract_commits()
+        extract_commit_experiences()
+        extract_touched_together()
+        extract_past_failures_label()
+        extract_past_failures_group()
 
-        commits_db_downloaded = download_commits_future.result()
-        if commits_db_downloaded:
+        if commits_db_extracted:
             # Update the commits DB.
             logger.info("Browsing all commits...")
             for commit in repository.get_commits():
                 pass
             logger.info("All commits browsed.")
-
-            # Wait commit experiences DB to be downloaded, as it's required to call
-            # repository.download_commits.
-            logger.info("Waiting commit experiences DB to be downloaded...")
-            download_commit_experiences_future.result()
 
             # Wait repository to be cloned, as it's required to call repository.download_commits.
             logger.info("Waiting autoland to be cloned...")
@@ -104,10 +86,6 @@ def boot_worker():
                 REPO_DIR, rev_start, use_single_process=True
             )
             logger.info("Commits DB updated.")
-
-            # Wait touched together DB to be downloaded.
-            logger.info("Waiting touched together DB to be downloaded...")
-            download_touched_together_future.result()
 
             logger.info("Updating touched together DB...")
             if len(commits) > 0:
@@ -122,12 +100,5 @@ def boot_worker():
                 except StopIteration:
                     pass
             logger.info("Touched together DB updated.")
-
-        # Make sure all downloads complete successfully.
-        for future in concurrent.futures.as_completed(futures):
-            future.result()
-
-    download_past_failures_label()
-    download_past_failures_group()
 
     logger.info("Worker boot done")

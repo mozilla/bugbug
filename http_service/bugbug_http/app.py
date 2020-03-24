@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 import logging
 import os
 import uuid
@@ -11,6 +10,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, List
 
+import libmozdata
+import orjson
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
@@ -23,9 +24,8 @@ from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
-from bugbug import get_bugbug_version
+from bugbug import get_bugbug_version, utils
 from bugbug_http.models import MODELS_NAMES, classify_bug, schedule_tests
-from bugbug_http.utils import get_bugzilla_http_client
 
 API_TOKEN = "X-Api-Key"
 
@@ -58,9 +58,10 @@ q = Queue(
 VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
-
-# Keep an HTTP client around for persistent connections
-BUGBUG_HTTP_CLIENT, BUGZILLA_API_URL = get_bugzilla_http_client()
+BUGZILLA_API_URL = (
+    libmozdata.config.get("Bugzilla", "URL", "https://bugzilla.mozilla.org")
+    + "/rest/bug"
+)
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -187,7 +188,7 @@ def is_pending(job):
         return False
 
     try:
-        job = Job.fetch(job_id.decode("utf-8"), connection=redis_conn)
+        job = Job.fetch(job_id.decode("ascii"), connection=redis_conn)
     except NoSuchJobError:
         LOGGER.debug(f"No job in DB for {job_id}, False")
         # The job might have expired from redis
@@ -225,7 +226,7 @@ def get_bugs_last_change_time(bug_ids):
         "include_fields": ["last_change_time", "id"],
     }
     header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
-    response = BUGBUG_HTTP_CLIENT.get(
+    response = utils.get_session("bugzilla").get(
         BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
     )
     response.raise_for_status()
@@ -269,7 +270,7 @@ def get_result(job):
 
     if result:
         LOGGER.debug(f"Found {result}")
-        return json.loads(result)
+        return orjson.loads(result)
 
     return None
 
@@ -309,7 +310,6 @@ def model_prediction(model_name, bug_id):
               schema: UnauthorizedError
     """
     headers = request.headers
-    redis_conn.ping()
 
     auth = headers.get(API_TOKEN)
 
@@ -469,7 +469,7 @@ def batch_prediction(model_name):
         return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
 
     # TODO Check is JSON is valid and validate against a request schema
-    batch_body = json.loads(request.data)
+    batch_body = orjson.loads(request.data)
 
     # Validate
     schema = {
@@ -552,7 +552,6 @@ def push_schedules(branch, rev):
               schema: UnauthorizedError
     """
     headers = request.headers
-    redis_conn.ping()
 
     auth = headers.get(API_TOKEN)
 

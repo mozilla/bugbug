@@ -624,7 +624,7 @@ def _hg_log(revs):
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
-    print(f"Getting revs from {rev_start} to {rev_end}...")
+    logger.info(f"Getting revs from {rev_start} to {rev_end}...")
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -680,7 +680,7 @@ class Experiences:
 
 
 def calculate_experiences(commits, first_pushdate, save=True):
-    print(f"Analyzing experiences from {len(commits)} commits...")
+    logger.info(f"Analyzing seniorities from {len(commits)} commits...")
 
     experiences = Experiences(save)
 
@@ -692,6 +692,8 @@ def calculate_experiences(commits, first_pushdate, save=True):
         else:
             time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
+
+    logger.info(f"Analyzing experiences from {len(commits)} commits...")
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
@@ -836,7 +838,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
                         experiences[orig_key]
                     )
                 else:
-                    print(
+                    logger.warning(
                         f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
                     )
 
@@ -937,59 +939,63 @@ def get_first_pushdate(repo_dir):
         return hg_log(hg, [b"0"])[0].pushdate
 
 
-def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False):
+def download_commits(
+    repo_dir, rev_start=None, revs=None, save=True, use_single_process=False
+):
+    assert revs is not None or rev_start is not None
+
     with hglib.open(repo_dir) as hg:
-        revs = get_revs(hg, rev_start)
-        if len(revs) == 0:
-            print("No commits to analyze")
-            return []
+        if revs is None:
+            revs = get_revs(hg, rev_start)
+            if len(revs) == 0:
+                logger.info("No commits to analyze")
+                return []
 
-    first_pushdate = get_first_pushdate(repo_dir)
+        first_pushdate = get_first_pushdate(repo_dir)
 
-    print(f"Mining {len(revs)} commits...")
+        logger.info(f"Mining {len(revs)} commits...")
 
-    if not use_single_process:
-        print(f"Using {os.cpu_count()} processes...")
-        commits = hg_log_multi(repo_dir, revs)
-    else:
-        with hglib.open(repo_dir) as hg:
+        if not use_single_process:
+            logger.info(f"Using {os.cpu_count()} processes...")
+            commits = hg_log_multi(repo_dir, revs)
+        else:
             commits = hg_log(hg, revs)
 
-    print("Downloading file->component mapping...")
+        if save:
+            logger.info("Downloading file->component mapping...")
+            download_component_mapping()
 
-    if save:
-        download_component_mapping()
+        set_commits_to_ignore(repo_dir, commits)
 
-    set_commits_to_ignore(repo_dir, commits)
+        commits_num = len(commits)
 
-    commits_num = len(commits)
+        logger.info(f"Mining {commits_num} patches...")
 
-    print(f"Mining {commits_num} commits...")
+        global rs_parsepatch
+        import rs_parsepatch
 
-    global rs_parsepatch
-    import rs_parsepatch
+        global code_analysis_server
+        code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    global code_analysis_server
-    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+        if not use_single_process:
+            with concurrent.futures.ProcessPoolExecutor(
+                initializer=_init_process, initargs=(repo_dir,)
+            ) as executor:
+                commits = executor.map(_transform, commits, chunksize=64)
+                commits = tqdm(commits, total=commits_num)
+                commits = list(commits)
+        else:
+            get_component_mapping()
 
-    if not use_single_process:
-        with concurrent.futures.ProcessPoolExecutor(
-            initializer=_init_process, initargs=(repo_dir,)
-        ) as executor:
-            commits = executor.map(_transform, commits, chunksize=64)
-            commits = tqdm(commits, total=commits_num)
-            commits = list(commits)
-    else:
-        get_component_mapping()
-
-        with hglib.open(repo_dir) as hg:
             commits = [transform(hg, repo_dir, c) for c in commits]
 
-        close_component_mapping()
+            close_component_mapping()
 
     code_analysis_server.terminate()
 
     calculate_experiences(commits, first_pushdate, save)
+
+    logger.info(f"Applying final commits filtering...")
 
     commits = [commit.to_dict() for commit in commits if not commit.ignored]
 
@@ -999,30 +1005,36 @@ def download_commits(repo_dir, rev_start=0, save=True, use_single_process=False)
     return commits
 
 
-def clean(repo_dir, pull=True):
-    with hglib.open(repo_dir) as hg:
-        hg.revert(repo_dir.encode("utf-8"), all=True)
+def clean(hg, repo_dir, pull=True):
+    logger.info("Restoring files to their checkout state...")
+    hg.revert(repo_dir.encode("utf-8"), all=True)
 
-        try:
-            cmd = hglib.util.cmdbuilder(
-                b"strip", rev=b"roots(outgoing())", force=True, backup=False
-            )
-            hg.rawcommand(cmd)
-        except hglib.error.CommandError as e:
-            if b"abort: empty revision set" not in e.err:
-                raise
+    logger.info("Stripping non-public commits...")
+    try:
+        cmd = hglib.util.cmdbuilder(
+            b"strip", rev=b"roots(outgoing())", force=True, backup=False
+        )
+        hg.rawcommand(cmd)
+    except hglib.error.CommandError as e:
+        if b"abort: empty revision set" not in e.err:
+            raise
 
-        # Pull and update.
-        if pull:
-            logger.info(f"Pulling and updating {repo_dir}")
-            hg.pull(update=True)
-            logger.info(f"{repo_dir} pulled and updated")
+    # Pull and update.
+    if pull:
+        logger.info(f"Pulling and updating {repo_dir}")
+        hg.pull(update=True)
+        logger.info(f"{repo_dir} pulled and updated")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
-    if os.path.exists(repo_dir):
-        clean(repo_dir)
+    try:
+        with hglib.open(repo_dir) as hg:
+            clean(hg, repo_dir)
+
         return
+    except hglib.error.ServerError as e:
+        if "abort: repository" not in str(e) and b"not found" not in str(e):
+            raise
 
     cmd = hglib.util.cmdbuilder(
         "robustcheckout",
@@ -1047,7 +1059,8 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
         logger.info("pushlog database doesn't exist")
 
     # Pull and update, to make sure the pushlog is generated.
-    clean(repo_dir)
+    with hglib.open(repo_dir) as hg:
+        clean(hg, repo_dir)
 
 
 def apply_stack(repo_dir, stack, branch):
@@ -1062,12 +1075,12 @@ def apply_stack(repo_dir, stack, branch):
             return False
 
     def apply_patches(base, patches):
-
         # Update to base revision
         logger.info(f"Updating {repo_dir} to {base}")
         hg.update(base, clean=True)
 
         # Then apply each patch in the stack
+        logger.info(f"Applying {len(patches)}...")
         try:
             for node, patch in patches:
                 hg.import_(patches=io.BytesIO(patch.encode("utf-8")), user="bugbug")
@@ -1087,13 +1100,14 @@ def apply_stack(repo_dir, stack, branch):
 
         return "tip"
 
-    def first_in_stack():
-        return hg.log(revrange=f"-{len(stack)}")[0].node.decode("utf-8")
-
-    # Start by cleaning the repo, without pulling
-    clean(repo_dir, pull=False)
+    def stack_nodes():
+        return get_revs(hg, f"-{len(stack)}")
 
     with hglib.open(repo_dir) as hg:
+        # Start by cleaning the repo, without pulling
+        clean(hg, repo_dir, pull=False)
+        logger.info("Repository cleaned")
+
         # Get initial base revision
         base = get_base()
 
@@ -1104,14 +1118,14 @@ def apply_stack(repo_dir, stack, branch):
         # Apply all the patches in the stack on current base
         if apply_patches(base, patches):
             logger.info(f"Stack applied successfully on {base}")
-            return first_in_stack()
+            return stack_nodes()
 
         # We tried to apply on the valid parent and failed: cannot try another revision
         if base != "tip":
             raise Exception(f"Failed to apply on valid parent {base}")
 
         # We tried to apply on tip, let's try to find the valid parent after pulling
-        clean(repo_dir, pull=True)
+        clean(hg, repo_dir, pull=True)
 
         # Check if the valid base is now available
         new_base = get_base()
@@ -1121,9 +1135,9 @@ def apply_stack(repo_dir, stack, branch):
         if not apply_patches(new_base, patches):
             raise Exception("Failed to apply stack on second try")
 
-        logger.info(f"Stack applied successfully on {new_base}")
+        logger.info(f"Stack applied successfully on second try on {new_base}")
 
-        return first_in_stack()
+        return stack_nodes()
 
 
 if __name__ == "__main__":

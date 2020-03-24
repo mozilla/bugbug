@@ -16,7 +16,7 @@ PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
-    7,
+    8,
     [PAST_FAILURES_LABEL_DB],
 )
 
@@ -26,7 +26,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    11,
+    12,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
