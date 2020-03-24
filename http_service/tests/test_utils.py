@@ -23,17 +23,16 @@ class MockDatetime:
 class MockSleep:
     def __init__(self, mock_datetime):
         self.mock_datetime = mock_datetime
+        self.wakeups_count = 0
 
         # count variable used to ensure that context switch into
         # thread claling sleep occurred
-        self.context_switch_total = 0
 
     def sleep(self, sleep_seconds):
         self.wakeup_time = self.mock_datetime.now() + timedelta(seconds=sleep_seconds)
         while self.mock_datetime.now() < self.wakeup_time:
-            self.context_switch_total = (
-                self.context_switch_total + 1 % 1000000
-            )  # <- to make sure we don't take up too much memory
+            pass
+        self.wakeups_count += 1
 
 
 def test_doesnt_cache_unless_accessed_within_ttl():
@@ -111,19 +110,16 @@ def test_cache_thread():
     with patch("datetime.datetime", mockdatetime):
         with patch("time.sleep", mocksleep.sleep):
             cache.force_store("key_a")
-
             cache.start_ttl_thread()
 
             # after one hour
-            context_switch_count = mocksleep.context_switch_total
             mockdatetime.set_now(datetime(2019, 4, 1, 11))
-            while context_switch_count == mocksleep.context_switch_total:
-                pass
             assert "key_a" in cache
+            assert mocksleep.wakeups_count == 0
 
             # after two hours one minute
-            context_switch_count = mocksleep.context_switch_total
+            before_purge_timestamp = cache.last_purged_time
             mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
-            while context_switch_count == mocksleep.context_switch_total:
+            while cache.last_purged_time == before_purge_timestamp:
                 pass
             assert "key_a" not in cache
