@@ -60,7 +60,7 @@ def test_cache_purges_after_ttl():
     cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
 
     with patch("datetime.datetime", mockdatetime):
-        cache.force_store("key_a")
+        cache.get("key_a", force_store=True)
 
         # after one hour
         mockdatetime.set_now(datetime(2019, 4, 1, 11))
@@ -78,7 +78,7 @@ def test_cache_ttl_refreshes_after_get():
     cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
 
     with patch("datetime.datetime", mockdatetime):
-        cache.force_store("key_a")
+        cache.get("key_a", force_store=True)
 
         # after one hour
         mockdatetime.set_now(datetime(2019, 4, 1, 11))
@@ -99,7 +99,7 @@ def test_cache_ttl_refreshes_after_get():
 
 def test_force_store():
     cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
-    cache.force_store("key_a")
+    cache.get("key_a", force_store=True)
     assert "key_a" in cache
 
 
@@ -109,7 +109,7 @@ def test_cache_thread():
     mocksleep = MockSleep(mockdatetime)
     with patch("datetime.datetime", mockdatetime):
         with patch("time.sleep", mocksleep.sleep):
-            cache.force_store("key_a")
+            cache.get("key_a", force_store=True)
             cache.start_ttl_thread()
 
             # after one hour

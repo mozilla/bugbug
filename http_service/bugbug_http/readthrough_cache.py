@@ -32,7 +32,8 @@ class ReadthroughTTLCache(Generic[Key, Value]):
     def __contains__(self, key):
         return key in self.items_storage
 
-    def get(self, key):
+    def get(self, key, **kwargs):
+        store_item = kwargs.get("force_store", False)
         item = None
         if item in self.items_storage:
             item = self.items_storage[key]
@@ -42,18 +43,16 @@ class ReadthroughTTLCache(Generic[Key, Value]):
             # Note that all entries in items_last_accessed are purged if item was not
             # accessed in the last TTL seconds.
             if key in self.items_last_accessed:
-                LOGGER.info(
-                    f"Storing item with the following key in readthroughcache: {key}"
-                )
-                self.items_storage[key] = item
+                store_item = True
 
         self.items_last_accessed[key] = datetime.datetime.now()
+        if store_item:
+            LOGGER.info(
+                f"Storing item with the following key in readthroughcache: {key}"
+            )
+            self.items_storage[key] = item
+
         return item
-
-    def force_store(self, key):
-        LOGGER.info(f"Storing item with the following key in readthroughcache: {key}")
-        self.items_storage[key] = self.load_item_function(key)
-        self.items_last_accessed[key] = datetime.datetime.now()
 
     def purge_expired_entries(self):
         purge_entries_before = datetime.datetime.now() - self.ttl
