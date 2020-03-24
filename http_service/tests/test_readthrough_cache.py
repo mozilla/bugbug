@@ -6,7 +6,7 @@
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from bugbug.readthrough_cache import ReadthroughTTLCache
+from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 
 class MockDatetime:
