@@ -35,6 +35,10 @@ db.register(
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/adr_cache.tar.zst",
     3,
 )
+# The mozci version (to bump whenever we change the mozci regression algorithm),
+# so we can keep track of which version of mozci was used to analyze a given push
+# and we can decide when we want to regenerate parts of the dataset.
+MOZCI_VERSION = 1
 PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
 
 TRAINING_MONTHS = {
@@ -109,8 +113,12 @@ class Retriever(object):
 
             if adr.config.cache.has(key):
                 num_cached += 1
-                value = adr.config.cache.get(key)
-                if value is not None:
+                cached = adr.config.cache.get(key)
+                if cached is not None:
+                    # XXX: We have to support items in the cache that were added
+                    # before the mozci version was stored. We can drop the if
+                    # when all items have been switched over.
+                    value = cached[0] if isinstance(cached, tuple) else cached
                     push_data.append(value)
             else:
                 try:
@@ -126,7 +134,7 @@ class Retriever(object):
                         list(push.get_likely_regressions(runnable)),
                     ]
                     push_data.append(value)
-                    adr.config.cache.forever(key, value)
+                    adr.config.cache.forever(key, (value, MOZCI_VERSION))
                 except adr.errors.MissingDataError:
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
