@@ -4,6 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import os
 
+from bugbug import repository
+
 
 class name(object):
     def __call__(self, test_job, **kwargs):
@@ -177,3 +179,19 @@ class first_common_parent_distance(object):
                     break
 
         return min(distances, default=None)
+
+
+class same_component(object):
+    def __call__(self, test_job, commit, **kwargs):
+        component_mapping = repository.get_component_mapping()
+
+        if test_job["name"].encode("utf-8") not in component_mapping:
+            return None
+
+        touches_same_component = any(
+            component_mapping[test_job["name"].encode("utf-8")]
+            == component_mapping[f.encode("utf-8")]
+            for f in commit["files"]
+            if f.encode("utf-8") in component_mapping
+        )
+        return touches_same_component
