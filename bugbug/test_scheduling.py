@@ -134,6 +134,7 @@ def update_touched_together():
             touched_together["last_analyzed"] = commit["node"]
 
             # As in the test scheduling history retriever script, for now skip commits which are too large.
+            # Skip backed-out commits since they are usually relanded and we don't want to count them twice.
             if len(commit["files"]) <= 50 and not commit["ever_backedout"]:
                 # Number of times a source file was touched together with a directory.
                 for f1 in commit["files"]:
