@@ -114,7 +114,7 @@ class Retriever(object):
             if adr.config.cache.has(key):
                 num_cached += 1
                 cached = adr.config.cache.get(key)
-                if cached is not None:
+                if cached:
                     # XXX: We have to support items in the cache that were added
                     # before the mozci version was stored. We can drop the if
                     # when all items have been switched over.
@@ -139,10 +139,10 @@ class Retriever(object):
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
                     )
-                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
+                    adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
                 except Exception:
                     traceback.print_exc()
-                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
+                    adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
             if time.monotonic() - start_time >= 3600:
                 upload_adr_cache()
