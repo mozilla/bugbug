@@ -163,3 +163,17 @@ class common_path_components(object):
             len(set(path.split("/")) & test_components) for path in commit["files"]
         ]
         return max(common_components_numbers, default=None)
+
+
+class first_common_parent_distance(object):
+    def __call__(self, test_job, commit, **kwargs):
+        distances = []
+        for path in commit["files"]:
+            path_components = path.split("/")
+
+            for i in range(len(path_components) - 1, 0, -1):
+                if test_job["name"].startswith("/".join(path_components[:i])):
+                    distances.append(i)
+                    break
+
+        return min(distances, default=None)
