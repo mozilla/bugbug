@@ -32,10 +32,9 @@ class ReadthroughTTLCache(Generic[Key, Value]):
     def __contains__(self, key):
         return key in self.items_storage
 
-    def get(self, key, **kwargs):
-        store_item = kwargs.get("force_store", False)
-        item = None
-        if item in self.items_storage:
+    def get(self, key, force_store=False):
+        store_item = force_store
+        if key in self.items_storage:
             item = self.items_storage[key]
         else:
             item = self.load_item_function(key)

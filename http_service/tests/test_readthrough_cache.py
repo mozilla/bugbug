@@ -3,8 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import time
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -26,13 +27,27 @@ class MockSleep:
         self.wakeups_count = 0
 
         # count variable used to ensure that context switch into
-        # thread claling sleep occurred
+        # thread calling sleep occurred
 
     def sleep(self, sleep_seconds):
         self.wakeup_time = self.mock_datetime.now() + timedelta(seconds=sleep_seconds)
         while self.mock_datetime.now() < self.wakeup_time:
             pass
         self.wakeups_count += 1
+
+
+class PurgeCountCache(ReadthroughTTLCache):
+    def __init__(self, ttl, load_item_function):
+        super().__init__(ttl, load_item_function)
+        self.purge_count = 0
+
+        def purge_then_increment(purge):
+            purge()
+            self.purge_count += 1
+
+        super().purge_expired_entries = purge_then_increment(
+            super().purge_expired_entries
+        )
 
 
 def test_doesnt_cache_unless_accessed_within_ttl():
@@ -98,14 +113,43 @@ def test_cache_ttl_refreshes_after_get():
 
 
 def test_force_store():
-    cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+    def with_spied_storage(cache):
+        cache.storage_access_count = 0
+        cache_getitem = cache.items_storage.__getitem__
+        def spy_getitem(key):
+            cache.storage_access_count += 1
+            return cache_getitem(key)
+        mock_items_storage = MagicMock()
+        mock_items_storage.__getitem__.side_effect = spy_getitem
+        mock_items_storage.__setitem__.side_effect = cache.items_storage.__setitem__
+        mock_items_storage.__contains__.side_effect = cache.items_storage.__contains__
+        cache.items_storage = mock_items_storage
+        return cache
+
+    cache = with_spied_storage(ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload"))
     cache.get("key_a", force_store=True)
+
     assert "key_a" in cache
+    assert cache.get("key_a") == "payload"
+    assert cache.storage_access_count == 1
 
 
 def test_cache_thread():
+    def cache_with_purge_count(cache):
+        cache.purge_count = 0
+        purge = cache.purge_expired_entries
+
+        def purge_then_increment():
+            purge()
+            cache.purge_count += 1
+
+        cache.purge_expired_entries = purge_then_increment
+        return cache
+
     mockdatetime = MockDatetime(datetime(2019, 4, 1, 10))
-    cache = ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+    cache = cache_with_purge_count(
+        ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+    )
     mocksleep = MockSleep(mockdatetime)
     with patch("datetime.datetime", mockdatetime):
         with patch("time.sleep", mocksleep.sleep):
@@ -118,8 +162,9 @@ def test_cache_thread():
             assert mocksleep.wakeups_count == 0
 
             # after two hours one minute
-            before_purge_timestamp = cache.last_purged_time
+            before_timechange_purge_count = cache.purge_count
             mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
-            while cache.last_purged_time == before_purge_timestamp:
-                pass
+
+            while cache.purge_count == before_timechange_purge_count:
+                time.sleep(0)
             assert "key_a" not in cache
