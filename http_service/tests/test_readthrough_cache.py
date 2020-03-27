@@ -3,9 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+
 import time
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -116,9 +117,11 @@ def test_force_store():
     def with_spied_storage(cache):
         cache.storage_access_count = 0
         cache_getitem = cache.items_storage.__getitem__
+
         def spy_getitem(key):
             cache.storage_access_count += 1
             return cache_getitem(key)
+
         mock_items_storage = MagicMock()
         mock_items_storage.__getitem__.side_effect = spy_getitem
         mock_items_storage.__setitem__.side_effect = cache.items_storage.__setitem__
@@ -126,7 +129,9 @@ def test_force_store():
         cache.items_storage = mock_items_storage
         return cache
 
-    cache = with_spied_storage(ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload"))
+    cache = with_spied_storage(
+        ReadthroughTTLCache(timedelta(hours=2), lambda x: "payload")
+    )
     cache.get("key_a", force_store=True)
 
     assert "key_a" in cache
