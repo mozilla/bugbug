@@ -27,7 +27,6 @@ class ReadthroughTTLCache(Generic[Key, Value]):
         self.load_item_function = load_item_function
         self.items_last_accessed: Dict[Key, datetime.datetime] = {}
         self.items_storage: Dict[Key, Value] = {}
-        self.last_purged_time = datetime.datetime.now()
 
     def __contains__(self, key):
         return key in self.items_storage
@@ -62,7 +61,6 @@ class ReadthroughTTLCache(Generic[Key, Value]):
                 )
                 del self.items_last_accessed[key]
                 del self.items_storage[key]
-        self.last_purged_time = datetime.datetime.now()
 
     def start_ttl_thread(self):
         def purge_expired_entries_with_wait():
