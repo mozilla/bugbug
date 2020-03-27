@@ -11,6 +11,8 @@ import shelve
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
+PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
+
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
 PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
 db.register(

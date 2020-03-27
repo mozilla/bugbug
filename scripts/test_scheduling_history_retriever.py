@@ -39,7 +39,6 @@ db.register(
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
 MOZCI_VERSION = 1
-PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
 
 TRAINING_MONTHS = {
     "label": 7,
@@ -165,7 +164,9 @@ class Retriever(object):
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
-        updated = download_check_etag(PUSH_DATA_URL.format(granularity=granularity))
+        updated = download_check_etag(
+            test_scheduling.PUSH_DATA_URL.format(granularity=granularity)
+        )
         if updated:
             zstd_decompress(push_data_path)
         assert os.path.exists(push_data_path), "Decompressed push data file exists"
