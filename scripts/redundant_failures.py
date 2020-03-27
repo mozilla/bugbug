@@ -99,7 +99,7 @@ def main():
         count_second_but_not_first,
     ) = count(is_first_task, is_second_task)
     print(
-        f"Out of {count_runs} runs, they both failed {count_any_of_the_two} times. The first exclusively failed {count_first_but_not_second} times, the second exclusively failed {count_second_but_not_first} times."
+        f"Out of {count_runs} runs, any of the two failed {count_any_of_the_two} times. The first exclusively failed {count_first_but_not_second} times, the second exclusively failed {count_second_but_not_first} times."
     )
 
 
