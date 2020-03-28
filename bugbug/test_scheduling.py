@@ -183,10 +183,10 @@ def _read_and_update_past_failures(
     for item in items:
         full_key = key + item
 
-        if full_key not in past_failures:
-            cur = past_failures[full_key] = ExpQueue(
-                push_num, HISTORICAL_TIMESPAN + 1, 0
-            )
+        is_new = full_key not in past_failures
+
+        if is_new:
+            cur = ExpQueue(push_num, HISTORICAL_TIMESPAN + 1, 0)
         else:
             cur = past_failures[full_key]
 
@@ -200,6 +200,8 @@ def _read_and_update_past_failures(
 
         if is_regression:
             cur[push_num] = value + 1
+            if is_new:
+                past_failures[full_key] = cur
 
     return (
         sum(values_total),
