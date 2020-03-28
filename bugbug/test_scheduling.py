@@ -7,6 +7,7 @@ import itertools
 import os
 import pickle
 import shelve
+import sys
 
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
@@ -67,10 +68,8 @@ touched_together = None
 def get_touched_together_db():
     global touched_together
     if touched_together is None:
-        touched_together = shelve.Shelf(
-            LMDBDict(os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])),
-            protocol=pickle.DEFAULT_PROTOCOL,
-            writeback=True,
+        touched_together = LMDBDict(
+            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])
         )
     return touched_together
 
@@ -87,7 +86,7 @@ def get_touched_together_key(f1, f2):
     if f2 < f1:
         f1, f2 = f2, f1
 
-    return f"{f1}${f2}"
+    return f"{f1}${f2}".encode("utf-8")
 
 
 def get_touched_together(f1, f2):
@@ -98,7 +97,7 @@ def get_touched_together(f1, f2):
     if key not in touched_together:
         return 0
 
-    return touched_together[key]
+    return int.from_bytes(touched_together[key], sys.byteorder)
 
 
 def set_touched_together(f1, f2):
@@ -107,16 +106,18 @@ def set_touched_together(f1, f2):
     key = get_touched_together_key(f1, f2)
 
     if key not in touched_together:
-        touched_together[key] = 1
+        touched_together[key] = (1).to_bytes(4, sys.byteorder)
     else:
-        touched_together[key] += 1
+        touched_together[key] = (
+            int.from_bytes(touched_together[key], sys.byteorder) + 1
+        ).to_bytes(4, sys.byteorder)
 
 
 def update_touched_together():
     touched_together = get_touched_together_db()
     last_analyzed = (
-        touched_together["last_analyzed"]
-        if "last_analyzed" in touched_together
+        touched_together[b"last_analyzed"]
+        if b"last_analyzed" in touched_together
         else None
     )
 
@@ -127,13 +128,11 @@ def update_touched_together():
 
     end_revision = yield
 
-    i = 0
-
     for commit in repository.get_commits():
         seen.add(commit["node"])
 
         if can_start:
-            touched_together["last_analyzed"] = commit["node"]
+            touched_together[b"last_analyzed"] = commit["node"].encode("ascii")
 
             # As in the test scheduling history retriever script, for now skip commits which are too large.
             # Skip backed-out commits since they are usually relanded and we don't want to count them twice.
@@ -151,10 +150,7 @@ def update_touched_together():
                 ):
                     set_touched_together(d1, d2)
 
-                i += 1
-                if i % 5000:
-                    touched_together.sync()
-        elif last_analyzed == commit["node"]:
+        elif last_analyzed == commit["node"].encode("ascii"):
             can_start = True
 
         if commit["node"] == end_revision:
