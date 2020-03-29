@@ -123,8 +123,6 @@ class TestSelectModel(Model):
         classes = {}
         classes_by_rev = defaultdict(dict)
 
-        random.seed(0)
-
         revs = set()
         for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
@@ -141,6 +139,8 @@ class TestSelectModel(Model):
                 classes_by_rev[rev][name] = 0
 
         if self.use_subset:
+            random.seed(0)
+
             for rev, by_name in classes_by_rev.items():
                 passing_names = [name for name, val in by_name.items() if val == 0]
                 if len(passing_names) == 0:
