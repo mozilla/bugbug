@@ -415,7 +415,7 @@ class files(object):
 
 class file_touched_prev(object):
     def __call__(self, commit, **kwargs):
-        exps = get_exps("component", commit)
+        exps = get_exps("file", commit)
         return {
             "Total # of times these files have been touched before": exps["sum"],
             "Maximum # of times these files have been touched before": exps["max"],
