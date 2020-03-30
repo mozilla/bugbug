@@ -134,43 +134,29 @@ class source_code_file_metrics(object):
     def __call__(self, commit, **kwargs):
         return {
             "Average cyclomatic": commit["average_cyclomatic"],
-            "Average number of unique operands": commit[
-                "average_halstead_unique_operands"
-            ],
-            "Average number of operands": commit["average_halstead_operands"],
-            "Average number of unique operators": commit[
-                "average_halstead_unique_operators"
-            ],
-            "Average number of operators": commit["average_halstead_operators"],
+            "Average number of unique operands": commit["average_halstead_n2"],
+            "Average number of operands": commit["average_halstead_N2"],
+            "Average number of unique operators": commit["average_halstead_n1"],
+            "Average number of operators": commit["average_halstead_N1"],
             "Average number of source loc": commit["average_source_loc"],
             "Average number of logical loc": commit["average_logical_loc"],
             "Maximum cyclomatic": commit["maximum_cyclomatic"],
-            "Maximum number of unique operands": commit[
-                "maximum_halstead_unique_operands"
-            ],
-            "Maximum number of operands": commit["maximum_halstead_operands"],
-            "Maximum number of unique operators": commit[
-                "maximum_halstead_unique_operators"
-            ],
-            "Maximum number of operators": commit["maximum_halstead_operators"],
+            "Maximum number of unique operands": commit["maximum_halstead_n2"],
+            "Maximum number of operands": commit["maximum_halstead_N2"],
+            "Maximum number of unique operators": commit["maximum_halstead_n1"],
+            "Maximum number of operators": commit["maximum_halstead_N1"],
             "Maximum number of source loc": commit["maximum_source_loc"],
             "Maximum number of logical loc": commit["maximum_logical_loc"],
             "Minimum cyclomatic": commit["minimum_cyclomatic"],
-            "Minimum number of unique operands": commit[
-                "minimum_halstead_unique_operands"
-            ],
-            "Minimum number of operands": commit["minimum_halstead_operands"],
-            "Minimum number of unique operators": commit[
-                "minimum_halstead_unique_operators"
-            ],
-            "Minimum number of operators": commit["minimum_halstead_operators"],
+            "Minimum number of unique operands": commit["minimum_halstead_n2"],
+            "Minimum number of operands": commit["minimum_halstead_N2"],
+            "Minimum number of unique operators": commit["minimum_halstead_n1"],
+            "Minimum number of operators": commit["minimum_halstead_N1"],
             "Minimum number of source loc": commit["minimum_source_loc"],
             "Minimum number of logical loc": commit["minimum_logical_loc"],
-            "Total of number of operands": commit["total_halstead_operands"],
-            "Total of number of unique operators": commit[
-                "total_halstead_unique_operators"
-            ],
-            "Total number of operators": commit["total_halstead_operators"],
+            "Total of number of operands": commit["total_halstead_N2"],
+            "Total of number of unique operators": commit["total_halstead_n1"],
+            "Total number of operators": commit["total_halstead_N1"],
             "Total number of source loc": commit["total_source_loc"],
             "Total number of logical loc": commit["total_logical_loc"],
         }
@@ -540,68 +526,36 @@ def merge_commits(commits):
         "test_deleted": sum(commit["test_deleted"] for commit in commits),
         "average_cyclomatic": sum(commit["average_cyclomatic"] for commit in commits)
         / len(commits),
-        "average_halstead_unique_operands": sum(
-            commit["average_halstead_unique_operands"] for commit in commits
-        )
+        "average_halstead_n2": sum(commit["average_halstead_n2"] for commit in commits)
         / len(commits),
-        "average_halstead_operands": sum(
-            commit["average_halstead_operands"] for commit in commits
-        )
+        "average_halstead_N2": sum(commit["average_halstead_N2"] for commit in commits)
         / len(commits),
-        "average_halstead_unique_operators": sum(
-            commit["average_halstead_unique_operators"] for commit in commits
-        )
+        "average_halstead_n1": sum(commit["average_halstead_n1"] for commit in commits)
         / len(commits),
-        "average_halstead_operators": sum(
-            commit["average_halstead_operators"] for commit in commits
-        )
+        "average_halstead_N1": sum(commit["average_halstead_N1"] for commit in commits)
         / len(commits),
         "average_source_loc": sum(commit["average_source_loc"] for commit in commits)
         / len(commits),
         "average_logical_loc": sum(commit["average_logical_loc"] for commit in commits)
         / len(commits),
         "maximum_cyclomatic": max(commit["maximum_cyclomatic"] for commit in commits),
-        "maximum_halstead_unique_operands": max(
-            commit["maximum_halstead_unique_operands"] for commit in commits
-        ),
-        "maximum_halstead_operands": max(
-            commit["maximum_halstead_operands"] for commit in commits
-        ),
-        "maximum_halstead_unique_operators": max(
-            commit["maximum_halstead_unique_operators"] for commit in commits
-        ),
-        "maximum_halstead_operators": max(
-            commit["maximum_halstead_operators"] for commit in commits
-        ),
+        "maximum_halstead_n2": max(commit["maximum_halstead_n2"] for commit in commits),
+        "maximum_halstead_N2": max(commit["maximum_halstead_N2"] for commit in commits),
+        "maximum_halstead_n1": max(commit["maximum_halstead_n1"] for commit in commits),
+        "maximum_halstead_N1": max(commit["maximum_halstead_N1"] for commit in commits),
         "maximum_source_loc": max(commit["maximum_source_loc"] for commit in commits),
         "maximum_logical_loc": max(commit["maximum_logical_loc"] for commit in commits),
         "minimum_cyclomatic": min(commit["minimum_cyclomatic"] for commit in commits),
-        "minimum_halstead_unique_operands": min(
-            commit["minimum_halstead_unique_operands"] for commit in commits
-        ),
-        "minimum_halstead_operands": min(
-            commit["minimum_halstead_operands"] for commit in commits
-        ),
-        "minimum_halstead_unique_operators": min(
-            commit["minimum_halstead_unique_operators"] for commit in commits
-        ),
-        "minimum_halstead_operators": min(
-            commit["minimum_halstead_operators"] for commit in commits
-        ),
+        "minimum_halstead_n2": min(commit["minimum_halstead_n2"] for commit in commits),
+        "minimum_halstead_N2": min(commit["minimum_halstead_N2"] for commit in commits),
+        "minimum_halstead_n1": min(commit["minimum_halstead_n1"] for commit in commits),
+        "minimum_halstead_N1": min(commit["minimum_halstead_N1"] for commit in commits),
         "minimum_source_loc": min(commit["minimum_source_loc"] for commit in commits),
         "minimum_logical_loc": min(commit["minimum_logical_loc"] for commit in commits),
-        "total_halstead_unique_operands": sum(
-            commit["total_halstead_unique_operands"] for commit in commits
-        ),
-        "total_halstead_operands": sum(
-            commit["total_halstead_operands"] for commit in commits
-        ),
-        "total_halstead_unique_operators": sum(
-            commit["total_halstead_unique_operators"] for commit in commits
-        ),
-        "total_halstead_operators": sum(
-            commit["total_halstead_operators"] for commit in commits
-        ),
+        "total_halstead_n2": sum(commit["total_halstead_n2"] for commit in commits),
+        "total_halstead_N2": sum(commit["total_halstead_N2"] for commit in commits),
+        "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
+        "total_halstead_N1": sum(commit["total_halstead_N1"] for commit in commits),
         "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
         "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
     }

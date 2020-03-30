@@ -141,31 +141,31 @@ class Commit:
         self.minimum_test_file_size = 0
         self.test_files_modified_num = 0
         self.average_cyclomatic = 0.0
-        self.average_halstead_operands = 0.0
-        self.average_halstead_unique_operands = 0.0
-        self.average_halstead_operators = 0.0
-        self.average_halstead_unique_operators = 0.0
+        self.average_halstead_N1 = 0.0
+        self.average_halstead_n1 = 0.0
+        self.average_halstead_N2 = 0.0
+        self.average_halstead_n2 = 0.0
         self.average_source_loc = 0.0
         self.average_logical_loc = 0.0
         self.maximum_cyclomatic = 0
-        self.maximum_halstead_operands = 0
-        self.maximum_halstead_unique_operands = 0
-        self.maximum_halstead_operators = 0
-        self.maximum_halstead_unique_operators = 0
+        self.maximum_halstead_N2 = 0
+        self.maximum_halstead_n2 = 0
+        self.maximum_halstead_N1 = 0
+        self.maximum_halstead_n1 = 0
         self.maximum_source_loc = 0
         self.maximum_logical_loc = 0
         self.minimum_cyclomatic = sys.maxsize
-        self.minimum_halstead_operands = sys.maxsize
-        self.minimum_halstead_unique_operands = sys.maxsize
-        self.minimum_halstead_operators = sys.maxsize
-        self.minimum_halstead_unique_operators = sys.maxsize
+        self.minimum_halstead_N1 = sys.maxsize
+        self.minimum_halstead_n1 = sys.maxsize
+        self.minimum_halstead_N2 = sys.maxsize
+        self.minimum_halstead_n2 = sys.maxsize
         self.minimum_source_loc = sys.maxsize
         self.minimum_logical_loc = sys.maxsize
         self.total_cyclomatic = 0
-        self.total_halstead_operands = 0
-        self.total_halstead_unique_operands = 0
-        self.total_halstead_operators = 0
-        self.total_halstead_unique_operators = 0
+        self.total_halstead_N1 = 0
+        self.total_halstead_n1 = 0
+        self.total_halstead_N2 = 0
+        self.total_halstead_n2 = 0
         self.total_source_loc = 0
         self.total_logical_loc = 0
 
@@ -358,31 +358,27 @@ def get_metrics(commit, metrics_space):
     if metrics_space["kind"] == "function":
         metrics = metrics_space["metrics"]
         commit.total_cyclomatic += metrics["cyclomatic"]
-        commit.total_halstead_unique_operands += metrics["halstead"]["unique_operands"]
-        commit.total_halstead_operands += metrics["halstead"]["operands"]
-        commit.total_halstead_unique_operators += metrics["halstead"][
-            "unique_operators"
-        ]
-        commit.total_halstead_operators += metrics["halstead"]["operators"]
+        commit.total_halstead_n2 += metrics["halstead"]["n2"]
+        commit.total_halstead_N2 += metrics["halstead"]["N2"]
+        commit.total_halstead_n1 += metrics["halstead"]["n1"]
+        commit.total_halstead_N1 += metrics["halstead"]["N1"]
         commit.total_source_loc += metrics["loc"]["sloc"]
         commit.total_logical_loc += metrics["loc"]["lloc"]
 
         commit.maximum_cyclomatic = max(
             commit.maximum_cyclomatic, metrics["cyclomatic"]
         )
-        commit.maximum_halstead_unique_operands = max(
-            commit.maximum_halstead_unique_operands,
-            metrics["halstead"]["unique_operands"],
+        commit.maximum_halstead_n2 = max(
+            commit.maximum_halstead_n2, metrics["halstead"]["n2"],
         )
-        commit.maximum_halstead_operands = max(
-            metrics["halstead"]["operands"], commit.maximum_halstead_operands
+        commit.maximum_halstead_N2 = max(
+            metrics["halstead"]["N2"], commit.maximum_halstead_N2
         )
-        commit.maximum_halstead_unique_operators = max(
-            metrics["halstead"]["unique_operators"],
-            commit.maximum_halstead_unique_operators,
+        commit.maximum_halstead_n1 = max(
+            metrics["halstead"]["n1"], commit.maximum_halstead_n1,
         )
-        commit.maximum_halstead_operators = max(
-            metrics["halstead"]["operators"], commit.maximum_halstead_operators
+        commit.maximum_halstead_N1 = max(
+            metrics["halstead"]["N1"], commit.maximum_halstead_N1
         )
         commit.maximum_source_loc = max(
             metrics["loc"]["sloc"], commit.maximum_source_loc
@@ -394,19 +390,17 @@ def get_metrics(commit, metrics_space):
         commit.minimum_cyclomatic = min(
             commit.minimum_cyclomatic, metrics["cyclomatic"]
         )
-        commit.minimum_halstead_unique_operands = min(
-            commit.minimum_halstead_unique_operands,
-            metrics["halstead"]["unique_operands"],
+        commit.minimum_halstead_n2 = min(
+            commit.minimum_halstead_n2, metrics["halstead"]["n2"],
         )
-        commit.minimum_halstead_operands = min(
-            metrics["halstead"]["operands"], commit.minimum_halstead_operands
+        commit.minimum_halstead_N2 = min(
+            metrics["halstead"]["N2"], commit.minimum_halstead_N2
         )
-        commit.minimum_halstead_unique_operators = min(
-            metrics["halstead"]["unique_operators"],
-            commit.minimum_halstead_unique_operators,
+        commit.minimum_halstead_n1 = min(
+            metrics["halstead"]["n1"], commit.minimum_halstead_n1,
         )
-        commit.minimum_halstead_operators = min(
-            metrics["halstead"]["operators"], commit.minimum_halstead_operators
+        commit.minimum_halstead_N1 = min(
+            metrics["halstead"]["N1"], commit.minimum_halstead_N1
         )
         commit.minimum_source_loc = min(
             metrics["loc"]["sloc"], commit.minimum_source_loc
@@ -537,28 +531,20 @@ def transform(hg, repo_dir, commit):
 
     if metrics_file_count:
         commit.average_cyclomatic = commit.total_cyclomatic / metrics_file_count
-        commit.average_halstead_unique_operands = (
-            commit.total_halstead_unique_operands / metrics_file_count
-        )
-        commit.average_halstead_operands = (
-            commit.total_halstead_operands / metrics_file_count
-        )
-        commit.average_halstead_unique_operators = (
-            commit.total_halstead_unique_operators / metrics_file_count
-        )
-        commit.average_halstead_operators = (
-            commit.total_halstead_operators / metrics_file_count
-        )
+        commit.average_halstead_n2 = commit.total_halstead_n2 / metrics_file_count
+        commit.average_halstead_N2 = commit.total_halstead_N2 / metrics_file_count
+        commit.average_halstead_n1 = commit.total_halstead_n1 / metrics_file_count
+        commit.average_halstead_N1 = commit.total_halstead_N1 / metrics_file_count
         commit.average_source_loc = commit.total_source_loc / metrics_file_count
         commit.average_logical_loc = commit.total_logical_loc / metrics_file_count
     else:
         # these values are initialized with sys.maxsize (because we take the min)
         # if no files, then reset them to 0 (it'd be stupid to have min > max)
         commit.minimum_cyclomatic = 0
-        commit.minimum_halstead_operands = 0
-        commit.minimum_halstead_unique_operands = 0
-        commit.minimum_halstead_operators = 0
-        commit.minimum_halstead_unique_operators = 0
+        commit.minimum_halstead_N2 = 0
+        commit.minimum_halstead_n2 = 0
+        commit.minimum_halstead_N1 = 0
+        commit.minimum_halstead_n1 = 0
         commit.minimum_source_loc = 0
         commit.minimum_logical_loc = 0
 
