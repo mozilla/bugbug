@@ -44,26 +44,25 @@ class TestSelectModel(Model):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
-            test_scheduling_features.name(),
+            # commit_features.source_code_files_modified_num(),
+            # commit_features.other_files_modified_num(),
+            # commit_features.test_files_modified_num(),
+            # commit_features.source_code_file_size(),
+            # commit_features.other_file_size(),
+            # commit_features.test_file_size(),
+            # commit_features.source_code_added(),
+            # commit_features.other_added(),
+            # commit_features.test_added(),
+            # commit_features.source_code_deleted(),
+            # commit_features.other_deleted(),
+            # commit_features.test_deleted(),
             test_scheduling_features.prev_failures(),
         ]
 
         if granularity == "label":
             feature_extractors += [
                 test_scheduling_features.platform(),
-                test_scheduling_features.chunk(),
+                # test_scheduling_features.chunk(),
                 test_scheduling_features.suite(),
             ]
         elif granularity == "group":

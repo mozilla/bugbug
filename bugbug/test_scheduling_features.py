@@ -80,34 +80,34 @@ class prev_failures(object):
             "past_1400_pushes_in_files": test_job["failures_past_1400_pushes_in_files"],
             "past_2800_pushes_in_files": test_job["failures_past_2800_pushes_in_files"],
             "in_directories": test_job["failures_in_directories"],
-            "past_700_pushes_in_directories": test_job[
-                "failures_past_700_pushes_in_directories"
-            ],
-            "past_1400_pushes_in_directories": test_job[
-                "failures_past_1400_pushes_in_directories"
-            ],
-            "past_2800_pushes_in_directories": test_job[
-                "failures_past_2800_pushes_in_directories"
-            ],
-            "in_components": test_job["failures_in_components"],
-            "past_100_pushes_in_components": test_job[
-                "failures_past_100_pushes_in_components"
-            ],
-            "past_200_pushes_in_components": test_job[
-                "failures_past_200_pushes_in_components"
-            ],
-            "past_300_pushes_in_components": test_job[
-                "failures_past_300_pushes_in_components"
-            ],
-            "past_700_pushes_in_components": test_job[
-                "failures_past_700_pushes_in_components"
-            ],
-            "past_1400_pushes_in_components": test_job[
-                "failures_past_1400_pushes_in_components"
-            ],
-            "past_2800_pushes_in_components": test_job[
-                "failures_past_2800_pushes_in_components"
-            ],
+            # "past_700_pushes_in_directories": test_job[
+            #     "failures_past_700_pushes_in_directories"
+            # ],
+            # "past_1400_pushes_in_directories": test_job[
+            #     "failures_past_1400_pushes_in_directories"
+            # ],
+            # "past_2800_pushes_in_directories": test_job[
+            #     "failures_past_2800_pushes_in_directories"
+            # ],
+            # "in_components": test_job["failures_in_components"],
+            # "past_100_pushes_in_components": test_job[
+            #     "failures_past_100_pushes_in_components"
+            # ],
+            # "past_200_pushes_in_components": test_job[
+            #     "failures_past_200_pushes_in_components"
+            # ],
+            # "past_300_pushes_in_components": test_job[
+            #     "failures_past_300_pushes_in_components"
+            # ],
+            # "past_700_pushes_in_components": test_job[
+            #     "failures_past_700_pushes_in_components"
+            # ],
+            # "past_1400_pushes_in_components": test_job[
+            #     "failures_past_1400_pushes_in_components"
+            # ],
+            # "past_2800_pushes_in_components": test_job[
+            #     "failures_past_2800_pushes_in_components"
+            # ],
         }
 
 
