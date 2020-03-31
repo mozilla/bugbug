@@ -38,7 +38,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    10,
+    11,
     [COMMIT_EXPERIENCES_DB],
 )
 
