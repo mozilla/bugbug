@@ -127,8 +127,6 @@ class Retriever(object):
         for push in tqdm(pushes):
             key = cache_key(push)
 
-            logger.info(f"Analyzing {push.rev} at the {runnable} level...")
-
             if adr.config.cache.has(key) and push.revs[0] not in to_regenerate:
                 num_cached += 1
                 cached = adr.config.cache.get(key)
@@ -139,6 +137,8 @@ class Retriever(object):
                     value = cached[0] if isinstance(cached, tuple) else cached
                     push_data.append(value)
             else:
+                logger.info(f"Analyzing {push.rev} at the {runnable} level...")
+
                 try:
                     if runnable == "label":
                         runnables = push.task_labels
