@@ -162,6 +162,18 @@ class TestSelectModel(Model):
 
         print("{} pushes considered".format(len(classes_by_rev)))
         print(
+            "{} pushes with at least one failure".format(
+                len(
+                    set(
+                        rev
+                        for rev, by_name in classes_by_rev.items()
+                        for label in by_name.values()
+                        if label == 1
+                    )
+                )
+            )
+        )
+        print(
             "{} push/jobs failed".format(
                 sum(1 for label in classes.values() if label == 1)
             )
