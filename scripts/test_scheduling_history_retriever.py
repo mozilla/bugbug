@@ -108,12 +108,28 @@ class Retriever(object):
 
         push_data = []
 
+        def cache_key(push):
+            return f"push_data.{runnable}.{push.rev}"
+
+        # Regenerating a large amount of data when we update the mozci regression detection
+        # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+        # run.
+        to_regenerate = set()
+        for push in pushes[::-1]:
+            cached = adr.config.cache.get(cache_key(push))
+            if not cached:
+                continue
+
+            value, mozci_version = cached if isinstance(cached, tuple) else (cached, 0)
+            if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
+                to_regenerate.add(value[0][0])
+
         for push in tqdm(pushes):
-            key = f"push_data.{runnable}.{push.rev}"
+            key = cache_key(push)
 
             logger.info(f"Analyzing {push.rev} at the {runnable} level...")
 
-            if adr.config.cache.has(key):
+            if adr.config.cache.has(key) and push.revs[0] not in to_regenerate:
                 num_cached += 1
                 cached = adr.config.cache.get(key)
                 if cached:
