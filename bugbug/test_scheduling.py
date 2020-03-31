@@ -19,7 +19,7 @@ PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
-    8,
+    9,
     [PAST_FAILURES_LABEL_DB],
 )
 
@@ -29,11 +29,11 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    12,
+    13,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
-HISTORICAL_TIMESPAN = 56
+HISTORICAL_TIMESPAN = 2800
 
 
 def get_test_scheduling_history(granularity):
@@ -169,10 +169,9 @@ def _read_and_update_past_failures(
     past_failures, type_, runnable, items, push_num, is_regression
 ):
     values_total = []
-    values_prev_7 = []
-    values_prev_14 = []
-    values_prev_28 = []
-    values_prev_56 = []
+    values_prev_700 = []
+    values_prev_1400 = []
+    values_prev_2800 = []
 
     key = f"{type_}${runnable}$"
 
@@ -182,29 +181,27 @@ def _read_and_update_past_failures(
         is_new = full_key not in past_failures
 
         if is_new:
-            cur = ExpQueue(push_num, HISTORICAL_TIMESPAN + 1, 0)
+            cur = ExpQueue(round(push_num / 100), int(HISTORICAL_TIMESPAN / 100) + 1, 0)
         else:
             cur = past_failures[full_key]
 
-        value = cur[push_num]
+        value = cur[round(push_num / 100)]
 
         values_total.append(value)
-        values_prev_7.append(value - cur[push_num - 7])
-        values_prev_14.append(value - cur[push_num - 14])
-        values_prev_28.append(value - cur[push_num - 28])
-        values_prev_56.append(value - cur[push_num - 56])
+        values_prev_700.append(value - cur[round((push_num - 700) / 100)])
+        values_prev_1400.append(value - cur[round((push_num - 1400) / 100)])
+        values_prev_2800.append(value - cur[round((push_num - 2800) / 100)])
 
         if is_regression:
-            cur[push_num] = value + 1
+            cur[round(push_num / 100)] = value + 1
             if is_new:
                 past_failures[full_key] = cur
 
     return (
         sum(values_total),
-        sum(values_prev_7),
-        sum(values_prev_14),
-        sum(values_prev_28),
-        sum(values_prev_56),
+        sum(values_prev_700),
+        sum(values_prev_1400),
+        sum(values_prev_2800),
     )
 
 
@@ -229,40 +226,36 @@ def generate_data(
 
         (
             total_failures,
-            past_7_pushes_failures,
-            past_14_pushes_failures,
-            past_28_pushes_failures,
-            past_56_pushes_failures,
+            past_700_pushes_failures,
+            past_1400_pushes_failures,
+            past_2800_pushes_failures,
         ) = _read_and_update_past_failures(
             past_failures, "all", runnable, ["all"], push_num, is_regression
         )
 
         (
             total_types_failures,
-            past_7_pushes_types_failures,
-            past_14_pushes_types_failures,
-            past_28_pushes_types_failures,
-            past_56_pushes_types_failures,
+            past_700_pushes_types_failures,
+            past_1400_pushes_types_failures,
+            past_2800_pushes_types_failures,
         ) = _read_and_update_past_failures(
             past_failures, "type", runnable, commit["types"], push_num, is_regression,
         )
 
         (
             total_files_failures,
-            past_7_pushes_files_failures,
-            past_14_pushes_files_failures,
-            past_28_pushes_files_failures,
-            past_56_pushes_files_failures,
+            past_700_pushes_files_failures,
+            past_1400_pushes_files_failures,
+            past_2800_pushes_files_failures,
         ) = _read_and_update_past_failures(
             past_failures, "file", runnable, commit["files"], push_num, is_regression,
         )
 
         (
             total_directories_failures,
-            past_7_pushes_directories_failures,
-            past_14_pushes_directories_failures,
-            past_28_pushes_directories_failures,
-            past_56_pushes_directories_failures,
+            past_700_pushes_directories_failures,
+            past_1400_pushes_directories_failures,
+            past_2800_pushes_directories_failures,
         ) = _read_and_update_past_failures(
             past_failures,
             "directory",
@@ -274,10 +267,9 @@ def generate_data(
 
         (
             total_components_failures,
-            past_7_pushes_components_failures,
-            past_14_pushes_components_failures,
-            past_28_pushes_components_failures,
-            past_56_pushes_components_failures,
+            past_700_pushes_components_failures,
+            past_1400_pushes_components_failures,
+            past_2800_pushes_components_failures,
         ) = _read_and_update_past_failures(
             past_failures,
             "component",
@@ -290,30 +282,25 @@ def generate_data(
         yield {
             "name": runnable,
             "failures": total_failures,
-            "failures_past_7_pushes": past_7_pushes_failures,
-            "failures_past_14_pushes": past_14_pushes_failures,
-            "failures_past_28_pushes": past_28_pushes_failures,
-            "failures_past_56_pushes": past_56_pushes_failures,
+            "failures_past_700_pushes": past_700_pushes_failures,
+            "failures_past_1400_pushes": past_1400_pushes_failures,
+            "failures_past_2800_pushes": past_2800_pushes_failures,
             "failures_in_types": total_types_failures,
-            "failures_past_7_pushes_in_types": past_7_pushes_types_failures,
-            "failures_past_14_pushes_in_types": past_14_pushes_types_failures,
-            "failures_past_28_pushes_in_types": past_28_pushes_types_failures,
-            "failures_past_56_pushes_in_types": past_56_pushes_types_failures,
+            "failures_past_700_pushes_in_types": past_700_pushes_types_failures,
+            "failures_past_1400_pushes_in_types": past_1400_pushes_types_failures,
+            "failures_past_2800_pushes_in_types": past_2800_pushes_types_failures,
             "failures_in_files": total_files_failures,
-            "failures_past_7_pushes_in_files": past_7_pushes_files_failures,
-            "failures_past_14_pushes_in_files": past_14_pushes_files_failures,
-            "failures_past_28_pushes_in_files": past_28_pushes_files_failures,
-            "failures_past_56_pushes_in_files": past_56_pushes_files_failures,
+            "failures_past_700_pushes_in_files": past_700_pushes_files_failures,
+            "failures_past_1400_pushes_in_files": past_1400_pushes_files_failures,
+            "failures_past_2800_pushes_in_files": past_2800_pushes_files_failures,
             "failures_in_directories": total_directories_failures,
-            "failures_past_7_pushes_in_directories": past_7_pushes_directories_failures,
-            "failures_past_14_pushes_in_directories": past_14_pushes_directories_failures,
-            "failures_past_28_pushes_in_directories": past_28_pushes_directories_failures,
-            "failures_past_56_pushes_in_directories": past_56_pushes_directories_failures,
+            "failures_past_700_pushes_in_directories": past_700_pushes_directories_failures,
+            "failures_past_1400_pushes_in_directories": past_1400_pushes_directories_failures,
+            "failures_past_2800_pushes_in_directories": past_2800_pushes_directories_failures,
             "failures_in_components": total_components_failures,
-            "failures_past_7_pushes_in_components": past_7_pushes_components_failures,
-            "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
-            "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
-            "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
+            "failures_past_700_pushes_in_components": past_700_pushes_components_failures,
+            "failures_past_1400_pushes_in_components": past_1400_pushes_components_failures,
+            "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
             "touched_together_files": touched_together_files,
             "touched_together_directories": touched_together_directories,
             "is_possible_regression": runnable in possible_regressions,
