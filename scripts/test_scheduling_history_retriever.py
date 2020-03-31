@@ -41,7 +41,7 @@ db.register(
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
-MOZCI_VERSION = 1
+MOZCI_VERSION = 2
 
 TRAINING_MONTHS = {
     "label": 7,
