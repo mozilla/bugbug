@@ -120,7 +120,7 @@ class Retriever(object):
             if not cached:
                 continue
 
-            value, mozci_version = cached if isinstance(cached, tuple) else (cached, 0)
+            value, mozci_version = cached
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
                 to_regenerate.add(value[0][0])
 
@@ -131,16 +131,8 @@ class Retriever(object):
                 num_cached += 1
                 cached = adr.config.cache.get(key)
                 if cached:
-                    # XXX: We have to support items in the cache that were added
-                    # before the mozci version was stored. We can drop the if
-                    # when all items have been switched over.
-                    value, mozci_version = (
-                        cached if isinstance(cached, tuple) else (cached, 0)
-                    )
+                    value, mozci_version = cached
                     push_data.append(value)
-                    # XXX: We re-cache now just to make sure all items get a mozci version.
-                    # We will remove this soon.
-                    adr.config.cache.forever(key, (value, mozci_version))
             else:
                 logger.info(f"Analyzing {push.rev} at the {runnable} level...")
 
