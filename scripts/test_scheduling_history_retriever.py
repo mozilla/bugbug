@@ -127,9 +127,7 @@ class Retriever(object):
         for push in tqdm(pushes):
             key = cache_key(push)
 
-            # XXX: Move this back to adr.config.cache.has to avoid regenerating
-            # results where we failed.
-            if adr.config.cache.get(key) and push.revs[0] not in to_regenerate:
+            if adr.config.cache.has(key) and push.revs[0] not in to_regenerate:
                 num_cached += 1
                 cached = adr.config.cache.get(key)
                 if cached:
