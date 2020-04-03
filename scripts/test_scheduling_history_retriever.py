@@ -30,7 +30,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 JOBS_TO_CONSIDER = ("test-", "build-")
-JOBS_TO_IGNORE = ("build-docker-image-",)
+JOBS_TO_IGNORE = ("build-docker-image-", "-test-verify-")
 
 ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
@@ -58,7 +58,7 @@ def filter_runnables(runnables, all_runnables, granularity):
             granularity == "group"
             or (
                 any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
-                and not any(runnable.startswith(j) for j in JOBS_TO_IGNORE)
+                and not any(j in runnable for j in JOBS_TO_IGNORE)
             )
         )
     )
