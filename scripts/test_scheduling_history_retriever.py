@@ -185,6 +185,7 @@ class Retriever(object):
         )
         if updated:
             zstd_decompress(push_data_path)
+            os.remove(f"{push_data_path}.zst")
         assert os.path.exists(push_data_path), "Decompressed push data file exists"
 
         # Get the commits DB.
