@@ -73,18 +73,18 @@ class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
 
+    def upload_adr_cache():
+        cache_path = os.path.splitext(ADR_CACHE_DB)[0]
+        assert os.path.abspath(
+            adr.config["cache"]["stores"]["file"]["path"]
+        ) == os.path.abspath(cache_path)
+
+        with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
+            tar.add(cache_path)
+
+        db.upload(ADR_CACHE_DB)
+
     def generate_push_data(self, runnable):
-        def upload_adr_cache():
-            cache_path = os.path.splitext(ADR_CACHE_DB)[0]
-            assert os.path.abspath(
-                adr.config["cache"]["stores"]["file"]["path"]
-            ) == os.path.abspath(cache_path)
-
-            with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
-                tar.add(cache_path)
-
-            db.upload(ADR_CACHE_DB)
-
         # We keep in the cache the fact that we failed to analyze a push for 10
         # days, so if we re-run often we don't retry the same pushes many times.
         MISSING_CACHE_RETENTION = 10 * 24 * 60
@@ -159,13 +159,11 @@ class Retriever(object):
                     traceback.print_exc()
                     adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-            if time.monotonic() - start_time >= 3600:
-                upload_adr_cache()
+            if time.monotonic() - start_time >= 10800:
+                self.upload_adr_cache()
                 start_time = time.monotonic()
 
         logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
-
-        upload_adr_cache()
 
         with open(f"push_data_{runnable}.json", "w") as f:
             json.dump(push_data, f)
@@ -177,6 +175,7 @@ class Retriever(object):
         db.download(ADR_CACHE_DB)
         self.generate_push_data("label")
         self.generate_push_data("group")
+        self.upload_adr_cache()
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
