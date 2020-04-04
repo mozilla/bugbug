@@ -5,7 +5,6 @@
 
 import math
 import random
-from collections import defaultdict
 
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
@@ -120,7 +119,7 @@ class TestSelectModel(Model):
 
     def get_labels(self):
         classes = {}
-        classes_by_rev = defaultdict(dict)
+        pushes = {}
 
         for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
@@ -129,45 +128,36 @@ class TestSelectModel(Model):
             if self.granularity == "label" and not name.startswith("test-"):
                 continue
 
+            if rev not in pushes:
+                pushes[rev] = {
+                    "failures": [],
+                    "passes": [],
+                }
+
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
-                classes_by_rev[rev][name] = 1
+                pushes[rev]["failures"].append(name)
             else:
-                classes_by_rev[rev][name] = 0
+                pushes[rev]["passes"].append(name)
 
         if self.use_subset:
             random.seed(0)
 
-            for rev, by_name in classes_by_rev.items():
-                passing_names = [name for name, val in by_name.items() if val == 0]
-                if len(passing_names) == 0:
-                    continue
-
-                chosen_passing_names = random.sample(
-                    passing_names, math.ceil(len(passing_names) / 10)
+            for rev, push in pushes.items():
+                push["passes"] = random.sample(
+                    push["passes"], math.ceil(len(push["passes"]) / 10)
                 )
-                assert len(chosen_passing_names) > 0
 
-                to_delete = set(passing_names) - set(chosen_passing_names)
-                for name in to_delete:
-                    del by_name[name]
+        for rev, push in pushes.items():
+            for name in push["failures"]:
+                classes[(rev, name)] = 1
 
-        classes = {
-            (rev, name): val
-            for rev, by_name in classes_by_rev.items()
-            for name, val in by_name.items()
-        }
+            for name in push["passes"]:
+                classes[(rev, name)] = 0
 
-        print("{} pushes considered".format(len(classes_by_rev)))
+        print("{} pushes considered".format(len(pushes)))
         print(
             "{} pushes with at least one failure".format(
-                len(
-                    set(
-                        rev
-                        for rev, by_name in classes_by_rev.items()
-                        for label in by_name.values()
-                        if label == 1
-                    )
-                )
+                sum(1 for push in pushes.values() if len(push["failures"]) > 0)
             )
         )
         print(
