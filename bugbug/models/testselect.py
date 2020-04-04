@@ -122,12 +122,9 @@ class TestSelectModel(Model):
         classes = {}
         classes_by_rev = defaultdict(dict)
 
-        revs = set()
         for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
             name = test_data["name"]
-
-            revs.add(rev)
 
             if self.granularity == "label" and not name.startswith("test-"):
                 continue
