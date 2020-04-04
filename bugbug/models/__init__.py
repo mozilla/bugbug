@@ -55,6 +55,5 @@ def load_model(model_name):
 
     model_file_path = f"{model_name}model"
 
-    LOGGER.info(f"Lookup model in {model_file_path}")
-    model = model_class.load(model_file_path)
-    return model
+    LOGGER.debug(f"Lookup model in {model_file_path}")
+    return model_class.load(model_file_path)
