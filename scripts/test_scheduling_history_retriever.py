@@ -115,14 +115,14 @@ class Retriever(object):
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
         # run.
         to_regenerate = set()
-        """for push in pushes[::-1]:
+        for push in pushes[::-1]:
             cached = adr.config.cache.get(cache_key(push))
             if not cached:
                 continue
 
             value, mozci_version = cached
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
-                to_regenerate.add(value[0][0])"""
+                to_regenerate.add(value[0][0])
 
         for push in tqdm(pushes):
             key = cache_key(push)
