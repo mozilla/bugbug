@@ -30,7 +30,13 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 JOBS_TO_CONSIDER = ("test-", "build-")
-JOBS_TO_IGNORE = ("build-docker-image-", "-test-verify-")
+JOBS_TO_IGNORE = (
+    "build-docker-image-",
+    "-test-verify-",
+    "-awsy-",
+    "-raptor-",
+    "-talos-",
+)
 
 ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
