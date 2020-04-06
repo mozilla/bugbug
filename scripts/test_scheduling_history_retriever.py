@@ -314,8 +314,9 @@ class Retriever(object):
                     continue
 
                 # If we considered all_runnables, we'd generate a huge amount of data.
-                # So we consider only the runnables which run in this push, and the possible and likely regressions
-                # from this push.
+                # We consider only the runnables which run in this push, and the possible and likely regressions
+                # from this push. We can't consider all runnables because we can't be sure that a task that didn't
+                # run on a push would have been successful.
                 runnables_to_consider = list(
                     set(push_runnables + possible_regressions + likely_regressions)
                 )
