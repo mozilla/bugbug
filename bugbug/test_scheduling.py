@@ -16,11 +16,12 @@ PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/pro
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
 PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
+FAILING_TOGETHER_LABEL_DB = "failing_together_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
     10,
-    [PAST_FAILURES_LABEL_DB],
+    [PAST_FAILURES_LABEL_DB, FAILING_TOGETHER_LABEL_DB],
 )
 
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
@@ -60,6 +61,24 @@ def get_past_failures(granularity):
         protocol=pickle.DEFAULT_PROTOCOL,
         writeback=True,
     )
+
+
+failing_together = None
+
+
+def get_failing_together_db():
+    global failing_together
+    if failing_together is None:
+        failing_together = LMDBDict(
+            os.path.join("data", FAILING_TOGETHER_LABEL_DB[: -len(".tar.zst")])
+        )
+    return failing_together
+
+
+def close_failing_together_db():
+    global failing_together
+    failing_together.close()
+    failing_together = None
 
 
 touched_together = None
