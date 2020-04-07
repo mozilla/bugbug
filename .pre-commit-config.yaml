@@ -51,8 +51,8 @@ repos:
     hooks:
     -   id: mypy
         name: mypy-bugbug
-        files: ^bugbug/
-        entry: mypy bugbug/
+        files: ^bugbug/|^scripts/
+        entry: mypy bugbug/ scripts/
         pass_filenames: false
     -   id: mypy
         name: mypy-bugbug-http
