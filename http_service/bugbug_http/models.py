@@ -6,20 +6,18 @@
 import logging
 import math
 import os
-from datetime import datetime
-from typing import Dict
+from datetime import timedelta
 
 import numpy as np
 import orjson
 import requests
-from dateutil.relativedelta import relativedelta
 from redis import Redis
 
 from bugbug import bugzilla, commit_features, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.utils import get_hgmo_stack
-from bugbug_http import ALLOW_MISSING_MODELS
+from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger()
@@ -33,41 +31,14 @@ MODELS_NAMES = [
     "testlabelselect",
     "testgroupselect",
 ]
+
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
-
-
-MODEL_LAST_LOADED: Dict[str, datetime] = {}
-MODEL_CACHE: Dict[str, Model] = {}
-
-
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
-
-def get_model(model_name):
-    if model_name not in MODEL_CACHE:
-        LOGGER.info("Recreating the %r model in cache" % model_name)
-        try:
-            model = load_model(model_name)
-        except FileNotFoundError:
-            if ALLOW_MISSING_MODELS:
-                LOGGER.info(
-                    "Missing %r model, skipping because ALLOW_MISSING_MODELS is set"
-                    % model_name
-                )
-                return None
-            else:
-                raise
-
-        # Cache the model only if it was last used less than one hour ago.
-        if model_name in MODEL_LAST_LOADED and MODEL_LAST_LOADED[
-            model_name
-        ] > datetime.now() - relativedelta(hours=1):
-            MODEL_CACHE[model_name] = model
-    else:
-        model = MODEL_CACHE[model_name]
-
-    MODEL_LAST_LOADED[model_name] = datetime.now()
-    return model
+MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
+    timedelta(hours=1), load_model
+)
+MODEL_CACHE.start_ttl_thread()
 
 
 def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
@@ -99,7 +70,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
     if not bugs:
         return "NOK"
 
-    model = get_model(model_name)
+    model = MODEL_CACHE.get(model_name)
 
     if not model:
         LOGGER.info("Missing model %r, aborting" % model_name)
@@ -183,7 +154,7 @@ def schedule_tests(branch, rev):
             commit_test["test_job"] = data
             commit_tests.append(commit_test)
 
-        probs = get_model(f"test{granularity}select").classify(
+        probs = MODEL_CACHE.get(f"test{granularity}select").classify(
             commit_tests, probabilities=True
         )
         selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]
