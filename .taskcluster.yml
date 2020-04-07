@@ -28,7 +28,7 @@ tasks:
 
     taskboot_image: "mozilla/taskboot:0.2.2"
   in:
-    $if: 'tasks_for in ["github-pull-request", "github-push"]'
+    $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
       - taskId: {$eval: as_slugid("lint_task")}
         created: {$fromNow: ''}
