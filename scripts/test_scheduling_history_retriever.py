@@ -374,7 +374,8 @@ class Retriever(object):
                 for revisions, push_tasks, possible_regressions, likely_regressions in push_data
             ]
 
-            generate_failing_together_probabilities(push_data)
+            if granularity == "label":
+                generate_failing_together_probabilities(push_data)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures["all_runnables"] = all_runnables
