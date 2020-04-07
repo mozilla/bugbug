@@ -5,6 +5,8 @@
 
 from datetime import datetime
 
+import pytest
+
 from bugbug import repository, test_scheduling
 
 
@@ -482,3 +484,390 @@ def test_touched_together_with_backout(monkeypatch):
 
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
+
+
+@pytest.mark.parametrize("granularity", ["group", "label"])
+def test_generate_data(granularity):
+    past_failures = test_scheduling.get_past_failures(granularity)
+
+    commits = [
+        {
+            "types": ["C/C++"],
+            "files": ["dom/file1.cpp"],
+            "directories": ["dom"],
+            "components": ["DOM"],
+        },
+        {
+            "types": ["C/C++"],
+            "files": ["dom/file1.cpp", "dom/file2.cpp"],
+            "directories": ["dom"],
+            "components": ["DOM"],
+        },
+        {
+            "types": ["C/C++"],
+            "files": ["layout/file.cpp"],
+            "directories": ["layout"],
+            "components": ["Layout"],
+        },
+        {
+            "types": ["C/C++"],
+            "files": ["layout/file.cpp"],
+            "directories": ["layout"],
+            "components": ["Layout"],
+        },
+        {
+            "types": ["JavaScript", "C/C++"],
+            "files": ["dom/file1.cpp", "dom/file1.js"],
+            "directories": ["dom"],
+            "components": ["DOM"],
+        },
+    ]
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures, commits[0], 1, ["runnable1", "runnable2"], [], []
+        )
+    )
+    assert len(data) == 2
+    assert data[0] == {
+        "failures": 0,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 0,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 0,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 0,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": False,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+    assert data[1] == {
+        "failures": 0,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 0,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 0,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 0,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": False,
+        "name": "runnable2",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures, commits[1], 2, ["runnable1", "runnable2"], ["runnable1"], []
+        )
+    )
+    assert len(data) == 2
+    assert data[0] == {
+        "failures": 0,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 0,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 0,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 0,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": True,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+    assert data[1] == {
+        "failures": 0,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 0,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 0,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 0,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": False,
+        "name": "runnable2",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures, commits[2], 3, ["runnable1", "runnable2"], [], ["runnable2"]
+        )
+    )
+    assert len(data) == 2
+    assert data[0] == {
+        "failures": 1,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 1,
+        "failures_past_1400_pushes": 1,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 1,
+        "failures_past_2800_pushes": 1,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 1,
+        "failures_past_700_pushes": 1,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 1,
+        "is_likely_regression": False,
+        "is_possible_regression": False,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+    assert data[1] == {
+        "failures": 0,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 0,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 0,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 0,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": True,
+        "is_possible_regression": False,
+        "name": "runnable2",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures, commits[3], 4, ["runnable1"], [], []
+        )
+    )
+    assert len(data) == 1
+    assert data[0] == {
+        "failures": 1,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 1,
+        "failures_past_1400_pushes": 1,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 1,
+        "failures_past_2800_pushes": 1,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 1,
+        "failures_past_700_pushes": 1,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 1,
+        "is_likely_regression": False,
+        "is_possible_regression": False,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures,
+            commits[4],
+            1500,
+            ["runnable1", "runnable2"],
+            ["runnable1", "runnable2"],
+            [],
+        )
+    )
+    assert len(data) == 2
+    assert data[0] == {
+        "failures": 1,
+        "failures_in_components": 1,
+        "failures_in_directories": 1,
+        "failures_in_files": 1,
+        "failures_in_types": 1,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 1,
+        "failures_past_2800_pushes_in_components": 1,
+        "failures_past_2800_pushes_in_directories": 1,
+        "failures_past_2800_pushes_in_files": 1,
+        "failures_past_2800_pushes_in_types": 1,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": True,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+    assert data[1] == {
+        "failures": 1,
+        "failures_in_components": 0,
+        "failures_in_directories": 0,
+        "failures_in_files": 0,
+        "failures_in_types": 1,
+        "failures_past_1400_pushes": 0,
+        "failures_past_1400_pushes_in_components": 0,
+        "failures_past_1400_pushes_in_directories": 0,
+        "failures_past_1400_pushes_in_files": 0,
+        "failures_past_1400_pushes_in_types": 0,
+        "failures_past_2800_pushes": 1,
+        "failures_past_2800_pushes_in_components": 0,
+        "failures_past_2800_pushes_in_directories": 0,
+        "failures_past_2800_pushes_in_files": 0,
+        "failures_past_2800_pushes_in_types": 1,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": True,
+        "name": "runnable2",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+
+    data = list(
+        test_scheduling.generate_data(
+            past_failures,
+            commits[4],
+            2400,
+            ["runnable1", "runnable2"],
+            ["runnable1", "runnable2"],
+            [],
+        )
+    )
+    assert len(data) == 2
+    assert data[0] == {
+        "failures": 2,
+        "failures_in_components": 2,
+        "failures_in_directories": 2,
+        "failures_in_files": 3,
+        "failures_in_types": 3,
+        "failures_past_1400_pushes": 1,
+        "failures_past_1400_pushes_in_components": 1,
+        "failures_past_1400_pushes_in_directories": 1,
+        "failures_past_1400_pushes_in_files": 2,
+        "failures_past_1400_pushes_in_types": 2,
+        "failures_past_2800_pushes": 2,
+        "failures_past_2800_pushes_in_components": 2,
+        "failures_past_2800_pushes_in_directories": 2,
+        "failures_past_2800_pushes_in_files": 3,
+        "failures_past_2800_pushes_in_types": 3,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": True,
+        "name": "runnable1",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
+    assert data[1] == {
+        "failures": 2,
+        "failures_in_components": 1,
+        "failures_in_directories": 1,
+        "failures_in_files": 2,
+        "failures_in_types": 3,
+        "failures_past_1400_pushes": 1,
+        "failures_past_1400_pushes_in_components": 1,
+        "failures_past_1400_pushes_in_directories": 1,
+        "failures_past_1400_pushes_in_files": 2,
+        "failures_past_1400_pushes_in_types": 2,
+        "failures_past_2800_pushes": 2,
+        "failures_past_2800_pushes_in_components": 1,
+        "failures_past_2800_pushes_in_directories": 1,
+        "failures_past_2800_pushes_in_files": 2,
+        "failures_past_2800_pushes_in_types": 3,
+        "failures_past_700_pushes": 0,
+        "failures_past_700_pushes_in_components": 0,
+        "failures_past_700_pushes_in_directories": 0,
+        "failures_past_700_pushes_in_files": 0,
+        "failures_past_700_pushes_in_types": 0,
+        "is_likely_regression": False,
+        "is_possible_regression": True,
+        "name": "runnable2",
+        "touched_together_directories": 0,
+        "touched_together_files": 0,
+    }
