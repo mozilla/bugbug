@@ -200,6 +200,9 @@ def _read_and_update_past_failures(
         is_new = full_key not in past_failures
 
         if is_new:
+            if not is_regression:
+                continue
+
             cur = ExpQueue(round(push_num / 100), int(HISTORICAL_TIMESPAN / 100) + 1, 0)
         else:
             cur = past_failures[full_key]
