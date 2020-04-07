@@ -288,23 +288,29 @@ def hg_modified_files(hg, commit):
     )
 
 
-def get_touched_functions(path, deleted_lines, added_lines, content):
-    if content is None:
-        return set()
+def get_functions_from_metrics(metrics_space):
+    functions = []
 
-    function_data = code_analysis_server.function(path, content)
-    if not function_data:
-        return set()
+    if metrics_space["kind"] == "function" and metrics_space["name"] != "<anonymous>":
+        functions.append(
+            {
+                "end_line": metrics_space["end_line"],
+                "name": metrics_space["name"],
+                "start_line": metrics_space["start_line"],
+            }
+        )
 
+    for space in metrics_space["spaces"]:
+        functions += get_functions_from_metrics(space)
+
+    return functions
+
+
+def get_touched_functions(metrics_space, deleted_lines, added_lines):
     touched_functions = set()
     touched_function_names = set()
 
-    functions = function_data["spans"]
-    functions = [
-        function
-        for function in functions
-        if not function["error"] and function["name"] != "<anonymous>"
-    ]
+    functions = get_functions_from_metrics(metrics_space)
 
     def get_touched(functions, lines):
         last_f = 0
@@ -468,21 +474,22 @@ def transform(hg, repo_dir, commit):
         elif type_ in SOURCE_CODE_TYPES_TO_EXT:
             commit.source_code_files_modified_num += 1
 
-            touched_functions = get_touched_functions(
-                path, stats["deleted_lines"], stats["added_lines"], after
-            )
-            if len(touched_functions) > 0:
-                commit.functions[path] = list(touched_functions)
-
             commit.source_code_added += len(stats["added_lines"])
             commit.source_code_deleted += len(stats["deleted_lines"])
 
             if size is not None:
                 source_code_sizes.append(size)
+
                 metrics = code_analysis_server.metrics(path, after, unit=False)
                 if metrics.get("spaces"):
                     metrics_file_count += 1
                     get_metrics(commit, metrics["spaces"])
+
+                    touched_functions = get_touched_functions(
+                        metrics["spaces"], stats["deleted_lines"], stats["added_lines"]
+                    )
+                    if len(touched_functions) > 0:
+                        commit.functions[path] = list(touched_functions)
 
                 # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
                 # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics

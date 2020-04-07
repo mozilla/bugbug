@@ -77,12 +77,3 @@ class RustCodeAnalysisServer:
             return {}
 
         return r.json()
-
-    def function(self, filename, code):
-        url = f"{self.base_url}/function?file_name={filename}"
-        r = requests.post(url, data=code, headers=HEADERS)
-
-        if not r.ok:
-            return {}
-
-        return r.json()

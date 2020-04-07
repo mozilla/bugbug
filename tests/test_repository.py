@@ -1542,13 +1542,10 @@ def test_get_touched_functions():
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
 
-    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    # No function touched.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.cpp",
-        [],
-        [],
         """void func1() {
     int i = 1;
 }
@@ -1556,15 +1553,16 @@ def test_get_touched_functions():
 void func2() {
     int i = 2;
 }""",
+        unit=False,
     )
+
+    # No function touched.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [],)
 
     assert touched_functions == set()
 
-    # A function touched by adding a line.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.cpp",
-        [],
-        [1],
         """void func1() {
     int i = 1;
 }
@@ -1572,15 +1570,16 @@ void func2() {
 void func2() {
     int i = 2;
 }""",
+        unit=False,
     )
+
+    # A function touched by adding a line.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [1],)
 
     assert touched_functions == {("func1", 1, 3)}
 
-    # A function touched by removing a line, another function touched by adding a line.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.cpp",
-        [2, 5, 6, 7, 8],
-        [6],
         """void func1() {
     int i = 1;
 }
@@ -1592,15 +1591,18 @@ void func3() {
 void func4() {
     int i = 4;
 }""",
+        unit=False,
+    )
+
+    # A function touched by removing a line, another function touched by adding a line.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"], [2, 5, 6, 7, 8], [6],
     )
 
     assert touched_functions == {("func3", 5, 7), ("func1", 1, 3)}
 
-    # A function touched by replacing a line.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.cpp",
-        [6],
-        [6],
         """void func1() {
     int i = 1;
 }
@@ -1608,50 +1610,57 @@ void func4() {
 void func2() {
     int i = 2;
 }""",
+        unit=False,
     )
+
+    # A function touched by replacing a line.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [6], [6],)
 
     assert touched_functions == {("func2", 5, 7)}
 
-    # top-level and a JavaScript function touched.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.js",
-        [],
-        [1, 4],
         """let j = 0;
 
 function func() {
 let i = 0;
 }""",
+        unit=False,
     )
+
+    # top-level and a JavaScript function touched.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [1, 4],)
 
     assert touched_functions == {("func", 3, 5)}
 
-    # An anonymous function touched inside another function.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.jsm",
-        [],
-        [4],
         """function outer_func() {
 let i = 0;
 let f = function() {
   let j = 0;
 }();
 }""",
+        unit=False,
     )
+
+    # An anonymous function touched inside another function.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [4],)
 
     assert touched_functions == {("outer_func", 1, 6)}
 
-    # A function touched inside another function.
-    touched_functions = repository.get_touched_functions(
+    metrics = code_analysis_server.metrics(
         "file.jsm",
-        [],
-        [4],
         """function outer_func() {
 let i = 0;
 function inner_func() {
   let j = 0;
 }
 }""",
+        unit=False,
     )
+
+    # A function touched inside another function.
+    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [4],)
 
     assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
