@@ -82,7 +82,7 @@ class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
 
-    def upload_adr_cache():
+    def upload_adr_cache(self):
         cache_path = os.path.splitext(ADR_CACHE_DB)[0]
         assert os.path.abspath(
             adr.config["cache"]["stores"]["file"]["path"]
