@@ -4,6 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import os
 
+from bugbug import repository
+
 
 class name(object):
     def __call__(self, test_job, **kwargs):
@@ -66,46 +68,46 @@ class prev_failures(object):
     def __call__(self, test_job, **kwargs):
         return {
             "total": test_job["failures"],
-            "past_7_pushes": test_job["failures_past_7_pushes"],
-            "past_14_pushes": test_job["failures_past_14_pushes"],
-            "past_28_pushes": test_job["failures_past_28_pushes"],
-            "past_56_pushes": test_job["failures_past_56_pushes"],
+            "past_700_pushes": test_job["failures_past_700_pushes"],
+            "past_1400_pushes": test_job["failures_past_1400_pushes"],
+            "past_2800_pushes": test_job["failures_past_2800_pushes"],
             "in_types": test_job["failures_in_types"],
-            "past_7_pushes_in_types": test_job["failures_past_7_pushes_in_types"],
-            "past_14_pushes_in_types": test_job["failures_past_14_pushes_in_types"],
-            "past_28_pushes_in_types": test_job["failures_past_28_pushes_in_types"],
-            "past_56_pushes_in_types": test_job["failures_past_56_pushes_in_types"],
+            "past_700_pushes_in_types": test_job["failures_past_700_pushes_in_types"],
+            "past_1400_pushes_in_types": test_job["failures_past_1400_pushes_in_types"],
+            "past_2800_pushes_in_types": test_job["failures_past_2800_pushes_in_types"],
             "in_files": test_job["failures_in_files"],
-            "past_7_pushes_in_files": test_job["failures_past_7_pushes_in_files"],
-            "past_14_pushes_in_files": test_job["failures_past_14_pushes_in_files"],
-            "past_28_pushes_in_files": test_job["failures_past_28_pushes_in_files"],
-            "past_56_pushes_in_files": test_job["failures_past_56_pushes_in_files"],
+            "past_700_pushes_in_files": test_job["failures_past_700_pushes_in_files"],
+            "past_1400_pushes_in_files": test_job["failures_past_1400_pushes_in_files"],
+            "past_2800_pushes_in_files": test_job["failures_past_2800_pushes_in_files"],
             "in_directories": test_job["failures_in_directories"],
-            "past_7_pushes_in_directories": test_job[
-                "failures_past_7_pushes_in_directories"
-            ],
-            "past_14_pushes_in_directories": test_job[
-                "failures_past_14_pushes_in_directories"
-            ],
-            "past_28_pushes_in_directories": test_job[
-                "failures_past_28_pushes_in_directories"
-            ],
-            "past_56_pushes_in_directories": test_job[
-                "failures_past_56_pushes_in_directories"
-            ],
-            "in_components": test_job["failures_in_components"],
-            "past_7_pushes_in_components": test_job[
-                "failures_past_7_pushes_in_components"
-            ],
-            "past_14_pushes_in_components": test_job[
-                "failures_past_14_pushes_in_components"
-            ],
-            "past_28_pushes_in_components": test_job[
-                "failures_past_28_pushes_in_components"
-            ],
-            "past_56_pushes_in_components": test_job[
-                "failures_past_56_pushes_in_components"
-            ],
+            # "past_700_pushes_in_directories": test_job[
+            #     "failures_past_700_pushes_in_directories"
+            # ],
+            # "past_1400_pushes_in_directories": test_job[
+            #     "failures_past_1400_pushes_in_directories"
+            # ],
+            # "past_2800_pushes_in_directories": test_job[
+            #     "failures_past_2800_pushes_in_directories"
+            # ],
+            # "in_components": test_job["failures_in_components"],
+            # "past_100_pushes_in_components": test_job[
+            #     "failures_past_100_pushes_in_components"
+            # ],
+            # "past_200_pushes_in_components": test_job[
+            #     "failures_past_200_pushes_in_components"
+            # ],
+            # "past_300_pushes_in_components": test_job[
+            #     "failures_past_300_pushes_in_components"
+            # ],
+            # "past_700_pushes_in_components": test_job[
+            #     "failures_past_700_pushes_in_components"
+            # ],
+            # "past_1400_pushes_in_components": test_job[
+            #     "failures_past_1400_pushes_in_components"
+            # ],
+            # "past_2800_pushes_in_components": test_job[
+            #     "failures_past_2800_pushes_in_components"
+            # ],
         }
 
 
@@ -163,3 +165,33 @@ class common_path_components(object):
             len(set(path.split("/")) & test_components) for path in commit["files"]
         ]
         return max(common_components_numbers, default=None)
+
+
+class first_common_parent_distance(object):
+    def __call__(self, test_job, commit, **kwargs):
+        distances = []
+        for path in commit["files"]:
+            path_components = path.split("/")
+
+            for i in range(len(path_components) - 1, 0, -1):
+                if test_job["name"].startswith("/".join(path_components[:i])):
+                    distances.append(i)
+                    break
+
+        return min(distances, default=None)
+
+
+class same_component(object):
+    def __call__(self, test_job, commit, **kwargs):
+        component_mapping = repository.get_component_mapping()
+
+        if test_job["name"].encode("utf-8") not in component_mapping:
+            return None
+
+        touches_same_component = any(
+            component_mapping[test_job["name"].encode("utf-8")]
+            == component_mapping[f.encode("utf-8")]
+            for f in commit["files"]
+            if f.encode("utf-8") in component_mapping
+        )
+        return touches_same_component

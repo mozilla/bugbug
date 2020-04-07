@@ -52,8 +52,15 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 
+# Kill jobs which don't finish within 5 minutes.
+JOB_TIMEOUT = 5 * 60
+# Remove jobs from the queue if they haven't started within 5 minutes.
+QUEUE_TIMEOUT = 5 * 60
+# Store the information that a job failed for 30 minutes.
+FAILURE_TTL = 30 * 60
+
 q = Queue(
-    connection=redis_conn, default_timeout=5 * 60
+    connection=redis_conn, default_timeout=JOB_TIMEOUT
 )  # no args implies the default queue
 VALIDATOR = Validator()
 
@@ -158,7 +165,9 @@ def schedule_job(job, job_id=None):
     job_id = job_id or get_job_id()
 
     redis_conn.mset({job.mapping_key: job_id})
-    q.enqueue(job.func, *job.args, job_id=job_id)
+    q.enqueue(
+        job.func, *job.args, job_id=job_id, ttl=QUEUE_TIMEOUT, failure_ttl=FAILURE_TTL
+    )
 
 
 def schedule_bug_classification(model_name, bug_ids):

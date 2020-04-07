@@ -7,17 +7,21 @@ import itertools
 import os
 import pickle
 import shelve
+import sys
 
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
+PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
+
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
 PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
+FAILING_TOGETHER_LABEL_DB = "failing_together_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
-    8,
-    [PAST_FAILURES_LABEL_DB],
+    10,
+    [PAST_FAILURES_LABEL_DB, FAILING_TOGETHER_LABEL_DB],
 )
 
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
@@ -26,11 +30,11 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    12,
+    13,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
-HISTORICAL_TIMESPAN = 56
+HISTORICAL_TIMESPAN = 2800
 
 
 def get_test_scheduling_history(granularity):
@@ -59,16 +63,32 @@ def get_past_failures(granularity):
     )
 
 
+failing_together = None
+
+
+def get_failing_together_db():
+    global failing_together
+    if failing_together is None:
+        failing_together = LMDBDict(
+            os.path.join("data", FAILING_TOGETHER_LABEL_DB[: -len(".tar.zst")])
+        )
+    return failing_together
+
+
+def close_failing_together_db():
+    global failing_together
+    failing_together.close()
+    failing_together = None
+
+
 touched_together = None
 
 
 def get_touched_together_db():
     global touched_together
     if touched_together is None:
-        touched_together = shelve.Shelf(
-            LMDBDict(os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])),
-            protocol=pickle.DEFAULT_PROTOCOL,
-            writeback=True,
+        touched_together = LMDBDict(
+            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])
         )
     return touched_together
 
@@ -85,7 +105,7 @@ def get_touched_together_key(f1, f2):
     if f2 < f1:
         f1, f2 = f2, f1
 
-    return f"{f1}${f2}"
+    return f"{f1}${f2}".encode("utf-8")
 
 
 def get_touched_together(f1, f2):
@@ -96,7 +116,7 @@ def get_touched_together(f1, f2):
     if key not in touched_together:
         return 0
 
-    return touched_together[key]
+    return int.from_bytes(touched_together[key], sys.byteorder)
 
 
 def set_touched_together(f1, f2):
@@ -105,16 +125,18 @@ def set_touched_together(f1, f2):
     key = get_touched_together_key(f1, f2)
 
     if key not in touched_together:
-        touched_together[key] = 1
+        touched_together[key] = (1).to_bytes(4, sys.byteorder)
     else:
-        touched_together[key] += 1
+        touched_together[key] = (
+            int.from_bytes(touched_together[key], sys.byteorder) + 1
+        ).to_bytes(4, sys.byteorder)
 
 
 def update_touched_together():
     touched_together = get_touched_together_db()
     last_analyzed = (
-        touched_together["last_analyzed"]
-        if "last_analyzed" in touched_together
+        touched_together[b"last_analyzed"]
+        if b"last_analyzed" in touched_together
         else None
     )
 
@@ -125,15 +147,14 @@ def update_touched_together():
 
     end_revision = yield
 
-    i = 0
-
     for commit in repository.get_commits():
         seen.add(commit["node"])
 
         if can_start:
-            touched_together["last_analyzed"] = commit["node"]
+            touched_together[b"last_analyzed"] = commit["node"].encode("ascii")
 
             # As in the test scheduling history retriever script, for now skip commits which are too large.
+            # Skip backed-out commits since they are usually relanded and we don't want to count them twice.
             if len(commit["files"]) <= 50 and not commit["ever_backedout"]:
                 # Number of times a source file was touched together with a directory.
                 for f1 in commit["files"]:
@@ -148,10 +169,7 @@ def update_touched_together():
                 ):
                     set_touched_together(d1, d2)
 
-                i += 1
-                if i % 5000:
-                    touched_together.sync()
-        elif last_analyzed == commit["node"]:
+        elif last_analyzed == commit["node"].encode("ascii"):
             can_start = True
 
         if commit["node"] == end_revision:
@@ -170,40 +188,39 @@ def _read_and_update_past_failures(
     past_failures, type_, runnable, items, push_num, is_regression
 ):
     values_total = []
-    values_prev_7 = []
-    values_prev_14 = []
-    values_prev_28 = []
-    values_prev_56 = []
+    values_prev_700 = []
+    values_prev_1400 = []
+    values_prev_2800 = []
 
     key = f"{type_}${runnable}$"
 
     for item in items:
         full_key = key + item
 
-        if full_key not in past_failures:
-            cur = past_failures[full_key] = ExpQueue(
-                push_num, HISTORICAL_TIMESPAN + 1, 0
-            )
+        is_new = full_key not in past_failures
+
+        if is_new:
+            cur = ExpQueue(round(push_num / 100), int(HISTORICAL_TIMESPAN / 100) + 1, 0)
         else:
             cur = past_failures[full_key]
 
-        value = cur[push_num]
+        value = cur[round(push_num / 100)]
 
         values_total.append(value)
-        values_prev_7.append(value - cur[push_num - 7])
-        values_prev_14.append(value - cur[push_num - 14])
-        values_prev_28.append(value - cur[push_num - 28])
-        values_prev_56.append(value - cur[push_num - 56])
+        values_prev_700.append(value - cur[round((push_num - 700) / 100)])
+        values_prev_1400.append(value - cur[round((push_num - 1400) / 100)])
+        values_prev_2800.append(value - cur[round((push_num - 2800) / 100)])
 
         if is_regression:
-            cur[push_num] = value + 1
+            cur[round(push_num / 100)] = value + 1
+            if is_new:
+                past_failures[full_key] = cur
 
     return (
         sum(values_total),
-        sum(values_prev_7),
-        sum(values_prev_14),
-        sum(values_prev_28),
-        sum(values_prev_56),
+        sum(values_prev_700),
+        sum(values_prev_1400),
+        sum(values_prev_2800),
     )
 
 
@@ -228,40 +245,36 @@ def generate_data(
 
         (
             total_failures,
-            past_7_pushes_failures,
-            past_14_pushes_failures,
-            past_28_pushes_failures,
-            past_56_pushes_failures,
+            past_700_pushes_failures,
+            past_1400_pushes_failures,
+            past_2800_pushes_failures,
         ) = _read_and_update_past_failures(
             past_failures, "all", runnable, ["all"], push_num, is_regression
         )
 
         (
             total_types_failures,
-            past_7_pushes_types_failures,
-            past_14_pushes_types_failures,
-            past_28_pushes_types_failures,
-            past_56_pushes_types_failures,
+            past_700_pushes_types_failures,
+            past_1400_pushes_types_failures,
+            past_2800_pushes_types_failures,
         ) = _read_and_update_past_failures(
             past_failures, "type", runnable, commit["types"], push_num, is_regression,
         )
 
         (
             total_files_failures,
-            past_7_pushes_files_failures,
-            past_14_pushes_files_failures,
-            past_28_pushes_files_failures,
-            past_56_pushes_files_failures,
+            past_700_pushes_files_failures,
+            past_1400_pushes_files_failures,
+            past_2800_pushes_files_failures,
         ) = _read_and_update_past_failures(
             past_failures, "file", runnable, commit["files"], push_num, is_regression,
         )
 
         (
             total_directories_failures,
-            past_7_pushes_directories_failures,
-            past_14_pushes_directories_failures,
-            past_28_pushes_directories_failures,
-            past_56_pushes_directories_failures,
+            past_700_pushes_directories_failures,
+            past_1400_pushes_directories_failures,
+            past_2800_pushes_directories_failures,
         ) = _read_and_update_past_failures(
             past_failures,
             "directory",
@@ -273,10 +286,9 @@ def generate_data(
 
         (
             total_components_failures,
-            past_7_pushes_components_failures,
-            past_14_pushes_components_failures,
-            past_28_pushes_components_failures,
-            past_56_pushes_components_failures,
+            past_700_pushes_components_failures,
+            past_1400_pushes_components_failures,
+            past_2800_pushes_components_failures,
         ) = _read_and_update_past_failures(
             past_failures,
             "component",
@@ -289,30 +301,25 @@ def generate_data(
         yield {
             "name": runnable,
             "failures": total_failures,
-            "failures_past_7_pushes": past_7_pushes_failures,
-            "failures_past_14_pushes": past_14_pushes_failures,
-            "failures_past_28_pushes": past_28_pushes_failures,
-            "failures_past_56_pushes": past_56_pushes_failures,
+            "failures_past_700_pushes": past_700_pushes_failures,
+            "failures_past_1400_pushes": past_1400_pushes_failures,
+            "failures_past_2800_pushes": past_2800_pushes_failures,
             "failures_in_types": total_types_failures,
-            "failures_past_7_pushes_in_types": past_7_pushes_types_failures,
-            "failures_past_14_pushes_in_types": past_14_pushes_types_failures,
-            "failures_past_28_pushes_in_types": past_28_pushes_types_failures,
-            "failures_past_56_pushes_in_types": past_56_pushes_types_failures,
+            "failures_past_700_pushes_in_types": past_700_pushes_types_failures,
+            "failures_past_1400_pushes_in_types": past_1400_pushes_types_failures,
+            "failures_past_2800_pushes_in_types": past_2800_pushes_types_failures,
             "failures_in_files": total_files_failures,
-            "failures_past_7_pushes_in_files": past_7_pushes_files_failures,
-            "failures_past_14_pushes_in_files": past_14_pushes_files_failures,
-            "failures_past_28_pushes_in_files": past_28_pushes_files_failures,
-            "failures_past_56_pushes_in_files": past_56_pushes_files_failures,
+            "failures_past_700_pushes_in_files": past_700_pushes_files_failures,
+            "failures_past_1400_pushes_in_files": past_1400_pushes_files_failures,
+            "failures_past_2800_pushes_in_files": past_2800_pushes_files_failures,
             "failures_in_directories": total_directories_failures,
-            "failures_past_7_pushes_in_directories": past_7_pushes_directories_failures,
-            "failures_past_14_pushes_in_directories": past_14_pushes_directories_failures,
-            "failures_past_28_pushes_in_directories": past_28_pushes_directories_failures,
-            "failures_past_56_pushes_in_directories": past_56_pushes_directories_failures,
+            "failures_past_700_pushes_in_directories": past_700_pushes_directories_failures,
+            "failures_past_1400_pushes_in_directories": past_1400_pushes_directories_failures,
+            "failures_past_2800_pushes_in_directories": past_2800_pushes_directories_failures,
             "failures_in_components": total_components_failures,
-            "failures_past_7_pushes_in_components": past_7_pushes_components_failures,
-            "failures_past_14_pushes_in_components": past_14_pushes_components_failures,
-            "failures_past_28_pushes_in_components": past_28_pushes_components_failures,
-            "failures_past_56_pushes_in_components": past_56_pushes_components_failures,
+            "failures_past_700_pushes_in_components": past_700_pushes_components_failures,
+            "failures_past_1400_pushes_in_components": past_1400_pushes_components_failures,
+            "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
             "touched_together_files": touched_together_files,
             "touched_together_directories": touched_together_directories,
             "is_possible_regression": runnable in possible_regressions,

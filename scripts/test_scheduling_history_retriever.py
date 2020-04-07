@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import collections
+import itertools
 import json
 import math
 import os
+import struct
 import time
 import traceback
 from datetime import datetime
@@ -27,7 +33,13 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 JOBS_TO_CONSIDER = ("test-", "build-")
-JOBS_TO_IGNORE = ("build-docker-image-",)
+JOBS_TO_IGNORE = (
+    "build-docker-image-",
+    "-test-verify-",
+    "-awsy-",
+    "-raptor-",
+    "-talos-",
+)
 
 ADR_CACHE_DB = "data/adr_cache.tar"
 db.register(
@@ -35,7 +47,10 @@ db.register(
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/adr_cache.tar.zst",
     3,
 )
-PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
+# The mozci version (to bump whenever we change the mozci regression algorithm),
+# so we can keep track of which version of mozci was used to analyze a given push
+# and we can decide when we want to regenerate parts of the dataset.
+MOZCI_VERSION = 2
 
 TRAINING_MONTHS = {
     "label": 7,
@@ -52,7 +67,7 @@ def filter_runnables(runnables, all_runnables, granularity):
             granularity == "group"
             or (
                 any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
-                and not any(runnable.startswith(j) for j in JOBS_TO_IGNORE)
+                and not any(j in runnable for j in JOBS_TO_IGNORE)
             )
         )
     )
@@ -67,18 +82,18 @@ class Retriever(object):
     def __init__(self):
         os.makedirs("data", exist_ok=True)
 
+    def upload_adr_cache(self):
+        cache_path = os.path.splitext(ADR_CACHE_DB)[0]
+        assert os.path.abspath(
+            adr.config["cache"]["stores"]["file"]["path"]
+        ) == os.path.abspath(cache_path)
+
+        with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
+            tar.add(cache_path)
+
+        db.upload(ADR_CACHE_DB)
+
     def generate_push_data(self, runnable):
-        def upload_adr_cache():
-            cache_path = os.path.splitext(ADR_CACHE_DB)[0]
-            assert os.path.abspath(
-                adr.config["cache"]["stores"]["file"]["path"]
-            ) == os.path.abspath(cache_path)
-
-            with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
-                tar.add(cache_path)
-
-            db.upload(ADR_CACHE_DB)
-
         # We keep in the cache the fact that we failed to analyze a push for 10
         # days, so if we re-run often we don't retry the same pushes many times.
         MISSING_CACHE_RETENTION = 10 * 24 * 60
@@ -102,17 +117,34 @@ class Retriever(object):
 
         push_data = []
 
+        def cache_key(push):
+            return f"push_data.{runnable}.{push.rev}"
+
+        # Regenerating a large amount of data when we update the mozci regression detection
+        # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+        # run.
+        to_regenerate = set()
+        for push in pushes[::-1]:
+            cached = adr.config.cache.get(cache_key(push))
+            if not cached:
+                continue
+
+            value, mozci_version = cached
+            if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
+                to_regenerate.add(value[0][0])
+
         for push in tqdm(pushes):
-            key = f"push_data.{runnable}.{push.rev}"
+            key = cache_key(push)
 
-            logger.info(f"Analyzing {push.rev} at the {runnable} level...")
-
-            if adr.config.cache.has(key):
+            if adr.config.cache.has(key) and push.revs[0] not in to_regenerate:
                 num_cached += 1
-                value = adr.config.cache.get(key)
-                if value is not None:
+                cached = adr.config.cache.get(key)
+                if cached:
+                    value, mozci_version = cached
                     push_data.append(value)
             else:
+                logger.info(f"Analyzing {push.rev} at the {runnable} level...")
+
                 try:
                     if runnable == "label":
                         runnables = push.task_labels
@@ -126,23 +158,21 @@ class Retriever(object):
                         list(push.get_likely_regressions(runnable)),
                     ]
                     push_data.append(value)
-                    adr.config.cache.forever(key, value)
+                    adr.config.cache.forever(key, (value, MOZCI_VERSION))
                 except adr.errors.MissingDataError:
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
                     )
-                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
+                    adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
                 except Exception:
                     traceback.print_exc()
-                    adr.config.cache.put(key, None, MISSING_CACHE_RETENTION)
+                    adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-            if time.monotonic() - start_time >= 3600:
-                upload_adr_cache()
+            if time.monotonic() - start_time >= 10800:
+                self.upload_adr_cache()
                 start_time = time.monotonic()
 
         logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
-
-        upload_adr_cache()
 
         with open(f"push_data_{runnable}.json", "w") as f:
             json.dump(push_data, f)
@@ -154,12 +184,16 @@ class Retriever(object):
         db.download(ADR_CACHE_DB)
         self.generate_push_data("label")
         self.generate_push_data("group")
+        self.upload_adr_cache()
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
-        updated = download_check_etag(PUSH_DATA_URL.format(granularity=granularity))
+        updated = download_check_etag(
+            test_scheduling.PUSH_DATA_URL.format(granularity=granularity)
+        )
         if updated:
             zstd_decompress(push_data_path)
+            os.remove(f"{push_data_path}.zst")
         assert os.path.exists(push_data_path), "Decompressed push data file exists"
 
         # Get the commits DB.
@@ -188,6 +222,98 @@ class Retriever(object):
         last_node = None
         for test_data in test_scheduling.get_test_scheduling_history(granularity):
             last_node = test_data["revs"][0]
+
+        def generate_failing_together_probabilities(push_data):
+            # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
+            # `task2 failure -> task1 failure` separately, as they could be different.
+
+            count_runs = collections.Counter()
+            count_single_failures = collections.Counter()
+            count_both_failures = collections.Counter()
+
+            for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
+                push_data
+            ):
+                failures = set(likely_regressions + candidate_regressions)
+                all_tasks = list(set(tasks) | failures)
+
+                for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
+                    count_runs[(task1, task2)] += 1
+
+                    if task1 in failures:
+                        if task2 in failures:
+                            count_both_failures[(task1, task2)] += 1
+                        else:
+                            count_single_failures[(task1, task2)] += 1
+                    elif task2 in failures:
+                        count_single_failures[(task1, task2)] += 1
+
+            stats = {}
+
+            skipped = 0
+
+            for couple, run_count in count_runs.most_common():
+                failure_count = count_both_failures[couple]
+                support = failure_count / run_count
+
+                if support < 1 / 700:
+                    skipped += 1
+                    continue
+
+                if failure_count != 0:
+                    confidence = failure_count / (
+                        count_single_failures[couple] + failure_count
+                    )
+                else:
+                    confidence = 0.0
+
+                stats[couple] = (support, confidence)
+
+            logger.info(f"{skipped} couples skipped because their support was too low")
+
+            logger.info("Redundancies with the highest support and confidence:")
+            for couple, (support, confidence) in sorted(
+                stats.items(), key=lambda k: (-k[1][1], -k[1][0])
+            )[:7]:
+                failure_count = count_both_failures[couple]
+                run_count = count_runs[couple]
+                logger.info(
+                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+                )
+
+            logger.info("Redundancies with the highest confidence and lowest support:")
+            for couple, (support, confidence) in sorted(
+                stats.items(), key=lambda k: (-k[1][1], k[1][0])
+            )[:7]:
+                failure_count = count_both_failures[couple]
+                run_count = count_runs[couple]
+                logger.info(
+                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+                )
+
+            failing_together = test_scheduling.get_failing_together_db()
+            count_redundancies = collections.Counter()
+            for couple, (support, confidence) in stats.items():
+                if confidence == 1.0:
+                    count_redundancies["==100%"] += 1
+                if confidence > 0.9:
+                    count_redundancies[">=90%"] += 1
+                if confidence > 0.8:
+                    count_redundancies[">=80%"] += 1
+                if confidence > 0.7:
+                    count_redundancies[">=70%"] += 1
+
+                if confidence < 0.7:
+                    continue
+
+                failing_together[
+                    f"{couple[0]}${couple[1]}".encode("utf-8")
+                ] = struct.pack("ff", support, confidence)
+
+            for percentage, count in count_redundancies.most_common():
+                logger.info(f"{count} with {percentage} confidence")
+
+            test_scheduling.close_failing_together_db()
 
         def generate_all_data():
             past_failures = test_scheduling.get_past_failures(granularity)
@@ -233,6 +359,23 @@ class Retriever(object):
             )
             all_runnables_set = set(all_runnables_set)
             logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
+
+            push_data = [
+                (
+                    revisions,
+                    filter_runnables(push_tasks, all_runnables_set, granularity),
+                    filter_runnables(
+                        possible_regressions, all_runnables_set, granularity
+                    ),
+                    filter_runnables(
+                        likely_regressions, all_runnables_set, granularity
+                    ),
+                )
+                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+            ]
+
+            if granularity == "label":
+                generate_failing_together_probabilities(push_data)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures["all_runnables"] = all_runnables
@@ -289,13 +432,11 @@ class Retriever(object):
                     continue
 
                 # If we considered all_runnables, we'd generate a huge amount of data.
-                # So we consider only the runnables which run in this push, and the possible and likely regressions
-                # from this push.
+                # We consider only the runnables which run in this push, and the possible and likely regressions
+                # from this push. We can't consider all runnables because we can't be sure that a task that didn't
+                # run on a push would have been successful.
                 runnables_to_consider = list(
                     set(push_runnables + possible_regressions + likely_regressions)
-                )
-                runnables_to_consider = filter_runnables(
-                    runnables_to_consider, all_runnables_set, granularity
                 )
 
                 if len(runnables_to_consider) == 0:

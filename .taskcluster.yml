@@ -93,7 +93,7 @@ tasks:
                pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
                hg clone -r ce06125e4728 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
-               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.10/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
+               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
@@ -126,7 +126,7 @@ tasks:
             - "pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
                hg clone -r ce06125e4728 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
-               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.10/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
+               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&

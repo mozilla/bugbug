@@ -5,7 +5,7 @@
 
 import math
 import random
-from collections import defaultdict
+from collections import OrderedDict
 
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
@@ -44,30 +44,29 @@ class TestSelectModel(Model):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
-            test_scheduling_features.name(),
             test_scheduling_features.prev_failures(),
         ]
 
         if granularity == "label":
             feature_extractors += [
                 test_scheduling_features.platform(),
-                test_scheduling_features.chunk(),
+                # test_scheduling_features.chunk(),
                 test_scheduling_features.suite(),
             ]
         elif granularity == "group":
             feature_extractors += [
+                commit_features.source_code_files_modified_num(),
+                commit_features.other_files_modified_num(),
+                commit_features.test_files_modified_num(),
+                commit_features.source_code_file_size(),
+                commit_features.other_file_size(),
+                commit_features.test_file_size(),
+                commit_features.source_code_added(),
+                commit_features.other_added(),
+                commit_features.test_added(),
+                commit_features.source_code_deleted(),
+                commit_features.other_deleted(),
+                commit_features.test_deleted(),
                 test_scheduling_features.path_distance(),
                 test_scheduling_features.common_path_components(),
                 test_scheduling_features.touched_together(),
@@ -89,7 +88,25 @@ class TestSelectModel(Model):
     # To properly test the performance of our model, we need to split the data
     # according to time: we train on older pushes and evaluate on newer pushes.
     def train_test_split(self, X, y):
-        train_len = math.floor(0.9 * X.shape[0])
+        pushes = OrderedDict()
+        for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
+            rev = test_data["revs"][0]
+            name = test_data["name"]
+
+            if self.granularity == "label" and not name.startswith("test-"):
+                continue
+
+            if rev in pushes:
+                pushes[rev] += 1
+            else:
+                pushes[rev] = 1
+
+        train_push_len = math.floor(0.9 * len(pushes))
+        train_pushes = list(pushes.values())[:train_push_len]
+        train_len = sum(count for count in train_pushes)
+        print(
+            f"{train_push_len} pushes in the training set (corresponding to {train_len} push/jobs)"
+        )
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
     def items_gen(self, classes):
@@ -121,47 +138,47 @@ class TestSelectModel(Model):
 
     def get_labels(self):
         classes = {}
-        classes_by_rev = defaultdict(dict)
+        pushes = {}
 
-        random.seed(0)
-
-        revs = set()
         for test_data in test_scheduling.get_test_scheduling_history(self.granularity):
             rev = test_data["revs"][0]
             name = test_data["name"]
 
-            revs.add(rev)
-
             if self.granularity == "label" and not name.startswith("test-"):
                 continue
 
+            if rev not in pushes:
+                pushes[rev] = {
+                    "failures": [],
+                    "passes": [],
+                }
+
             if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
-                classes_by_rev[rev][name] = 1
+                pushes[rev]["failures"].append(name)
             else:
-                classes_by_rev[rev][name] = 0
+                pushes[rev]["passes"].append(name)
 
         if self.use_subset:
-            for rev, by_name in classes_by_rev.items():
-                passing_names = [name for name, val in by_name.items() if val == 0]
-                if len(passing_names) == 0:
-                    continue
+            random.seed(0)
 
-                chosen_passing_names = random.sample(
-                    passing_names, math.ceil(len(passing_names) / 10)
+            for rev, push in pushes.items():
+                push["passes"] = random.sample(
+                    push["passes"], math.ceil(len(push["passes"]) / 10)
                 )
-                assert len(chosen_passing_names) > 0
 
-                to_delete = set(passing_names) - set(chosen_passing_names)
-                for name in to_delete:
-                    del by_name[name]
+        for rev, push in pushes.items():
+            for name in push["failures"]:
+                classes[(rev, name)] = 1
 
-        classes = {
-            (rev, name): val
-            for rev, by_name in classes_by_rev.items()
-            for name, val in by_name.items()
-        }
+            for name in push["passes"]:
+                classes[(rev, name)] = 0
 
-        print("{} pushes considered".format(len(classes_by_rev)))
+        print("{} pushes considered".format(len(pushes)))
+        print(
+            "{} pushes with at least one failure".format(
+                sum(1 for push in pushes.values() if len(push["failures"]) > 0)
+            )
+        )
         print(
             "{} push/jobs failed".format(
                 sum(1 for label in classes.values() if label == 1)

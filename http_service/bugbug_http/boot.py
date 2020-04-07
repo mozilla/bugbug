@@ -5,6 +5,7 @@
 
 import concurrent.futures
 import logging
+import os
 
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
@@ -20,45 +21,59 @@ def boot_worker():
 
     def extract_past_failures_label():
         try:
-            utils.extract_file(test_scheduling.PAST_FAILURES_LABEL_DB)
+            utils.extract_file(
+                os.path.join("data", test_scheduling.PAST_FAILURES_LABEL_DB)
+            )
+            logger.info("Label-level past failures DB extracted.")
         except FileNotFoundError:
             assert ALLOW_MISSING_MODELS
-
-        logger.info("Label-level past failures DB extracted.")
+            logger.info(
+                "Label-level past failures DB not extracted, but missing models are allowed."
+            )
 
     def extract_past_failures_group():
         try:
-            utils.extract_file(test_scheduling.PAST_FAILURES_GROUP_DB)
+            utils.extract_file(
+                os.path.join("data", test_scheduling.PAST_FAILURES_GROUP_DB)
+            )
+            logger.info("Group-level past failures DB extracted.")
         except FileNotFoundError:
             assert ALLOW_MISSING_MODELS
-
-        logger.info("Group-level past failures DB extracted.")
+            logger.info(
+                "Group-level past failures DB not extracted, but missing models are allowed."
+            )
 
     def extract_touched_together():
         try:
-            utils.extract_file(test_scheduling.TOUCHED_TOGETHER_DB)
+            utils.extract_file(
+                os.path.join("data", test_scheduling.TOUCHED_TOGETHER_DB)
+            )
+            logger.info("Touched together DB extracted.")
         except FileNotFoundError:
             assert ALLOW_MISSING_MODELS
-
-        logger.info("Touched together DB extracted.")
+            logger.info(
+                "Touched together DB not extracted, but missing models are allowed."
+            )
 
     def extract_commits():
         try:
             utils.extract_file(f"{repository.COMMITS_DB}.zst")
+            logger.info("Commits DB extracted.")
+            return True
         except FileNotFoundError:
+            logger.info("Commits DB not extracted, but missing models are allowed.")
             assert ALLOW_MISSING_MODELS
             return False
 
-        logger.info("Commits DB extracted.")
-        return True
-
     def extract_commit_experiences():
         try:
-            utils.extract_file(repository.COMMIT_EXPERIENCES_DB)
+            utils.extract_file(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
+            logger.info("Commit experiences DB extracted.")
         except FileNotFoundError:
+            logger.info(
+                "Commit experiences DB not extracted, but missing models are allowed."
+            )
             assert ALLOW_MISSING_MODELS
-
-        logger.info("Commit experiences DB extracted.")
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)

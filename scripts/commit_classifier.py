@@ -628,11 +628,7 @@ class CommitClassifier(object):
                 runnable_jobs = json.load(f)
 
         # XXX: For now, only restrict to linux64 test tasks.
-        all_tasks = [
-            t
-            for t in all_tasks
-            if t.startswith("test-linux1804-64/") and "test-verify" not in t
-        ]
+        all_tasks = [t for t in all_tasks if t.startswith("test-linux1804-64/")]
 
         # XXX: Remove tasks which are not in runnable jobs right away, so we avoid classifying them.
 
