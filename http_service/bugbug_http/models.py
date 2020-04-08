@@ -4,16 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-import math
 import os
 from datetime import timedelta
 
-import numpy as np
 import orjson
 import requests
 from redis import Redis
 
-from bugbug import bugzilla, commit_features, repository, test_scheduling
+from bugbug import bugzilla, repository
 from bugbug.model import Model
 from bugbug.models import load_model
 from bugbug.utils import get_hgmo_stack
@@ -135,37 +133,13 @@ def schedule_tests(branch, rev):
         REPO_DIR, revs=revs, save=False, use_single_process=True
     )
 
-    commit_data = commit_features.merge_commits(commits)
-
-    def get_runnables(granularity):
-        past_failures_data = test_scheduling.get_past_failures(granularity)
-
-        push_num = past_failures_data["push_num"]
-        all_runnables = past_failures_data["all_runnables"]
-
-        commit_tests = []
-        for data in test_scheduling.generate_data(
-            past_failures_data, commit_data, push_num, all_runnables, [], []
-        ):
-            if granularity == "label" and not data["name"].startswith("test-"):
-                continue
-
-            commit_test = commit_data.copy()
-            commit_test["test_job"] = data
-            commit_tests.append(commit_test)
-
-        probs = MODEL_CACHE.get(f"test{granularity}select").classify(
-            commit_tests, probabilities=True
-        )
-        selected_indexes = np.argwhere(probs[:, 1] > test_selection_threshold)[:, 0]
-        return {
-            commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
-            for i in selected_indexes
-        }
-
     data = {
-        "tasks": get_runnables("label"),
-        "groups": get_runnables("group"),
+        "tasks": MODEL_CACHE.get("testlabelselect").select_tests(
+            commits, test_selection_threshold
+        ),
+        "groups": MODEL_CACHE.get("testgroupselect").select_tests(
+            commits, test_selection_threshold
+        ),
     }
     setkey(job.result_key, orjson.dumps(data))
 

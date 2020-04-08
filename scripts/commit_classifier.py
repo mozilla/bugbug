@@ -25,7 +25,7 @@ from libmozdata import vcs_map
 from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
-from bugbug import commit_features, db, repository, test_scheduling
+from bugbug import db, repository, test_scheduling
 from bugbug.utils import (
     download_and_load_model,
     download_check_etag,
@@ -610,15 +610,8 @@ class CommitClassifier(object):
 
         logger.info(f"Test failure risk: {testfailure_probs[0][1]}")
 
-        commit_data = commit_features.merge_commits(commits)
-
-        push_num = self.past_failures_data["push_num"]
-
-        # XXX: Consider using mozilla-central built-in rules to filter some of these out, e.g. SCHEDULES.
-        all_tasks = self.past_failures_data["all_runnables"]
-
         if not runnable_jobs_path:
-            runnable_jobs = {task for task in all_tasks}
+            runnable_jobs = {}
         elif runnable_jobs_path.startswith("http"):
             r = requests.get(runnable_jobs_path)
             r.raise_for_status()
@@ -627,27 +620,19 @@ class CommitClassifier(object):
             with open(runnable_jobs_path, "r") as f:
                 runnable_jobs = json.load(f)
 
-        # XXX: For now, only restrict to linux64 test tasks.
-        all_tasks = [t for t in all_tasks if t.startswith("test-linux1804-64/")]
-
         # XXX: Remove tasks which are not in runnable jobs right away, so we avoid classifying them.
+        # XXX: Consider using mozilla-central built-in rules to filter some of the tasks out, e.g. SCHEDULES.
 
-        commit_tests = []
-        for data in test_scheduling.generate_data(
-            self.past_failures_data, commit_data, push_num, all_tasks, [], []
-        ):
-            if not data["name"].startswith("test-"):
-                continue
+        selected_tasks = list(
+            self.model.select_tests(
+                commits, float(get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD"))
+            ).values()
+        )
 
-            commit_test = commit_data.copy()
-            commit_test["test_job"] = data
-            commit_tests.append(commit_test)
-
-        probs = self.model.classify(commit_tests, probabilities=True)
-        selected_indexes = np.argwhere(
-            probs[:, 1] > float(get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD"))
-        )[:, 0]
-        selected_tasks = [commit_tests[i]["test_job"]["name"] for i in selected_indexes]
+        # XXX: For now, only restrict to linux64 test tasks (as for runnable jobs above, we could remove these right away).
+        selected_tasks = [
+            t for t in selected_tasks if t.startswith("test-linux1804-64/")
+        ]
 
         with open("failure_risk", "w") as f:
             f.write(
@@ -658,26 +643,27 @@ class CommitClassifier(object):
             )
 
         # This should be kept in sync with the test scheduling history retriever script.
-        cleaned_selected_tasks = []
-        for selected_task in selected_tasks:
-            if (
-                selected_task.startswith("test-linux64")
-                and selected_task not in runnable_jobs
-            ):
-                selected_task = selected_task.replace(
-                    "test-linux64-", "test-linux1804-64-"
-                )
+        if len(runnable_jobs) > 0:
+            cleaned_selected_tasks = []
+            for selected_task in selected_tasks:
+                if (
+                    selected_task.startswith("test-linux64")
+                    and selected_task not in runnable_jobs
+                ):
+                    selected_task = selected_task.replace(
+                        "test-linux64-", "test-linux1804-64-"
+                    )
 
-            if (
-                selected_task.startswith("test-linux1804-64-")
-                and selected_task not in runnable_jobs
-            ):
-                selected_task = selected_task.replace(
-                    "test-linux1804-64-", "test-linux64-"
-                )
+                if (
+                    selected_task.startswith("test-linux1804-64-")
+                    and selected_task not in runnable_jobs
+                ):
+                    selected_task = selected_task.replace(
+                        "test-linux1804-64-", "test-linux64-"
+                    )
 
-            if selected_task in runnable_jobs:
-                cleaned_selected_tasks.append(selected_task)
+                if selected_task in runnable_jobs:
+                    cleaned_selected_tasks.append(selected_task)
 
         # It isn't worth running the build associated to the tests, if we only run three test tasks.
         if len(cleaned_selected_tasks) < 3:

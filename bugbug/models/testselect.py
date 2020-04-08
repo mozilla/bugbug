@@ -7,6 +7,7 @@ import math
 import random
 from collections import OrderedDict
 
+import numpy as np
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
@@ -191,6 +192,32 @@ class TestSelectModel(Model):
         )
 
         return classes, [0, 1]
+
+    def select_tests(self, commits, confidence=0.3):
+        commit_data = commit_features.merge_commits(commits)
+
+        past_failures_data = test_scheduling.get_past_failures(self.granularity)
+
+        push_num = past_failures_data["push_num"] + 1
+        all_runnables = past_failures_data["all_runnables"]
+
+        commit_tests = []
+        for data in test_scheduling.generate_data(
+            past_failures_data, commit_data, push_num, all_runnables, [], []
+        ):
+            if self.granularity == "label" and not data["name"].startswith("test-"):
+                continue
+
+            commit_test = commit_data.copy()
+            commit_test["test_job"] = data
+            commit_tests.append(commit_test)
+
+        probs = self.classify(commit_tests, probabilities=True)
+        selected_indexes = np.argwhere(probs[:, 1] >= confidence)[:, 0]
+        return {
+            commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
+            for i in selected_indexes
+        }
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
