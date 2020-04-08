@@ -29,8 +29,6 @@ def fake_hg_repo(tmpdir):
     os.environ["USER"] = "app"
     hg = hglib.open(local)
 
-    hg.branch(b"central")
-
     responses.add_passthru("http://localhost:8000")
 
     yield hg, local, remote
