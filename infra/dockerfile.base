@@ -3,11 +3,13 @@ FROM python:3.8.2-slim
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
 RUN apt-get update && \
-		apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev && \
+		apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 && \
 		pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
 		apt-get purge -y gcc g++ libffi-dev && \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
+
+ENV LD_PRELOAD="libjemalloc.so.2"
 
 COPY infra/adr_config.toml /root/.config/adr/config.toml
 
