@@ -315,6 +315,11 @@ class Model:
     def train_test_split(self, X, y):
         return train_test_split(X, y, test_size=0.1, random_state=0)
 
+    def evaluation(self):
+        """Subclasses can implement their own additional evaluation.
+        """
+        pass
+
     def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
@@ -522,6 +527,8 @@ class Model:
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )
+
+        self.evaluation()
 
         if self.entire_dataset_training:
             print("Retraining on the entire dataset...")
