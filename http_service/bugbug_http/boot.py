@@ -31,6 +31,18 @@ def boot_worker():
                 "Label-level past failures DB not extracted, but missing models are allowed."
             )
 
+    def extract_failing_together():
+        try:
+            utils.extract_file(
+                os.path.join("data", test_scheduling.FAILING_TOGETHER_LABEL_DB)
+            )
+            logger.info("Failing together DB extracted.")
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
+            logger.info(
+                "Failing together DB not extracted, but missing models are allowed."
+            )
+
     def extract_past_failures_group():
         try:
             utils.extract_file(
@@ -83,6 +95,7 @@ def boot_worker():
         extract_touched_together()
         extract_past_failures_label()
         extract_past_failures_group()
+        extract_failing_together()
 
         if commits_db_extracted:
             # Update the commits DB.

@@ -35,6 +35,12 @@ def download_models():
     )
 
     db.download_support_file(
+        test_scheduling.TEST_LABEL_SCHEDULING_DB,
+        test_scheduling.FAILING_TOGETHER_LABEL_DB,
+        extract=False,
+    )
+
+    db.download_support_file(
         test_scheduling.TEST_GROUP_SCHEDULING_DB,
         test_scheduling.PAST_FAILURES_GROUP_DB,
         extract=False,
