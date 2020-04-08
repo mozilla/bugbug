@@ -947,7 +947,7 @@ def download_commits(
         else:
             commits = hg_log(hg, revs)
 
-        if save:
+        if save or not os.path.exists("data/component_mapping.lmdb"):
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
