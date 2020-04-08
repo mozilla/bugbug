@@ -16,6 +16,8 @@ import pytest
 import responses
 from rq.exceptions import NoSuchJobError
 
+import bugbug.models
+import bugbug.models.testselect
 import bugbug_http
 import bugbug_http.models
 from bugbug import repository, test_scheduling
@@ -291,41 +293,43 @@ def mock_schedule_tests_classify(monkeypatch):
 
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.
-        class Model:
-            def __init__(self, name):
-                self.name = name
-
-            def classify(self, items, probabilities=False):
-                assert probabilities
-                results = []
-                for item in items:
-                    runnable_name = item["test_job"]["name"]
-                    if self.name == "testlabelselect":
-                        if runnable_name in labels_to_choose:
-                            results.append(
-                                [
-                                    1 - labels_to_choose[runnable_name],
-                                    labels_to_choose[runnable_name],
-                                ]
-                            )
-                        else:
-                            results.append([0.9, 0.1])
-                    elif self.name == "testgroupselect":
-                        if runnable_name in groups_to_choose:
-                            results.append(
-                                [
-                                    1 - groups_to_choose[runnable_name],
-                                    groups_to_choose[runnable_name],
-                                ]
-                            )
-                        else:
-                            results.append([0.9, 0.1])
-                return np.array(results)
+        def classify(self, items, probabilities=False):
+            assert probabilities
+            results = []
+            for item in items:
+                runnable_name = item["test_job"]["name"]
+                if self.granularity == "label":
+                    if runnable_name in labels_to_choose:
+                        results.append(
+                            [
+                                1 - labels_to_choose[runnable_name],
+                                labels_to_choose[runnable_name],
+                            ]
+                        )
+                    else:
+                        results.append([0.9, 0.1])
+                elif self.granularity == "group":
+                    if runnable_name in groups_to_choose:
+                        results.append(
+                            [
+                                1 - groups_to_choose[runnable_name],
+                                groups_to_choose[runnable_name],
+                            ]
+                        )
+                    else:
+                        results.append([0.9, 0.1])
+            return np.array(results)
 
         class MockModelCache:
             def get(self, model_name):
-                return Model(model_name)
+                if "group" in model_name:
+                    return bugbug.models.testselect.TestGroupSelectModel()
+                else:
+                    return bugbug.models.testselect.TestLabelSelectModel()
 
         monkeypatch.setattr(bugbug_http.models, "MODEL_CACHE", MockModelCache())
+        monkeypatch.setattr(
+            bugbug.models.testselect.TestSelectModel, "classify", classify
+        )
 
     return do_mock
