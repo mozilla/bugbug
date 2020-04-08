@@ -45,7 +45,21 @@ def get_test_scheduling_history(granularity):
     else:
         raise Exception(f"{granularity} granularity unsupported")
 
-    return db.read(test_scheduling_db)
+    cur_revs = None
+    test_datas = []
+    for test_data in db.read(test_scheduling_db):
+        revs = test_data["revs"]
+        if cur_revs is None:
+            cur_revs = revs
+        elif revs[0] != cur_revs[0]:
+            yield cur_revs, test_datas
+            cur_revs = revs
+            test_datas = []
+
+        test_datas.append(test_data)
+
+    if cur_revs is not None:
+        yield cur_revs, test_datas
 
 
 def get_past_failures(granularity):

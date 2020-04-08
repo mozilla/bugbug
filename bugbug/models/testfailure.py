@@ -69,17 +69,9 @@ class TestFailureModel(CommitModel):
 
         assert len(commit_map) > 0
 
-        done = set()
-        for test_data in test_scheduling.get_test_scheduling_history("label"):
-            revs = test_data["revs"]
-
-            if revs[0] in done:
-                continue
-
+        for revs, test_datas in test_scheduling.get_test_scheduling_history("label"):
             if revs[0] not in classes:
                 continue
-
-            done.add(revs[0])
 
             commits = tuple(
                 commit_map[revision] for revision in revs if revision in commit_map
@@ -93,12 +85,15 @@ class TestFailureModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        for test_data in test_scheduling.get_test_scheduling_history("label"):
-            rev = test_data["revs"][0]
+        for revs, test_datas in test_scheduling.get_test_scheduling_history("label"):
+            rev = revs[0]
 
-            if test_data["is_likely_regression"] or test_data["is_possible_regression"]:
+            if any(
+                test_data["is_likely_regression"] or test_data["is_possible_regression"]
+                for test_data in test_datas
+            ):
                 classes[rev] = 1
-            elif rev not in classes:
+            else:
                 classes[rev] = 0
 
         print(
