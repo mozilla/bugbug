@@ -208,6 +208,9 @@ class Retriever(object):
             past_failures_db = os.path.join(
                 "data", test_scheduling.PAST_FAILURES_LABEL_DB
             )
+            failing_together_db = os.path.join(
+                "data", test_scheduling.FAILING_TOGETHER_LABEL_DB
+            )
         elif granularity == "group":
             test_scheduling_db = test_scheduling.TEST_GROUP_SCHEDULING_DB
             past_failures_db = os.path.join(
@@ -489,6 +492,10 @@ class Retriever(object):
         if granularity == "group":
             with open_tar_zst(touched_together_db) as tar:
                 tar.add(touched_together_db[: -len(".tar.zst")])
+
+        if granularity == "label":
+            with open_tar_zst(failing_together_db) as tar:
+                tar.add(failing_together_db[: -len(".tar.zst")])
 
 
 def main():
