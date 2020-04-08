@@ -263,8 +263,8 @@ tasks:
           public/past_failures_label.lmdb.tar.zst:
             path: /data/past_failures_label.lmdb.tar.zst
             type: file
-          public/failing_together.lmdb.tar.zst:
-            path: /data/failing_together.lmdb.tar.zst
+          public/failing_together_label.lmdb.tar.zst:
+            path: /data/failing_together_label.lmdb.tar.zst
             type: file
 
         features:
