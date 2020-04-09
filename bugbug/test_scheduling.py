@@ -128,7 +128,8 @@ def set_touched_together(f1, f2):
     if key not in touched_together:
         touched_together[key] = struct.pack("i", 1)
     else:
-        touched_together[key] = struct.pack("i",
+        touched_together[key] = struct.pack(
+            "i",
             struct.unpack("i", touched_together[key])[0] + 1
         )
 
