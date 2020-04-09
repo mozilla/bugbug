@@ -291,7 +291,11 @@ def hg_modified_files(hg, commit):
 def get_functions_from_metrics(metrics_space):
     functions = []
 
-    if metrics_space["kind"] == "function" and metrics_space["name"] != "<anonymous>":
+    if (
+        metrics_space["kind"] == "function"
+        and metrics_space["name"]
+        and metrics_space["name"] != "<anonymous>"
+    ):
         functions.append(
             {
                 "end_line": metrics_space["end_line"],
@@ -361,7 +365,7 @@ def get_touched_functions(metrics_space, deleted_lines, added_lines):
 
 
 def get_metrics(commit, metrics_space):
-    if metrics_space["kind"] == "function":
+    if metrics_space["kind"] == "function" and metrics_space["name"]:
         metrics = metrics_space["metrics"]
         commit.total_cyclomatic += metrics["cyclomatic"]
         commit.total_halstead_n2 += metrics["halstead"]["n2"]
