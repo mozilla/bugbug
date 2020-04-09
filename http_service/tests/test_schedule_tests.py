@@ -34,69 +34,44 @@ def test_simple_schedule(
     mock_schedule_tests_classify,
 ):
     # The repo should be almost empty at first
-    repo_dir, _ = mock_repo
-    repo = hglib.open(str(repo_dir))
-    assert len(repo.log()) == 4
-    test_txt = repo_dir / "test.txt"
-    assert test_txt.exists()
-    assert test_txt.read_text("utf-8") == "Version 3"
+    repo_dir, remote_repo_dir = mock_repo
+    with hglib.open(str(repo_dir)) as hg:
+        logs = hg.log()
+        assert len(logs) == 4
+        assert [l.desc.decode("utf-8") for l in logs] == [
+            "Base history 3",
+            "Base history 2",
+            "Base history 1",
+            "Base history 0",
+        ]
+    with hglib.open(str(remote_repo_dir)) as hg:
+        rev = hg.log()[-1].node.decode("ascii")[:12]
 
     mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
 
     # Scheduling a test on a revision should apply changes in the repo
-    assert models.schedule_tests("mozilla-central", "12345deadbeef") == "OK"
+    assert models.schedule_tests("mozilla-central", rev) == "OK"
 
     # Check changes have been applied
-    assert len(repo.log()) == 5
-    assert test_txt.read_text("utf-8") == "Version 3\nThis is a new line\n"
+    with hglib.open(str(repo_dir)) as hg:
+        assert len(hg.log()) == 5
+        assert [l.desc.decode("utf-8") for l in hg.log()] == [
+            "Bug 1 - Pulled from remote",
+            "Base history 3",
+            "Base history 2",
+            "Base history 1",
+            "Base history 0",
+        ]
 
     # Assert the test selection result is stored in Redis.
     assert json.loads(
-        models.redis.get(
-            "bugbug:job_result:schedule_tests:mozilla-central_12345deadbeef"
-        )
+        models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
     ) == {"tasks": labels_to_choose, "groups": groups_to_choose,}
 
 
 @pytest.mark.parametrize(
     "branch, revision, result, final_log",
     [
-        # patch from autoland based on local parent n°0
-        (
-            "integration/autoland",
-            "normal123",
-            "OK",
-            ["Bug 123 - Target patch", "Bug 123 - Parent 123", "Base history 0"],
-        ),
-        # patch from autoland where parent is not available
-        # so the patch is applied on top of tip
-        (
-            "integration/autoland",
-            "orphan123",
-            "OK",
-            [
-                "Bug 123 - Orphan 123",
-                "Base history 3",
-                "Base history 2",
-                "Base history 1",
-                "Base history 0",
-            ],
-        ),
-        # patch on autoland that only applies after a pull has been done
-        (
-            "integration/autoland",
-            "needRemote",
-            "OK",
-            [
-                "Bug 123 - On top of remote + local",
-                "Bug 123 - Based on remote",
-                "Pulled from remote",
-                "Base history 3",
-                "Base history 2",
-                "Base history 1",
-                "Base history 0",
-            ],
-        ),
         # patch from try based on local parent n°1
         (
             "try",
@@ -139,7 +114,7 @@ def test_simple_schedule(
             "OK",
             [
                 "Bug 123 - Depends on remote",
-                "Pulled from remote",
+                "Bug 1 - Pulled from remote",
                 "Base history 3",
                 "Base history 2",
                 "Base history 1",

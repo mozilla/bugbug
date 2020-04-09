@@ -10,7 +10,7 @@
         {
             "node": "needRemote",
             "parents": [
-                "PULLED_FROM_REMOTE"
+                "BUG_1_-_PULLED_FROM_REMOTE"
             ],
             "phase": "draft"
         }

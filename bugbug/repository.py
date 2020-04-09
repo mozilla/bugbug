@@ -1113,40 +1113,49 @@ def apply_stack(repo_dir, stack, branch):
         return get_revs(hg, f"-{len(stack)}")
 
     with hglib.open(repo_dir) as hg:
-        # Start by cleaning the repo, without pulling
-        clean(hg, repo_dir, pull=False)
-        logger.info("Repository cleaned")
+        if branch != "try":
+            hg.pull(
+                source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+                rev=stack[-1]["pushhead"].encode("ascii"),
+            )
+            return [rev["node"].encode("ascii") for rev in stack]
+        else:
+            # Start by cleaning the repo, without pulling
+            clean(hg, repo_dir, pull=False)
+            logger.info("Repository cleaned")
 
-        # Get initial base revision
-        base = get_base()
+            # Get initial base revision
+            base = get_base()
 
-        # Load all the patches in the stack
-        patches = [(rev["node"], get_hgmo_patch(branch, rev["node"])) for rev in stack]
-        logger.info(f"Loaded {len(patches)} patches for the stack")
+            # Load all the patches in the stack
+            patches = [
+                (rev["node"], get_hgmo_patch(branch, rev["node"])) for rev in stack
+            ]
+            logger.info(f"Loaded {len(patches)} patches for the stack")
 
-        # Apply all the patches in the stack on current base
-        if apply_patches(base, patches):
-            logger.info(f"Stack applied successfully on {base}")
+            # Apply all the patches in the stack on current base
+            if apply_patches(base, patches):
+                logger.info(f"Stack applied successfully on {base}")
+                return stack_nodes()
+
+            # We tried to apply on the valid parent and failed: cannot try another revision
+            if base != "tip":
+                raise Exception(f"Failed to apply on valid parent {base}")
+
+            # We tried to apply on tip, let's try to find the valid parent after pulling
+            clean(hg, repo_dir, pull=True)
+
+            # Check if the valid base is now available
+            new_base = get_base()
+            if base == new_base:
+                raise Exception("No valid parent found for the stack")
+
+            if not apply_patches(new_base, patches):
+                raise Exception("Failed to apply stack on second try")
+
+            logger.info(f"Stack applied successfully on second try on {new_base}")
+
             return stack_nodes()
-
-        # We tried to apply on the valid parent and failed: cannot try another revision
-        if base != "tip":
-            raise Exception(f"Failed to apply on valid parent {base}")
-
-        # We tried to apply on tip, let's try to find the valid parent after pulling
-        clean(hg, repo_dir, pull=True)
-
-        # Check if the valid base is now available
-        new_base = get_base()
-        if base == new_base:
-            raise Exception("No valid parent found for the stack")
-
-        if not apply_patches(new_base, patches):
-            raise Exception("Failed to apply stack on second try")
-
-        logger.info(f"Stack applied successfully on second try on {new_base}")
-
-        return stack_nodes()
 
 
 if __name__ == "__main__":

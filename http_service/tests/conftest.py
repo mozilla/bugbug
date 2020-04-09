@@ -185,9 +185,23 @@ def mock_hgmo(get_fixture_path, mock_repo):
         assert repo != "None", "Missing repo"
         assert revision != "None", "Missing revision"
 
-        mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.json")
-        with open(mock_path) as f:
-            content = f.read()
+        try:
+            mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.json")
+            with open(mock_path) as f:
+                content = f.read()
+        except AssertionError:
+            content = json.dumps(
+                {
+                    "changesets": [
+                        {
+                            "node": "BUG_1_-_PULLED_FROM_REMOTE",
+                            "pushhead": "BUG_1_-_PULLED_FROM_REMOTE",
+                            "parents": ["xxxxx"],
+                        }
+                    ],
+                    "visible": True,
+                }
+            )
 
         # Patch the hardcoded revisions using the remote repo
         with hglib.open(str(mock_repo[1])) as repo:
@@ -246,10 +260,19 @@ def mock_repo(tmpdir, monkeypatch):
         remote = remote_dir / "remote.txt"
         remote.write_text("New remote file !", encoding="utf-8")
         repo.add([str(remote).encode("utf-8")])
-        repo.commit("Pulled from remote", user="bugbug")
+        repo.commit("Bug 1 - Pulled from remote", user="bugbug")
 
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
+
+    orig_hgclient_pull = hglib.client.hgclient.pull
+
+    def hglib_pull(hgclient, source=None, rev=None, update=False):
+        orig_hgclient_pull(
+            hgclient, source=str(remote_dir).encode("ascii"), rev=rev, update=update
+        )
+
+    monkeypatch.setattr(hglib.client.hgclient, "pull", hglib_pull)
 
     return local_dir, remote_dir
 
