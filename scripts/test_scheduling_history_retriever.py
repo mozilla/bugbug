@@ -223,8 +223,8 @@ class Retriever(object):
         db.download(test_scheduling_db, support_files_too=True)
 
         last_node = None
-        for test_data in test_scheduling.get_test_scheduling_history(granularity):
-            last_node = test_data["revs"][0]
+        for revs, _ in test_scheduling.get_test_scheduling_history(granularity):
+            last_node = revs[0]
 
         def generate_failing_together_probabilities(push_data):
             # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
