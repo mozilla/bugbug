@@ -4,7 +4,8 @@
             "node": "bad123",
             "parents": [
                 "BASE_HISTORY_2"
-            ]
+            ],
+            "phase": "draft"
         }
     ],
     "visible": true

@@ -1,10 +1,18 @@
 {
     "changesets": [
         {
+            "node": "aPublicParent",
+            "parents": [
+                "REVISION_DOES_NOT_EXIST"
+            ],
+            "phase": "public"
+        },
+        {
             "node": "needRemote",
             "parents": [
                 "PULLED_FROM_REMOTE"
-            ]
+            ],
+            "phase": "draft"
         }
     ],
     "visible": true

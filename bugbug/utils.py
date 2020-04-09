@@ -419,7 +419,11 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)
     r.raise_for_status()
-    return r.json()["changesets"]
+    return [
+        c
+        for c in r.json()["changesets"]
+        if branch != "try" or c.get("phase") == "draft"
+    ]
 
 
 def get_hgmo_patch(branch: str, revision: str) -> str:
