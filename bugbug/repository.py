@@ -365,7 +365,10 @@ def get_touched_functions(metrics_space, deleted_lines, added_lines):
 
 
 def get_metrics(commit, metrics_space):
-    if metrics_space["kind"] == "function" and metrics_space["name"]:
+    name = metrics_space["name"]
+    error = metrics_space["kind"] in {"unit", "function"} and name == ""
+
+    if metrics_space["kind"] == "function" and not error:
         metrics = metrics_space["metrics"]
         commit.total_cyclomatic += metrics["cyclomatic"]
         commit.total_halstead_n2 += metrics["halstead"]["n2"]
@@ -420,7 +423,9 @@ def get_metrics(commit, metrics_space):
         )
 
     for space in metrics_space["spaces"]:
-        get_metrics(commit, space)
+        error |= get_metrics(commit, space)
+
+    return error
 
 
 def transform(hg, repo_dir, commit):
@@ -487,7 +492,11 @@ def transform(hg, repo_dir, commit):
                 metrics = code_analysis_server.metrics(path, after, unit=False)
                 if metrics.get("spaces"):
                     metrics_file_count += 1
-                    get_metrics(commit, metrics["spaces"])
+                    error = get_metrics(commit, metrics["spaces"])
+                    if error:
+                        logger.warning(
+                            f"rust-code-analysis error on commit {commit.node}, path {path}"
+                        )
 
                     touched_functions = get_touched_functions(
                         metrics["spaces"], stats["deleted_lines"], stats["added_lines"]
