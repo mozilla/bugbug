@@ -288,23 +288,33 @@ def hg_modified_files(hg, commit):
     )
 
 
-def get_touched_functions(path, deleted_lines, added_lines, content):
-    if content is None:
-        return set()
+def get_functions_from_metrics(metrics_space):
+    functions = []
 
-    function_data = code_analysis_server.function(path, content)
-    if not function_data:
-        return set()
+    if (
+        metrics_space["kind"] == "function"
+        and metrics_space["name"]
+        and metrics_space["name"] != "<anonymous>"
+    ):
+        functions.append(
+            {
+                "end_line": metrics_space["end_line"],
+                "name": metrics_space["name"],
+                "start_line": metrics_space["start_line"],
+            }
+        )
 
+    for space in metrics_space["spaces"]:
+        functions += get_functions_from_metrics(space)
+
+    return functions
+
+
+def get_touched_functions(metrics_space, deleted_lines, added_lines):
     touched_functions = set()
     touched_function_names = set()
 
-    functions = function_data["spans"]
-    functions = [
-        function
-        for function in functions
-        if not function["error"] and function["name"] != "<anonymous>"
-    ]
+    functions = get_functions_from_metrics(metrics_space)
 
     def get_touched(functions, lines):
         last_f = 0
@@ -355,7 +365,10 @@ def get_touched_functions(path, deleted_lines, added_lines, content):
 
 
 def get_metrics(commit, metrics_space):
-    if metrics_space["kind"] == "function":
+    name = metrics_space["name"]
+    error = metrics_space["kind"] in {"unit", "function"} and name == ""
+
+    if metrics_space["kind"] == "function" and not error:
         metrics = metrics_space["metrics"]
         commit.total_cyclomatic += metrics["cyclomatic"]
         commit.total_halstead_n2 += metrics["halstead"]["n2"]
@@ -410,7 +423,9 @@ def get_metrics(commit, metrics_space):
         )
 
     for space in metrics_space["spaces"]:
-        get_metrics(commit, space)
+        error |= get_metrics(commit, space)
+
+    return error
 
 
 def transform(hg, repo_dir, commit):
@@ -468,30 +483,38 @@ def transform(hg, repo_dir, commit):
         elif type_ in SOURCE_CODE_TYPES_TO_EXT:
             commit.source_code_files_modified_num += 1
 
-            touched_functions = get_touched_functions(
-                path, stats["deleted_lines"], stats["added_lines"], after
-            )
-            if len(touched_functions) > 0:
-                commit.functions[path] = list(touched_functions)
-
             commit.source_code_added += len(stats["added_lines"])
             commit.source_code_deleted += len(stats["deleted_lines"])
 
             if size is not None:
                 source_code_sizes.append(size)
-                metrics = code_analysis_server.metrics(path, after, unit=False)
-                if metrics.get("spaces"):
-                    metrics_file_count += 1
-                    get_metrics(commit, metrics["spaces"])
 
-                # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
-                # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
-                # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
-                # the additional information that it is an Objective-C/C++ file.
-                if type_ == "C/C++" and (
-                    metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
-                ):
-                    commit.types.add("Objective-C/C++")
+                if type_ != "IDL/IPDL/WebIDL":
+                    metrics = code_analysis_server.metrics(path, after, unit=False)
+                    if metrics.get("spaces"):
+                        metrics_file_count += 1
+                        error = get_metrics(commit, metrics["spaces"])
+                        if error:
+                            logger.debug(
+                                f"rust-code-analysis error on commit {commit.node}, path {path}"
+                            )
+
+                        touched_functions = get_touched_functions(
+                            metrics["spaces"],
+                            stats["deleted_lines"],
+                            stats["added_lines"],
+                        )
+                        if len(touched_functions) > 0:
+                            commit.functions[path] = list(touched_functions)
+
+                    # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
+                    # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
+                    # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
+                    # the additional information that it is an Objective-C/C++ file.
+                    if type_ == "C/C++" and (
+                        metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
+                    ):
+                        commit.types.add("Objective-C/C++")
 
             commit.types.add(type_)
         else:
