@@ -117,7 +117,7 @@ def get_touched_together(f1, f2):
     if key not in touched_together:
         return 0
 
-    return int.from_bytes(touched_together[key], sys.byteorder)
+    return struct.unpack("I", touched_together[key])[0]
 
 
 def set_touched_together(f1, f2):
