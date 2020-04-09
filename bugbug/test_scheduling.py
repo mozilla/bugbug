@@ -7,7 +7,7 @@ import itertools
 import os
 import pickle
 import shelve
-import sys
+import struct
 
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
@@ -116,7 +116,7 @@ def get_touched_together(f1, f2):
     if key not in touched_together:
         return 0
 
-    return int.from_bytes(touched_together[key], sys.byteorder)
+    return struct.unpack("I", touched_together[key])[0]
 
 
 def set_touched_together(f1, f2):
@@ -125,11 +125,11 @@ def set_touched_together(f1, f2):
     key = get_touched_together_key(f1, f2)
 
     if key not in touched_together:
-        touched_together[key] = (1).to_bytes(4, sys.byteorder)
+        touched_together[key] = struct.pack("I", 1)
     else:
-        touched_together[key] = (
-            int.from_bytes(touched_together[key], sys.byteorder) + 1
-        ).to_bytes(4, sys.byteorder)
+        touched_together[key] = struct.pack(
+            "I", struct.unpack("I", touched_together[key])[0] + 1
+        )
 
 
 def update_touched_together():
