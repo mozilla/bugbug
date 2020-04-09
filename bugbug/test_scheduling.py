@@ -8,7 +8,6 @@ import os
 import pickle
 import shelve
 import struct
-import sys
 
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
