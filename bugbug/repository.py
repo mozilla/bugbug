@@ -489,29 +489,32 @@ def transform(hg, repo_dir, commit):
             if size is not None:
                 source_code_sizes.append(size)
 
-                metrics = code_analysis_server.metrics(path, after, unit=False)
-                if metrics.get("spaces"):
-                    metrics_file_count += 1
-                    error = get_metrics(commit, metrics["spaces"])
-                    if error:
-                        logger.warning(
-                            f"rust-code-analysis error on commit {commit.node}, path {path}"
+                if type_ != "IDL/IPDL/WebIDL":
+                    metrics = code_analysis_server.metrics(path, after, unit=False)
+                    if metrics.get("spaces"):
+                        metrics_file_count += 1
+                        error = get_metrics(commit, metrics["spaces"])
+                        if error:
+                            logger.debug(
+                                f"rust-code-analysis error on commit {commit.node}, path {path}"
+                            )
+
+                        touched_functions = get_touched_functions(
+                            metrics["spaces"],
+                            stats["deleted_lines"],
+                            stats["added_lines"],
                         )
+                        if len(touched_functions) > 0:
+                            commit.functions[path] = list(touched_functions)
 
-                    touched_functions = get_touched_functions(
-                        metrics["spaces"], stats["deleted_lines"], stats["added_lines"]
-                    )
-                    if len(touched_functions) > 0:
-                        commit.functions[path] = list(touched_functions)
-
-                # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
-                # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
-                # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
-                # the additional information that it is an Objective-C/C++ file.
-                if type_ == "C/C++" and (
-                    metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
-                ):
-                    commit.types.add("Objective-C/C++")
+                    # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
+                    # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
+                    # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
+                    # the additional information that it is an Objective-C/C++ file.
+                    if type_ == "C/C++" and (
+                        metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
+                    ):
+                        commit.types.add("Objective-C/C++")
 
             commit.types.add(type_)
         else:
