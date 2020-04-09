@@ -4,7 +4,8 @@
             "node": "orphan456",
             "parents": [
                 "REVISION_DOES_NOT_EXIST"
-            ]
+            ],
+            "phase": "draft"
         }
     ],
     "visible": true

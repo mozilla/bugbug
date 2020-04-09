@@ -4,13 +4,15 @@
             "node": "localParent456",
             "parents": [
                 "BASE_HISTORY_1"
-            ]
+            ],
+            "phase": "draft"
         },
         {
             "node": "normal456",
             "parents": [
                 "localParent456"
-            ]
+            ],
+            "phase": "draft"
         }
     ],
     "visible": true
