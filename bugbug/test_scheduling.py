@@ -129,8 +129,7 @@ def set_touched_together(f1, f2):
         touched_together[key] = struct.pack("i", 1)
     else:
         touched_together[key] = struct.pack(
-            "i",
-            struct.unpack("i", touched_together[key])[0] + 1
+            "i", struct.unpack("i", touched_together[key])[0] + 1
         )
 
 
