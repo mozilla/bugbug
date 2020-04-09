@@ -126,10 +126,10 @@ def set_touched_together(f1, f2):
     key = get_touched_together_key(f1, f2)
 
     if key not in touched_together:
-        touched_together[key] = struct.pack("i", 1)
+        touched_together[key] = struct.pack("I", 1)
     else:
         touched_together[key] = struct.pack(
-            "i", struct.unpack("i", touched_together[key])[0] + 1
+            "I", struct.unpack("I", touched_together[key])[0] + 1
         )
 
 
