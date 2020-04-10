@@ -42,7 +42,7 @@ class RegressorModel(CommitModel):
     def __init__(self, lemmatization=False, interpretable=False):
         CommitModel.__init__(self, lemmatization)
 
-        self.required_dbs.append(BUG_INTRODUCING_COMMITS_DB)
+        self.training_dbs.append(BUG_INTRODUCING_COMMITS_DB)
 
         self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)

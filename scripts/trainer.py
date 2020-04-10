@@ -49,8 +49,11 @@ class Trainer(object):
             model_obj = model_class(args.lemmatization)
 
         if args.download_db:
-            for required_db in model_obj.required_dbs:
+            for required_db in model_obj.training_dbs:
                 assert db.download(required_db)
+
+            if args.download_eval:
+                model_obj.download_eval_dbs()
         else:
             logger.info("Skipping download of the databases")
 
@@ -92,6 +95,12 @@ def parse_args(args):
         action="store_false",
         dest="download_db",
         help="Do not download databases, uses whatever is on disk",
+    )
+    parser.add_argument(
+        "--download-eval",
+        action="store_true",
+        dest="download_eval",
+        help="Download databases and database support files required at runtime (e.g. if the model performs custom evaluations)",
     )
     parser.add_argument(
         "--lemmatization",

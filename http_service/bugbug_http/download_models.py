@@ -5,7 +5,7 @@
 
 import logging
 
-from bugbug import db, repository, test_scheduling, utils
+from bugbug import utils
 from bugbug_http import ALLOW_MISSING_MODELS
 from bugbug_http.models import MODEL_CACHE, MODELS_NAMES
 
@@ -17,7 +17,8 @@ def download_models():
         utils.download_model(model_name)
         # Try loading the model
         try:
-            MODEL_CACHE.get(model_name)
+            m = MODEL_CACHE.get(model_name)
+            m.download_eval_dbs(extract=False, ensure_exist=not ALLOW_MISSING_MODELS)
         except FileNotFoundError:
             if ALLOW_MISSING_MODELS:
                 LOGGER.info(
@@ -27,36 +28,6 @@ def download_models():
                 return None
             else:
                 raise
-
-    db.download_support_file(
-        test_scheduling.TEST_LABEL_SCHEDULING_DB,
-        test_scheduling.PAST_FAILURES_LABEL_DB,
-        extract=False,
-    )
-
-    db.download_support_file(
-        test_scheduling.TEST_LABEL_SCHEDULING_DB,
-        test_scheduling.FAILING_TOGETHER_LABEL_DB,
-        extract=False,
-    )
-
-    db.download_support_file(
-        test_scheduling.TEST_GROUP_SCHEDULING_DB,
-        test_scheduling.PAST_FAILURES_GROUP_DB,
-        extract=False,
-    )
-
-    db.download_support_file(
-        test_scheduling.TEST_GROUP_SCHEDULING_DB,
-        test_scheduling.TOUCHED_TOGETHER_DB,
-        extract=False,
-    )
-
-    db.download_support_file(
-        repository.COMMITS_DB, repository.COMMIT_EXPERIENCES_DB, extract=False
-    )
-
-    db.download(repository.COMMITS_DB, extract=False)
 
 
 if __name__ == "__main__":

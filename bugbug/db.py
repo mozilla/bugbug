@@ -33,6 +33,10 @@ def register(path, url, version, support_files=[]):
             f.write(str(version))
 
 
+def is_registered(path: str) -> bool:
+    return path in DATABASES
+
+
 def exists(path):
     return os.path.exists(path)
 

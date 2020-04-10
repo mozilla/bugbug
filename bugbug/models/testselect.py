@@ -46,11 +46,23 @@ class TestSelectModel(Model):
         # by using a subset of the dataset (dropping some passing runnables).
         self.use_subset = use_subset
 
-        self.required_dbs = [repository.COMMITS_DB]
+        self.training_dbs = [repository.COMMITS_DB]
+        self.eval_dbs[repository.COMMITS_DB] = (
+            repository.COMMITS_DB,
+            repository.COMMIT_EXPERIENCES_DB,
+        )
         if granularity == "label":
-            self.required_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
+            self.training_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
+            self.eval_dbs[test_scheduling.TEST_LABEL_SCHEDULING_DB] = (
+                test_scheduling.PAST_FAILURES_LABEL_DB,
+                test_scheduling.FAILING_TOGETHER_LABEL_DB,
+            )
         elif granularity == "group":
-            self.required_dbs.append(test_scheduling.TEST_GROUP_SCHEDULING_DB)
+            self.training_dbs.append(test_scheduling.TEST_GROUP_SCHEDULING_DB)
+            self.eval_dbs[test_scheduling.TEST_GROUP_SCHEDULING_DB] = (
+                test_scheduling.PAST_FAILURES_GROUP_DB,
+                test_scheduling.TOUCHED_TOGETHER_DB,
+            )
 
         self.cross_validation_enabled = False
 

@@ -949,6 +949,7 @@ tasks:
         command:
           - bugbug-train
           - testlabelselect
+          - --download-eval
 
         artifacts:
           public/testlabelselectmodel.zst:
@@ -988,6 +989,7 @@ tasks:
         command:
           - bugbug-train
           - testgroupselect
+          - --download-eval
 
         artifacts:
           public/testgroupselectmodel.zst:

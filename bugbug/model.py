@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import defaultdict
+from typing import Dict, List, Tuple
 
 import joblib
 import matplotlib
@@ -22,7 +23,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from tabulate import tabulate
 
-from bugbug import bugzilla, repository
+from bugbug import bugzilla, db, repository
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
@@ -146,6 +147,24 @@ class Model:
         self.store_dataset = False
 
         self.entire_dataset_training = False
+
+        # DBs required for training.
+        self.training_dbs: List[str] = []
+        # DBs and DB support files required at runtime.
+        self.eval_dbs: Dict[str, Tuple[str, ...]] = {}
+
+    def download_eval_dbs(
+        self, extract: bool = True, ensure_exist: bool = True
+    ) -> None:
+        for eval_db, eval_files in self.eval_dbs.items():
+            for eval_file in eval_files:
+                if db.is_registered(eval_file):
+                    assert db.download(eval_file, extract=extract) or not ensure_exist
+                else:
+                    assert (
+                        db.download_support_file(eval_db, eval_file, extract=extract)
+                        or not ensure_exist
+                    )
 
     @property
     def le(self):
@@ -644,9 +663,9 @@ class BugModel(Model):
     def __init__(self, lemmatization=False, commit_data=False):
         Model.__init__(self, lemmatization)
         self.commit_data = commit_data
-        self.required_dbs = [bugzilla.BUGS_DB]
+        self.training_dbs = [bugzilla.BUGS_DB]
         if commit_data:
-            self.required_dbs.append(repository.COMMITS_DB)
+            self.training_dbs.append(repository.COMMITS_DB)
 
     def items_gen(self, classes):
         if not self.commit_data:
@@ -681,9 +700,9 @@ class CommitModel(Model):
     def __init__(self, lemmatization=False, bug_data=False):
         Model.__init__(self, lemmatization)
         self.bug_data = bug_data
-        self.required_dbs = [repository.COMMITS_DB]
+        self.training_dbs = [repository.COMMITS_DB]
         if bug_data:
-            self.required_dbs.append(bugzilla.BUGS_DB)
+            self.training_dbs.append(bugzilla.BUGS_DB)
 
     def items_gen(self, classes):
         if not self.bug_data:
@@ -721,7 +740,7 @@ class CommitModel(Model):
 class BugCoupleModel(Model):
     def __init__(self, lemmatization=False):
         Model.__init__(self, lemmatization)
-        self.required_dbs = [bugzilla.BUGS_DB]
+        self.training_dbs = [bugzilla.BUGS_DB]
 
     def items_gen(self, classes):
         bugs = {}
