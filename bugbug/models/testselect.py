@@ -8,6 +8,7 @@ import random
 import statistics
 import struct
 from functools import reduce
+from typing import Set
 
 import numpy as np
 import xgboost
@@ -225,6 +226,37 @@ class TestSelectModel(Model):
             for i in selected_indexes
         }
 
+    def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
+        failing_together = test_scheduling.get_failing_together_db()
+
+        priorities = ["linux", "win", "mac", "android"]
+
+        to_drop = set()
+        to_analyze = sorted(tasks)
+        while len(to_analyze) > 1:
+            task1 = to_analyze.pop(0)
+
+            for task2 in to_analyze[1:]:
+                key = f"{task1}${task2}".encode("utf-8")
+                if key not in failing_together:
+                    continue
+
+                support, confidence = struct.unpack("ff", failing_together[key])
+                if confidence < min_redundancy_confidence:
+                    continue
+
+                for priority in priorities:
+                    if priority in task1:
+                        to_drop.add(task2)
+                        break
+                    elif priority in task2:
+                        to_drop.add(task1)
+                        break
+
+            to_analyze = [t for t in to_analyze if t not in to_drop]
+
+        return tasks - to_drop
+
     def evaluation(self):
         # Get a test set of pushes on which to test the model.
         pushes, train_push_len = self.get_pushes()
@@ -268,8 +300,6 @@ class TestSelectModel(Model):
                 commits, 0.3, push_num - 100
             )
 
-        failing_together = test_scheduling.get_failing_together_db()
-
         reductions = [None]
         if self.granularity == "label":
             reductions += [0.7, 0.8, 0.9, 1.0]
@@ -284,34 +314,7 @@ class TestSelectModel(Model):
                     )
 
                     if reduction is not None:
-                        to_drop = set()
-                        priorities = ["linux", "win", "mac", "android"]
-                        to_analyze = sorted(selected)
-                        while len(to_analyze) > 1:
-                            task1 = to_analyze.pop(0)
-
-                            for task2 in to_analyze[1:]:
-                                key = f"{task1}${task2}".encode("utf-8")
-                                if key not in failing_together:
-                                    continue
-
-                                support, confidence = struct.unpack(
-                                    "ff", failing_together[key]
-                                )
-                                if confidence < reduction:
-                                    continue
-
-                                for priority in priorities:
-                                    if priority in task1:
-                                        to_drop.add(task2)
-                                        break
-                                    elif priority in task2:
-                                        to_drop.add(task1)
-                                        break
-
-                            to_analyze = [t for t in to_analyze if t not in to_drop]
-
-                        selected -= to_drop
+                        selected = self.reduce(selected, reduction)
 
                     caught = selected & set(push["failures"])
 
