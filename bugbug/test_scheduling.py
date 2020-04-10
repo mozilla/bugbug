@@ -20,7 +20,7 @@ FAILING_TOGETHER_LABEL_DB = "failing_together_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
-    10,
+    11,
     [PAST_FAILURES_LABEL_DB, FAILING_TOGETHER_LABEL_DB],
 )
 
@@ -30,11 +30,11 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    13,
+    14,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
-HISTORICAL_TIMESPAN = 2800
+HISTORICAL_TIMESPAN = 4500
 
 
 def get_test_scheduling_history(granularity):

@@ -15,6 +15,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
+from tqdm import tqdm
 
 from bugbug import (
     commit_features,
@@ -197,12 +198,13 @@ class TestSelectModel(Model):
 
         return classes, [0, 1]
 
-    def select_tests(self, commits, confidence=0.3):
+    def select_tests(self, commits, confidence=0.3, push_num=None):
         commit_data = commit_features.merge_commits(commits)
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity)
 
-        push_num = past_failures_data["push_num"] + 1
+        if push_num is None:
+            push_num = past_failures_data["push_num"] + 1
         all_runnables = past_failures_data["all_runnables"]
 
         commit_tests = []
@@ -242,34 +244,29 @@ class TestSelectModel(Model):
 
         commit_map = get_commit_map()
 
-        # Select tests for all the pushes in the test set.
-        for revs, test_datas in test_scheduling.get_test_scheduling_history(
-            self.granularity
-        ):
-            if revs[0] not in test_pushes:
-                continue
+        past_failures_data = test_scheduling.get_past_failures(self.granularity)
+        last_push_num = past_failures_data["push_num"]
+        past_failures_data.close()
 
+        # Select tests for all the pushes in the test set.
+        for i, (rev, push) in enumerate(tqdm(test_pushes.items())):
             commits = tuple(
-                commit_map[revision] for revision in revs if revision in commit_map
+                commit_map[revision]
+                for revision in push["revs"]
+                if revision in commit_map
             )
             if len(commits) == 0:
                 continue
 
-            commit_data = commit_features.merge_commits(commits)
+            push_num = last_push_num - (len(test_pushes) - (i + 1))
 
-            commit_tests = []
-            for data in test_datas:
-                commit_test = commit_data.copy()
-                commit_test["test_job"] = data
-                commit_tests.append(commit_test)
-
-            probs = self.classify(commit_tests, probabilities=True)
-            selected_indexes = np.argwhere(probs[:, 1] >= 0.3)[:, 0]
-
-            test_pushes[revs[0]]["all_possibly_selected"] = {
-                commit_tests[i]["test_job"]["name"]: math.floor(probs[i, 1] * 100) / 100
-                for i in selected_indexes
-            }
+            # Note: we subtract 100 to the push number to make sure we don't use
+            # past failure data for the push itself.
+            # The number 100 comes from the fact that in the past failure data
+            # generation we store past failures in batches of 100 pushes.
+            test_pushes[rev]["all_possibly_selected"] = self.select_tests(
+                commits, 0.3, push_num - 100
+            )
 
         failing_together = test_scheduling.get_failing_together_db()
 
