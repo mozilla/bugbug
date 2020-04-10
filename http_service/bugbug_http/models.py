@@ -133,13 +133,20 @@ def schedule_tests(branch, rev):
         REPO_DIR, revs=revs, save=False, use_single_process=True
     )
 
+    tasks = MODEL_CACHE.get("testlabelselect").select_tests(
+        commits, test_selection_threshold
+    )
+
+    reduced = MODEL_CACHE.get("testlabelselect").reduce(
+        set(t for t, c in tasks.items() if c >= 0.7), 1.0
+    )
+
     data = {
-        "tasks": MODEL_CACHE.get("testlabelselect").select_tests(
-            commits, test_selection_threshold
-        ),
+        "tasks": tasks,
         "groups": MODEL_CACHE.get("testgroupselect").select_tests(
             commits, test_selection_threshold
         ),
+        "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
     }
     setkey(job.result_key, orjson.dumps(data))
 

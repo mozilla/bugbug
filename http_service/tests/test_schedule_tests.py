@@ -12,21 +12,32 @@ from bugbug_http import models
 
 
 @pytest.mark.parametrize(
-    "labels_to_choose, groups_to_choose",
+    "labels_to_choose, groups_to_choose, reduced_labels",
     [
         # one from label, one from group
-        ({"test-label1": 0.9}, {"test-group2": 0.9},),
+        ({"test-label1": 0.9}, {"test-group2": 0.9}, {"test-label1": 0.9}),
         # one from label, none from group
-        ({"test-label1": 0.9}, {"test-group2": 0.9},),
+        ({"test-label1": 0.9}, {"test-group2": 0.9}, {"test-label1": 0.9}),
         # none from label, one from group
-        ({}, {"test-group1": 0.9},),
+        ({}, {"test-group1": 0.9}, {}),
         # two from label, one from group
-        ({"test-label1": 0.9, "test-label2": 0.4}, {"test-group2": 0.9},),
+        (
+            {"test-label1": 0.9, "test-label2": 0.4},
+            {"test-group2": 0.9},
+            {"test-label1": 0.9},
+        ),
+        # two redundant from label, one from group
+        (
+            {"test-linux": 0.9, "test-windows": 0.8},
+            {"test-group1": 0.9},
+            {"test-linux": 0.9},
+        ),
     ],
 )
 def test_simple_schedule(
     labels_to_choose,
     groups_to_choose,
+    reduced_labels,
     monkeypatch,
     mock_hgmo,
     mock_repo,
@@ -66,7 +77,11 @@ def test_simple_schedule(
     # Assert the test selection result is stored in Redis.
     assert json.loads(
         models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
-    ) == {"tasks": labels_to_choose, "groups": groups_to_choose,}
+    ) == {
+        "tasks": labels_to_choose,
+        "groups": groups_to_choose,
+        "reduced_tasks": reduced_labels,
+    }
 
 
 @pytest.mark.parametrize(
@@ -159,4 +174,8 @@ def test_schedule(
         # Assert the test selection result is stored in Redis.
         assert json.loads(
             models.redis.get(f"bugbug:job_result:schedule_tests:{branch}_{revision}")
-        ) == {"tasks": {"test-label1": 0.9}, "groups": {"test-group2": 0.9},}
+        ) == {
+            "tasks": {"test-label1": 0.9},
+            "groups": {"test-group2": 0.9},
+            "reduced_tasks": {"test-label1": 0.9},
+        }
