@@ -272,10 +272,10 @@ class TestSelectModel(Model):
 
         reductions = [None]
         if self.granularity == "label":
-            reductions += [0.7, 0.8, 0.9]
+            reductions += [0.7, 0.8, 0.9, 1.0]
 
         for reduction in reductions:
-            for confidence_threshold in [0.3, 0.5, 0.7]:
+            for confidence_threshold in [0.3, 0.5, 0.7, 0.8]:
                 for rev, push in test_pushes.items():
                     selected = set(
                         name
