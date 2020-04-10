@@ -236,7 +236,7 @@ class TestSelectModel(Model):
         while len(to_analyze) > 1:
             task1 = to_analyze.pop(0)
 
-            for task2 in to_analyze[1:]:
+            for task2 in to_analyze:
                 key = f"{task1}${task2}".encode("utf-8")
                 if key not in failing_together:
                     continue
