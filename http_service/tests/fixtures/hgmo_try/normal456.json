@@ -5,6 +5,7 @@
             "parents": [
                 "BASE_HISTORY_1"
             ],
+            "files": ["test.txt"],
             "phase": "draft"
         },
         {
@@ -12,6 +13,7 @@
             "parents": [
                 "localParent456"
             ],
+            "files": ["hello.txt"],
             "phase": "draft"
         }
     ],

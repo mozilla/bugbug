@@ -5,6 +5,7 @@
             "parents": [
                 "BASE_HISTORY_2"
             ],
+            "files": ["hello.txt"],
             "phase": "draft"
         }
     ],

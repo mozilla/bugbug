@@ -419,11 +419,28 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)
     r.raise_for_status()
-    return [
-        c
-        for c in r.json()["changesets"]
-        if branch != "try" or c.get("phase") == "draft"
-    ]
+
+    def should_skip(changeset):
+        # Analyze all changesets if we are not on try.
+        if branch != "try":
+            return False
+
+        # Don't analyze public changesets, as they are not relevant for a try
+        # push.
+        if changeset["phase"] != "draft":
+            return True
+
+        # Don't analyze empty changesets.
+        if len(changeset["files"]) == 0:
+            return True
+
+        # Don't analyze changesets which simply specify try parameters.
+        if changeset["files"] == ["try_task_config.json"]:
+            return True
+
+        return False
+
+    return [c for c in r.json()["changesets"] if not should_skip(c)]
 
 
 def get_hgmo_patch(branch: str, revision: str) -> str:

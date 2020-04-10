@@ -5,6 +5,7 @@
             "parents": [
                 "REVISION_DOES_NOT_EXIST"
             ],
+            "files": ["hello.txt"],
             "phase": "draft"
         }
     ],
