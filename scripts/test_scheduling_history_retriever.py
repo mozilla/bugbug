@@ -54,7 +54,7 @@ MOZCI_VERSION = 2
 
 TRAINING_MONTHS = {
     "label": 7,
-    "group": 6,
+    "group": 7,
 }
 
 
