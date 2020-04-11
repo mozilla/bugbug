@@ -20,7 +20,6 @@ class ComponentModel(BugModel):
         "Core",
         "External Software Affecting Firefox",
         "DevTools",
-        "Firefox for Android",
         "Firefox",
         "Toolkit",
         "WebExtensions",
