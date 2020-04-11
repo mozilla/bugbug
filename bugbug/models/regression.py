@@ -12,7 +12,20 @@ class RegressionModel(DefectModel):
         self.calculate_importance = False
 
     def get_labels(self):
-        return self.get_bugbug_labels("regression"), [0, 1]
+        classes = self.get_bugbug_labels("regression")
+
+        print(
+            "{} regression bugs".format(
+                sum(1 for label in classes.values() if label == 1)
+            )
+        )
+        print(
+            "{} non-regression bugs".format(
+                sum(1 for label in classes.values() if label == 0)
+            )
+        )
+
+        return classes, [0, 1]
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
