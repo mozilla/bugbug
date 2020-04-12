@@ -30,8 +30,6 @@ class SpamBugModel(BugModel):
             bug_features.has_w3c_url(),
             bug_features.has_github_url(),
             bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
             bug_features.product(),
             # TODO: We would like to use the component at the time of filing too,
             # but we can't because the rollback script doesn't support changes to
