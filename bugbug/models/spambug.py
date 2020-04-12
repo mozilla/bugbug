@@ -85,7 +85,10 @@ class SpamBugModel(BugModel):
                 classes[bug_id] = 0
 
             # Spam bugs
-            elif bug_data["product"] == "Invalid Bugs":
+            elif (
+                bug_data["product"] == "Invalid Bugs"
+                and "@mozilla" not in bug_data["creator"]
+            ):
                 classes[bug_id] = 1
 
         print(
