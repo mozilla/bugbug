@@ -20,7 +20,7 @@ FAILING_TOGETHER_LABEL_DB = "failing_together_label.lmdb.tar.zst"
 db.register(
     TEST_LABEL_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
-    11,
+    12,
     [PAST_FAILURES_LABEL_DB, FAILING_TOGETHER_LABEL_DB],
 )
 
@@ -30,7 +30,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    15,
+    16,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 
@@ -45,21 +45,8 @@ def get_test_scheduling_history(granularity):
     else:
         raise Exception(f"{granularity} granularity unsupported")
 
-    cur_revs = None
-    test_datas = []
-    for test_data in db.read(test_scheduling_db):
-        revs = test_data["revs"]
-        if cur_revs is None:
-            cur_revs = revs
-        elif revs[0] != cur_revs[0]:
-            yield cur_revs, test_datas
-            cur_revs = revs
-            test_datas = []
-
-        test_datas.append(test_data)
-
-    if cur_revs is not None:
-        yield cur_revs, test_datas
+    for obj in db.read(test_scheduling_db):
+        yield obj["revs"], obj["data"]
 
 
 def get_past_failures(granularity):

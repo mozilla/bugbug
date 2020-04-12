@@ -455,6 +455,10 @@ class Retriever(object):
                 if granularity == "group":
                     update_touched_together_gen.send(commits[0]["node"])
 
+                result = {
+                    "revs": revisions,
+                    "data": [],
+                }
                 for data in test_scheduling.generate_data(
                     past_failures,
                     merged_commits,
@@ -464,9 +468,11 @@ class Retriever(object):
                     likely_regressions,
                 ):
                     if pushdate > HISTORY_DATE_START:
-                        saved_nodes.add(i)
-                        data["revs"] = revisions
-                        yield data
+                        result["data"].append(data)
+
+                if pushdate > HISTORY_DATE_START:
+                    saved_nodes.add(i)
+                    yield result
 
             if granularity == "group":
                 try:
