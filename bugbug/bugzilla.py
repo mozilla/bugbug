@@ -16,7 +16,7 @@ BUGS_DB = "data/bugs.json"
 db.register(
     BUGS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
-    5,
+    6,
 )
 
 PRODUCTS = (
@@ -161,7 +161,7 @@ def get_ids_between(date_from, date_to, security=False):
 def download_bugs(bug_ids, products=None, security=False):
     old_bug_count = 0
     new_bug_ids = set(int(bug_id) for bug_id in bug_ids)
-    for bug in get_bugs():
+    for bug in get_bugs(include_invalid=True):
         old_bug_count += 1
         if int(bug["id"]) in new_bug_ids:
             new_bug_ids.remove(bug["id"])
