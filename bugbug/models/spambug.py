@@ -80,15 +80,16 @@ class SpamBugModel(BugModel):
         for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
 
+            # Skip bugs filed by Mozillians, since we are sure they are not spam.
+            if "@mozilla" in bug_data["creator"]:
+                continue
+
             # Legitimate bugs
             if bug_data["resolution"] == "FIXED":
                 classes[bug_id] = 0
 
             # Spam bugs
-            elif (
-                bug_data["product"] == "Invalid Bugs"
-                and "@mozilla" not in bug_data["creator"]
-            ):
+            elif bug_data["product"] == "Invalid Bugs":
                 classes[bug_id] = 1
 
         print(
