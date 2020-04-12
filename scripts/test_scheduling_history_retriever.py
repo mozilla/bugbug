@@ -120,6 +120,16 @@ class Retriever(object):
         def cache_key(push):
             return f"push_data.{runnable}.{push.rev}"
 
+        # XXX: Some of the old pushes were stored without the mozci version, we
+        # need to handle that until all have the version stored alongside them.
+        for push in pushes:
+            key = cache_key(push)
+            cached = adr.config.cache.get(key)
+            if not cached or isinstance(cached, tuple):
+                continue
+
+            adr.config.cache.forever(key, (cached, 0))
+
         # Regenerating a large amount of data when we update the mozci regression detection
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
         # run.
