@@ -85,10 +85,7 @@ class SpamBugModel(BugModel):
                 classes[bug_id] = 0
 
             # Spam bugs
-            elif (
-                bug_data["product"] == "Invalid Bugs"
-                and bug_data["component"] == "General"
-            ):
+            elif bug_data["product"] == "Invalid Bugs":
                 classes[bug_id] = 1
 
         print(
