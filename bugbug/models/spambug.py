@@ -33,7 +33,10 @@ class SpamBugModel(BugModel):
             bug_features.patches(),
             bug_features.landings(),
             bug_features.product(),
-            bug_features.component(),
+            # TODO: We would like to use the component at the time of filing too,
+            # but we can't because the rollback script doesn't support changes to
+            # components yet.
+            # bug_features.component(),
             bug_features.num_words_title(),
             bug_features.num_words_comments(),
             bug_features.keywords(),
