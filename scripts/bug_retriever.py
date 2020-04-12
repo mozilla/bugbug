@@ -109,7 +109,7 @@ class Retriever(object):
         bugzilla.download_bugs(regressed_by_bug_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
-        inconsistent_bugs = bugzilla.get_bugs()
+        inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
         for i in range(3):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
