@@ -59,8 +59,12 @@ class SpamBugModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(), "title"),
-                            ("comments", self.text_vectorizer(), "comments"),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            (
+                                "comments",
+                                self.text_vectorizer(min_df=0.0001),
+                                "comments",
+                            ),
                         ]
                     ),
                 ),
