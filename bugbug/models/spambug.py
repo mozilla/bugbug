@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
-from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -17,7 +17,7 @@ class SpamBugModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = RandomUnderSampler(random_state=0)
+        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
 
         feature_extractors = [
