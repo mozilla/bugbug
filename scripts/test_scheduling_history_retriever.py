@@ -130,7 +130,7 @@ class Retriever(object):
             if not cached or isinstance(cached, tuple):
                 continue
 
-            adr.config.cache.forever(key, (cached, 0))
+            adr.config.cache.put(key, (cached, 0), adr.config["cache"]["retention"])
 
         # Regenerating a large amount of data when we update the mozci regression detection
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
@@ -170,7 +170,9 @@ class Retriever(object):
                         list(push.get_likely_regressions(runnable)),
                     ]
                     push_data.append(value)
-                    adr.config.cache.forever(key, (value, MOZCI_VERSION))
+                    adr.config.cache.put(
+                        key, (value, MOZCI_VERSION), adr.config["cache"]["retention"]
+                    )
                 except adr.errors.MissingDataError:
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
