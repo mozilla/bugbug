@@ -400,7 +400,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
 def get_session(name):
     session = requests.Session()
 
-    retry = Retry(total=7, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+    retry = Retry(total=9, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 
     # Default HTTPAdapter uses 10 connections. Mount custom adapter to increase
     # that limit. Connections are established as needed, so using a large value
