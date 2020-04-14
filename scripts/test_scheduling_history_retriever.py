@@ -37,6 +37,8 @@ JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
     "build-docker-image-",
     "-test-verify-",
+    "-test-coverage-",
+    "-android-hw-",
     "-awsy-",
     "-raptor-",
     "-talos-",
