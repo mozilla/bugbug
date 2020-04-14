@@ -364,16 +364,16 @@ class Retriever(object):
                     for revisions, push_tasks, possible_regressions, likely_regressions in push_data
                 ]
 
-            # In the last 28 pushes, we definitely run all possible runnables.
+            # In the last 14 pushes, we definitely run all possible runnables.
             all_runnables_set = set(
-                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
+                sum((push_runnables for _, push_runnables, _, _ in push_data[-14:]), [])
             )
             # Filter runnables we don't need.
             all_runnables = filter_runnables(
                 list(all_runnables_set), all_runnables_set, granularity
             )
             all_runnables_set = set(all_runnables_set)
-            logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
+            logger.info(f"{len(all_runnables_set)} runnables run in the last 14 pushes")
 
             push_data = [
                 (
