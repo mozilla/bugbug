@@ -6,6 +6,7 @@
 import csv
 from datetime import datetime
 
+import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
@@ -176,27 +177,29 @@ def download_bugs(bug_ids, products=None, security=False):
         new_bug_ids[i : (i + CHUNK_SIZE)]
         for i in range(0, len(new_bug_ids), CHUNK_SIZE)
     )
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(7),
+        wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+    )
+    def get_chunk(chunk):
+        new_bugs = get(chunk)
+
+        if not security:
+            new_bugs = [bug for bug in new_bugs.values() if len(bug["groups"]) == 0]
+
+        if products is not None:
+            new_bugs = [bug for bug in new_bugs.values() if bug["product"] in products]
+
+        return new_bugs
+
     with tqdm(total=len(new_bug_ids)) as progress_bar:
         for chunk in chunks:
-            new_bugs = get(chunk)
+            new_bugs = get_chunk(chunk)
 
             progress_bar.update(len(chunk))
 
-            if not security:
-                new_bugs = {
-                    bug_id: bug
-                    for bug_id, bug in new_bugs.items()
-                    if len(bug["groups"]) == 0
-                }
-
-            if products is not None:
-                new_bugs = {
-                    bug_id: bug
-                    for bug_id, bug in new_bugs.items()
-                    if bug["product"] in products
-                }
-
-            db.append(BUGS_DB, new_bugs.values())
+            db.append(BUGS_DB, new_bugs)
 
 
 def delete_bugs(match):
