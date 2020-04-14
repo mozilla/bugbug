@@ -107,9 +107,14 @@ class Retriever(object):
             TRAINING_MONTHS[runnable] / 2
         )
 
+        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # this query.
+        from_date = datetime.utcnow() - relativedelta(months=from_months)
+        to_date = datetime.utcnow() - relativedelta(days=3)
+
         pushes = mozci.push.make_push_objects(
-            from_date=f"today-{from_months}month",
-            to_date="today-3day",
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
             branch="autoland",
         )
 
