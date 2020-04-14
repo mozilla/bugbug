@@ -2,4 +2,4 @@
 retention = 40320
 
 [adr.cache.stores]
-file = { driver = "file", path = "/data/adr_cache" }
+file = { driver = "renewing-file", path = "/data/adr_cache" }
