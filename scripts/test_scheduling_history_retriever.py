@@ -18,7 +18,6 @@ from logging import INFO, basicConfig, getLogger
 import adr
 import dateutil.parser
 import mozci.push
-import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -365,25 +364,10 @@ class Retriever(object):
                     for revisions, push_tasks, possible_regressions, likely_regressions in push_data
                 ]
 
-            if granularity == "label":
-                # Retrieve all autoland schedulable tasks.
-                r = requests.get(
-                    "https://hg.mozilla.org/integration/autoland/json-pushes?version=2"
-                )
-                r.raise_for_status()
-                data = r.json()
-                last_push = data["pushes"][str(data["lastpushid"])]
-                last_push_revs = last_push["changesets"][::-1]
-                all_runnables = rename_tasks(
-                    mozci.push.Push(last_push_revs).target_task_labels
-                )
-            else:
-                # In the last 28 pushes, we definitely run all possible groups.
-                all_runnables = sum(
-                    (push_runnables for _, push_runnables, _, _ in push_data[-28:]), [],
-                )
-
-            all_runnables_set = set(all_runnables)
+            # In the last 28 pushes, we definitely run all possible runnables.
+            all_runnables_set = set(
+                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
+            )
             # Filter runnables we don't need.
             all_runnables = filter_runnables(
                 list(all_runnables_set), all_runnables_set, granularity
