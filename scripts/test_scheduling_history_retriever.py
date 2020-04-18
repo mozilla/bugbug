@@ -230,6 +230,12 @@ class Retriever(object):
                 if now >= expire:
                     continue
 
+                # Set an expiration for values that had been stored "forever".
+                if expire == 9999999999:
+                    content = str(
+                        int(now + (adr.config["cache"]["retention"] * 60))
+                    ).encode("utf-8")
+
                 content += fin.read()
 
                 with open(member.name, "wb") as fout:
