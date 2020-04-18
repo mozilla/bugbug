@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
+    create_tar_zst,
     download_check_etag,
     open_tar_zst,
     zstd_compress,
@@ -91,8 +92,7 @@ class Retriever(object):
             adr.config["cache"]["stores"]["file"]["path"]
         ) == os.path.abspath(cache_path)
 
-        with open_tar_zst(f"{ADR_CACHE_DB}.zst", "w") as tar:
-            tar.add(cache_path)
+        create_tar_zst(f"{ADR_CACHE_DB}.zst")
 
         db.upload(ADR_CACHE_DB)
 
@@ -551,17 +551,13 @@ class Retriever(object):
         db.append(test_scheduling_db, generate_all_data())
 
         zstd_compress(test_scheduling_db)
-
-        with open_tar_zst(past_failures_db, "w") as tar:
-            tar.add(past_failures_db[: -len(".tar.zst")])
+        create_tar_zst(past_failures_db)
 
         if granularity == "group":
-            with open_tar_zst(touched_together_db, "w") as tar:
-                tar.add(touched_together_db[: -len(".tar.zst")])
+            create_tar_zst(touched_together_db)
 
         if granularity == "label":
-            with open_tar_zst(failing_together_db, "w") as tar:
-                tar.add(failing_together_db[: -len(".tar.zst")])
+            create_tar_zst(failing_together_db)
 
 
 def main():

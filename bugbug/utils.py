@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import tarfile
 from collections import deque
 from contextlib import contextmanager
@@ -257,6 +258,11 @@ def open_tar_zst(path, mode):
                     yield tar
     else:
         assert False, f"Unexpected mode: {mode}"
+
+
+# Using tar directly is twice as fast than through Python!
+def create_tar_zst(path: str) -> None:
+    subprocess.run(["tar", "-I", "zstd", "-cf", path, path[: -len(".zst")]], check=True)
 
 
 def extract_file(path: str) -> None:
