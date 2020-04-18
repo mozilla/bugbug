@@ -98,7 +98,7 @@ def download(path, support_files_too=False, extract=True):
         successful = True
         if support_files_too:
             for support_file in DATABASES[path]["support_files"]:
-                successful |= download_support_file(path, support_file)
+                successful |= download_support_file(path, support_file, extract)
 
         return successful
     except requests.exceptions.HTTPError:
