@@ -265,12 +265,15 @@ def create_tar_zst(path: str) -> None:
     subprocess.run(["tar", "-I", "zstd", "-cf", path, path[: -len(".zst")]], check=True)
 
 
+def extract_tar_zst(path: str) -> None:
+    subprocess.run(["tar", "-I", "zstd", "-xf", path], check=True)
+
+
 def extract_file(path: str) -> None:
     inner_path, _ = os.path.splitext(path)
 
     if str(path).endswith(".tar.zst"):
-        with open_tar_zst(path, "r") as tar:
-            tar.extractall()
+        extract_tar_zst(path)
     elif str(path).endswith(".zst"):
         zstd_decompress(inner_path)
     else:
