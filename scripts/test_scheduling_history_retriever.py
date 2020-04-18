@@ -10,6 +10,7 @@ import json
 import math
 import os
 import struct
+import threading
 import time
 import traceback
 from datetime import datetime
@@ -118,8 +119,6 @@ class Retriever(object):
             branch="autoland",
         )
 
-        start_time = time.monotonic()
-
         num_cached = 0
 
         push_data = []
@@ -149,6 +148,18 @@ class Retriever(object):
             value, mozci_version = cached
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
                 to_regenerate.add(value[0][0])
+
+        def periodically_upload_adr_cache():
+            start_time = time.monotonic()
+            while not upload_thread_stop.isSet():
+                if time.monotonic() - start_time >= 10800:
+                    self.upload_adr_cache()
+
+                upload_thread_stop.wait(timeout=7)
+
+        upload_thread = threading.Thread(target=periodically_upload_adr_cache)
+        upload_thread_stop = threading.Event()
+        upload_thread.start()
 
         for push in tqdm(pushes):
             key = cache_key(push)
@@ -187,9 +198,8 @@ class Retriever(object):
                     traceback.print_exc()
                     adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-            if time.monotonic() - start_time >= 10800:
-                self.upload_adr_cache()
-                start_time = time.monotonic()
+        upload_thread_stop.set()
+        upload_thread.join()
 
         logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
 
