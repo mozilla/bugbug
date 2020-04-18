@@ -242,27 +242,29 @@ def zstd_decompress(path):
 
 
 @contextmanager
-def open_tar_zst(path):
-    cctx = zstandard.ZstdCompressor(threads=-1)
-    with open(path, "wb") as f:
-        with cctx.stream_writer(f) as compressor:
-            with tarfile.open(mode="w|", fileobj=compressor) as tar:
-                yield tar
-
-
-def extract_tar_zst(path):
-    dctx = zstandard.ZstdDecompressor()
-    with open(f"{path}.zst", "rb") as f:
-        with dctx.stream_reader(f) as reader:
-            with tarfile.open(mode="r|", fileobj=reader) as tar:
-                tar.extractall()
+def open_tar_zst(path, mode):
+    if mode == "w":
+        cctx = zstandard.ZstdCompressor(threads=-1)
+        with open(path, f"wb") as f:
+            with cctx.stream_writer(f) as compressor:
+                with tarfile.open(mode=f"w|", fileobj=compressor) as tar:
+                    yield tar
+    elif mode == "r":
+        dctx = zstandard.ZstdDecompressor()
+        with open(path, "rb") as f:
+            with dctx.stream_reader(f) as reader:
+                with tarfile.open(mode="r|", fileobj=reader) as tar:
+                    yield tar
+    else:
+        assert False, f"Unexpected mode: {mode}"
 
 
 def extract_file(path: str) -> None:
     inner_path, _ = os.path.splitext(path)
 
     if str(path).endswith(".tar.zst"):
-        extract_tar_zst(inner_path)
+        with open_tar_zst(path, "r") as tar:
+            tar.extractall()
     elif str(path).endswith(".zst"):
         zstd_decompress(inner_path)
     else:

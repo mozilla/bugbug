@@ -36,7 +36,7 @@ class Retriever(object):
         logger.info("commit data extracted from repository")
 
         zstd_compress("data/commits.json")
-        with open_tar_zst("data/commit_experiences.lmdb.tar.zst") as tar:
+        with open_tar_zst("data/commit_experiences.lmdb.tar.zst", "w") as tar:
             tar.add("data/commit_experiences.lmdb")
 
 

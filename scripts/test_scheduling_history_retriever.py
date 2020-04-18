@@ -91,7 +91,7 @@ class Retriever(object):
             adr.config["cache"]["stores"]["file"]["path"]
         ) == os.path.abspath(cache_path)
 
-        with open_tar_zst(f"{ADR_CACHE_DB}.zst") as tar:
+        with open_tar_zst(f"{ADR_CACHE_DB}.zst", "w") as tar:
             tar.add(cache_path)
 
         db.upload(ADR_CACHE_DB)
@@ -521,15 +521,15 @@ class Retriever(object):
 
         zstd_compress(test_scheduling_db)
 
-        with open_tar_zst(past_failures_db) as tar:
+        with open_tar_zst(past_failures_db, "w") as tar:
             tar.add(past_failures_db[: -len(".tar.zst")])
 
         if granularity == "group":
-            with open_tar_zst(touched_together_db) as tar:
+            with open_tar_zst(touched_together_db, "w") as tar:
                 tar.add(touched_together_db[: -len(".tar.zst")])
 
         if granularity == "label":
-            with open_tar_zst(failing_together_db) as tar:
+            with open_tar_zst(failing_together_db, "w") as tar:
                 tar.add(failing_together_db[: -len(".tar.zst")])
 
 
