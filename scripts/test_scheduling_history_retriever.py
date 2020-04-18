@@ -210,9 +210,34 @@ class Retriever(object):
 
     def retrieve_push_data(self):
         # Download previous cache.
-        db.download(ADR_CACHE_DB)
+        db.download(ADR_CACHE_DB, extract=False)
+
+        # Extract files from the cache.
+        with open_tar_zst(f"{ADR_CACHE_DB}.zst", "r") as tar:
+            now = round(time.time())
+
+            for member in tar:
+                if member.isdir():
+                    os.mkdir(member.name)
+                    continue
+
+                fin = tar.extractfile(member)
+
+                # If the element expired (the format of the file can be inferred
+                # from cachy's FileStore source code), no need to extract it.
+                content = fin.read(10)
+                expire = int(content)
+                if now >= expire:
+                    continue
+
+                content += fin.read()
+
+                with open(member.name, "wb") as fout:
+                    fout.write(content)
+
         self.generate_push_data("label")
         self.generate_push_data("group")
+
         self.upload_adr_cache()
 
     def generate_test_scheduling_history(self, granularity):
