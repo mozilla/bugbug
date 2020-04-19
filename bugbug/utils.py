@@ -262,7 +262,9 @@ def open_tar_zst(path, mode):
 
 # Using tar directly is twice as fast than through Python!
 def create_tar_zst(path: str) -> None:
-    subprocess.run(["tar", "-I", "zstd", "-cf", path, path[: -len(".zst")]], check=True)
+    subprocess.run(
+        ["tar", "-I", "zstd", "-cf", path, path[: -len(".tar.zst")]], check=True
+    )
 
 
 def extract_tar_zst(path: str) -> None:
