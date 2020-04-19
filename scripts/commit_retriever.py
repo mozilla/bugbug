@@ -35,8 +35,8 @@ class Retriever(object):
 
         logger.info("commit data extracted from repository")
 
-        zstd_compress("data/commits.json")
-        create_tar_zst("data/commit_experiences.lmdb.tar.zst")
+        zstd_compress(repository.COMMITS_DB)
+        create_tar_zst(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
 
 
 def main():
