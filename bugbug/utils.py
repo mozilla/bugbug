@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import concurrent.futures
+import errno
 import json
 import logging
 import os
@@ -262,12 +263,18 @@ def open_tar_zst(path, mode):
 
 # Using tar directly is twice as fast than through Python!
 def create_tar_zst(path: str) -> None:
-    subprocess.run(
-        ["tar", "-I", "zstd", "-cf", path, path[: -len(".tar.zst")]], check=True
-    )
+    inner_path = path[: -len(".tar.zst")]
+
+    if not os.path.exists(inner_path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
+
+    subprocess.run(["tar", "-I", "zstd", "-cf", path, inner_path], check=True)
 
 
 def extract_tar_zst(path: str) -> None:
+    if not os.path.exists(path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
     subprocess.run(["tar", "-I", "zstd", "-xf", path], check=True)
 
 
