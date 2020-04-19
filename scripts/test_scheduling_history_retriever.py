@@ -154,6 +154,7 @@ class Retriever(object):
             while not upload_thread_stop.isSet():
                 if time.monotonic() - start_time >= 10800:
                     self.upload_adr_cache()
+                    start_time = time.monotonic()
 
                 upload_thread_stop.wait(timeout=7)
 
