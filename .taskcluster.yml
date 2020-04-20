@@ -251,6 +251,7 @@ tasks:
             - {$eval: as_slugid("lint_task")}
             - {$eval: as_slugid("version_check_task")}
             - {$eval: as_slugid("tests_task")}
+            - {$eval: as_slugid("http_tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
           scopes:
             - secrets:get:project/relman/bugbug/deploy
