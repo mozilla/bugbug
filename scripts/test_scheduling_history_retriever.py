@@ -43,6 +43,7 @@ JOBS_TO_IGNORE = (
     "-awsy-",
     "-raptor-",
     "-talos-",
+    "backlog",
 )
 
 ADR_CACHE_DB = "data/adr_cache.tar"
