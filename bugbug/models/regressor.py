@@ -118,6 +118,9 @@ class RegressorModel(CommitModel):
             if commit_data["ever_backedout"]:
                 continue
 
+            if commit_data["author_email"] == "wptsync@mozilla.com":
+                continue
+
             node = commit_data["node"]
             if node in regressors:
                 classes[node] = 1

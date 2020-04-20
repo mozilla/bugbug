@@ -47,7 +47,7 @@ IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
     IGNORED_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/ignored_commits.json.zst",
-    1,
+    2,
 )
 
 
@@ -168,6 +168,9 @@ class RegressorFinder(object):
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
         repository.set_commits_to_ignore(self.mercurial_repo_dir, commits)
+
+        for commit in commits:
+            commit.ignored |= commit.author_email == "wptsync@mozilla.com"
 
         chosen_commits = set()
         commits_to_ignore = []
