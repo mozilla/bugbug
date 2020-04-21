@@ -120,10 +120,6 @@ class RegressorFinder(object):
         logger.info(f"{repo_dir} pulled and updated")
 
     def init_mapping(self):
-        logger.info("Downloading Mercurial <-> git mapping file...")
-        vcs_map.download_mapfile()
-        vcs_map.load_mapfile()
-
         if self.tokenized_git_repo_url is not None:
             (
                 self.tokenized_git_to_mercurial,
@@ -153,17 +149,6 @@ class RegressorFinder(object):
 
         with hglib.open(self.mercurial_repo_dir) as hg:
             revs = repository.get_revs(hg, rev_start)
-
-        # Drop commits which are not yet present in the mercurial <-> git mapping.
-        while len(revs) > 0:
-            try:
-                vcs_map.mercurial_to_git(revs[-1].decode("ascii"))
-                break
-            except Exception as e:
-                if not str(e).startswith("Missing mercurial commit in the VCS map"):
-                    raise
-
-                revs.pop()
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
@@ -322,13 +307,13 @@ class RegressorFinder(object):
             if tokenized:
                 return self.tokenized_git_to_mercurial[rev]
             else:
-                return vcs_map.git_to_mercurial(rev)
+                return vcs_map.git_to_mercurial(repo_dir, rev)
 
         def mercurial_to_git(rev):
             if tokenized:
                 return self.mercurial_to_tokenized_git[rev]
             else:
-                return vcs_map.mercurial_to_git(rev)
+                return vcs_map.mercurial_to_git(repo_dir, rev)
 
         logger.info("Download previously found bug-introducing commits...")
         db.download(db_path)
