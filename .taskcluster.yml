@@ -90,8 +90,6 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
                apt-get -qq install -y libhdf5-dev &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
-               hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                git clone --quiet ${repository} &&
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
@@ -102,6 +100,7 @@ tasks:
                pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nn-requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r infra/spawn_pipeline_requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
+               hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
@@ -123,9 +122,7 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 &&
-               hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-               git clone --quiet ${repository} &&
+            - "git clone --quiet ${repository} &&
                curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && chmod +x /usr/bin/rust-code-analysis &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -133,6 +130,7 @@ tasks:
                pip install --disable-pip-version-check --quiet --no-cache-dir . &&
                pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
                pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service &&
+               hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                pytest --cov=http_service http_service/tests/ -vvv &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
