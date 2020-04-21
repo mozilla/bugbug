@@ -632,7 +632,7 @@ tasks:
         command:
           - bugbug-regressor-finder
           - bug_introducing
-          - --git_repo_url=https://github.com/mozilla/gecko-dev
+          - --git_repo_url=hg::https://hg.mozilla.org/mozilla-central
           - --git_repo_dir=gecko-dev
         features:
           taskclusterProxy:
