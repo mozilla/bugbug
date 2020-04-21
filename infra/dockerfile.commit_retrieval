@@ -10,7 +10,6 @@ ENV PATH="${PATH}:/git-cinnabar"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -t testing git && \
     apt-get install -y --no-install-recommends gcc g++ curl patch && \
-    pip install --disable-pip-version-check --quiet --no-cache-dir mercurial==5.3 && \
     hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
