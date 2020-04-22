@@ -193,30 +193,33 @@ class CommitClassifier(object):
 
         if not os.path.exists(repo_dir):
             tenacity.retry(
-                lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                ),
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
+            )(
+                lambda: subprocess.run(
+                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                )
             )()
 
         tenacity.retry(
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+            stop=tenacity.stop_after_attempt(5),
+        )(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
-            ),
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            )
         )()
 
         tenacity.retry(
-            lambda: subprocess.run(
-                ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
-            ),
             wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
             stop=tenacity.stop_after_attempt(5),
+        )(
+            lambda: subprocess.run(
+                ["git", "checkout", rev], cwd=repo_dir, capture_output=True, check=True
+            )
         )()
 
     def update_commit_db(self):

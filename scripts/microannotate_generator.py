@@ -62,11 +62,12 @@ class MicroannotateGenerator(object):
                 executor.submit(self.init_git_repo)
 
         tenacity.retry(
-            lambda: subprocess.run(
-                ["git", "config", "--global", "http.postBuffer", "12M"], check=True
-            ),
             wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
             stop=tenacity.stop_after_attempt(5),
+        )(
+            lambda: subprocess.run(
+                ["git", "config", "--global", "http.postBuffer", "12M"], check=True
+            )
         )()
 
         push_args = ["git", "push", repo_push_url, "master"]
@@ -84,10 +85,9 @@ class MicroannotateGenerator(object):
             )
 
             tenacity.retry(
-                lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True),
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
-            )()
+            )(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))()
 
             # We are not using db.upload as we don't need to upload the git repo.
             upload_s3([f"{db_path}.version"])
@@ -103,24 +103,26 @@ class MicroannotateGenerator(object):
 
     def clone_git_repo(self):
         tenacity.retry(
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+            stop=tenacity.stop_after_attempt(5),
+        )(
             lambda: subprocess.run(
                 ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
-            ),
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            )
         )()
 
         try:
             tenacity.retry(
+                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+                stop=tenacity.stop_after_attempt(5),
+            )(
                 lambda: subprocess.run(
                     ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
-                ),
-                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-                stop=tenacity.stop_after_attempt(5),
+                )
             )()
         except subprocess.CalledProcessError as e:
             # When the repo is empty.

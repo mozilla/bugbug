@@ -95,11 +95,12 @@ class RegressorFinder(object):
     def clone_git_repo(self, repo_url, repo_dir):
         if not os.path.exists(repo_dir):
             tenacity.retry(
-                lambda: subprocess.run(
-                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
-                ),
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
+            )(
+                lambda: subprocess.run(
+                    ["git", "clone", "--quiet", repo_url, repo_dir], check=True
+                )
             )()
 
             logger.info(f"{repo_dir} cloned")
@@ -107,14 +108,15 @@ class RegressorFinder(object):
         logger.info(f"Pulling and updating {repo_dir}")
 
         tenacity.retry(
+            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+            stop=tenacity.stop_after_attempt(5),
+        )(
             lambda: subprocess.run(
                 ["git", "pull", "--quiet", repo_url, "master"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
-            ),
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            )
         )()
 
         logger.info(f"{repo_dir} pulled and updated")
