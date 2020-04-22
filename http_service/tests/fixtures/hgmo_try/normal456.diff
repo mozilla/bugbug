@@ -1,8 +1,0 @@
-Bug 123 - Target patch
-
-diff --git a/hello.txt b/hello.txt
---- a/hello.txt
-+++ b/hello.txt
-@@ -1,1 +1,2 @@
- Hello from try
-+Nice to meet you

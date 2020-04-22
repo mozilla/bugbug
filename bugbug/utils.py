@@ -461,11 +461,3 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
         return False
 
     return [c for c in r.json()["changesets"] if not should_skip(c)]
-
-
-def get_hgmo_patch(branch: str, revision: str) -> str:
-    """Load a patch for a given revision"""
-    url = f"https://hg.mozilla.org/{branch}/raw-rev/{revision}"
-    r = get_session("hgmo").get(url)
-    r.raise_for_status()
-    return r.text

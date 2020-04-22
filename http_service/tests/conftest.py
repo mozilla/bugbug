@@ -24,18 +24,6 @@ import bugbug_http.models
 from bugbug import repository, test_scheduling
 from bugbug_http import app
 
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
-
-
-@pytest.fixture
-def get_fixture_path():
-    def _get_fixture_path(path):
-        path = os.path.join(FIXTURES_DIR, path)
-        assert os.path.exists(path), f"Missing fixture {path}"
-        return path
-
-    return _get_fixture_path
-
 
 @pytest.fixture
 def client():
@@ -163,21 +151,8 @@ def add_change_time():
 
 
 @pytest.fixture
-def mock_hgmo(get_fixture_path, mock_repo):
+def mock_hgmo(mock_repo):
     """Mock HGMO API to get patches to apply"""
-
-    def fake_raw_rev(request):
-        *repo, _, revision = request.path_url[1:].split("/")
-        repo = "-".join(repo)
-
-        assert repo != "None", "Missing repo"
-        assert revision != "None", "Missing revision"
-
-        mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.diff")
-        with open(mock_path) as f:
-            content = f.read()
-
-        return (200, {"Content-Type": "text/plain"}, content)
 
     def fake_json_relevance(request):
         *repo, _, revision = request.path_url[1:].split("/")
@@ -186,23 +161,18 @@ def mock_hgmo(get_fixture_path, mock_repo):
         assert repo != "None", "Missing repo"
         assert revision != "None", "Missing revision"
 
-        try:
-            mock_path = get_fixture_path(f"hgmo_{repo}/{revision}.json")
-            with open(mock_path) as f:
-                content = f.read()
-        except AssertionError:
-            content = json.dumps(
-                {
-                    "changesets": [
-                        {
-                            "node": "BUG_1_-_PULLED_FROM_REMOTE",
-                            "pushhead": "BUG_1_-_PULLED_FROM_REMOTE",
-                            "parents": ["xxxxx"],
-                        }
-                    ],
-                    "visible": True,
-                }
-            )
+        content = json.dumps(
+            {
+                "changesets": [
+                    {
+                        "node": "BUG_1_-_PULLED_FROM_REMOTE",
+                        "pushhead": "BUG_1_-_PULLED_FROM_REMOTE",
+                        "parents": ["xxxxx"],
+                    }
+                ],
+                "visible": True,
+            }
+        )
 
         # Patch the hardcoded revisions using the remote repo
         with hglib.open(str(mock_repo[1])) as repo:
@@ -213,11 +183,6 @@ def mock_hgmo(get_fixture_path, mock_repo):
 
         return (200, {"Content-Type": "application/json"}, content)
 
-    responses.add_callback(
-        responses.GET,
-        re.compile(r"^https?://(hgmo|hg\.mozilla\.org)/[\w\-\/]+/raw-rev/(\w+)"),
-        callback=fake_raw_rev,
-    )
     responses.add_callback(
         responses.GET,
         re.compile(
