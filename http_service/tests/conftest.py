@@ -204,11 +204,12 @@ def mock_repo(tmpdir, monkeypatch):
     # Create the repo
     hglib.init(str(local_dir))
 
-    (local_dir / ".hg-annotate-ignore-revs").write_text("", encoding="ascii")
-
-    # Add several commits on a test file to create some history
-    test_file = local_dir / "test.txt"
     with hglib.open(str(local_dir)) as repo:
+        (local_dir / ".hg-annotate-ignore-revs").write_text("", encoding="ascii")
+        repo.add(str(local_dir / ".hg-annotate-ignore-revs").encode("utf-8"))
+
+        # Add several commits on a test file to create some history
+        test_file = local_dir / "test.txt"
         for i in range(4):
             test_file.write_text(f"Version {i}", encoding="utf-8")
             repo.add([str(test_file).encode("utf-8")])

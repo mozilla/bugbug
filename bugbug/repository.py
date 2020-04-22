@@ -859,12 +859,14 @@ def calculate_experiences(commits, first_pushdate, save=True):
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(repo_dir, commits):
+def set_commits_to_ignore(hg, repo_dir, commits):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
-    with open(os.path.join(repo_dir, ".hg-annotate-ignore-revs"), "r") as f:
-        ignore_revs = set(l[:40] for l in f)
+    ignore_revs_content = hg.cat(
+        [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")], rev=b"-1"
+    ).decode("utf-8")
+    ignore_revs = set(l[:40] for l in ignore_revs_content.splitlines())
 
     backouts = set(commit.backedoutby for commit in commits if commit.ever_backedout)
 
@@ -973,7 +975,7 @@ def download_commits(
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
-        set_commits_to_ignore(repo_dir, commits)
+        set_commits_to_ignore(hg, repo_dir, commits)
 
         commits_num = len(commits)
 
