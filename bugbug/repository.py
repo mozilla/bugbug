@@ -1036,7 +1036,7 @@ def clean(hg, repo_dir, pull=True):
         logger.info(f"{repo_dir} pulled and updated")
 
 
-def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
+def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     try:
         with hglib.open(repo_dir) as hg:
             clean(hg, repo_dir)
@@ -1054,6 +1054,7 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central"):
         sharebase=repo_dir + "-shared",
         networkattempts=7,
         branch=b"tip",
+        noupdate=not update,
     )
 
     cmd.insert(0, hglib.HGPATH)

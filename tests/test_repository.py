@@ -93,6 +93,10 @@ def test_clone(fake_hg_repo):
 
     repository.clone(tmp_repo_dir, url=remote)
 
+    # Assert that we don't have the file from the remote repository, since we cloned
+    # without updating the working dir.
+    assert not os.path.exists(os.path.join(tmp_repo_dir, "file1"))
+
     # Assert we have the commit from the remote repository.
     remote_revs = repository.get_revs(hg)
     with hglib.open(tmp_repo_dir) as tmp_hg:
@@ -114,6 +118,11 @@ def test_clone(fake_hg_repo):
     remote_revs = repository.get_revs(hg)
     with hglib.open(tmp_repo_dir) as tmp_hg:
         assert repository.get_revs(tmp_hg) == remote_revs
+
+    repository.clone(f"{tmp_repo_dir}2", url=remote, update=True)
+    # Assert that we do have the file from the remote repository, since we cloned
+    # and updated the working dir.
+    assert os.path.exists(os.path.join(tmp_repo_dir, "file1"))
 
 
 def test_get_revs(fake_hg_repo):
