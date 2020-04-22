@@ -61,14 +61,9 @@ class MicroannotateGenerator(object):
             else:
                 executor.submit(self.init_git_repo)
 
-        tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
-        )(
-            lambda: subprocess.run(
-                ["git", "config", "--global", "http.postBuffer", "12M"], check=True
-            )
-        )()
+        subprocess.run(
+            ["git", "config", "--global", "http.postBuffer", "12M"], check=True
+        )
 
         push_args = ["git", "push", repo_push_url, "master"]
         if is_old_version:
