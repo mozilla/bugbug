@@ -13,12 +13,10 @@ RUN apt-get update && \
     hg clone -r 9e411ad9aaa4c2f107a146238104beb64f13d04f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
-    cd git-cinnabar && \
-    git config cinnabar.experiments python3 && \
-    git config cinnabar.check no-version-check && \
+    git config --global cinnabar.experiments python3 && \
+    git config --global cinnabar.check no-version-check && \
     git cinnabar download && \
     rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
-    cd / && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
     apt-get purge -y curl && \
     apt-get autoremove -y && \
