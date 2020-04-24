@@ -165,8 +165,8 @@ def mock_hgmo(mock_repo):
             {
                 "changesets": [
                     {
-                        "node": "BUG_1_-_PULLED_FROM_REMOTE",
-                        "pushhead": "BUG_1_-_PULLED_FROM_REMOTE",
+                        "node": "PULLED_FROM_REMOTE",
+                        "pushhead": "PULLED_FROM_REMOTE",
                         "parents": ["xxxxx"],
                     }
                 ],
@@ -227,7 +227,7 @@ def mock_repo(tmpdir, monkeypatch):
         remote = remote_dir / "remote.txt"
         remote.write_text("New remote file !", encoding="utf-8")
         repo.add([str(remote).encode("utf-8")])
-        repo.commit("Bug 1 - Pulled from remote", user="bugbug")
+        repo.commit("Pulled from remote", user="bugbug")
 
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")

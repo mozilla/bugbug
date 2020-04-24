@@ -130,7 +130,7 @@ def schedule_tests(branch, rev):
 
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, revs=revs, save=False, use_single_process=True
+        REPO_DIR, revs=revs, save=False, use_single_process=True, ignore_no_bug=False
     )
 
     tasks = MODEL_CACHE.get("testlabelselect").select_tests(

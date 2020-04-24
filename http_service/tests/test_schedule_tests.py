@@ -67,7 +67,7 @@ def test_simple_schedule(
     with hglib.open(str(repo_dir)) as hg:
         assert len(hg.log()) == 5
         assert [l.desc.decode("utf-8") for l in hg.log()] == [
-            "Bug 1 - Pulled from remote",
+            "Pulled from remote",
             "Base history 3",
             "Base history 2",
             "Base history 1",

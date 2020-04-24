@@ -859,7 +859,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(hg, repo_dir, commits):
+def set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug=True):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
@@ -879,7 +879,7 @@ def set_commits_to_ignore(hg, repo_dir, commits):
             return True
 
         # Don't analyze commits that are not linked to a bug.
-        if commit.bug_id is None:
+        if ignore_no_bug and commit.bug_id is None:
             return True
 
         return False
@@ -950,7 +950,12 @@ def get_first_pushdate(repo_dir):
 
 
 def download_commits(
-    repo_dir, rev_start=None, revs=None, save=True, use_single_process=False
+    repo_dir,
+    rev_start=None,
+    revs=None,
+    save=True,
+    use_single_process=False,
+    ignore_no_bug=True,
 ):
     assert revs is not None or rev_start is not None
 
@@ -975,7 +980,7 @@ def download_commits(
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
-        set_commits_to_ignore(hg, repo_dir, commits)
+        set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug)
 
         commits_num = len(commits)
 
