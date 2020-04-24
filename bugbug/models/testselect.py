@@ -316,77 +316,92 @@ class TestSelectModel(Model):
         if self.granularity == "label":
             reductions += [0.7, 0.8, 0.9, 1.0]
 
-        for reduction in reductions:
-            for confidence_threshold in [0.3, 0.5, 0.7, 0.8]:
-                for rev, push in test_pushes.items():
+        def do_eval(confidence_threshold, reduction, cap):
+            for rev, push in test_pushes.items():
+                selected = set(
+                    name
+                    for name, confidence in push["all_possibly_selected"].items()
+                    if confidence >= confidence_threshold
+                )
+
+                if reduction is not None:
+                    selected = self.reduce(selected, reduction)
+
+                if cap is not None and len(selected) > cap:
                     selected = set(
-                        name
-                        for name, confidence in push["all_possibly_selected"].items()
-                        if confidence >= confidence_threshold
+                        sorted(
+                            (
+                                (name, confidence)
+                                for name, confidence in push[
+                                    "all_possibly_selected"
+                                ].items()
+                                if name in selected
+                            ),
+                            key=lambda x: x[1],
+                            reverse=True,
+                        )[:cap]
                     )
 
-                    if reduction is not None:
-                        selected = self.reduce(selected, reduction)
+                caught = selected & set(push["failures"])
 
-                    caught = selected & set(push["failures"])
-
-                    push["number_scheduled"] = len(selected)
-                    push["caught_one"] = (
-                        len(caught) > 0 if len(push["failures"]) != 0 else None
-                    )
-                    push["some_didnt_run"] = (
-                        not selected.issubset(
-                            set(push["passes"]) | set(push["failures"])
-                        ),
-                    )
-                    push["caught_percentage"] = (
-                        len(caught) / len(push["failures"])
-                        if len(push["failures"]) != 0
-                        else None
-                    )
-
-                min_scheduled = min(
-                    result["number_scheduled"] for result in test_pushes.values()
+                push["number_scheduled"] = len(selected)
+                push["caught_one"] = (
+                    len(caught) > 0 if len(push["failures"]) != 0 else None
                 )
-                max_scheduled = max(
-                    result["number_scheduled"] for result in test_pushes.values()
+                push["some_didnt_run"] = (
+                    not selected.issubset(set(push["passes"]) | set(push["failures"])),
                 )
-                average_scheduled = statistics.mean(
-                    result["number_scheduled"] for result in test_pushes.values()
-                )
-                num_failing_pushes = sum(
-                    1
-                    for result in test_pushes.values()
-                    if result["caught_one"] is not None
-                )
-                num_caught_one = sum(
-                    1 for result in test_pushes.values() if result["caught_one"]
-                )
-                num_caught_one_or_some_didnt_run = sum(
-                    1
-                    for result in test_pushes.values()
-                    if result["caught_one"]
-                    or (result["caught_one"] is not None and result["some_didnt_run"])
-                )
-                percentage_caught_one = 100 * num_caught_one / num_failing_pushes
-                percentage_caught_one_or_some_didnt_run = (
-                    100 * num_caught_one_or_some_didnt_run / num_failing_pushes
-                )
-                average_caught_percentage = 100 * statistics.mean(
-                    result["caught_percentage"]
-                    for result in test_pushes.values()
-                    if result["caught_percentage"] is not None
+                push["caught_percentage"] = (
+                    len(caught) / len(push["failures"])
+                    if len(push["failures"]) != 0
+                    else None
                 )
 
-                reduction_str = (
-                    f"enabled at {reduction * 100}%"
-                    if reduction is not None
-                    else "disabled"
-                )
+            min_scheduled = min(
+                result["number_scheduled"] for result in test_pushes.values()
+            )
+            max_scheduled = max(
+                result["number_scheduled"] for result in test_pushes.values()
+            )
+            average_scheduled = statistics.mean(
+                result["number_scheduled"] for result in test_pushes.values()
+            )
+            num_failing_pushes = sum(
+                1 for result in test_pushes.values() if result["caught_one"] is not None
+            )
+            num_caught_one = sum(
+                1 for result in test_pushes.values() if result["caught_one"]
+            )
+            num_caught_one_or_some_didnt_run = sum(
+                1
+                for result in test_pushes.values()
+                if result["caught_one"]
+                or (result["caught_one"] is not None and result["some_didnt_run"])
+            )
+            percentage_caught_one = 100 * num_caught_one / num_failing_pushes
+            percentage_caught_one_or_some_didnt_run = (
+                100 * num_caught_one_or_some_didnt_run / num_failing_pushes
+            )
+            average_caught_percentage = 100 * statistics.mean(
+                result["caught_percentage"]
+                for result in test_pushes.values()
+                if result["caught_percentage"] is not None
+            )
 
-                print(
-                    f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
-                )
+            reduction_str = (
+                f"enabled at {reduction * 100}%"
+                if reduction is not None
+                else "disabled"
+            )
+
+            print(
+                f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, and cap at {cap}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
+            )
+
+        for confidence_threshold in [0.3, 0.5, 0.7, 0.8]:
+            for reduction in reductions:
+                for cap in [None, 200, 300, 500]:
+                    do_eval(confidence_threshold, reduction, cap)
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
