@@ -44,8 +44,6 @@ def parse_args(args):
         choices=similarity.model_name_to_class.keys(),
     )
 
-    # At the moment, we use LinearSVC
-    parser.add_argument("duplicatemodel", help="Duplicate algorithm to test")
     return parser.parse_args(args)
 
 
@@ -72,13 +70,10 @@ def load_models(args):
             f"{similarity.model_name_to_class[args.similaritymodel].__name__.lower()}.similaritymodel"
         )
 
-    if args.duplicatemodel == "linearsvc":
-        duplicate_model = DuplicateModel.load("duplicatemodel")
-    else:
         logger.error(f"Define the duplicate model to use")
         raise SystemExit(1)
 
-    return similarity_model, duplicate_model
+    return similarity_model, DuplicateModel.load("duplicatemodel")
 
 
 def test(similaritymodel, duplicatemodel):
@@ -98,8 +93,8 @@ def test(similaritymodel, duplicatemodel):
             ["bug 1 ID", "bug 1 summary", "bug 2 ID", "bug 2 summary", "prediction"]
         )
         for test_bug in test_bugs:
-            similar_bugs_id = similaritymodel.get_similar_bugs(test_bug)
-            sim_bugs = bugzilla.get(similar_bugs_id)
+            similar_bug_ids = similaritymodel.get_similar_bugs(test_bug)
+            sim_bugs = bugzilla.get(similar_bug_ids)
             test_tuple = [
                 (sim_bugs[similar_bug_id], test_bug) for similar_bug_id in sim_bugs
             ]
@@ -119,8 +114,8 @@ def test(similaritymodel, duplicatemodel):
 
 
 def main(args):
-    models = load_models(args)
-    test(models[0], models[1])
+    similaritymodel, duplicatemodel = load_models(args)
+    test(similaritymodel, duplicatemodel)
 
 
 if __name__ == "__main__":

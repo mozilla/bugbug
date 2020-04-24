@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 from bugbug import bugzilla, feature_cleanup
 from bugbug.utils import download_check_etag, zstd_decompress
+from bugbug.models.duplicate import DuplicateModel
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
@@ -130,7 +131,7 @@ class BaseSimilarity(abc.ABC):
             return " ".join(word for word in text)
         return text
 
-    def evaluation(self):
+    def evaluation(self, end_to_end=False):
         # A map from bug ID to its duplicate IDs
         duplicates = defaultdict(set)
         all_ids = set(
@@ -139,6 +140,9 @@ class BaseSimilarity(abc.ABC):
             if bug["creator"] not in REPORTERS_TO_IGNORE
             and "dupeme" not in bug["keywords"]
         )
+
+        if end_to_end:
+            duplicatemodel = DuplicateModel.load("duplicatemodel")
 
         for bug in bugzilla.get_bugs():
             dupes = [entry for entry in bug["duplicates"] if entry in all_ids]
@@ -169,6 +173,15 @@ class BaseSimilarity(abc.ABC):
                 num_hits = 0
                 queries += 1
                 similar_bugs = self.get_similar_bugs(bug)[:10]
+                if end_to_end:
+                    sim_bugs = bugzilla.get(similar_bugs)
+                    bug_couples = [(bug, sim_bugs[bug_id]) for bug_id in sim_bugs]
+                    probs = duplicatemodel.classify(bug_couples, probabilities=True)
+                    similar_bugs = [
+                        similar_bugs[idx]
+                        for idx, prob in enumerate(probs)
+                        if prob[1] > 0.8
+                    ]
 
                 # Recall
                 for idx, item in enumerate(duplicates[bug["id"]]):
