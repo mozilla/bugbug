@@ -398,9 +398,9 @@ class TestSelectModel(Model):
                 f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, and cap at {cap}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
             )
 
-        for confidence_threshold in [0.3, 0.5, 0.7, 0.8]:
+        for cap in [None, 200, 300, 500]:
             for reduction in reductions:
-                for cap in [None, 200, 300, 500]:
+                for confidence_threshold in [0.3, 0.5, 0.7, 0.8]:
                     do_eval(confidence_threshold, reduction, cap)
 
     def get_feature_names(self):
