@@ -154,7 +154,8 @@ class RegressorFinder(object):
 
         commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
 
-        repository.set_commits_to_ignore(self.mercurial_repo_dir, commits)
+        with hglib.open(self.mercurial_repo_dir) as hg:
+            repository.set_commits_to_ignore(hg, self.mercurial_repo_dir, commits)
 
         for commit in commits:
             commit.ignored |= commit.author_email == "wptsync@mozilla.com"
