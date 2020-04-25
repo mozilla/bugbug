@@ -148,10 +148,15 @@ def get_secret(secret_id):
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
-def upload_s3(paths):
+def get_s3_credentials():
     auth = taskcluster.Auth(get_taskcluster_options())
     response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
     credentials = response["credentials"]
+    return credentials
+
+
+def upload_s3(paths):
+    credentials = get_s3_credentials()
 
     client = boto3.client(
         "s3",

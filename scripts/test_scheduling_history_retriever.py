@@ -9,6 +9,7 @@ import itertools
 import json
 import math
 import os
+import pickle
 import struct
 import threading
 import time
@@ -19,6 +20,8 @@ from logging import INFO, basicConfig, getLogger
 import adr
 import dateutil.parser
 import mozci.push
+import zstandard
+from cachy.serializers import Serializer
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -26,6 +29,7 @@ from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
     create_tar_zst,
     download_check_etag,
+    get_s3_credentials,
     open_tar_zst,
     zstd_compress,
     zstd_decompress,
@@ -81,6 +85,20 @@ def filter_runnables(runnables, all_runnables, granularity):
 # Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
 def rename_tasks(tasks):
     return [task.replace("test-linux64-", "test-linux1804-64-") for task in tasks]
+
+
+class CompressedPickleSerializer(Serializer):
+    def __init__(self):
+        self.compressor = zstandard.ZstdCompressor(
+            level=zstandard.MAX_COMPRESSION_LEVEL
+        )
+        self.decompressor = zstandard.ZstdDecompressor()
+
+    def serialize(self, data):
+        return self.compressor.compress(pickle.dumps(data))
+
+    def unserialize(self, data):
+        return pickle.loads(self.decompressor.decompress(data))
 
 
 class Retriever(object):
@@ -153,6 +171,17 @@ class Retriever(object):
         upload_thread_stop = threading.Event()
         upload_thread.start()
 
+        credentials = get_s3_credentials()
+
+        s3_store = adr.util.cache_stores.S3Store(
+            {"bucket": "communitytc-bugbug", "prefix": "data/adr_cache/",},
+            credentials["accessKeyId"],
+            credentials["secretAccessKey"],
+            credentials["sessionToken"],
+        )
+
+        s3_store.set_serializer(CompressedPickleSerializer())
+
         for push in tqdm(pushes):
             key = cache_key(push)
 
@@ -160,6 +189,7 @@ class Retriever(object):
                 num_cached += 1
                 cached = adr.config.cache.get(key)
                 if cached:
+                    s3_store.put(key, cached, adr.config["cache"]["retention"])
                     value, mozci_version = cached
                     push_data.append(value)
             else:
@@ -179,6 +209,9 @@ class Retriever(object):
                     ]
                     push_data.append(value)
                     adr.config.cache.put(
+                        key, (value, MOZCI_VERSION), adr.config["cache"]["retention"]
+                    )
+                    s3_store.put(
                         key, (value, MOZCI_VERSION), adr.config["cache"]["retention"]
                     )
                 except adr.errors.MissingDataError:
