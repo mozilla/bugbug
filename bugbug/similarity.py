@@ -21,8 +21,8 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 
 from bugbug import bugzilla, feature_cleanup
-from bugbug.utils import download_check_etag, zstd_decompress
 from bugbug.models.duplicate import DuplicateModel
+from bugbug.utils import download_check_etag, zstd_decompress
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
@@ -81,7 +81,9 @@ def download_and_load_similarity_model(model_name):
 
 
 class BaseSimilarity(abc.ABC):
-    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
+    def __init__(
+        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+    ):
         self.cleanup_functions = [
             feature_cleanup.responses(),
             feature_cleanup.hex(),
@@ -94,6 +96,7 @@ class BaseSimilarity(abc.ABC):
             self.cleanup_functions.append(feature_cleanup.url())
 
         self.nltk_tokenizer = nltk_tokenizer
+        self.confidence_threshold = confidence_threshold
 
     def get_text(self, bug, all_comments=False):
         if all_comments:
@@ -174,13 +177,15 @@ class BaseSimilarity(abc.ABC):
                 queries += 1
                 similar_bugs = self.get_similar_bugs(bug)[:10]
                 if end_to_end:
-                    sim_bugs = bugzilla.get(similar_bugs)
+                    sim_bugs = [
+                        bug for bug in bugzilla.get_bugs() if bug["id"] in similar_bugs
+                    ]
                     bug_couples = [(bug, sim_bugs[bug_id]) for bug_id in sim_bugs]
                     probs = duplicatemodel.classify(bug_couples, probabilities=True)
                     similar_bugs = [
                         similar_bugs[idx]
                         for idx, prob in enumerate(probs)
-                        if prob[1] > 0.8
+                        if prob[1] > self.confidence_threshold
                     ]
 
                 # Recall
@@ -239,8 +244,14 @@ class BaseSimilarity(abc.ABC):
 
 
 class LSISimilarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
@@ -299,8 +310,13 @@ class NeighborsSimilarity(BaseSimilarity):
         vectorizer=TfidfVectorizer(),
         cleanup_urls=True,
         nltk_tokenizer=False,
+        confidence_threshold=0.8,
     ):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.vectorizer = vectorizer
         self.similarity_calculator = NearestNeighbors(n_neighbors=k)
         text = []
@@ -327,8 +343,18 @@ class NeighborsSimilarity(BaseSimilarity):
 
 
 class Word2VecSimilarityBase(BaseSimilarity):
-    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self,
+        cut_off=0.2,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.corpus = []
         self.bug_ids = []
         self.cut_off = cut_off
@@ -346,8 +372,18 @@ class Word2VecSimilarityBase(BaseSimilarity):
 
 
 class Word2VecWmdSimilarity(Word2VecSimilarityBase):
-    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self,
+        cut_off=0.2,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
 
     # word2vec.wmdistance calculates only the euclidean distance. To get the cosine distance,
     # we're using the function with a few subtle changes. We compute the cosine distances
@@ -479,8 +515,18 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
 
 
 class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
-    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self,
+        cut_off=0.2,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.dictionary = Dictionary(self.corpus)
         self.tfidf = TfidfModel(dictionary=self.dictionary)
 
@@ -577,8 +623,18 @@ class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
 
 
 class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
-    def __init__(self, cut_off=0.2, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self,
+        cut_off=0.2,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
 
         terms_idx = WordEmbeddingSimilarityIndex(self.w2vmodel.wv)
         self.dictionary = Dictionary(self.corpus)
@@ -605,8 +661,14 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
 
 
 class BM25Similarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.corpus = []
         self.bug_ids = []
 
@@ -634,8 +696,14 @@ class BM25Similarity(BaseSimilarity):
 
 
 class LDASimilarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.corpus = []
         self.bug_ids = []
         for bug in bugzilla.get_bugs():
@@ -679,8 +747,14 @@ class LDASimilarity(BaseSimilarity):
 
 
 class ElasticSearchSimilarity(BaseSimilarity):
-    def __init__(self, cleanup_urls=True, nltk_tokenizer=False):
-        super().__init__(cleanup_urls=cleanup_urls, nltk_tokenizer=nltk_tokenizer)
+    def __init__(
+        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+    ):
+        super().__init__(
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+        )
         self.elastic_search = Elasticsearch()
         assert (
             self.elastic_search.ping()
