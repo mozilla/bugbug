@@ -188,7 +188,7 @@ class CommitClassifier(object):
             self.testfailure_model = download_and_load_model("testfailure")
             assert self.testfailure_model is not None
 
-    def clone_git_repo(self, repo_url, repo_dir, rev="master"):
+    def clone_git_repo(self, repo_url, repo_dir, rev="origin/branches/default/tip"):
         logger.info(f"Cloning {repo_url}...")
 
         if not os.path.exists(repo_dir):
@@ -206,10 +206,7 @@ class CommitClassifier(object):
             stop=tenacity.stop_after_attempt(5),
         )(
             lambda: subprocess.run(
-                ["git", "pull", "--quiet", repo_url, "master"],
-                cwd=repo_dir,
-                capture_output=True,
-                check=True,
+                ["git", "fetch"], cwd=repo_dir, capture_output=True, check=True,
             )
         )()
 

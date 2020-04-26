@@ -105,21 +105,21 @@ class RegressorFinder(object):
 
             logger.info(f"{repo_dir} cloned")
 
-        logger.info(f"Pulling and updating {repo_dir}")
+        logger.info(f"Fetching {repo_dir}")
 
         tenacity.retry(
             wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
             stop=tenacity.stop_after_attempt(5),
         )(
             lambda: subprocess.run(
-                ["git", "pull", "--quiet", repo_url, "master"],
+                ["git", "fetch", "--quiet"],
                 cwd=repo_dir,
                 capture_output=True,
                 check=True,
             )
         )()
 
-        logger.info(f"{repo_dir} pulled and updated")
+        logger.info(f"{repo_dir} fetched")
 
     def init_mapping(self):
         if self.tokenized_git_repo_url is not None:
