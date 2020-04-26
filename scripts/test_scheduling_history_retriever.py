@@ -29,7 +29,6 @@ from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
     create_tar_zst,
     download_check_etag,
-    get_s3_credentials,
     open_tar_zst,
     zstd_compress,
     zstd_decompress,
@@ -171,13 +170,8 @@ class Retriever(object):
         upload_thread_stop = threading.Event()
         upload_thread.start()
 
-        credentials = get_s3_credentials()
-
         s3_store = adr.util.cache_stores.S3Store(
-            {"bucket": "communitytc-bugbug", "prefix": "data/adr_cache/",},
-            credentials["accessKeyId"],
-            credentials["secretAccessKey"],
-            credentials["sessionToken"],
+            {"bucket": "communitytc-bugbug", "prefix": "data/adr_cache/",}
         )
 
         s3_store.set_serializer(CompressedPickleSerializer())
