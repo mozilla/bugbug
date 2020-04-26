@@ -17,6 +17,7 @@ RUN apt-get update && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
     git config --global cinnabar.experiments python3 && \
     git config --global cinnabar.check no-version-check && \
+    git config --global fetch.prune true && \
     git cinnabar download && \
     rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.11/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
