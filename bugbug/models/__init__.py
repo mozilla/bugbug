@@ -17,6 +17,7 @@ MODELS = {
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
+    "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",
     "regressionrange": "bugbug.models.regressionrange.RegressionRangeModel",
     "regressor": "bugbug.models.regressor.RegressorModel",
