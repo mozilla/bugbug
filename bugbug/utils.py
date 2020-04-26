@@ -151,8 +151,7 @@ def get_secret(secret_id):
 def get_s3_credentials():
     auth = taskcluster.Auth(get_taskcluster_options())
     response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
-    credentials = response["credentials"]
-    return credentials
+    return response["credentials"]
 
 
 def upload_s3(paths):
