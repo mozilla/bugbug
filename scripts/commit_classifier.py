@@ -287,7 +287,7 @@ class CommitClassifier(object):
 
             if self.git_repo_dir and hg_base != "tip":
                 try:
-                    self.git_base = vcs_map.mercurial_to_git(hg_base)
+                    self.git_base = next(vcs_map.mercurial_to_git([hg_base]))
                     subprocess.run(
                         ["git", "checkout", "-b", "analysis_branch", self.git_base],
                         check=True,
@@ -678,7 +678,7 @@ class CommitClassifier(object):
         four_months_ago = datetime.utcnow() - relativedelta(months=4)
         for commit in repository.get_commits():
             if dateutil.parser.parse(commit["pushdate"]) >= four_months_ago:
-                stop_hash = vcs_map.mercurial_to_git(commit["node"])
+                stop_hash = next(vcs_map.mercurial_to_git([commit["node"]]))
                 break
         assert stop_hash is not None
 

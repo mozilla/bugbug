@@ -306,17 +306,17 @@ class RegressorFinder(object):
         else:
             db_path = BUG_INTRODUCING_COMMITS_DB
 
-        def git_to_mercurial(rev):
+        def git_to_mercurial(revs):
             if tokenized:
-                return self.tokenized_git_to_mercurial[rev]
+                return (self.tokenized_git_to_mercurial[rev] for rev in revs)
             else:
-                return vcs_map.git_to_mercurial(repo_dir, rev)
+                yield from vcs_map.git_to_mercurial(repo_dir, revs)
 
-        def mercurial_to_git(rev):
+        def mercurial_to_git(revs):
             if tokenized:
-                return self.mercurial_to_tokenized_git[rev]
+                return (self.mercurial_to_tokenized_git[rev] for rev in revs)
             else:
-                return vcs_map.mercurial_to_git(repo_dir, rev)
+                yield from vcs_map.mercurial_to_git(repo_dir, revs)
 
         logger.info("Download previously found bug-introducing commits...")
         db.download(db_path)
@@ -334,11 +334,12 @@ class RegressorFinder(object):
         hashes_to_ignore = set(commit["rev"] for commit in commits_to_ignore)
 
         with open("git_hashes_to_ignore", "w") as f:
-            f.writelines(
-                "{}\n".format(mercurial_to_git(commit["rev"]))
-                for commit in commits_to_ignore
+            git_hashes = mercurial_to_git(
+                commit["rev"]
+                for commit in tqdm(commits_to_ignore)
                 if not tokenized or commit["rev"] in self.mercurial_to_tokenized_git
             )
+            f.writelines("{}\n".format(git_hash) for git_hash in git_hashes)
 
         logger.info(f"{len(bug_fixing_commits)} commits to analyze")
 
@@ -383,7 +384,7 @@ class RegressorFinder(object):
         def find_bic(bug_fixing_commit):
             logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
-            git_fix_revision = mercurial_to_git(bug_fixing_commit["rev"])
+            git_fix_revision = next(mercurial_to_git([bug_fixing_commit["rev"]]))
 
             commit = thread_local.git.get_commit(git_fix_revision)
 
@@ -432,8 +433,8 @@ class RegressorFinder(object):
                         bug_introducing_commits.append(
                             {
                                 "bug_fixing_rev": bug_fixing_commit["rev"],
-                                "bug_introducing_rev": git_to_mercurial(
-                                    bug_introducing_hash
+                                "bug_introducing_rev": next(
+                                    git_to_mercurial([bug_introducing_hash])
                                 ),
                             }
                         )
