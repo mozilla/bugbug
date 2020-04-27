@@ -1,5 +1,6 @@
 [adr.cache]
 retention = 40320
+serializer = "compressedpickle"
 
 [adr.cache.stores]
-file = { driver = "renewing-file", path = "/data/adr_cache" }
+s3 = { driver = "s3", bucket = "communitytc-bugbug", prefix = "/data/adr_cache/" }

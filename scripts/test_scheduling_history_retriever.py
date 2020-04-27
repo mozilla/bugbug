@@ -9,10 +9,7 @@ import itertools
 import json
 import math
 import os
-import pickle
 import struct
-import threading
-import time
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -20,8 +17,6 @@ from logging import INFO, basicConfig, getLogger
 import adr
 import dateutil.parser
 import mozci.push
-import zstandard
-from cachy.serializers import Serializer
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -29,7 +24,6 @@ from bugbug import commit_features, db, repository, test_scheduling
 from bugbug.utils import (
     create_tar_zst,
     download_check_etag,
-    open_tar_zst,
     zstd_compress,
     zstd_decompress,
 )
@@ -49,12 +43,6 @@ JOBS_TO_IGNORE = (
     "backlog",
 )
 
-ADR_CACHE_DB = "data/adr_cache.tar"
-db.register(
-    ADR_CACHE_DB,
-    "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/adr_cache.tar.zst",
-    3,
-)
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
@@ -86,34 +74,7 @@ def rename_tasks(tasks):
     return [task.replace("test-linux64-", "test-linux1804-64-") for task in tasks]
 
 
-class CompressedPickleSerializer(Serializer):
-    def __init__(self):
-        self.compressor = zstandard.ZstdCompressor(
-            level=zstandard.MAX_COMPRESSION_LEVEL
-        )
-        self.decompressor = zstandard.ZstdDecompressor()
-
-    def serialize(self, data):
-        return self.compressor.compress(pickle.dumps(data))
-
-    def unserialize(self, data):
-        return pickle.loads(self.decompressor.decompress(data))
-
-
 class Retriever(object):
-    def __init__(self):
-        os.makedirs("data", exist_ok=True)
-
-    def upload_adr_cache(self):
-        cache_path = os.path.splitext(ADR_CACHE_DB)[0]
-        assert os.path.abspath(
-            adr.config["cache"]["stores"]["file"]["path"]
-        ) == os.path.abspath(cache_path)
-
-        create_tar_zst(f"{ADR_CACHE_DB}.zst")
-
-        db.upload(ADR_CACHE_DB)
-
     def generate_push_data(self, runnable):
         # We keep in the cache the fact that we failed to analyze a push for 10
         # days, so if we re-run often we don't retry the same pushes many times.
@@ -157,25 +118,6 @@ class Retriever(object):
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
                 to_regenerate.add(value[0][0])"""
 
-        def periodically_upload_adr_cache():
-            start_time = time.monotonic()
-            while not upload_thread_stop.isSet():
-                if time.monotonic() - start_time >= 10800:
-                    self.upload_adr_cache()
-                    start_time = time.monotonic()
-
-                upload_thread_stop.wait(timeout=7)
-
-        upload_thread = threading.Thread(target=periodically_upload_adr_cache)
-        upload_thread_stop = threading.Event()
-        upload_thread.start()
-
-        s3_store = adr.util.cache_stores.S3Store(
-            {"bucket": "communitytc-bugbug", "prefix": "data/adr_cache/",}
-        )
-
-        s3_store.set_serializer(CompressedPickleSerializer())
-
         for push in tqdm(pushes):
             key = cache_key(push)
 
@@ -183,7 +125,6 @@ class Retriever(object):
                 num_cached += 1
                 cached = adr.config.cache.get(key)
                 if cached:
-                    s3_store.put(key, cached, adr.config["cache"]["retention"])
                     value, mozci_version = cached
                     push_data.append(value)
             else:
@@ -205,9 +146,6 @@ class Retriever(object):
                     adr.config.cache.put(
                         key, (value, MOZCI_VERSION), adr.config["cache"]["retention"]
                     )
-                    s3_store.put(
-                        key, (value, MOZCI_VERSION), adr.config["cache"]["retention"]
-                    )
                 except adr.errors.MissingDataError:
                     logger.warning(
                         f"Tasks for push {push.rev} can't be found on ActiveData"
@@ -217,9 +155,6 @@ class Retriever(object):
                     traceback.print_exc()
                     adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-        upload_thread_stop.set()
-        upload_thread.join()
-
         logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
 
         with open(f"push_data_{runnable}.json", "w") as f:
@@ -228,36 +163,8 @@ class Retriever(object):
         zstd_compress(f"push_data_{runnable}.json")
 
     def retrieve_push_data(self):
-        # Download previous cache.
-        db.download(ADR_CACHE_DB, extract=False)
-
-        # Extract files from the cache.
-        with open_tar_zst(f"{ADR_CACHE_DB}.zst", "r") as tar:
-            now = round(time.time())
-
-            for member in tar:
-                if member.isdir():
-                    os.mkdir(member.name)
-                    continue
-
-                fin = tar.extractfile(member)
-
-                # If the element expired (the format of the file can be inferred
-                # from cachy's FileStore source code), no need to extract it.
-                content = fin.read(10)
-                expire = int(content)
-                if now >= expire:
-                    continue
-
-                content += fin.read()
-
-                with open(member.name, "wb") as fout:
-                    fout.write(content)
-
         self.generate_push_data("label")
         self.generate_push_data("group")
-
-        self.upload_adr_cache()
 
     def generate_test_scheduling_history(self, granularity):
         push_data_path = f"push_data_{granularity}.json"
