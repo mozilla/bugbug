@@ -67,9 +67,17 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-### Usage for training a model
+### Usage (generic)
 
 Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training (warning this takes 30min+).
+
+### Usage for mode "defect"
+
+**training** To train the model for mode `defect`:
+
+    python3 -m scripts.trainer defect
+    
+**testing**  To use a model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`. N.B.: If you run the classifier script without training a model first, it will automatically download an already trained model.
 
 ### Running the repository mining script
 
@@ -87,11 +95,6 @@ Note: If you run into problems, it's possible the version of Mercurial you are u
 
 Note: the script will take a long time to run (on my laptop more than 7 hours). If you want to test a simple change and you don't intend to actually mine the data, you can modify the repository.py script to limit the number of analyzed commits. Simply add `limit=1024` to the call to the `log` command.
 
-### Training the defect model
-
-To train the model for mode `defect`:
-
-    python3 -m scripts.trainer defect
 
 ## Structure of the project
 - `bugbug/labels` contains manually collected labels;
