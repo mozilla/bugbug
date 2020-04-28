@@ -132,7 +132,7 @@ class Retriever(object):
         # Regenerating a large amount of data when we update the mozci regression detection
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
         # run.
-        """to_regenerate = 0
+        to_regenerate = 0
         for push in pushes[::-1]:
             cached = cache[push]
             if not cached:
@@ -141,7 +141,7 @@ class Retriever(object):
             value, mozci_version = cached
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
                 cache[push] = None
-                to_regenerate += 1"""
+                to_regenerate += 1
 
         for push in tqdm(pushes):
             key = cache_key(push)
