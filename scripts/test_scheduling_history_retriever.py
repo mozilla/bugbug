@@ -5,6 +5,7 @@
 
 import argparse
 import collections
+import concurrent.futures
 import itertools
 import json
 import math
@@ -101,29 +102,53 @@ class Retriever(object):
         num_cached = 0
 
         push_data = []
+        cache = {}
 
         def cache_key(push):
             return f"push_data.{runnable}.{push.rev}"
 
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_push = {
+                executor.submit(
+                    lambda push: adr.config.cache.get(cache_key(push)), push
+                ): push
+                for push in pushes
+            }
+
+            for future in tqdm(
+                concurrent.futures.as_completed(future_to_push),
+                total=len(future_to_push),
+            ):
+                push = future_to_push[future]
+
+                exc = future.exception()
+                if exc is not None:
+                    logger.info(f"Exception {exc} while getting {push.rev}")
+                    for f in future_to_push.keys():
+                        f.cancel()
+
+                cache[push] = future.result()
+
         # Regenerating a large amount of data when we update the mozci regression detection
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
         # run.
-        to_regenerate = set()
-        """for push in pushes[::-1]:
-            cached = adr.config.cache.get(cache_key(push))
+        """to_regenerate = 0
+        for push in pushes[::-1]:
+            cached = cache[push]
             if not cached:
                 continue
 
             value, mozci_version = cached
             if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
-                to_regenerate.add(value[0][0])"""
+                cache[push] = None
+                to_regenerate += 1"""
 
         for push in tqdm(pushes):
             key = cache_key(push)
 
-            if adr.config.cache.has(key) and push.revs[0] not in to_regenerate:
+            if cache[push] is not None:
                 num_cached += 1
-                cached = adr.config.cache.get(key)
+                cached = cache[push.rev]
                 if cached:
                     value, mozci_version = cached
                     push_data.append(value)
