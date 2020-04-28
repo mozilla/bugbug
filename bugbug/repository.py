@@ -113,7 +113,6 @@ class Commit:
         self.pushdate = pushdate
         self.backsout = backsout
         self.backedoutby = backedoutby
-        self.ever_backedout = backedoutby != ""
         self.author_email = author_email
         self.reviewers = reviewers
         self.ignored = ignored
@@ -203,7 +202,7 @@ class Commit:
 
     def to_dict(self):
         d = self.__dict__
-        for f in ["backedoutby", "ignored", "file_copies"]:
+        for f in ["ignored", "file_copies"]:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
@@ -761,9 +760,9 @@ def calculate_experiences(commits, first_pushdate, save=True):
             # We don't want to consider backed out commits when calculating normal experiences.
             if (
                 commit_type == ""
-                and not commit.ever_backedout
+                and not commit.backedoutby
                 or commit_type == "backout"
-                and commit.ever_backedout
+                and commit.backedoutby
             ):
                 for i in range(len(items)):
                     exp_queues[i][day] = total_exps[i] + 1
@@ -826,9 +825,9 @@ def calculate_experiences(commits, first_pushdate, save=True):
             # We don't want to consider backed out commits when calculating normal experiences.
             if (
                 commit_type == ""
-                and not commit.ever_backedout
+                and not commit.backedoutby
                 or commit_type == "backout"
-                and commit.ever_backedout
+                and commit.backedoutby
             ):
                 for i in range(len(items)):
                     exp_queues[i][day] = all_commit_lists[i] + (commit.node,)

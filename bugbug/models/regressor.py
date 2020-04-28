@@ -115,7 +115,7 @@ class RegressorModel(CommitModel):
         )
 
         for commit_data in repository.get_commits():
-            if commit_data["ever_backedout"]:
+            if commit_data["backedoutby"]:
                 continue
 
             if commit_data["author_email"] == "wptsync@mozilla.com":

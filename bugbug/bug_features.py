@@ -336,27 +336,21 @@ class has_image_attachment(single_bug_feature):
 class commit_added(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
-            commit["added"] for commit in bug["commits"] if not commit["ever_backedout"]
+            commit["added"] for commit in bug["commits"] if not commit["backedoutby"]
         )
 
 
 class commit_deleted(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
-            commit["deleted"]
-            for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            commit["deleted"] for commit in bug["commits"] if not commit["backedoutby"]
         )
 
 
 class commit_types(single_bug_feature):
     def __call__(self, bug, **kwargs):
         return sum(
-            (
-                commit["types"]
-                for commit in bug["commits"]
-                if not commit["ever_backedout"]
-            ),
+            (commit["types"] for commit in bug["commits"] if not commit["backedoutby"]),
             [],
         )
 
@@ -366,7 +360,7 @@ class commit_files_modified_num(single_bug_feature):
         return sum(
             commit["files_modified_num"]
             for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            if not commit["backedoutby"]
         )
 
 
@@ -375,7 +369,7 @@ class commit_author_experience(single_bug_feature):
         res = [
             commit["author_experience"]
             for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            if not commit["backedoutby"]
         ]
         return sum(res) / len(res)
 
@@ -385,7 +379,7 @@ class commit_author_experience_90_days(single_bug_feature):
         res = [
             commit["author_experience_90_days"]
             for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            if not commit["backedoutby"]
         ]
         return sum(res) / len(res)
 
@@ -395,7 +389,7 @@ class commit_reviewer_experience(single_bug_feature):
         res = [
             commit["reviewer_experience"]
             for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            if not commit["backedoutby"]
         ]
         return sum(res) / len(res)
 
@@ -405,14 +399,14 @@ class commit_reviewer_experience_90_days(single_bug_feature):
         res = [
             commit["reviewer_experience_90_days"]
             for commit in bug["commits"]
-            if not commit["ever_backedout"]
+            if not commit["backedoutby"]
         ]
         return sum(res) / len(res)
 
 
 class commit_no_of_backouts(single_bug_feature):
     def __call__(self, bug, **kwargs):
-        return sum(1 for commit in bug["commits"] if commit["ever_backedout"])
+        return sum(1 for commit in bug["commits"] if commit["backedoutby"])
 
 
 class components_touched(single_bug_feature):
@@ -422,7 +416,7 @@ class components_touched(single_bug_feature):
                 component
                 for commit in bug["commits"]
                 for component in commit["components"]
-                if not commit["ever_backedout"]
+                if not commit["backedoutby"]
             )
         )
 
@@ -434,7 +428,7 @@ class components_touched_num(single_bug_feature):
                 component
                 for commit in bug["commits"]
                 for component in commit["components"]
-                if not commit["ever_backedout"]
+                if not commit["backedoutby"]
             )
         )
 

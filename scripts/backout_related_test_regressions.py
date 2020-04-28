@@ -17,11 +17,9 @@ def go(repo_dir):
         revs = repository.get_revs(hg, -1000, -500)
         commits = repository.hg_log(hg, revs)
         backouts = list(
-            set(commit.backedoutby for commit in commits if commit.ever_backedout)
+            set(commit.backedoutby for commit in commits if commit.backedoutby)
         )
-        backedouts = list(
-            set(commit.node for commit in commits if commit.ever_backedout)
-        )
+        backedouts = list(set(commit.node for commit in commits if commit.backedoutby))
 
     likely_label_count = 0
     possible_label_count = 0

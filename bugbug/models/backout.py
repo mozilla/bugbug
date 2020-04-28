@@ -105,7 +105,7 @@ class BackoutModel(CommitModel):
             if pushdate < two_years_and_six_months_ago:
                 continue
 
-            classes[commit_data["node"]] = 1 if commit_data["ever_backedout"] else 0
+            classes[commit_data["node"]] = 1 if commit_data["backedoutby"] else 0
 
         print(
             "{} commits were backed out".format(
