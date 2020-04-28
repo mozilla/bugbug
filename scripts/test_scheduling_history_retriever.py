@@ -148,7 +148,7 @@ class Retriever(object):
 
             if cache[push] is not None:
                 num_cached += 1
-                cached = cache[push.rev]
+                cached = cache[push]
                 if cached:
                     value, mozci_version = cached
                     push_data.append(value)
