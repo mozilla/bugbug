@@ -621,6 +621,14 @@ def test_set_commits_to_ignore(fake_hg_repo):
         "commit_with_ignore_in_desc",
     }
 
+    repository.set_commits_to_ignore(hg, local, commits, ignore_no_bug=False)
+    ignored = [commit for commit in commits if commit.ignored]
+    assert set(commit.node for commit in ignored) == {
+        "commit_backout",
+        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+        "commit_with_ignore_in_desc",
+    }
+
 
 def test_calculate_experiences():
     repository.path_to_component = {
