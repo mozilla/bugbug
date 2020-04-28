@@ -39,9 +39,22 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 - **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
 
 
-## Setup
+## Setup and Prerequisites
 
-Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
+libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental))
+
+```
+sudo apt-get -t experimental install libgit2-dev
+```
+
+And the python dependencies:
+
+```
+pip3 install -r requirements.txt
+```
+
+
+You may also need `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
 Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
 
@@ -54,7 +67,16 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training.
+### Usage (generic)
+
+Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training (warning this takes 30min+).
+
+### Usage for mode "defect"
+
+**training** To train the model for mode `defect`:
+
+    python3 -m scripts.trainer defect
+**testing**  To use a model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`. N.B.: If you run the classifier script without training a model first, it will automatically download an already trained model.
 
 ### Running the repository mining script
 
