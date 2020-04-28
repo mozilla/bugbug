@@ -32,7 +32,13 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **regressor** - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
 
+- **spam** - The aim of this classifier is to detect bugs which are spam.
+
 - **stepstoreproduce** - The aim of this classifier is to detect bugs that have steps to reproduce vs those that don't.
+
+- **testfailure** - The aim of this classifier is to detect patches that might be more likely to cause test failures.
+
+- **testselect** - The aim of this classifier is to select relevant tests to run for a given patch.
 
 - **tracking** - The aim of this classifier is to detect bugs to track.
 
