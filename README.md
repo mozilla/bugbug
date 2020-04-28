@@ -1,6 +1,6 @@
 # bugbug
 
-Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks.
+Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks (such as test selection and defect prediction).
 
 Chat with us in the [bugbug](https://chat.mozilla.org/#/room/#bugbug:mozilla.org) Matrix room.
 
@@ -33,16 +33,35 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **regressor** - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
 
+- **spam** - The aim of this classifier is to detect bugs which are spam.
+
 - **stepstoreproduce** - The aim of this classifier is to detect bugs that have steps to reproduce vs those that don't.
+
+- **testfailure** - The aim of this classifier is to detect patches that might be more likely to cause test failures.
+
+- **testselect** - The aim of this classifier is to select relevant tests to run for a given patch.
 
 - **tracking** - The aim of this classifier is to detect bugs to track.
 
 - **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
 
 
-## Setup
+## Setup and Prerequisites
 
-Run `pip install -r requirements.txt` and `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
+libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental)) might be required.
+
+```
+sudo apt-get -t experimental install libgit2-dev
+```
+
+And the python dependencies:
+
+```
+pip3 install -r requirements.txt
+```
+
+
+You may also need `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
 Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
 
@@ -55,7 +74,21 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training.
+### Training
+
+Run the `trainer.py` script with the command `python -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training (warning this takes 30min+).
+
+### Testing
+
+To use a model to classify a given bug, you can run `python -m scripts.bug_classifier MODEL_NAME --bug-id ID_OF_A_BUG_FROM_BUGZILLA`. N.B.: If you run the classifier script without training a model first, it will automatically download an already trained model.
+
+### Example for the "defect" model
+
+**training** To train the model for mode `defect`:
+
+    python3 -m scripts.trainer defect
+
+**testing**  To use the model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`.
 
 ### Running the repository mining script
 
