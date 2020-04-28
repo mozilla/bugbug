@@ -139,7 +139,7 @@ class Retriever(object):
                 continue
 
             value, mozci_version = cached
-            if mozci_version != MOZCI_VERSION and len(to_regenerate) < 1000:
+            if mozci_version != MOZCI_VERSION and to_regenerate < 1000:
                 cache[push] = None
                 to_regenerate += 1
 
