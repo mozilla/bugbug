@@ -1,6 +1,6 @@
 # bugbug
 
-Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks.
+Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks (such as test selection and defect prediction).
 
 Chat with us in the [bugbug](https://chat.mozilla.org/#/room/#bugbug:mozilla.org) Matrix room.
 
