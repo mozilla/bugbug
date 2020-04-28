@@ -73,16 +73,21 @@ Every time you will try to commit, pre-commit will run checks on your files to m
 
 ## Usage
 
-### Usage (generic)
+### Training
 
-Run the `trainer.py` script with the command `python3 -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training (warning this takes 30min+).
+Run the `trainer.py` script with the command `python -m scripts.trainer` (with `--help` to see the required and optional arguments of the command) to perform training (warning this takes 30min+).
 
-### Usage for mode "defect"
+### Testing
+
+To use a model to classify a given bug, you can run `python -m scripts.bug_classifier MODEL_NAME --bug-id ID_OF_A_BUG_FROM_BUGZILLA`. N.B.: If you run the classifier script without training a model first, it will automatically download an already trained model.
+
+### Example for the "defect" model
 
 **training** To train the model for mode `defect`:
 
     python3 -m scripts.trainer defect
-**testing**  To use a model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`. N.B.: If you run the classifier script without training a model first, it will automatically download an already trained model.
+
+**testing**  To use the model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`.
 
 ### Running the repository mining script
 
