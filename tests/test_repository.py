@@ -581,7 +581,7 @@ def test_set_commits_to_ignore(fake_hg_repo):
     )
     commit(hg)
 
-    def create_commit(node, desc, bug_id, backedoutby):
+    def create_commit(node, desc, bug_id, backsout, backedoutby):
         return repository.Commit(
             node=node,
             author="author",
@@ -589,31 +589,32 @@ def test_set_commits_to_ignore(fake_hg_repo):
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=bug_id,
+            backsout=backsout,
             backedoutby=backedoutby,
             author_email="author@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
         ).set_files(["dom/file1.cpp"], {})
 
     commits = [
-        create_commit("commit", "", 123, ""),
-        create_commit("commit_backout", "", 123, ""),
-        create_commit("commit_backedout", "", 123, "commit_backout"),
-        create_commit("commit_no_bug", "", None, ""),
+        create_commit("commit", "", 123, [], ""),
+        create_commit("commit_backout", "", 123, ["commit_backedout"], ""),
+        create_commit("commit_backedout", "", 123, [], "commit_backout"),
+        create_commit("commit_no_bug", "", None, [], ""),
         create_commit(
             "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
             "commit in .hg-annotate-ignore-revs",
             123,
+            [],
             "",
         ),
         create_commit(
-            "commit_with_ignore_in_desc", "prova\nignore-this-changeset\n", 123, ""
+            "commit_with_ignore_in_desc", "prova\nignore-this-changeset\n", 123, [], ""
         ),
     ]
 
     repository.set_commits_to_ignore(hg, local, commits)
-    leftovers = [commit for commit in commits if commit.ignored]
-    assert len(leftovers) == 4
-    assert set(commit.node for commit in leftovers) == {
+    ignored = [commit for commit in commits if commit.ignored]
+    assert set(commit.node for commit in ignored) == {
         "commit_backout",
         "commit_no_bug",
         "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
@@ -638,6 +639,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -649,6 +651,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -660,6 +663,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1",),
@@ -671,6 +675,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1",),
@@ -683,6 +688,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
             reviewers=("reviewer2",),
@@ -694,6 +700,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -705,6 +712,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
             reviewers=("reviewer3",),
@@ -716,6 +724,7 @@ def test_calculate_experiences():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
             reviewers=("reviewer3",),
@@ -1114,6 +1123,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -1125,6 +1135,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -1136,6 +1147,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1",),
@@ -1147,6 +1159,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1",),
@@ -1159,6 +1172,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
             reviewers=("reviewer2",),
@@ -1170,6 +1184,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
             reviewers=("reviewer1", "reviewer2"),
@@ -1181,6 +1196,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
             reviewers=("reviewer3",),
@@ -1192,6 +1208,7 @@ def test_calculate_experiences_no_save():
             date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
+            backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
             reviewers=("reviewer3",),

@@ -99,6 +99,7 @@ class Commit:
         date,
         pushdate,
         bug_id,
+        backsout,
         backedoutby,
         author_email,
         reviewers,
@@ -110,6 +111,7 @@ class Commit:
         self.desc = desc
         self.date = date
         self.pushdate = pushdate
+        self.backsout = backsout
         self.backedoutby = backedoutby
         self.ever_backedout = backedoutby != ""
         self.author_email = author_email
@@ -578,7 +580,7 @@ def _transform(commit):
 
 
 def hg_log(hg, revs):
-    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -610,6 +612,12 @@ def hg_log(hg, revs):
             else []
         )
 
+        backsout = (
+            list(set(sys.intern(r) for r in rev[9].decode("utf-8").split(" ")))
+            if rev[9] != b""
+            else []
+        )
+
         revs.append(
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
@@ -618,6 +626,7 @@ def hg_log(hg, revs):
                 date=date,
                 pushdate=pushdate,
                 bug_id=bug_id,
+                backsout=backsout,
                 backedoutby=rev[5].decode("ascii"),
                 author_email=rev[6].decode("utf-8"),
                 reviewers=reviewers,
@@ -868,14 +877,12 @@ def set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug=True):
     ).decode("utf-8")
     ignore_revs = set(l[:40] for l in ignore_revs_content.splitlines())
 
-    backouts = set(commit.backedoutby for commit in commits if commit.ever_backedout)
-
     def should_ignore(commit):
         if commit.node in ignore_revs or "ignore-this-changeset" in commit.desc:
             return True
 
         # Don't analyze backouts.
-        if commit.node in backouts:
+        if len(commit.backsout) > 0:
             return True
 
         # Don't analyze commits that are not linked to a bug.

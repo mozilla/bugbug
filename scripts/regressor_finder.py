@@ -47,7 +47,7 @@ IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
     IGNORED_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/ignored_commits.json.zst",
-    2,
+    3,
 )
 
 
@@ -134,18 +134,11 @@ class RegressorFinder(object):
         db.download(IGNORED_COMMITS_DB)
 
         logger.info("Get previously classified commits...")
-        prev_commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
-        logger.info(f"Already found {len(prev_commits_to_ignore)} commits to ignore...")
+        commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
+        logger.info(f"Already found {len(commits_to_ignore)} commits to ignore...")
 
-        # When we already have some analyzed commits, re-analyze the last 3500 to make sure
-        # we didn't miss back-outs that happened since the last analysis.
-        if len(prev_commits_to_ignore) > 0:
-            first_commit_to_reanalyze = (
-                -3500 if len(prev_commits_to_ignore) >= 3500 else 0
-            )
-            rev_start = "children({})".format(
-                prev_commits_to_ignore[first_commit_to_reanalyze]["rev"]
-            )
+        if len(commits_to_ignore) > 0:
+            rev_start = "children({})".format(commits_to_ignore[-1]["rev"])
         else:
             rev_start = 0
 
@@ -160,9 +153,12 @@ class RegressorFinder(object):
         for commit in commits:
             commit.ignored |= commit.author_email == "wptsync@mozilla.com"
 
-        chosen_commits = set()
-        commits_to_ignore = []
+        already_ignored = set(commit["rev"] for commit in commits_to_ignore)
+
         for commit in commits:
+            if commit.node in already_ignored:
+                continue
+
             if commit.ignored or commit.backedoutby:
                 commits_to_ignore.append(
                     {
@@ -170,14 +166,10 @@ class RegressorFinder(object):
                         "type": "backedout" if commit.backedoutby else "",
                     }
                 )
-                chosen_commits.add(commit.node)
 
-        logger.info(f"{len(commits_to_ignore)} new commits to ignore...")
-
-        for prev_commit in prev_commits_to_ignore[::-1]:
-            if prev_commit["rev"] not in chosen_commits:
-                commits_to_ignore.append(prev_commit)
-                chosen_commits.add(prev_commit["rev"])
+            if len(commit.backsout) > 0:
+                for backedout in commit.backsout:
+                    commits_to_ignore.append({"rev": backedout, "type": "backedout"})
 
         logger.info(f"{len(commits_to_ignore)} commits to ignore...")
 
