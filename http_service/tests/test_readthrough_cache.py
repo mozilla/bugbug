@@ -5,7 +5,6 @@
 
 
 import threading
-import time
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -145,6 +144,8 @@ def test_force_store():
 
 
 def test_cache_thread():
+    purged_event = threading.Event()
+
     def cache_with_purge_count(cache):
         cache.purge_count = 0
         purge = cache.purge_expired_entries
@@ -152,6 +153,7 @@ def test_cache_thread():
         def purge_then_increment():
             purge()
             cache.purge_count += 1
+            purged_event.set()
 
         cache.purge_expired_entries = purge_then_increment
         return cache
@@ -166,15 +168,20 @@ def test_cache_thread():
             cache.get("key_a", force_store=True)
             cache.start_ttl_thread()
 
+            purged_event.wait()
+            purged_event.clear()
+            assert cache.purge_count == 1
+
             # after one hour
             mockdatetime.set_now(datetime(2019, 4, 1, 11))
+            assert cache.purge_count == 1
             assert "key_a" in cache
             assert mocksleep.wakeups_count == 0
 
             # after two hours one minute
-            before_timechange_purge_count = cache.purge_count
             mockdatetime.set_now(datetime(2019, 4, 1, 12, 1))
 
-            while cache.purge_count == before_timechange_purge_count:
-                time.sleep(0)
+            purged_event.wait()
+            assert cache.purge_count == 2
             assert "key_a" not in cache
+            assert mocksleep.wakeups_count == 1
