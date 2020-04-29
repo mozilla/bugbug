@@ -527,14 +527,12 @@ tasks:
         command:
           - bugbug-regressor-finder
           - to_ignore
-          - --repo_dir=/cache/mozilla-central
         cache:
           bugbug-mercurial-repository: /cache
         features:
           taskclusterProxy:
             true
       scopes:
-        - "docker-worker:cache:bugbug-mercurial-repository"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed

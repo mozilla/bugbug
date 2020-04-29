@@ -14,7 +14,6 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
-import hglib
 import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata import vcs_map
@@ -47,32 +46,24 @@ IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
     IGNORED_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/ignored_commits.json.zst",
-    3,
+    4,
 )
 
 
 class RegressorFinder(object):
     def __init__(
         self,
-        mercurial_repo_dir=None,
         git_repo_url=None,
         git_repo_dir=None,
         tokenized_git_repo_url=None,
         tokenized_git_repo_dir=None,
     ):
-        self.mercurial_repo_dir = mercurial_repo_dir
         self.git_repo_url = git_repo_url
         self.git_repo_dir = git_repo_dir
         self.tokenized_git_repo_url = tokenized_git_repo_url
         self.tokenized_git_repo_dir = tokenized_git_repo_dir
 
         with ThreadPoolExecutorResult(max_workers=3) as executor:
-            if self.mercurial_repo_dir is not None:
-                logger.info(
-                    f"Cloning mercurial repository to {self.mercurial_repo_dir}..."
-                )
-                executor.submit(repository.clone, self.mercurial_repo_dir)
-
             if self.git_repo_url is not None:
                 logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
                 executor.submit(
@@ -128,51 +119,35 @@ class RegressorFinder(object):
                 self.mercurial_to_tokenized_git,
             ) = microannotate_utils.get_commit_mapping(self.tokenized_git_repo_dir)
 
-    # TODO: Make repository module analyze all commits, even those to ignore, but add a field "ignore" or a function should_ignore that analyzes the commit data. This way we don't have to clone the Mercurial repository in this script.
-    def get_commits_to_ignore(self):
-        logger.info("Download previous commits to ignore...")
-        db.download(IGNORED_COMMITS_DB)
+    def get_commits_to_ignore(self) -> None:
+        assert db.download(repository.COMMITS_DB)
 
-        logger.info("Get previously classified commits...")
-        commits_to_ignore = list(db.read(IGNORED_COMMITS_DB))
-        logger.info(f"Already found {len(commits_to_ignore)} commits to ignore...")
+        ignored = set()
+        commits_to_ignore = []
 
-        if len(commits_to_ignore) > 0:
-            rev_start = "children({})".format(commits_to_ignore[-1]["rev"])
-        else:
-            rev_start = 0
-
-        with hglib.open(self.mercurial_repo_dir) as hg:
-            revs = repository.get_revs(hg, rev_start)
-
-        commits = repository.hg_log_multi(self.mercurial_repo_dir, revs)
-
-        with hglib.open(self.mercurial_repo_dir) as hg:
-            repository.set_commits_to_ignore(hg, self.mercurial_repo_dir, commits)
-
-        for commit in commits:
-            commit.ignored |= commit.author_email == "wptsync@mozilla.com"
-
-        already_ignored = set(commit["rev"] for commit in commits_to_ignore)
-
-        for commit in commits:
-            if commit.node in already_ignored:
-                continue
-
-            if commit.ignored or commit.backedoutby:
-                already_ignored.add(commit.node)
+        for commit in repository.get_commits(
+            include_no_bug=True, include_backouts=True, include_ignored=True
+        ):
+            if (
+                commit["ignored"]
+                or commit["backedoutby"]
+                or not commit["bug_id"]
+                or len(commit["backsout"]) > 0
+                or repository.is_wptsync(commit)
+            ):
                 commits_to_ignore.append(
                     {
-                        "rev": commit.node,
-                        "type": "backedout" if commit.backedoutby else "",
+                        "rev": commit["node"],
+                        "type": "backedout" if commit["backedoutby"] else "",
                     }
                 )
+                ignored.add(commit["node"])
 
-            if len(commit.backsout) > 0:
-                for backedout in commit.backsout:
-                    if backedout in already_ignored:
+            if len(commit["backsout"]) > 0:
+                for backedout in commit["backsout"]:
+                    if backedout in ignored:
                         continue
-                    already_ignored.add(backedout)
+                    ignored.add(backedout)
 
                     commits_to_ignore.append({"rev": backedout, "type": "backedout"})
 
@@ -595,15 +570,11 @@ def evaluate(bug_introducing_commits):
     )
 
 
-def main():
+def main() -> None:
     description = "Find bug-introducing commits from bug-fixing commits"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("what", choices=["to_ignore", "bug_fixing", "bug_introducing"])
-    parser.add_argument(
-        "--repo_dir",
-        help="Path to a Gecko repository. If no repository exists, it will be cloned to this location.",
-    )
     parser.add_argument(
         "--git_repo_url", help="URL to the git repository on which to run SZZ."
     )
@@ -622,7 +593,6 @@ def main():
     args = parser.parse_args()
 
     regressor_finder = RegressorFinder(
-        args.repo_dir,
         args.git_repo_url,
         args.git_repo_dir,
         args.tokenized_git_repo_url,
