@@ -5,21 +5,25 @@
 import argparse
 import json
 
-import hglib
 from mozci.push import Push
 from tqdm import tqdm
 
-from bugbug import repository
+from bugbug import db, repository
 
 
-def go(repo_dir):
-    with hglib.open(repo_dir) as hg:
-        revs = repository.get_revs(hg, -1000, -500)
-        commits = repository.hg_log(hg, revs)
-        backouts = list(
-            set(commit.backedoutby for commit in commits if commit.backedoutby)
-        )
-        backedouts = list(set(commit.node for commit in commits if commit.backedoutby))
+def go() -> None:
+    assert db.download(repository.COMMITS_DB)
+
+    backouts = []
+    backedouts = []
+    for commit in repository.get_commits(include_backouts=True):
+        if commit["backedoutby"]:
+            backouts.append(commit["node"])
+        if commit["backsout"]:
+            backedouts += commit["backsout"]
+
+    backouts = backouts[-100:]
+    backedouts = backedouts[-100:]
 
     likely_label_count = 0
     possible_label_count = 0
@@ -74,15 +78,14 @@ def go(repo_dir):
         json.dump(backedout_regressions, f)
 
 
-def main():
+def main() -> None:
     description = (
         "Find likely and possible test regressions of backouts and backed-out commits"
     )
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("repository_dir", help="Path to the repository", action="store")
-    args = parser.parse_args()
+    parser.parse_args()
 
-    go(args.repository_dir)
+    go()
 
 
 if __name__ == "__main__":
