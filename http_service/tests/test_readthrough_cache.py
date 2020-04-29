@@ -4,11 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+import threading
 import time
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
+
+time_change_event = threading.Event()
 
 
 class MockDatetime:
@@ -20,6 +23,7 @@ class MockDatetime:
 
     def set_now(self, new_mock_now):
         self.mock_now = new_mock_now
+        time_change_event.set()
 
 
 class MockSleep:
@@ -33,7 +37,8 @@ class MockSleep:
     def sleep(self, sleep_seconds):
         self.wakeup_time = self.mock_datetime.now() + timedelta(seconds=sleep_seconds)
         while self.mock_datetime.now() < self.wakeup_time:
-            pass
+            time_change_event.wait()
+            time_change_event.clear()
         self.wakeups_count += 1
 
 
