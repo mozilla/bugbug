@@ -130,7 +130,7 @@ def schedule_tests(branch, rev):
 
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, revs=revs, save=False, use_single_process=True, ignore_no_bug=False
+        REPO_DIR, revs=revs, save=False, use_single_process=True, include_no_bug=True
     )
 
     if len(commits) > 0:

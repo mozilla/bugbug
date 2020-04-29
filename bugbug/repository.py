@@ -18,6 +18,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
+from typing import Generator, Iterable, List
 
 import hglib
 import lmdb
@@ -27,6 +28,8 @@ from bugbug import db, rust_code_analysis_server, utils
 from bugbug.utils import LMDBDict
 
 logger = logging.getLogger(__name__)
+
+code_analysis_server = None
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
@@ -202,7 +205,7 @@ class Commit:
 
     def to_dict(self):
         d = self.__dict__
-        for f in ["ignored", "file_copies"]:
+        for f in ["file_copies"]:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
@@ -224,8 +227,36 @@ def get_directories(files):
     return list(directories)
 
 
-def get_commits():
-    return db.read(COMMITS_DB)
+def filter_commits(
+    commits: Iterable[dict],
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> Generator[dict, None, None]:
+    for commit in commits:
+        if not include_ignored and commit["ignored"]:
+            continue
+
+        if not include_no_bug and not commit["bug_id"]:
+            continue
+
+        if not include_backouts and len(commit["backsout"]) > 0:
+            continue
+
+        yield commit
+
+
+def get_commits(
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> Generator[dict, None, None]:
+    return filter_commits(
+        db.read(COMMITS_DB),
+        include_no_bug=include_no_bug,
+        include_backouts=include_backouts,
+        include_ignored=include_ignored,
+    )
 
 
 def _init_process(repo_dir):
@@ -431,7 +462,7 @@ def get_metrics(commit, metrics_space):
 def transform(hg, repo_dir, commit):
     hg_modified_files(hg, commit)
 
-    if commit.ignored:
+    if commit.ignored or len(commit.backsout) > 0 or commit.bug_id is None:
         return commit
 
     source_code_sizes = []
@@ -863,7 +894,11 @@ def calculate_experiences(commits, first_pushdate, save=True):
                         f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
                     )
 
-        if not commit.ignored:
+        if (
+            not commit.ignored
+            and len(commit.backsout) == 0
+            and commit.bug_id is not None
+        ):
             update_experiences("author", day, [commit.author])
             update_experiences("reviewer", day, commit.reviewers)
 
@@ -872,7 +907,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug=True):
+def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: List[Commit]):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
@@ -881,22 +916,10 @@ def set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug=True):
     ).decode("utf-8")
     ignore_revs = set(l[:40] for l in ignore_revs_content.splitlines())
 
-    def should_ignore(commit):
-        if commit.node in ignore_revs or "ignore-this-changeset" in commit.desc:
-            return True
-
-        # Don't analyze backouts.
-        if len(commit.backsout) > 0:
-            return True
-
-        # Don't analyze commits that are not linked to a bug.
-        if ignore_no_bug and commit.bug_id is None:
-            return True
-
-        return False
-
     for commit in commits:
-        commit.ignored = should_ignore(commit)
+        commit.ignored = (
+            commit.node in ignore_revs or "ignore-this-changeset" in commit.desc
+        )
 
 
 def download_component_mapping():
@@ -961,13 +984,15 @@ def get_first_pushdate(repo_dir):
 
 
 def download_commits(
-    repo_dir,
-    rev_start=None,
-    revs=None,
-    save=True,
-    use_single_process=False,
-    ignore_no_bug=True,
-):
+    repo_dir: str,
+    rev_start: str = None,
+    revs: List[str] = None,
+    save: bool = True,
+    use_single_process: bool = False,
+    include_no_bug: bool = False,
+    include_backouts: bool = False,
+    include_ignored: bool = False,
+) -> List[dict]:
     assert revs is not None or rev_start is not None
 
     with hglib.open(repo_dir) as hg:
@@ -991,7 +1016,7 @@ def download_commits(
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
-        set_commits_to_ignore(hg, repo_dir, commits, ignore_no_bug)
+        set_commits_to_ignore(hg, repo_dir, commits)
 
         commits_num = len(commits)
 
@@ -1023,12 +1048,19 @@ def download_commits(
 
     logger.info(f"Applying final commits filtering...")
 
-    commits = [commit.to_dict() for commit in commits if not commit.ignored]
+    commits = [commit.to_dict() for commit in commits]
 
     if save:
         db.append(COMMITS_DB, commits)
 
-    return commits
+    return list(
+        filter_commits(
+            commits,
+            include_no_bug=include_no_bug,
+            include_backouts=include_backouts,
+            include_ignored=include_ignored,
+        )
+    )
 
 
 def clean(hg, repo_dir, pull=True):

@@ -568,7 +568,8 @@ def test_get_directories():
     ) == {"dom", "tools", "tools/code-coverage"}
 
 
-def test_set_commits_to_ignore(fake_hg_repo):
+@pytest.fixture
+def ignored_commits_to_test(fake_hg_repo):
     hg, local, remote = fake_hg_repo
 
     repository.path_to_component = {}
@@ -612,18 +613,74 @@ def test_set_commits_to_ignore(fake_hg_repo):
         ),
     ]
 
+    return hg, local, commits
+
+
+def test_set_commits_to_ignore(ignored_commits_to_test):
+    hg, local, commits = ignored_commits_to_test
+
     repository.set_commits_to_ignore(hg, local, commits)
-    ignored = [commit for commit in commits if commit.ignored]
-    assert set(commit.node for commit in ignored) == {
-        "commit_backout",
+
+    assert set(commit.node for commit in commits if commit.ignored) == {
+        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+        "commit_with_ignore_in_desc",
+    }
+
+
+def test_filter_commits(ignored_commits_to_test):
+    hg, local, commits = ignored_commits_to_test
+
+    repository.set_commits_to_ignore(hg, local, commits)
+
+    commits = [commit.to_dict() for commit in commits]
+
+    assert set(commit["node"] for commit in repository.filter_commits(commits)) == {
+        "commit_backedout",
+        "commit",
+    }
+
+    assert set(
+        commit["node"]
+        for commit in repository.filter_commits(commits, include_no_bug=True)
+    ) == {"commit_backedout", "commit", "commit_no_bug"}
+
+    assert set(
+        commit["node"]
+        for commit in repository.filter_commits(commits, include_backouts=True)
+    ) == {"commit_backedout", "commit", "commit_backout"}
+
+    assert set(
+        commit["node"]
+        for commit in repository.filter_commits(commits, include_ignored=True)
+    ) == {
+        "commit_backedout",
+        "commit",
+        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+        "commit_with_ignore_in_desc",
+    }
+
+    assert set(
+        commit["node"]
+        for commit in repository.filter_commits(
+            commits, include_no_bug=True, include_ignored=True
+        )
+    ) == {
+        "commit_backedout",
+        "commit",
         "commit_no_bug",
         "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
         "commit_with_ignore_in_desc",
     }
 
-    repository.set_commits_to_ignore(hg, local, commits, ignore_no_bug=False)
-    ignored = [commit for commit in commits if commit.ignored]
-    assert set(commit.node for commit in ignored) == {
+    assert set(
+        commit["node"]
+        for commit in repository.filter_commits(
+            commits, include_no_bug=True, include_backouts=True, include_ignored=True
+        )
+    ) == {
+        "commit_backedout",
+        "commit",
+        "commit_no_bug",
         "commit_backout",
         "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
         "commit_with_ignore_in_desc",
