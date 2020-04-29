@@ -440,7 +440,12 @@ def transform(hg, repo_dir, commit):
     metrics_file_count = 0
 
     patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
-    patch_data = rs_parsepatch.get_lines(patch)
+    try:
+        patch_data = rs_parsepatch.get_lines(patch)
+    except Exception:
+        logger.error(f"Exception while analyzing {commit.node}")
+        raise
+
     for stats in patch_data:
         path = stats["filename"]
 
