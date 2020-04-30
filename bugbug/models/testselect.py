@@ -300,6 +300,7 @@ class TestSelectModel(Model):
                 if revision in commit_map
             )
             if len(commits) == 0:
+                test_pushes[rev]["all_possibly_selected"] = {}
                 continue
 
             push_num = last_push_num - (len(test_pushes) - (i + 1))
