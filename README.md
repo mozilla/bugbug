@@ -12,7 +12,7 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **backout** - The aim of this classifier is to detect patches that might be more likely to be backed-out (because of build or test failures). It could be used for test prioritization/scheduling purposes.
 
-- **bugtype** - The aim of this classifier is to classify bugs according to their type. The  labels are gathered automatically from bugs: right now they are "crash/memory/performance/security". The plan is to add more types after manual labeling.
+- **bugtype** - The aim of this classifier is to classify bugs according to their type. The labels are gathered automatically from bugs: right now they are "crash/memory/performance/security". The plan is to add more types after manual labeling.
 
 
 - **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
