@@ -280,10 +280,14 @@ class TestSelectModel(Model):
             (set(push["failures"]) | set(push["passes"]) for push in test_pushes[-28:]),
         )
 
+        test_pushes_failures = sum(
+            1 for push in test_pushes if len(push["failures"]) > 0
+        )
+
         test_pushes = {push["revs"][0]: push for push in test_pushes}
 
         print(
-            f"Testing on {len(pushes) - train_push_len} out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
+            f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
         )
 
         commit_map = get_commit_map()
