@@ -527,8 +527,6 @@ tasks:
         command:
           - bugbug-regressor-finder
           - to_ignore
-        cache:
-          bugbug-mercurial-repository: /cache
         features:
           taskclusterProxy:
             true
