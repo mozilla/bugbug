@@ -14,7 +14,6 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **bugtype** - The aim of this classifier is to classify bugs according to their type. The labels are gathered automatically from bugs: right now they are "crash/memory/performance/security". The plan is to add more types after manual labeling.
 
-
 - **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
 
 - **defect vs enhancement vs task** - Extension of the **defect** classifier to detect differences also between feature requests and development tasks.
