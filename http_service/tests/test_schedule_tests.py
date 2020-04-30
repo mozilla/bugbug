@@ -81,4 +81,5 @@ def test_simple_schedule(
         "tasks": labels_to_choose,
         "groups": groups_to_choose,
         "reduced_tasks": reduced_labels,
+        "reduced_tasks_higher": reduced_labels,
     }

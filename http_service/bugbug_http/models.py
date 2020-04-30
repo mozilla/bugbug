@@ -142,6 +142,10 @@ def schedule_tests(branch, rev):
             set(t for t, c in tasks.items() if c >= 0.7), 1.0
         )
 
+        reduced_higher = MODEL_CACHE.get("testlabelselect").reduce(
+            set(t for t, c in tasks.items() if c >= 0.8), 1.0
+        )
+
         groups = MODEL_CACHE.get("testgroupselect").select_tests(
             commits, test_selection_threshold
         )
@@ -154,6 +158,7 @@ def schedule_tests(branch, rev):
         "tasks": tasks,
         "groups": groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
+        "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
     }
     setkey(job.result_key, orjson.dumps(data))
 
