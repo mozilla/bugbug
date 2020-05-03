@@ -4,11 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import math
-import random
 import statistics
 import struct
 from functools import reduce
-from typing import Set
+from typing import Dict, List, Set, Tuple
 
 import numpy as np
 import xgboost
@@ -38,13 +37,11 @@ def get_commit_map():
 
 
 class TestSelectModel(Model):
-    def __init__(self, lemmatization=False, granularity="label", use_subset=False):
+    def __init__(self, lemmatization=False, granularity="label", failures_skip=None):
         Model.__init__(self, lemmatization)
 
         self.granularity = granularity
-        # This is useful for development purposes, it avoids using too much memory
-        # by using a subset of the dataset (dropping some passing runnables).
-        self.use_subset = use_subset
+        self.failures_skip = failures_skip
 
         self.training_dbs = [repository.COMMITS_DB]
         self.eval_dbs[repository.COMMITS_DB] = (
@@ -100,10 +97,9 @@ class TestSelectModel(Model):
         self.clf = xgboost.XGBClassifier(n_jobs=16)
         self.clf.set_params(predictor="cpu_predictor")
 
-    def get_pushes(self):
-        if self.use_subset:
-            random.seed(0)
-
+    def get_pushes(
+        self, apply_filters: bool = False
+    ) -> Tuple[List[Dict[str, List[str]]], float]:
         pushes = []
         for revs, test_datas in test_scheduling.get_test_scheduling_history(
             self.granularity
@@ -125,8 +121,9 @@ class TestSelectModel(Model):
                 else:
                     passes.append(name)
 
-            if self.use_subset:
-                passes = random.sample(passes, math.ceil(len(passes) / 10))
+            if apply_filters:
+                if self.failures_skip and len(failures) > self.failures_skip:
+                    continue
 
             pushes.append(
                 {"revs": revs, "failures": failures, "passes": passes,}
@@ -137,7 +134,7 @@ class TestSelectModel(Model):
     # To properly test the performance of our model, we need to split the data
     # according to time: we train on older pushes and evaluate on newer pushes.
     def train_test_split(self, X, y):
-        pushes, train_push_len = self.get_pushes()
+        pushes, train_push_len = self.get_pushes(True)
         train_len = sum(
             len(push["failures"]) + len(push["passes"])
             for push in pushes[:train_push_len]
@@ -171,7 +168,7 @@ class TestSelectModel(Model):
 
     def get_labels(self):
         classes = {}
-        pushes, _ = self.get_pushes()
+        pushes, _ = self.get_pushes(True)
 
         for push in pushes:
             for name in push["failures"]:
@@ -259,7 +256,7 @@ class TestSelectModel(Model):
 
     def evaluation(self):
         # Get a test set of pushes on which to test the model.
-        pushes, train_push_len = self.get_pushes()
+        pushes, train_push_len = self.get_pushes(False)
 
         test_pushes = pushes[train_push_len:]
 
@@ -402,7 +399,7 @@ class TestSelectModel(Model):
 
 class TestLabelSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "label")
+        TestSelectModel.__init__(self, lemmatization, "label", failures_skip=60)
 
 
 class TestGroupSelectModel(TestSelectModel):
