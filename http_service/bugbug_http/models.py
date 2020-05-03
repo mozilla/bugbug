@@ -6,6 +6,8 @@
 import logging
 import os
 from datetime import timedelta
+from functools import lru_cache
+from typing import Tuple
 
 import orjson
 import requests
@@ -103,6 +105,12 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
     return "OK"
 
 
+@lru_cache(maxsize=None)
+def get_known_tasks() -> Tuple[str, ...]:
+    with open("known_tasks", "r") as f:
+        return tuple(l.strip() for l in f)
+
+
 def schedule_tests(branch, rev):
     from bugbug_http.app import JobInfo
     from bugbug_http import REPO_DIR
@@ -159,6 +167,7 @@ def schedule_tests(branch, rev):
         "groups": groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
+        "known_tasks": get_known_tasks(),
     }
     setkey(job.result_key, orjson.dumps(data))
 

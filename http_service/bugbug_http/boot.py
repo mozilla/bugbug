@@ -7,6 +7,9 @@ import concurrent.futures
 import logging
 import os
 
+import mozci.push
+import requests
+
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
@@ -87,8 +90,22 @@ def boot_worker():
             )
             assert ALLOW_MISSING_MODELS
 
+    def retrieve_schedulable_tasks():
+        # Store in a file the list of tasks in the latest autoland push.
+        r = requests.get(
+            "https://hg.mozilla.org/integration/autoland/json-pushes?version=2"
+        )
+        r.raise_for_status()
+        data = r.json()
+        last_push = data["pushes"][str(data["lastpushid"])]
+        last_push_revs = last_push["changesets"][::-1]
+        with open("known_tasks", "w") as f:
+            f.write("\n".join(mozci.push.Push(last_push_revs).target_task_labels))
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)
+
+        retrieve_schedulable_tasks_future = executor.submit(retrieve_schedulable_tasks)
 
         commits_db_extracted = extract_commits()
         extract_commit_experiences()
@@ -128,5 +145,8 @@ def boot_worker():
                 except StopIteration:
                     pass
             logger.info("Touched together DB updated.")
+
+        # Wait list of schedulable tasks to be downloaded and written to disk.
+        retrieve_schedulable_tasks_future.result()
 
     logger.info("Worker boot done")

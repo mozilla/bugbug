@@ -271,6 +271,9 @@ def mock_component_taskcluster_artifact():
 
 @pytest.fixture
 def mock_schedule_tests_classify(monkeypatch):
+    with open("known_tasks", "w") as f:
+        f.write("prova")
+
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):
         past_failures_data = test_scheduling.get_past_failures(granularity)
