@@ -35,13 +35,17 @@ logger = getLogger(__name__)
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
     "build-docker-image-",
-    "-test-verify-",
-    "-test-coverage-",
     "-android-hw-",
     "-awsy-",
     "-raptor-",
     "-talos-",
     "backlog",
+    # inclusive test suites -- these *only* run when certain files have changed
+    "-test-verify-",
+    "-test-coverage-",
+    "jittest",
+    "jsreftest",
+    "android-hw-gfx",
 )
 
 # The mozci version (to bump whenever we change the mozci regression algorithm),
