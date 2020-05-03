@@ -139,11 +139,11 @@ def schedule_tests(branch, rev):
         )
 
         reduced = MODEL_CACHE.get("testlabelselect").reduce(
-            set(t for t, c in tasks.items() if c >= 0.7), 1.0
+            set(t for t, c in tasks.items() if c >= 0.8), 1.0
         )
 
         reduced_higher = MODEL_CACHE.get("testlabelselect").reduce(
-            set(t for t, c in tasks.items() if c >= 0.8), 1.0
+            set(t for t, c in tasks.items() if c >= 0.9), 1.0
         )
 
         groups = MODEL_CACHE.get("testgroupselect").select_tests(
