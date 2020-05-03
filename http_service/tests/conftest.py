@@ -278,13 +278,15 @@ def mock_schedule_tests_classify(monkeypatch):
         past_failures_data["all_runnables"] = [
             f"test-{granularity}1",
             f"test-{granularity}2",
-            "test-linux",
-            "test-windows",
+            "test-linux64/opt",
+            "test-windows10/opt",
         ]
         past_failures_data.close()
 
     failing_together = test_scheduling.get_failing_together_db()
-    failing_together[b"test-linux$test-windows"] = struct.pack("ff", 0.1, 1.0)
+    failing_together[b"test-linux64/opt$test-windows10/opt"] = struct.pack(
+        "ff", 0.1, 1.0
+    )
     test_scheduling.close_failing_together_db()
 
     def do_mock(labels_to_choose, groups_to_choose):

@@ -28,9 +28,9 @@ from bugbug_http import models
         ),
         # two redundant from label, one from group
         (
-            {"test-linux": 0.9, "test-windows": 0.8},
+            {"test-linux64/opt": 0.9, "test-windows10/opt": 0.8},
             {"test-group1": 0.9},
-            {"test-linux": 0.9},
+            {"test-linux64/opt": 0.9},
         ),
     ],
 )

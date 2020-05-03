@@ -226,7 +226,18 @@ class TestSelectModel(Model):
     def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
         failing_together = test_scheduling.get_failing_together_db()
 
-        priorities = ["linux", "win", "mac", "android"]
+        priorities1 = [
+            "tsan",
+            "android-hw",
+            "linux32",
+            "asan",
+            "mac",
+            "windows7",
+            "android-em",
+            "windows10",
+            "linux64",
+        ]
+        priorities2 = ["debug", "opt"]
 
         to_drop = set()
         to_analyze = sorted(tasks)
@@ -242,12 +253,21 @@ class TestSelectModel(Model):
                 if confidence < min_redundancy_confidence:
                     continue
 
-                for priority in priorities:
-                    if priority in task1:
-                        to_drop.add(task2)
+                for priority in priorities1:
+                    if priority in task1 and priority in task2:
+                        for priority in priorities2:
+                            if priority in task1:
+                                to_drop.add(task1)
+                                break
+                            elif priority in task2:
+                                to_drop.add(task2)
+                                break
+                        break
+                    elif priority in task1:
+                        to_drop.add(task1)
                         break
                     elif priority in task2:
-                        to_drop.add(task1)
+                        to_drop.add(task2)
                         break
 
             to_analyze = [t for t in to_analyze if t not in to_drop]
