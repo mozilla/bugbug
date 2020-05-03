@@ -405,7 +405,7 @@ class TestSelectModel(Model):
 
         for cap in [None, 300, 500]:
             for reduction in reductions:
-                for confidence_threshold in [0.5, 0.7, 0.8]:
+                for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
                     do_eval(confidence_threshold, reduction, cap)
 
     def get_feature_names(self):
