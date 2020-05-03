@@ -144,13 +144,13 @@ class RegressorFinder(object):
                         "type": "backedout" if commit["backedoutby"] else "",
                     }
                 )
-                ignored.add(commit["node"])
+                ignored.add(commit["node"][:12])
 
             if len(commit["backsout"]) > 0:
                 for backedout in commit["backsout"]:
-                    if backedout in ignored:
+                    if backedout[:12] in ignored:
                         continue
-                    ignored.add(backedout)
+                    ignored.add(backedout[:12])
 
                     commits_to_ignore.append({"rev": backedout, "type": "backedout"})
 
