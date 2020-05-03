@@ -124,10 +124,13 @@ class RegressorFinder(object):
 
         ignored = set()
         commits_to_ignore = []
+        all_commits = set()
 
         for commit in repository.get_commits(
             include_no_bug=True, include_backouts=True, include_ignored=True
         ):
+            all_commits.add(commit["node"][:12])
+
             if (
                 commit["ignored"]
                 or commit["backedoutby"]
@@ -150,6 +153,14 @@ class RegressorFinder(object):
                     ignored.add(backedout)
 
                     commits_to_ignore.append({"rev": backedout, "type": "backedout"})
+
+        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
+
+        # Skip backed-out commits which aren't in the repository (commits which landed *before* the Mercurial history
+        # started, and backouts which mentioned a bad hash in their message).
+        commits_to_ignore = [
+            c for c in commits_to_ignore if c["rev"][:12] in all_commits
+        ]
 
         logger.info(f"{len(commits_to_ignore)} commits to ignore...")
 
