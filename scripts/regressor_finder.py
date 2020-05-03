@@ -46,7 +46,7 @@ IGNORED_COMMITS_DB = "data/ignored_commits.json"
 db.register(
     IGNORED_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/ignored_commits.json.zst",
-    4,
+    5,
 )
 
 
