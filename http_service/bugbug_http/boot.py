@@ -7,7 +7,6 @@ import concurrent.futures
 import logging
 import os
 
-import mozci.push
 import requests
 
 from bugbug import repository, test_scheduling, utils
@@ -93,14 +92,11 @@ def boot_worker():
     def retrieve_schedulable_tasks():
         # Store in a file the list of tasks in the latest autoland push.
         r = requests.get(
-            "https://hg.mozilla.org/integration/autoland/json-pushes?version=2"
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.latest.taskgraph.decision/artifacts/public/target-tasks.json"
         )
         r.raise_for_status()
-        data = r.json()
-        last_push = data["pushes"][str(data["lastpushid"])]
-        last_push_revs = last_push["changesets"][::-1]
         with open("known_tasks", "w") as f:
-            f.write("\n".join(mozci.push.Push(last_push_revs).target_task_labels))
+            f.write("\n".join(r.json()))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)
