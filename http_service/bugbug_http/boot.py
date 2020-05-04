@@ -7,6 +7,8 @@ import concurrent.futures
 import logging
 import os
 
+import requests
+
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 
@@ -87,8 +89,19 @@ def boot_worker():
             )
             assert ALLOW_MISSING_MODELS
 
+    def retrieve_schedulable_tasks():
+        # Store in a file the list of tasks in the latest autoland push.
+        r = requests.get(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.latest.taskgraph.decision/artifacts/public/target-tasks.json"
+        )
+        r.raise_for_status()
+        with open("known_tasks", "w") as f:
+            f.write("\n".join(r.json()))
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)
+
+        retrieve_schedulable_tasks_future = executor.submit(retrieve_schedulable_tasks)
 
         commits_db_extracted = extract_commits()
         extract_commit_experiences()
@@ -128,5 +141,8 @@ def boot_worker():
                 except StopIteration:
                     pass
             logger.info("Touched together DB updated.")
+
+        # Wait list of schedulable tasks to be downloaded and written to disk.
+        retrieve_schedulable_tasks_future.result()
 
     logger.info("Worker boot done")
