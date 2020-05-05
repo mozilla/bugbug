@@ -9,7 +9,7 @@ mercurial==5.3.2
 microannotate==0.0.20
 mozci==1.4.5
 numpy==1.18.3
-orjson==2.6.6
+orjson==3.0.0
 pandas==1.0.3
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
