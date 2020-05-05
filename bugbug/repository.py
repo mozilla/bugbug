@@ -1069,7 +1069,7 @@ def download_commits(
     )
 
 
-def clean(hg, repo_dir, pull=True):
+def clean(hg, repo_dir, pull=True, update=False):
     logger.info("Restoring files to their checkout state...")
     hg.revert(repo_dir.encode("utf-8"), all=True)
 
@@ -1085,15 +1085,15 @@ def clean(hg, repo_dir, pull=True):
 
     # Pull and update.
     if pull:
-        logger.info(f"Pulling and updating {repo_dir}")
-        hg.pull(update=True)
-        logger.info(f"{repo_dir} pulled and updated")
+        logger.info(f"Pulling {repo_dir}")
+        hg.pull(update=update)
+        logger.info(f"{repo_dir} pulled")
 
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     try:
         with hglib.open(repo_dir) as hg:
-            clean(hg, repo_dir)
+            clean(hg, repo_dir, update=update)
 
         return
     except hglib.error.ServerError as e:
@@ -1123,7 +1123,7 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     except FileNotFoundError:
         logger.info("pushlog database doesn't exist")
 
-    # Pull and update, to make sure the pushlog is generated.
+    # Pull, to make sure the pushlog is generated.
     with hglib.open(repo_dir) as hg:
         clean(hg, repo_dir)
 

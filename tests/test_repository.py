@@ -122,7 +122,7 @@ def test_clone(fake_hg_repo):
     repository.clone(f"{tmp_repo_dir}2", url=remote, update=True)
     # Assert that we do have the file from the remote repository, since we cloned
     # and updated the working dir.
-    assert os.path.exists(os.path.join(tmp_repo_dir, "file1"))
+    assert os.path.exists(os.path.join(f"{tmp_repo_dir}2", "file1"))
 
 
 def test_get_revs(fake_hg_repo):
