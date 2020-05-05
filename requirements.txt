@@ -11,7 +11,7 @@ mozci==1.4.5
 numpy==1.18.4
 orjson==3.0.0
 pandas==1.0.3
-pydriller==1.12
+pydriller==1.14
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.8.1
 python-hglib==2.6.1
