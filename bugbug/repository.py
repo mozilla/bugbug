@@ -1069,7 +1069,7 @@ def download_commits(
     )
 
 
-def clean(hg, repo_dir, pull=True, update=False):
+def clean(hg, repo_dir):
     logger.info("Restoring files to their checkout state...")
     hg.revert(repo_dir.encode("utf-8"), all=True)
 
@@ -1083,17 +1083,23 @@ def clean(hg, repo_dir, pull=True, update=False):
         if b"abort: empty revision set" not in e.err:
             raise
 
-    # Pull and update.
-    if pull:
-        logger.info(f"Pulling {repo_dir}")
-        hg.pull(update=update)
-        logger.info(f"{repo_dir} pulled")
-
 
 def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     try:
         with hglib.open(repo_dir) as hg:
-            clean(hg, repo_dir, update=update)
+            clean(hg, repo_dir)
+
+        # Remove pushlog DB to make sure it's regenerated.
+        try:
+            os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
+        except FileNotFoundError:
+            logger.info("pushlog database doesn't exist")
+
+        # Pull, to make sure the pushlog is generated.
+        with hglib.open(repo_dir) as hg:
+            logger.info(f"Pulling {repo_dir}")
+            hg.pull(update=update)
+            logger.info(f"{repo_dir} pulled")
 
         return
     except hglib.error.ServerError as e:
@@ -1116,16 +1122,6 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     subprocess.run(cmd, check=True)
 
     logger.info(f"{repo_dir} cloned")
-
-    # Remove pushlog DB to make sure it's regenerated.
-    try:
-        os.remove(os.path.join(repo_dir, ".hg", "pushlog2.db"))
-    except FileNotFoundError:
-        logger.info("pushlog database doesn't exist")
-
-    # Pull, to make sure the pushlog is generated.
-    with hglib.open(repo_dir) as hg:
-        hg.pull()
 
 
 def apply_stack(repo_dir, stack, branch):
