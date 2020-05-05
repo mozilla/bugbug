@@ -1125,7 +1125,7 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
 
     # Pull, to make sure the pushlog is generated.
     with hglib.open(repo_dir) as hg:
-        clean(hg, repo_dir)
+        hg.pull()
 
 
 def apply_stack(repo_dir, stack, branch):
