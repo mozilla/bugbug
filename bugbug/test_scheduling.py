@@ -12,8 +12,6 @@ import struct
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
-PUSH_DATA_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_{granularity}.json.zst"
-
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
 PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
 FAILING_TOGETHER_LABEL_DB = "failing_together_label.lmdb.tar.zst"
@@ -22,6 +20,12 @@ db.register(
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history.latest/artifacts/public/test_label_scheduling_history.pickle.zst",
     13,
     [PAST_FAILURES_LABEL_DB, FAILING_TOGETHER_LABEL_DB],
+)
+PUSH_DATA_LABEL_DB = "data/push_data_label.json"
+db.register(
+    PUSH_DATA_LABEL_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst",
+    1,
 )
 
 TEST_GROUP_SCHEDULING_DB = "data/test_group_scheduling_history.pickle"
@@ -32,6 +36,12 @@ db.register(
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
     18,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
+)
+PUSH_DATA_GROUP_DB = "data/push_data_group.json"
+db.register(
+    PUSH_DATA_GROUP_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_group.json.zst",
+    1,
 )
 
 HISTORICAL_TIMESPAN = 4500

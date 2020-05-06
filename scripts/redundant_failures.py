@@ -3,21 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
-
-from bugbug import test_scheduling
-from bugbug.utils import download_check_etag, zstd_decompress
+from bugbug import db, test_scheduling
 
 
 def count(is_first_task, is_second_task):
-    updated = download_check_etag(
-        test_scheduling.PUSH_DATA_URL.format(granularity="label")
-    )
-    if updated:
-        zstd_decompress("push_data_label.json")
+    assert db.download(test_scheduling.PUSH_DATA_LABEL_DB)
 
-    with open("push_data_label.json", "r") as f:
-        push_data = json.load(f)
+    push_data = list(db.read(test_scheduling.PUSH_DATA_LABEL_DB))
 
     print(f"Analyzing {len(push_data)} pushes...")
 
