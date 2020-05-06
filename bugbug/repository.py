@@ -93,6 +93,15 @@ TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
 
 
+def get_type(path: str) -> str:
+    file_name = os.path.basename(path)
+    if file_name in HARDCODED_TYPES:
+        return HARDCODED_TYPES[file_name]
+
+    ext = os.path.splitext(path)[1].lower()
+    return EXT_TO_TYPES.get(ext, ext)
+
+
 class Commit:
     def __init__(
         self,
@@ -504,12 +513,8 @@ def transform(hg, repo_dir, commit):
                 if b"no such file in rev" not in e.err:
                     raise
 
-        file_name = os.path.basename(path)
-        if file_name in HARDCODED_TYPES:
-            type_ = HARDCODED_TYPES[file_name]
-        else:
-            ext = os.path.splitext(path)[1].lower()
-            type_ = EXT_TO_TYPES.get(ext, ext)
+        type_ = get_type(path)
+        ext = os.path.splitext(path)[1].lower()
 
         if is_test(path):
             commit.test_files_modified_num += 1

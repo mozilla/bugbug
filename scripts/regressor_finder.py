@@ -389,10 +389,14 @@ class RegressorFinder(object):
 
             bug_introducing_modifications = {}
             for modification in commit.modifications:
-                if (
-                    get_modification_path(modification)
-                    == "testing/web-platform/meta/MANIFEST.json"
-                ):
+                path = get_modification_path(modification)
+
+                if path == "testing/web-platform/meta/MANIFEST.json":
+                    continue
+
+                # Don't try to find the bug-introducing commit for modifications
+                # in the bug-fixing commit to non-source code files.
+                if repository.get_type(path) not in repository.SOURCE_CODE_TYPES_TO_EXT:
                     continue
 
                 bug_introducing_modifications.update(
