@@ -27,7 +27,7 @@ BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
 db.register(
     BUG_INTRODUCING_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/bug_introducing_commits.json.zst",
-    2,
+    3,
 )
 
 TOKENIZED_BUG_INTRODUCING_COMMITS_DB = "data/tokenized_bug_introducing_commits.json"
