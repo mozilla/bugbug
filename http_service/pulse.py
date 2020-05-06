@@ -6,7 +6,9 @@ Generate your credentials in https://pulseguardian.mozilla.org
 Call this script like:
   export PULSE_USER=generated_username
   export PULSE_PASSWORD=generated_username
-  ./pulse.py
+  ./http_service/pulse.py
+  # Or alternatively
+  cd http_service && docker-compose run bugbug-http-service-rq-dasboard
 """
 import logging
 import os

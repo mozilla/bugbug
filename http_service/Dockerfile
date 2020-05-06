@@ -10,4 +10,5 @@ RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /requireme
 COPY . /code/http_service
 RUN pip install --disable-pip-version-check --quiet --no-cache-dir /code/http_service
 
-CMD gunicorn -b 0.0.0.0:$PORT bugbug_http.app --preload --timeout 30 -w 3
+# Run the Pulse listener in the background
+CMD (/code/http_service/pulse.py &> /code/http_service/pulse.log &) && gunicorn -b 0.0.0.0:$PORT bugbug_http.app --preload --timeout 30 -w 3
