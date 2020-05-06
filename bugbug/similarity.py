@@ -5,9 +5,12 @@
 
 import abc
 import bisect
+import logging
+import os
 import random
 import re
 from collections import defaultdict
+from functools import lru_cache
 from itertools import chain
 
 import joblib
@@ -18,6 +21,7 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 
 from bugbug import bugzilla, feature_cleanup
+from bugbug.utils import download_check_etag, zstd_decompress
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
@@ -44,9 +48,35 @@ except ImportError:
     raise ImportError(OPT_MSG_MISSING)
 
 nltk.download("stopwords")
-nlp = spacy.load("en_core_web_sm")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=None)
+def get_nlp():
+    return spacy.load("en_core_web_sm")
+
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
+
+
+def download_similarity_model(model_name):
+    path = f"{model_name_to_class[model_name].__name__.lower()}.similaritymodel"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_similarity.latest/artifacts/public/{path}.zst"
+
+    logger.info(f"Downloading similarity model from {url}...")
+    updated = download_check_etag(url)
+    if updated:
+        zstd_decompress(path)
+        os.remove(f"{path}.zst")
+    assert os.path.exists(path), "Decompressed file exists"
+    return path
+
+
+def download_and_load_similarity_model(model_name):
+    path = download_similarity_model(model_name)
+    return model_name_to_class[model_name].load(path)
 
 
 class BaseSimilarity(abc.ABC):
@@ -80,7 +110,7 @@ class BaseSimilarity(abc.ABC):
         text = re.sub("[^a-zA-Z0-9]", " ", text)
 
         if lemmatization:
-            text = [word.lemma_ for word in nlp(text)]
+            text = [word.lemma_ for word in get_nlp()(text)]
         elif stemming:
             ps = PorterStemmer()
             tokenized_text = (
