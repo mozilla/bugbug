@@ -148,6 +148,17 @@ class Retriever(object):
                 cache[push] = None
                 to_regenerate += 1"""
 
+        to_regenerate = 0
+        for push in pushes[::-1]:
+            cached = cache[push]
+            if not cached:
+                continue
+
+            if to_regenerate < 1000:
+                del cache[push]
+                adr.config.cache.put(push.push_uuid, {}, 0)
+                to_regenerate += 1
+
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
 
