@@ -8,7 +8,7 @@ Call this script like:
   export PULSE_PASSWORD=generated_username
   ./http_service/pulse.py
   # Or alternatively
-  cd http_service && docker-compose run bugbug-http-service-rq-dasboard
+  cd http_service && docker-compose run bugbug-http-service
 """
 import logging
 import os
