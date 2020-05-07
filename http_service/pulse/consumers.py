@@ -18,13 +18,14 @@ from kombu.mixins import ConsumerMixin
 _CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 
-def _generate_hg_pushes_queue(user, auto_delete=True):
+def _generate_hg_pushes_queue(user):
     return Queue(
         name="queue/{}/pushes".format(user),
         exchange=Exchange("exchange/hgpushes/v2", type="topic", no_declare=True,),
         routing_key="#",
         durable=True,
-        auto_delete=auto_delete,
+        # XXX: This should not be auto delete
+        auto_delete=True,
     )
 
 
