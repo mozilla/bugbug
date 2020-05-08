@@ -445,7 +445,7 @@ class RegressorFinder(object):
             zstd_compress(db_path)
             db.upload(db_path)
 
-        workers = os.cpu_count() + 1
+        workers = os.cpu_count()
         logger.info(
             f"Analyzing {len(bug_fixing_commits)} commits using {workers} workers..."
         )
