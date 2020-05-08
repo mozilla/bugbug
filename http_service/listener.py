@@ -15,13 +15,45 @@ import os
 import traceback
 
 import requests
-from pulse.consumers import ConsumerFactory
+from kombu import Connection, Exchange, Queue
+from kombu.mixins import ConsumerMixin
 
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000")
+CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
+
+
+def _generate_hg_pushes_queue(user):
+    return Queue(
+        name="queue/{}/pushes".format(user),
+        exchange=Exchange("exchange/hgpushes/v2", type="topic", no_declare=True,),
+        routing_key="#",
+        durable=True,
+        # XXX: This should not be auto delete
+        auto_delete=True,
+    )
+
+
+class _GenericConsumer(ConsumerMixin):
+    def __init__(self, connection, queues, callback):
+        self.connection = connection
+        self.queues = queues
+        self.callback = callback
+
+    def get_consumers(self, Consumer, channel):
+        return [Consumer(queues=self.queues, callbacks=[self.callback])]
+
+
+class ConsumerFactory:
+    @staticmethod
+    def hg_pushes(user, password, callback):
+        connection = Connection(CONNECTION_URL.format(user, password))
+        queues = [_generate_hg_pushes_queue(user)]
+        consumer = _GenericConsumer(connection, queues, callback)
+        return connection, consumer
 
 
 def _on_message(body, message):
