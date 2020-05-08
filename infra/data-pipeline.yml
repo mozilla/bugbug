@@ -1183,7 +1183,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - docker-build
       scopes:
