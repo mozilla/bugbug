@@ -108,7 +108,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
 @lru_cache(maxsize=None)
 def get_known_tasks() -> Tuple[str, ...]:
     with open("known_tasks", "r") as f:
-        return tuple(l.strip() for l in f)
+        return tuple(line.strip() for line in f)
 
 
 def schedule_tests(branch, rev):

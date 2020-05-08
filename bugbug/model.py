@@ -40,7 +40,7 @@ def classification_report_imbalanced_values(
     labels = np.asarray(labels)
 
     if target_names is None:
-        target_names = ["%s" % l for l in labels]
+        target_names = [str(label) for label in labels]
 
     # Compute the different metrics
     # Precision/recall/f1
