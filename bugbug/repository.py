@@ -1057,7 +1057,7 @@ def download_commits(
 
     calculate_experiences(commits, first_pushdate, save)
 
-    logger.info(f"Applying final commits filtering...")
+    logger.info("Applying final commits filtering...")
 
     commits = [commit.to_dict() for commit in commits]
 

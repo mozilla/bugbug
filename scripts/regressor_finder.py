@@ -80,7 +80,7 @@ class RegressorFinder(object):
                     self.tokenized_git_repo_dir,
                 )
 
-        logger.info(f"Initializing mapping between git and mercurial commits...")
+        logger.info("Initializing mapping between git and mercurial commits...")
         self.init_mapping()
 
     def clone_git_repo(self, repo_url, repo_dir):

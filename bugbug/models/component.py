@@ -321,7 +321,7 @@ class ComponentModel(BugModel):
         if not meaningful_product_components.issubset(
             self.meaningful_product_components
         ):
-            print(f"Meaningful product components mismatch")
+            print("Meaningful product components mismatch")
 
             new_meaningful_product_components = meaningful_product_components.difference(
                 self.meaningful_product_components

@@ -251,9 +251,9 @@ def zstd_decompress(path):
 def open_tar_zst(path, mode):
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
-        with open(path, f"wb") as f:
+        with open(path, "wb") as f:
             with cctx.stream_writer(f) as compressor:
-                with tarfile.open(mode=f"w|", fileobj=compressor) as tar:
+                with tarfile.open(mode="w|", fileobj=compressor) as tar:
                     yield tar
     elif mode == "r":
         dctx = zstandard.ZstdDecompressor()
