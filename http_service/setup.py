@@ -31,7 +31,12 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     license="MPL2",
-    entry_points={"console_scripts": ["bugbug-http-worker = bugbug_http.worker:main"]},
+    entry_points={
+        "console_scripts": [
+            "bugbug-http-worker = bugbug_http.worker:main",
+            "bugbug-http-pulse-listener = bugbug_http.listener:main",
+        ]
+    },
     classifiers=[
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3 :: Only",
