@@ -32,7 +32,6 @@ def _generate_hg_pushes_queue(user):
         exchange=Exchange("exchange/hgpushes/v2", type="topic", no_declare=True,),
         routing_key="#",
         durable=True,
-        # XXX: This should not be auto delete
         auto_delete=True,
     )
 
