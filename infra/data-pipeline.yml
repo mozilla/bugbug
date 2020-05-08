@@ -15,7 +15,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -51,7 +51,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -87,7 +87,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: batch
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -199,7 +199,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: batch
+      workerType: compute-smaller
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -245,7 +245,7 @@ tasks:
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - commit-retrieval
         - test-scheduling-history-push_data-retrieval
@@ -294,7 +294,7 @@ tasks:
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - commit-retrieval
         - test-scheduling-history-push_data-retrieval
@@ -368,7 +368,7 @@ tasks:
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - commit-retrieval
       payload:
@@ -444,7 +444,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -524,7 +524,7 @@ tasks:
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: batch
       dependencies:
         - commit-retrieval
       payload:
@@ -553,7 +553,7 @@ tasks:
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: batch
       dependencies:
         - commit-retrieval
         - bugs-retrieval
@@ -687,7 +687,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - commit-retrieval
         - regressor-finder-bug-introducing
@@ -739,7 +739,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -777,7 +777,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -819,7 +819,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -861,7 +861,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -903,7 +903,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -941,7 +941,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-super-large
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator
@@ -1021,7 +1021,7 @@ tasks:
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-large
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-generator
@@ -1060,7 +1060,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: compute-smaller
       dependencies:
         - bugs-retrieval
       payload:
@@ -1183,7 +1183,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: compute-smaller
       dependencies:
         - docker-build
       scopes:
@@ -1321,7 +1321,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: compute-smaller
       payload:
         features:
           taskclusterProxy:
@@ -1353,7 +1353,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: ci
+      workerType: compute-smaller
       payload:
         features:
           taskclusterProxy:
