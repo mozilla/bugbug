@@ -26,16 +26,6 @@ BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000
 CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 
-def _generate_hg_pushes_queue(user):
-    return Queue(
-        name="queue/{}/pushes".format(user),
-        exchange=Exchange("exchange/hgpushes/v2", type="topic", no_declare=True,),
-        routing_key="#",
-        durable=True,
-        auto_delete=True,
-    )
-
-
 class _GenericConsumer(ConsumerMixin):
     def __init__(self, connection, queues, callback):
         self.connection = connection
@@ -50,7 +40,17 @@ class ConsumerFactory:
     @staticmethod
     def hg_pushes(user, password, callback):
         connection = Connection(CONNECTION_URL.format(user, password))
-        queues = [_generate_hg_pushes_queue(user)]
+        queues = [
+            Queue(
+                name="queue/{}/pushes".format(user),
+                exchange=Exchange(
+                    "exchange/hgpushes/v2", type="topic", no_declare=True,
+                ),
+                routing_key="#",
+                durable=True,
+                auto_delete=True,
+            )
+        ]
         consumer = _GenericConsumer(connection, queues, callback)
         return connection, consumer
 
