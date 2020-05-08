@@ -35,9 +35,7 @@ def classification_report_imbalanced_values(
     access to the raw values. The code is mostly the same except the
     formatting code and generation of the report which haven removed. Copied
     from version 0.4.3. The original code is living here:
-    https://github.com/scikit-learn-contrib/imbalanced-learn/blob/master/imblearn/metrics/_classification.py#L750
-
-
+    https://github.com/scikit-learn-contrib/imbalanced-learn/blob/b861b3a8e3414c52f40a953f2e0feca5b32e7460/imblearn/metrics/_classification.py#L790
     """
     labels = np.asarray(labels)
 

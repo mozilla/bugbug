@@ -33,6 +33,7 @@ repos:
     -   id: check-json
         exclude: ^tests/fixtures/
     -   id: requirements-txt-fixer
+    -   id: check-vcs-permalinks
 -   repo: https://github.com/codespell-project/codespell
     rev: v1.16.0
     hooks:
