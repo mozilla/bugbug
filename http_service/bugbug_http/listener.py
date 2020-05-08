@@ -36,11 +36,10 @@ class _GenericConsumer(ConsumerMixin):
         return [Consumer(queues=self.queues, callbacks=[self.callback])]
 
 
-class ConsumerFactory:
-    @staticmethod
-    def hg_pushes(user, password, callback):
-        connection = Connection(CONNECTION_URL.format(user, password))
-        queues = [
+class HgPushesConsumer:
+    def __init__(self, user, password, callback):
+        self.connection = Connection(CONNECTION_URL.format(user, password))
+        self.queues = [
             Queue(
                 name="queue/{}/pushes".format(user),
                 exchange=Exchange(
@@ -51,8 +50,13 @@ class ConsumerFactory:
                 auto_delete=True,
             )
         ]
-        consumer = _GenericConsumer(connection, queues, callback)
-        return connection, consumer
+        self.consumer = _GenericConsumer(self.connection, self.queues, callback)
+
+    def __enter__(self):
+        return self.consumer
+
+    def __exit__(self, type, value, traceback):
+        self.connection.close()
 
 
 def _on_message(body, message):
@@ -80,8 +84,7 @@ def main():
     user = os.environ.get("PULSE_USER")
     password = os.environ.get("PULSE_PASSWORD")
     if user and password:
-        connection, consumer = ConsumerFactory.hg_pushes(user, password, _on_message)
-        with connection as conn:  # noqa
+        with HgPushesConsumer(user, password, _on_message) as consumer:
             consumer.run()
     else:
         logger.warning(
