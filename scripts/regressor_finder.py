@@ -5,6 +5,7 @@
 
 import argparse
 import concurrent.futures
+import math
 import os
 import subprocess
 import threading
@@ -445,7 +446,7 @@ class RegressorFinder(object):
             zstd_compress(db_path)
             db.upload(db_path)
 
-        workers = os.cpu_count()
+        workers = math.ceil(os.cpu_count() / 2)
         logger.info(
             f"Analyzing {len(bug_fixing_commits)} commits using {workers} workers..."
         )
