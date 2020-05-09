@@ -355,28 +355,18 @@ class CommitClassifier(object):
             )
 
             if self.git_repo_dir:
-                patch_proc = subprocess.Popen(
-                    ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
-                    stdin=subprocess.PIPE,
-                    cwd=self.git_repo_dir,
-                )
-                patch_proc.communicate(patch.patch.encode("utf-8"))
-                assert patch_proc.returncode == 0, "Failed to apply patch"
-
-                subprocess.run(
+                fetch_proc = subprocess.run(
                     [
                         "git",
-                        "-c",
-                        f"user.name={author_name}",
-                        "-c",
-                        f"user.email={author_email}",
-                        "commit",
-                        "-am",
-                        message,
+                        "cinnabar",
+                        "fetch",
+                        f"hg::{self.git_repo_dir}",
+                        f"{revision['id']}"
                     ],
                     check=True,
                     cwd=self.git_repo_dir,
                 )
+                assert fetch_proc.returncode == 0, "Failed to fetch"
 
     def generate_feature_importance_data(self, probs, importance):
         X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
