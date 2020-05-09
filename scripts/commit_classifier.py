@@ -361,7 +361,7 @@ class CommitClassifier(object):
                         "cinnabar",
                         "fetch",
                         f"hg::{self.git_repo_dir}",
-                        f"{revision['id']}"
+                        f"{revision['id']}",
                     ],
                     check=True,
                     cwd=self.git_repo_dir,
