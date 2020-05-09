@@ -40,7 +40,7 @@ repos:
     -   id: codespell
         exclude_types: [json]
 -   repo: https://github.com/marco-c/taskcluster_yml_validator
-    rev: v0.0.4
+    rev: v0.0.5
     hooks:
     -   id: taskcluster_yml
 -   repo: https://github.com/asottile/yesqa
