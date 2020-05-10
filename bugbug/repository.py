@@ -18,10 +18,11 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Generator, Iterable, List
+from typing import Generator, Iterable, List, Optional
 
 import hglib
 import lmdb
+import rs_parsepatch
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -29,7 +30,7 @@ from bugbug.utils import LMDBDict
 
 logger = logging.getLogger(__name__)
 
-code_analysis_server = None
+code_analysis_server: Optional[rust_code_analysis_server.RustCodeAnalysisServer] = None
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
@@ -475,11 +476,13 @@ def get_metrics(commit, metrics_space):
     return error
 
 
-def transform(hg, repo_dir, commit):
+def transform(hg: hglib.client, repo_dir: str, commit: Commit):
     hg_modified_files(hg, commit)
 
     if commit.ignored or len(commit.backsout) > 0 or commit.bug_id is None:
         return commit
+
+    assert code_analysis_server is not None
 
     source_code_sizes = []
     other_sizes = []
@@ -1027,9 +1030,6 @@ def download_commits(
         commits_num = len(commits)
 
         logger.info(f"Mining {commits_num} patches...")
-
-        global rs_parsepatch
-        import rs_parsepatch
 
         global code_analysis_server
         code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
