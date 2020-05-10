@@ -128,7 +128,7 @@ class Retriever(object):
             num_cached = 0
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = (
+                futures = tuple(
                     executor.submit(
                         lambda push: adr.config.cache.get(cache_key(push)), push
                     )
