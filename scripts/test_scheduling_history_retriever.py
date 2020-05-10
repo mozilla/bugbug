@@ -13,7 +13,7 @@ import struct
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Dict, Generator, List, NewType, Tuple
+from typing import Generator, List, NewType, Tuple
 
 import adr
 import dateutil.parser
@@ -107,32 +107,8 @@ class Retriever(object):
         elif granularity == "group":
             push_data_db = test_scheduling.PUSH_DATA_GROUP_DB
 
-        cache: Dict[mozci.push.Push, Tuple[PushResult, int]] = {}
-
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_push = {
-                executor.submit(
-                    lambda push: adr.config.cache.get(cache_key(push)), push
-                ): push
-                for push in pushes
-            }
-
-            for future in tqdm(
-                concurrent.futures.as_completed(future_to_push),
-                total=len(future_to_push),
-            ):
-                push = future_to_push[future]
-
-                exc = future.exception()
-                if exc is not None:
-                    logger.info(f"Exception {exc} while getting {push.rev}")
-                    for f in future_to_push.keys():
-                        f.cancel()
-
-                cache[push] = future.result()
 
         # Regenerating a large amount of data when we update the mozci regression detection
         # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
@@ -151,46 +127,65 @@ class Retriever(object):
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
 
-            for push in tqdm(pushes):
-                key = cache_key(push)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = (
+                    executor.submit(
+                        lambda push: adr.config.cache.get(cache_key(push)), push
+                    )
+                    for push in pushes
+                )
 
-                if cache[push] is not None:
-                    num_cached += 1
-                    cached = cache[push]
-                    if cached:
-                        value, mozci_version = cached
-                        yield value
-                else:
-                    logger.info(f"Analyzing {push.rev} at the {granularity} level...")
+                for push, future in zip(tqdm(pushes), futures):
+                    exc = future.exception()
+                    if exc is not None:
+                        logger.info(f"Exception {exc} while getting {push.rev}")
+                        for f in futures:
+                            f.cancel()
 
-                    try:
-                        if granularity == "label":
-                            runnables = push.task_labels
-                        elif granularity == "group":
-                            runnables = push.group_summaries.keys()
+                    cached = future.result()
 
-                        value = (
-                            push.revs,
-                            list(runnables),
-                            list(push.get_possible_regressions(granularity)),
-                            list(push.get_likely_regressions(granularity)),
+                    if cached is not None:
+                        num_cached += 1
+                        if cached:
+                            value, mozci_version = cached
+                            yield value
+                    else:
+                        logger.info(
+                            f"Analyzing {push.rev} at the {granularity} level..."
                         )
-                        adr.config.cache.put(
-                            key,
-                            (value, MOZCI_VERSION),
-                            adr.config["cache"]["retention"],
-                        )
-                        yield value
-                    except adr.errors.MissingDataError:
-                        logger.warning(
-                            f"Tasks for push {push.rev} can't be found on ActiveData"
-                        )
-                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
-                    except Exception:
-                        traceback.print_exc()
-                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-            logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
+                        key = cache_key(push)
+
+                        try:
+                            if granularity == "label":
+                                runnables = push.task_labels
+                            elif granularity == "group":
+                                runnables = push.group_summaries.keys()
+
+                            value = (
+                                push.revs,
+                                list(runnables),
+                                list(push.get_possible_regressions(granularity)),
+                                list(push.get_likely_regressions(granularity)),
+                            )
+                            adr.config.cache.put(
+                                key,
+                                (value, MOZCI_VERSION),
+                                adr.config["cache"]["retention"],
+                            )
+                            yield value
+                        except adr.errors.MissingDataError:
+                            logger.warning(
+                                f"Tasks for push {push.rev} can't be found on ActiveData"
+                            )
+                            adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
+                        except Exception:
+                            traceback.print_exc()
+                            adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
+
+                logger.info(
+                    f"{num_cached} pushes were already cached out of {len(pushes)}"
+                )
 
         db.write(push_data_db, generate())
         zstd_compress(push_data_db)
