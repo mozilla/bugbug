@@ -368,7 +368,7 @@ class RegressorFinder(object):
         def find_bic(bug_fixing_commit):
             logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
-            git_fix_revision = next(mercurial_to_git([bug_fixing_commit["rev"]]))
+            git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
 
             commit = thread_local.git.get_commit(git_fix_revision)
 
@@ -421,9 +421,9 @@ class RegressorFinder(object):
                         bug_introducing_commits.append(
                             {
                                 "bug_fixing_rev": bug_fixing_commit["rev"],
-                                "bug_introducing_rev": next(
+                                "bug_introducing_rev": tuple(
                                     git_to_mercurial([bug_introducing_hash])
-                                ),
+                                )[0],
                             }
                         )
                     except Exception as e:
