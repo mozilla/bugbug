@@ -52,7 +52,8 @@ EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 SOURCE_CODE_TYPES_TO_EXT = {
     "Assembly": [".asm", ".S"],
     "Javascript": [".js", ".jsm", ".sjs"],
-    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
+    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".hxx"],
+    "Objective-C/C++": [".mm", ".m"],
     "Java": [".java"],
     "Python": [".py"],
     "Rust": [".rs"],
@@ -514,7 +515,6 @@ def transform(hg, repo_dir, commit):
                     raise
 
         type_ = get_type(path)
-        ext = os.path.splitext(path)[1].lower()
 
         if is_test(path):
             commit.test_files_modified_num += 1
@@ -554,14 +554,9 @@ def transform(hg, repo_dir, commit):
                         if len(touched_functions) > 0:
                             commit.functions[path] = list(touched_functions)
 
-                    # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
-                    # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
-                    # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
-                    # the additional information that it is an Objective-C/C++ file.
-                    if type_ == "C/C++" and (
-                        metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
-                    ):
-                        commit.types.add("Objective-C/C++")
+                    # Replace type with "Objective-C/C++" if rust-code-analysis detected this is an Objective-C/C++ file.
+                    if type_ == "C/C++" and metrics.get("language") == "obj-c/c++":
+                        type_ = "Objective-C/C++"
 
             commit.types.add(type_)
         else:
