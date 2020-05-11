@@ -144,6 +144,13 @@ class Retriever(object):
 
                     cached = future.result()
 
+                    # Regenerate results which were generated when we were not cleaning
+                    # up WPT groups.
+                    if cached:
+                        value, mozci_version = cached
+                        if any(runnable.startswith("/") for runnable in value[1]):
+                            cached = None
+
                     if cached is not None:
                         num_cached += 1
                         if cached:
