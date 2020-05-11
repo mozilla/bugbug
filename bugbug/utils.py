@@ -11,6 +11,7 @@ import os
 import socket
 import subprocess
 import tarfile
+import threading
 from collections import deque
 from contextlib import contextmanager
 from functools import lru_cache
@@ -418,6 +419,23 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
                 future.cancel()
             raise e
         return super(ThreadPoolExecutorResult, self).__exit__(*args)
+
+
+class ThreadPoolBoundedExecutor(concurrent.futures.ThreadPoolExecutor):
+    def __init__(self, *args, **kwargs):
+        self.semaphore = threading.BoundedSemaphore(kwargs["max_results"])
+        super(ThreadPoolExecutorResult, self).__init__(*args, **kwargs)
+
+    def submit(self, fn, *args, **kwargs):
+        self.semaphore.acquire()
+        try:
+            future = self.submit(fn, *args, **kwargs)
+        except Exception:
+            self.semaphore.release()
+            raise
+
+        future.add_done_callback(lambda x: self.semaphore.release())
+        return future
 
 
 @lru_cache(maxsize=None)
