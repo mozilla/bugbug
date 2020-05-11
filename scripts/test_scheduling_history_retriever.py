@@ -25,7 +25,9 @@ from bugbug.utils import ThreadPoolBoundedExecutor, create_tar_zst, zstd_compres
 
 Revision = NewType("Revision", str)
 TaskName = NewType("TaskName", str)
-PushResult = Tuple[List[Revision], List[TaskName], List[TaskName], List[TaskName]]
+PushResult = Tuple[
+    List[Revision], Tuple[TaskName, ...], Tuple[TaskName, ...], Tuple[TaskName, ...]
+]
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -170,9 +172,9 @@ class Retriever(object):
 
                             value = (
                                 push.revs,
-                                list(runnables),
-                                list(push.get_possible_regressions(granularity)),
-                                list(push.get_likely_regressions(granularity)),
+                                tuple(runnables),
+                                tuple(push.get_possible_regressions(granularity)),
+                                tuple(push.get_likely_regressions(granularity)),
                             )
                             adr.config.cache.put(
                                 key,
