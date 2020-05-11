@@ -147,10 +147,10 @@ class Retriever(object):
 
                     # Regenerate results which were generated when we were not cleaning
                     # up WPT groups.
-                    if cached:
+                    """if cached:
                         value, mozci_version = cached
                         if any(runnable.startswith("/") for runnable in value[1]):
-                            cached = None
+                            cached = None"""
 
                     if cached is not None:
                         num_cached += 1
