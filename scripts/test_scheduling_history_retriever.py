@@ -10,6 +10,7 @@ import itertools
 import math
 import os
 import struct
+import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -129,6 +130,12 @@ class Retriever(object):
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
 
+            semaphore = threading.BoundedSemaphore(256)
+
+            def retrieve_from_cache(push):
+                semaphore.acquire()
+                return adr.config.cache.get(cache_key(push))
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = tuple(
                     executor.submit(
@@ -145,6 +152,8 @@ class Retriever(object):
                             f.cancel()
 
                     cached = future.result()
+
+                    semaphore.release()
 
                     # Regenerate results which were generated when we were not cleaning
                     # up WPT groups.
