@@ -138,10 +138,7 @@ class Retriever(object):
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = tuple(
-                    executor.submit(
-                        lambda push: adr.config.cache.get(cache_key(push)), push
-                    )
-                    for push in pushes
+                    executor.submit(retrieve_from_cache, push) for push in pushes
                 )
 
                 for push, future in zip(tqdm(pushes), futures):
