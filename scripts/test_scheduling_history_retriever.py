@@ -5,7 +5,6 @@
 
 import argparse
 import collections
-import concurrent.futures
 import itertools
 import math
 import os
@@ -22,7 +21,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import commit_features, db, repository, test_scheduling
-from bugbug.utils import create_tar_zst, zstd_compress
+from bugbug.utils import ThreadPoolBoundedExecutor, create_tar_zst, zstd_compress
 
 Revision = NewType("Revision", str)
 TaskName = NewType("TaskName", str)
@@ -127,7 +126,7 @@ class Retriever(object):
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
+            with ThreadPoolBoundedExecutor(max_results=256) as executor:
                 futures = tuple(
                     executor.submit(
                         lambda push: adr.config.cache.get(cache_key(push)), push
