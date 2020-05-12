@@ -64,7 +64,12 @@ def _on_message(body, message):
     try:
         branch = body["payload"]["data"]["repo_url"].split("/")[-1]
         rev = body["payload"]["data"]["heads"][0]
+
         if branch in ["autoland", "try"]:
+            user = body["payload"]["data"]["pushlog_pushes"][0]["user"]
+            if user == "reviewbot":
+                return
+
             url = "{}/push/{}/{}/schedules".format(BUGBUG_HTTP_SERVER, branch, rev)
             response = requests.get(url, headers={"X-Api-Key": "pulse_listener"})
             if response.status_code == 202:
