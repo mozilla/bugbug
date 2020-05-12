@@ -129,6 +129,7 @@ class Retriever(object):
 
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
+            num_pushes = len(pushes)
 
             semaphore = threading.BoundedSemaphore(256)
 
@@ -141,7 +142,9 @@ class Retriever(object):
                     executor.submit(retrieve_from_cache, push) for push in pushes
                 )
 
-                for push, future in zip(tqdm(pushes), futures):
+                for future in tqdm(futures):
+                    push = pushes.pop(0)
+
                     exc = future.exception()
                     if exc is not None:
                         logger.info(f"Exception {exc} while getting {push.rev}")
@@ -199,7 +202,7 @@ class Retriever(object):
                             adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
                 logger.info(
-                    f"{num_cached} pushes were already cached out of {len(pushes)}"
+                    f"{num_cached} pushes were already cached out of {num_pushes}"
                 )
 
         db.write(push_data_db, generate())
