@@ -113,23 +113,14 @@ class Retriever(object):
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
 
-        # Regenerating a large amount of data when we update the mozci regression detection
-        # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
-        # run.
-        """to_regenerate = 0
-        for push in pushes[::-1]:
-            cached = cache[push]
-            if not cached:
-                continue
-
-            value, mozci_version = cached
-            if mozci_version != MOZCI_VERSION and to_regenerate < 1000:
-                cache[push] = None
-                to_regenerate += 1"""
-
         def generate() -> Generator[PushResult, None, None]:
             num_cached = 0
             num_pushes = len(pushes)
+
+            # Regenerating a large amount of data when we update the mozci regression detection
+            # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+            # run.
+            to_regenerate = 1000
 
             semaphore = threading.BoundedSemaphore(256)
 
@@ -155,12 +146,19 @@ class Retriever(object):
 
                     semaphore.release()
 
-                    # Regenerate results which were generated when we were not cleaning
-                    # up WPT groups.
-                    """if cached:
+                    if cached and to_regenerate > 0:
                         value, mozci_version = cached
+
+                        # Regenerate results which were generated when we were not cleaning
+                        # up WPT groups.
                         if any(runnable.startswith("/") for runnable in value[1]):
-                            cached = None"""
+                            cached = None
+                            to_regenerate -= 1
+
+                        """# Regenerate results which were generated with an older version of mozci.
+                        elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
+                            cached = None
+                            to_regenerate -= 1"""
 
                     if cached is not None:
                         num_cached += 1
