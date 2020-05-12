@@ -113,7 +113,7 @@ class Retriever(object):
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
 
-        def generate() -> Generator[PushResult, None, None]:
+        def generate(executor) -> Generator[PushResult, None, None]:
             num_cached = 0
             num_pushes = len(pushes)
 
@@ -128,82 +128,78 @@ class Retriever(object):
                 semaphore.acquire()
                 return adr.config.cache.get(cache_key(push))
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = tuple(
-                    executor.submit(retrieve_from_cache, push) for push in pushes
-                )
+            futures = tuple(
+                executor.submit(retrieve_from_cache, push) for push in pushes
+            )
 
-                for future in tqdm(futures):
-                    push = pushes.pop(0)
+            for future in tqdm(futures):
+                push = pushes.pop(0)
 
-                    exc = future.exception()
-                    if exc is not None:
-                        logger.info(f"Exception {exc} while getting {push.rev}")
-                        for f in futures:
-                            f.cancel()
+                exc = future.exception()
+                if exc is not None:
+                    logger.info(f"Exception {exc} while getting {push.rev}")
+                    for f in futures:
+                        f.cancel()
 
-                    cached = future.result()
+                cached = future.result()
 
-                    semaphore.release()
+                semaphore.release()
 
-                    if cached and to_regenerate > 0:
+                if cached and to_regenerate > 0:
+                    value, mozci_version = cached
+
+                    # Regenerate results which were generated when we were not cleaning
+                    # up WPT groups.
+                    if any(runnable.startswith("/") for runnable in value[1]):
+                        cached = None
+                        to_regenerate -= 1
+
+                    """# Regenerate results which were generated with an older version of mozci.
+                    elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
+                        cached = None
+                        to_regenerate -= 1"""
+
+                if cached is not None:
+                    num_cached += 1
+                    if cached:
                         value, mozci_version = cached
+                        yield value
+                else:
+                    logger.info(f"Analyzing {push.rev} at the {granularity} level...")
 
-                        # Regenerate results which were generated when we were not cleaning
-                        # up WPT groups.
-                        if any(runnable.startswith("/") for runnable in value[1]):
-                            cached = None
-                            to_regenerate -= 1
+                    key = cache_key(push)
 
-                        """# Regenerate results which were generated with an older version of mozci.
-                        elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
-                            cached = None
-                            to_regenerate -= 1"""
+                    try:
+                        if granularity == "label":
+                            runnables = push.task_labels
+                        elif granularity == "group":
+                            runnables = push.group_summaries.keys()
 
-                    if cached is not None:
-                        num_cached += 1
-                        if cached:
-                            value, mozci_version = cached
-                            yield value
-                    else:
-                        logger.info(
-                            f"Analyzing {push.rev} at the {granularity} level..."
+                        value = (
+                            push.revs,
+                            tuple(runnables),
+                            tuple(push.get_possible_regressions(granularity)),
+                            tuple(push.get_likely_regressions(granularity)),
                         )
+                        adr.config.cache.put(
+                            key,
+                            (value, MOZCI_VERSION),
+                            adr.config["cache"]["retention"],
+                        )
+                        yield value
+                    except adr.errors.MissingDataError:
+                        logger.warning(
+                            f"Tasks for push {push.rev} can't be found on ActiveData"
+                        )
+                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
+                    except Exception:
+                        traceback.print_exc()
+                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-                        key = cache_key(push)
+            logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
-                        try:
-                            if granularity == "label":
-                                runnables = push.task_labels
-                            elif granularity == "group":
-                                runnables = push.group_summaries.keys()
-
-                            value = (
-                                push.revs,
-                                tuple(runnables),
-                                tuple(push.get_possible_regressions(granularity)),
-                                tuple(push.get_likely_regressions(granularity)),
-                            )
-                            adr.config.cache.put(
-                                key,
-                                (value, MOZCI_VERSION),
-                                adr.config["cache"]["retention"],
-                            )
-                            yield value
-                        except adr.errors.MissingDataError:
-                            logger.warning(
-                                f"Tasks for push {push.rev} can't be found on ActiveData"
-                            )
-                            adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
-                        except Exception:
-                            traceback.print_exc()
-                            adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
-
-                logger.info(
-                    f"{num_cached} pushes were already cached out of {num_pushes}"
-                )
-
-        db.write(push_data_db, generate())
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            db.write(push_data_db, generate(executor))
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
