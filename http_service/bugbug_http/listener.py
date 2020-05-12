@@ -22,7 +22,8 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000")
+PORT = os.environ.get("PORT", 8000)
+BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", f"http://localhost:{PORT}")
 CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
 
 
