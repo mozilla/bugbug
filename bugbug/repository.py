@@ -18,10 +18,11 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Generator, Iterable, List
+from typing import Generator, Iterable, List, Optional
 
 import hglib
 import lmdb
+import rs_parsepatch
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -29,7 +30,7 @@ from bugbug.utils import LMDBDict
 
 logger = logging.getLogger(__name__)
 
-code_analysis_server = None
+code_analysis_server: Optional[rust_code_analysis_server.RustCodeAnalysisServer] = None
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
@@ -40,7 +41,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    12,
+    13,
     [COMMIT_EXPERIENCES_DB],
 )
 
@@ -52,7 +53,8 @@ EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 SOURCE_CODE_TYPES_TO_EXT = {
     "Assembly": [".asm", ".S"],
     "Javascript": [".js", ".jsm", ".sjs"],
-    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".m", ".mm", ".h", ".hh", ".hpp", ".hxx"],
+    "C/C++": [".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".hxx"],
+    "Objective-C/C++": [".mm", ".m"],
     "Java": [".java"],
     "Python": [".py"],
     "Rust": [".rs"],
@@ -474,11 +476,13 @@ def get_metrics(commit, metrics_space):
     return error
 
 
-def transform(hg, repo_dir, commit):
+def transform(hg: hglib.client, repo_dir: str, commit: Commit):
     hg_modified_files(hg, commit)
 
     if commit.ignored or len(commit.backsout) > 0 or commit.bug_id is None:
         return commit
+
+    assert code_analysis_server is not None
 
     source_code_sizes = []
     other_sizes = []
@@ -514,7 +518,6 @@ def transform(hg, repo_dir, commit):
                     raise
 
         type_ = get_type(path)
-        ext = os.path.splitext(path)[1].lower()
 
         if is_test(path):
             commit.test_files_modified_num += 1
@@ -554,14 +557,9 @@ def transform(hg, repo_dir, commit):
                         if len(touched_functions) > 0:
                             commit.functions[path] = list(touched_functions)
 
-                    # Add "Objective-C/C++" type if rust-code-analysis detected this is an Objective-C/C++ file.
-                    # We use both C/C++ and Objective-C/C++ as Objective-C/C++ files are few but share most characteristics
-                    # with C/C++ files: we don't want to lose this information by just overwriting the type, but we want
-                    # the additional information that it is an Objective-C/C++ file.
-                    if type_ == "C/C++" and (
-                        metrics.get("language") == "obj-c/c++" or ext in {".m", ".mm"}
-                    ):
-                        commit.types.add("Objective-C/C++")
+                    # Replace type with "Objective-C/C++" if rust-code-analysis detected this is an Objective-C/C++ file.
+                    if type_ == "C/C++" and metrics.get("language") == "obj-c/c++":
+                        type_ = "Objective-C/C++"
 
             commit.types.add(type_)
         else:
@@ -1033,9 +1031,6 @@ def download_commits(
 
         logger.info(f"Mining {commits_num} patches...")
 
-        global rs_parsepatch
-        import rs_parsepatch
-
         global code_analysis_server
         code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
@@ -1057,7 +1052,7 @@ def download_commits(
 
     calculate_experiences(commits, first_pushdate, save)
 
-    logger.info(f"Applying final commits filtering...")
+    logger.info("Applying final commits filtering...")
 
     commits = [commit.to_dict() for commit in commits]
 

@@ -36,7 +36,7 @@ def classify_bugs(model_name, classifier, bug_id):
             )
         except requests.HTTPError:
             logger.error(
-                f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
+                "A pre-trained model is not available, you will need to train it yourself using the trainer script"
             )
             raise SystemExit(1)
 

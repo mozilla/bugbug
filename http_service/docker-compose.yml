@@ -8,6 +8,8 @@ services:
       - BUGBUG_BUGZILLA_TOKEN
       - REDIS_URL=redis://redis:6379/0
       - PORT=8000
+      - PULSE_USER
+      - PULSE_PASSWORD
     ports:
       - target: 8000
         published: 8000

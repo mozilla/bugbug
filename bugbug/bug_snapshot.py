@@ -412,6 +412,7 @@ def is_expected_inconsistent_change_list_field(field, bug_id, value):
                 "beta1",
                 "beta2",
                 "mozilla0.9",
+                "mozilla0.9.2",
                 "verified1.0.1",
                 "fixed1.9.0.10",
                 "adt1.0.1+",
@@ -510,13 +511,16 @@ def is_expected_inconsistent_change_flag(flag, obj_id):
             ]
         )
         or (flag == "approval-comm-beta+" and obj_id == 8972248)
+        or (flag == "testcase+" and obj_id == 267645)
         or (
             flag
             in [
                 "platform-rel?",
                 "blocking0.3-",
                 "blocking-aviary1.0RC1-",
+                "blocking-aviary1.1+",
                 "blocking-firefox3.1-",
+                "blocking1.8b4-",
                 "blocking1.9+",
                 "blocking1.9.0.3?",
                 "blocking1.9.0.10+",
