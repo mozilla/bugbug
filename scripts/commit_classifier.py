@@ -318,7 +318,7 @@ class CommitClassifier(object):
             author_name = None
             author_email = None
 
-            if patch.commits:
+            if patch.commits:   
                 author_name = patch.commits[0]["author"]["name"]
                 author_email = patch.commits[0]["author"]["email"]
 
@@ -355,6 +355,31 @@ class CommitClassifier(object):
             )
 
             if self.git_repo_dir:
+                # see local commits
+                cmd = "hg out"
+                res = subprocess.check_output(cmd,shell=True)
+                start = res.find('changeset: ')
+                res = res[start:]
+                res = res.replace(" ","")
+                res = res.replace("\n",",")
+
+                # Finding 2nd occurrence of ':' 
+                substr = ":"
+                occurrence = 2
+                inilist = [i for i in range(0, len(ini_str)) \
+                    if ini_str[i:].startswith(substr)] 
+                start = inilist[occurrence - 1] + 1
+                
+                # Finding 1st occurrence of ',' 
+                substr = ","
+                occurrence = 1
+                inilist = [i for i in range(0, len(ini_str)) 
+                            if ini_str[i:].startswith(substr)] 
+                end = inilist[occurrence - 1]
+
+                # hash of the local commit
+                local_commit_hash = res[start:end]
+
                 patch_proc = subprocess.Popen(
                     ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
                     stdin=subprocess.PIPE,
