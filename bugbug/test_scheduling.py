@@ -241,6 +241,10 @@ def _read_and_update_past_failures(
 def generate_data(
     past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
 ):
+    source_file_dirs = tuple(
+        os.path.dirname(source_file) for source_file in commit["files"]
+    )
+
     for runnable in runnables:
         runnable_dir = os.path.dirname(runnable)
 
@@ -249,8 +253,8 @@ def generate_data(
             for source_file in commit["files"]
         )
         touched_together_directories = sum(
-            get_touched_together(os.path.dirname(source_file), runnable_dir)
-            for source_file in commit["files"]
+            get_touched_together(source_file_dir, runnable_dir)
+            for source_file_dir in source_file_dirs
         )
 
         is_possible_regression = runnable in possible_regressions
