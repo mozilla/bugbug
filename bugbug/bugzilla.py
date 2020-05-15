@@ -94,98 +94,74 @@ def get_ids(params):
     return all_ids
 
 
-def get(ids_or_query):
+def get(bug_ids):
+    """Function to retrieve Bug Information including history, attachment, comments using Bugzilla REST API.
+
+    :param bug_ids: find bug information for these `bug_ids`
+    :type bug_ids: list of integers or str or int
+    :return: dict with key as `id`(int) of a bug,  and values as bug_information
+    :rtype: dict
+    """
     new_bugs = {}
 
-    def bughandler(bug):
-        bug_id = int(bug["id"])
+    if isinstance(bug_ids, list):
+        # Expected Format
+        bug_ids_list = list(map(int, bug_ids))
 
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
+    elif isinstance(bug_ids, six.string_types):
+        bug_ids_list = [int(bug_ids)]
 
-        new_bugs[bug_id].update(bug)
+    elif isinstance(bug_ids, int):
+        bug_ids_list = [bug_ids]
+    else:
+        raise ValueError(
+            "Invalid datatype for the parameter-bug_ids with value- {bug_ids} and datatype-{type(bug_ids)}"
+        )
 
-    def commenthandler(bug, bug_id):
-        bug_id = int(bug_id)
-
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["comments"] = bug["comments"]
-
-    def attachmenthandler(bug, bug_id):
-        bug_id = int(bug_id)
-
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["attachments"] = bug
-
-    def historyhandler(bug):
-        bug_id = int(bug["id"])
-
-        if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
-
-        new_bugs[bug_id]["history"] = bug["history"]
-
-    if isinstance(ids_or_query, int):
-        ids_or_query = str(ids_or_query)
-
-    if isinstance(ids_or_query, six.string_types):
+    new_bugs = dict()
+    for a_bug_id in bug_ids_list:
         params_for_custom_fields = {
-            "id": ids_or_query,
+            "id": a_bug_id,
             "include_fields": "_default,history,comments,attachments",
         }
-
-        r = utils.get_session("bugzilla").get(
+        response = utils.get_session("bugzilla").get(
             "https://bugzilla.mozilla.org/rest/bug", params=params_for_custom_fields
         )
-        r.raise_for_status()
+        response.raise_for_status()
 
-        bug_info_array = r.json()
-        bug_info_array = bug_info_array["bugs"]
+        a_bug_info = response.json()
+        a_bug_info = a_bug_info["bugs"]
 
-        # Realignment of results
+        assert len(a_bug_info) == 1
 
-        new_bugs = {}
+        a_bug_info = a_bug_info[0]
 
-        for a_bug in bug_info_array:
-            bug_id = int(a_bug["id"])
+        # Realignment of results to cope with previous versions of data manipulation
+        bug_id_of_a_bug_info = int(a_bug_info["id"])
 
-            # Delete other fields from comments
-            current_comments_array = a_bug["comments"]
-            for a_comment in current_comments_array:
-                to_be_deleted_comment_fields = set(a_comment.keys()).difference(
-                    set(COMMENT_INCLUDE_FIELDS)
-                )
-                for extra_field in to_be_deleted_comment_fields:
-                    del a_comment[extra_field]
-            a_bug["comments"] = current_comments_array
+        # Delete other fields from comments
+        current_comments_array = a_bug_info["comments"]
+        for a_comment in current_comments_array:
+            to_be_deleted_comment_fields = set(a_comment.keys()).difference(
+                set(COMMENT_INCLUDE_FIELDS)
+            )
+            for extra_field in to_be_deleted_comment_fields:
+                del a_comment[extra_field]
+        a_bug_info["comments"] = current_comments_array
 
-            # Delete other fields from attachments
-            current_attachments_array = a_bug["attachments"]
-            for a_attachment in current_attachments_array:
-                to_be_deleted_attachment_fields = set(a_attachment.keys()).difference(
-                    set(ATTACHMENT_INCLUDE_FIELDS)
-                )
-                for extra_field in to_be_deleted_attachment_fields:
-                    del a_attachment[extra_field]
-            a_bug["attachments"] = current_attachments_array
+        # Delete other fields from attachments
+        current_attachments_array = a_bug_info["attachments"]
+        for a_attachment in current_attachments_array:
+            to_be_deleted_attachment_fields = set(a_attachment.keys()).difference(
+                set(ATTACHMENT_INCLUDE_FIELDS)
+            )
+            for extra_field in to_be_deleted_attachment_fields:
+                del a_attachment[extra_field]
+        a_bug_info["attachments"] = current_attachments_array
 
-            new_bugs[bug_id] = dict()
-            new_bugs[bug_id] = a_bug
-
-    else:
-        Bugzilla(
-            ids_or_query,
-            bughandler=bughandler,
-            commenthandler=commenthandler,
-            comment_include_fields=COMMENT_INCLUDE_FIELDS,
-            attachmenthandler=attachmenthandler,
-            attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
-            historyhandler=historyhandler,
-        ).get_data().wait()
+        # Since bug_id won't have duplicates in bug_ids_list, the check for existence of bug_id in `new_bugs` is skipped
+        new_bugs[bug_id_of_a_bug_info] = dict()
+        new_bugs[bug_id_of_a_bug_info] = a_bug_info
 
     return new_bugs
 
