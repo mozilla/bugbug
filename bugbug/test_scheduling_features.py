@@ -2,7 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-import os
 
 from bugbug import repository
 
@@ -143,17 +142,19 @@ class arch(object):
         return archs.pop()
 
 
+def commonprefix(path1, path2):
+    for i, c in enumerate(path1):
+        if c != path2[i]:
+            return path1[:i]
+    return path1
+
+
 class path_distance(object):
     def __call__(self, test_job, commit, **kwargs):
         distances = []
         for path in commit["files"]:
-            movement = os.path.relpath(
-                os.path.dirname(test_job["name"]), os.path.dirname(path)
-            )
-            if movement == ".":
-                distances.append(0)
-            else:
-                distances.append(movement.count("/") + 1)
+            i = len(commonprefix(test_job["name"], path))
+            distances.append(test_job["name"][i:].count("/") + path[i:].count("/"))
 
         return min(distances, default=None)
 
