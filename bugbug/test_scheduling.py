@@ -242,14 +242,14 @@ def generate_data(
     past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
 ):
     for runnable in runnables:
+        runnable_dir = os.path.dirname(runnable)
+
         touched_together_files = sum(
-            get_touched_together(source_file, os.path.dirname(runnable))
+            get_touched_together(source_file, runnable_dir)
             for source_file in commit["files"]
         )
         touched_together_directories = sum(
-            get_touched_together(
-                os.path.dirname(source_file), os.path.dirname(runnable)
-            )
+            get_touched_together(os.path.dirname(source_file), runnable_dir)
             for source_file in commit["files"]
         )
 
