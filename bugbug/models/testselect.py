@@ -205,13 +205,13 @@ class TestSelectModel(Model):
             push_num = past_failures_data["push_num"] + 1
         all_runnables = past_failures_data["all_runnables"]
 
+        if self.granularity == "label":
+            all_runnables = tuple(r for r in all_runnables if r.startswith("test-"))
+
         commit_tests = []
         for data in test_scheduling.generate_data(
-            past_failures_data, commit_data, push_num, all_runnables, [], []
+            past_failures_data, commit_data, push_num, all_runnables, tuple(), tuple()
         ):
-            if self.granularity == "label" and not data["name"].startswith("test-"):
-                continue
-
             commit_test = commit_data.copy()
             commit_test["test_job"] = data
             commit_tests.append(commit_test)

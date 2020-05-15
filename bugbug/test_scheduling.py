@@ -34,7 +34,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    19,
+    20,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
@@ -124,10 +124,10 @@ def get_touched_together(f1, f2):
 
     key = get_touched_together_key(f1, f2)
 
-    if key not in touched_together:
+    try:
+        return struct.unpack("I", touched_together[key])[0]
+    except KeyError:
         return 0
-
-    return struct.unpack("I", touched_together[key])[0]
 
 
 def set_touched_together(f1, f2):
@@ -241,21 +241,26 @@ def _read_and_update_past_failures(
 def generate_data(
     past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
 ):
+    source_file_dirs = tuple(
+        os.path.dirname(source_file) for source_file in commit["files"]
+    )
+
     for runnable in runnables:
+        runnable_dir = os.path.dirname(runnable)
+
         touched_together_files = sum(
-            get_touched_together(source_file, os.path.dirname(runnable))
+            get_touched_together(source_file, runnable_dir)
             for source_file in commit["files"]
         )
         touched_together_directories = sum(
-            get_touched_together(
-                os.path.dirname(source_file), os.path.dirname(runnable)
-            )
-            for source_file in commit["files"]
+            get_touched_together(source_file_dir, runnable_dir)
+            for source_file_dir in source_file_dirs
         )
 
-        is_regression = (
-            runnable in possible_regressions or runnable in likely_regressions
-        )
+        is_possible_regression = runnable in possible_regressions
+        is_likely_regression = runnable in likely_regressions
+
+        is_regression = is_possible_regression or is_likely_regression
 
         (
             total_failures,
@@ -263,7 +268,7 @@ def generate_data(
             past_1400_pushes_failures,
             past_2800_pushes_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "all", runnable, ["all"], push_num, is_regression
+            past_failures, "all", runnable, ("all",), push_num, is_regression
         )
 
         (
@@ -336,6 +341,6 @@ def generate_data(
             "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
             "touched_together_files": touched_together_files,
             "touched_together_directories": touched_together_directories,
-            "is_possible_regression": runnable in possible_regressions,
-            "is_likely_regression": runnable in likely_regressions,
+            "is_possible_regression": is_possible_regression,
+            "is_likely_regression": is_likely_regression,
         }

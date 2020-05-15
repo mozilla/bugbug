@@ -2,7 +2,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-import os
 
 from bugbug import repository
 
@@ -143,42 +142,52 @@ class arch(object):
         return archs.pop()
 
 
+def commonprefix(path1, path2):
+    for i, c in enumerate(path1):
+        if c != path2[i]:
+            return path1[:i]
+    return path1
+
+
 class path_distance(object):
     def __call__(self, test_job, commit, **kwargs):
-        distances = []
-        for path in commit["files"]:
-            movement = os.path.relpath(
-                os.path.dirname(test_job["name"]), os.path.dirname(path)
-            )
-            if movement == ".":
-                distances.append(0)
-            else:
-                distances.append(movement.count("/") + 1)
+        min_distance = None
 
-        return min(distances, default=None)
+        manifest = test_job["name"]
+
+        for path in commit["files"]:
+            i = len(commonprefix(manifest, path))
+            distance = manifest[i:].count("/") + path[i:].count("/")
+
+            if min_distance is None or min_distance > distance:
+                min_distance = distance
+
+        return min_distance
 
 
 class common_path_components(object):
     def __call__(self, test_job, commit, **kwargs):
         test_components = set(test_job["name"].split("/"))
-        common_components_numbers = [
+        common_components_numbers = (
             len(set(path.split("/")) & test_components) for path in commit["files"]
-        ]
+        )
         return max(common_components_numbers, default=None)
 
 
 class first_common_parent_distance(object):
     def __call__(self, test_job, commit, **kwargs):
-        distances = []
+        min_distance = None
+
         for path in commit["files"]:
             path_components = path.split("/")
 
             for i in range(len(path_components) - 1, 0, -1):
                 if test_job["name"].startswith("/".join(path_components[:i])):
-                    distances.append(i)
+                    if min_distance is None or min_distance > i:
+                        min_distance = i
                     break
 
-        return min(distances, default=None)
+        return min_distance
 
 
 class same_component(object):

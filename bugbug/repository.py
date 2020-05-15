@@ -18,7 +18,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Generator, Iterable, List, Optional
+from typing import Generator, Iterable, List, Optional, Tuple
 
 import hglib
 import lmdb
@@ -766,21 +766,24 @@ def calculate_experiences(commits, first_pushdate, save=True):
 
     def get_experience(exp_type, commit_type, item, day, default):
         key = get_key(exp_type, commit_type, item)
-        if key not in experiences:
-            experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
-        return experiences[key]
+        try:
+            return experiences[key]
+        except KeyError:
+            queue = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
+            experiences[key] = queue
+            return queue
 
     def update_experiences(experience_type, day, items):
-        for commit_type in ["", "backout"]:
-            exp_queues = [
+        for commit_type in ("", "backout"):
+            exp_queues = tuple(
                 get_experience(experience_type, commit_type, item, day, 0)
                 for item in items
-            ]
-            total_exps = [exp_queues[i][day] for i in range(len(items))]
-            timespan_exps = [
+            )
+            total_exps = tuple(exp_queues[i][day] for i in range(len(items)))
+            timespan_exps = tuple(
                 exp - exp_queues[i][day - EXPERIENCE_TIMESPAN]
                 for exp, i in zip(total_exps, range(len(items)))
-            ]
+            )
 
             total_exps_sum = sum(total_exps)
             timespan_exps_sum = sum(timespan_exps)
@@ -813,21 +816,21 @@ def calculate_experiences(commits, first_pushdate, save=True):
                     exp_queues[i][day] = total_exps[i] + 1
 
     def update_complex_experiences(experience_type, day, items):
-        for commit_type in ["", "backout"]:
-            exp_queues = [
+        for commit_type in ("", "backout"):
+            exp_queues = tuple(
                 get_experience(experience_type, commit_type, item, day, tuple())
                 for item in items
-            ]
-            all_commit_lists = [exp_queues[i][day] for i in range(len(items))]
-            before_commit_lists = [
+            )
+            all_commit_lists = tuple(exp_queues[i][day] for i in range(len(items)))
+            before_commit_lists = tuple(
                 exp_queues[i][day - EXPERIENCE_TIMESPAN] for i in range(len(items))
-            ]
-            timespan_commit_lists = [
+            )
+            timespan_commit_lists = tuple(
                 commit_list[len(before_commit_list) :]
                 for commit_list, before_commit_list in zip(
                     all_commit_lists, before_commit_lists
                 )
-            ]
+            )
 
             all_commits = set(sum(all_commit_lists, tuple()))
             timespan_commits = set(sum(timespan_commit_lists, tuple()))
@@ -892,7 +895,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
 
         # When a file is moved/copied, copy original experience values to the copied path.
         for orig, copied in commit.file_copies.items():
-            for commit_type in ["", "backout"]:
+            for commit_type in ("", "backout"):
                 orig_key = get_key("file", commit_type, orig)
                 if orig_key in experiences:
                     experiences[get_key("file", commit_type, copied)] = copy.deepcopy(
@@ -908,7 +911,7 @@ def calculate_experiences(commits, first_pushdate, save=True):
             and len(commit.backsout) == 0
             and commit.bug_id is not None
         ):
-            update_experiences("author", day, [commit.author])
+            update_experiences("author", day, (commit.author,))
             update_experiences("reviewer", day, commit.reviewers)
 
             update_complex_experiences("file", day, commit.files)
@@ -1001,7 +1004,7 @@ def download_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> List[dict]:
+) -> Tuple[dict, ...]:
     assert revs is not None or rev_start is not None
 
     with hglib.open(repo_dir) as hg:
@@ -1009,7 +1012,7 @@ def download_commits(
             revs = get_revs(hg, rev_start)
             if len(revs) == 0:
                 logger.info("No commits to analyze")
-                return []
+                return tuple()
 
         first_pushdate = get_first_pushdate(repo_dir)
 
@@ -1040,11 +1043,11 @@ def download_commits(
             ) as executor:
                 commits = executor.map(_transform, commits, chunksize=64)
                 commits = tqdm(commits, total=commits_num)
-                commits = list(commits)
+                commits = tuple(commits)
         else:
             get_component_mapping()
 
-            commits = [transform(hg, repo_dir, c) for c in commits]
+            commits = tuple(transform(hg, repo_dir, c) for c in commits)
 
             close_component_mapping()
 
@@ -1054,12 +1057,12 @@ def download_commits(
 
     logger.info("Applying final commits filtering...")
 
-    commits = [commit.to_dict() for commit in commits]
+    commits = tuple(commit.to_dict() for commit in commits)
 
     if save:
         db.append(COMMITS_DB, commits)
 
-    return list(
+    return tuple(
         filter_commits(
             commits,
             include_no_bug=include_no_bug,
