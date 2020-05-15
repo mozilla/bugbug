@@ -44,6 +44,13 @@ db.register(
     1,
 )
 
+PUSH_DATA_CONFIG_GROUP_DB = "data/push_data_config_group.json"
+db.register(
+    PUSH_DATA_CONFIG_GROUP_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_config_group.json.zst",
+    1,
+)
+
 HISTORICAL_TIMESPAN = 4500
 
 

@@ -58,6 +58,7 @@ MOZCI_VERSION = 2
 TRAINING_MONTHS = {
     "label": 7,
     "group": 7,
+    "config_group": 3,
 }
 
 
@@ -117,6 +118,8 @@ class Retriever(object):
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
         elif granularity == "group":
             push_data_db = test_scheduling.PUSH_DATA_GROUP_DB
+        elif granularity == "config_group":
+            push_data_db = test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
 
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
@@ -182,6 +185,8 @@ class Retriever(object):
                             runnables = push.task_labels
                         elif granularity == "group":
                             runnables = push.group_summaries.keys()
+                        elif granularity == "config_group":
+                            runnables = push.config_group_summaries.keys()
 
                         value = (
                             push.revs,
@@ -213,6 +218,7 @@ class Retriever(object):
     def retrieve_push_data(self) -> None:
         self.generate_push_data("label")
         self.generate_push_data("group")
+        self.generate_push_data("config_group")
 
     def generate_test_scheduling_history(self, granularity):
         # Get the commits DB.
