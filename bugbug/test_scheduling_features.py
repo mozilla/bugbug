@@ -151,12 +151,18 @@ def commonprefix(path1, path2):
 
 class path_distance(object):
     def __call__(self, test_job, commit, **kwargs):
-        distances = []
-        for path in commit["files"]:
-            i = len(commonprefix(test_job["name"], path))
-            distances.append(test_job["name"][i:].count("/") + path[i:].count("/"))
+        min_distance = None
 
-        return min(distances, default=None)
+        manifest = test_job["name"]
+
+        for path in commit["files"]:
+            i = len(commonprefix(manifest, path))
+            distance = manifest[i:].count("/") + path[i:].count("/")
+
+            if min_distance is None or min_distance > distance:
+                min_distance = distance
+
+        return min_distance
 
 
 class common_path_components(object):
@@ -170,16 +176,18 @@ class common_path_components(object):
 
 class first_common_parent_distance(object):
     def __call__(self, test_job, commit, **kwargs):
-        distances = []
+        min_distance = None
+
         for path in commit["files"]:
             path_components = path.split("/")
 
             for i in range(len(path_components) - 1, 0, -1):
                 if test_job["name"].startswith("/".join(path_components[:i])):
-                    distances.append(i)
+                    if min_distance is None or min_distance > i:
+                        min_distance = i
                     break
 
-        return min(distances, default=None)
+        return min_distance
 
 
 class same_component(object):
