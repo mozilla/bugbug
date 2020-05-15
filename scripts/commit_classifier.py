@@ -315,6 +315,8 @@ class CommitClassifier(object):
                 revision["fields"]["title"], revision["fields"]["summary"]
             )
 
+            latest_rev = get_revs(hg, f"-{len(stack)}")
+
             author_name = None
             author_email = None
 
@@ -355,38 +357,13 @@ class CommitClassifier(object):
             )
 
             if self.git_repo_dir:
-                # see local commits
-                cmd = "hg out"
-                res = subprocess.check_output(cmd,shell=True)
-                start = res.find('changeset: ')
-                res = res[start:]
-                res = res.replace(" ","")
-                res = res.replace("\n",",")
-
-                # Finding 2nd occurrence of ':' 
-                substr = ":"
-                occurrence = 2
-                inilist = [i for i in range(0, len(ini_str)) \
-                    if ini_str[i:].startswith(substr)] 
-                start = inilist[occurrence - 1] + 1
                 
-                # Finding 1st occurrence of ',' 
-                substr = ","
-                occurrence = 1
-                inilist = [i for i in range(0, len(ini_str)) 
-                            if ini_str[i:].startswith(substr)] 
-                end = inilist[occurrence - 1]
-
-                # hash of the local commit
-                local_commit_hash = res[start:end]
-
-                patch_proc = subprocess.Popen(
-                    ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
+                cmd = ["git", "cinnabar", "fetch", "hg::",repo_dir,latest_rev]
+                proc = subprocess.Popen(
+                    cmd,
+                    shell=True, 
                     stdin=subprocess.PIPE,
-                    cwd=self.git_repo_dir,
-                )
-                patch_proc.communicate(patch.patch.encode("utf-8"))
-                assert patch_proc.returncode == 0, "Failed to apply patch"
+                    cwd=self.git_repo_dir)  
 
                 subprocess.run(
                     [
