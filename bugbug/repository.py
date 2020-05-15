@@ -766,9 +766,12 @@ def calculate_experiences(commits, first_pushdate, save=True):
 
     def get_experience(exp_type, commit_type, item, day, default):
         key = get_key(exp_type, commit_type, item)
-        if key not in experiences:
-            experiences[key] = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
-        return experiences[key]
+        try:
+            return experiences[key]
+        except KeyError:
+            queue = utils.ExpQueue(day, EXPERIENCE_TIMESPAN + 1, default)
+            experiences[key] = queue
+            return queue
 
     def update_experiences(experience_type, day, items):
         for commit_type in ("", "backout"):
