@@ -14,7 +14,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Generator, List, NewType, Tuple
+from typing import Any, Dict, Generator, List, NewType, Tuple
 
 import adr
 import dateutil.parser
@@ -77,8 +77,16 @@ def filter_runnables(runnables, all_runnables, granularity):
 
 
 # Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
-def rename_tasks(tasks):
-    return [task.replace("test-linux64-", "test-linux1804-64-") for task in tasks]
+def rename_tasks(granularity: str, tasks: List[TaskName]) -> List[TaskName]:
+    if granularity == "label":
+        return [
+            TaskName(task.replace("test-linux64-", "test-linux1804-64-"))
+            for task in tasks
+        ]
+    elif granularity == "group":
+        return [TaskName(task.split(":")[0]) for task in tasks]
+    else:
+        raise Exception(f"Unexpected {granularity} granularity")
 
 
 class Retriever(object):
@@ -333,7 +341,7 @@ class Retriever(object):
 
             test_scheduling.close_failing_together_db()
 
-        def generate_all_data():
+        def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
@@ -355,16 +363,15 @@ class Retriever(object):
 
             logger.info(f"push data nodes: {len(push_data)}")
 
-            if granularity == "label":
-                push_data = [
-                    (
-                        revisions,
-                        rename_tasks(push_tasks),
-                        rename_tasks(possible_regressions),
-                        rename_tasks(likely_regressions),
-                    )
-                    for revisions, push_tasks, possible_regressions, likely_regressions in push_data
-                ]
+            push_data = [
+                (
+                    revisions,
+                    rename_tasks(granularity, push_tasks),
+                    rename_tasks(granularity, possible_regressions),
+                    rename_tasks(granularity, likely_regressions),
+                )
+                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+            ]
 
             # In the last 14 pushes, we definitely run all possible runnables.
             all_runnables_set = set(
