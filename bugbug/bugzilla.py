@@ -102,6 +102,14 @@ def get(bug_ids):
     :return: dict with key as `id`(int) of a bug,  and values as bug_information
     :rtype: dict
     """
+
+    def filter_keys(array_of_dict_values, required_fields):
+        for a_value in array_of_dict_values:
+            to_be_deleted_fields = set(a_value.keys()).difference(set(required_fields))
+            for extra_field in to_be_deleted_fields:
+                del a_value[extra_field]
+        return array_of_dict_values
+
     new_bugs = {}
 
     if isinstance(bug_ids, list):
@@ -141,22 +149,18 @@ def get(bug_ids):
 
         # Delete other fields from comments
         current_comments_array = a_bug_info["comments"]
-        for a_comment in current_comments_array:
-            to_be_deleted_comment_fields = set(a_comment.keys()).difference(
-                set(COMMENT_INCLUDE_FIELDS)
-            )
-            for extra_field in to_be_deleted_comment_fields:
-                del a_comment[extra_field]
+        current_comments_array = filter_keys(
+            array_of_dict_values=current_comments_array,
+            required_fields=COMMENT_INCLUDE_FIELDS,
+        )
         a_bug_info["comments"] = current_comments_array
 
         # Delete other fields from attachments
         current_attachments_array = a_bug_info["attachments"]
-        for a_attachment in current_attachments_array:
-            to_be_deleted_attachment_fields = set(a_attachment.keys()).difference(
-                set(ATTACHMENT_INCLUDE_FIELDS)
-            )
-            for extra_field in to_be_deleted_attachment_fields:
-                del a_attachment[extra_field]
+        current_attachments_array = filter_keys(
+            array_of_dict_values=current_attachments_array,
+            required_fields=ATTACHMENT_INCLUDE_FIELDS,
+        )
         a_bug_info["attachments"] = current_attachments_array
 
         # Since bug_id won't have duplicates in bug_ids_list, the check for existence of bug_id in `new_bugs` is skipped
