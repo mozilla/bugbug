@@ -6,6 +6,7 @@
 import csv
 from datetime import datetime
 
+import six
 import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
@@ -128,15 +129,63 @@ def get(ids_or_query):
 
         new_bugs[bug_id]["history"] = bug["history"]
 
-    Bugzilla(
-        ids_or_query,
-        bughandler=bughandler,
-        commenthandler=commenthandler,
-        comment_include_fields=COMMENT_INCLUDE_FIELDS,
-        attachmenthandler=attachmenthandler,
-        attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
-        historyhandler=historyhandler,
-    ).get_data().wait()
+    if isinstance(ids_or_query, int):
+        ids_or_query = str(ids_or_query)
+
+    if isinstance(ids_or_query, six.string_types):
+        params_for_custom_fields = {
+            "id": ids_or_query,
+            "include_fields": "_default,history,comments,attachments",
+        }
+
+        r = utils.get_session("bugzilla").get(
+            "https://bugzilla.mozilla.org/rest/bug", params=params_for_custom_fields
+        )
+        r.raise_for_status()
+
+        bug_info_array = r.json()
+        bug_info_array = bug_info_array["bugs"]
+
+        # Realignment of results
+
+        new_bugs = {}
+
+        for a_bug in bug_info_array:
+            bug_id = int(a_bug["id"])
+
+            # Delete other fields from comments
+            current_comments_array = a_bug["comments"]
+            for a_comment in current_comments_array:
+                to_be_deleted_comment_fields = set(a_comment.keys()).difference(
+                    set(COMMENT_INCLUDE_FIELDS)
+                )
+                for extra_field in to_be_deleted_comment_fields:
+                    del a_comment[extra_field]
+            a_bug["comments"] = current_comments_array
+
+            # Delete other fields from attachments
+            current_attachments_array = a_bug["attachments"]
+            for a_attachment in current_attachments_array:
+                to_be_deleted_attachment_fields = set(a_attachment.keys()).difference(
+                    set(ATTACHMENT_INCLUDE_FIELDS)
+                )
+                for extra_field in to_be_deleted_attachment_fields:
+                    del a_attachment[extra_field]
+            a_bug["attachments"] = current_attachments_array
+
+            new_bugs[bug_id] = dict()
+            new_bugs[bug_id] = a_bug
+
+    else:
+        Bugzilla(
+            ids_or_query,
+            bughandler=bughandler,
+            commenthandler=commenthandler,
+            comment_include_fields=COMMENT_INCLUDE_FIELDS,
+            attachmenthandler=attachmenthandler,
+            attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
+            historyhandler=historyhandler,
+        ).get_data().wait()
 
     return new_bugs
 
