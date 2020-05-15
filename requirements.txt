@@ -17,7 +17,7 @@ python-dateutil==2.8.1
 python-hglib==2.6.1
 requests==2.23.0
 rs_parsepatch==0.3.2
-scikit-learn==0.22.2
+scikit-learn==0.23.0
 scipy==1.4.1
 shap[plots]==0.35.0
 tabulate==0.8.7
