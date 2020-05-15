@@ -124,10 +124,10 @@ def get_touched_together(f1, f2):
 
     key = get_touched_together_key(f1, f2)
 
-    if key not in touched_together:
+    try:
+        return struct.unpack("I", touched_together[key])[0]
+    except KeyError:
         return 0
-
-    return struct.unpack("I", touched_together[key])[0]
 
 
 def set_touched_together(f1, f2):
