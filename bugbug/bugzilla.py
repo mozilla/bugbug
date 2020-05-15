@@ -106,7 +106,7 @@ def get(bug_ids):
 
     if isinstance(bug_ids, list):
         # Expected Format
-        bug_ids_list = list(map(int, bug_ids))
+        bug_ids_list = list(set(map(int, bug_ids)))
 
     elif isinstance(bug_ids, six.string_types):
         bug_ids_list = [int(bug_ids)]
