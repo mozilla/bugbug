@@ -161,9 +161,9 @@ class path_distance(object):
 class common_path_components(object):
     def __call__(self, test_job, commit, **kwargs):
         test_components = set(test_job["name"].split("/"))
-        common_components_numbers = [
+        common_components_numbers = (
             len(set(path.split("/")) & test_components) for path in commit["files"]
-        ]
+        )
         return max(common_components_numbers, default=None)
 
 
