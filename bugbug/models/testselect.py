@@ -206,7 +206,7 @@ class TestSelectModel(Model):
         all_runnables = past_failures_data["all_runnables"]
 
         if self.granularity == "label":
-            all_runnables = tuple(r for r in all_runnables if not r.startswith("test-"))
+            all_runnables = tuple(r for r in all_runnables if r.startswith("test-"))
 
         commit_tests = []
         for data in test_scheduling.generate_data(
