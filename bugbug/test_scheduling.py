@@ -253,9 +253,10 @@ def generate_data(
             for source_file in commit["files"]
         )
 
-        is_regression = (
-            runnable in possible_regressions or runnable in likely_regressions
-        )
+        is_possible_regression = runnable in possible_regressions
+        is_likely_regression = runnable in likely_regressions
+
+        is_regression = is_possible_regression or is_likely_regression
 
         (
             total_failures,
@@ -336,6 +337,6 @@ def generate_data(
             "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
             "touched_together_files": touched_together_files,
             "touched_together_directories": touched_together_directories,
-            "is_possible_regression": runnable in possible_regressions,
-            "is_likely_regression": runnable in likely_regressions,
+            "is_possible_regression": is_possible_regression,
+            "is_likely_regression": is_likely_regression,
         }
