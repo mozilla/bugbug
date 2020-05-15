@@ -263,7 +263,7 @@ def generate_data(
             past_1400_pushes_failures,
             past_2800_pushes_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "all", runnable, ["all"], push_num, is_regression
+            past_failures, "all", runnable, ("all",), push_num, is_regression
         )
 
         (
