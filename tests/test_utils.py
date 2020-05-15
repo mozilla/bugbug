@@ -244,7 +244,7 @@ def test_get_last_modified_missing():
 
 
 def test_extract_db_zst(tmp_path, mock_zst):
-    path = tmp_path / f"prova.zst"
+    path = tmp_path / "prova.zst"
 
     mock_zst(path)
 

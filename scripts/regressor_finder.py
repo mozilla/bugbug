@@ -80,7 +80,7 @@ class RegressorFinder(object):
                     self.tokenized_git_repo_dir,
                 )
 
-        logger.info(f"Initializing mapping between git and mercurial commits...")
+        logger.info("Initializing mapping between git and mercurial commits...")
         self.init_mapping()
 
     def clone_git_repo(self, repo_url, repo_dir):
@@ -367,7 +367,7 @@ class RegressorFinder(object):
         def find_bic(bug_fixing_commit):
             logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
-            git_fix_revision = next(mercurial_to_git([bug_fixing_commit["rev"]]))
+            git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
 
             commit = thread_local.git.get_commit(git_fix_revision)
 
@@ -420,9 +420,9 @@ class RegressorFinder(object):
                         bug_introducing_commits.append(
                             {
                                 "bug_fixing_rev": bug_fixing_commit["rev"],
-                                "bug_introducing_rev": next(
+                                "bug_introducing_rev": tuple(
                                     git_to_mercurial([bug_introducing_hash])
-                                ),
+                                )[0],
                             }
                         )
                     except Exception as e:

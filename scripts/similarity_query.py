@@ -43,7 +43,7 @@ def main(args):
                 download_check_etag(URL.format(model_file_name))
             except requests.HTTPError:
                 logger.error(
-                    f"A pre-trained model is not available, you will need to train it yourself using the trainer script"
+                    "A pre-trained model is not available, you will need to train it yourself using the trainer script"
                 )
                 raise SystemExit(1)
 

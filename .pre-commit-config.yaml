@@ -1,6 +1,6 @@
 repos:
 -   repo: https://github.com/asottile/seed-isort-config
-    rev: v2.1.0
+    rev: v2.1.1
     hooks:
     -   id: seed-isort-config
 -   repo: https://github.com/timothycrosley/isort
@@ -33,13 +33,14 @@ repos:
     -   id: check-json
         exclude: ^tests/fixtures/
     -   id: requirements-txt-fixer
+    -   id: check-vcs-permalinks
 -   repo: https://github.com/codespell-project/codespell
     rev: v1.16.0
     hooks:
     -   id: codespell
         exclude_types: [json]
 -   repo: https://github.com/marco-c/taskcluster_yml_validator
-    rev: v0.0.4
+    rev: v0.0.5
     hooks:
     -   id: taskcluster_yml
 -   repo: https://github.com/asottile/yesqa

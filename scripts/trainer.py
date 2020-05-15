@@ -65,13 +65,13 @@ class Trainer(object):
         with open(metric_file_path, "w") as metric_file:
             json.dump(metrics, metric_file, cls=CustomJsonEncoder)
 
-        logger.info(f"Training done")
+        logger.info("Training done")
 
         model_file_name = f"{model_name}model"
         assert os.path.exists(model_file_name)
         zstd_compress(model_file_name)
 
-        logger.info(f"Model compressed")
+        logger.info("Model compressed")
 
         if model_obj.store_dataset:
             assert os.path.exists(f"{model_file_name}_data_X")

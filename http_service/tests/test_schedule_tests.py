@@ -49,7 +49,7 @@ def test_simple_schedule(
     with hglib.open(str(repo_dir)) as hg:
         logs = hg.log()
         assert len(logs) == 4
-        assert [l.desc.decode("utf-8") for l in logs] == [
+        assert [log.desc.decode("utf-8") for log in logs] == [
             "Base history 3",
             "Base history 2",
             "Base history 1",
@@ -66,7 +66,7 @@ def test_simple_schedule(
     # Check changes have been applied
     with hglib.open(str(repo_dir)) as hg:
         assert len(hg.log()) == 5
-        assert [l.desc.decode("utf-8") for l in hg.log()] == [
+        assert [log.desc.decode("utf-8") for log in hg.log()] == [
             "Pulled from remote",
             "Base history 3",
             "Base history 2",

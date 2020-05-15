@@ -10,10 +10,11 @@ import itertools
 import math
 import os
 import struct
+import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Dict, Generator, List, NewType, Tuple
+from typing import Generator, List, NewType, Tuple
 
 import adr
 import dateutil.parser
@@ -26,7 +27,9 @@ from bugbug.utils import create_tar_zst, zstd_compress
 
 Revision = NewType("Revision", str)
 TaskName = NewType("TaskName", str)
-PushResult = Tuple[List[Revision], List[TaskName], List[TaskName], List[TaskName]]
+PushResult = Tuple[
+    List[Revision], Tuple[TaskName, ...], Tuple[TaskName, ...], Tuple[TaskName, ...]
+]
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -107,61 +110,64 @@ class Retriever(object):
         elif granularity == "group":
             push_data_db = test_scheduling.PUSH_DATA_GROUP_DB
 
-        cache: Dict[mozci.push.Push, Tuple[PushResult, int]] = {}
-
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_push = {
-                executor.submit(
-                    lambda push: adr.config.cache.get(cache_key(push)), push
-                ): push
-                for push in pushes
-            }
+        def generate(executor) -> Generator[PushResult, None, None]:
+            num_cached = 0
+            num_pushes = len(pushes)
 
-            for future in tqdm(
-                concurrent.futures.as_completed(future_to_push),
-                total=len(future_to_push),
-            ):
-                push = future_to_push[future]
+            # Regenerating a large amount of data when we update the mozci regression detection
+            # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+            # run.
+            to_regenerate = 1000
+
+            semaphore = threading.BoundedSemaphore(256)
+
+            def retrieve_from_cache(push):
+                semaphore.acquire()
+                return adr.config.cache.get(cache_key(push))
+
+            futures = tuple(
+                executor.submit(retrieve_from_cache, push) for push in pushes
+            )
+
+            for future in tqdm(futures):
+                push = pushes.pop(0)
 
                 exc = future.exception()
                 if exc is not None:
                     logger.info(f"Exception {exc} while getting {push.rev}")
-                    for f in future_to_push.keys():
+                    for f in futures:
                         f.cancel()
 
-                cache[push] = future.result()
+                cached = future.result()
 
-        # Regenerating a large amount of data when we update the mozci regression detection
-        # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
-        # run.
-        """to_regenerate = 0
-        for push in pushes[::-1]:
-            cached = cache[push]
-            if not cached:
-                continue
+                semaphore.release()
 
-            value, mozci_version = cached
-            if mozci_version != MOZCI_VERSION and to_regenerate < 1000:
-                cache[push] = None
-                to_regenerate += 1"""
+                if cached and to_regenerate > 0:
+                    value, mozci_version = cached
 
-        def generate() -> Generator[PushResult, None, None]:
-            num_cached = 0
+                    # Regenerate results which were generated when we were not cleaning
+                    # up WPT groups.
+                    if any(runnable.startswith("/") for runnable in value[1]):
+                        cached = None
+                        to_regenerate -= 1
 
-            for push in tqdm(pushes):
-                key = cache_key(push)
+                    """# Regenerate results which were generated with an older version of mozci.
+                    elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
+                        cached = None
+                        to_regenerate -= 1"""
 
-                if cache[push] is not None:
+                if cached is not None:
                     num_cached += 1
-                    cached = cache[push]
                     if cached:
                         value, mozci_version = cached
                         yield value
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
+
+                    key = cache_key(push)
 
                     try:
                         if granularity == "label":
@@ -171,9 +177,9 @@ class Retriever(object):
 
                         value = (
                             push.revs,
-                            list(runnables),
-                            list(push.get_possible_regressions(granularity)),
-                            list(push.get_likely_regressions(granularity)),
+                            tuple(runnables),
+                            tuple(push.get_possible_regressions(granularity)),
+                            tuple(push.get_likely_regressions(granularity)),
                         )
                         adr.config.cache.put(
                             key,
@@ -190,9 +196,10 @@ class Retriever(object):
                         traceback.print_exc()
                         adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
-            logger.info(f"{num_cached} pushes were already cached out of {len(pushes)}")
+            logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
-        db.write(push_data_db, generate())
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            db.write(push_data_db, generate(executor))
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
