@@ -315,7 +315,7 @@ class CommitClassifier(object):
                 revision["fields"]["title"], revision["fields"]["summary"]
             )
 
-            latest_rev = get_revs(hg, f"-{len(stack)}")
+            latest_rev = repository.get_revs(hg, f"-{len(stack)}")
 
             author_name = None
             author_email = None
