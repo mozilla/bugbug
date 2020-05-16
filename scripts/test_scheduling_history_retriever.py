@@ -58,7 +58,18 @@ MOZCI_VERSION = 2
 TRAINING_MONTHS = {
     "label": 7,
     "group": 7,
+    "config_group": 3,
 }
+
+
+def get_from_date(granularity: str) -> datetime:
+    # We'll use the past TRAINING_MONTHS months only for training the model,
+    # but we use half TRAINING_MONTHS months more than that to calculate the
+    # failure statistics.
+    from_months = TRAINING_MONTHS[granularity] + math.floor(
+        TRAINING_MONTHS[granularity] / 2
+    )
+    return datetime.utcnow() - relativedelta(months=from_months)
 
 
 def filter_runnables(runnables, all_runnables, granularity):
@@ -90,33 +101,25 @@ def rename_tasks(granularity: str, tasks: List[TaskName]) -> List[TaskName]:
 
 
 class Retriever(object):
-    def generate_push_data(self, granularity: str) -> None:
+    def generate_push_data(
+        self, pushes: List[mozci.push.Push], granularity: str
+    ) -> None:
         # We keep in the cache the fact that we failed to analyze a push for 10
         # days, so if we re-run often we don't retry the same pushes many times.
         MISSING_CACHE_RETENTION = 10 * 24 * 60
 
-        # We'll use the past TRAINING_MONTHS months only for training the model,
-        # but we use half TRAINING_MONTHS months more than that to calculate the
-        # failure statistics.
-        from_months = TRAINING_MONTHS[granularity] + math.floor(
-            TRAINING_MONTHS[granularity] / 2
-        )
+        from_date = get_from_date(granularity)
 
-        # We use the actual date instead of 'today-X' aliases to avoid adr caching
-        # this query.
-        from_date = datetime.utcnow() - relativedelta(months=from_months)
-        to_date = datetime.utcnow() - relativedelta(days=3)
-
-        pushes = mozci.push.make_push_objects(
-            from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=to_date.strftime("%Y-%m-%d"),
-            branch="autoland",
-        )
+        pushes = [
+            push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
+        ]
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
         elif granularity == "group":
             push_data_db = test_scheduling.PUSH_DATA_GROUP_DB
+        elif granularity == "config_group":
+            push_data_db = test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
 
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
@@ -140,9 +143,7 @@ class Retriever(object):
                 executor.submit(retrieve_from_cache, push) for push in pushes
             )
 
-            for future in tqdm(futures):
-                push = pushes.pop(0)
-
+            for push, future in zip(tqdm(pushes), futures):
                 exc = future.exception()
                 if exc is not None:
                     logger.info(f"Exception {exc} while getting {push.rev}")
@@ -182,6 +183,8 @@ class Retriever(object):
                             runnables = push.task_labels
                         elif granularity == "group":
                             runnables = push.group_summaries.keys()
+                        elif granularity == "config_group":
+                            runnables = push.config_group_summaries.keys()
 
                         value = (
                             push.revs,
@@ -211,8 +214,21 @@ class Retriever(object):
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
-        self.generate_push_data("label")
-        self.generate_push_data("group")
+        from_date = get_from_date(max(TRAINING_MONTHS, key=TRAINING_MONTHS.get))
+
+        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # this query.
+        to_date = datetime.utcnow() - relativedelta(days=3)
+
+        pushes = mozci.push.make_push_objects(
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
+            branch="autoland",
+        )
+
+        self.generate_push_data(pushes, "label")
+        self.generate_push_data(pushes, "group")
+        self.generate_push_data(pushes, "config_group")
 
     def generate_test_scheduling_history(self, granularity):
         # Get the commits DB.
@@ -242,12 +258,6 @@ class Retriever(object):
             )
 
         assert db.download(push_data_db)
-
-        db.download(test_scheduling_db, support_files_too=True)
-
-        last_node = None
-        for revs, _ in test_scheduling.get_test_scheduling_history(granularity):
-            last_node = revs[0]
 
         def generate_failing_together_probabilities(push_data):
             # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
@@ -346,17 +356,8 @@ class Retriever(object):
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
-            # We can start once we get to the last revision we added in the previous run.
-            can_start = True if last_node is None else False
-
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
-                if not can_start:
-                    if last_node == commit_data["node"]:
-                        can_start = True
-
-                    continue
-
                 commit_map[commit_data["node"]] = commit_data
 
             push_data = list(db.read(push_data_db))
@@ -375,7 +376,7 @@ class Retriever(object):
 
             # In the last 14 pushes, we definitely run all possible runnables.
             all_runnables_set = set(
-                sum((push_runnables for _, push_runnables, _, _ in push_data[-14:]), [])
+                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
             )
             # Filter runnables we don't need.
             all_runnables = filter_runnables(
@@ -411,9 +412,6 @@ class Retriever(object):
             skipped_too_big_commits = 0
             skipped_no_runnables = 0
 
-            # We can start once we get to the last revision we added in the previous run.
-            can_start = True if last_node is None else False
-
             if granularity == "group":
                 update_touched_together_gen = test_scheduling.update_touched_together()
                 next(update_touched_together_gen)
@@ -425,12 +423,6 @@ class Retriever(object):
                     possible_regressions,
                     likely_regressions,
                 ) = push_data.pop(0)
-
-                if not can_start:
-                    if last_node == revisions[0]:
-                        can_start = True
-
-                    continue
 
                 push_num += 1
 
