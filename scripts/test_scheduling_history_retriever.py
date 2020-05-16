@@ -391,7 +391,7 @@ class Retriever(object):
 
             # In the last 14 pushes, we definitely run all possible runnables.
             all_runnables_set = set(
-                sum((push_runnables for _, push_runnables, _, _ in push_data[-14:]), [])
+                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
             )
             # Filter runnables we don't need.
             all_runnables = filter_runnables(
