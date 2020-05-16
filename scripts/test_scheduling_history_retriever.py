@@ -259,12 +259,6 @@ class Retriever(object):
 
         assert db.download(push_data_db)
 
-        db.download(test_scheduling_db, support_files_too=True)
-
-        last_node = None
-        for revs, _ in test_scheduling.get_test_scheduling_history(granularity):
-            last_node = revs[0]
-
         def generate_failing_together_probabilities(push_data):
             # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
             # `task2 failure -> task1 failure` separately, as they could be different.
@@ -362,17 +356,8 @@ class Retriever(object):
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
-            # We can start once we get to the last revision we added in the previous run.
-            can_start = True if last_node is None else False
-
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
-                if not can_start:
-                    if last_node == commit_data["node"]:
-                        can_start = True
-
-                    continue
-
                 commit_map[commit_data["node"]] = commit_data
 
             push_data = list(db.read(push_data_db))
@@ -427,9 +412,6 @@ class Retriever(object):
             skipped_too_big_commits = 0
             skipped_no_runnables = 0
 
-            # We can start once we get to the last revision we added in the previous run.
-            can_start = True if last_node is None else False
-
             if granularity == "group":
                 update_touched_together_gen = test_scheduling.update_touched_together()
                 next(update_touched_together_gen)
@@ -441,12 +423,6 @@ class Retriever(object):
                     possible_regressions,
                     likely_regressions,
                 ) = push_data.pop(0)
-
-                if not can_start:
-                    if last_node == revisions[0]:
-                        can_start = True
-
-                    continue
 
                 push_num += 1
 
