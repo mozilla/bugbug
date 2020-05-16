@@ -357,13 +357,10 @@ class CommitClassifier(object):
             )
 
             if self.git_repo_dir:
-                
-                cmd = ["git", "cinnabar", "fetch", "hg::",repo_dir,latest_rev]
+                cmd = ["git", "cinnabar", "fetch", "hg::", repo_dir, latest_rev]
                 proc = subprocess.Popen(
-                    cmd,
-                    shell=True, 
-                    stdin=subprocess.PIPE,
-                    cwd=self.git_repo_dir)  
+                    cmd, shell=True, stdin=subprocess.PIPE, cwd=self.git_repo_dir
+                )  
 
                 subprocess.run(
                     [
