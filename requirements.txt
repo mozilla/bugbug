@@ -1,7 +1,7 @@
 adr==0.18.7
 boto3==1.13.11
 imbalanced-learn==0.6.2
-joblib==0.15.0
+joblib==0.15.1
 libmozdata==0.1.68
 lmdb==0.98
 matplotlib==3.2.1
