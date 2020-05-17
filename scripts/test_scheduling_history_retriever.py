@@ -104,10 +104,6 @@ class Retriever(object):
     def generate_push_data(
         self, pushes: List[mozci.push.Push], granularity: str
     ) -> None:
-        # We keep in the cache the fact that we failed to analyze a push for 10
-        # days, so if we re-run often we don't retry the same pushes many times.
-        MISSING_CACHE_RETENTION = 10 * 24 * 60
-
         from_date = get_from_date(granularity)
 
         pushes = [
@@ -168,11 +164,10 @@ class Retriever(object):
                         cached = None
                         to_regenerate -= 1"""
 
-                if cached is not None:
+                if cached:
                     num_cached += 1
-                    if cached:
-                        value, mozci_version = cached
-                        yield value
+                    value, mozci_version = cached
+                    yield value
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
 
@@ -202,10 +197,8 @@ class Retriever(object):
                         logger.warning(
                             f"Tasks for push {push.rev} can't be found on ActiveData"
                         )
-                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
                     except Exception:
                         traceback.print_exc()
-                        adr.config.cache.put(key, (), MISSING_CACHE_RETENTION)
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
