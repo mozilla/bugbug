@@ -307,7 +307,7 @@ class Retriever(object):
 
         test_scheduling.close_failing_together_db()
 
-    def generate_test_scheduling_history(self, granularity):
+    def generate_test_scheduling_history(self, granularity: str) -> None:
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
 
