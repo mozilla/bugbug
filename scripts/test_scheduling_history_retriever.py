@@ -213,13 +213,15 @@ class Retriever(object):
         self.generate_push_data("group")
         self.generate_push_data("config_group")
 
-    def generate_failing_together_probabilities(self, push_data):
+    def generate_failing_together_probabilities(
+        self, push_data: List[PushResult]
+    ) -> None:
         # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
         # `task2 failure -> task1 failure` separately, as they could be different.
 
-        count_runs = collections.Counter()
-        count_single_failures = collections.Counter()
-        count_both_failures = collections.Counter()
+        count_runs: collections.Counter = collections.Counter()
+        count_single_failures: collections.Counter = collections.Counter()
+        count_both_failures: collections.Counter = collections.Counter()
 
         for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
             push_data
@@ -282,7 +284,7 @@ class Retriever(object):
             )
 
         failing_together = test_scheduling.get_failing_together_db()
-        count_redundancies = collections.Counter()
+        count_redundancies: collections.Counter = collections.Counter()
         for couple, (support, confidence) in stats.items():
             if confidence == 1.0:
                 count_redundancies["==100%"] += 1
