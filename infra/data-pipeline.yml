@@ -251,7 +251,7 @@ tasks:
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - test-scheduling-history-push_data-retrieval
