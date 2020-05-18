@@ -213,6 +213,98 @@ class Retriever(object):
         self.generate_push_data("group")
         self.generate_push_data("config_group")
 
+    def generate_failing_together_probabilities(self, push_data):
+        # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
+        # `task2 failure -> task1 failure` separately, as they could be different.
+
+        count_runs = collections.Counter()
+        count_single_failures = collections.Counter()
+        count_both_failures = collections.Counter()
+
+        for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
+            push_data
+        ):
+            failures = set(likely_regressions + candidate_regressions)
+            all_tasks = list(set(tasks) | failures)
+
+            for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
+                count_runs[(task1, task2)] += 1
+
+                if task1 in failures:
+                    if task2 in failures:
+                        count_both_failures[(task1, task2)] += 1
+                    else:
+                        count_single_failures[(task1, task2)] += 1
+                elif task2 in failures:
+                    count_single_failures[(task1, task2)] += 1
+
+        stats = {}
+
+        skipped = 0
+
+        for couple, run_count in count_runs.most_common():
+            failure_count = count_both_failures[couple]
+            support = failure_count / run_count
+
+            if support < 1 / 700:
+                skipped += 1
+                continue
+
+            if failure_count != 0:
+                confidence = failure_count / (
+                    count_single_failures[couple] + failure_count
+                )
+            else:
+                confidence = 0.0
+
+            stats[couple] = (support, confidence)
+
+        logger.info(f"{skipped} couples skipped because their support was too low")
+
+        logger.info("Redundancies with the highest support and confidence:")
+        for couple, (support, confidence) in sorted(
+            stats.items(), key=lambda k: (-k[1][1], -k[1][0])
+        )[:7]:
+            failure_count = count_both_failures[couple]
+            run_count = count_runs[couple]
+            logger.info(
+                f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+            )
+
+        logger.info("Redundancies with the highest confidence and lowest support:")
+        for couple, (support, confidence) in sorted(
+            stats.items(), key=lambda k: (-k[1][1], k[1][0])
+        )[:7]:
+            failure_count = count_both_failures[couple]
+            run_count = count_runs[couple]
+            logger.info(
+                f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+            )
+
+        failing_together = test_scheduling.get_failing_together_db()
+        count_redundancies = collections.Counter()
+        for couple, (support, confidence) in stats.items():
+            if confidence == 1.0:
+                count_redundancies["==100%"] += 1
+            if confidence > 0.9:
+                count_redundancies[">=90%"] += 1
+            if confidence > 0.8:
+                count_redundancies[">=80%"] += 1
+            if confidence > 0.7:
+                count_redundancies[">=70%"] += 1
+
+            if confidence < 0.7:
+                continue
+
+            failing_together[f"{couple[0]}${couple[1]}".encode("utf-8")] = struct.pack(
+                "ff", support, confidence
+            )
+
+        for percentage, count in count_redundancies.most_common():
+            logger.info(f"{count} with {percentage} confidence")
+
+        test_scheduling.close_failing_together_db()
+
     def generate_test_scheduling_history(self, granularity):
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
@@ -241,98 +333,6 @@ class Retriever(object):
             )
 
         assert db.download(push_data_db)
-
-        def generate_failing_together_probabilities(push_data):
-            # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
-            # `task2 failure -> task1 failure` separately, as they could be different.
-
-            count_runs = collections.Counter()
-            count_single_failures = collections.Counter()
-            count_both_failures = collections.Counter()
-
-            for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
-                push_data
-            ):
-                failures = set(likely_regressions + candidate_regressions)
-                all_tasks = list(set(tasks) | failures)
-
-                for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
-                    count_runs[(task1, task2)] += 1
-
-                    if task1 in failures:
-                        if task2 in failures:
-                            count_both_failures[(task1, task2)] += 1
-                        else:
-                            count_single_failures[(task1, task2)] += 1
-                    elif task2 in failures:
-                        count_single_failures[(task1, task2)] += 1
-
-            stats = {}
-
-            skipped = 0
-
-            for couple, run_count in count_runs.most_common():
-                failure_count = count_both_failures[couple]
-                support = failure_count / run_count
-
-                if support < 1 / 700:
-                    skipped += 1
-                    continue
-
-                if failure_count != 0:
-                    confidence = failure_count / (
-                        count_single_failures[couple] + failure_count
-                    )
-                else:
-                    confidence = 0.0
-
-                stats[couple] = (support, confidence)
-
-            logger.info(f"{skipped} couples skipped because their support was too low")
-
-            logger.info("Redundancies with the highest support and confidence:")
-            for couple, (support, confidence) in sorted(
-                stats.items(), key=lambda k: (-k[1][1], -k[1][0])
-            )[:7]:
-                failure_count = count_both_failures[couple]
-                run_count = count_runs[couple]
-                logger.info(
-                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
-                )
-
-            logger.info("Redundancies with the highest confidence and lowest support:")
-            for couple, (support, confidence) in sorted(
-                stats.items(), key=lambda k: (-k[1][1], k[1][0])
-            )[:7]:
-                failure_count = count_both_failures[couple]
-                run_count = count_runs[couple]
-                logger.info(
-                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
-                )
-
-            failing_together = test_scheduling.get_failing_together_db()
-            count_redundancies = collections.Counter()
-            for couple, (support, confidence) in stats.items():
-                if confidence == 1.0:
-                    count_redundancies["==100%"] += 1
-                if confidence > 0.9:
-                    count_redundancies[">=90%"] += 1
-                if confidence > 0.8:
-                    count_redundancies[">=80%"] += 1
-                if confidence > 0.7:
-                    count_redundancies[">=70%"] += 1
-
-                if confidence < 0.7:
-                    continue
-
-                failing_together[
-                    f"{couple[0]}${couple[1]}".encode("utf-8")
-                ] = struct.pack("ff", support, confidence)
-
-            for percentage, count in count_redundancies.most_common():
-                logger.info(f"{count} with {percentage} confidence")
-
-            test_scheduling.close_failing_together_db()
 
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
@@ -383,7 +383,7 @@ class Retriever(object):
             ]
 
             if granularity == "label":
-                generate_failing_together_probabilities(push_data)
+                self.generate_failing_together_probabilities(push_data)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures["all_runnables"] = all_runnables
