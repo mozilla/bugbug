@@ -1,7 +1,7 @@
 Supported languages
 ------------------
 
-The regressor model supports other languages too (all languages supported by rust-code-analysis: https://github.com/mozilla/rust-code-analysis#supported-languages).
+The regressor model supports all languages supported by rust-code-analysis: https://github.com/mozilla/rust-code-analysis#supported-languages.
 
 Training the model for another project
 --------------------------------------
