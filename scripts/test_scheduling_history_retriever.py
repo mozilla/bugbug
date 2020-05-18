@@ -211,7 +211,7 @@ class Retriever(object):
     def retrieve_push_data(self) -> None:
         self.generate_push_data("label")
         self.generate_push_data("group")
-        # self.generate_push_data("config_group")
+        self.generate_push_data("config_group")
 
     def generate_test_scheduling_history(self, granularity):
         # Get the commits DB.
