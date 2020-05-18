@@ -222,12 +222,12 @@ tasks:
           public/push_data_group.json.version:
             path: /data/push_data_group.json.version
             type: file
-          public/push_data_config_group.json.zst:
-            path: /data/push_data_config_group.json.zst
-            type: file
-          public/push_data_config_group.json.version:
-            path: /data/push_data_config_group.json.version
-            type: file
+#          public/push_data_config_group.json.zst:
+#            path: /data/push_data_config_group.json.zst
+#            type: file
+#          public/push_data_config_group.json.version:
+#            path: /data/push_data_config_group.json.version
+#            type: file
 
         features:
           taskclusterProxy:
