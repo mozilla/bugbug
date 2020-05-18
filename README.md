@@ -30,7 +30,7 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **regressionrange** - The aim of this classifier is to detect regression bugs that have a regression range vs those that don't.
 
-- **regressor** - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny. See documentation as <master/docs/models/regressor.md>
+- [**regressor**](docs/models/regressor.md) - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
 
 - **spam** - The aim of this classifier is to detect bugs which are spam.
 
