@@ -3,14 +3,27 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import itertools
+import logging
 import os
 import pickle
 import shelve
 import struct
+from typing import List, NewType, Set, Tuple
+
+from tqdm import tqdm
 
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
+
+logger = logging.getLogger(__name__)
+
+Revision = NewType("Revision", str)
+TaskName = NewType("TaskName", str)
+PushResult = Tuple[
+    List[Revision], Tuple[TaskName, ...], Tuple[TaskName, ...], Tuple[TaskName, ...]
+]
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
 PAST_FAILURES_LABEL_DB = "past_failures_label.lmdb.tar.zst"
@@ -52,6 +65,98 @@ db.register(
 )
 
 HISTORICAL_TIMESPAN = 4500
+
+JOBS_TO_CONSIDER = ("test-", "build-")
+JOBS_TO_IGNORE = (
+    "build-docker-image-",
+    "-android-hw-",
+    "-awsy-",
+    "-raptor-",
+    "-talos-",
+    "backlog",
+    # inclusive test suites -- these *only* run when certain files have changed
+    "-test-verify-",
+    "-test-coverage-",
+    "jittest",
+    "jsreftest",
+    "android-hw-gfx",
+)
+
+
+def filter_runnables(
+    runnables: Tuple[TaskName, ...], all_runnables: Set[TaskName], granularity: str
+) -> Tuple[TaskName, ...]:
+    return tuple(
+        runnable
+        for runnable in runnables
+        if runnable in all_runnables
+        and (
+            granularity == "group"
+            or (
+                any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
+                and not any(j in runnable for j in JOBS_TO_IGNORE)
+            )
+        )
+    )
+
+
+# Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
+def rename_tasks(granularity: str, tasks: List[TaskName]) -> List[TaskName]:
+    if granularity == "label":
+        return [
+            TaskName(task.replace("test-linux64-", "test-linux1804-64-"))
+            for task in tasks
+        ]
+    elif granularity == "group":
+        return [TaskName(task.split(":")[0]) for task in tasks]
+    else:
+        raise Exception(f"Unexpected {granularity} granularity")
+
+
+def get_push_data(granularity: str) -> Tuple[List[PushResult], Tuple[TaskName, ...]]:
+    if granularity == "label":
+        push_data_db = PUSH_DATA_LABEL_DB
+    elif granularity == "group":
+        push_data_db = PUSH_DATA_GROUP_DB
+
+    assert db.download(push_data_db)
+
+    push_data = list(db.read(push_data_db))
+
+    logger.info(f"push data nodes: {len(push_data)}")
+
+    push_data = [
+        (
+            revisions,
+            rename_tasks(granularity, push_tasks),
+            rename_tasks(granularity, possible_regressions),
+            rename_tasks(granularity, likely_regressions),
+        )
+        for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+    ]
+
+    # In the last 14 pushes, we definitely run all possible runnables.
+    all_runnables_set = set(
+        sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
+    )
+    # Filter runnables we don't need.
+    all_runnables = filter_runnables(
+        tuple(all_runnables_set), all_runnables_set, granularity
+    )
+    all_runnables_set = set(all_runnables_set)
+    logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
+
+    push_data = [
+        (
+            revisions,
+            filter_runnables(push_tasks, all_runnables_set, granularity),
+            filter_runnables(possible_regressions, all_runnables_set, granularity),
+            filter_runnables(likely_regressions, all_runnables_set, granularity),
+        )
+        for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+    ]
+
+    return push_data, all_runnables
 
 
 def get_test_scheduling_history(granularity):
@@ -97,6 +202,95 @@ def close_failing_together_db():
     global failing_together
     failing_together.close()
     failing_together = None
+
+
+def generate_failing_together_probabilities(push_data: List[PushResult]) -> None:
+    # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
+    # `task2 failure -> task1 failure` separately, as they could be different.
+
+    count_runs: collections.Counter = collections.Counter()
+    count_single_failures: collections.Counter = collections.Counter()
+    count_both_failures: collections.Counter = collections.Counter()
+
+    for revisions, tasks, likely_regressions, candidate_regressions in tqdm(push_data):
+        failures = set(likely_regressions + candidate_regressions)
+        all_tasks = list(set(tasks) | failures)
+
+        for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
+            count_runs[(task1, task2)] += 1
+
+            if task1 in failures:
+                if task2 in failures:
+                    count_both_failures[(task1, task2)] += 1
+                else:
+                    count_single_failures[(task1, task2)] += 1
+            elif task2 in failures:
+                count_single_failures[(task1, task2)] += 1
+
+    stats = {}
+
+    skipped = 0
+
+    for couple, run_count in count_runs.most_common():
+        failure_count = count_both_failures[couple]
+        support = failure_count / run_count
+
+        if support < 1 / 700:
+            skipped += 1
+            continue
+
+        if failure_count != 0:
+            confidence = failure_count / (count_single_failures[couple] + failure_count)
+        else:
+            confidence = 0.0
+
+        stats[couple] = (support, confidence)
+
+    logger.info(f"{skipped} couples skipped because their support was too low")
+
+    logger.info("Redundancies with the highest support and confidence:")
+    for couple, (support, confidence) in sorted(
+        stats.items(), key=lambda k: (-k[1][1], -k[1][0])
+    )[:7]:
+        failure_count = count_both_failures[couple]
+        run_count = count_runs[couple]
+        logger.info(
+            f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+        )
+
+    logger.info("Redundancies with the highest confidence and lowest support:")
+    for couple, (support, confidence) in sorted(
+        stats.items(), key=lambda k: (-k[1][1], k[1][0])
+    )[:7]:
+        failure_count = count_both_failures[couple]
+        run_count = count_runs[couple]
+        logger.info(
+            f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
+        )
+
+    failing_together = get_failing_together_db()
+    count_redundancies: collections.Counter = collections.Counter()
+    for couple, (support, confidence) in stats.items():
+        if confidence == 1.0:
+            count_redundancies["==100%"] += 1
+        if confidence > 0.9:
+            count_redundancies[">=90%"] += 1
+        if confidence > 0.8:
+            count_redundancies[">=80%"] += 1
+        if confidence > 0.7:
+            count_redundancies[">=70%"] += 1
+
+        if confidence < 0.7:
+            continue
+
+        failing_together[f"{couple[0]}${couple[1]}".encode("utf-8")] = struct.pack(
+            "ff", support, confidence
+        )
+
+    for percentage, count in count_redundancies.most_common():
+        logger.info(f"{count} with {percentage} confidence")
+
+    close_failing_together_db()
 
 
 touched_together = None
