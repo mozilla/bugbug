@@ -11,7 +11,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, Tuple
+from typing import Any, Dict, Generator, List
 
 import adr
 import dateutil.parser
@@ -69,7 +69,7 @@ class Retriever(object):
             return f"push_data.{granularity}.{push.rev}"
 
         def generate(
-            futures: Tuple[concurrent.futures.Future, ...],
+            futures: List[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
             num_cached = 0
             num_pushes = len(pushes)
@@ -79,10 +79,9 @@ class Retriever(object):
             # run.
             to_regenerate = 1000
 
-            for future in tqdm(futures):
+            for i in tqdm(range(len(futures))):
+                cached = futures.pop(0).result()
                 push = pushes.pop(0)
-
-                cached = future.result()
 
                 semaphore.release()
 
@@ -145,9 +144,7 @@ class Retriever(object):
             return adr.config.cache.get(cache_key(push))
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = tuple(
-                executor.submit(retrieve_from_cache, push) for push in pushes
-            )
+            futures = [executor.submit(retrieve_from_cache, push) for push in pushes]
 
             try:
                 db.write(push_data_db, generate(futures))
