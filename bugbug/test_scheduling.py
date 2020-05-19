@@ -9,6 +9,7 @@ import logging
 import os
 import pickle
 import shelve
+import shutil
 import struct
 from typing import List, NewType, Set, Tuple
 
@@ -198,15 +199,26 @@ def get_failing_together_db():
     return failing_together
 
 
+def remove_failing_together_db():
+    shutil.rmtree(
+        os.path.join("data", FAILING_TOGETHER_LABEL_DB[: -len(".tar.zst")]),
+        ignore_errors=True,
+    )
+
+
 def close_failing_together_db():
     global failing_together
     failing_together.close()
     failing_together = None
 
 
-def generate_failing_together_probabilities(push_data: List[PushResult]) -> None:
+def generate_failing_together_probabilities(
+    push_data: List[PushResult], up_to=None
+) -> None:
     # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
     # `task2 failure -> task1 failure` separately, as they could be different.
+
+    remove_failing_together_db()
 
     count_runs: collections.Counter = collections.Counter()
     count_single_failures: collections.Counter = collections.Counter()
@@ -226,6 +238,9 @@ def generate_failing_together_probabilities(push_data: List[PushResult]) -> None
                     count_single_failures[(task1, task2)] += 1
             elif task2 in failures:
                 count_single_failures[(task1, task2)] += 1
+
+        if up_to is not None and revisions[0] == up_to:
+            break
 
     stats = {}
 

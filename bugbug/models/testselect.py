@@ -278,6 +278,16 @@ class TestSelectModel(Model):
         # Get a test set of pushes on which to test the model.
         pushes, train_push_len = self.get_pushes(False)
 
+        # To evaluate the model with reductions enabled, we need to regenerate the failing together DB, using
+        # only failure data from the training pushes (otherwise, we'd leak training information into the test
+        # set).
+        if self.granularity == "label":
+            print("Generate failing together DB (restricted to training pushes)")
+            push_data, _ = test_scheduling.get_push_data("label")
+            test_scheduling.generate_failing_together_probabilities(
+                push_data, pushes[train_push_len - 1]["revs"][0]
+            )
+
         test_pushes = pushes[train_push_len:]
 
         all_tasks = reduce(
