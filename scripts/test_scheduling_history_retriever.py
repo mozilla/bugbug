@@ -11,7 +11,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator
+from typing import Any, Dict, Generator, Tuple
 
 import adr
 import dateutil.parser
@@ -68,7 +68,9 @@ class Retriever(object):
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
 
-        def generate(executor) -> Generator[PushResult, None, None]:
+        def generate(
+            futures: Tuple[concurrent.futures.Future, ...],
+        ) -> Generator[PushResult, None, None]:
             num_cached = 0
             num_pushes = len(pushes)
 
@@ -77,24 +79,8 @@ class Retriever(object):
             # run.
             to_regenerate = 1000
 
-            semaphore = threading.BoundedSemaphore(256)
-
-            def retrieve_from_cache(push):
-                semaphore.acquire()
-                return adr.config.cache.get(cache_key(push))
-
-            futures = tuple(
-                executor.submit(retrieve_from_cache, push) for push in pushes
-            )
-
             for future in tqdm(futures):
                 push = pushes.pop(0)
-
-                exc = future.exception()
-                if exc is not None:
-                    logger.info(f"Exception {exc} while getting {push.rev}")
-                    for f in futures:
-                        f.cancel()
 
                 cached = future.result()
 
@@ -152,8 +138,30 @@ class Retriever(object):
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
+        semaphore = threading.BoundedSemaphore(256)
+
+        def retrieve_from_cache(push):
+            semaphore.acquire()
+            return adr.config.cache.get(cache_key(push))
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            db.write(push_data_db, generate(executor))
+            futures = tuple(
+                executor.submit(retrieve_from_cache, push) for push in pushes
+            )
+
+            try:
+                db.write(push_data_db, generate(futures))
+            except Exception:
+                for f in futures:
+                    f.cancel()
+
+                    try:
+                        semaphore.release()
+                    except ValueError:
+                        continue
+
+                raise
+
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
