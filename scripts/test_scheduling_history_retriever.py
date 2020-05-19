@@ -90,7 +90,9 @@ class Retriever(object):
 
                     # Regenerate results which were generated when we were not cleaning
                     # up WPT groups.
-                    if any(runnable.startswith("/") for runnable in value[1]):
+                    if granularity == "group" and any(
+                        runnable.startswith("/") for runnable in value[1]
+                    ):
                         cached = None
                         to_regenerate -= 1
 
