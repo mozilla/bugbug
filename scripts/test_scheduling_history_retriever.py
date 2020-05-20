@@ -38,25 +38,25 @@ TRAINING_MONTHS = {
 }
 
 
+def get_from_date(granularity: str) -> datetime:
+    # We'll use the past TRAINING_MONTHS months only for training the model,
+    # but we use half TRAINING_MONTHS months more than that to calculate the
+    # failure statistics.
+    from_months = TRAINING_MONTHS[granularity] + math.floor(
+        TRAINING_MONTHS[granularity] / 2
+    )
+    return datetime.utcnow() - relativedelta(months=from_months)
+
+
 class Retriever(object):
-    def generate_push_data(self, granularity: str) -> None:
-        # We'll use the past TRAINING_MONTHS months only for training the model,
-        # but we use half TRAINING_MONTHS months more than that to calculate the
-        # failure statistics.
-        from_months = TRAINING_MONTHS[granularity] + math.floor(
-            TRAINING_MONTHS[granularity] / 2
-        )
+    def generate_push_data(
+        self, pushes: List[mozci.push.Push], granularity: str
+    ) -> None:
+        from_date = get_from_date(granularity)
 
-        # We use the actual date instead of 'today-X' aliases to avoid adr caching
-        # this query.
-        from_date = datetime.utcnow() - relativedelta(months=from_months)
-        to_date = datetime.utcnow() - relativedelta(days=3)
-
-        pushes = mozci.push.make_push_objects(
-            from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=to_date.strftime("%Y-%m-%d"),
-            branch="autoland",
-        )
+        pushes = [
+            push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
+        ]
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
@@ -79,9 +79,8 @@ class Retriever(object):
             # run.
             to_regenerate = 1000
 
-            for i in tqdm(range(len(futures))):
+            for push in tqdm(pushes):
                 cached = futures.pop(0).result()
-                push = pushes.pop(0)
 
                 semaphore.release()
 
@@ -164,9 +163,21 @@ class Retriever(object):
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
-        self.generate_push_data("config_group")
-        self.generate_push_data("label")
-        self.generate_push_data("group")
+        from_date = get_from_date(max(TRAINING_MONTHS, key=TRAINING_MONTHS.get))
+
+        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # this query.
+        to_date = datetime.utcnow() - relativedelta(days=3)
+
+        pushes = mozci.push.make_push_objects(
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
+            branch="autoland",
+        )
+
+        self.generate_push_data(pushes, "config_group")
+        self.generate_push_data(pushes, "label")
+        self.generate_push_data(pushes, "group")
 
     def generate_test_scheduling_history(self, granularity: str) -> None:
         # Get the commits DB.
