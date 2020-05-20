@@ -11,7 +11,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, Generator, List, Tuple
 
 import adr
 import dateutil.parser
@@ -50,13 +50,13 @@ def get_from_date(granularity: str) -> datetime:
 
 class Retriever(object):
     def generate_push_data(
-        self, pushes: List[mozci.push.Push], granularity: str
+        self, pushes: Tuple[mozci.push.Push, ...], granularity: str
     ) -> None:
         from_date = get_from_date(granularity)
 
-        pushes = [
+        pushes = tuple(
             push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
-        ]
+        )
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
@@ -169,10 +169,12 @@ class Retriever(object):
         # this query.
         to_date = datetime.utcnow() - relativedelta(days=3)
 
-        pushes = mozci.push.make_push_objects(
-            from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=to_date.strftime("%Y-%m-%d"),
-            branch="autoland",
+        pushes = tuple(
+            mozci.push.make_push_objects(
+                from_date=from_date.strftime("%Y-%m-%d"),
+                to_date=to_date.strftime("%Y-%m-%d"),
+                branch="autoland",
+            )
         )
 
         self.generate_push_data(pushes, "config_group")
