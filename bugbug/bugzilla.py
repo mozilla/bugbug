@@ -6,10 +6,14 @@
 import csv
 from datetime import datetime
 
+from typing import Union, List, Set
+
 import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
+
+
 
 from bugbug import db, utils
 
@@ -93,7 +97,7 @@ def get_ids(params):
     return all_ids
 
 
-def get(bug_ids):
+def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
     """Function to retrieve Bug Information including history, attachment, comments using Bugzilla REST API.
 
     :param bug_ids: find bug information for these `bug_ids`
@@ -111,9 +115,13 @@ def get(bug_ids):
 
     new_bugs = {}
 
+
     if isinstance(bug_ids, list):
         # Expected Format
-        bug_ids = list(set(map(int, bug_ids)))
+        bug_ids = list(sorted(set(map(int, bug_ids))))
+
+    elif isinstance(bug_ids, set):
+        bug_ids = list(sorted(map(int, bug_ids)))
 
     elif isinstance(bug_ids, str):
         bug_ids = [int(bug_ids)]
@@ -121,9 +129,7 @@ def get(bug_ids):
     elif isinstance(bug_ids, int):
         bug_ids = [bug_ids]
     else:
-        raise ValueError(
-            "Invalid datatype for the parameter-bug_ids with value- {bug_ids} and datatype-{type(bug_ids)}"
-        )
+        pass
 
     new_bugs = dict()
     for a_bug_id in bug_ids:
