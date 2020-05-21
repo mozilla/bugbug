@@ -148,9 +148,10 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
         pass
 
     new_bugs = dict()
-    batchsize = 4
-    for i in range(0, len(bug_ids), batchsize):
-        batch = bug_ids[i : i + batchsize]
+    batch_size = Bugzilla.BUGZILLA_CHUNK_SIZE
+
+    for i in range(0, len(bug_ids), batch_size):
+        batch = bug_ids[i : i + batch_size]
         batch_of_ids = ",".join(map(str, batch))
 
         params_for_custom_fields = {
