@@ -6,7 +6,6 @@
 import csv
 from datetime import datetime
 
-import six
 import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
@@ -114,20 +113,20 @@ def get(bug_ids):
 
     if isinstance(bug_ids, list):
         # Expected Format
-        bug_ids_list = list(set(map(int, bug_ids)))
+        bug_ids = list(set(map(int, bug_ids)))
 
-    elif isinstance(bug_ids, six.string_types):
-        bug_ids_list = [int(bug_ids)]
+    elif isinstance(bug_ids, str):
+        bug_ids = [int(bug_ids)]
 
     elif isinstance(bug_ids, int):
-        bug_ids_list = [bug_ids]
+        bug_ids = [bug_ids]
     else:
         raise ValueError(
             "Invalid datatype for the parameter-bug_ids with value- {bug_ids} and datatype-{type(bug_ids)}"
         )
 
     new_bugs = dict()
-    for a_bug_id in bug_ids_list:
+    for a_bug_id in bug_ids:
         params_for_custom_fields = {
             "id": a_bug_id,
             "include_fields": "_default,history,comments,attachments",
