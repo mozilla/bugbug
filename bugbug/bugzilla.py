@@ -5,15 +5,12 @@
 
 import csv
 from datetime import datetime
-
-from typing import Union, List, Set
+from typing import List, Set, Union
 
 import tenacity
 from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
-
-
 
 from bugbug import db, utils
 
@@ -113,8 +110,27 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
                 del a_value[extra_field]
         return array_of_dict_values
 
-    new_bugs = {}
+    def cleanup_fields_in_batch_of_bugs(batch_of_bugs):
+        # Updation happens in place
+        for a_bug_info_key in batch_of_bugs.keys():
+            a_bug_info = batch_of_bugs[a_bug_info_key]
+            current_comments_array = a_bug_info["comments"]
+            current_comments_array = filter_keys(
+                array_of_dict_values=current_comments_array,
+                required_fields=COMMENT_INCLUDE_FIELDS,
+            )
+            a_bug_info["comments"] = current_comments_array
 
+            # Delete other fields from attachments
+            current_attachments_array = a_bug_info["attachments"]
+            current_attachments_array = filter_keys(
+                array_of_dict_values=current_attachments_array,
+                required_fields=ATTACHMENT_INCLUDE_FIELDS,
+            )
+            a_bug_info["attachments"] = current_attachments_array
+            batch_of_bugs[a_bug_info_key] = a_bug_info
+
+        return batch_of_bugs
 
     if isinstance(bug_ids, list):
         # Expected Format
@@ -132,9 +148,13 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
         pass
 
     new_bugs = dict()
-    for a_bug_id in bug_ids:
+    batchsize = 4
+    for i in range(0, len(bug_ids), batchsize):
+        batch = bug_ids[i : i + batchsize]
+        batch_of_ids = ",".join(map(str, batch))
+
         params_for_custom_fields = {
-            "id": a_bug_id,
+            "id": batch_of_ids,
             "include_fields": "_default,history,comments,attachments",
         }
         response = utils.get_session("bugzilla").get(
@@ -142,35 +162,12 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
         )
         response.raise_for_status()
 
-        a_bug_info = response.json()
-        a_bug_info = a_bug_info["bugs"]
-
-        assert len(a_bug_info) == 1
-
-        a_bug_info = a_bug_info[0]
-
-        # Realignment of results to cope with previous versions of data manipulation
-        bug_id_of_a_bug_info = int(a_bug_info["id"])
-
-        # Delete other fields from comments
-        current_comments_array = a_bug_info["comments"]
-        current_comments_array = filter_keys(
-            array_of_dict_values=current_comments_array,
-            required_fields=COMMENT_INCLUDE_FIELDS,
-        )
-        a_bug_info["comments"] = current_comments_array
-
-        # Delete other fields from attachments
-        current_attachments_array = a_bug_info["attachments"]
-        current_attachments_array = filter_keys(
-            array_of_dict_values=current_attachments_array,
-            required_fields=ATTACHMENT_INCLUDE_FIELDS,
-        )
-        a_bug_info["attachments"] = current_attachments_array
-
-        # Since bug_id won't have duplicates in bug_ids_list, the check for existence of bug_id in `new_bugs` is skipped
-        new_bugs[bug_id_of_a_bug_info] = dict()
-        new_bugs[bug_id_of_a_bug_info] = a_bug_info
+        batch_of_bugs_info = response.json()
+        batch_of_bugs_info = {
+            int(a_bug["id"]): a_bug for a_bug in batch_of_bugs_info["bugs"]
+        }
+        batch_of_bugs_info = cleanup_fields_in_batch_of_bugs(batch_of_bugs_info)
+        new_bugs.update(batch_of_bugs_info)
 
     return new_bugs
 
