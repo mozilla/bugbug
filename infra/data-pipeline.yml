@@ -199,7 +199,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-smaller
+      workerType: compute-small
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -251,7 +251,7 @@ tasks:
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - test-scheduling-history-push_data-retrieval

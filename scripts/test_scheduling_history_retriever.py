@@ -4,17 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-import collections
 import concurrent.futures
-import itertools
 import math
 import os
-import struct
 import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List, NewType, Tuple
+from typing import Any, Dict, Generator, List, Tuple
 
 import adr
 import dateutil.parser
@@ -23,32 +20,11 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import commit_features, db, repository, test_scheduling
+from bugbug.test_scheduling import PushResult
 from bugbug.utils import create_tar_zst, zstd_compress
-
-Revision = NewType("Revision", str)
-TaskName = NewType("TaskName", str)
-PushResult = Tuple[
-    List[Revision], Tuple[TaskName, ...], Tuple[TaskName, ...], Tuple[TaskName, ...]
-]
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-JOBS_TO_CONSIDER = ("test-", "build-")
-JOBS_TO_IGNORE = (
-    "build-docker-image-",
-    "-android-hw-",
-    "-awsy-",
-    "-raptor-",
-    "-talos-",
-    "backlog",
-    # inclusive test suites -- these *only* run when certain files have changed
-    "-test-verify-",
-    "-test-coverage-",
-    "jittest",
-    "jsreftest",
-    "android-hw-gfx",
-)
 
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
@@ -58,7 +34,7 @@ MOZCI_VERSION = 2
 TRAINING_MONTHS = {
     "label": 7,
     "group": 7,
-    "config_group": 1,
+    "config_group": 2,
 }
 
 
@@ -72,43 +48,15 @@ def get_from_date(granularity: str) -> datetime:
     return datetime.utcnow() - relativedelta(months=from_months)
 
 
-def filter_runnables(runnables, all_runnables, granularity):
-    return tuple(
-        runnable
-        for runnable in runnables
-        if runnable in all_runnables
-        and (
-            granularity == "group"
-            or (
-                any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
-                and not any(j in runnable for j in JOBS_TO_IGNORE)
-            )
-        )
-    )
-
-
-# Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
-def rename_tasks(granularity: str, tasks: List[TaskName]) -> List[TaskName]:
-    if granularity == "label":
-        return [
-            TaskName(task.replace("test-linux64-", "test-linux1804-64-"))
-            for task in tasks
-        ]
-    elif granularity == "group":
-        return [TaskName(task.split(":")[0]) for task in tasks]
-    else:
-        raise Exception(f"Unexpected {granularity} granularity")
-
-
 class Retriever(object):
     def generate_push_data(
-        self, pushes: List[mozci.push.Push], granularity: str
+        self, pushes: Tuple[mozci.push.Push, ...], granularity: str
     ) -> None:
         from_date = get_from_date(granularity)
 
-        pushes = [
+        pushes = tuple(
             push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
-        ]
+        )
 
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
@@ -120,7 +68,9 @@ class Retriever(object):
         def cache_key(push: mozci.push.Push) -> str:
             return f"push_data.{granularity}.{push.rev}"
 
-        def generate(executor) -> Generator[PushResult, None, None]:
+        def generate(
+            futures: List[concurrent.futures.Future],
+        ) -> Generator[PushResult, None, None]:
             num_cached = 0
             num_pushes = len(pushes)
 
@@ -129,24 +79,8 @@ class Retriever(object):
             # run.
             to_regenerate = 1000
 
-            semaphore = threading.BoundedSemaphore(256)
-
-            def retrieve_from_cache(push):
-                semaphore.acquire()
-                return adr.config.cache.get(cache_key(push))
-
-            futures = tuple(
-                executor.submit(retrieve_from_cache, push) for push in pushes
-            )
-
-            for push, future in zip(tqdm(pushes), futures):
-                exc = future.exception()
-                if exc is not None:
-                    logger.info(f"Exception {exc} while getting {push.rev}")
-                    for f in futures:
-                        f.cancel()
-
-                cached = future.result()
+            for push in tqdm(pushes):
+                cached = futures.pop(0).result()
 
                 semaphore.release()
 
@@ -155,7 +89,9 @@ class Retriever(object):
 
                     # Regenerate results which were generated when we were not cleaning
                     # up WPT groups.
-                    if any(runnable.startswith("/") for runnable in value[1]):
+                    if granularity == "group" and any(
+                        runnable.startswith("/") for runnable in value[1]
+                    ):
                         cached = None
                         to_regenerate -= 1
 
@@ -202,8 +138,28 @@ class Retriever(object):
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
+        semaphore = threading.BoundedSemaphore(256)
+
+        def retrieve_from_cache(push):
+            semaphore.acquire()
+            return adr.config.cache.get(cache_key(push))
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            db.write(push_data_db, generate(executor))
+            futures = [executor.submit(retrieve_from_cache, push) for push in pushes]
+
+            try:
+                db.write(push_data_db, generate(futures))
+            except Exception:
+                for f in futures:
+                    f.cancel()
+
+                    try:
+                        semaphore.release()
+                    except ValueError:
+                        continue
+
+                raise
+
         zstd_compress(push_data_db)
 
     def retrieve_push_data(self) -> None:
@@ -213,17 +169,19 @@ class Retriever(object):
         # this query.
         to_date = datetime.utcnow() - relativedelta(days=3)
 
-        pushes = mozci.push.make_push_objects(
-            from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=to_date.strftime("%Y-%m-%d"),
-            branch="autoland",
+        pushes = tuple(
+            mozci.push.make_push_objects(
+                from_date=from_date.strftime("%Y-%m-%d"),
+                to_date=to_date.strftime("%Y-%m-%d"),
+                branch="autoland",
+            )
         )
 
+        self.generate_push_data(pushes, "config_group")
         self.generate_push_data(pushes, "label")
         self.generate_push_data(pushes, "group")
-        self.generate_push_data(pushes, "config_group")
 
-    def generate_test_scheduling_history(self, granularity):
+    def generate_test_scheduling_history(self, granularity: str) -> None:
         # Get the commits DB.
         assert db.download(repository.COMMITS_DB)
 
@@ -232,7 +190,6 @@ class Retriever(object):
         )
 
         if granularity == "label":
-            push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
             test_scheduling_db = test_scheduling.TEST_LABEL_SCHEDULING_DB
             past_failures_db = os.path.join(
                 "data", test_scheduling.PAST_FAILURES_LABEL_DB
@@ -241,7 +198,6 @@ class Retriever(object):
                 "data", test_scheduling.FAILING_TOGETHER_LABEL_DB
             )
         elif granularity == "group":
-            push_data_db = test_scheduling.PUSH_DATA_GROUP_DB
             test_scheduling_db = test_scheduling.TEST_GROUP_SCHEDULING_DB
             past_failures_db = os.path.join(
                 "data", test_scheduling.PAST_FAILURES_GROUP_DB
@@ -250,99 +206,7 @@ class Retriever(object):
                 "data", test_scheduling.TOUCHED_TOGETHER_DB
             )
 
-        assert db.download(push_data_db)
-
-        def generate_failing_together_probabilities(push_data):
-            # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
-            # `task2 failure -> task1 failure` separately, as they could be different.
-
-            count_runs = collections.Counter()
-            count_single_failures = collections.Counter()
-            count_both_failures = collections.Counter()
-
-            for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
-                push_data
-            ):
-                failures = set(likely_regressions + candidate_regressions)
-                all_tasks = list(set(tasks) | failures)
-
-                for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
-                    count_runs[(task1, task2)] += 1
-
-                    if task1 in failures:
-                        if task2 in failures:
-                            count_both_failures[(task1, task2)] += 1
-                        else:
-                            count_single_failures[(task1, task2)] += 1
-                    elif task2 in failures:
-                        count_single_failures[(task1, task2)] += 1
-
-            stats = {}
-
-            skipped = 0
-
-            for couple, run_count in count_runs.most_common():
-                failure_count = count_both_failures[couple]
-                support = failure_count / run_count
-
-                if support < 1 / 700:
-                    skipped += 1
-                    continue
-
-                if failure_count != 0:
-                    confidence = failure_count / (
-                        count_single_failures[couple] + failure_count
-                    )
-                else:
-                    confidence = 0.0
-
-                stats[couple] = (support, confidence)
-
-            logger.info(f"{skipped} couples skipped because their support was too low")
-
-            logger.info("Redundancies with the highest support and confidence:")
-            for couple, (support, confidence) in sorted(
-                stats.items(), key=lambda k: (-k[1][1], -k[1][0])
-            )[:7]:
-                failure_count = count_both_failures[couple]
-                run_count = count_runs[couple]
-                logger.info(
-                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
-                )
-
-            logger.info("Redundancies with the highest confidence and lowest support:")
-            for couple, (support, confidence) in sorted(
-                stats.items(), key=lambda k: (-k[1][1], k[1][0])
-            )[:7]:
-                failure_count = count_both_failures[couple]
-                run_count = count_runs[couple]
-                logger.info(
-                    f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
-                )
-
-            failing_together = test_scheduling.get_failing_together_db()
-            count_redundancies = collections.Counter()
-            for couple, (support, confidence) in stats.items():
-                if confidence == 1.0:
-                    count_redundancies["==100%"] += 1
-                if confidence > 0.9:
-                    count_redundancies[">=90%"] += 1
-                if confidence > 0.8:
-                    count_redundancies[">=80%"] += 1
-                if confidence > 0.7:
-                    count_redundancies[">=70%"] += 1
-
-                if confidence < 0.7:
-                    continue
-
-                failing_together[
-                    f"{couple[0]}${couple[1]}".encode("utf-8")
-                ] = struct.pack("ff", support, confidence)
-
-            for percentage, count in count_redundancies.most_common():
-                logger.info(f"{count} with {percentage} confidence")
-
-            test_scheduling.close_failing_together_db()
+        push_data, all_runnables = test_scheduling.get_push_data(granularity)
 
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
@@ -353,47 +217,8 @@ class Retriever(object):
             for commit_data in tqdm(repository.get_commits()):
                 commit_map[commit_data["node"]] = commit_data
 
-            push_data = list(db.read(push_data_db))
-
-            logger.info(f"push data nodes: {len(push_data)}")
-
-            push_data = [
-                (
-                    revisions,
-                    rename_tasks(granularity, push_tasks),
-                    rename_tasks(granularity, possible_regressions),
-                    rename_tasks(granularity, likely_regressions),
-                )
-                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
-            ]
-
-            # In the last 14 pushes, we definitely run all possible runnables.
-            all_runnables_set = set(
-                sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
-            )
-            # Filter runnables we don't need.
-            all_runnables = filter_runnables(
-                list(all_runnables_set), all_runnables_set, granularity
-            )
-            all_runnables_set = set(all_runnables_set)
-            logger.info(f"{len(all_runnables_set)} runnables run in the last 14 pushes")
-
-            push_data = [
-                (
-                    revisions,
-                    filter_runnables(push_tasks, all_runnables_set, granularity),
-                    filter_runnables(
-                        possible_regressions, all_runnables_set, granularity
-                    ),
-                    filter_runnables(
-                        likely_regressions, all_runnables_set, granularity
-                    ),
-                )
-                for revisions, push_tasks, possible_regressions, likely_regressions in push_data
-            ]
-
             if granularity == "label":
-                generate_failing_together_probabilities(push_data)
+                test_scheduling.generate_failing_together_probabilities(push_data)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures["all_runnables"] = all_runnables
@@ -461,10 +286,7 @@ class Retriever(object):
                 if granularity == "group":
                     update_touched_together_gen.send(commits[0]["node"])
 
-                result = {
-                    "revs": revisions,
-                    "data": [],
-                }
+                result_data = []
                 for data in test_scheduling.generate_data(
                     past_failures,
                     merged_commits,
@@ -474,11 +296,14 @@ class Retriever(object):
                     likely_regressions,
                 ):
                     if pushdate > HISTORY_DATE_START:
-                        result["data"].append(data)
+                        result_data.append(data)
 
                 if pushdate > HISTORY_DATE_START:
                     saved_nodes.add(i)
-                    yield result
+                    yield {
+                        "revs": revisions,
+                        "data": result_data,
+                    }
 
             if granularity == "group":
                 try:

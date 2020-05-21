@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import os
+
 from bugbug import repository
 
 
@@ -204,3 +206,22 @@ class same_component(object):
             if f.encode("utf-8") in component_mapping
         )
         return touches_same_component
+
+
+class manifest_suite(object):
+    def __call__(self, test_job, commit, **kwargs):
+        if test_job["name"].startswith("testing/web-platform/"):
+            return "WPT"
+
+        base = os.path.basename(test_job["name"])
+
+        if any(s in base for s in ("chrome", "browser", "mochitest", "a11y")):
+            return "mochitest"
+        elif base == "jstests.list":
+            return "jstest"
+        elif "xpcshell" in base:
+            return "xpcshell"
+        elif "reftest" in base:
+            return "reftest"
+
+        return None
