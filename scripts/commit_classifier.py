@@ -314,9 +314,6 @@ class CommitClassifier(object):
             message = "{}\n\n{}".format(
                 revision["fields"]["title"], revision["fields"]["summary"]
             )
-
-            latest_rev = repository.get_revs(hg, f"-{len(stack)}")
-
             author_name = None
             author_email = None
 
@@ -376,6 +373,8 @@ class CommitClassifier(object):
                     check=True,
                     cwd=self.git_repo_dir,
                 )
+        latest_rev = repository.get_revs(hg, f"-{len(stack)}")
+        
 
     def generate_feature_importance_data(self, probs, importance):
         X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
