@@ -95,13 +95,39 @@ def boot_worker():
         wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
     )
     def retrieve_schedulable_tasks():
-        # Store in a file the list of tasks in the latest autoland push.
         r = requests.get(
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.latest.taskgraph.decision/artifacts/public/target-tasks.json"
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.latest.taskgraph.decision"
         )
         r.raise_for_status()
+        taskId = r.json()["taskId"]
+
+        r = requests.get(
+            f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{taskId}"
+        )
+        r.raise_for_status()
+        latest_rev = r.json()["payload"]["env"]["GECKO_HEAD_REV"]
+
+        r = requests.get(
+            f"https://hg.mozilla.org/integration/autoland/json-pushes?version=2&tipsonly=1&tochange={latest_rev}"
+        )
+        r.raise_for_status()
+        revs = [
+            push_obj["changesets"][0]
+            for push_id, push_obj in r.json()["pushes"].items()
+        ]
+
+        # Store in a file the list of tasks in the latest autoland pushes.
+        # We use more than one to protect ourselves from broken decision tasks.
+        known_tasks = set()
+        for rev in revs:
+            r = requests.get(
+                f"https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.autoland.revision.{rev}.taskgraph.decision/artifacts/public/target-tasks.json"
+            )
+            r.raise_for_status()
+            known_tasks.update(r.json())
+
         with open("known_tasks", "w") as f:
-            f.write("\n".join(r.json()))
+            f.write("\n".join(known_tasks))
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         clone_autoland_future = executor.submit(clone_autoland)
