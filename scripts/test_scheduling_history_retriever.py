@@ -95,8 +95,16 @@ class Retriever(object):
                         cached = None
                         to_regenerate -= 1
 
+                    # Regenerate results which were generated when we didn't get a correct
+                    # configuration for test-verify tasks.
+                    elif granularity == "config_group" and any(
+                        "test-verify" in runnable[0] for runnable in value[1]
+                    ):
+                        cached = None
+                        to_regenerate -= 1
+
                     """# Regenerate results which were generated with an older version of mozci.
-                    elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
+                    elif mozci_version != MOZCI_VERSION:
                         cached = None
                         to_regenerate -= 1"""
 
