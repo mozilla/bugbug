@@ -11,7 +11,19 @@ import pickle
 import shelve
 import shutil
 import struct
-from typing import List, NewType, Set, Tuple
+from functools import lru_cache
+from typing import (
+    Any,
+    Callable,
+    Deque,
+    Iterator,
+    List,
+    NewType,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 from tqdm import tqdm
 
@@ -21,9 +33,12 @@ from bugbug.utils import ExpQueue, LMDBDict
 logger = logging.getLogger(__name__)
 
 Revision = NewType("Revision", str)
-TaskName = NewType("TaskName", str)
+Task = NewType("Task", str)
+Group = NewType("Group", str)
+ConfigGroup = NewType("ConfigGroup", Tuple[str, Group])
+Runnable = Union[Task, Group, ConfigGroup]
 PushResult = Tuple[
-    List[Revision], Tuple[TaskName, ...], Tuple[TaskName, ...], Tuple[TaskName, ...]
+    List[Revision], Tuple[Runnable, ...], Tuple[Runnable, ...], Tuple[Runnable, ...]
 ]
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
@@ -48,7 +63,7 @@ TOUCHED_TOGETHER_DB = "touched_together.lmdb.tar.zst"
 db.register(
     TEST_GROUP_SCHEDULING_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_group_scheduling_history.pickle.zst",
-    20,
+    1,
     [PAST_FAILURES_GROUP_DB, TOUCHED_TOGETHER_DB],
 )
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
@@ -58,6 +73,15 @@ db.register(
     1,
 )
 
+TEST_CONFIG_GROUP_SCHEDULING_DB = "data/test_config_group_scheduling_history.pickle"
+PAST_FAILURES_CONFIG_GROUP_DB = "past_failures_config_group.lmdb.tar.zst"
+FAILING_TOGETHER_CONFIG_GROUP_DB = "failing_together_config_group.lmdb.tar.zst"
+db.register(
+    TEST_CONFIG_GROUP_SCHEDULING_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_config_group_scheduling_history.pickle.zst",
+    20,
+    [PAST_FAILURES_CONFIG_GROUP_DB, FAILING_TOGETHER_CONFIG_GROUP_DB],
+)
 PUSH_DATA_CONFIG_GROUP_DB = "data/push_data_config_group.json"
 db.register(
     PUSH_DATA_CONFIG_GROUP_DB,
@@ -85,79 +109,145 @@ JOBS_TO_IGNORE = (
 
 
 def filter_runnables(
-    runnables: Tuple[TaskName, ...], all_runnables: Set[TaskName], granularity: str
-) -> Tuple[TaskName, ...]:
-    return tuple(
-        runnable
-        for runnable in runnables
-        if runnable in all_runnables
-        and (
-            granularity == "group"
-            or (
-                any(runnable.startswith(j) for j in JOBS_TO_CONSIDER)
-                and not any(j in runnable for j in JOBS_TO_IGNORE)
-            )
+    runnables: Tuple[Runnable, ...], all_runnables: Set[Runnable], granularity: str
+) -> Tuple[Any, ...]:
+    if granularity == "label":
+        tasks = cast(List[Task], runnables)
+        return tuple(
+            task
+            for task in tasks
+            if task in all_runnables
+            and any(task.startswith(j) for j in JOBS_TO_CONSIDER)
+            and not any(j in task for j in JOBS_TO_IGNORE)
         )
-    )
+    else:
+        return tuple(runnable for runnable in runnables if runnable in all_runnables)
 
 
 # Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
-def rename_tasks(granularity: str, tasks: List[TaskName]) -> List[TaskName]:
+def rename_runnables(
+    granularity: str, runnables: Tuple[Runnable, ...]
+) -> Tuple[Runnable, ...]:
     if granularity == "label":
-        return [
-            TaskName(task.replace("test-linux64-", "test-linux1804-64-"))
-            for task in tasks
-        ]
+        tasks = cast(List[Task], runnables)
+        return tuple(
+            Task(task.replace("test-linux64-", "test-linux1804-64-")) for task in tasks
+        )
     elif granularity == "group":
-        return [TaskName(task.split(":")[0]) for task in tasks]
+        groups = cast(List[Group], runnables)
+        return tuple(Group(group.split(":")[0]) for group in groups)
+    elif granularity == "config_group":
+        config_groups = cast(List[ConfigGroup], runnables)
+        return tuple(
+            ConfigGroup(
+                (
+                    config.replace("test-linux64-", "test-linux1804-64-"),
+                    Group(group.split(":")[0]),
+                )
+            )
+            for config, group in config_groups
+        )
     else:
         raise Exception(f"Unexpected {granularity} granularity")
 
 
-def get_push_data(granularity: str) -> Tuple[List[PushResult], Tuple[TaskName, ...]]:
+def get_push_data(
+    granularity: str,
+) -> Tuple[Callable[[], Iterator[PushResult]], int, Tuple[Runnable, ...]]:
     if granularity == "label":
         push_data_db = PUSH_DATA_LABEL_DB
     elif granularity == "group":
         push_data_db = PUSH_DATA_GROUP_DB
+    elif granularity == "config_group":
+        push_data_db = PUSH_DATA_CONFIG_GROUP_DB
 
     assert db.download(push_data_db)
 
-    push_data = list(db.read(push_data_db))
+    # In the last 28 pushes, we definitely run all possible runnables.
+    push_data_count = 0
+    push_data_queue: Deque[PushResult] = collections.deque(maxlen=28)
+    for elem in db.read(push_data_db):
+        push_data_count += 1
 
-    logger.info(f"push data nodes: {len(push_data)}")
+        push_data_queue.append(elem)
+
+    logger.info(f"push data nodes: {push_data_count}")
 
     push_data = [
         (
             revisions,
-            rename_tasks(granularity, push_tasks),
-            rename_tasks(granularity, possible_regressions),
-            rename_tasks(granularity, likely_regressions),
+            rename_runnables(granularity, push_tasks),
+            rename_runnables(granularity, possible_regressions),
+            rename_runnables(granularity, likely_regressions),
         )
-        for revisions, push_tasks, possible_regressions, likely_regressions in push_data
+        for revisions, push_tasks, possible_regressions, likely_regressions in push_data_queue
     ]
 
-    # In the last 14 pushes, we definitely run all possible runnables.
+    if granularity == "config_group":
+        all_groups_set = set(
+            sum(
+                (
+                    [Group(r[1]) for r in push_runnables]
+                    for _, push_runnables, _, _ in push_data
+                ),
+                [],
+            )
+        )
+        # Filter runnables we don't need.
+        all_groups = filter_runnables(
+            tuple(all_groups_set), cast(Set[Runnable], all_groups_set), "group"
+        )
+        all_groups_set = set(all_groups)
+        logger.info(f"{len(all_groups_set)} manifests run in the last 28 pushes")
+
     all_runnables_set = set(
-        sum((push_runnables for _, push_runnables, _, _ in push_data[-28:]), [])
+        sum((list(push_runnables) for _, push_runnables, _, _ in push_data), [])
     )
     # Filter runnables we don't need.
     all_runnables = filter_runnables(
         tuple(all_runnables_set), all_runnables_set, granularity
     )
-    all_runnables_set = set(all_runnables_set)
+    all_runnables_set = set(all_runnables)
     logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
 
-    push_data = [
-        (
-            revisions,
-            filter_runnables(push_tasks, all_runnables_set, granularity),
-            filter_runnables(possible_regressions, all_runnables_set, granularity),
-            filter_runnables(likely_regressions, all_runnables_set, granularity),
+    def push_data_iter() -> Iterator[PushResult]:
+        return (
+            (
+                revisions,
+                filter_runnables(
+                    rename_runnables(granularity, push_tasks),
+                    all_runnables_set,
+                    granularity,
+                ),
+                filter_runnables(
+                    rename_runnables(granularity, possible_regressions),
+                    all_runnables_set,
+                    granularity,
+                ),
+                filter_runnables(
+                    rename_runnables(granularity, likely_regressions),
+                    all_runnables_set,
+                    granularity,
+                ),
+            )
+            for revisions, push_tasks, possible_regressions, likely_regressions in db.read(
+                push_data_db
+            )
         )
-        for revisions, push_tasks, possible_regressions, likely_regressions in push_data
-    ]
 
-    return push_data, all_runnables
+    if granularity == "config_group":
+        manifest_combinations = sum(
+            sum(1 for _ in itertools.combinations(sorted(group_tasks), 2))
+            for manifest, group_tasks in itertools.groupby(
+                sorted(all_runnables, key=lambda x: x[1]), key=lambda x: x[1]
+            )
+        )
+
+        print(
+            f"{manifest_combinations} possible combinations of manifests on configurations"
+        )
+
+    return push_data_iter, push_data_count, all_runnables
 
 
 def get_test_scheduling_history(granularity):
@@ -165,6 +255,8 @@ def get_test_scheduling_history(granularity):
         test_scheduling_db = TEST_LABEL_SCHEDULING_DB
     elif granularity == "group":
         test_scheduling_db = TEST_GROUP_SCHEDULING_DB
+    elif granularity == "config_group":
+        test_scheduling_db = TEST_CONFIG_GROUP_SCHEDULING_DB
     else:
         raise Exception(f"{granularity} granularity unsupported")
 
@@ -177,6 +269,8 @@ def get_past_failures(granularity):
         past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
     elif granularity == "group":
         past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
+    elif granularity == "config_group":
+        past_failures_db = os.path.join("data", PAST_FAILURES_CONFIG_GROUP_DB)
     else:
         raise Exception(f"{granularity} granularity unsupported")
 
@@ -187,48 +281,59 @@ def get_past_failures(granularity):
     )
 
 
-failing_together = None
+def get_failing_together_db_path(granularity: str) -> str:
+    if granularity == "label":
+        path = FAILING_TOGETHER_LABEL_DB
+    elif granularity == "config_group":
+        path = FAILING_TOGETHER_CONFIG_GROUP_DB
+    else:
+        raise Exception(f"{granularity} granularity unsupported")
+
+    return os.path.join("data", path[: -len(".tar.zst")])
 
 
-def get_failing_together_db():
-    global failing_together
-    if failing_together is None:
-        failing_together = LMDBDict(
-            os.path.join("data", FAILING_TOGETHER_LABEL_DB[: -len(".tar.zst")])
+@lru_cache(maxsize=None)
+def get_failing_together_db(granularity: str) -> LMDBDict:
+    return LMDBDict(get_failing_together_db_path(granularity))
+
+
+def failing_together_key(couple):
+    if isinstance(couple[0], str):
+        return f"{couple[0]}${couple[1]}".encode("utf-8")
+    elif isinstance(couple[0], tuple):
+        return f"{couple[0][0]}@{couple[0][1]}${couple[1][0]}@{couple[1][0]}".encode(
+            "utf-8"
         )
-    return failing_together
 
 
-def remove_failing_together_db():
+def remove_failing_together_db(granularity: str) -> None:
     shutil.rmtree(
-        os.path.join("data", FAILING_TOGETHER_LABEL_DB[: -len(".tar.zst")]),
-        ignore_errors=True,
+        get_failing_together_db_path(granularity), ignore_errors=True,
     )
 
 
-def close_failing_together_db():
-    global failing_together
-    failing_together.close()
-    failing_together = None
+def close_failing_together_db(granularity: str) -> None:
+    get_failing_together_db(granularity).close()
+    get_failing_together_db.cache_clear()
 
 
 def generate_failing_together_probabilities(
-    push_data: List[PushResult], up_to=None
+    granularity: str,
+    push_data: Iterator[PushResult],
+    push_data_count: int,
+    up_to: str = None,
 ) -> None:
     # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
     # `task2 failure -> task1 failure` separately, as they could be different.
 
-    remove_failing_together_db()
+    remove_failing_together_db(granularity)
 
     count_runs: collections.Counter = collections.Counter()
     count_single_failures: collections.Counter = collections.Counter()
     count_both_failures: collections.Counter = collections.Counter()
 
-    for revisions, tasks, likely_regressions, candidate_regressions in tqdm(push_data):
-        failures = set(likely_regressions + candidate_regressions)
-        all_tasks = list(set(tasks) | failures)
-
-        for task1, task2 in itertools.combinations(sorted(all_tasks), 2):
+    def count_runs_and_failures(tasks):
+        for task1, task2 in itertools.combinations(sorted(tasks), 2):
             count_runs[(task1, task2)] += 1
 
             if task1 in failures:
@@ -239,6 +344,23 @@ def generate_failing_together_probabilities(
             elif task2 in failures:
                 count_single_failures[(task1, task2)] += 1
 
+    for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
+        push_data, total=push_data_count
+    ):
+        failures = set(likely_regressions + candidate_regressions)
+        all_tasks = list(set(tasks) | failures)
+
+        # At config/group granularity, only consider redundancy between the same manifest
+        # on different configurations, and not between manifests too.
+        if granularity == "config_group":
+            groups = itertools.groupby(
+                sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
+            )
+            for manifest, group_tasks in groups:
+                count_runs_and_failures(group_tasks)
+        else:
+            count_runs_and_failures(all_tasks)
+
         if up_to is not None and revisions[0] == up_to:
             break
 
@@ -248,14 +370,20 @@ def generate_failing_together_probabilities(
 
     for couple, run_count in count_runs.most_common():
         failure_count = count_both_failures[couple]
+        single_failure_count = count_single_failures[couple]
         support = failure_count / run_count
 
-        if support < 1 / 700:
+        # At manifest-level, don't filter based on support.
+        if granularity != "config_group" and support < 1 / 700:
             skipped += 1
             continue
 
+        # At manifest-level, consider failures to be platform independent unless
+        # proven otherwise.
         if failure_count != 0:
-            confidence = failure_count / (count_single_failures[couple] + failure_count)
+            confidence = failure_count / (single_failure_count + failure_count)
+        elif single_failure_count == 0 and granularity == "config_group":
+            confidence = 1.0
         else:
             confidence = 0.0
 
@@ -283,7 +411,7 @@ def generate_failing_together_probabilities(
             f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
         )
 
-    failing_together = get_failing_together_db()
+    failing_together = get_failing_together_db(granularity)
     count_redundancies: collections.Counter = collections.Counter()
     for couple, (support, confidence) in stats.items():
         if confidence == 1.0:
@@ -294,18 +422,33 @@ def generate_failing_together_probabilities(
             count_redundancies[">=80%"] += 1
         if confidence > 0.7:
             count_redundancies[">=70%"] += 1
+        if confidence > 0.6:
+            count_redundancies[">=60%"] += 1
+        if confidence > 0.5:
+            count_redundancies[">=50%"] += 1
+        if confidence > 0.4:
+            count_redundancies[">=40%"] += 1
+        if confidence > 0.3:
+            count_redundancies[">=30%"] += 1
+        if confidence > 0.2:
+            count_redundancies[">=20%"] += 1
+        if confidence > 0.1:
+            count_redundancies[">=10%"] += 1
+        if confidence > 0.0:
+            count_redundancies[">0%"] += 1
 
-        if confidence < 0.7:
+        if confidence == 0.0:
+            count_redundancies["0%"] += 1
             continue
 
-        failing_together[f"{couple[0]}${couple[1]}".encode("utf-8")] = struct.pack(
+        failing_together[failing_together_key(couple)] = struct.pack(
             "ff", support, confidence
         )
 
     for percentage, count in count_redundancies.most_common():
         logger.info(f"{count} with {percentage} confidence")
 
-    close_failing_together_db()
+    close_failing_together_db(granularity)
 
 
 touched_together = None
@@ -462,7 +605,10 @@ def generate_data(
     )
 
     for runnable in runnables:
-        runnable_dir = os.path.dirname(runnable)
+        if isinstance(runnable, tuple):
+            runnable_dir = os.path.dirname(runnable[1])
+        else:
+            runnable_dir = os.path.dirname(runnable)
 
         touched_together_files = sum(
             get_touched_together(source_file, runnable_dir)

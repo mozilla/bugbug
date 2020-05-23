@@ -34,7 +34,7 @@ MOZCI_VERSION = 2
 TRAINING_MONTHS = {
     "label": 7,
     "group": 7,
-    "config_group": 2,
+    "config_group": 4,
 }
 
 
@@ -95,8 +95,16 @@ class Retriever(object):
                         cached = None
                         to_regenerate -= 1
 
+                    # Regenerate results which were generated when we didn't get a correct
+                    # configuration for test-verify tasks.
+                    elif granularity == "config_group" and any(
+                        "test-verify" in runnable[0] for runnable in value[1]
+                    ):
+                        cached = None
+                        to_regenerate -= 1
+
                     """# Regenerate results which were generated with an older version of mozci.
-                    elif mozci_version != MOZCI_VERSION and to_regenerate > 0:
+                    elif mozci_version != MOZCI_VERSION:
                         cached = None
                         to_regenerate -= 1"""
 
@@ -205,20 +213,32 @@ class Retriever(object):
             touched_together_db = os.path.join(
                 "data", test_scheduling.TOUCHED_TOGETHER_DB
             )
+        elif granularity == "config_group":
+            test_scheduling_db = test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB
+            past_failures_db = os.path.join(
+                "data", test_scheduling.PAST_FAILURES_CONFIG_GROUP_DB
+            )
+            failing_together_db = os.path.join(
+                "data", test_scheduling.FAILING_TOGETHER_CONFIG_GROUP_DB
+            )
 
-        push_data, all_runnables = test_scheduling.get_push_data(granularity)
+        push_data_iter, push_data_count, all_runnables = test_scheduling.get_push_data(
+            granularity
+        )
 
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
+            if granularity in ("label", "config_group"):
+                test_scheduling.generate_failing_together_probabilities(
+                    granularity, push_data_iter(), push_data_count
+                )
+
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
                 commit_map[commit_data["node"]] = commit_data
-
-            if granularity == "label":
-                test_scheduling.generate_failing_together_probabilities(push_data)
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
             past_failures["all_runnables"] = all_runnables
@@ -230,18 +250,14 @@ class Retriever(object):
             skipped_too_big_commits = 0
             skipped_no_runnables = 0
 
-            if granularity == "group":
+            if granularity in ("group", "config_group"):
                 update_touched_together_gen = test_scheduling.update_touched_together()
                 next(update_touched_together_gen)
 
-            for i in tqdm(range(len(push_data))):
-                (
-                    revisions,
-                    push_runnables,
-                    possible_regressions,
-                    likely_regressions,
-                ) = push_data.pop(0)
-
+            for (
+                i,
+                (revisions, push_runnables, possible_regressions, likely_regressions),
+            ) in enumerate(tqdm(push_data_iter(), total=push_data_count)):
                 push_num += 1
 
                 # XXX: Some commits are skipped in the repository mining, e.g. merges and backouts. Maybe we should not skip them.
@@ -283,7 +299,7 @@ class Retriever(object):
 
                 pushdate = dateutil.parser.parse(merged_commits["pushdate"])
 
-                if granularity == "group":
+                if granularity in ("group", "config_group"):
                     update_touched_together_gen.send(commits[0]["node"])
 
                 result_data = []
@@ -341,7 +357,7 @@ def main():
     parser.add_argument(
         "--granularity",
         help="Which test granularity to use.",
-        choices=["label", "group"],
+        choices=["label", "group", "config_group"],
     )
 
     args = parser.parse_args()

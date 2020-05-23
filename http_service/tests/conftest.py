@@ -286,11 +286,11 @@ def mock_schedule_tests_classify(monkeypatch):
         ]
         past_failures_data.close()
 
-    failing_together = test_scheduling.get_failing_together_db()
+    failing_together = test_scheduling.get_failing_together_db("label")
     failing_together[b"test-linux64/opt$test-windows10/opt"] = struct.pack(
         "ff", 0.1, 1.0
     )
-    test_scheduling.close_failing_together_db()
+    test_scheduling.close_failing_together_db("label")
 
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.

@@ -10,7 +10,7 @@ from bugbug.models.testselect import TestLabelSelectModel
 
 
 def test_reduce():
-    failing_together = test_scheduling.get_failing_together_db()
+    failing_together = test_scheduling.get_failing_together_db("label")
     failing_together[b"test-linux64/debug$test-windows10/debug"] = struct.pack(
         "ff", 0.1, 1.0
     )
@@ -26,7 +26,7 @@ def test_reduce():
     failing_together[b"test-linux64-asan/debug$test-linux64/debug"] = struct.pack(
         "ff", 0.1, 1.0
     )
-    test_scheduling.close_failing_together_db()
+    test_scheduling.close_failing_together_db("label")
 
     model = TestLabelSelectModel()
     assert model.reduce({"test-linux64/debug", "test-windows10/debug"}, 1.0) == {

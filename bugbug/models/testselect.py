@@ -60,6 +60,12 @@ class TestSelectModel(Model):
                 test_scheduling.PAST_FAILURES_GROUP_DB,
                 test_scheduling.TOUCHED_TOGETHER_DB,
             )
+        elif granularity == "config_group":
+            self.training_dbs.append(test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB)
+            self.eval_dbs[test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB] = (
+                test_scheduling.PAST_FAILURES_CONFIG_GROUP_DB,
+                test_scheduling.TOUCHED_TOGETHER_DB,
+            )
 
         self.cross_validation_enabled = False
 
@@ -77,7 +83,7 @@ class TestSelectModel(Model):
                 # test_scheduling_features.chunk(),
                 test_scheduling_features.suite(),
             ]
-        elif granularity == "group":
+        elif granularity in ("group", "config_group"):
             feature_extractors += [
                 test_scheduling_features.path_distance(),
                 test_scheduling_features.common_path_components(),
@@ -224,7 +230,7 @@ class TestSelectModel(Model):
         }
 
     def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db()
+        failing_together = test_scheduling.get_failing_together_db(self.granularity)
 
         priorities1 = [
             "tsan",
@@ -449,3 +455,8 @@ class TestLabelSelectModel(TestSelectModel):
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
         TestSelectModel.__init__(self, lemmatization, "group")
+
+
+class TestConfigGroupSelectModel(TestSelectModel):
+    def __init__(self, lemmatization=False):
+        TestSelectModel.__init__(self, lemmatization, "config_group")

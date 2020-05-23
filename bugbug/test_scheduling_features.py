@@ -144,6 +144,13 @@ class arch(object):
         return archs.pop()
 
 
+def get_manifest(runnable):
+    if isinstance(runnable, str):
+        return runnable
+    else:
+        return runnable[1]
+
+
 def commonprefix(path1, path2):
     for i, c in enumerate(path1):
         if c != path2[i]:
@@ -155,7 +162,7 @@ class path_distance(object):
     def __call__(self, test_job, commit, **kwargs):
         min_distance = None
 
-        manifest = test_job["name"]
+        manifest = get_manifest(test_job["name"])
 
         for path in commit["files"]:
             i = len(commonprefix(manifest, path))
@@ -169,7 +176,8 @@ class path_distance(object):
 
 class common_path_components(object):
     def __call__(self, test_job, commit, **kwargs):
-        test_components = set(test_job["name"].split("/"))
+        manifest = get_manifest(test_job["name"])
+        test_components = set(manifest.split("/"))
         common_components_numbers = (
             len(set(path.split("/")) & test_components) for path in commit["files"]
         )
@@ -180,11 +188,13 @@ class first_common_parent_distance(object):
     def __call__(self, test_job, commit, **kwargs):
         min_distance = None
 
+        manifest = get_manifest(test_job["name"])
+
         for path in commit["files"]:
             path_components = path.split("/")
 
             for i in range(len(path_components) - 1, 0, -1):
-                if test_job["name"].startswith("/".join(path_components[:i])):
+                if manifest.startswith("/".join(path_components[:i])):
                     if min_distance is None or min_distance > i:
                         min_distance = i
                     break
@@ -194,13 +204,15 @@ class first_common_parent_distance(object):
 
 class same_component(object):
     def __call__(self, test_job, commit, **kwargs):
+        manifest = get_manifest(test_job["name"])
+
         component_mapping = repository.get_component_mapping()
 
-        if test_job["name"].encode("utf-8") not in component_mapping:
+        if manifest.encode("utf-8") not in component_mapping:
             return None
 
         touches_same_component = any(
-            component_mapping[test_job["name"].encode("utf-8")]
+            component_mapping[manifest.encode("utf-8")]
             == component_mapping[f.encode("utf-8")]
             for f in commit["files"]
             if f.encode("utf-8") in component_mapping
@@ -210,10 +222,12 @@ class same_component(object):
 
 class manifest_suite(object):
     def __call__(self, test_job, commit, **kwargs):
-        if test_job["name"].startswith("testing/web-platform/"):
+        manifest = get_manifest(test_job["name"])
+
+        if manifest.startswith("testing/web-platform/"):
             return "WPT"
 
-        base = os.path.basename(test_job["name"])
+        base = os.path.basename(manifest)
 
         if any(s in base for s in ("chrome", "browser", "mochitest", "a11y")):
             return "mochitest"
