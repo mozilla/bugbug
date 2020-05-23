@@ -926,7 +926,7 @@ def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: List[Commit]
     ignore_revs_content = hg.cat(
         [os.path.join(repo_dir, ".hg-annotate-ignore-revs").encode("ascii")], rev=b"-1"
     ).decode("utf-8")
-    ignore_revs = set(l[:40] for l in ignore_revs_content.splitlines())
+    ignore_revs = set(line[:40] for line in ignore_revs_content.splitlines())
 
     for commit in commits:
         commit.ignored = (

@@ -8,6 +8,7 @@ import logging
 import os
 
 import requests
+import tenacity
 
 from bugbug import repository, test_scheduling, utils
 from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
@@ -89,6 +90,10 @@ def boot_worker():
             )
             assert ALLOW_MISSING_MODELS
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(7),
+        wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
+    )
     def retrieve_schedulable_tasks():
         # Store in a file the list of tasks in the latest autoland push.
         r = requests.get(
