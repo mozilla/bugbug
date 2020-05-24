@@ -30,7 +30,7 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 - **regressionrange** - The aim of this classifier is to detect regression bugs that have a regression range vs those that don't.
 
-- **regressor** - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
+- [**regressor**](docs/models/regressor.md) - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
 
 - **spam** - The aim of this classifier is to detect bugs which are spam.
 
@@ -47,22 +47,19 @@ https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
 ## Setup and Prerequisites
 
-libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental)) might be required.
-
-```
-sudo apt-get -t experimental install libgit2-dev
-```
-
-And the python dependencies:
-
+Install the Python dependencies:
 ```
 pip3 install -r requirements.txt
 ```
 
-
 You may also need `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
 Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
+
+Also, libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental)), **might** be required (if you can't install it, skip this step).
+```
+sudo apt-get -t experimental install libgit2-dev
+```
 
 ### Auto-formatting
 

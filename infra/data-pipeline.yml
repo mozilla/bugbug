@@ -199,7 +199,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-small
+      workerType: batch
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -221,6 +221,12 @@ tasks:
             type: file
           public/push_data_group.json.version:
             path: /data/push_data_group.json.version
+            type: file
+          public/push_data_config_group.json.zst:
+            path: /data/push_data_config_group.json.zst
+            type: file
+          public/push_data_config_group.json.version:
+            path: /data/push_data_config_group.json.version
             type: file
 
         features:
@@ -245,7 +251,7 @@ tasks:
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - test-scheduling-history-push_data-retrieval
@@ -360,44 +366,6 @@ tasks:
       metadata:
         name: bugbug rollback test
         description: bugbug rollback test
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: train-backout
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '2 days'}
-      expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
-      workerType: compute-smaller
-      dependencies:
-        - commit-retrieval
-      payload:
-        maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
-        command:
-          - bugbug-train
-          - backout
-
-        artifacts:
-          public/backoutmodel.zst:
-            expires: {$fromNow: '1 month'}
-            path: /backoutmodel.zst
-            type: file
-          public/metrics.json:
-            expires: {$fromNow: '1 year'}
-            path: /metrics.json
-            type: file
-
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_backout.${version}
-        - index.project.relman.bugbug.train_backout.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_backout.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_backout.latest
-      metadata:
-        name: bugbug train backout model
-        description: bugbug train backout model
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -734,86 +702,6 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: train-tracking
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
-      expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
-      workerType: compute-smaller
-      dependencies:
-        - bugs-retrieval
-      payload:
-        maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
-        command:
-          - bugbug-train
-          - tracking
-
-        artifacts:
-          public/trackingmodel.zst:
-            expires: {$fromNow: '1 month'}
-            path: /trackingmodel.zst
-            type: file
-          public/metrics.json:
-            expires: {$fromNow: '1 year'}
-            path: /metrics.json
-            type: file
-
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_tracking.${version}
-        - index.project.relman.bugbug.train_tracking.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_tracking.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_tracking.latest
-      metadata:
-        name: bugbug train tracking model
-        description: bugbug train tracking model
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
-    - ID: train-regressionrange
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
-      expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
-      workerType: compute-smaller
-      dependencies:
-        - bugs-retrieval
-      payload:
-        maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
-        command:
-          - bugbug-train
-          - regressionrange
-
-        artifacts:
-          public/regressionrangemodel.zst:
-            expires: {$fromNow: '1 month'}
-            path: /regressionrangemodel.zst
-            type: file
-          public/metrics.json:
-            expires: {$fromNow: '1 year'}
-            path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: {$fromNow: '1 year'}
-            path: /feature_importance.png
-            type: file
-
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_regressionrange.${version}
-        - index.project.relman.bugbug.train_regressionrange.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_regressionrange.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_regressionrange.latest
-      metadata:
-        name: bugbug train regressionrange model
-        description: bugbug train regressionrange model
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
-
     - ID: train-stepstoreproduce
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
@@ -898,43 +786,43 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: train-duplicate
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
-      expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
-      workerType: compute-smaller
-      dependencies:
-        - bugs-retrieval
-      payload:
-        maxRunTime: 25200
-        image: mozilla/bugbug-base:${version}
-        command:
-          - bugbug-train
-          - duplicate
+#    - ID: train-duplicate
+#      created: {$fromNow: ''}
+#      deadline: {$fromNow: '3 days'}
+#      expires: {$fromNow: '1 year'}
+#      provisionerId: proj-relman
+#      workerType: compute-smaller
+#      dependencies:
+#        - bugs-retrieval
+#      payload:
+#        maxRunTime: 25200
+#        image: mozilla/bugbug-base:${version}
+#        command:
+#          - bugbug-train
+#          - duplicate
 
-        artifacts:
-          public/duplicatemodel.zst:
-            expires: {$fromNow: '1 month'}
-            path: /duplicatemodel.zst
-            type: file
-          public/metrics.json:
-            expires: {$fromNow: '1 year'}
-            path: /metrics.json
-            type: file
+#        artifacts:
+#          public/duplicatemodel.zst:
+#            expires: {$fromNow: '1 month'}
+#            path: /duplicatemodel.zst
+#            type: file
+#          public/metrics.json:
+#            expires: {$fromNow: '1 year'}
+#            path: /metrics.json
+#            type: file
 
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_duplicate.${version}
-        - index.project.relman.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_duplicate.latest
-      metadata:
-        name: bugbug train duplicate model
-        description: bugbug train duplicate model
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
+#      routes:
+#        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+#        - notify.irc-channel.#bugbug.on-failed
+#        - index.project.relman.bugbug.train_duplicate.${version}
+#        - index.project.relman.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+#        - index.project.relman.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+#        - index.project.relman.bugbug.train_duplicate.latest
+#      metadata:
+#        name: bugbug train duplicate model
+#        description: bugbug train duplicate model
+#        owner: release-mgmt-analysis@mozilla.com
+#        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-label-select
       created: {$fromNow: ''}
@@ -1055,44 +943,44 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: train-similarity
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '3 days'}
-      expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
-      workerType: compute-smaller
-      dependencies:
-        - bugs-retrieval
-      payload:
-        maxRunTime: 25200
-        image: mozilla/bugbug-base-nlp:${version}
-        command:
-          - bugbug-train-similarity
-          - --algorithm
-          - bm25
+#    - ID: train-similarity
+#      created: {$fromNow: ''}
+#      deadline: {$fromNow: '3 days'}
+#      expires: {$fromNow: '1 year'}
+#      provisionerId: proj-relman
+#      workerType: compute-smaller
+#      dependencies:
+#        - bugs-retrieval
+#      payload:
+#        maxRunTime: 25200
+#        image: mozilla/bugbug-base-nlp:${version}
+#        command:
+#          - bugbug-train-similarity
+#          - --algorithm
+#          - bm25
 
-        artifacts:
-          public/bm25similarity.similaritymodel.zst:
-            expires: {$fromNow: '1 month'}
-            path: /bm25similarity.similaritymodel.zst
-            type: file
-          public/metrics.json:
-            expires: {$fromNow: '1 year'}
-            path: /metrics.json
-            type: file
+#        artifacts:
+#          public/bm25similarity.similaritymodel.zst:
+#            expires: {$fromNow: '1 month'}
+#            path: /bm25similarity.similaritymodel.zst
+#            type: file
+#          public/metrics.json:
+#            expires: {$fromNow: '1 year'}
+#            path: /metrics.json
+#            type: file
 
-      routes:
-        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-        - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_similarity.${version}
-        - index.project.relman.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_similarity.latest
-      metadata:
-        name: bugbug train similarity model
-        description: bugbug train similarity model
-        owner: release-mgmt-analysis@mozilla.com
-        source: ${repository}/raw/master/data-pipeline.yml
+#      routes:
+#        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+#        - notify.irc-channel.#bugbug.on-failed
+#        - index.project.relman.bugbug.train_similarity.${version}
+#        - index.project.relman.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+#        - index.project.relman.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+#        - index.project.relman.bugbug.train_similarity.latest
+#      metadata:
+#        name: bugbug train similarity model
+#        description: bugbug train similarity model
+#        owner: release-mgmt-analysis@mozilla.com
+#        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: check_metrics
       created: {$fromNow: ''}
@@ -1100,16 +988,12 @@ tasks:
       provisionerId: proj-relman
       workerType: batch
       dependencies:
-        - train-backout
         - train-component
         - train-defectenhancementtask
-        - train-duplicate
         - train-regression
-        - train-regressionrange
         - train-regressor
         - train-spambug
         - train-stepstoreproduce
-        - train-tracking
         - train-test-label-select
         - train-test-group-select
         - train-test-failure

@@ -60,6 +60,12 @@ class TestSelectModel(Model):
                 test_scheduling.PAST_FAILURES_GROUP_DB,
                 test_scheduling.TOUCHED_TOGETHER_DB,
             )
+        elif granularity == "config_group":
+            self.training_dbs.append(test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB)
+            self.eval_dbs[test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB] = (
+                test_scheduling.PAST_FAILURES_CONFIG_GROUP_DB,
+                test_scheduling.TOUCHED_TOGETHER_DB,
+            )
 
         self.cross_validation_enabled = False
 
@@ -77,7 +83,7 @@ class TestSelectModel(Model):
                 # test_scheduling_features.chunk(),
                 test_scheduling_features.suite(),
             ]
-        elif granularity == "group":
+        elif granularity in ("group", "config_group"):
             feature_extractors += [
                 test_scheduling_features.path_distance(),
                 test_scheduling_features.common_path_components(),
@@ -205,13 +211,13 @@ class TestSelectModel(Model):
             push_num = past_failures_data["push_num"] + 1
         all_runnables = past_failures_data["all_runnables"]
 
+        if self.granularity == "label":
+            all_runnables = tuple(r for r in all_runnables if r.startswith("test-"))
+
         commit_tests = []
         for data in test_scheduling.generate_data(
-            past_failures_data, commit_data, push_num, all_runnables, [], []
+            past_failures_data, commit_data, push_num, all_runnables, tuple(), tuple()
         ):
-            if self.granularity == "label" and not data["name"].startswith("test-"):
-                continue
-
             commit_test = commit_data.copy()
             commit_test["test_job"] = data
             commit_tests.append(commit_test)
@@ -224,7 +230,7 @@ class TestSelectModel(Model):
         }
 
     def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db()
+        failing_together = test_scheduling.get_failing_together_db(self.granularity)
 
         priorities1 = [
             "tsan",
@@ -278,6 +284,16 @@ class TestSelectModel(Model):
         # Get a test set of pushes on which to test the model.
         pushes, train_push_len = self.get_pushes(False)
 
+        # To evaluate the model with reductions enabled, we need to regenerate the failing together DB, using
+        # only failure data from the training pushes (otherwise, we'd leak training information into the test
+        # set).
+        if self.granularity == "label":
+            print("Generate failing together DB (restricted to training pushes)")
+            push_data, _ = test_scheduling.get_push_data("label")
+            test_scheduling.generate_failing_together_probabilities(
+                push_data, pushes[train_push_len - 1]["revs"][0]
+            )
+
         test_pushes = pushes[train_push_len:]
 
         all_tasks = reduce(
@@ -326,13 +342,26 @@ class TestSelectModel(Model):
         if self.granularity == "label":
             reductions += [0.9, 1.0]
 
-        def do_eval(confidence_threshold, reduction, cap):
+        def do_eval(confidence_threshold, reduction, cap, minimum):
             for rev, push in test_pushes.items():
                 selected = set(
                     name
                     for name, confidence in push["all_possibly_selected"].items()
                     if confidence >= confidence_threshold
                 )
+
+                if minimum is not None and len(selected) < minimum:
+                    remaining = [
+                        (name, confidence)
+                        for name, confidence in push["all_possibly_selected"].items()
+                        if name not in selected
+                    ]
+                    selected.update(
+                        name
+                        for name, _ in sorted(remaining, key=lambda x: -x[1])[
+                            : minimum - len(selected)
+                        ]
+                    )
 
                 if reduction is not None:
                     selected = self.reduce(selected, reduction)
@@ -408,10 +437,11 @@ class TestSelectModel(Model):
                 f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, and cap at {cap}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
             )
 
-        for cap in [None, 300, 500]:
-            for reduction in reductions:
-                for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
-                    do_eval(confidence_threshold, reduction, cap)
+        for minimum in [None, 10]:
+            for cap in [None, 300, 500]:
+                for reduction in reductions:
+                    for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
+                        do_eval(confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
@@ -425,3 +455,8 @@ class TestLabelSelectModel(TestSelectModel):
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
         TestSelectModel.__init__(self, lemmatization, "group")
+
+
+class TestConfigGroupSelectModel(TestSelectModel):
+    def __init__(self, lemmatization=False):
+        TestSelectModel.__init__(self, lemmatization, "config_group")

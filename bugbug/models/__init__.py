@@ -25,6 +25,7 @@ MODELS = {
     "stepstoreproduce": "bugbug.models.stepstoreproduce.StepsToReproduceModel",
     "testlabelselect": "bugbug.models.testselect.TestLabelSelectModel",
     "testgroupselect": "bugbug.models.testselect.TestGroupSelectModel",
+    "testconfiggroupselect": "bugbug.models.testselect.TestConfigGroupSelectModel",
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
