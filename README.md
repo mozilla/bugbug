@@ -1,5 +1,11 @@
 # bugbug
 
+[![Task Status](https://community-tc.services.mozilla.com/api/github/v1/repository/mozilla/bugbug/master/badge.svg)](https://community-tc.services.mozilla.com/api/github/v1/repository/mozilla/bugbug/master/latest)
+[![codecov](https://codecov.io/gh/mozilla/bugbug/branch/master/graph/badge.svg)](https://codecov.io/gh/mozilla/bugbug)
+<a href="https://chat.mozilla.org/#/room/#bugbug:mozilla.org" target="_blank">
+   <img src="https://img.shields.io/badge/chat%20on%20[m]-%23bugbug%3Amozilla.org-blue">
+</a>
+
 Bugbug aims at leveraging machine learning techniques to help with bug and quality management, and other software engineering tasks (such as test selection and defect prediction).
 
 Chat with us in the [bugbug](https://chat.mozilla.org/#/room/#bugbug:mozilla.org) Matrix room.
