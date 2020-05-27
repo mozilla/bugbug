@@ -5,7 +5,7 @@
 
 import csv
 from datetime import datetime
-from typing import List, Set, Union
+from typing import Iterable
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -94,8 +94,8 @@ def get_ids(params):
     return all_ids
 
 
-def get(bug_ids: Union[List[int], Set[int]]):
-    """Function to retrieve Bug Information including history, attachment, comments using Bugzilla REST API.
+def get(bug_ids: Iterable[int]):
+    """Function to retrieve Bug Information including history, comments using Bugzilla REST API and attachment using Bugzilla package.
 
     :param bug_ids: find bug information for these `bug_ids`
     :type bug_ids: list of integers or str or int
@@ -160,7 +160,9 @@ def get(bug_ids: Union[List[int], Set[int]]):
         batch_of_bugs_info = {
             int(a_bug["id"]): a_bug for a_bug in batch_of_bugs_info["bugs"]
         }
+
         batch_of_bugs_info = cleanup_fields_in_batch_of_bugs(batch_of_bugs_info)
+
         new_bugs.update(batch_of_bugs_info)
 
         Bugzilla(
