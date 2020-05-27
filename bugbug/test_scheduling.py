@@ -8,6 +8,7 @@ import itertools
 import logging
 import os
 import pickle
+import re
 import shelve
 import shutil
 import struct
@@ -124,27 +125,28 @@ def filter_runnables(
         return tuple(runnable for runnable in runnables if runnable in all_runnables)
 
 
+def rename_task(task: str) -> str:
+    return re.sub(
+        r"android(.+)/pgo",
+        r"android\g<1>-shippable/opt",
+        task.replace("test-linux64-", "test-linux1804-64-"),
+    )
+
+
 # Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
 def rename_runnables(
     granularity: str, runnables: Tuple[Runnable, ...]
 ) -> Tuple[Runnable, ...]:
     if granularity == "label":
         tasks = cast(List[Task], runnables)
-        return tuple(
-            Task(task.replace("test-linux64-", "test-linux1804-64-")) for task in tasks
-        )
+        return tuple(Task(rename_task(task)) for task in tasks)
     elif granularity == "group":
         groups = cast(List[Group], runnables)
         return tuple(Group(group.split(":")[0]) for group in groups)
     elif granularity == "config_group":
         config_groups = cast(List[ConfigGroup], runnables)
         return tuple(
-            ConfigGroup(
-                (
-                    config.replace("test-linux64-", "test-linux1804-64-"),
-                    Group(group.split(":")[0]),
-                )
-            )
+            ConfigGroup((rename_task(config), Group(group.split(":")[0]),))
             for config, group in config_groups
         )
     else:

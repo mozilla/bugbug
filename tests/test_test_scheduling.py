@@ -10,6 +10,55 @@ import pytest
 from bugbug import repository, test_scheduling
 
 
+def test_rename_runnables():
+    assert test_scheduling.rename_runnables(
+        "label", ("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2",)
+    ) == ("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2",)
+    assert test_scheduling.rename_runnables(
+        "label",
+        (
+            "test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2",
+            "test-linux64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1",
+        ),
+    ) == (
+        "test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2",
+        "test-linux1804-64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1",
+    )
+    assert test_scheduling.rename_runnables(
+        "label",
+        (
+            "test-android-hw-p2-8-0-android-aarch64/pgo-geckoview-mochitest-media-e10s-2",
+        ),
+    ) == (
+        "test-android-hw-p2-8-0-android-aarch64-shippable/opt-geckoview-mochitest-media-e10s-2",
+    )
+
+    assert test_scheduling.rename_runnables(
+        "group",
+        (
+            "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini",
+        ),
+    ) == ("toolkit/components/extensions/test/mochitest/mochitest-remote.ini",)
+    assert test_scheduling.rename_runnables("group", ("dom/prova/mochitest.ini",)) == (
+        "dom/prova/mochitest.ini",
+    )
+
+    assert test_scheduling.rename_runnables(
+        "config_group",
+        (
+            (
+                "test-linux64-shippable/opt-*-e10s",
+                "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini",
+            ),
+        ),
+    ) == (
+        (
+            "test-linux1804-64-shippable/opt-*-e10s",
+            "toolkit/components/extensions/test/mochitest/mochitest-remote.ini",
+        ),
+    )
+
+
 def test_touched_together(monkeypatch):
     test_scheduling.touched_together = None
 
