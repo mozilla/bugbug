@@ -128,6 +128,7 @@ def get(bug_ids: Iterable[int]):
 
     def attachmenthandler(bug, bug_id):
         bug_id = int(bug_id)
+
         if bug_id not in new_bugs:
             new_bugs[bug_id] = dict()
         new_bugs[bug_id]["attachments"] = bug
