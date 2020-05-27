@@ -54,7 +54,7 @@ def main(args):
             f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
         )
 
-    bug_ids = model.get_similar_bugs(bugzilla.get(args.bug_id)[args.bug_id])
+    bug_ids = model.get_similar_bugs(bugzilla.get([int(args.bug_id)])[args.bug_id])
 
     bugs = {}
     for bug in bugzilla.get_bugs():

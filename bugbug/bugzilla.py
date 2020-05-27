@@ -94,7 +94,7 @@ def get_ids(params):
     return all_ids
 
 
-def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
+def get(bug_ids: Union[List[int], Set[int]]):
     """Function to retrieve Bug Information including history, attachment, comments using Bugzilla REST API.
 
     :param bug_ids: find bug information for these `bug_ids`
@@ -104,10 +104,14 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
     """
 
     def filter_keys(array_of_dict_values, required_fields):
-        for a_value in array_of_dict_values:
-            to_be_deleted_fields = set(a_value.keys()).difference(set(required_fields))
-            for extra_field in to_be_deleted_fields:
-                del a_value[extra_field]
+        # This will mutates array_of_dict_values values in place
+        for a_ind, a_value in enumerate(array_of_dict_values):
+            a_value = {
+                a_field: a_value[a_field]
+                for a_field in list(a_value.keys())
+                if a_field in required_fields
+            }
+            array_of_dict_values[a_ind] = a_value
         return array_of_dict_values
 
     def cleanup_fields_in_batch_of_bugs(batch_of_bugs):
@@ -120,43 +124,32 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
                 required_fields=COMMENT_INCLUDE_FIELDS,
             )
             a_bug_info["comments"] = current_comments_array
-
-            # Delete other fields from attachments
-            current_attachments_array = a_bug_info["attachments"]
-            current_attachments_array = filter_keys(
-                array_of_dict_values=current_attachments_array,
-                required_fields=ATTACHMENT_INCLUDE_FIELDS,
-            )
-            a_bug_info["attachments"] = current_attachments_array
-            batch_of_bugs[a_bug_info_key] = a_bug_info
-
         return batch_of_bugs
 
-    if isinstance(bug_ids, list):
-        # Expected Format
-        bug_ids = list(sorted(set(map(int, bug_ids))))
+    def attachmenthandler(bug, bug_id):
+        bug_id = int(bug_id)
+        if bug_id not in new_bugs:
+            new_bugs[bug_id] = dict()
+        new_bugs[bug_id]["attachments"] = bug
 
-    elif isinstance(bug_ids, set):
-        bug_ids = list(sorted(map(int, bug_ids)))
-
-    elif isinstance(bug_ids, str):
-        bug_ids = [int(bug_ids)]
-
-    elif isinstance(bug_ids, int):
-        bug_ids = [bug_ids]
-    else:
-        pass
+    bug_ids = sorted(set(bug_ids))
 
     new_bugs = dict()
+
     batch_size = Bugzilla.BUGZILLA_CHUNK_SIZE
+
+    # Getting _default, history and comments information using REST API
+    # as specified
 
     for i in range(0, len(bug_ids), batch_size):
         batch = bug_ids[i : i + batch_size]
         batch_of_ids = ",".join(map(str, batch))
 
+        # "include_fields": "_default,history,comments,attachments",
+        # Attachments data size is heavy, so handling them separately
         params_for_custom_fields = {
             "id": batch_of_ids,
-            "include_fields": "_default,history,comments,attachments",
+            "include_fields": "_default,history,comments",
         }
         response = utils.get_session("bugzilla").get(
             "https://bugzilla.mozilla.org/rest/bug", params=params_for_custom_fields
@@ -169,6 +162,16 @@ def get(bug_ids: Union[str, int, List[int], List[str], Set[int], Set[str]]):
         }
         batch_of_bugs_info = cleanup_fields_in_batch_of_bugs(batch_of_bugs_info)
         new_bugs.update(batch_of_bugs_info)
+
+        Bugzilla(
+            batch,
+            bughandler=None,
+            commenthandler=None,
+            comment_include_fields=None,
+            attachmenthandler=attachmenthandler,
+            attachment_include_fields=ATTACHMENT_INCLUDE_FIELDS,
+            historyhandler=None,
+        ).get_data().wait()
 
     return new_bugs
 

@@ -56,7 +56,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
     # the token here
     bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla.get(bug_ids)
+    bugs = bugzilla.get(bug_ids_set)
 
     missing_bugs = bug_ids_set.difference(bugs.keys())
 

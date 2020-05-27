@@ -18,6 +18,7 @@ logger = getLogger(__name__)
 
 
 def classify_bugs(model_name, classifier, bug_id):
+
     if classifier != "default":
         assert (
             model_name in MODELS_WITH_TYPE
@@ -46,8 +47,10 @@ def classify_bugs(model_name, classifier, bug_id):
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
+    bug_id = int(bug_id)
+
     if bug_id:
-        bugs = bugzilla.get(bug_id).values()
+        bugs = bugzilla.get([bug_id]).values()
         assert bugs, f"A bug with a bug id of {bug_id} was not found"
     else:
         assert db.download(bugzilla.BUGS_DB)
