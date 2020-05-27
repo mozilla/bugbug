@@ -46,8 +46,6 @@ def classify_bugs(model_name, classifier, bug_id):
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
-    bug_id = int(bug_id)
-
     if bug_id:
         bugs = bugzilla.get([bug_id]).values()
         assert bugs, f"A bug with a bug id of {bug_id} was not found"
@@ -92,7 +90,7 @@ def main():
         choices=["default", "nn"],
         default="default",
     )
-    parser.add_argument("--bug-id", help="Classify the given bug id")
+    parser.add_argument("--bug-id", help="Classify the given bug id", type=int)
 
     args = parser.parse_args()
 
