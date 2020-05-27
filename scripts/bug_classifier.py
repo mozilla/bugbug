@@ -18,7 +18,6 @@ logger = getLogger(__name__)
 
 
 def classify_bugs(model_name, classifier, bug_id):
-
     if classifier != "default":
         assert (
             model_name in MODELS_WITH_TYPE
