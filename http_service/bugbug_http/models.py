@@ -41,12 +41,10 @@ MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
 MODEL_CACHE.start_ttl_thread()
 
 
-def setkey(key, value, expiration=DEFAULT_EXPIRATION_TTL):
-    LOGGER.debug(f"Storing data at {key}: {value}")
+def setkey(key: str, value: bytes) -> None:
+    LOGGER.debug(f"Storing data at {key}: {value.decode()}")
     redis.set(key, value)
-
-    if expiration > 0:
-        redis.expire(key, expiration)
+    redis.expire(key, DEFAULT_EXPIRATION_TTL)
 
 
 def classify_bug(model_name, bug_ids, bugzilla_token):
@@ -64,8 +62,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
         job = JobInfo(classify_bug, model_name, bug_id)
 
         # TODO: Find a better error format
-        encoded_data = orjson.dumps({"available": False})
-        setkey(job.result_key, encoded_data)
+        setkey(job.result_key, orjson.dumps({"available": False}))
 
     if not bugs:
         return "NOK"
@@ -100,7 +97,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
         setkey(job.result_key, orjson.dumps(data))
 
         # Save the bug last change
-        setkey(job.change_time_key, bugs[bug_id]["last_change_time"], expiration=0)
+        setkey(job.change_time_key, bugs[bug_id]["last_change_time"])
 
     return "OK"
 
