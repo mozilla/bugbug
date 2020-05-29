@@ -131,6 +131,7 @@ def get(bug_ids: Iterable[int]) -> Dict[int, dict]:
 
         if bug_id not in new_bugs:
             new_bugs[bug_id] = dict()
+
         new_bugs[bug_id]["attachments"] = bug
 
     bug_ids = sorted(set(bug_ids))
