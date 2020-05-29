@@ -7,7 +7,7 @@ import math
 import statistics
 import struct
 from functools import reduce
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 import xgboost
@@ -105,7 +105,7 @@ class TestSelectModel(Model):
 
     def get_pushes(
         self, apply_filters: bool = False
-    ) -> Tuple[List[Dict[str, List[str]]], float]:
+    ) -> Tuple[List[Dict[str, Any]], int]:
         pushes = []
         for revs, test_datas in test_scheduling.get_test_scheduling_history(
             self.granularity
@@ -202,7 +202,12 @@ class TestSelectModel(Model):
 
         return classes, [0, 1]
 
-    def select_tests(self, commits, confidence=0.3, push_num=None):
+    def select_tests(
+        self,
+        commits: Iterable[dict],
+        confidence: float = 0.3,
+        push_num: Optional[int] = None,
+    ):
         commit_data = commit_features.merge_commits(commits)
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity)
@@ -280,7 +285,7 @@ class TestSelectModel(Model):
 
         return tasks - to_drop
 
-    def evaluation(self):
+    def evaluation(self) -> None:
         # Get a test set of pushes on which to test the model.
         pushes, train_push_len = self.get_pushes(False)
 
@@ -289,23 +294,29 @@ class TestSelectModel(Model):
         # set).
         if self.granularity == "label":
             print("Generate failing together DB (restricted to training pushes)")
-            push_data, _ = test_scheduling.get_push_data("label")
+            push_data_iter, push_data_count, _ = test_scheduling.get_push_data("label")
             test_scheduling.generate_failing_together_probabilities(
-                push_data, pushes[train_push_len - 1]["revs"][0]
+                self.granularity,
+                push_data_iter(),
+                push_data_count,
+                pushes[train_push_len - 1]["revs"][0],
             )
 
-        test_pushes = pushes[train_push_len:]
+        test_pushes_list = pushes[train_push_len:]
 
         all_tasks = reduce(
             lambda x, y: x | y,
-            (set(push["failures"]) | set(push["passes"]) for push in test_pushes[-28:]),
+            (
+                set(push["failures"]) | set(push["passes"])
+                for push in test_pushes_list[-28:]
+            ),
         )
 
         test_pushes_failures = sum(
-            1 for push in test_pushes if len(push["failures"]) > 0
+            1 for push in test_pushes_list if len(push["failures"]) > 0
         )
 
-        test_pushes = {push["revs"][0]: push for push in test_pushes}
+        test_pushes = {push["revs"][0]: push for push in test_pushes_list}
 
         print(
             f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
@@ -338,7 +349,7 @@ class TestSelectModel(Model):
                 commits, 0.3, push_num - 100
             )
 
-        reductions = [None]
+        reductions: List[Optional[float]] = [None]
         if self.granularity == "label":
             reductions += [0.9, 1.0]
 

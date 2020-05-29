@@ -99,6 +99,7 @@ JOBS_TO_IGNORE = (
     "-awsy-",
     "-raptor-",
     "-talos-",
+    "browsertime",
     "backlog",
     # inclusive test suites -- these *only* run when certain files have changed
     "-test-verify-",
