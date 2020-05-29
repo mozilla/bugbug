@@ -5,7 +5,7 @@
 
 import csv
 from datetime import datetime
-from typing import Iterable
+from typing import Dict, Iterable
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -94,7 +94,7 @@ def get_ids(params):
     return all_ids
 
 
-def get(bug_ids: Iterable[int]):
+def get(bug_ids: Iterable[int]) -> Dict[int, dict]:
     """Function to retrieve Bug Information including history, comments using Bugzilla REST API and attachment using Bugzilla package.
 
     :param bug_ids: find bug information for these `bug_ids`
@@ -140,7 +140,7 @@ def get(bug_ids: Iterable[int]):
     batch_size = Bugzilla.BUGZILLA_CHUNK_SIZE
 
     # Getting _default, history and comments information using REST API
-    # as specified
+    # Attachment meta data is retrieved using Bugzilla module
 
     for i in range(0, len(bug_ids), batch_size):
         batch = bug_ids[i : i + batch_size]
@@ -148,6 +148,7 @@ def get(bug_ids: Iterable[int]):
 
         # "include_fields": "_default,history,comments,attachments",
         # Attachments data size is heavy, so handling them separately
+
         params_for_custom_fields = {
             "id": batch_of_ids,
             "include_fields": "_default,history,comments",
