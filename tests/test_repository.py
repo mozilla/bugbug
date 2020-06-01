@@ -366,11 +366,22 @@ def test_hg_log(fake_hg_repo):
     assert commits[5].author_email == "milla@mozilla.org"
     assert commits[5].reviewers == []
 
-    commits = repository.hg_log(hg, [revs[1], revs[3]])
+    commits = repository.hg_log(hg, revs[1] + b":" + revs[3])
     assert len(commits) == 3, "hg log should return three commits"
     assert commits[0].node == revision2
     assert commits[1].node == revision3
     assert commits[2].node == revision4
+
+    commits = repository.hg_log(hg, [revs[1], revs[2], revs[3]])
+    assert len(commits) == 3, "hg log should return three commits"
+    assert commits[0].node == revision2
+    assert commits[1].node == revision3
+    assert commits[2].node == revision4
+
+    commits = repository.hg_log(hg, [revs[1], revs[3]])
+    assert len(commits) == 2, "hg log should return two commits"
+    assert commits[0].node == revision2
+    assert commits[1].node == revision4
 
 
 def test_download_component_mapping():
