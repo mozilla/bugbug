@@ -240,13 +240,13 @@ class TestSelectModel(Model):
         priorities1 = [
             "tsan",
             "android-hw",
-            "linux32",
+            "linux1804-32",
             "asan",
             "mac",
             "windows7",
             "android-em",
             "windows10",
-            "linux64",
+            "linux1804-64",
         ]
         priorities2 = ["debug", "opt"]
 
