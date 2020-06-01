@@ -256,16 +256,18 @@ class TestSelectModel(Model):
             task1 = to_analyze.pop(0)
 
             key = test_scheduling.failing_together_key(task1)
-            if key not in failing_together:
+
+            try:
+                failing_together_stats = pickle.loads(failing_together[key])
+            except KeyError:
                 continue
 
-            failing_together_stats = pickle.loads(failing_together[key])
-
             for task2 in to_analyze:
-                if task2 not in failing_together_stats:
+                try:
+                    support, confidence = failing_together_stats[task2]
+                except KeyError:
                     continue
 
-                support, confidence = failing_together_stats[task2]
                 if confidence < min_redundancy_confidence:
                     continue
 

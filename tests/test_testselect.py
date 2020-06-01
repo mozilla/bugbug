@@ -46,3 +46,14 @@ def test_reduce():
     assert model.reduce(
         {"test-linux1804-64-asan/debug", "test-linux1804-64/debug"}, 1.0
     ) == {"test-linux1804-64/debug"}
+
+    # Test case where the second task is not present in the failing together stats of the first.
+    assert model.reduce(
+        {"test-linux1804-64-asan/debug", "test-windows10/opt"}, 1.0
+    ) == {"test-linux1804-64-asan/debug", "test-windows10/opt"}
+
+    # Test case where a task is not present at all in the failing together DB.
+    assert model.reduce({"test-linux1804-64-qr/debug", "test-windows10/opt"}, 1.0) == {
+        "test-linux1804-64-qr/debug",
+        "test-windows10/opt",
+    }
