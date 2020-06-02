@@ -300,13 +300,8 @@ def get_failing_together_db(granularity: str) -> LMDBDict:
     return LMDBDict(get_failing_together_db_path(granularity))
 
 
-def failing_together_key(couple):
-    if isinstance(couple[0], str):
-        return f"{couple[0]}${couple[1]}".encode("utf-8")
-    elif isinstance(couple[0], tuple):
-        return f"{couple[0][0]}@{couple[0][1]}${couple[1][0]}@{couple[1][0]}".encode(
-            "utf-8"
-        )
+def failing_together_key(item: str) -> bytes:
+    return item.encode("utf-8")
 
 
 def remove_failing_together_db(granularity: str) -> None:
@@ -414,7 +409,7 @@ def generate_failing_together_probabilities(
             f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
         )
 
-    failing_together = get_failing_together_db(granularity)
+    failing_together: dict = collections.defaultdict(dict)
     count_redundancies: collections.Counter = collections.Counter()
     for couple, (support, confidence) in stats.items():
         if confidence == 1.0:
@@ -444,13 +439,20 @@ def generate_failing_together_probabilities(
             count_redundancies["0%"] += 1
             continue
 
-        failing_together[failing_together_key(couple)] = struct.pack(
-            "ff", support, confidence
-        )
+        if granularity == "config_group":
+            failing_together[couple[0][1]][(couple[0][0], couple[1][0])] = (
+                support,
+                confidence,
+            )
+        else:
+            failing_together[couple[0]][couple[1]] = (support, confidence)
 
     for percentage, count in count_redundancies.most_common():
         logger.info(f"{count} with {percentage} confidence")
 
+    failing_together_db = get_failing_together_db(granularity)
+    for key, value in failing_together.items():
+        failing_together_db[failing_together_key(key)] = pickle.dumps(value)
     close_failing_together_db(granularity)
 
 

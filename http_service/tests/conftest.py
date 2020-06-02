@@ -6,8 +6,8 @@
 import json
 import logging
 import os
+import pickle
 import re
-import struct
 from collections import defaultdict
 from datetime import datetime
 
@@ -287,8 +287,8 @@ def mock_schedule_tests_classify(monkeypatch):
         past_failures_data.close()
 
     failing_together = test_scheduling.get_failing_together_db("label")
-    failing_together[b"test-linux64/opt$test-windows10/opt"] = struct.pack(
-        "ff", 0.1, 1.0
+    failing_together[b"test-linux64/opt"] = pickle.dumps(
+        {"test-windows10/opt": (0.1, 1.0),}
     )
     test_scheduling.close_failing_together_db("label")
 
