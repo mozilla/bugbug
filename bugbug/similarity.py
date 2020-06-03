@@ -82,7 +82,11 @@ def download_and_load_similarity_model(model_name):
 
 class BaseSimilarity(abc.ABC):
     def __init__(
-        self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
+        self,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+        end_to_end=False,
     ):
         self.cleanup_functions = [
             feature_cleanup.responses(),
@@ -98,6 +102,10 @@ class BaseSimilarity(abc.ABC):
         self.nltk_tokenizer = nltk_tokenizer
         self.confidence_threshold = confidence_threshold
 
+        self.duplicatemodel = (
+            DuplicateModel.load("duplicatemodel") if end_to_end else None
+        )
+
     def get_text(self, bug, all_comments=False):
         if all_comments:
             comments = " ".join(comment["text"] for comment in bug["comments"])
@@ -105,6 +113,29 @@ class BaseSimilarity(abc.ABC):
             comments = bug["comments"][0]["text"]
 
         return "{} {}".format(bug["summary"], comments)
+
+    def get_similar_bugs(self, bug):
+        similar_bug_ids = self.search_similar_bugs(bug)
+        if self.duplicatemodel:
+            similar_bugs = [
+                bug for bug in bugzilla.get_bugs() if bug["id"] in similar_bug_ids
+            ]
+            bug_couples = [(bug, similar_bug) for similar_bug in similar_bugs]
+            probs_bug_couples = sorted(
+                zip(
+                    self.duplicatemodel.classify(bug_couples, probabilities=True),
+                    bug_couples,
+                ),
+                key=lambda v: -v[0][1],
+            )
+
+            similar_bug_ids = [
+                similar_bug["id"]
+                for prob, (bug, similar_bug) in probs_bug_couples
+                if prob[1] > self.confidence_threshold
+            ]
+
+        return similar_bug_ids
 
     def text_preprocess(self, text, stemming=True, lemmatization=False, join=False):
 
@@ -134,7 +165,7 @@ class BaseSimilarity(abc.ABC):
             return " ".join(word for word in text)
         return text
 
-    def evaluation(self, end_to_end=False):
+    def evaluation(self):
         # A map from bug ID to its duplicate IDs
         duplicates = defaultdict(set)
         all_ids = set(
@@ -143,9 +174,6 @@ class BaseSimilarity(abc.ABC):
             if bug["creator"] not in REPORTERS_TO_IGNORE
             and "dupeme" not in bug["keywords"]
         )
-
-        if end_to_end:
-            duplicatemodel = DuplicateModel.load("duplicatemodel")
 
         for bug in bugzilla.get_bugs():
             dupes = [entry for entry in bug["duplicates"] if entry in all_ids]
@@ -176,17 +204,6 @@ class BaseSimilarity(abc.ABC):
                 num_hits = 0
                 queries += 1
                 similar_bugs = self.get_similar_bugs(bug)[:10]
-                if end_to_end:
-                    sim_bugs = [
-                        bug for bug in bugzilla.get_bugs() if bug["id"] in similar_bugs
-                    ]
-                    bug_couples = [(bug, sim_bugs[bug_id]) for bug_id in sim_bugs]
-                    probs = duplicatemodel.classify(bug_couples, probabilities=True)
-                    similar_bugs = [
-                        similar_bugs[idx]
-                        for idx, prob in enumerate(probs)
-                        if prob[1] > self.confidence_threshold
-                    ]
 
                 # Recall
                 for idx, item in enumerate(duplicates[bug["id"]]):
@@ -280,7 +297,7 @@ class LSISimilarity(BaseSimilarity):
             output_prefix="simdata.shdat", corpus=corpus_lsi, num_features=300
         )
 
-    def get_similar_bugs(self, query, k=10):
+    def search_similar_bugs(self, query, k=10):
         query_summary = "{} {}".format(query["summary"], query["comments"][0]["text"])
         query_summary = self.text_preprocess(query_summary)
 
@@ -329,7 +346,7 @@ class NeighborsSimilarity(BaseSimilarity):
         self.vectorizer.fit(text)
         self.similarity_calculator.fit(self.vectorizer.transform(text))
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
 
         processed_query = self.vectorizer.transform([self.get_text(query)])
         _, indices = self.similarity_calculator.kneighbors(processed_query)
@@ -387,7 +404,7 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
 
     # word2vec.wmdistance calculates only the euclidean distance. To get the cosine distance,
     # we're using the function with a few subtle changes. We compute the cosine distances
-    # in the get_similar_bugs method and use this inside the wmdistance method.
+    # in the search_similar_bugs method and use this inside the wmdistance method.
     def wmdistance(self, document1, document2, all_distances, distance_metric="cosine"):
         model = self.w2vmodel
         if len(document1) == 0 or len(document2) == 0:
@@ -446,7 +463,7 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
             dtype=np.double,
         )
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
 
         words = self.text_preprocess(self.get_text(query))
         words = [word for word in words if word in self.w2vmodel.wv.vocab]
@@ -530,7 +547,7 @@ class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
         self.dictionary = Dictionary(self.corpus)
         self.tfidf = TfidfModel(dictionary=self.dictionary)
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
 
         query = self.text_preprocess(self.get_text(query))
         words = [
@@ -646,7 +663,7 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
             bow, similarity_matrix, num_best=10
         )
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
         similarities = self.softcosinesimilarity[
             self.dictionary.doc2bow(self.text_preprocess(self.get_text(query)))
         ]
@@ -683,7 +700,7 @@ class BM25Similarity(BaseSimilarity):
 
         self.model = BM25(self.corpus)
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
         distances = self.model.get_scores(self.text_preprocess(self.get_text(query)))
         id_dist = zip(self.bug_ids, distances)
 
@@ -719,7 +736,7 @@ class LDASimilarity(BaseSimilarity):
 
         self.model = LdaModel([self.dictionary.doc2bow(text) for text in self.corpus])
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
         query = self.text_preprocess(self.get_text(query))
 
         dense1 = sparse2full(
@@ -775,7 +792,7 @@ class ElasticSearchSimilarity(BaseSimilarity):
         self.elastic_search.indices.delete(index="bugbug", ignore=[400, 404])
         bulk(self.elastic_search, self.make_documents())
 
-    def get_similar_bugs(self, query):
+    def search_similar_bugs(self, query):
         find_similar = self.text_preprocess(
             self.get_text(query, all_comments=True), stemming=False, join=True
         )
