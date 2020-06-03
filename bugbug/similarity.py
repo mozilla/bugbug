@@ -121,7 +121,7 @@ class BaseSimilarity(abc.ABC):
                 bug for bug in bugzilla.get_bugs() if bug["id"] in similar_bug_ids
             ]
             bug_couples = [(bug, similar_bug) for similar_bug in similar_bugs]
-            probs_bugs_couples = sorted(
+            probs_bug_couples = sorted(
                 zip(
                     self.duplicatemodel.classify(bug_couples, probabilities=True),
                     bug_couples,
@@ -131,7 +131,7 @@ class BaseSimilarity(abc.ABC):
 
             similar_bug_ids = [
                 similar_bug["id"]
-                for prob, (bug, similar_bug) in probs_bugs_couples
+                for prob, (bug, similar_bug) in probs_bug_couples
                 if prob[1] > self.confidence_threshold
             ]
 
