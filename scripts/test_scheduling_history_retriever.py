@@ -103,10 +103,10 @@ class Retriever(object):
                         cached = None
                         to_regenerate -= 1
 
-                    """# Regenerate results which were generated with an older version of mozci.
+                    # Regenerate results which were generated with an older version of mozci.
                     elif mozci_version != MOZCI_VERSION:
                         cached = None
-                        to_regenerate -= 1"""
+                        to_regenerate -= 1
 
                 if cached:
                     num_cached += 1
