@@ -52,16 +52,10 @@ class Retriever(object):
         from_date = datetime.utcnow() - relativedelta(months=from_months)
         to_date = datetime.utcnow() - relativedelta(days=3)
 
-        pushes = tuple(
-            mozci.push.make_push_objects(
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d"),
-                branch="autoland",
-            )
-        )
-
-        pushes = tuple(
-            push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
+        pushes = mozci.push.make_push_objects(
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
+            branch="autoland",
         )
 
         if granularity == "label":
@@ -85,7 +79,8 @@ class Retriever(object):
             # run.
             to_regenerate = 0
 
-            for push in tqdm(pushes):
+            for _ in tqdm(range(num_pushes)):
+                push = pushes.pop(0)
                 cached = futures.pop(0).result()
 
                 semaphore.release()
