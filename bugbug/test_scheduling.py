@@ -54,7 +54,7 @@ db.register(
 PUSH_DATA_LABEL_DB = "data/push_data_label.json"
 db.register(
     PUSH_DATA_LABEL_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_label_scheduling_history_push_data.latest/artifacts/public/push_data_label.json.zst",
     1,
 )
 
@@ -70,7 +70,7 @@ db.register(
 PUSH_DATA_GROUP_DB = "data/push_data_group.json"
 db.register(
     PUSH_DATA_GROUP_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_group.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history_push_data.latest/artifacts/public/push_data_group.json.zst",
     1,
 )
 
@@ -86,7 +86,7 @@ db.register(
 PUSH_DATA_CONFIG_GROUP_DB = "data/push_data_config_group.json"
 db.register(
     PUSH_DATA_CONFIG_GROUP_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_scheduling_history_push_data.latest/artifacts/public/push_data_config_group.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_config_group_scheduling_history_push_data.latest/artifacts/public/push_data_config_group.json.zst",
     1,
 )
 

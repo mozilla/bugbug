@@ -11,7 +11,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List, Tuple
+from typing import Any, Dict, Generator, List
 
 import adr
 import dateutil.parser
@@ -38,21 +38,27 @@ TRAINING_MONTHS = {
 }
 
 
-def get_from_date(granularity: str) -> datetime:
-    # We'll use the past TRAINING_MONTHS months only for training the model,
-    # but we use half TRAINING_MONTHS months more than that to calculate the
-    # failure statistics.
-    from_months = TRAINING_MONTHS[granularity] + math.floor(
-        TRAINING_MONTHS[granularity] / 2
-    )
-    return datetime.utcnow() - relativedelta(months=from_months)
-
-
 class Retriever(object):
-    def generate_push_data(
-        self, pushes: Tuple[mozci.push.Push, ...], granularity: str
-    ) -> None:
-        from_date = get_from_date(granularity)
+    def generate_push_data(self, granularity: str) -> None:
+        # We'll use the past TRAINING_MONTHS months only for training the model,
+        # but we use half TRAINING_MONTHS months more than that to calculate the
+        # failure statistics.
+        from_months = TRAINING_MONTHS[granularity] + math.floor(
+            TRAINING_MONTHS[granularity] / 2
+        )
+
+        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # this query.
+        from_date = datetime.utcnow() - relativedelta(months=from_months)
+        to_date = datetime.utcnow() - relativedelta(days=3)
+
+        pushes = tuple(
+            mozci.push.make_push_objects(
+                from_date=from_date.strftime("%Y-%m-%d"),
+                to_date=to_date.strftime("%Y-%m-%d"),
+                branch="autoland",
+            )
+        )
 
         pushes = tuple(
             push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
@@ -169,25 +175,6 @@ class Retriever(object):
                 raise
 
         zstd_compress(push_data_db)
-
-    def retrieve_push_data(self) -> None:
-        from_date = get_from_date(max(TRAINING_MONTHS, key=TRAINING_MONTHS.get))
-
-        # We use the actual date instead of 'today-X' aliases to avoid adr caching
-        # this query.
-        to_date = datetime.utcnow() - relativedelta(days=3)
-
-        pushes = tuple(
-            mozci.push.make_push_objects(
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d"),
-                branch="autoland",
-            )
-        )
-
-        self.generate_push_data(pushes, "config_group")
-        self.generate_push_data(pushes, "label")
-        self.generate_push_data(pushes, "group")
 
     def generate_test_scheduling_history(self, granularity: str) -> None:
         # Get the commits DB.
@@ -355,7 +342,7 @@ def main():
         "op", help="Which operation to perform.", choices=["retrieve", "generate"]
     )
     parser.add_argument(
-        "--granularity",
+        "granularity",
         help="Which test granularity to use.",
         choices=["label", "group", "config_group"],
     )
@@ -364,9 +351,8 @@ def main():
 
     retriever = Retriever()
     if args.op == "retrieve":
-        retriever.retrieve_push_data()
+        retriever.generate_push_data(args.granularity)
     elif args.op == "generate":
-        assert args.granularity is not None
         retriever.generate_test_scheduling_history(args.granularity)
 
 

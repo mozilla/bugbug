@@ -194,7 +194,7 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    - ID: test-scheduling-history-push_data-retrieval
+    - ID: test-label-scheduling-history-push_data-retrieval
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
@@ -208,6 +208,7 @@ tasks:
         command:
           - bugbug-data-test-scheduling-history
           - retrieve
+          - label
 
         artifacts:
           public/push_data_label.json.zst:
@@ -216,12 +217,82 @@ tasks:
           public/push_data_label.json.version:
             path: /data/push_data_label.json.version
             type: file
+
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "secrets:get:project/relman/bugbug/production"
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.data_test_label_scheduling_history_push_data.${version}
+        - index.project.relman.bugbug.data_test_label_scheduling_history_push_data.latest
+      metadata:
+        name: bugbug test label scheduling history push data retrieval
+        description: bugbug test label scheduling history push data retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: test-group-scheduling-history-push_data-retrieval
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '3 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 259200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-test-scheduling-history
+          - retrieve
+          - group
+
+        artifacts:
           public/push_data_group.json.zst:
             path: /data/push_data_group.json.zst
             type: file
           public/push_data_group.json.version:
             path: /data/push_data_group.json.version
             type: file
+
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "secrets:get:project/relman/bugbug/production"
+        - "auth:aws-s3:read-write:communitytc-bugbug/*"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.data_test_group_scheduling_history_push_data.${version}
+        - index.project.relman.bugbug.data_test_group_scheduling_history_push_data.latest
+      metadata:
+        name: bugbug test group scheduling history push data retrieval
+        description: bugbug test group scheduling history push data retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: test-config_group-scheduling-history-push_data-retrieval
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '3 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 259200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-test-scheduling-history
+          - retrieve
+          - config_group
+
+        artifacts:
           public/push_data_config_group.json.zst:
             path: /data/push_data_config_group.json.zst
             type: file
@@ -238,11 +309,11 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_scheduling_history_push_data.${version}
-        - index.project.relman.bugbug.data_test_scheduling_history_push_data.latest
+        - index.project.relman.bugbug.data_test_config_group_scheduling_history_push_data.${version}
+        - index.project.relman.bugbug.data_test_config_group_scheduling_history_push_data.latest
       metadata:
-        name: bugbug test scheduling history push data retrieval
-        description: bugbug test scheduling history push data retrieval
+        name: bugbug test config_group scheduling history push data retrieval
+        description: bugbug test config_group scheduling history push data retrieval
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -254,7 +325,7 @@ tasks:
       workerType: compute-small
       dependencies:
         - commit-retrieval
-        - test-scheduling-history-push_data-retrieval
+        - test-label-scheduling-history-push_data-retrieval
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -263,7 +334,7 @@ tasks:
         command:
           - bugbug-data-test-scheduling-history
           - generate
-          - --granularity=label
+          - label
 
         artifacts:
           public/test_label_scheduling_history.pickle.zst:
@@ -303,7 +374,7 @@ tasks:
       workerType: compute-small
       dependencies:
         - commit-retrieval
-        - test-scheduling-history-push_data-retrieval
+        - test-group-scheduling-history-push_data-retrieval
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -312,7 +383,7 @@ tasks:
         command:
           - bugbug-data-test-scheduling-history
           - generate
-          - --granularity=group
+          - group
 
         artifacts:
           public/test_group_scheduling_history.pickle.zst:
