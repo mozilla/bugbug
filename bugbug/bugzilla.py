@@ -103,29 +103,6 @@ def get(bug_ids: Iterable[int]) -> Dict[int, dict]:
     :rtype: dict
     """
 
-    def filter_keys(array_of_dict_values, required_fields):
-        # This will mutates array_of_dict_values values in place
-        for a_ind, a_value in enumerate(array_of_dict_values):
-            a_value = {
-                a_field: a_value[a_field]
-                for a_field in list(a_value.keys())
-                if a_field in required_fields
-            }
-            array_of_dict_values[a_ind] = a_value
-        return array_of_dict_values
-
-    def cleanup_fields_in_batch_of_bugs(batch_of_bugs):
-        # Updation happens in place
-        for a_bug_info_key in batch_of_bugs.keys():
-            a_bug_info = batch_of_bugs[a_bug_info_key]
-            current_comments_array = a_bug_info["comments"]
-            current_comments_array = filter_keys(
-                array_of_dict_values=current_comments_array,
-                required_fields=COMMENT_INCLUDE_FIELDS,
-            )
-            a_bug_info["comments"] = current_comments_array
-        return batch_of_bugs
-
     def attachmenthandler(bug, bug_id):
         bug_id = int(bug_id)
 
@@ -163,8 +140,6 @@ def get(bug_ids: Iterable[int]) -> Dict[int, dict]:
         batch_of_bugs_info = {
             int(a_bug["id"]): a_bug for a_bug in batch_of_bugs_info["bugs"]
         }
-
-        batch_of_bugs_info = cleanup_fields_in_batch_of_bugs(batch_of_bugs_info)
 
         new_bugs.update(batch_of_bugs_info)
 
