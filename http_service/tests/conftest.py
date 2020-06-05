@@ -163,13 +163,7 @@ def mock_hgmo(mock_repo):
 
         content = json.dumps(
             {
-                "changesets": [
-                    {
-                        "node": "PULLED_FROM_REMOTE",
-                        "pushhead": "PULLED_FROM_REMOTE",
-                        "parents": ["xxxxx"],
-                    }
-                ],
+                "changesets": [{"node": "PULLED_FROM_REMOTE", "parents": ["xxxxx"],}],
                 "visible": True,
             }
         )
