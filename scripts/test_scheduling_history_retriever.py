@@ -11,7 +11,7 @@ import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List, Tuple
+from typing import Any, Dict, Generator, List
 
 import adr
 import dateutil.parser
@@ -29,7 +29,7 @@ logger = getLogger(__name__)
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
-MOZCI_VERSION = 2
+MOZCI_VERSION = 3
 
 TRAINING_MONTHS = {
     "label": 7,
@@ -38,24 +38,24 @@ TRAINING_MONTHS = {
 }
 
 
-def get_from_date(granularity: str) -> datetime:
-    # We'll use the past TRAINING_MONTHS months only for training the model,
-    # but we use half TRAINING_MONTHS months more than that to calculate the
-    # failure statistics.
-    from_months = TRAINING_MONTHS[granularity] + math.floor(
-        TRAINING_MONTHS[granularity] / 2
-    )
-    return datetime.utcnow() - relativedelta(months=from_months)
-
-
 class Retriever(object):
-    def generate_push_data(
-        self, pushes: Tuple[mozci.push.Push, ...], granularity: str
-    ) -> None:
-        from_date = get_from_date(granularity)
+    def generate_push_data(self, granularity: str) -> None:
+        # We'll use the past TRAINING_MONTHS months only for training the model,
+        # but we use half TRAINING_MONTHS months more than that to calculate the
+        # failure statistics.
+        from_months = TRAINING_MONTHS[granularity] + math.floor(
+            TRAINING_MONTHS[granularity] / 2
+        )
 
-        pushes = tuple(
-            push for push in pushes if datetime.utcfromtimestamp(push.date) >= from_date
+        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # this query.
+        from_date = datetime.utcnow() - relativedelta(months=from_months)
+        to_date = datetime.utcnow() - relativedelta(days=3)
+
+        pushes = mozci.push.make_push_objects(
+            from_date=from_date.strftime("%Y-%m-%d"),
+            to_date=to_date.strftime("%Y-%m-%d"),
+            branch="autoland",
         )
 
         if granularity == "label":
@@ -77,9 +77,10 @@ class Retriever(object):
             # Regenerating a large amount of data when we update the mozci regression detection
             # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
             # run.
-            to_regenerate = 1000
+            to_regenerate = 0
 
-            for push in tqdm(pushes):
+            for _ in tqdm(range(num_pushes)):
+                push = pushes.pop(0)
                 cached = futures.pop(0).result()
 
                 semaphore.release()
@@ -103,10 +104,10 @@ class Retriever(object):
                         cached = None
                         to_regenerate -= 1
 
-                    """# Regenerate results which were generated with an older version of mozci.
+                    # Regenerate results which were generated with an older version of mozci.
                     elif mozci_version != MOZCI_VERSION:
                         cached = None
-                        to_regenerate -= 1"""
+                        to_regenerate -= 1
 
                 if cached:
                     num_cached += 1
@@ -170,28 +171,10 @@ class Retriever(object):
 
         zstd_compress(push_data_db)
 
-    def retrieve_push_data(self) -> None:
-        from_date = get_from_date(max(TRAINING_MONTHS, key=TRAINING_MONTHS.get))
-
-        # We use the actual date instead of 'today-X' aliases to avoid adr caching
-        # this query.
-        to_date = datetime.utcnow() - relativedelta(days=3)
-
-        pushes = tuple(
-            mozci.push.make_push_objects(
-                from_date=from_date.strftime("%Y-%m-%d"),
-                to_date=to_date.strftime("%Y-%m-%d"),
-                branch="autoland",
-            )
-        )
-
-        self.generate_push_data(pushes, "config_group")
-        self.generate_push_data(pushes, "label")
-        self.generate_push_data(pushes, "group")
-
     def generate_test_scheduling_history(self, granularity: str) -> None:
-        # Get the commits DB.
-        assert db.download(repository.COMMITS_DB)
+        if granularity != "config_group":
+            # Get the commits DB.
+            assert db.download(repository.COMMITS_DB)
 
         HISTORY_DATE_START = datetime.now() - relativedelta(
             months=TRAINING_MONTHS[granularity]
@@ -226,15 +209,15 @@ class Retriever(object):
             granularity
         )
 
+        if granularity in ("label", "config_group"):
+            test_scheduling.generate_failing_together_probabilities(
+                granularity, push_data_iter(), push_data_count
+            )
+
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
-
-            if granularity in ("label", "config_group"):
-                test_scheduling.generate_failing_together_probabilities(
-                    granularity, push_data_iter(), push_data_count
-                )
 
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
@@ -335,15 +318,17 @@ class Retriever(object):
             past_failures["push_num"] = push_num
             past_failures.close()
 
-        db.append(test_scheduling_db, generate_all_data())
+        # For the config/group granularity, we are only interested in the failing together DB.
+        if granularity != "config_group":
+            db.append(test_scheduling_db, generate_all_data())
 
-        zstd_compress(test_scheduling_db)
-        create_tar_zst(past_failures_db)
+            zstd_compress(test_scheduling_db)
+            create_tar_zst(past_failures_db)
 
         if granularity == "group":
             create_tar_zst(touched_together_db)
 
-        if granularity == "label":
+        if granularity in ("label", "config_group"):
             create_tar_zst(failing_together_db)
 
 
@@ -355,7 +340,7 @@ def main():
         "op", help="Which operation to perform.", choices=["retrieve", "generate"]
     )
     parser.add_argument(
-        "--granularity",
+        "granularity",
         help="Which test granularity to use.",
         choices=["label", "group", "config_group"],
     )
@@ -364,9 +349,8 @@ def main():
 
     retriever = Retriever()
     if args.op == "retrieve":
-        retriever.retrieve_push_data()
+        retriever.generate_push_data(args.granularity)
     elif args.op == "generate":
-        assert args.granularity is not None
         retriever.generate_test_scheduling_history(args.granularity)
 
 

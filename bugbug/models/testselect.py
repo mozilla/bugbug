@@ -4,8 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import math
+import pickle
 import statistics
-import struct
 from functools import reduce
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -207,7 +207,7 @@ class TestSelectModel(Model):
         commits: Iterable[dict],
         confidence: float = 0.3,
         push_num: Optional[int] = None,
-    ):
+    ) -> Dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity)
@@ -240,13 +240,13 @@ class TestSelectModel(Model):
         priorities1 = [
             "tsan",
             "android-hw",
-            "linux32",
+            "linux1804-32",
             "asan",
             "mac",
             "windows7",
             "android-em",
             "windows10",
-            "linux64",
+            "linux1804-64",
         ]
         priorities2 = ["debug", "opt"]
 
@@ -255,12 +255,19 @@ class TestSelectModel(Model):
         while len(to_analyze) > 1:
             task1 = to_analyze.pop(0)
 
+            key = test_scheduling.failing_together_key(task1)
+
+            try:
+                failing_together_stats = pickle.loads(failing_together[key])
+            except KeyError:
+                continue
+
             for task2 in to_analyze:
-                key = f"{task1}${task2}".encode("utf-8")
-                if key not in failing_together:
+                try:
+                    support, confidence = failing_together_stats[task2]
+                except KeyError:
                     continue
 
-                support, confidence = struct.unpack("ff", failing_together[key])
                 if confidence < min_redundancy_confidence:
                     continue
 

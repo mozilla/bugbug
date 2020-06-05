@@ -627,11 +627,7 @@ def hg_log(hg, revs):
     template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
-        b"log",
-        template=template,
-        no_merges=True,
-        rev=revs[0] + b":" + revs[-1],
-        branch="tip",
+        b"log", template=template, no_merges=True, rev=revs, branch="tip",
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -970,10 +966,7 @@ def hg_log_multi(repo_dir, revs):
     threads_num = os.cpu_count() + 1
     REVS_COUNT = len(revs)
     CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
-    revs_groups = [
-        (revs[i], revs[min(i + CHUNK_SIZE, REVS_COUNT) - 1])
-        for i in range(0, REVS_COUNT, CHUNK_SIZE)
-    ]
+    revs_groups = [revs[i : i + CHUNK_SIZE] for i in range(0, REVS_COUNT, CHUNK_SIZE)]
 
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num

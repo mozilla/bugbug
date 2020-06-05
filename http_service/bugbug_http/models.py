@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Tuple
+from typing import Iterable, Tuple
 
 import orjson
 import requests
@@ -42,12 +42,12 @@ MODEL_CACHE.start_ttl_thread()
 
 
 def setkey(key: str, value: bytes) -> None:
-    LOGGER.debug(f"Storing data at {key}: {value.decode()}")
+    LOGGER.debug(f"Storing data at {key}: {value!r}")
     redis.set(key, value)
     redis.expire(key, DEFAULT_EXPIRATION_TTL)
 
 
-def classify_bug(model_name, bug_ids, bugzilla_token):
+def classify_bug(model_name: str, bug_ids: Iterable[int], bugzilla_token: str) -> str:
     from bugbug_http.app import JobInfo
 
     # This should be called in a process worker so it should be safe to set
@@ -97,7 +97,7 @@ def classify_bug(model_name, bug_ids, bugzilla_token):
         setkey(job.result_key, orjson.dumps(data))
 
         # Save the bug last change
-        setkey(job.change_time_key, bugs[bug_id]["last_change_time"])
+        setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())
 
     return "OK"
 
