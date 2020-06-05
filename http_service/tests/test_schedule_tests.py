@@ -56,7 +56,7 @@ def test_simple_schedule(
             "Base history 0",
         ]
     with hglib.open(str(remote_repo_dir)) as hg:
-        rev = hg.log()[-1].node.decode("ascii")[:12]
+        rev = hg.log()[0].node.decode("ascii")[:12]
 
     mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
 

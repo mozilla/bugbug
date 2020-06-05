@@ -108,7 +108,7 @@ def get_known_tasks() -> Tuple[str, ...]:
         return tuple(line.strip() for line in f)
 
 
-def schedule_tests(branch, rev):
+def schedule_tests(branch: str, rev: str) -> str:
     from bugbug_http.app import JobInfo
     from bugbug_http import REPO_DIR
 
@@ -124,7 +124,7 @@ def schedule_tests(branch, rev):
 
     # Apply the stack on the local repository
     try:
-        revs = repository.apply_stack(REPO_DIR, stack, branch)
+        revs = repository.apply_stack(REPO_DIR, stack, branch, rev)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
