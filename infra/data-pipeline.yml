@@ -415,6 +415,48 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: test-config_group-scheduling-history-generator
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '4 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-relman
+      workerType: compute-small
+      dependencies:
+        - test-config_group-scheduling-history-push_data-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/relman/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-test-scheduling-history
+          - generate
+          - config_group
+
+        artifacts:
+          public/past_failures_config_group.lmdb.tar.zst:
+            path: /data/past_failures_config_group.lmdb.tar.zst
+            type: file
+          public/failing_together_config_group.lmdb.tar.zst:
+            path: /data/failing_together_config_group.lmdb.tar.zst
+            type: file
+
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "secrets:get:project/relman/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.relman.bugbug.data_test_config_group_scheduling_history.${version}
+        - index.project.relman.bugbug.data_test_config_group_scheduling_history.latest
+      metadata:
+        name: bugbug test config_group scheduling history retrieval
+        description: bugbug test config_group scheduling history retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: rollback-test-task
       created: {$fromNow: ''}
       deadline: {$fromNow: '2 days'}
