@@ -80,17 +80,20 @@ def main():
     rendered = jsone.render(raw_tasks, context)
 
     for task in rendered["tasks"]:
+        # add each task id to id_mapping dictionary
+        # before process the task dependencies
+        task_id = taskcluster.utils.slugId()
+        task_internal_id = task.pop("ID")
+        if task_internal_id in id_mapping:
+            raise ValueError(f"Conflicting IDs {task_internal_id}")
+        id_mapping[task_internal_id] = task_id
+
+    for task in rendered["tasks"]:
         # We need to generate new unique task ids for taskcluster to be happy
         # but need to identify dependencies across tasks. So we create a
         # mapping between an internal ID and the generate ID
 
         task_id = taskcluster.utils.slugId()
-        task_internal_id = task.pop("ID")
-
-        if task_internal_id in id_mapping:
-            raise ValueError(f"Conflicting IDs {task_internal_id}")
-
-        id_mapping[task_internal_id] = task_id
 
         for key, value in keys.items():
             task[key] = value
