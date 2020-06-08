@@ -623,7 +623,7 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg, revs):
+def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
     template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
@@ -632,7 +632,7 @@ def hg_log(hg, revs):
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
 
-    revs = []
+    commits = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
         assert b" " in rev[3]
         date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
@@ -658,7 +658,7 @@ def hg_log(hg, revs):
             else []
         )
 
-        revs.append(
+        commits.append(
             Commit(
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
@@ -673,10 +673,10 @@ def hg_log(hg, revs):
             )
         )
 
-    return revs
+    return commits
 
 
-def _hg_log(revs):
+def _hg_log(revs: List[bytes]) -> List[Commit]:
     return hg_log(thread_local.hg, revs)
 
 
@@ -991,7 +991,7 @@ def get_first_pushdate(repo_dir):
 def download_commits(
     repo_dir: str,
     rev_start: str = None,
-    revs: List[str] = None,
+    revs: List[bytes] = None,
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
@@ -1120,14 +1120,16 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     logger.info(f"{repo_dir} cloned")
 
 
-def apply_stack(repo_dir, stack, branch):
+def apply_stack(
+    repo_dir: str, stack: List[dict], branch: str, revision: str
+) -> List[bytes]:
     """Apply a stack of patches on a repository"""
     assert len(stack) > 0, "Empty stack"
 
     with hglib.open(repo_dir) as hg:
         hg.pull(
             source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            rev=stack[-1]["pushhead"].encode("ascii"),
+            rev=revision.encode("ascii"),
         )
         return [rev["node"].encode("ascii") for rev in stack]
 

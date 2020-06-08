@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import math
 import pickle
 import statistics
@@ -12,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import numpy as np
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
+from ortools.sat.python import cp_model
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -237,60 +239,139 @@ class TestSelectModel(Model):
     def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
         failing_together = test_scheduling.get_failing_together_db(self.granularity)
 
-        priorities1 = [
-            "tsan",
-            "android-hw",
-            "linux1804-32",
-            "asan",
-            "mac",
-            "windows7",
-            "android-em",
-            "windows10",
-            "linux1804-64",
+        costs = [
+            (("linux1804-64", "opt"), 1),
+            (("linux1804-64", "debug"), 2),
+            (("windows10", "opt"), 4),
+            (("windows10", "debug"), 4),
+            (("android-em", "opt"), 5),
+            (("android-em", "debug"), 6),
+            (("windows7", "opt"), 7),
+            (("windows7", "debug"), 8),
+            (("mac", "opt"), 9),
+            (("mac", "debug"), 10),
+            (("asan", "opt"), 11),
+            (("asan", "debug"), 12),
+            (("linux1804-32", "opt"), 13),
+            (("linux1804-32", "debug"), 14),
+            (("android-hw", "opt"), 15),
+            (("android-hw", "debug"), 16),
+            (("tsan", "opt"), 17),
+            (("tsan", "debug"), 18),
         ]
-        priorities2 = ["debug", "opt"]
 
-        to_drop = set()
-        to_analyze = sorted(tasks)
-        while len(to_analyze) > 1:
-            task1 = to_analyze.pop(0)
+        def get_cost(task):
+            for substrings, cost in reversed(costs):
+                if all(s in task for s in substrings):
+                    return cost
 
+            raise Exception(f"Couldn't find cost for {task}")
+
+        model = cp_model.CpModel()
+
+        task_vars = {task: model.NewIntVar(0, 1, task) for task in tasks}
+
+        # Generate 'equivalence groups', containing all tasks that are redundant with each other.
+        groups: List[Set[str]] = []
+        task_to_groups: Dict[str, Set[int]] = collections.defaultdict(set)
+        incompatible_groups: Dict[str, Set[int]] = collections.defaultdict(set)
+
+        def create_group(task):
+            if task in task_to_groups:
+                return
+
+            groups.append({task})
+            task_to_groups[task] = {len(groups) - 1}
+
+        # Add task1 to all equivalence groups where task2 is present, and likewise for task2.
+        # Skip groups which contain tasks that are not redundant with task1.
+        def add_to_groups(task1, task2):
+            found = False
+
+            if task1 in task_to_groups:
+                for i in task_to_groups[task1]:
+                    if task2 in incompatible_groups and i in incompatible_groups[task2]:
+                        continue
+
+                    groups[i].add(task2)
+                    task_to_groups[task2].add(i)
+                    found = True
+
+            if task2 in task_to_groups:
+                for i in task_to_groups[task2]:
+                    if task1 in incompatible_groups and i in incompatible_groups[task1]:
+                        continue
+
+                    groups[i].add(task1)
+                    task_to_groups[task1].add(i)
+                    found = True
+
+            # No suitable equivalence group was found for the tasks, create a new one.
+            if found:
+                return
+
+            group = {task1, task2}
+            groups.append(group)
+            task_to_groups[task1].add(len(groups) - 1)
+            task_to_groups[task2].add(len(groups) - 1)
+
+        def mark_incompatible(task1, task2):
+            if task1 in task_to_groups:
+                incompatible_groups[task2].update(task_to_groups[task1])
+
+            if task2 in task_to_groups:
+                incompatible_groups[task1].update(task_to_groups[task2])
+
+        sorted_tasks = sorted(tasks)
+        for i, task1 in enumerate(sorted_tasks):
             key = test_scheduling.failing_together_key(task1)
-
-            try:
-                failing_together_stats = pickle.loads(failing_together[key])
-            except KeyError:
+            if key not in failing_together:
+                create_group(task1)
                 continue
 
-            for task2 in to_analyze:
+            failing_together_stats = pickle.loads(failing_together[key])
+
+            for task2 in sorted_tasks[i + 1 :]:
                 try:
                     support, confidence = failing_together_stats[task2]
                 except KeyError:
                     continue
 
-                if confidence < min_redundancy_confidence:
-                    continue
+                if confidence >= min_redundancy_confidence:
+                    add_to_groups(task1, task2)
+                else:
+                    mark_incompatible(task1, task2)
 
-                for priority in priorities1:
-                    if priority in task1 and priority in task2:
-                        for priority in priorities2:
-                            if priority in task1:
-                                to_drop.add(task1)
-                                break
-                            elif priority in task2:
-                                to_drop.add(task2)
-                                break
-                        break
-                    elif priority in task1:
-                        to_drop.add(task1)
-                        break
-                    elif priority in task2:
-                        to_drop.add(task2)
-                        break
+            # Create group consisting only of task1, if there was nothing equivalent
+            # with it.
+            create_group(task1)
 
-            to_analyze = [t for t in to_analyze if t not in to_drop]
+        # Create constraints to ensure at least one task from each set of equivalent
+        # groups is selected.
+        for group in groups:
+            model.Add(sum(task_vars[task] for task in group) >= 1)
 
-        return tasks - to_drop
+        # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+        model.Minimize(
+            sum(get_cost(task) * task_vars[task] for task in task_vars.keys())
+        )
+
+        solver = cp_model.CpSolver()
+        # The CP-SAT solver is usually fast (milliseconds). If we hit a weird problem,
+        # accept a suboptimal solution after 10 seconds.
+        solver.parameters.max_time_in_seconds = 10.0
+        # Presolving considerably slows down the CP-SAT solver.
+        solver.parameters.cp_model_presolve = 0
+        status = solver.Solve(model)
+
+        if status == cp_model.INFEASIBLE:
+            raise Exception("Infeasible problem")
+
+        return {
+            task
+            for task, task_var in task_vars.items()
+            if solver.Value(task_vars[task]) == 1
+        }
 
     def evaluation(self) -> None:
         # Get a test set of pushes on which to test the model.
@@ -452,7 +533,7 @@ class TestSelectModel(Model):
             )
 
             print(
-                f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, and cap at {cap}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
+                f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, cap at {cap}, and minimum at {minimum}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
             )
 
         for minimum in [None, 10]:

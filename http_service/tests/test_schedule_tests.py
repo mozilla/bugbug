@@ -15,22 +15,30 @@ from bugbug_http import models
     "labels_to_choose, groups_to_choose, reduced_labels",
     [
         # one from label, one from group
-        ({"test-label1": 0.9}, {"test-group2": 0.9}, {"test-label1": 0.9}),
+        (
+            {"test-linux1804-64-opt-label1": 0.9},
+            {"test-group2": 0.9},
+            {"test-linux1804-64-opt-label1": 0.9},
+        ),
         # one from label, none from group
-        ({"test-label1": 0.9}, {"test-group2": 0.9}, {"test-label1": 0.9}),
+        (
+            {"test-linux1804-64-opt-label1": 0.9},
+            {"test-group2": 0.9},
+            {"test-linux1804-64-opt-label1": 0.9},
+        ),
         # none from label, one from group
         ({}, {"test-group1": 0.9}, {}),
         # two from label, one from group
         (
-            {"test-label1": 0.9, "test-label2": 0.4},
+            {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.4},
             {"test-group2": 0.9},
-            {"test-label1": 0.9},
+            {"test-linux1804-64-opt-label1": 0.9},
         ),
         # two redundant from label, one from group
         (
-            {"test-linux64/opt": 0.9, "test-windows10/opt": 0.8},
+            {"test-linux1804-64/opt": 0.9, "test-windows10/opt": 0.8},
             {"test-group1": 0.9},
-            {"test-linux64/opt": 0.9},
+            {"test-linux1804-64/opt": 0.9},
         ),
     ],
 )
@@ -56,7 +64,7 @@ def test_simple_schedule(
             "Base history 0",
         ]
     with hglib.open(str(remote_repo_dir)) as hg:
-        rev = hg.log()[-1].node.decode("ascii")[:12]
+        rev = hg.log()[0].node.decode("ascii")[:12]
 
     mock_schedule_tests_classify(labels_to_choose, groups_to_choose)
 

@@ -434,10 +434,8 @@ def generate_failing_together_probabilities(
             count_redundancies[">=10%"] += 1
         if confidence > 0.0:
             count_redundancies[">0%"] += 1
-
         if confidence == 0.0:
             count_redundancies["0%"] += 1
-            continue
 
         if granularity == "config_group":
             failing_together[couple[0][1]][(couple[0][0], couple[1][0])] = (

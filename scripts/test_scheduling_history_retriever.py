@@ -77,7 +77,7 @@ class Retriever(object):
             # Regenerating a large amount of data when we update the mozci regression detection
             # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
             # run.
-            to_regenerate = 1000
+            to_regenerate = 0
 
             for _ in tqdm(range(num_pushes)):
                 push = pushes.pop(0)
@@ -172,8 +172,9 @@ class Retriever(object):
         zstd_compress(push_data_db)
 
     def generate_test_scheduling_history(self, granularity: str) -> None:
-        # Get the commits DB.
-        assert db.download(repository.COMMITS_DB)
+        if granularity != "config_group":
+            # Get the commits DB.
+            assert db.download(repository.COMMITS_DB)
 
         HISTORY_DATE_START = datetime.now() - relativedelta(
             months=TRAINING_MONTHS[granularity]
@@ -208,15 +209,15 @@ class Retriever(object):
             granularity
         )
 
+        if granularity in ("label", "config_group"):
+            test_scheduling.generate_failing_together_probabilities(
+                granularity, push_data_iter(), push_data_count
+            )
+
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
-
-            if granularity in ("label", "config_group"):
-                test_scheduling.generate_failing_together_probabilities(
-                    granularity, push_data_iter(), push_data_count
-                )
 
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
@@ -317,15 +318,17 @@ class Retriever(object):
             past_failures["push_num"] = push_num
             past_failures.close()
 
-        db.append(test_scheduling_db, generate_all_data())
+        # For the config/group granularity, we are only interested in the failing together DB.
+        if granularity != "config_group":
+            db.append(test_scheduling_db, generate_all_data())
 
-        zstd_compress(test_scheduling_db)
-        create_tar_zst(past_failures_db)
+            zstd_compress(test_scheduling_db)
+            create_tar_zst(past_failures_db)
 
         if granularity == "group":
             create_tar_zst(touched_together_db)
 
-        if granularity == "label":
+        if granularity in ("label", "config_group"):
             create_tar_zst(failing_together_db)
 
 
