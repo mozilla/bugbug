@@ -1,5 +1,5 @@
 adr==0.18.9
-boto3==1.13.21
+boto3==1.13.24
 imbalanced-learn==0.6.2
 joblib==0.15.1
 libmozdata==0.1.68
