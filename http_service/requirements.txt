@@ -1,5 +1,5 @@
 apispec-webframeworks==0.5.2
-apispec[yaml]==3.3.0
+apispec[yaml]==3.3.1
 cerberus==1.3.2
 Flask==1.1.2
 flask-apispec==0.9.0
