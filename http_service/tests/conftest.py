@@ -273,15 +273,17 @@ def mock_schedule_tests_classify(monkeypatch):
         past_failures_data = test_scheduling.get_past_failures(granularity)
         past_failures_data["push_num"] = 1
         past_failures_data["all_runnables"] = [
-            f"test-{granularity}1",
-            f"test-{granularity}2",
-            "test-linux64/opt",
+            "test-linux1804-64-opt-label1",
+            "test-linux1804-64-opt-label2",
+            "test-group1",
+            "test-group2",
+            "test-linux1804-64/opt",
             "test-windows10/opt",
         ]
         past_failures_data.close()
 
     failing_together = test_scheduling.get_failing_together_db("label")
-    failing_together[b"test-linux64/opt"] = pickle.dumps(
+    failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
         {"test-windows10/opt": (0.1, 1.0),}
     )
     test_scheduling.close_failing_together_db("label")
