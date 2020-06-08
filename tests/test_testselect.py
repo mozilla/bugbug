@@ -13,13 +13,19 @@ import pytest
 from igraph import Graph
 
 from bugbug import test_scheduling
-from bugbug.models.testselect import TestLabelSelectModel
+from bugbug.models.testselect import TestGroupSelectModel, TestLabelSelectModel
 
 
 @pytest.fixture
 def failing_together():
     yield test_scheduling.get_failing_together_db("label")
     test_scheduling.close_failing_together_db("label")
+
+
+@pytest.fixture
+def failing_together_config_group():
+    yield test_scheduling.get_failing_together_db("config_group")
+    test_scheduling.close_failing_together_db("config_group")
 
 
 def test_reduce1(failing_together):
@@ -120,6 +126,7 @@ def test_reduce3(failing_together):
         result == {"windows10/opt-a", "windows10/opt-c",}
         or result == {"windows10/opt-d", "windows10/opt-c",}
         or result == {"windows10/opt-b", "windows10/opt-c",}
+        or result == {"windows10/opt-b", "windows10/opt-d",}
     )
 
 
@@ -253,3 +260,65 @@ def test_all(g):
     result = model.reduce(tasks, 1.0)
     hypothesis.note(f"Result: {sorted(result)}")
     assert len(result) == len(g.components())
+
+
+def test_select_configs(failing_together_config_group):
+    failing_together_config_group[b"group1"] = pickle.dumps(
+        {
+            "linux1804-64-asan/debug": {
+                "linux1804-64/debug": (1.0, 0.0),
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "linux1804-64/debug": {
+                "linux1804-64/opt": (1.0, 1.0),
+                "mac/debug": (1.0, 1.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "linux1804-64/opt": {
+                "mac/debug": (1.0, 1.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "mac/debug": {"windows10/debug": (1.0, 1.0)},
+        }
+    )
+    failing_together_config_group[b"group2"] = pickle.dumps(
+        {
+            "linux1804-64-asan/debug": {
+                "linux1804-64/debug": (1.0, 1.0),
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "linux1804-64/debug": {
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "linux1804-64/opt": {
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "mac/debug": {"windows10/debug": (1.0, 0.0)},
+        }
+    )
+    failing_together_config_group[b"$ALL_CONFIGS$"] = pickle.dumps(
+        [
+            "linux1804-64-asan/debug",
+            "linux1804-64/debug",
+            "linux1804-64/opt",
+            "mac/debug",
+            "windows10/debug",
+        ]
+    )
+
+    model = TestGroupSelectModel()
+    result = model.select_configs({"group1", "group2",}, 1.0,)
+    assert result == {
+        ("linux1804-64-asan/debug", "group1"),
+        ("linux1804-64/opt", "group2"),
+        ("mac/debug", "group2"),
+        ("linux1804-64/opt", "group1"),
+        ("linux1804-64/debug", "group2"),
+    }
