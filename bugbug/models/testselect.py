@@ -437,9 +437,9 @@ class TestSelectModel(Model):
 
         for group in groups:
             key = test_scheduling.failing_together_key(group)
-            if key in failing_together:
+            try:
                 failing_together_stats = pickle.loads(failing_together[key])
-            else:
+            except KeyError:
                 failing_together_stats = {}
 
             def load_failing_together(config: str) -> Dict[str, Tuple[float, float]]:
