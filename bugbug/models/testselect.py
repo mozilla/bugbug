@@ -379,7 +379,7 @@ class TestSelectModel(Model):
             "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
         )
 
-        task_vars = {task: solver.IntVar(0, 1, task) for task in tasks}
+        task_vars = {task: solver.BoolVar(task) for task in tasks}
 
         equivalence_sets = self._generate_equivalence_sets(
             tasks, min_redundancy_confidence, load_failing_together, False
