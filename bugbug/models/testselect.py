@@ -269,7 +269,7 @@ class TestSelectModel(Model):
 
     def _generate_equivalence_sets(
         self,
-        tasks: Set[str],
+        tasks: Iterable[str],
         min_redundancy_confidence: float,
         load_failing_together: Callable[[str], Dict[str, Tuple[float, float]]],
         assume_redundant: bool,
@@ -368,7 +368,9 @@ class TestSelectModel(Model):
         elif status == pywraplp.Solver.NOT_SOLVED:
             raise Exception("Problem unsolved")
 
-    def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
+    def reduce(
+        self, tasks: Iterable[str], min_redundancy_confidence: float
+    ) -> Set[str]:
         failing_together = test_scheduling.get_failing_together_db(self.granularity)
 
         def load_failing_together(task: str) -> Dict[str, Tuple[float, float]]:
@@ -418,8 +420,8 @@ class TestSelectModel(Model):
         }
 
     def select_configs(
-        self, groups: Set[str], min_redundancy_confidence: float
-    ) -> Set[Tuple[str, str]]:
+        self, groups: Iterable[str], min_redundancy_confidence: float
+    ) -> Dict[str, List[str]]:
         failing_together = test_scheduling.get_failing_together_db("config_group")
 
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
@@ -480,11 +482,15 @@ class TestSelectModel(Model):
 
         self._solve_optimization(solver)
 
-        return {
-            (config, group)
-            for (config, group), config_group_var in config_group_vars.items()
-            if config_group_var.solution_value() == 1
-        }
+        configs_by_group: Dict[str, List[str]] = {}
+        for group in groups:
+            configs_by_group[group] = []
+
+        for (config, group), config_group_var in config_group_vars.items():
+            if config_group_var.solution_value() == 1:
+                configs_by_group[group].append(config)
+
+        return configs_by_group
 
     def evaluation(self) -> None:
         # Get a test set of pushes on which to test the model.

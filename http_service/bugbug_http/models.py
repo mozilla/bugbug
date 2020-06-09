@@ -139,29 +139,32 @@ def schedule_tests(branch: str, rev: str) -> str:
     )
 
     if len(commits) > 0:
-        tasks = MODEL_CACHE.get("testlabelselect").select_tests(
-            commits, test_selection_threshold
-        )
+        testlabelselect_model = MODEL_CACHE.get("testlabelselect")
+        testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
-        reduced = MODEL_CACHE.get("testlabelselect").reduce(
+        tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+
+        reduced = testlabelselect_model.reduce(
             set(t for t, c in tasks.items() if c >= 0.8), 1.0
         )
 
-        reduced_higher = MODEL_CACHE.get("testlabelselect").reduce(
+        reduced_higher = testlabelselect_model.reduce(
             set(t for t, c in tasks.items() if c >= 0.9), 1.0
         )
 
-        groups = MODEL_CACHE.get("testgroupselect").select_tests(
-            commits, test_selection_threshold
-        )
+        groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+
+        config_groups = testgroupselect_model.select_configs(groups.keys(), 1.0)
     else:
         tasks = {}
         reduced = {}
         groups = {}
+        config_groups = {}
 
     data = {
         "tasks": tasks,
         "groups": groups,
+        "config_groups": config_groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": get_known_tasks(),
