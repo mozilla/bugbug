@@ -10,7 +10,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
 
 KEYWORD_DICT = {
@@ -92,7 +92,9 @@ class BugTypeModel(BugModel):
             ]
         )
 
-        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(n_jobs=16))
+        self.clf = OneVsRestClassifier(
+            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        )
 
     def get_labels(self):
         classes = {}
