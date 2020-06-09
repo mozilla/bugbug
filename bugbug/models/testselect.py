@@ -24,6 +24,7 @@ from bugbug import (
     repository,
     test_scheduling,
     test_scheduling_features,
+    utils,
 )
 from bugbug.model import Model
 
@@ -103,7 +104,7 @@ class TestSelectModel(Model):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
     def get_pushes(
