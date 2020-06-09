@@ -209,7 +209,7 @@ class TestSelectModel(Model):
     def select_tests(
         self,
         commits: Iterable[dict],
-        confidence: float = 0.3,
+        confidence: float = 0.5,
         push_num: Optional[int] = None,
     ) -> Dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
@@ -554,7 +554,7 @@ class TestSelectModel(Model):
             # The number 100 comes from the fact that in the past failure data
             # generation we store past failures in batches of 100 pushes.
             test_pushes[rev]["all_possibly_selected"] = self.select_tests(
-                commits, 0.3, push_num - 100
+                commits, 0.5, push_num - 100
             )
 
         reductions: List[Optional[float]] = [None, 0.9, 1.0]
