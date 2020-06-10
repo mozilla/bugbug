@@ -3,11 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
 import logging
 import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from io import BytesIO
 from typing import Any, Callable, List
 
 import libmozdata
@@ -16,7 +18,7 @@ from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
 from cerberus import Validator
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields
 from redis import Redis
@@ -284,6 +286,20 @@ def get_result(job):
     return None
 
 
+def compress_response(data, status_code):
+    gzip_buffer = BytesIO()
+    with gzip.GzipFile(mode="wb", compresslevel=6, fileobj=gzip_buffer) as gzip_file:
+        gzip_file.write(orjson.dumps(data))
+
+    response = Response()
+    response.set_data(gzip_buffer.getvalue())
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers["Content-Length"] = len(response.get_data())
+    # response.headers['Content-Type'] = 'application/json'
+    response["status_code"] = status_code
+    return response
+
+
 @application.route("/<model_name>/predict/<int:bug_id>")
 @cross_origin()
 def model_prediction(model_name, bug_id):
@@ -348,7 +364,8 @@ def model_prediction(model_name, bug_id):
         status_code = 202
         data = {"ready": False}
 
-    return jsonify(**data), status_code
+    # return jsonify(**data), status_code
+    return compress_response(data, status_code)
 
 
 @application.route("/<model_name>/predict/batch", methods=["POST"])
@@ -522,7 +539,9 @@ def batch_prediction(model_name):
         # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
-    return jsonify({"bugs": data}), status_code
+    # return jsonify({"bugs": data}), status_code
+    data = {"bugs": data}
+    return compress_response(data, status_code)
 
 
 @application.route("/push/<path:branch>/<rev>/schedules")
@@ -576,7 +595,8 @@ def push_schedules(branch, rev):
     job = JobInfo(schedule_tests, branch, rev)
     data = get_result(job)
     if data:
-        return jsonify(data), 200
+        # return jsonify(data), 200
+        return compress_response(data, 200)
 
     if not is_pending(job):
         schedule_job(job)
