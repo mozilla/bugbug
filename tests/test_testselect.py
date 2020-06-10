@@ -6,6 +6,7 @@
 import itertools
 import math
 import pickle
+from typing import Dict, Iterator, Tuple
 
 import hypothesis
 import hypothesis.strategies as st
@@ -13,16 +14,23 @@ import pytest
 from igraph import Graph
 
 from bugbug import test_scheduling
-from bugbug.models.testselect import TestLabelSelectModel
+from bugbug.models.testselect import TestGroupSelectModel, TestLabelSelectModel
+from bugbug.utils import LMDBDict
 
 
 @pytest.fixture
-def failing_together():
+def failing_together() -> Iterator[LMDBDict]:
     yield test_scheduling.get_failing_together_db("label")
     test_scheduling.close_failing_together_db("label")
 
 
-def test_reduce1(failing_together):
+@pytest.fixture
+def failing_together_config_group() -> Iterator[LMDBDict]:
+    yield test_scheduling.get_failing_together_db("config_group")
+    test_scheduling.close_failing_together_db("config_group")
+
+
+def test_reduce1(failing_together: LMDBDict) -> None:
     failing_together[b"test-linux1804-64/debug"] = pickle.dumps(
         {
             "test-windows10/debug": (0.1, 1.0),
@@ -71,8 +79,7 @@ def test_reduce1(failing_together):
     }
 
 
-def test_reduce2():
-    failing_together = test_scheduling.get_failing_together_db("label")
+def test_reduce2(failing_together: LMDBDict) -> None:
     failing_together[b"windows10/opt-a"] = pickle.dumps(
         {
             "windows10/opt-b": (0.1, 1.0),
@@ -91,10 +98,8 @@ def test_reduce2():
         1.0,
     ) == {"windows10/opt-b",}
 
-    test_scheduling.close_failing_together_db("label")
 
-
-def test_reduce3(failing_together):
+def test_reduce3(failing_together: LMDBDict) -> None:
     test_scheduling.remove_failing_together_db("label")
     failing_together = test_scheduling.get_failing_together_db("label")
     failing_together[b"windows10/opt-a"] = pickle.dumps(
@@ -120,10 +125,11 @@ def test_reduce3(failing_together):
         result == {"windows10/opt-a", "windows10/opt-c",}
         or result == {"windows10/opt-d", "windows10/opt-c",}
         or result == {"windows10/opt-b", "windows10/opt-c",}
+        or result == {"windows10/opt-b", "windows10/opt-d",}
     )
 
 
-def test_reduce4(failing_together):
+def test_reduce4(failing_together: LMDBDict) -> None:
     failing_together[b"windows10/opt-a"] = pickle.dumps(
         {
             "windows10/opt-b": (0.1, 1.0),
@@ -155,7 +161,7 @@ def test_reduce4(failing_together):
     }
 
 
-def test_reduce5(failing_together):
+def test_reduce5(failing_together: LMDBDict) -> None:
     failing_together[b"linux1804-64/opt-a"] = pickle.dumps(
         {"windows10/opt-d": (0.1, 1.0),}
     )
@@ -172,7 +178,7 @@ def test_reduce5(failing_together):
     }
 
 
-def test_reduce6(failing_together):
+def test_reduce6(failing_together: LMDBDict) -> None:
     failing_together[b"windows10/opt-a"] = pickle.dumps(
         {"windows10/opt-d": (0.1, 1.0),}
     )
@@ -199,7 +205,7 @@ def test_reduce6(failing_together):
 
 
 @st.composite
-def equivalence_graph(draw):
+def equivalence_graph(draw) -> Graph:
     NODES = 7
 
     n = draw(st.integers(min_value=1, max_value=NODES))
@@ -226,14 +232,14 @@ def equivalence_graph(draw):
 @pytest.mark.xfail
 @hypothesis.settings(max_examples=7777)
 @hypothesis.given(g=equivalence_graph())
-def test_all(g):
+def test_all(g: Graph) -> None:
     tasks = [f"windows10/opt-{chr(i)}" for i in range(len(g.vs))]
 
     test_scheduling.close_failing_together_db("label")
     test_scheduling.remove_failing_together_db("label")
 
     # TODO: Also add some couples that are *not* failing together.
-    ft = {}
+    ft: Dict[str, Dict[str, Tuple[float, float]]] = {}
 
     for edge in g.es:
         task1 = tasks[edge.tuple[0]]
@@ -253,3 +259,65 @@ def test_all(g):
     result = model.reduce(tasks, 1.0)
     hypothesis.note(f"Result: {sorted(result)}")
     assert len(result) == len(g.components())
+
+
+def test_select_configs(failing_together_config_group: LMDBDict) -> None:
+    failing_together_config_group[b"group1"] = pickle.dumps(
+        {
+            "linux1804-64-asan/debug": {
+                "linux1804-64/debug": (1.0, 0.0),
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "linux1804-64/debug": {
+                "linux1804-64/opt": (1.0, 1.0),
+                "mac/debug": (1.0, 1.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "linux1804-64/opt": {
+                "mac/debug": (1.0, 1.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "mac/debug": {"windows10/debug": (1.0, 1.0)},
+        }
+    )
+    failing_together_config_group[b"group2"] = pickle.dumps(
+        {
+            "linux1804-64-asan/debug": {
+                "linux1804-64/debug": (1.0, 1.0),
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "linux1804-64/debug": {
+                "linux1804-64/opt": (1.0, 0.0),
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 1.0),
+            },
+            "linux1804-64/opt": {
+                "mac/debug": (1.0, 0.0),
+                "windows10/debug": (1.0, 0.0),
+            },
+            "mac/debug": {"windows10/debug": (1.0, 0.0)},
+        }
+    )
+    failing_together_config_group[b"$ALL_CONFIGS$"] = pickle.dumps(
+        [
+            "linux1804-64-asan/debug",
+            "linux1804-64/debug",
+            "linux1804-64/opt",
+            "mac/debug",
+            "windows10/debug",
+        ]
+    )
+
+    model = TestGroupSelectModel()
+    result = model.select_configs({"group1", "group2",}, 1.0,)
+    assert len(result) == 2
+    assert set(result["group1"]) == {"linux1804-64-asan/debug", "linux1804-64/opt"}
+    assert set(result["group2"]) == {
+        "linux1804-64/opt",
+        "mac/debug",
+        "linux1804-64/debug",
+    }

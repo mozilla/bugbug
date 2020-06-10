@@ -13,7 +13,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, commit_features, feature_cleanup, repository
+from bugbug import bug_features, commit_features, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
 
 
@@ -90,7 +90,7 @@ class BackoutModel(CommitModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
