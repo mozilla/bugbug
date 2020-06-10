@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import commit_features, repository, test_scheduling
+from bugbug import commit_features, repository, test_scheduling, utils
 from bugbug.model import CommitModel
 
 
@@ -58,7 +58,7 @@ class TestFailureModel(CommitModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
     def items_gen(self, classes):

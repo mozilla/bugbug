@@ -10,7 +10,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 
@@ -104,7 +104,7 @@ class ComponentModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
