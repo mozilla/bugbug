@@ -38,7 +38,7 @@ from bugbug_http import models
         ),
         # two from label, one from group
         (
-            {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.4},
+            {"test-linux1804-64-opt-label1": 0.9, "test-linux1804-64-opt-label2": 0.5},
             {"test-group2": 0.9},
             {"test-linux1804-64-opt-label1": 0.9},
             {"test-group2": ["test-linux1804-64/opt"]},
