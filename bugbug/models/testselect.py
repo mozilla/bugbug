@@ -3,15 +3,17 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import math
 import pickle
 import statistics
 from functools import reduce
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
+from ortools.linear_solver import pywraplp
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -22,6 +24,7 @@ from bugbug import (
     repository,
     test_scheduling,
     test_scheduling_features,
+    utils,
 )
 from bugbug.model import Model
 
@@ -59,6 +62,7 @@ class TestSelectModel(Model):
             self.eval_dbs[test_scheduling.TEST_GROUP_SCHEDULING_DB] = (
                 test_scheduling.PAST_FAILURES_GROUP_DB,
                 test_scheduling.TOUCHED_TOGETHER_DB,
+                test_scheduling.FAILING_TOGETHER_CONFIG_GROUP_DB,
             )
         elif granularity == "config_group":
             self.training_dbs.append(test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB)
@@ -100,7 +104,7 @@ class TestSelectModel(Model):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
     def get_pushes(
@@ -205,7 +209,7 @@ class TestSelectModel(Model):
     def select_tests(
         self,
         commits: Iterable[dict],
-        confidence: float = 0.3,
+        confidence: float = 0.5,
         push_num: Optional[int] = None,
     ) -> Dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
@@ -234,63 +238,259 @@ class TestSelectModel(Model):
             for i in selected_indexes
         }
 
-    def reduce(self, tasks: Set[str], min_redundancy_confidence: float) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db(self.granularity)
-
-        priorities1 = [
-            "tsan",
-            "android-hw",
-            "linux1804-32",
-            "asan",
-            "mac",
-            "windows7",
-            "android-em",
-            "windows10",
-            "linux1804-64",
+    def _get_cost(self, config: str) -> int:
+        costs = [
+            (("linux1804-64", "opt"), 2),
+            (("linux1804-64", "debug"), 3),
+            (("windows10", "opt"), 4),
+            (("windows10", "debug"), 5),
+            (("android-em", "opt"), 6),
+            (("android-em", "debug"), 7),
+            (("windows7", "opt"), 8),
+            (("windows7", "debug"), 9),
+            (("mac", "opt"), 10),
+            (("mac", "debug"), 11),
+            (("asan", "opt"), 12),
+            (("asan", "debug"), 13),
+            (("linux1804-32", "opt"), 14),
+            (("linux1804-32", "debug"), 15),
+            (("android-hw", "opt"), 16),
+            (("android-hw", "debug"), 17),
+            (("tsan", "opt"), 18),
+            (("tsan", "debug"), 19),
+            (("test-linux1804-64-shippable/opt-*-e10s",), 1),
         ]
-        priorities2 = ["debug", "opt"]
 
-        to_drop = set()
-        to_analyze = sorted(tasks)
-        while len(to_analyze) > 1:
-            task1 = to_analyze.pop(0)
+        for substrings, cost in reversed(costs):
+            if all(s in config for s in substrings):
+                return cost
 
-            key = test_scheduling.failing_together_key(task1)
+        raise Exception(f"Couldn't find cost for {config}")
 
+    def _generate_equivalence_sets(
+        self,
+        tasks: Iterable[str],
+        min_redundancy_confidence: float,
+        load_failing_together: Callable[[str], Dict[str, Tuple[float, float]]],
+        assume_redundant: bool,
+    ) -> List[Set[str]]:
+        # Generate 'equivalence sets', containing all tasks that are redundant with
+        # each other.
+        groups: List[Set[str]] = []
+        task_to_groups: Dict[str, Set[int]] = collections.defaultdict(set)
+        incompatible_groups: Dict[str, Set[int]] = collections.defaultdict(set)
+
+        def create_group(task: str) -> None:
+            if task in task_to_groups:
+                return
+
+            groups.append({task})
+            task_to_groups[task] = {len(groups) - 1}
+
+        # Add task1 to all equivalence groups where task2 is present, and likewise for task2.
+        # Skip groups which contain tasks that are not redundant with task1.
+        def add_to_groups(task1: str, task2: str) -> None:
+            found = False
+
+            if task1 in task_to_groups:
+                for i in task_to_groups[task1]:
+                    if task2 in incompatible_groups and i in incompatible_groups[task2]:
+                        continue
+
+                    groups[i].add(task2)
+                    task_to_groups[task2].add(i)
+                    found = True
+
+            if task2 in task_to_groups:
+                for i in task_to_groups[task2]:
+                    if task1 in incompatible_groups and i in incompatible_groups[task1]:
+                        continue
+
+                    groups[i].add(task1)
+                    task_to_groups[task1].add(i)
+                    found = True
+
+            # No suitable equivalence group was found for the tasks, create a new one.
+            if found:
+                return
+
+            group = {task1, task2}
+            groups.append(group)
+            task_to_groups[task1].add(len(groups) - 1)
+            task_to_groups[task2].add(len(groups) - 1)
+
+        def mark_incompatible(task1: str, task2: str) -> None:
+            if task1 in task_to_groups:
+                incompatible_groups[task2].update(task_to_groups[task1])
+
+            if task2 in task_to_groups:
+                incompatible_groups[task1].update(task_to_groups[task2])
+
+        sorted_tasks = sorted(tasks)
+        for i, task1 in enumerate(sorted_tasks):
             try:
-                failing_together_stats = pickle.loads(failing_together[key])
+                failing_together_stats = load_failing_together(task1)
             except KeyError:
-                continue
+                if not assume_redundant:
+                    create_group(task1)
+                    continue
+                else:
+                    failing_together_stats = {}
 
-            for task2 in to_analyze:
+            for task2 in sorted_tasks[i + 1 :]:
                 try:
                     support, confidence = failing_together_stats[task2]
                 except KeyError:
-                    continue
+                    if not assume_redundant:
+                        continue
+                    else:
+                        confidence = 1.0
 
-                if confidence < min_redundancy_confidence:
-                    continue
+                if confidence >= min_redundancy_confidence:
+                    add_to_groups(task1, task2)
+                else:
+                    mark_incompatible(task1, task2)
 
-                for priority in priorities1:
-                    if priority in task1 and priority in task2:
-                        for priority in priorities2:
-                            if priority in task1:
-                                to_drop.add(task1)
-                                break
-                            elif priority in task2:
-                                to_drop.add(task2)
-                                break
-                        break
-                    elif priority in task1:
-                        to_drop.add(task1)
-                        break
-                    elif priority in task2:
-                        to_drop.add(task2)
-                        break
+            # Create group consisting only of task1, if there was nothing equivalent
+            # with it.
+            create_group(task1)
 
-            to_analyze = [t for t in to_analyze if t not in to_drop]
+        return groups
 
-        return tasks - to_drop
+    def _solve_optimization(self, solver: pywraplp.Solver) -> None:
+        # The MIP solver is usually fast (milliseconds). If we hit a weird problem,
+        # accept a suboptimal solution after 10 seconds.
+        solver.SetTimeLimit(10000)
+        status = solver.Solve()
+
+        if status == pywraplp.Solver.INFEASIBLE:
+            raise Exception("Infeasible problem")
+        elif status == pywraplp.Solver.NOT_SOLVED:
+            raise Exception("Problem unsolved")
+
+    def reduce(
+        self, tasks: Iterable[str], min_redundancy_confidence: float
+    ) -> Set[str]:
+        failing_together = test_scheduling.get_failing_together_db(self.granularity)
+
+        def load_failing_together(task: str) -> Dict[str, Tuple[float, float]]:
+            key = test_scheduling.failing_together_key(task)
+            return pickle.loads(failing_together[key])
+
+        solver = pywraplp.Solver(
+            "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
+        )
+
+        task_vars = {task: solver.BoolVar(task) for task in tasks}
+
+        equivalence_sets = self._generate_equivalence_sets(
+            tasks, min_redundancy_confidence, load_failing_together, False
+        )
+
+        # Create constraints to ensure at least one task from each set of equivalent
+        # sets is selected.
+
+        mutually_exclusive = True
+        seen = set()
+        for equivalence_set in equivalence_sets:
+            if any(config in seen for config in equivalence_set):
+                mutually_exclusive = False
+                break
+
+            seen |= equivalence_set
+
+        for equivalence_set in equivalence_sets:
+            sum_constraint = sum(task_vars[task] for task in equivalence_set)
+            if mutually_exclusive:
+                solver.Add(sum_constraint == 1)
+            else:
+                solver.Add(sum_constraint >= 1)
+
+        # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+        solver.Minimize(
+            sum(self._get_cost(task) * task_vars[task] for task in task_vars.keys())
+        )
+
+        self._solve_optimization(solver)
+
+        return {
+            task
+            for task, task_var in task_vars.items()
+            if task_var.solution_value() == 1
+        }
+
+    def select_configs(
+        self, groups: Iterable[str], min_redundancy_confidence: float
+    ) -> Dict[str, List[str]]:
+        failing_together = test_scheduling.get_failing_together_db("config_group")
+
+        all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+        config_costs = {config: self._get_cost(config) for config in all_configs}
+
+        solver = pywraplp.Solver(
+            "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
+        )
+
+        config_group_vars = {
+            (config, group): solver.BoolVar(f"{group}@{config}")
+            for group in groups
+            for config in all_configs
+        }
+
+        for group in groups:
+            key = test_scheduling.failing_together_key(group)
+            try:
+                failing_together_stats = pickle.loads(failing_together[key])
+            except KeyError:
+                failing_together_stats = {}
+
+            def load_failing_together(config: str) -> Dict[str, Tuple[float, float]]:
+                return failing_together_stats[config]
+
+            equivalence_sets = self._generate_equivalence_sets(
+                all_configs, min_redundancy_confidence, load_failing_together, True
+            )
+
+            # Create constraints to ensure at least one task from each set of equivalent
+            # groups is selected.
+
+            mutually_exclusive = True
+            seen = set()
+            for equivalence_set in equivalence_sets:
+                if any(config in seen for config in equivalence_set):
+                    mutually_exclusive = False
+                    break
+
+                seen |= equivalence_set
+
+            for equivalence_set in equivalence_sets:
+                sum_constraint = sum(
+                    config_group_vars[(config, group)] for config in equivalence_set
+                )
+                if mutually_exclusive:
+                    solver.Add(sum_constraint == 1)
+                else:
+                    solver.Add(sum_constraint >= 1)
+
+        # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+        solver.Minimize(
+            sum(
+                config_costs[config] * config_group_vars[(config, group)]
+                for config, group in config_group_vars.keys()
+            )
+        )
+
+        self._solve_optimization(solver)
+
+        configs_by_group: Dict[str, List[str]] = {}
+        for group in groups:
+            configs_by_group[group] = []
+
+        for (config, group), config_group_var in config_group_vars.items():
+            if config_group_var.solution_value() == 1:
+                configs_by_group[group].append(config)
+
+        return configs_by_group
 
     def evaluation(self) -> None:
         # Get a test set of pushes on which to test the model.
@@ -299,15 +499,16 @@ class TestSelectModel(Model):
         # To evaluate the model with reductions enabled, we need to regenerate the failing together DB, using
         # only failure data from the training pushes (otherwise, we'd leak training information into the test
         # set).
-        if self.granularity == "label":
-            print("Generate failing together DB (restricted to training pushes)")
-            push_data_iter, push_data_count, _ = test_scheduling.get_push_data("label")
-            test_scheduling.generate_failing_together_probabilities(
-                self.granularity,
-                push_data_iter(),
-                push_data_count,
-                pushes[train_push_len - 1]["revs"][0],
-            )
+        print("Generate failing together DB (restricted to training pushes)")
+        push_data_iter, push_data_count, _ = test_scheduling.get_push_data(
+            "label" if self.granularity == "label" else "config_group"
+        )
+        test_scheduling.generate_failing_together_probabilities(
+            "label" if self.granularity == "label" else "config_group",
+            push_data_iter(),
+            push_data_count,
+            pushes[train_push_len - 1]["revs"][0],
+        )
 
         test_pushes_list = pushes[train_push_len:]
 
@@ -353,14 +554,17 @@ class TestSelectModel(Model):
             # The number 100 comes from the fact that in the past failure data
             # generation we store past failures in batches of 100 pushes.
             test_pushes[rev]["all_possibly_selected"] = self.select_tests(
-                commits, 0.3, push_num - 100
+                commits, 0.5, push_num - 100
             )
 
-        reductions: List[Optional[float]] = [None]
-        if self.granularity == "label":
-            reductions += [0.9, 1.0]
+        reductions: List[Optional[float]] = [None, 0.9, 1.0]
 
-        def do_eval(confidence_threshold, reduction, cap, minimum):
+        def do_eval(
+            confidence_threshold: float,
+            reduction: Optional[float],
+            cap: Optional[int],
+            minimum: Optional[int],
+        ) -> None:
             for rev, push in test_pushes.items():
                 selected = set(
                     name
@@ -382,7 +586,17 @@ class TestSelectModel(Model):
                     )
 
                 if reduction is not None:
-                    selected = self.reduce(selected, reduction)
+                    if self.granularity == "label":
+                        selected = self.reduce(selected, reduction)
+                    elif self.granularity == "group":
+                        push["number_configs"] = len(
+                            set(
+                                sum(
+                                    self.select_configs(selected, reduction).values(),
+                                    [],
+                                )
+                            )
+                        )
 
                 if cap is not None and len(selected) > cap:
                     selected = set(
@@ -451,9 +665,15 @@ class TestSelectModel(Model):
                 else "disabled"
             )
 
-            print(
-                f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, and cap at {cap}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
-            )
+            message = f"For confidence threshold {confidence_threshold}, with reduction {reduction_str}, cap at {cap}, and minimum at {minimum}: scheduled {average_scheduled} tasks on average (min {min_scheduled}, max {max_scheduled}). In {percentage_caught_one}% of pushes we caught at least one failure ({percentage_caught_one_or_some_didnt_run}% ignoring misses when some of our selected tasks didn't run). On average, we caught {average_caught_percentage}% of all seen failures."
+
+            if reduction is not None and self.granularity == "group":
+                average_configs = statistics.mean(
+                    result["number_configs"] for result in test_pushes.values()
+                )
+                message += f" On average, we selected {average_configs} configs."
+
+            print(message)
 
         for minimum in [None, 10]:
             for cap in [None, 300, 500]:

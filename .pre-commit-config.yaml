@@ -52,8 +52,8 @@ repos:
     hooks:
     -   id: mypy
         name: mypy-bugbug
-        files: ^bugbug/|^scripts/
-        entry: mypy bugbug/ scripts/
+        files: ^bugbug/|^scripts/|^tests/
+        entry: mypy bugbug/ scripts/ tests/
         pass_filenames: false
     -   id: mypy
         name: mypy-bugbug-http
@@ -64,4 +64,4 @@ repos:
     hooks:
     -   id: check-useless-excludes
 default_language_version:
-    python: python3.7
+    python: python3

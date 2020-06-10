@@ -19,6 +19,7 @@ import boto3
 import dateutil.parser
 import lmdb
 import numpy as np
+import psutil
 import requests
 import scipy
 import taskcluster
@@ -465,3 +466,7 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
         return False
 
     return [c for c in r.json()["changesets"] if not should_skip(c)]
+
+
+def get_physical_cpu_count() -> int:
+    return psutil.cpu_count(logical=False)

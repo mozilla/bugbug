@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, labels
+from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
 from bugbug.model import BugModel
 
 
@@ -84,7 +84,7 @@ class TrackingModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=16)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):

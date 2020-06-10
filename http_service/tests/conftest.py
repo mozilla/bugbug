@@ -10,11 +10,14 @@ import pickle
 import re
 from collections import defaultdict
 from datetime import datetime
+from typing import Callable, Dict, Tuple
 
 import hglib
 import numpy as np
+import py.path
 import pytest
 import responses
+from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
 
 import bugbug.models
@@ -151,7 +154,7 @@ def add_change_time():
 
 
 @pytest.fixture
-def mock_hgmo(mock_repo):
+def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
     """Mock HGMO API to get patches to apply"""
 
     def fake_json_relevance(request):
@@ -163,13 +166,7 @@ def mock_hgmo(mock_repo):
 
         content = json.dumps(
             {
-                "changesets": [
-                    {
-                        "node": "PULLED_FROM_REMOTE",
-                        "pushhead": "PULLED_FROM_REMOTE",
-                        "parents": ["xxxxx"],
-                    }
-                ],
+                "changesets": [{"node": "PULLED_FROM_REMOTE", "parents": ["xxxxx"],}],
                 "visible": True,
             }
         )
@@ -193,7 +190,7 @@ def mock_hgmo(mock_repo):
 
 
 @pytest.fixture
-def mock_repo(tmpdir, monkeypatch):
+def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str]:
     """Create an empty mercurial repo"""
     local_dir = tmpdir / "local"
     remote_dir = tmpdir / "remote"
@@ -251,7 +248,7 @@ def mock_data(tmp_path):
 
 
 @pytest.fixture
-def mock_component_taskcluster_artifact():
+def mock_component_taskcluster_artifact() -> None:
     responses.add(
         responses.HEAD,
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.source.source-bugzilla-info/artifacts/public/components.json",
@@ -270,7 +267,9 @@ def mock_component_taskcluster_artifact():
 
 
 @pytest.fixture
-def mock_schedule_tests_classify(monkeypatch):
+def mock_schedule_tests_classify(
+    monkeypatch: MonkeyPatch,
+) -> Callable[[Dict[str, float], Dict[str, float]], None]:
     with open("known_tasks", "w") as f:
         f.write("prova")
 
@@ -279,18 +278,35 @@ def mock_schedule_tests_classify(monkeypatch):
         past_failures_data = test_scheduling.get_past_failures(granularity)
         past_failures_data["push_num"] = 1
         past_failures_data["all_runnables"] = [
-            f"test-{granularity}1",
-            f"test-{granularity}2",
-            "test-linux64/opt",
+            "test-linux1804-64-opt-label1",
+            "test-linux1804-64-opt-label2",
+            "test-group1",
+            "test-group2",
+            "test-linux1804-64/opt",
             "test-windows10/opt",
         ]
         past_failures_data.close()
 
     failing_together = test_scheduling.get_failing_together_db("label")
-    failing_together[b"test-linux64/opt"] = pickle.dumps(
+    failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
         {"test-windows10/opt": (0.1, 1.0),}
     )
     test_scheduling.close_failing_together_db("label")
+
+    failing_together = test_scheduling.get_failing_together_db("config_group")
+    failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
+        ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
+    )
+    failing_together[b"test-group1"] = pickle.dumps(
+        {
+            "test-linux1804-64/opt": {
+                "test-windows10/debug": (1.0, 0.0),
+                "test-windows10/opt": (1.0, 1.0),
+            },
+            "test-windows10/debug": {"test-windows10/opt": (1.0, 0.0),},
+        }
+    )
+    test_scheduling.close_failing_together_db("config_group")
 
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.

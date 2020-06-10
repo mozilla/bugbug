@@ -13,7 +13,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
 
 # For the moment, rca - XYZ is treated of bugtype XYZ,
@@ -123,7 +123,9 @@ class RCATypeModel(BugModel):
             ]
         )
 
-        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(n_jobs=16))
+        self.clf = OneVsRestClassifier(
+            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        )
 
     # return rca from a whiteboard string
     def get_rca_from_whiteboard(self, whiteboard_data):

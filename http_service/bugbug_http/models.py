@@ -108,7 +108,7 @@ def get_known_tasks() -> Tuple[str, ...]:
         return tuple(line.strip() for line in f)
 
 
-def schedule_tests(branch, rev):
+def schedule_tests(branch: str, rev: str) -> str:
     from bugbug_http.app import JobInfo
     from bugbug_http import REPO_DIR
 
@@ -124,13 +124,13 @@ def schedule_tests(branch, rev):
 
     # Apply the stack on the local repository
     try:
-        revs = repository.apply_stack(REPO_DIR, stack, branch)
+        revs = repository.apply_stack(REPO_DIR, stack, branch, rev)
     except Exception as e:
         LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
         return "NOK"
 
     test_selection_threshold = float(
-        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.3)
+        os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
     )
 
     # Analyze patches.
@@ -139,29 +139,32 @@ def schedule_tests(branch, rev):
     )
 
     if len(commits) > 0:
-        tasks = MODEL_CACHE.get("testlabelselect").select_tests(
-            commits, test_selection_threshold
-        )
+        testlabelselect_model = MODEL_CACHE.get("testlabelselect")
+        testgroupselect_model = MODEL_CACHE.get("testgroupselect")
 
-        reduced = MODEL_CACHE.get("testlabelselect").reduce(
+        tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
+
+        reduced = testlabelselect_model.reduce(
             set(t for t, c in tasks.items() if c >= 0.8), 1.0
         )
 
-        reduced_higher = MODEL_CACHE.get("testlabelselect").reduce(
+        reduced_higher = testlabelselect_model.reduce(
             set(t for t, c in tasks.items() if c >= 0.9), 1.0
         )
 
-        groups = MODEL_CACHE.get("testgroupselect").select_tests(
-            commits, test_selection_threshold
-        )
+        groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
+
+        config_groups = testgroupselect_model.select_configs(groups.keys(), 1.0)
     else:
         tasks = {}
         reduced = {}
         groups = {}
+        config_groups = {}
 
     data = {
         "tasks": tasks,
         "groups": groups,
+        "config_groups": config_groups,
         "reduced_tasks": {t: c for t, c in tasks.items() if t in reduced},
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": get_known_tasks(),
