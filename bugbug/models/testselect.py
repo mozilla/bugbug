@@ -559,7 +559,12 @@ class TestSelectModel(Model):
 
         reductions: List[Optional[float]] = [None, 0.9, 1.0]
 
-        def do_eval(confidence_threshold, reduction, cap, minimum):
+        def do_eval(
+            confidence_threshold: float,
+            reduction: Optional[float],
+            cap: Optional[int],
+            minimum: Optional[int],
+        ) -> None:
             for rev, push in test_pushes.items():
                 selected = set(
                     name
@@ -586,9 +591,9 @@ class TestSelectModel(Model):
                     elif self.granularity == "group":
                         push["number_configs"] = len(
                             set(
-                                config
-                                for config, group in self.select_configs(
-                                    selected, reduction
+                                sum(
+                                    self.select_configs(selected, reduction).values(),
+                                    [],
                                 )
                             )
                         )
