@@ -364,7 +364,6 @@ def model_prediction(model_name, bug_id):
         status_code = 202
         data = {"ready": False}
 
-    # return jsonify(**data), status_code
     return compress_response(data, status_code)
 
 
@@ -595,7 +594,6 @@ def push_schedules(branch, rev):
     job = JobInfo(schedule_tests, branch, rev)
     data = get_result(job)
     if data:
-        # return jsonify(data), 200
         return compress_response(data, 200)
 
     if not is_pending(job):
