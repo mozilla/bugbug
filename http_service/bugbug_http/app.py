@@ -9,7 +9,6 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from io import BytesIO
 from typing import Any, Callable, List
 
 import libmozdata
@@ -286,16 +285,24 @@ def get_result(job):
     return None
 
 
-def compress_response(data, status_code):
-    gzip_buffer = BytesIO()
-    with gzip.GzipFile(mode="wb", compresslevel=6, fileobj=gzip_buffer) as gzip_file:
-        gzip_file.write(orjson.dumps(data))
+def compress_response(data: dict, status_code: int):
+    """Compress data using gzip compressor and frame response
+
+    :param data: data
+    :type data: dict
+    :param status_code: response status code
+    :type status_code: int
+    :return: response with gzip compressed data
+    :rtype: Response
+    """
+
+    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=9)
 
     response = Response(status=status_code)
-    response.set_data(gzip_buffer.getvalue())
+    response.set_data(gzip_buffer)
     response.headers["Content-Encoding"] = "gzip"
     response.headers["Content-Length"] = len(response.get_data())
-    # response.headers['Content-Type'] = 'application/json'
+    response.headers["Content-Type"] = "application/json"
 
     return response
 
@@ -538,9 +545,7 @@ def batch_prediction(model_name):
         # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
-    # return jsonify({"bugs": data}), status_code
-    data = {"bugs": data}
-    return compress_response(data, status_code)
+    return compress_response({"bugs": data}, status_code)
 
 
 @application.route("/push/<path:branch>/<rev>/schedules")
