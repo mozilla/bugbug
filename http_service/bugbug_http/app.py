@@ -291,12 +291,12 @@ def compress_response(data, status_code):
     with gzip.GzipFile(mode="wb", compresslevel=6, fileobj=gzip_buffer) as gzip_file:
         gzip_file.write(orjson.dumps(data))
 
-    response = Response()
+    response = Response(status=status_code)
     response.set_data(gzip_buffer.getvalue())
     response.headers["Content-Encoding"] = "gzip"
     response.headers["Content-Length"] = len(response.get_data())
     # response.headers['Content-Type'] = 'application/json'
-    response["status_code"] = status_code
+
     return response
 
 
