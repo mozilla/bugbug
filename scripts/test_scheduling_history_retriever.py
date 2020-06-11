@@ -75,9 +75,9 @@ class Retriever(object):
             num_pushes = len(pushes)
 
             # Regenerating a large amount of data when we update the mozci regression detection
-            # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+            # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
             # run.
-            to_regenerate = 1000
+            to_regenerate = int(os.environ.get("OLD_RESULTS_TO_REGENERATE", 0))
 
             for _ in tqdm(range(num_pushes)):
                 push = pushes.pop(0)

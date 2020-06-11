@@ -203,6 +203,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -244,6 +245,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -285,6 +287,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
