@@ -203,6 +203,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -244,6 +245,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -281,10 +283,11 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: batch
+      workerType: compute-small
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
+          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -986,6 +989,7 @@ tasks:
       dependencies:
         - commit-retrieval
         - test-group-scheduling-history-generator
+        - test-config_group-scheduling-history-generator
       payload:
         maxRunTime: 25200
         image: mozilla/bugbug-base:${version}

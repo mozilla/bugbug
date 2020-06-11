@@ -79,7 +79,7 @@ PAST_FAILURES_CONFIG_GROUP_DB = "past_failures_config_group.lmdb.tar.zst"
 FAILING_TOGETHER_CONFIG_GROUP_DB = "failing_together_config_group.lmdb.tar.zst"
 db.register(
     TEST_CONFIG_GROUP_SCHEDULING_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_config_group_scheduling_history.pickle.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_config_group_scheduling_history.latest/artifacts/public/test_config_group_scheduling_history.pickle.zst",
     20,
     [PAST_FAILURES_CONFIG_GROUP_DB, FAILING_TOGETHER_CONFIG_GROUP_DB],
 )
@@ -342,21 +342,27 @@ def generate_failing_together_probabilities(
             elif task2 in failures:
                 count_single_failures[(task1, task2)] += 1
 
+    all_available_configs: Set[str] = set()
+
     for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
         push_data, total=push_data_count
     ):
         failures = set(likely_regressions + candidate_regressions)
-        all_tasks = list(set(tasks) | failures)
+        all_tasks_set = set(tasks) | failures
+        all_tasks = list(all_tasks_set)
 
         # At config/group granularity, only consider redundancy between the same manifest
         # on different configurations, and not between manifests too.
         if granularity == "config_group":
+            all_available_configs.update(config for config, group in all_tasks)
+
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
             )
             for manifest, group_tasks in groups:
                 count_runs_and_failures(group_tasks)
         else:
+            all_available_configs |= all_tasks_set
             count_runs_and_failures(all_tasks)
 
         if up_to is not None and revisions[0] == up_to:
@@ -409,7 +415,7 @@ def generate_failing_together_probabilities(
             f"{couple[0]} - {couple[1]} redundancy confidence {confidence}, support {support} ({failure_count} over {run_count})."
         )
 
-    failing_together: dict = collections.defaultdict(dict)
+    failing_together: dict = {}
     count_redundancies: collections.Counter = collections.Counter()
     for couple, (support, confidence) in stats.items():
         if confidence == 1.0:
@@ -438,19 +444,32 @@ def generate_failing_together_probabilities(
             count_redundancies["0%"] += 1
 
         if granularity == "config_group":
-            failing_together[couple[0][1]][(couple[0][0], couple[1][0])] = (
+            if couple[0][1] not in failing_together:
+                failing_together[couple[0][1]] = {}
+
+            if couple[0][0] not in failing_together[couple[0][1]]:
+                failing_together[couple[0][1]][couple[0][0]] = {}
+
+            failing_together[couple[0][1]][couple[0][0]][couple[1][0]] = (
                 support,
                 confidence,
             )
         else:
+            if couple[0] not in failing_together:
+                failing_together[couple[0]] = {}
+
             failing_together[couple[0]][couple[1]] = (support, confidence)
 
     for percentage, count in count_redundancies.most_common():
         logger.info(f"{count} with {percentage} confidence")
 
     failing_together_db = get_failing_together_db(granularity)
+
+    failing_together_db[b"$ALL_CONFIGS$"] = pickle.dumps(list(all_available_configs))
+
     for key, value in failing_together.items():
         failing_together_db[failing_together_key(key)] = pickle.dumps(value)
+
     close_failing_together_db(granularity)
 
 

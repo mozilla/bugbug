@@ -29,7 +29,7 @@ logger = getLogger(__name__)
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
-MOZCI_VERSION = 3
+MOZCI_VERSION = 4
 
 TRAINING_MONTHS = {
     "label": 7,
@@ -75,9 +75,9 @@ class Retriever(object):
             num_pushes = len(pushes)
 
             # Regenerating a large amount of data when we update the mozci regression detection
-            # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
+            # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
             # run.
-            to_regenerate = 0
+            to_regenerate = int(os.environ.get("OLD_RESULTS_TO_REGENERATE", 0))
 
             for _ in tqdm(range(num_pushes)):
                 push = pushes.pop(0)
