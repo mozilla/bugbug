@@ -79,7 +79,7 @@ PAST_FAILURES_CONFIG_GROUP_DB = "past_failures_config_group.lmdb.tar.zst"
 FAILING_TOGETHER_CONFIG_GROUP_DB = "failing_together_config_group.lmdb.tar.zst"
 db.register(
     TEST_CONFIG_GROUP_SCHEDULING_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_group_scheduling_history.latest/artifacts/public/test_config_group_scheduling_history.pickle.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_test_config_group_scheduling_history.latest/artifacts/public/test_config_group_scheduling_history.pickle.zst",
     20,
     [PAST_FAILURES_CONFIG_GROUP_DB, FAILING_TOGETHER_CONFIG_GROUP_DB],
 )
