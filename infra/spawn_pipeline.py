@@ -86,6 +86,7 @@ def main():
 
         task_id = taskcluster.utils.slugId()
         task_internal_id = task["ID"]
+
         if task_internal_id in id_mapping:
             raise ValueError(f"Conflicting IDs {task_internal_id}")
 
