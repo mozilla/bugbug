@@ -118,7 +118,7 @@ def analyze_metrics(
     )
 
     clean = True
-
+    binary_classifier = False
     # First process the metrics JSON files
     for metric_file_path in root.glob("metric*.json"):
 
@@ -136,13 +136,16 @@ def analyze_metrics(
             if not key.startswith("test_"):
                 continue
 
-            metrics[model_name][f"{key}_mean"][date] = value["mean"]
-            metrics[model_name][f"{key}_std"][date] = value["std"]
+            if binary_classifier:
+                metrics[model_name][f"{key}_class_0"][date] = value["value"]
+                metrics[model_name][f"{key}_class_1"][date] = value["value"]
+            else:
+                metrics[model_name][f"{key}_mean"][date] = value["mean"]
+                metrics[model_name][f"{key}_std"][date] = value["std"]
 
     # Then analyze them
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
-
             if metric_name.endswith("_std"):
                 LOGGER.info(
                     "Skipping analysis of %r, analysis is not efficient on standard deviation",
