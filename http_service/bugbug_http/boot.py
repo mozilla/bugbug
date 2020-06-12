@@ -16,13 +16,13 @@ from bugbug_http import ALLOW_MISSING_MODELS, REPO_DIR
 logger = logging.getLogger(__name__)
 
 
-def boot_worker():
+def boot_worker() -> None:
     # Clone autoland
-    def clone_autoland():
+    def clone_autoland() -> None:
         logger.info(f"Cloning autoland in {REPO_DIR}...")
         repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
 
-    def extract_past_failures_label():
+    def extract_past_failures_label() -> None:
         try:
             utils.extract_file(
                 os.path.join("data", test_scheduling.PAST_FAILURES_LABEL_DB)
@@ -34,19 +34,31 @@ def boot_worker():
                 "Label-level past failures DB not extracted, but missing models are allowed."
             )
 
-    def extract_failing_together():
+    def extract_failing_together_label() -> None:
         try:
             utils.extract_file(
                 os.path.join("data", test_scheduling.FAILING_TOGETHER_LABEL_DB)
             )
-            logger.info("Failing together DB extracted.")
+            logger.info("Failing together label DB extracted.")
         except FileNotFoundError:
             assert ALLOW_MISSING_MODELS
             logger.info(
-                "Failing together DB not extracted, but missing models are allowed."
+                "Failing together label DB not extracted, but missing models are allowed."
             )
 
-    def extract_past_failures_group():
+    def extract_failing_together_config_group() -> None:
+        try:
+            utils.extract_file(
+                os.path.join("data", test_scheduling.FAILING_TOGETHER_CONFIG_GROUP_DB)
+            )
+            logger.info("Failing together config/group DB extracted.")
+        except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
+            logger.info(
+                "Failing together config/group DB not extracted, but missing models are allowed."
+            )
+
+    def extract_past_failures_group() -> None:
         try:
             utils.extract_file(
                 os.path.join("data", test_scheduling.PAST_FAILURES_GROUP_DB)
@@ -58,7 +70,7 @@ def boot_worker():
                 "Group-level past failures DB not extracted, but missing models are allowed."
             )
 
-    def extract_touched_together():
+    def extract_touched_together() -> None:
         try:
             utils.extract_file(
                 os.path.join("data", test_scheduling.TOUCHED_TOGETHER_DB)
@@ -70,7 +82,7 @@ def boot_worker():
                 "Touched together DB not extracted, but missing models are allowed."
             )
 
-    def extract_commits():
+    def extract_commits() -> bool:
         try:
             utils.extract_file(f"{repository.COMMITS_DB}.zst")
             logger.info("Commits DB extracted.")
@@ -80,7 +92,7 @@ def boot_worker():
             assert ALLOW_MISSING_MODELS
             return False
 
-    def extract_commit_experiences():
+    def extract_commit_experiences() -> None:
         try:
             utils.extract_file(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
             logger.info("Commit experiences DB extracted.")
@@ -94,7 +106,7 @@ def boot_worker():
         stop=tenacity.stop_after_attempt(7),
         wait=tenacity.wait_exponential(multiplier=1, min=1, max=8),
     )
-    def retrieve_schedulable_tasks():
+    def retrieve_schedulable_tasks() -> None:
         r = requests.get(
             "https://hg.mozilla.org/integration/autoland/json-pushes?version=2&tipsonly=1"
         )
@@ -133,7 +145,8 @@ def boot_worker():
         extract_touched_together()
         extract_past_failures_label()
         extract_past_failures_group()
-        extract_failing_together()
+        extract_failing_together_label()
+        extract_failing_together_config_group()
 
         if commits_db_extracted:
             # Update the commits DB.
