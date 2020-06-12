@@ -85,12 +85,18 @@ def main():
         # mapping between an internal ID and the generate ID
 
         task_id = taskcluster.utils.slugId()
-        task_internal_id = task.pop("ID")
+        task_internal_id = task["ID"]
 
         if task_internal_id in id_mapping:
             raise ValueError(f"Conflicting IDs {task_internal_id}")
 
+        # Store each task ID in the id_mapping dictionary before processing dependencies.
+        # This way, tasks can be defined in any order.
         id_mapping[task_internal_id] = task_id
+
+    for task in rendered["tasks"]:
+        task_internal_id = task.pop("ID")
+        task_id = id_mapping[task_internal_id]
 
         for key, value in keys.items():
             task[key] = value
