@@ -62,6 +62,8 @@ class TestSelectModel(Model):
             self.eval_dbs[test_scheduling.TEST_GROUP_SCHEDULING_DB] = (
                 test_scheduling.PAST_FAILURES_GROUP_DB,
                 test_scheduling.TOUCHED_TOGETHER_DB,
+            )
+            self.eval_dbs[test_scheduling.TEST_CONFIG_GROUP_SCHEDULING_DB] = (
                 test_scheduling.FAILING_TOGETHER_CONFIG_GROUP_DB,
             )
         elif granularity == "config_group":
