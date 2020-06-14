@@ -290,6 +290,7 @@ def test_touched_together_restart(monkeypatch):
 
     # Ensure we can still read the DB after closing.
     assert test_scheduling.get_touched_together("dom", "layout/tests") == 1
+    test_scheduling.close_touched_together_db()
 
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)

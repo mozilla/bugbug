@@ -16,9 +16,11 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Generator,
     Iterator,
     List,
     NewType,
+    Optional,
     Set,
     Tuple,
     Union,
@@ -484,22 +486,24 @@ def generate_failing_together_probabilities(
 touched_together = None
 
 
-def get_touched_together_db():
+def get_touched_together_db(readonly: bool) -> LMDBDict:
     global touched_together
     if touched_together is None:
         touched_together = LMDBDict(
-            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])
+            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")]),
+            readonly=readonly,
         )
     return touched_together
 
 
-def close_touched_together_db():
+def close_touched_together_db() -> None:
     global touched_together
+    assert touched_together is not None
     touched_together.close()
     touched_together = None
 
 
-def get_touched_together_key(f1, f2):
+def get_touched_together_key(f1: str, f2: str) -> bytes:
     # Always sort in lexographical order, so we are sure the output key is consistently
     # the same with the same two files as input, no matter their order.
     if f2 < f1:
@@ -508,8 +512,8 @@ def get_touched_together_key(f1, f2):
     return f"{f1}${f2}".encode("utf-8")
 
 
-def get_touched_together(f1, f2):
-    touched_together = get_touched_together_db()
+def get_touched_together(f1: str, f2: str) -> int:
+    touched_together = get_touched_together_db(True)
 
     key = get_touched_together_key(f1, f2)
 
@@ -519,8 +523,8 @@ def get_touched_together(f1, f2):
         return 0
 
 
-def set_touched_together(f1, f2):
-    touched_together = get_touched_together_db()
+def set_touched_together(f1: str, f2: str) -> None:
+    touched_together = get_touched_together_db(False)
 
     key = get_touched_together_key(f1, f2)
 
@@ -532,8 +536,8 @@ def set_touched_together(f1, f2):
         )
 
 
-def update_touched_together():
-    touched_together = get_touched_together_db()
+def update_touched_together() -> Generator[None, Optional[Revision], None]:
+    touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]
         if b"last_analyzed" in touched_together
