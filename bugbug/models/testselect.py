@@ -29,10 +29,15 @@ from bugbug import (
 from bugbug.model import Model
 
 
-def get_commit_map():
+def get_commit_map(
+    revs: Optional[Set[test_scheduling.Revision]] = None,
+) -> Dict[test_scheduling.Revision, dict]:
     commit_map = {}
 
     for commit in repository.get_commits():
+        if revs is not None and commit["node"] not in revs:
+            continue
+
         commit_map[commit["node"]] = commit
 
     assert len(commit_map) > 0
@@ -524,6 +529,8 @@ class TestSelectModel(Model):
             ),
         )
 
+        all_revs = set(sum((push["revs"] for push in test_pushes_list), []))
+
         test_pushes_failures = sum(
             1 for push in test_pushes_list if len(push["failures"]) > 0
         )
@@ -536,7 +543,7 @@ class TestSelectModel(Model):
 
         del pushes
 
-        commit_map = get_commit_map()
+        commit_map = get_commit_map(all_revs)
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
         last_push_num = past_failures_data["push_num"]
