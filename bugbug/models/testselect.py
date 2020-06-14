@@ -534,6 +534,8 @@ class TestSelectModel(Model):
             f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
         )
 
+        del pushes
+
         commit_map = get_commit_map()
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
