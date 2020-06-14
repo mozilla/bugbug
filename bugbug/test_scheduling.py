@@ -12,7 +12,6 @@ import re
 import shelve
 import shutil
 import struct
-from functools import lru_cache
 from typing import (
     Any,
     Callable,
@@ -295,9 +294,16 @@ def get_failing_together_db_path(granularity: str) -> str:
     return os.path.join("data", path[: -len(".tar.zst")])
 
 
-@lru_cache(maxsize=None)
-def get_failing_together_db(granularity: str) -> LMDBDict:
-    return LMDBDict(get_failing_together_db_path(granularity))
+failing_together = None
+
+
+def get_failing_together_db(granularity: str, readonly: bool) -> LMDBDict:
+    global failing_together
+    if failing_together is None:
+        failing_together = LMDBDict(
+            get_failing_together_db_path(granularity), readonly=readonly
+        )
+    return failing_together
 
 
 def failing_together_key(item: str) -> bytes:
@@ -311,8 +317,10 @@ def remove_failing_together_db(granularity: str) -> None:
 
 
 def close_failing_together_db(granularity: str) -> None:
-    get_failing_together_db(granularity).close()
-    get_failing_together_db.cache_clear()
+    global failing_together
+    assert failing_together is not None
+    failing_together.close()
+    failing_together = None
 
 
 def generate_failing_together_probabilities(
@@ -463,7 +471,7 @@ def generate_failing_together_probabilities(
     for percentage, count in count_redundancies.most_common():
         logger.info(f"{count} with {percentage} confidence")
 
-    failing_together_db = get_failing_together_db(granularity)
+    failing_together_db = get_failing_together_db(granularity, False)
 
     failing_together_db[b"$ALL_CONFIGS$"] = pickle.dumps(list(all_available_configs))
 

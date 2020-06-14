@@ -373,7 +373,9 @@ class TestSelectModel(Model):
     def reduce(
         self, tasks: Iterable[str], min_redundancy_confidence: float
     ) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db(self.granularity)
+        failing_together = test_scheduling.get_failing_together_db(
+            self.granularity, True
+        )
 
         def load_failing_together(task: str) -> Dict[str, Tuple[float, float]]:
             key = test_scheduling.failing_together_key(task)
@@ -424,7 +426,7 @@ class TestSelectModel(Model):
     def select_configs(
         self, groups: Iterable[str], min_redundancy_confidence: float
     ) -> Dict[str, List[str]]:
-        failing_together = test_scheduling.get_failing_together_db("config_group")
+        failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
         config_costs = {config: self._get_cost(config) for config in all_configs}
