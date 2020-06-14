@@ -163,7 +163,7 @@ class TestSelectModel(Model):
             self.granularity
         ):
             commits = tuple(
-                commit_map[revision] for revision in revs if revision in commit_map
+                commit_map.pop(revision) for revision in revs if revision in commit_map
             )
             if len(commits) == 0:
                 continue
@@ -545,7 +545,7 @@ class TestSelectModel(Model):
         # Select tests for all the pushes in the test set.
         for i, (rev, push) in enumerate(tqdm(test_pushes.items())):
             commits = tuple(
-                commit_map[revision]
+                commit_map.pop(revision)
                 for revision in push["revs"]
                 if revision in commit_map
             )
