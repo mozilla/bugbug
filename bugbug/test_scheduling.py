@@ -267,7 +267,7 @@ def get_test_scheduling_history(granularity):
         yield obj["revs"], obj["data"]
 
 
-def get_past_failures(granularity):
+def get_past_failures(granularity, readonly):
     if granularity == "label":
         past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
     elif granularity == "group":
@@ -278,9 +278,9 @@ def get_past_failures(granularity):
         raise Exception(f"{granularity} granularity unsupported")
 
     return shelve.Shelf(
-        LMDBDict(past_failures_db[: -len(".tar.zst")]),
+        LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
         protocol=pickle.DEFAULT_PROTOCOL,
-        writeback=True,
+        writeback=not readonly,
     )
 
 

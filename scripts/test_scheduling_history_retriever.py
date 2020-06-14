@@ -215,7 +215,7 @@ class Retriever(object):
             )
 
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
-            past_failures = test_scheduling.get_past_failures(granularity)
+            past_failures = test_scheduling.get_past_failures(granularity, False)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 

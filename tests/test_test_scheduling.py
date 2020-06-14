@@ -555,7 +555,7 @@ def test_touched_together_with_backout(monkeypatch):
 
 @pytest.mark.parametrize("granularity", ["group", "label"])
 def test_generate_data(granularity):
-    past_failures = test_scheduling.get_past_failures(granularity)
+    past_failures = test_scheduling.get_past_failures(granularity, False)
 
     commits = [
         {

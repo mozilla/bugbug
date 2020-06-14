@@ -275,7 +275,7 @@ def mock_schedule_tests_classify(
 
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):
-        past_failures_data = test_scheduling.get_past_failures(granularity)
+        past_failures_data = test_scheduling.get_past_failures(granularity, False)
         past_failures_data["push_num"] = 1
         past_failures_data["all_runnables"] = [
             "test-linux1804-64-opt-label1",

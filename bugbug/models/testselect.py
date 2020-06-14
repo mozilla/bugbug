@@ -216,7 +216,7 @@ class TestSelectModel(Model):
     ) -> Dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity)
+        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
 
         if push_num is None:
             push_num = past_failures_data["push_num"] + 1
@@ -534,7 +534,7 @@ class TestSelectModel(Model):
 
         commit_map = get_commit_map()
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity)
+        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
         last_push_num = past_failures_data["push_num"]
         past_failures_data.close()
 
