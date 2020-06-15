@@ -581,8 +581,6 @@ class TestSelectModel(Model):
 
             futures[future]["all_possibly_selected"] = future.result()
 
-        reductions: List[Optional[float]] = [None, 0.9, 1.0]
-
         def do_eval(
             confidence_threshold: float,
             reduction: Optional[float],
@@ -682,7 +680,7 @@ class TestSelectModel(Model):
 
         for minimum in [None, 10]:
             for cap in [None, 300, 500]:
-                for reduction in reductions:
+                for reduction in [None, 0.9, 1.0]:
                     for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
                         do_eval(confidence_threshold, reduction, cap, minimum)
 
