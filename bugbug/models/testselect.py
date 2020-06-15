@@ -585,19 +585,6 @@ class TestSelectModel(Model):
                     if confidence >= confidence_threshold
                 )
 
-                if minimum is not None and len(selected) < minimum:
-                    remaining = [
-                        (name, confidence)
-                        for name, confidence in push["all_possibly_selected"].items()
-                        if name not in selected
-                    ]
-                    selected.update(
-                        name
-                        for name, _ in sorted(remaining, key=lambda x: -x[1])[
-                            : minimum - len(selected)
-                        ]
-                    )
-
                 if reduction is not None:
                     if self.granularity == "label":
                         selected = self.reduce(selected, reduction)
@@ -610,6 +597,19 @@ class TestSelectModel(Model):
                                 )
                             )
                         )
+
+                if minimum is not None and len(selected) < minimum:
+                    remaining = [
+                        (name, confidence)
+                        for name, confidence in push["all_possibly_selected"].items()
+                        if name not in selected
+                    ]
+                    selected.update(
+                        name
+                        for name, _ in sorted(remaining, key=lambda x: -x[1])[
+                            : minimum - len(selected)
+                        ]
+                    )
 
                 if cap is not None and len(selected) > cap:
                     selected = set(
