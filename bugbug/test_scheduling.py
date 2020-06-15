@@ -296,16 +296,16 @@ def get_failing_together_db_path(granularity: str) -> str:
     return os.path.join("data", path[: -len(".tar.zst")])
 
 
-failing_together = None
+failing_together = {}
 
 
 def get_failing_together_db(granularity: str, readonly: bool) -> LMDBDict:
     global failing_together
-    if failing_together is None:
-        failing_together = LMDBDict(
+    if granularity not in failing_together:
+        failing_together[granularity] = LMDBDict(
             get_failing_together_db_path(granularity), readonly=readonly
         )
-    return failing_together
+    return failing_together[granularity]
 
 
 def failing_together_key(item: str) -> bytes:
@@ -320,9 +320,8 @@ def remove_failing_together_db(granularity: str) -> None:
 
 def close_failing_together_db(granularity: str) -> None:
     global failing_together
-    assert failing_together is not None
-    failing_together.close()
-    failing_together = None
+    failing_together[granularity].close()
+    failing_together.pop(granularity)
 
 
 def generate_failing_together_probabilities(
