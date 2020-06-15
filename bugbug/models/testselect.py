@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import concurrent.futures
 import math
 import pickle
 import statistics
@@ -550,25 +551,36 @@ class TestSelectModel(Model):
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.
-        for i, (rev, push) in enumerate(tqdm(test_pushes.items())):
-            commits = tuple(
-                commit_map.pop(revision)
-                for revision in push["revs"]
-                if revision in commit_map
-            )
-            if len(commits) == 0:
-                test_pushes[rev]["all_possibly_selected"] = {}
-                continue
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=utils.get_physical_cpu_count()
+        ) as executor:
+            futures: Dict[concurrent.futures.Future, test_scheduling.Revision] = {}
+            for i, (rev, push) in enumerate(test_pushes.items()):
+                commits = tuple(
+                    commit_map.pop(revision)
+                    for revision in push["revs"]
+                    if revision in commit_map
+                )
+                if len(commits) == 0:
+                    test_pushes[rev]["all_possibly_selected"] = {}
+                    continue
 
-            push_num = last_push_num - (len(test_pushes) - (i + 1))
+                push_num = last_push_num - (len(test_pushes) - (i + 1))
 
-            # Note: we subtract 100 to the push number to make sure we don't use
-            # past failure data for the push itself.
-            # The number 100 comes from the fact that in the past failure data
-            # generation we store past failures in batches of 100 pushes.
-            test_pushes[rev]["all_possibly_selected"] = self.select_tests(
-                commits, 0.5, push_num - 100
-            )
+                futures[
+                    executor.submit(eval_select_tests, self, commits, push_num)
+                ] = rev
+
+            for future in tqdm(
+                concurrent.futures.as_completed(futures), total=len(futures),
+            ):
+                exc = future.exception()
+                if exc is not None:
+                    print(f"Exception {exc} while running {futures[future]}")
+                    for f in futures:
+                        f.cancel()
+
+                test_pushes[futures[future]]["all_possibly_selected"] = future.result()
 
         reductions: List[Optional[float]] = [None, 0.9, 1.0]
 
@@ -711,3 +723,11 @@ class TestGroupSelectModel(TestSelectModel):
 class TestConfigGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
         TestSelectModel.__init__(self, lemmatization, "config_group")
+
+
+def eval_select_tests(model, commits, push_num):
+    # Note: we subtract 100 to the push number to make sure we don't use
+    # past failure data for the push itself.
+    # The number 100 comes from the fact that in the past failure data
+    # generation we store past failures in batches of 100 pushes.
+    return model.select_tests(commits, 0.5, push_num - 100)
