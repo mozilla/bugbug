@@ -308,6 +308,9 @@ def mock_schedule_tests_classify(
     )
     test_scheduling.close_failing_together_db("config_group")
 
+    test_scheduling.get_touched_together_db(False)
+    test_scheduling.close_touched_together_db()
+
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.
         def classify(self, items, probabilities=False):
