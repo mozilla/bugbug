@@ -580,12 +580,7 @@ class TestSelectModel(Model):
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.
-        executor = concurrent.futures.ProcessPoolExecutor(
-            max_workers=utils.get_physical_cpu_count()
-        )
-
-        futures: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
-        for i, push in enumerate(test_pushes.values()):
+        for i, push in enumerate(tqdm(test_pushes.values())):
             commits = tuple(
                 commit_map.pop(revision)
                 for revision in push["revs"]
@@ -597,20 +592,16 @@ class TestSelectModel(Model):
 
             push_num = last_push_num - (len(test_pushes) - (i + 1))
 
-            futures[executor.submit(eval_select_tests, self, commits, push_num)] = push
-
-        for future in tqdm(
-            concurrent.futures.as_completed(futures), total=len(futures),
-        ):
-            exc = future.exception()
-            if exc is not None:
-                print(f"Exception {exc} while running {futures[future]}")
-                for f in futures:
-                    f.cancel()
-
-            futures[future]["all_possibly_selected"] = future.result()
+            # Note: we subtract 100 to the push number to make sure we don't use
+            # past failure data for the push itself.
+            # The number 100 comes from the fact that in the past failure data
+            # generation we store past failures in batches of 100 pushes.
+            push["all_possibly_selected"] = self.select_tests(
+                commits, 0.5, push_num - 100
+            )
 
         def do_eval(
+            executor: concurrent.futures.ProcessPoolExecutor,
             confidence_threshold: float,
             reduction: Optional[float],
             cap: Optional[int],
@@ -630,12 +621,14 @@ class TestSelectModel(Model):
                     )
                 ] = push
 
-            for future in tqdm(
-                concurrent.futures.as_completed(futures), total=len(futures),
-            ):
+            for future in concurrent.futures.as_completed(futures):
                 exc = future.exception()
                 if exc is not None:
-                    print(f"Exception {exc} while running {futures[future]}")
+                    print(
+                        "Exception {} while running {}".format(
+                            exc, futures[future]["revs"][0]
+                        )
+                    )
                     for f in futures:
                         f.cancel()
 
@@ -707,13 +700,16 @@ class TestSelectModel(Model):
 
             print(message)
 
-        for minimum in [None, 10]:
-            for cap in [None, 300, 500]:
-                for reduction in [None, 0.9, 1.0]:
-                    for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
-                        do_eval(confidence_threshold, reduction, cap, minimum)
-
-        executor.shutdown(wait=True)
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=utils.get_physical_cpu_count()
+        ) as executor:
+            for minimum in [None, 10]:
+                for cap in [None, 300, 500]:
+                    for reduction in [None, 0.9, 1.0]:
+                        for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
+                            do_eval(
+                                executor, confidence_threshold, reduction, cap, minimum
+                            )
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
@@ -732,14 +728,6 @@ class TestGroupSelectModel(TestSelectModel):
 class TestConfigGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
         TestSelectModel.__init__(self, lemmatization, "config_group")
-
-
-def eval_select_tests(model, commits, push_num):
-    # Note: we subtract 100 to the push number to make sure we don't use
-    # past failure data for the push itself.
-    # The number 100 comes from the fact that in the past failure data
-    # generation we store past failures in batches of 100 pushes.
-    return model.select_tests(commits, 0.5, push_num - 100)
 
 
 def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, minimum):
