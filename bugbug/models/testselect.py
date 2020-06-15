@@ -551,25 +551,57 @@ class TestSelectModel(Model):
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.
-        with concurrent.futures.ProcessPoolExecutor(
+        executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=utils.get_physical_cpu_count()
-        ) as executor:
-            futures: Dict[concurrent.futures.Future, test_scheduling.Revision] = {}
-            for i, (rev, push) in enumerate(test_pushes.items()):
-                commits = tuple(
-                    commit_map.pop(revision)
-                    for revision in push["revs"]
-                    if revision in commit_map
-                )
-                if len(commits) == 0:
-                    test_pushes[rev]["all_possibly_selected"] = {}
-                    continue
+        )
 
-                push_num = last_push_num - (len(test_pushes) - (i + 1))
+        futures: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
+        for i, push in enumerate(test_pushes.values()):
+            commits = tuple(
+                commit_map.pop(revision)
+                for revision in push["revs"]
+                if revision in commit_map
+            )
+            if len(commits) == 0:
+                push["all_possibly_selected"] = {}
+                continue
 
+            push_num = last_push_num - (len(test_pushes) - (i + 1))
+
+            futures[executor.submit(eval_select_tests, self, commits, push_num)] = push
+
+        for future in tqdm(
+            concurrent.futures.as_completed(futures), total=len(futures),
+        ):
+            exc = future.exception()
+            if exc is not None:
+                print(f"Exception {exc} while running {futures[future]}")
+                for f in futures:
+                    f.cancel()
+
+            futures[future]["all_possibly_selected"] = future.result()
+
+        reductions: List[Optional[float]] = [None, 0.9, 1.0]
+
+        def do_eval(
+            confidence_threshold: float,
+            reduction: Optional[float],
+            cap: Optional[int],
+            minimum: Optional[int],
+        ) -> None:
+            futures: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
+            for push in test_pushes.values():
                 futures[
-                    executor.submit(eval_select_tests, self, commits, push_num)
-                ] = rev
+                    executor.submit(
+                        eval_apply_transforms,
+                        self,
+                        push,
+                        confidence_threshold,
+                        reduction,
+                        cap,
+                        minimum,
+                    )
+                ] = push
 
             for future in tqdm(
                 concurrent.futures.as_completed(futures), total=len(futures),
@@ -580,63 +612,11 @@ class TestSelectModel(Model):
                     for f in futures:
                         f.cancel()
 
-                test_pushes[futures[future]]["all_possibly_selected"] = future.result()
+                push = futures[future]
+                selected, number_configs = future.result()
 
-        reductions: List[Optional[float]] = [None, 0.9, 1.0]
-
-        def do_eval(
-            confidence_threshold: float,
-            reduction: Optional[float],
-            cap: Optional[int],
-            minimum: Optional[int],
-        ) -> None:
-            for rev, push in test_pushes.items():
-                selected = set(
-                    name
-                    for name, confidence in push["all_possibly_selected"].items()
-                    if confidence >= confidence_threshold
-                )
-
-                if reduction is not None:
-                    if self.granularity == "label":
-                        selected = self.reduce(selected, reduction)
-                    elif self.granularity == "group":
-                        push["number_configs"] = len(
-                            set(
-                                sum(
-                                    self.select_configs(selected, reduction).values(),
-                                    [],
-                                )
-                            )
-                        )
-
-                if minimum is not None and len(selected) < minimum:
-                    remaining = [
-                        (name, confidence)
-                        for name, confidence in push["all_possibly_selected"].items()
-                        if name not in selected
-                    ]
-                    selected.update(
-                        name
-                        for name, _ in sorted(remaining, key=lambda x: -x[1])[
-                            : minimum - len(selected)
-                        ]
-                    )
-
-                if cap is not None and len(selected) > cap:
-                    selected = set(
-                        sorted(
-                            (
-                                (name, confidence)
-                                for name, confidence in push[
-                                    "all_possibly_selected"
-                                ].items()
-                                if name in selected
-                            ),
-                            key=lambda x: x[1],
-                            reverse=True,
-                        )[:cap]
-                    )
+                if reduction is not None and self.granularity == "group":
+                    push["number_configs"] = number_configs
 
                 caught = selected & set(push["failures"])
 
@@ -706,6 +686,8 @@ class TestSelectModel(Model):
                     for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
                         do_eval(confidence_threshold, reduction, cap, minimum)
 
+        executor.shutdown(wait=True)
+
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
 
@@ -731,3 +713,49 @@ def eval_select_tests(model, commits, push_num):
     # The number 100 comes from the fact that in the past failure data
     # generation we store past failures in batches of 100 pushes.
     return model.select_tests(commits, 0.5, push_num - 100)
+
+
+def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, minimum):
+    number_configs = None
+
+    selected = set(
+        name
+        for name, confidence in push["all_possibly_selected"].items()
+        if confidence >= confidence_threshold
+    )
+
+    if reduction is not None:
+        if model.granularity == "label":
+            selected = model.reduce(selected, reduction)
+        elif model.granularity == "group":
+            number_configs = len(
+                set(sum(model.select_configs(selected, reduction).values(), [],))
+            )
+
+    if minimum is not None and len(selected) < minimum:
+        remaining = [
+            (name, confidence)
+            for name, confidence in push["all_possibly_selected"].items()
+            if name not in selected
+        ]
+        selected.update(
+            name
+            for name, _ in sorted(remaining, key=lambda x: -x[1])[
+                : minimum - len(selected)
+            ]
+        )
+
+    if cap is not None and len(selected) > cap:
+        selected = set(
+            sorted(
+                (
+                    (name, confidence)
+                    for name, confidence in push["all_possibly_selected"].items()
+                    if name in selected
+                ),
+                key=lambda x: x[1],
+                reverse=True,
+            )[:cap]
+        )
+
+    return selected, number_configs
