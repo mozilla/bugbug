@@ -241,7 +241,7 @@ def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str
     return local_dir, remote_dir
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_data(tmp_path):
     os.mkdir(tmp_path / "data")
     os.chdir(tmp_path)
