@@ -287,12 +287,20 @@ def mock_schedule_tests_classify(
         ]
         past_failures_data.close()
 
+    try:
+        test_scheduling.close_failing_together_db("label")
+    except AssertionError:
+        pass
     failing_together = test_scheduling.get_failing_together_db("label", False)
     failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
         {"test-windows10/opt": (0.1, 1.0),}
     )
     test_scheduling.close_failing_together_db("label")
 
+    try:
+        test_scheduling.close_failing_together_db("config_group")
+    except AssertionError:
+        pass
     failing_together = test_scheduling.get_failing_together_db("config_group", False)
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
@@ -308,6 +316,10 @@ def mock_schedule_tests_classify(
     )
     test_scheduling.close_failing_together_db("config_group")
 
+    try:
+        test_scheduling.close_touched_together_db()
+    except AssertionError:
+        pass
     test_scheduling.get_touched_together_db(False)
     test_scheduling.close_touched_together_db()
 

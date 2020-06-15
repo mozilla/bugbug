@@ -320,6 +320,9 @@ def remove_failing_together_db(granularity: str) -> None:
 
 def close_failing_together_db(granularity: str) -> None:
     global failing_together
+    assert (
+        granularity in failing_together
+    ), f"Failing together probabilities DB for {granularity} granularity was not open"
     failing_together[granularity].close()
     failing_together.pop(granularity)
 
@@ -497,7 +500,7 @@ def get_touched_together_db(readonly: bool) -> LMDBDict:
 
 def close_touched_together_db() -> None:
     global touched_together
-    assert touched_together is not None
+    assert touched_together is not None, "Touched together DB was not open"
     touched_together.close()
     touched_together = None
 
