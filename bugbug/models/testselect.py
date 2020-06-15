@@ -365,6 +365,46 @@ class TestSelectModel(Model):
 
         return groups
 
+    def _get_equivalence_sets(self, min_redundancy_confidence: float):
+        try:
+            with open(
+                f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb"
+            ) as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            past_failures_data = test_scheduling.get_past_failures(
+                self.granularity, True
+            )
+            all_runnables = past_failures_data["all_runnables"]
+
+            equivalence_sets = {}
+            failing_together = test_scheduling.get_failing_together_db(
+                "config_group", True
+            )
+            all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+            for group in all_runnables:
+                key = test_scheduling.failing_together_key(group)
+                try:
+                    failing_together_stats = pickle.loads(failing_together[key])
+                except KeyError:
+                    failing_together_stats = {}
+
+                def load_failing_together(
+                    config: str,
+                ) -> Dict[str, Tuple[float, float]]:
+                    return failing_together_stats[config]
+
+                equivalence_sets[group] = self._generate_equivalence_sets(
+                    all_configs, min_redundancy_confidence, load_failing_together, True
+                )
+
+            with open(
+                f"equivalence_sets_{min_redundancy_confidence}.pickle", "wb"
+            ) as f:
+                pickle.dump(equivalence_sets, f)
+
+            return equivalence_sets
+
     def _solve_optimization(self, solver: pywraplp.Solver) -> None:
         # The MIP solver is usually fast (milliseconds). If we hit a weird problem,
         # accept a suboptimal solution after 10 seconds.
@@ -447,33 +487,22 @@ class TestSelectModel(Model):
             for config in all_configs
         }
 
+        equivalence_sets = self._get_equivalence_sets(min_redundancy_confidence)
+
         for group in groups:
-            key = test_scheduling.failing_together_key(group)
-            try:
-                failing_together_stats = pickle.loads(failing_together[key])
-            except KeyError:
-                failing_together_stats = {}
-
-            def load_failing_together(config: str) -> Dict[str, Tuple[float, float]]:
-                return failing_together_stats[config]
-
-            equivalence_sets = self._generate_equivalence_sets(
-                all_configs, min_redundancy_confidence, load_failing_together, True
-            )
-
             # Create constraints to ensure at least one task from each set of equivalent
             # groups is selected.
 
             mutually_exclusive = True
             seen = set()
-            for equivalence_set in equivalence_sets:
+            for equivalence_set in equivalence_sets[group]:
                 if any(config in seen for config in equivalence_set):
                     mutually_exclusive = False
                     break
 
                 seen |= equivalence_set
 
-            for equivalence_set in equivalence_sets:
+            for equivalence_set in equivalence_sets[group]:
                 sum_constraint = sum(
                     config_group_vars[(config, group)] for config in equivalence_set
                 )

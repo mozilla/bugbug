@@ -260,6 +260,10 @@ def test_all(g: Graph) -> None:
 
 
 def test_select_configs(failing_together_config_group: LMDBDict) -> None:
+    past_failures_data = test_scheduling.get_past_failures("group", False)
+    past_failures_data["all_runnables"] = ["group1", "group2"]
+    past_failures_data.close()
+
     failing_together_config_group[b"group1"] = pickle.dumps(
         {
             "linux1804-64-asan/debug": {
