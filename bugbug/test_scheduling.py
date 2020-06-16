@@ -17,6 +17,7 @@ from typing import (
     Callable,
     Deque,
     Generator,
+    Iterable,
     Iterator,
     List,
     NewType,
@@ -634,26 +635,34 @@ def _read_and_update_past_failures(
 
 
 def generate_data(
-    past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
+    granularity: str,
+    past_failures: int,
+    commit: repository.CommitDict,
+    push_num: int,
+    runnables: Iterable[str],
+    possible_regressions: Iterable[str],
+    likely_regressions: Iterable[str],
 ):
-    source_file_dirs = tuple(
-        os.path.dirname(source_file) for source_file in commit["files"]
-    )
+    if granularity != "label":
+        source_file_dirs = tuple(
+            os.path.dirname(source_file) for source_file in commit["files"]
+        )
 
     for runnable in runnables:
-        if isinstance(runnable, tuple):
-            runnable_dir = os.path.dirname(runnable[1])
-        else:
-            runnable_dir = os.path.dirname(runnable)
+        if granularity != "label":
+            if isinstance(runnable, tuple):
+                runnable_dir = os.path.dirname(runnable[1])
+            else:
+                runnable_dir = os.path.dirname(runnable)
 
-        touched_together_files = sum(
-            get_touched_together(source_file, runnable_dir)
-            for source_file in commit["files"]
-        )
-        touched_together_directories = sum(
-            get_touched_together(source_file_dir, runnable_dir)
-            for source_file_dir in source_file_dirs
-        )
+            touched_together_files = sum(
+                get_touched_together(source_file, runnable_dir)
+                for source_file in commit["files"]
+            )
+            touched_together_directories = sum(
+                get_touched_together(source_file_dir, runnable_dir)
+                for source_file_dir in source_file_dirs
+            )
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions
@@ -715,7 +724,7 @@ def generate_data(
             is_regression,
         )
 
-        yield {
+        obj = {
             "name": runnable,
             "failures": total_failures,
             "failures_past_700_pushes": past_700_pushes_failures,
@@ -737,8 +746,12 @@ def generate_data(
             "failures_past_700_pushes_in_components": past_700_pushes_components_failures,
             "failures_past_1400_pushes_in_components": past_1400_pushes_components_failures,
             "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
-            "touched_together_files": touched_together_files,
-            "touched_together_directories": touched_together_directories,
             "is_possible_regression": is_possible_regression,
             "is_likely_regression": is_likely_regression,
         }
+
+        if granularity != "label":
+            obj["touched_together_files"] = touched_together_files
+            obj["touched_together_directories"] = (touched_together_directories,)
+
+        yield obj

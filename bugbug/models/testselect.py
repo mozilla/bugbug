@@ -9,7 +9,7 @@ import math
 import pickle
 import statistics
 from functools import reduce
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import xgboost
@@ -32,7 +32,7 @@ from bugbug.model import Model
 
 def get_commit_map(
     revs: Optional[Set[test_scheduling.Revision]] = None,
-) -> Dict[test_scheduling.Revision, dict]:
+) -> Dict[test_scheduling.Revision, repository.CommitDict]:
     commit_map = {}
 
     for commit in repository.get_commits():
@@ -216,7 +216,7 @@ class TestSelectModel(Model):
 
     def select_tests(
         self,
-        commits: Iterable[dict],
+        commits: Sequence[repository.CommitDict],
         confidence: float = 0.5,
         push_num: Optional[int] = None,
     ) -> Dict[str, float]:
@@ -233,7 +233,13 @@ class TestSelectModel(Model):
 
         commit_tests = []
         for data in test_scheduling.generate_data(
-            past_failures_data, commit_data, push_num, all_runnables, tuple(), tuple()
+            self.granularity,
+            past_failures_data,
+            commit_data,
+            push_num,
+            all_runnables,
+            tuple(),
+            tuple(),
         ):
             commit_test = commit_data.copy()
             commit_test["test_job"] = data

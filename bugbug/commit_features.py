@@ -4,9 +4,12 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
 from collections import defaultdict
+from typing import Sequence
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from bugbug import repository
 
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
@@ -459,106 +462,156 @@ class types(object):
         return commit["types"]
 
 
-def merge_commits(commits):
-    return {
-        "nodes": list(commit["node"] for commit in commits),
-        "pushdate": commits[0]["pushdate"],
-        "types": list(set(sum((commit["types"] for commit in commits), []))),
-        "files": list(set(sum((commit["files"] for commit in commits), []))),
-        "directories": list(
-            set(sum((commit["directories"] for commit in commits), []))
-        ),
-        "components": list(set(sum((commit["components"] for commit in commits), []))),
-        "reviewers": list(set(sum((commit["reviewers"] for commit in commits), []))),
-        "source_code_files_modified_num": sum(
-            commit["source_code_files_modified_num"] for commit in commits
-        ),
-        "other_files_modified_num": sum(
-            commit["other_files_modified_num"] for commit in commits
-        ),
-        "test_files_modified_num": sum(
-            commit["test_files_modified_num"] for commit in commits
-        ),
-        "total_source_code_file_size": sum(
-            commit["total_source_code_file_size"] for commit in commits
-        ),
-        "average_source_code_file_size": sum(
-            commit["total_source_code_file_size"] for commit in commits
-        )
-        / len(commits),
-        "maximum_source_code_file_size": max(
-            commit["maximum_source_code_file_size"] for commit in commits
-        ),
-        "minimum_source_code_file_size": min(
-            commit["minimum_source_code_file_size"] for commit in commits
-        ),
-        "total_other_file_size": sum(
-            commit["total_other_file_size"] for commit in commits
-        ),
-        "average_other_file_size": sum(
-            commit["total_other_file_size"] for commit in commits
-        )
-        / len(commits),
-        "maximum_other_file_size": max(
-            commit["maximum_other_file_size"] for commit in commits
-        ),
-        "minimum_other_file_size": min(
-            commit["minimum_other_file_size"] for commit in commits
-        ),
-        "total_test_file_size": sum(
-            commit["total_test_file_size"] for commit in commits
-        ),
-        "average_test_file_size": sum(
-            commit["total_test_file_size"] for commit in commits
-        )
-        / len(commits),
-        "maximum_test_file_size": max(
-            commit["maximum_test_file_size"] for commit in commits
-        ),
-        "minimum_test_file_size": min(
-            commit["minimum_test_file_size"] for commit in commits
-        ),
-        "source_code_added": sum(commit["source_code_added"] for commit in commits),
-        "other_added": sum(commit["other_added"] for commit in commits),
-        "test_added": sum(commit["test_added"] for commit in commits),
-        "source_code_deleted": sum(commit["source_code_deleted"] for commit in commits),
-        "other_deleted": sum(commit["other_deleted"] for commit in commits),
-        "test_deleted": sum(commit["test_deleted"] for commit in commits),
-        "average_cyclomatic": sum(commit["average_cyclomatic"] for commit in commits)
-        / len(commits),
-        "average_halstead_n2": sum(commit["average_halstead_n2"] for commit in commits)
-        / len(commits),
-        "average_halstead_N2": sum(commit["average_halstead_N2"] for commit in commits)
-        / len(commits),
-        "average_halstead_n1": sum(commit["average_halstead_n1"] for commit in commits)
-        / len(commits),
-        "average_halstead_N1": sum(commit["average_halstead_N1"] for commit in commits)
-        / len(commits),
-        "average_source_loc": sum(commit["average_source_loc"] for commit in commits)
-        / len(commits),
-        "average_logical_loc": sum(commit["average_logical_loc"] for commit in commits)
-        / len(commits),
-        "maximum_cyclomatic": max(commit["maximum_cyclomatic"] for commit in commits),
-        "maximum_halstead_n2": max(commit["maximum_halstead_n2"] for commit in commits),
-        "maximum_halstead_N2": max(commit["maximum_halstead_N2"] for commit in commits),
-        "maximum_halstead_n1": max(commit["maximum_halstead_n1"] for commit in commits),
-        "maximum_halstead_N1": max(commit["maximum_halstead_N1"] for commit in commits),
-        "maximum_source_loc": max(commit["maximum_source_loc"] for commit in commits),
-        "maximum_logical_loc": max(commit["maximum_logical_loc"] for commit in commits),
-        "minimum_cyclomatic": min(commit["minimum_cyclomatic"] for commit in commits),
-        "minimum_halstead_n2": min(commit["minimum_halstead_n2"] for commit in commits),
-        "minimum_halstead_N2": min(commit["minimum_halstead_N2"] for commit in commits),
-        "minimum_halstead_n1": min(commit["minimum_halstead_n1"] for commit in commits),
-        "minimum_halstead_N1": min(commit["minimum_halstead_N1"] for commit in commits),
-        "minimum_source_loc": min(commit["minimum_source_loc"] for commit in commits),
-        "minimum_logical_loc": min(commit["minimum_logical_loc"] for commit in commits),
-        "total_halstead_n2": sum(commit["total_halstead_n2"] for commit in commits),
-        "total_halstead_N2": sum(commit["total_halstead_N2"] for commit in commits),
-        "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
-        "total_halstead_N1": sum(commit["total_halstead_N1"] for commit in commits),
-        "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
-        "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
-    }
+def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.CommitDict:
+    return repository.CommitDict(
+        {
+            "nodes": list(commit["node"] for commit in commits),
+            "pushdate": commits[0]["pushdate"],
+            "types": list(set(sum((commit["types"] for commit in commits), []))),
+            "files": list(set(sum((commit["files"] for commit in commits), []))),
+            "directories": list(
+                set(sum((commit["directories"] for commit in commits), []))
+            ),
+            "components": list(
+                set(sum((commit["components"] for commit in commits), []))
+            ),
+            "reviewers": list(
+                set(sum((commit["reviewers"] for commit in commits), []))
+            ),
+            "source_code_files_modified_num": sum(
+                commit["source_code_files_modified_num"] for commit in commits
+            ),
+            "other_files_modified_num": sum(
+                commit["other_files_modified_num"] for commit in commits
+            ),
+            "test_files_modified_num": sum(
+                commit["test_files_modified_num"] for commit in commits
+            ),
+            "total_source_code_file_size": sum(
+                commit["total_source_code_file_size"] for commit in commits
+            ),
+            "average_source_code_file_size": sum(
+                commit["total_source_code_file_size"] for commit in commits
+            )
+            / len(commits),
+            "maximum_source_code_file_size": max(
+                commit["maximum_source_code_file_size"] for commit in commits
+            ),
+            "minimum_source_code_file_size": min(
+                commit["minimum_source_code_file_size"] for commit in commits
+            ),
+            "total_other_file_size": sum(
+                commit["total_other_file_size"] for commit in commits
+            ),
+            "average_other_file_size": sum(
+                commit["total_other_file_size"] for commit in commits
+            )
+            / len(commits),
+            "maximum_other_file_size": max(
+                commit["maximum_other_file_size"] for commit in commits
+            ),
+            "minimum_other_file_size": min(
+                commit["minimum_other_file_size"] for commit in commits
+            ),
+            "total_test_file_size": sum(
+                commit["total_test_file_size"] for commit in commits
+            ),
+            "average_test_file_size": sum(
+                commit["total_test_file_size"] for commit in commits
+            )
+            / len(commits),
+            "maximum_test_file_size": max(
+                commit["maximum_test_file_size"] for commit in commits
+            ),
+            "minimum_test_file_size": min(
+                commit["minimum_test_file_size"] for commit in commits
+            ),
+            "source_code_added": sum(commit["source_code_added"] for commit in commits),
+            "other_added": sum(commit["other_added"] for commit in commits),
+            "test_added": sum(commit["test_added"] for commit in commits),
+            "source_code_deleted": sum(
+                commit["source_code_deleted"] for commit in commits
+            ),
+            "other_deleted": sum(commit["other_deleted"] for commit in commits),
+            "test_deleted": sum(commit["test_deleted"] for commit in commits),
+            "average_cyclomatic": sum(
+                commit["average_cyclomatic"] for commit in commits
+            )
+            / len(commits),
+            "average_halstead_n2": sum(
+                commit["average_halstead_n2"] for commit in commits
+            )
+            / len(commits),
+            "average_halstead_N2": sum(
+                commit["average_halstead_N2"] for commit in commits
+            )
+            / len(commits),
+            "average_halstead_n1": sum(
+                commit["average_halstead_n1"] for commit in commits
+            )
+            / len(commits),
+            "average_halstead_N1": sum(
+                commit["average_halstead_N1"] for commit in commits
+            )
+            / len(commits),
+            "average_source_loc": sum(
+                commit["average_source_loc"] for commit in commits
+            )
+            / len(commits),
+            "average_logical_loc": sum(
+                commit["average_logical_loc"] for commit in commits
+            )
+            / len(commits),
+            "maximum_cyclomatic": max(
+                commit["maximum_cyclomatic"] for commit in commits
+            ),
+            "maximum_halstead_n2": max(
+                commit["maximum_halstead_n2"] for commit in commits
+            ),
+            "maximum_halstead_N2": max(
+                commit["maximum_halstead_N2"] for commit in commits
+            ),
+            "maximum_halstead_n1": max(
+                commit["maximum_halstead_n1"] for commit in commits
+            ),
+            "maximum_halstead_N1": max(
+                commit["maximum_halstead_N1"] for commit in commits
+            ),
+            "maximum_source_loc": max(
+                commit["maximum_source_loc"] for commit in commits
+            ),
+            "maximum_logical_loc": max(
+                commit["maximum_logical_loc"] for commit in commits
+            ),
+            "minimum_cyclomatic": min(
+                commit["minimum_cyclomatic"] for commit in commits
+            ),
+            "minimum_halstead_n2": min(
+                commit["minimum_halstead_n2"] for commit in commits
+            ),
+            "minimum_halstead_N2": min(
+                commit["minimum_halstead_N2"] for commit in commits
+            ),
+            "minimum_halstead_n1": min(
+                commit["minimum_halstead_n1"] for commit in commits
+            ),
+            "minimum_halstead_N1": min(
+                commit["minimum_halstead_N1"] for commit in commits
+            ),
+            "minimum_source_loc": min(
+                commit["minimum_source_loc"] for commit in commits
+            ),
+            "minimum_logical_loc": min(
+                commit["minimum_logical_loc"] for commit in commits
+            ),
+            "total_halstead_n2": sum(commit["total_halstead_n2"] for commit in commits),
+            "total_halstead_N2": sum(commit["total_halstead_N2"] for commit in commits),
+            "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
+            "total_halstead_N1": sum(commit["total_halstead_N1"] for commit in commits),
+            "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
+            "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
+        }
+    )
 
 
 class CommitExtractor(BaseEstimator, TransformerMixin):

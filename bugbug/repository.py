@@ -18,7 +18,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Generator, Iterable, List, Optional, Tuple
+from typing import Generator, Iterable, List, NewType, Optional, Tuple
 
 import hglib
 import lmdb
@@ -29,6 +29,8 @@ from bugbug import db, rust_code_analysis_server, utils
 from bugbug.utils import LMDBDict
 
 logger = logging.getLogger(__name__)
+
+CommitDict = NewType("CommitDict", dict)
 
 code_analysis_server: Optional[rust_code_analysis_server.RustCodeAnalysisServer] = None
 
@@ -214,14 +216,14 @@ class Commit:
             setattr(self, f"{exp_str}max", exp_max)
             setattr(self, f"{exp_str}min", exp_min)
 
-    def to_dict(self):
+    def to_dict(self) -> CommitDict:
         d = self.__dict__
         for f in ["file_copies"]:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
         d["date"] = str(d["date"])
-        return d
+        return CommitDict(d)
 
 
 def get_directories(files):
@@ -245,11 +247,11 @@ def is_wptsync(commit: dict) -> bool:
 
 
 def filter_commits(
-    commits: Iterable[dict],
+    commits: Iterable[CommitDict],
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[dict, None, None]:
+) -> Generator[CommitDict, None, None]:
     for commit in commits:
         if not include_ignored and commit["ignored"]:
             continue
@@ -267,7 +269,7 @@ def get_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[dict, None, None]:
+) -> Generator[CommitDict, None, None]:
     return filter_commits(
         db.read(COMMITS_DB),
         include_no_bug=include_no_bug,
@@ -997,7 +999,7 @@ def download_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Tuple[dict, ...]:
+) -> Tuple[CommitDict, ...]:
     assert revs is not None or rev_start is not None
 
     with hglib.open(repo_dir) as hg:

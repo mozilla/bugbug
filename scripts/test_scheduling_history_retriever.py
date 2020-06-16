@@ -287,6 +287,7 @@ class Retriever(object):
 
                 result_data = []
                 for data in test_scheduling.generate_data(
+                    granularity,
                     past_failures,
                     merged_commits,
                     push_num,
