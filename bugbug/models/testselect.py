@@ -723,6 +723,11 @@ class TestSelectModel(Model):
             for minimum in [None, 10]:
                 for cap in [None, 300, 500]:
                     for reduction in [None, 0.9, 1.0]:
+                        # Pre-generate equivalence sets, so when we run the config selection in multiple processes
+                        # we don't risk concurrent writes to the equivalence sets file.
+                        if reduction is not None and self.granularity == "group":
+                            self._get_equivalence_sets(reduction)
+
                         for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
                             do_eval(
                                 executor, confidence_threshold, reduction, cap, minimum
