@@ -752,6 +752,6 @@ def generate_data(
 
         if granularity != "label":
             obj["touched_together_files"] = touched_together_files
-            obj["touched_together_directories"] = (touched_together_directories,)
+            obj["touched_together_directories"] = touched_together_directories
 
         yield obj
