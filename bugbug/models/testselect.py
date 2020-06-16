@@ -9,7 +9,18 @@ import math
 import pickle
 import statistics
 from functools import reduce
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import numpy as np
 import xgboost
@@ -423,7 +434,7 @@ class TestSelectModel(Model):
             raise Exception("Problem unsolved")
 
     def reduce(
-        self, tasks: Iterable[str], min_redundancy_confidence: float
+        self, tasks: Collection[str], min_redundancy_confidence: float
     ) -> Set[str]:
         failing_together = test_scheduling.get_failing_together_db(
             self.granularity, True
@@ -476,7 +487,7 @@ class TestSelectModel(Model):
         }
 
     def select_configs(
-        self, groups: Iterable[str], min_redundancy_confidence: float
+        self, groups: Collection[str], min_redundancy_confidence: float
     ) -> Dict[str, List[str]]:
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
