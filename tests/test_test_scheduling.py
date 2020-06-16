@@ -631,7 +631,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 2
-    assert data[0] == {
+    obj = {
         "failures": 0,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -655,10 +655,13 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": False,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
-    assert data[1] == {
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
+
+    obj = {
         "failures": 0,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -682,9 +685,11 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": False,
         "name": "runnable2",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[1] == obj
 
     data = list(
         test_scheduling.generate_data(
@@ -698,7 +703,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 2
-    assert data[0] == {
+    obj = {
         "failures": 0,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -722,10 +727,12 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": True,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
-    assert data[1] == {
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
+    obj = {
         "failures": 0,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -749,9 +756,11 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": False,
         "name": "runnable2",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[1] == obj
 
     data = list(
         test_scheduling.generate_data(
@@ -765,7 +774,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 2
-    assert data[0] == {
+    obj = {
         "failures": 1,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -789,10 +798,12 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": False,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
-    assert data[1] == {
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
+    obj = {
         "failures": 0,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -816,9 +827,11 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": True,
         "is_possible_regression": False,
         "name": "runnable2",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[1] == obj
 
     data = list(
         test_scheduling.generate_data(
@@ -826,7 +839,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 1
-    assert data[0] == {
+    obj = {
         "failures": 1,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -850,9 +863,11 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": False,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
 
     data = list(
         test_scheduling.generate_data(
@@ -866,7 +881,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 2
-    assert data[0] == {
+    obj = {
         "failures": 1,
         "failures_in_components": 1,
         "failures_in_directories": 1,
@@ -890,10 +905,12 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": True,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
-    assert data[1] == {
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
+    obj = {
         "failures": 1,
         "failures_in_components": 0,
         "failures_in_directories": 0,
@@ -917,9 +934,11 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": True,
         "name": "runnable2",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[1] == obj
 
     data = list(
         test_scheduling.generate_data(
@@ -933,7 +952,7 @@ def test_generate_data(granularity: str) -> None:
         )
     )
     assert len(data) == 2
-    assert data[0] == {
+    obj = {
         "failures": 2,
         "failures_in_components": 2,
         "failures_in_directories": 2,
@@ -957,10 +976,12 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": True,
         "name": "runnable1",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
-    assert data[1] == {
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[0] == obj
+    obj = {
         "failures": 2,
         "failures_in_components": 1,
         "failures_in_directories": 1,
@@ -984,6 +1005,8 @@ def test_generate_data(granularity: str) -> None:
         "is_likely_regression": False,
         "is_possible_regression": True,
         "name": "runnable2",
-        "touched_together_directories": 0,
-        "touched_together_files": 0,
     }
+    if granularity == "group":
+        obj["touched_together_directories"] = 0
+        obj["touched_together_files"] = 0
+    assert data[1] == obj
