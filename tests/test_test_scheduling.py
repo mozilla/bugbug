@@ -4,62 +4,80 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import datetime
+from typing import List
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from bugbug import repository, test_scheduling
+from bugbug.repository import CommitDict
+from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
 
 
-def test_rename_runnables():
+def test_rename_runnables() -> None:
     assert test_scheduling.rename_runnables(
-        "label", ("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2",)
-    ) == ("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2",)
+        "label", (Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),)
     assert test_scheduling.rename_runnables(
         "label",
         (
-            "test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2",
-            "test-linux64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1",
+            Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),
+            Task("test-linux64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
         ),
     ) == (
-        "test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2",
-        "test-linux1804-64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1",
+        Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),
+        Task("test-linux1804-64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
     )
     assert test_scheduling.rename_runnables(
         "label",
         (
-            "test-android-hw-p2-8-0-android-aarch64/pgo-geckoview-mochitest-media-e10s-2",
+            Task(
+                "test-android-hw-p2-8-0-android-aarch64/pgo-geckoview-mochitest-media-e10s-2"
+            ),
         ),
     ) == (
-        "test-android-hw-p2-8-0-android-aarch64-shippable/opt-geckoview-mochitest-media-e10s-2",
+        Task(
+            "test-android-hw-p2-8-0-android-aarch64-shippable/opt-geckoview-mochitest-media-e10s-2"
+        ),
     )
 
     assert test_scheduling.rename_runnables(
         "group",
         (
-            "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini",
+            Group(
+                "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini"
+            ),
         ),
-    ) == ("toolkit/components/extensions/test/mochitest/mochitest-remote.ini",)
-    assert test_scheduling.rename_runnables("group", ("dom/prova/mochitest.ini",)) == (
-        "dom/prova/mochitest.ini",
-    )
+    ) == (Group("toolkit/components/extensions/test/mochitest/mochitest-remote.ini"),)
+    assert test_scheduling.rename_runnables(
+        "group", (Group("dom/prova/mochitest.ini"),)
+    ) == (Group("dom/prova/mochitest.ini"),)
 
     assert test_scheduling.rename_runnables(
         "config_group",
         (
-            (
-                "test-linux64-shippable/opt-*-e10s",
-                "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini",
+            ConfigGroup(
+                (
+                    "test-linux64-shippable/opt-*-e10s",
+                    Group(
+                        "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini"
+                    ),
+                )
             ),
         ),
     ) == (
-        (
-            "test-linux1804-64-shippable/opt-*-e10s",
-            "toolkit/components/extensions/test/mochitest/mochitest-remote.ini",
+        ConfigGroup(
+            (
+                "test-linux1804-64-shippable/opt-*-e10s",
+                Group(
+                    "toolkit/components/extensions/test/mochitest/mochitest-remote.ini"
+                ),
+            )
         ),
     )
 
 
-def test_touched_together(monkeypatch):
+def test_touched_together(monkeypatch: MonkeyPatch) -> None:
     test_scheduling.touched_together = None
 
     repository.path_to_component = {
@@ -134,7 +152,7 @@ def test_touched_together(monkeypatch):
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits():
+    def mock_get_commits() -> List[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -142,7 +160,7 @@ def test_touched_together(monkeypatch):
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)
 
-    update_touched_together_gen.send("commit2")
+    update_touched_together_gen.send(Revision("commit2"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -160,7 +178,7 @@ def test_touched_together(monkeypatch):
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    update_touched_together_gen.send("commit4")
+    update_touched_together_gen.send(Revision("commit4"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 2
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 2
@@ -182,7 +200,7 @@ def test_touched_together(monkeypatch):
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 1
 
 
-def test_touched_together_restart(monkeypatch):
+def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
     test_scheduling.touched_together = None
 
     repository.path_to_component = {
@@ -257,7 +275,7 @@ def test_touched_together_restart(monkeypatch):
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits():
+    def mock_get_commits() -> List[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -265,7 +283,7 @@ def test_touched_together_restart(monkeypatch):
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)
 
-    update_touched_together_gen.send("commit2")
+    update_touched_together_gen.send(Revision("commit2"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -295,7 +313,7 @@ def test_touched_together_restart(monkeypatch):
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)
 
-    update_touched_together_gen.send("commit4")
+    update_touched_together_gen.send(Revision("commit4"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 2
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 2
@@ -317,7 +335,7 @@ def test_touched_together_restart(monkeypatch):
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 1
 
 
-def test_touched_together_not_in_order(monkeypatch):
+def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
     test_scheduling.touched_together = None
 
     repository.path_to_component = {
@@ -392,7 +410,7 @@ def test_touched_together_not_in_order(monkeypatch):
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits():
+    def mock_get_commits() -> List[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -400,7 +418,7 @@ def test_touched_together_not_in_order(monkeypatch):
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)
 
-    update_touched_together_gen.send("commit2")
+    update_touched_together_gen.send(Revision("commit2"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -418,7 +436,7 @@ def test_touched_together_not_in_order(monkeypatch):
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    update_touched_together_gen.send("commit1")
+    update_touched_together_gen.send(Revision("commit1"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -436,7 +454,7 @@ def test_touched_together_not_in_order(monkeypatch):
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    update_touched_together_gen.send("commit4")
+    update_touched_together_gen.send(Revision("commit4"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 2
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 2
@@ -458,7 +476,7 @@ def test_touched_together_not_in_order(monkeypatch):
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 1
 
 
-def test_touched_together_with_backout(monkeypatch):
+def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
     test_scheduling.touched_together = None
 
     repository.path_to_component = {
@@ -509,7 +527,7 @@ def test_touched_together_with_backout(monkeypatch):
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits():
+    def mock_get_commits() -> List[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -517,7 +535,7 @@ def test_touched_together_with_backout(monkeypatch):
     update_touched_together_gen = test_scheduling.update_touched_together()
     next(update_touched_together_gen)
 
-    update_touched_together_gen.send("commitbackedout")
+    update_touched_together_gen.send(Revision("commitbackedout"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -535,7 +553,7 @@ def test_touched_together_with_backout(monkeypatch):
     assert test_scheduling.get_touched_together("layout/file.cpp", "dom/tests") == 0
     assert test_scheduling.get_touched_together("layout", "dom/tests") == 0
 
-    update_touched_together_gen.send("commit2")
+    update_touched_together_gen.send(Revision("commit2"))
 
     assert test_scheduling.get_touched_together("dom/file1.cpp", "dom/tests") == 1
     assert test_scheduling.get_touched_together("dom/tests", "dom/file1.cpp") == 1
@@ -555,45 +573,61 @@ def test_touched_together_with_backout(monkeypatch):
 
 
 @pytest.mark.parametrize("granularity", ["group", "label"])
-def test_generate_data(granularity):
+def test_generate_data(granularity: str) -> None:
     past_failures = test_scheduling.get_past_failures(granularity, False)
 
     commits = [
-        {
-            "types": ["C/C++"],
-            "files": ["dom/file1.cpp"],
-            "directories": ["dom"],
-            "components": ["DOM"],
-        },
-        {
-            "types": ["C/C++"],
-            "files": ["dom/file1.cpp", "dom/file2.cpp"],
-            "directories": ["dom"],
-            "components": ["DOM"],
-        },
-        {
-            "types": ["C/C++"],
-            "files": ["layout/file.cpp"],
-            "directories": ["layout"],
-            "components": ["Layout"],
-        },
-        {
-            "types": ["C/C++"],
-            "files": ["layout/file.cpp"],
-            "directories": ["layout"],
-            "components": ["Layout"],
-        },
-        {
-            "types": ["JavaScript", "C/C++"],
-            "files": ["dom/file1.cpp", "dom/file1.js"],
-            "directories": ["dom"],
-            "components": ["DOM"],
-        },
+        CommitDict(
+            {
+                "types": ["C/C++"],
+                "files": ["dom/file1.cpp"],
+                "directories": ["dom"],
+                "components": ["DOM"],
+            }
+        ),
+        CommitDict(
+            {
+                "types": ["C/C++"],
+                "files": ["dom/file1.cpp", "dom/file2.cpp"],
+                "directories": ["dom"],
+                "components": ["DOM"],
+            }
+        ),
+        CommitDict(
+            {
+                "types": ["C/C++"],
+                "files": ["layout/file.cpp"],
+                "directories": ["layout"],
+                "components": ["Layout"],
+            }
+        ),
+        CommitDict(
+            {
+                "types": ["C/C++"],
+                "files": ["layout/file.cpp"],
+                "directories": ["layout"],
+                "components": ["Layout"],
+            }
+        ),
+        CommitDict(
+            {
+                "types": ["JavaScript", "C/C++"],
+                "files": ["dom/file1.cpp", "dom/file1.js"],
+                "directories": ["dom"],
+                "components": ["DOM"],
+            }
+        ),
     ]
 
     data = list(
         test_scheduling.generate_data(
-            past_failures, commits[0], 1, ["runnable1", "runnable2"], [], []
+            granularity,
+            past_failures,
+            commits[0],
+            1,
+            ["runnable1", "runnable2"],
+            [],
+            [],
         )
     )
     assert len(data) == 2
@@ -654,7 +688,13 @@ def test_generate_data(granularity):
 
     data = list(
         test_scheduling.generate_data(
-            past_failures, commits[1], 2, ["runnable1", "runnable2"], ["runnable1"], []
+            granularity,
+            past_failures,
+            commits[1],
+            2,
+            ["runnable1", "runnable2"],
+            ["runnable1"],
+            [],
         )
     )
     assert len(data) == 2
@@ -715,7 +755,13 @@ def test_generate_data(granularity):
 
     data = list(
         test_scheduling.generate_data(
-            past_failures, commits[2], 3, ["runnable1", "runnable2"], [], ["runnable2"]
+            granularity,
+            past_failures,
+            commits[2],
+            3,
+            ["runnable1", "runnable2"],
+            [],
+            ["runnable2"],
         )
     )
     assert len(data) == 2
@@ -776,7 +822,7 @@ def test_generate_data(granularity):
 
     data = list(
         test_scheduling.generate_data(
-            past_failures, commits[3], 4, ["runnable1"], [], []
+            granularity, past_failures, commits[3], 4, ["runnable1"], [], []
         )
     )
     assert len(data) == 1
@@ -810,6 +856,7 @@ def test_generate_data(granularity):
 
     data = list(
         test_scheduling.generate_data(
+            granularity,
             past_failures,
             commits[4],
             1500,
@@ -876,6 +923,7 @@ def test_generate_data(granularity):
 
     data = list(
         test_scheduling.generate_data(
+            granularity,
             past_failures,
             commits[4],
             2400,
