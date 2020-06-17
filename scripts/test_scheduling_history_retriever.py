@@ -39,7 +39,7 @@ TRAINING_MONTHS = {
 
 
 class Retriever(object):
-    def generate_push_data(self, granularity: str) -> None:
+    def generate_push_data(self, granularity: str, reretrieve: int) -> None:
         # We'll use the past TRAINING_MONTHS months only for training the model,
         # but we use half TRAINING_MONTHS months more than that to calculate the
         # failure statistics.
@@ -71,13 +71,9 @@ class Retriever(object):
         def generate(
             futures: List[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
+            nonlocal reretrieve
             num_cached = 0
             num_pushes = len(pushes)
-
-            # Regenerating a large amount of data when we update the mozci regression detection
-            # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
-            # run.
-            to_regenerate = int(os.environ.get("OLD_RESULTS_TO_REGENERATE", 0))
 
             for _ in tqdm(range(num_pushes)):
                 push = pushes.pop(0)
@@ -85,7 +81,10 @@ class Retriever(object):
 
                 semaphore.release()
 
-                if cached and to_regenerate > 0:
+                # Regenerating a large amount of data when we update the mozci regression detection
+                # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
+                # run.
+                if cached and reretrieve > 0:
                     value, mozci_version = cached
 
                     # Regenerate results which were generated when we were not cleaning
@@ -94,7 +93,7 @@ class Retriever(object):
                         runnable.startswith("/") for runnable in value[1]
                     ):
                         cached = None
-                        to_regenerate -= 1
+                        reretrieve -= 1
 
                     # Regenerate results which were generated when we didn't get a correct
                     # configuration for test-verify tasks.
@@ -102,12 +101,12 @@ class Retriever(object):
                         "test-verify" in runnable[0] for runnable in value[1]
                     ):
                         cached = None
-                        to_regenerate -= 1
+                        reretrieve -= 1
 
                     # Regenerate results which were generated with an older version of mozci.
                     elif mozci_version != MOZCI_VERSION:
                         cached = None
-                        to_regenerate -= 1
+                        reretrieve -= 1
 
                 if cached:
                     num_cached += 1
@@ -345,12 +344,15 @@ def main():
         help="Which test granularity to use.",
         choices=["label", "group", "config_group"],
     )
+    parser.add_argument(
+        "--reretrieve", type="int", default=0, help="How many results to reretrieve.",
+    )
 
     args = parser.parse_args()
 
     retriever = Retriever()
     if args.op == "retrieve":
-        retriever.generate_push_data(args.granularity)
+        retriever.generate_push_data(args.granularity, args.reretrieve)
     elif args.op == "generate":
         retriever.generate_test_scheduling_history(args.granularity)
 

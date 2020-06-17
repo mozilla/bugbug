@@ -203,13 +203,13 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
           - retrieve
           - label
+          - --reretrieve=0
 
         artifacts:
           public/push_data_label.json.zst:
@@ -245,13 +245,13 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
           - retrieve
           - group
+          - --reretrieve=0
 
         artifacts:
           public/push_data_group.json.zst:
@@ -287,13 +287,13 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
-          OLD_RESULTS_TO_REGENERATE: 0
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
           - retrieve
           - config_group
+          - --reretrieve=0
 
         artifacts:
           public/push_data_config_group.json.zst:
