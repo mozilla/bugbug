@@ -31,21 +31,15 @@ logger = getLogger(__name__)
 # and we can decide when we want to regenerate parts of the dataset.
 MOZCI_VERSION = 4
 
-TRAINING_MONTHS = {
-    "label": 7,
-    "group": 7,
-    "config_group": 4,
-}
-
 
 class Retriever(object):
-    def generate_push_data(self, granularity: str, reretrieve: int) -> None:
-        # We'll use the past TRAINING_MONTHS months only for training the model,
-        # but we use half TRAINING_MONTHS months more than that to calculate the
+    def generate_push_data(
+        self, granularity: str, training_months: int, reretrieve: int
+    ) -> None:
+        # We'll use the past training_months months only for training the model,
+        # but we use half training_months months more than that to calculate the
         # failure statistics.
-        from_months = TRAINING_MONTHS[granularity] + math.floor(
-            TRAINING_MONTHS[granularity] / 2
-        )
+        from_months = training_months + math.floor(training_months / 2)
 
         # We use the actual date instead of 'today-X' aliases to avoid adr caching
         # this query.
@@ -170,14 +164,14 @@ class Retriever(object):
 
         zstd_compress(push_data_db)
 
-    def generate_test_scheduling_history(self, granularity: str) -> None:
+    def generate_test_scheduling_history(
+        self, granularity: str, training_months: int
+    ) -> None:
         if granularity != "config_group":
             # Get the commits DB.
             assert db.download(repository.COMMITS_DB)
 
-        HISTORY_DATE_START = datetime.now() - relativedelta(
-            months=TRAINING_MONTHS[granularity]
-        )
+        HISTORY_DATE_START = datetime.now() - relativedelta(months=training_months)
 
         if granularity == "label":
             test_scheduling_db = test_scheduling.TEST_LABEL_SCHEDULING_DB
@@ -347,14 +341,24 @@ def main():
     parser.add_argument(
         "--reretrieve", type="int", default=0, help="How many results to reretrieve.",
     )
+    parser.add_argument(
+        "--training-months",
+        type="int",
+        required=True,
+        help="How many months of pushes to use for training.",
+    )
 
     args = parser.parse_args()
 
     retriever = Retriever()
     if args.op == "retrieve":
-        retriever.generate_push_data(args.granularity, args.reretrieve)
+        retriever.generate_push_data(
+            args.granularity, args.training_months, args.reretrieve
+        )
     elif args.op == "generate":
-        retriever.generate_test_scheduling_history(args.granularity)
+        retriever.generate_test_scheduling_history(
+            args.granularity, args.training_months
+        )
 
 
 if __name__ == "__main__":
