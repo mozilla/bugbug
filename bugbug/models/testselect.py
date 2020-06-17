@@ -5,6 +5,7 @@
 
 import collections
 import concurrent.futures
+import logging
 import math
 import pickle
 import statistics
@@ -39,6 +40,8 @@ from bugbug import (
     utils,
 )
 from bugbug.model import Model
+
+logger = logging.getLogger(__name__)
 
 
 def get_commit_map(
@@ -422,16 +425,20 @@ class TestSelectModel(Model):
 
             return equivalence_sets
 
-    def _solve_optimization(self, solver: pywraplp.Solver) -> None:
+    def _solve_optimization(self, solver: pywraplp.Solver) -> bool:
         # The MIP solver is usually fast (milliseconds). If we hit a weird problem,
         # accept a suboptimal solution after 10 seconds.
         solver.SetTimeLimit(10000)
         status = solver.Solve()
 
         if status == pywraplp.Solver.INFEASIBLE:
-            raise Exception("Infeasible problem")
+            logger.warning("Optimization problem is infeasible")
+            return False
         elif status == pywraplp.Solver.NOT_SOLVED:
-            raise Exception("Problem unsolved")
+            logger.warning("Optimization problem could not be solved in time")
+            return False
+
+        return True
 
     def reduce(
         self, tasks: Collection[str], min_redundancy_confidence: float
@@ -478,13 +485,14 @@ class TestSelectModel(Model):
             sum(self._get_cost(task) * task_vars[task] for task in task_vars.keys())
         )
 
-        self._solve_optimization(solver)
-
-        return {
-            task
-            for task, task_var in task_vars.items()
-            if task_var.solution_value() == 1
-        }
+        if self._solve_optimization(solver):
+            return {
+                task
+                for task, task_var in task_vars.items()
+                if task_var.solution_value() == 1
+            }
+        else:
+            return set(tasks)
 
     def select_configs(
         self, groups: Collection[str], min_redundancy_confidence: float
@@ -536,15 +544,18 @@ class TestSelectModel(Model):
             )
         )
 
-        self._solve_optimization(solver)
-
         configs_by_group: Dict[str, List[str]] = {}
         for group in groups:
             configs_by_group[group] = []
 
-        for (config, group), config_group_var in config_group_vars.items():
-            if config_group_var.solution_value() == 1:
-                configs_by_group[group].append(config)
+        if self._solve_optimization(solver):
+            for (config, group), config_group_var in config_group_vars.items():
+                if config_group_var.solution_value() == 1:
+                    configs_by_group[group].append(config)
+        else:
+            least_cost_config = min(config_costs, key=config_costs.get)
+            for group in groups:
+                configs_by_group[group].append(least_cost_config)
 
         return configs_by_group
 
