@@ -731,18 +731,21 @@ class TestSelectModel(Model):
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=utils.get_physical_cpu_count()
         ) as executor:
-            for minimum in [None, 10]:
-                for cap in [None, 300, 500]:
-                    for reduction in [None, 0.9, 1.0]:
-                        # Pre-generate equivalence sets, so when we run the config selection in multiple processes
-                        # we don't risk concurrent writes to the equivalence sets file.
-                        if reduction is not None and self.granularity == "group":
-                            self._get_equivalence_sets(reduction)
+            scenarios = [
+                (None, None, None),
+                (10, None, None),
+                (None, 300, None),
+                (None, None, 0.9),
+                (None, None, 1.0),
+            ]
+            for minimum, cap, reduction in scenarios:
+                # Pre-generate equivalence sets, so when we run the config selection in multiple processes
+                # we don't risk concurrent writes to the equivalence sets file.
+                if reduction is not None and self.granularity == "group":
+                    self._get_equivalence_sets(reduction)
 
-                        for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
-                            do_eval(
-                                executor, confidence_threshold, reduction, cap, minimum
-                            )
+                for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
+                    do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
