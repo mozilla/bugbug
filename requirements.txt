@@ -1,4 +1,4 @@
-adr==0.18.10
+adr==0.19.0
 boto3==1.14.5
 imbalanced-learn==0.7.0
 joblib==0.15.1
