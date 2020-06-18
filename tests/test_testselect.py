@@ -313,6 +313,24 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
             "windows10/debug",
         ]
     )
+    failing_together_config_group[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+        {
+            "group1": {
+                "linux1804-64-asan/debug",
+                "linux1804-64/debug",
+                "linux1804-64/opt",
+                "mac/debug",
+                "windows10/debug",
+            },
+            "group2": {
+                "linux1804-64-asan/debug",
+                "linux1804-64/debug",
+                "linux1804-64/opt",
+                "mac/debug",
+                "windows10/debug",
+            },
+        }
+    )
     test_scheduling.close_failing_together_db("config_group")
 
     model = TestGroupSelectModel()
