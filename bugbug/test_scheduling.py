@@ -16,6 +16,7 @@ from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
     Generator,
     Iterable,
     Iterator,
@@ -356,6 +357,7 @@ def generate_failing_together_probabilities(
                 count_single_failures[(task1, task2)] += 1
 
     all_available_configs: Set[str] = set()
+    available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
 
     for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
         push_data, total=push_data_count
@@ -368,6 +370,8 @@ def generate_failing_together_probabilities(
         # on different configurations, and not between manifests too.
         if granularity == "config_group":
             all_available_configs.update(config for config, group in all_tasks)
+            for config, group in all_tasks:
+                available_configs_by_group[group].add(config)
 
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
@@ -479,6 +483,11 @@ def generate_failing_together_probabilities(
     failing_together_db = get_failing_together_db(granularity, False)
 
     failing_together_db[b"$ALL_CONFIGS$"] = pickle.dumps(list(all_available_configs))
+
+    if granularity == "config_group":
+        failing_together_db[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+            dict(available_configs_by_group)
+        )
 
     for key, value in failing_together.items():
         failing_together_db[failing_together_key(key)] = pickle.dumps(value)

@@ -402,6 +402,7 @@ class TestSelectModel(Model):
                 "config_group", True
             )
             all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+            configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
             for group in all_runnables:
                 key = test_scheduling.failing_together_key(group)
                 try:
@@ -414,8 +415,14 @@ class TestSelectModel(Model):
                 ) -> Dict[str, Tuple[float, float]]:
                     return failing_together_stats[config]
 
+                configs = (
+                    configs_by_group[group]
+                    if group in configs_by_group
+                    else all_configs
+                )
+
                 equivalence_sets[group] = self._generate_equivalence_sets(
-                    all_configs, min_redundancy_confidence, load_failing_together, True
+                    configs, min_redundancy_confidence, load_failing_together, True
                 )
 
             with open(
@@ -500,6 +507,7 @@ class TestSelectModel(Model):
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+        all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
         config_costs = {config: self._get_cost(config) for config in all_configs}
 
         solver = pywraplp.Solver(
@@ -509,7 +517,11 @@ class TestSelectModel(Model):
         config_group_vars = {
             (config, group): solver.BoolVar(f"{group}@{config}")
             for group in groups
-            for config in all_configs
+            for config in (
+                all_configs_by_group[group]
+                if group in all_configs_by_group
+                else all_configs
+            )
         }
 
         equivalence_sets = self._get_equivalence_sets(min_redundancy_confidence)
