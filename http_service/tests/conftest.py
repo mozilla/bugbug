@@ -305,6 +305,20 @@ def mock_schedule_tests_classify(
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
     )
+    failing_together[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+        {
+            "test-group1": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+            "test-group2": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+        }
+    )
     failing_together[b"test-group1"] = pickle.dumps(
         {
             "test-linux1804-64/opt": {
