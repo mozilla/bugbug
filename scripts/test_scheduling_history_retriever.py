@@ -339,11 +339,11 @@ def main():
         choices=["label", "group", "config_group"],
     )
     parser.add_argument(
-        "--reretrieve", type="int", default=0, help="How many results to reretrieve.",
+        "--reretrieve", type=int, default=0, help="How many results to reretrieve.",
     )
     parser.add_argument(
         "--training-months",
-        type="int",
+        type=int,
         required=True,
         help="How many months of pushes to use for training.",
     )
