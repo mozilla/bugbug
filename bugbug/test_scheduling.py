@@ -12,14 +12,17 @@ import re
 import shelve
 import shutil
 import struct
-from functools import lru_cache
 from typing import (
     Any,
     Callable,
     Deque,
+    Dict,
+    Generator,
+    Iterable,
     Iterator,
     List,
     NewType,
+    Optional,
     Set,
     Tuple,
     Union,
@@ -267,7 +270,7 @@ def get_test_scheduling_history(granularity):
         yield obj["revs"], obj["data"]
 
 
-def get_past_failures(granularity):
+def get_past_failures(granularity, readonly):
     if granularity == "label":
         past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
     elif granularity == "group":
@@ -278,9 +281,9 @@ def get_past_failures(granularity):
         raise Exception(f"{granularity} granularity unsupported")
 
     return shelve.Shelf(
-        LMDBDict(past_failures_db[: -len(".tar.zst")]),
+        LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
         protocol=pickle.DEFAULT_PROTOCOL,
-        writeback=True,
+        writeback=not readonly,
     )
 
 
@@ -295,9 +298,16 @@ def get_failing_together_db_path(granularity: str) -> str:
     return os.path.join("data", path[: -len(".tar.zst")])
 
 
-@lru_cache(maxsize=None)
-def get_failing_together_db(granularity: str) -> LMDBDict:
-    return LMDBDict(get_failing_together_db_path(granularity))
+failing_together = {}
+
+
+def get_failing_together_db(granularity: str, readonly: bool) -> LMDBDict:
+    global failing_together
+    if granularity not in failing_together:
+        failing_together[granularity] = LMDBDict(
+            get_failing_together_db_path(granularity), readonly=readonly
+        )
+    return failing_together[granularity]
 
 
 def failing_together_key(item: str) -> bytes:
@@ -311,8 +321,12 @@ def remove_failing_together_db(granularity: str) -> None:
 
 
 def close_failing_together_db(granularity: str) -> None:
-    get_failing_together_db(granularity).close()
-    get_failing_together_db.cache_clear()
+    global failing_together
+    assert (
+        granularity in failing_together
+    ), f"Failing together probabilities DB for {granularity} granularity was not open"
+    failing_together[granularity].close()
+    failing_together.pop(granularity)
 
 
 def generate_failing_together_probabilities(
@@ -343,6 +357,7 @@ def generate_failing_together_probabilities(
                 count_single_failures[(task1, task2)] += 1
 
     all_available_configs: Set[str] = set()
+    available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
 
     for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
         push_data, total=push_data_count
@@ -355,6 +370,8 @@ def generate_failing_together_probabilities(
         # on different configurations, and not between manifests too.
         if granularity == "config_group":
             all_available_configs.update(config for config, group in all_tasks)
+            for config, group in all_tasks:
+                available_configs_by_group[group].add(config)
 
             groups = itertools.groupby(
                 sorted(all_tasks, key=lambda x: x[1]), key=lambda x: x[1]
@@ -463,9 +480,14 @@ def generate_failing_together_probabilities(
     for percentage, count in count_redundancies.most_common():
         logger.info(f"{count} with {percentage} confidence")
 
-    failing_together_db = get_failing_together_db(granularity)
+    failing_together_db = get_failing_together_db(granularity, False)
 
     failing_together_db[b"$ALL_CONFIGS$"] = pickle.dumps(list(all_available_configs))
+
+    if granularity == "config_group":
+        failing_together_db[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+            dict(available_configs_by_group)
+        )
 
     for key, value in failing_together.items():
         failing_together_db[failing_together_key(key)] = pickle.dumps(value)
@@ -476,22 +498,24 @@ def generate_failing_together_probabilities(
 touched_together = None
 
 
-def get_touched_together_db():
+def get_touched_together_db(readonly: bool) -> LMDBDict:
     global touched_together
     if touched_together is None:
         touched_together = LMDBDict(
-            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")])
+            os.path.join("data", TOUCHED_TOGETHER_DB[: -len(".tar.zst")]),
+            readonly=readonly,
         )
     return touched_together
 
 
-def close_touched_together_db():
+def close_touched_together_db() -> None:
     global touched_together
+    assert touched_together is not None, "Touched together DB was not open"
     touched_together.close()
     touched_together = None
 
 
-def get_touched_together_key(f1, f2):
+def get_touched_together_key(f1: str, f2: str) -> bytes:
     # Always sort in lexographical order, so we are sure the output key is consistently
     # the same with the same two files as input, no matter their order.
     if f2 < f1:
@@ -500,8 +524,8 @@ def get_touched_together_key(f1, f2):
     return f"{f1}${f2}".encode("utf-8")
 
 
-def get_touched_together(f1, f2):
-    touched_together = get_touched_together_db()
+def get_touched_together(f1: str, f2: str) -> int:
+    touched_together = get_touched_together_db(True)
 
     key = get_touched_together_key(f1, f2)
 
@@ -511,8 +535,8 @@ def get_touched_together(f1, f2):
         return 0
 
 
-def set_touched_together(f1, f2):
-    touched_together = get_touched_together_db()
+def set_touched_together(f1: str, f2: str) -> None:
+    touched_together = get_touched_together_db(False)
 
     key = get_touched_together_key(f1, f2)
 
@@ -524,8 +548,8 @@ def set_touched_together(f1, f2):
         )
 
 
-def update_touched_together():
-    touched_together = get_touched_together_db()
+def update_touched_together() -> Generator[None, Optional[Revision], None]:
+    touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]
         if b"last_analyzed" in touched_together
@@ -620,26 +644,34 @@ def _read_and_update_past_failures(
 
 
 def generate_data(
-    past_failures, commit, push_num, runnables, possible_regressions, likely_regressions
+    granularity: str,
+    past_failures: int,
+    commit: repository.CommitDict,
+    push_num: int,
+    runnables: Iterable[str],
+    possible_regressions: Iterable[str],
+    likely_regressions: Iterable[str],
 ):
-    source_file_dirs = tuple(
-        os.path.dirname(source_file) for source_file in commit["files"]
-    )
+    if granularity != "label":
+        source_file_dirs = tuple(
+            os.path.dirname(source_file) for source_file in commit["files"]
+        )
 
     for runnable in runnables:
-        if isinstance(runnable, tuple):
-            runnable_dir = os.path.dirname(runnable[1])
-        else:
-            runnable_dir = os.path.dirname(runnable)
+        if granularity != "label":
+            if isinstance(runnable, tuple):
+                runnable_dir = os.path.dirname(runnable[1])
+            else:
+                runnable_dir = os.path.dirname(runnable)
 
-        touched_together_files = sum(
-            get_touched_together(source_file, runnable_dir)
-            for source_file in commit["files"]
-        )
-        touched_together_directories = sum(
-            get_touched_together(source_file_dir, runnable_dir)
-            for source_file_dir in source_file_dirs
-        )
+            touched_together_files = sum(
+                get_touched_together(source_file, runnable_dir)
+                for source_file in commit["files"]
+            )
+            touched_together_directories = sum(
+                get_touched_together(source_file_dir, runnable_dir)
+                for source_file_dir in source_file_dirs
+            )
 
         is_possible_regression = runnable in possible_regressions
         is_likely_regression = runnable in likely_regressions
@@ -701,7 +733,7 @@ def generate_data(
             is_regression,
         )
 
-        yield {
+        obj = {
             "name": runnable,
             "failures": total_failures,
             "failures_past_700_pushes": past_700_pushes_failures,
@@ -723,8 +755,12 @@ def generate_data(
             "failures_past_700_pushes_in_components": past_700_pushes_components_failures,
             "failures_past_1400_pushes_in_components": past_1400_pushes_components_failures,
             "failures_past_2800_pushes_in_components": past_2800_pushes_components_failures,
-            "touched_together_files": touched_together_files,
-            "touched_together_directories": touched_together_directories,
             "is_possible_regression": is_possible_regression,
             "is_likely_regression": is_likely_regression,
         }
+
+        if granularity != "label":
+            obj["touched_together_files"] = touched_together_files
+            obj["touched_together_directories"] = touched_together_directories
+
+        yield obj
