@@ -233,7 +233,10 @@ def equivalence_graph(draw) -> Graph:
 def test_all(g: Graph) -> None:
     tasks = [f"windows10/opt-{chr(i)}" for i in range(len(g.vs))]
 
-    test_scheduling.close_failing_together_db("label")
+    try:
+        test_scheduling.close_failing_together_db("label")
+    except AssertionError:
+        pass
     test_scheduling.remove_failing_together_db("label")
 
     # TODO: Also add some couples that are *not* failing together.
