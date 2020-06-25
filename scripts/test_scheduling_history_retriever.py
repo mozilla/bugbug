@@ -81,24 +81,8 @@ class Retriever(object):
                 if cached and reretrieve > 0:
                     value, mozci_version = cached
 
-                    # Regenerate results which were generated when we were not cleaning
-                    # up WPT groups.
-                    if granularity == "group" and any(
-                        runnable.startswith("/") for runnable in value[1]
-                    ):
-                        cached = None
-                        reretrieve -= 1
-
-                    # Regenerate results which were generated when we didn't get a correct
-                    # configuration for test-verify tasks.
-                    elif granularity == "config_group" and any(
-                        "test-verify" in runnable[0] for runnable in value[1]
-                    ):
-                        cached = None
-                        reretrieve -= 1
-
                     # Regenerate results which were generated with an older version of mozci.
-                    elif mozci_version != MOZCI_VERSION:
+                    if mozci_version != MOZCI_VERSION:
                         cached = None
                         reretrieve -= 1
 
