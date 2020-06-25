@@ -120,7 +120,8 @@ class Retriever(object):
                             runnables = push.config_group_summaries.keys()
 
                         value = (
-                            push.revs,
+                            tuple(push.revs),
+                            push.backedoutby or push.bustage_fixed_by,
                             tuple(runnables),
                             tuple(push.get_possible_regressions(granularity)),
                             tuple(push.get_likely_regressions(granularity)),
