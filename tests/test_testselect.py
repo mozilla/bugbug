@@ -202,6 +202,44 @@ def test_reduce6(failing_together: LMDBDict) -> None:
     )
 
 
+@pytest.mark.xfail
+def test_reduce7(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {"windows10/opt-5": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {"windows10/opt-6": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {"windows10/opt-4": (0.1, 1.0), "windows10/opt-5": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-4"] = pickle.dumps(
+        {"windows10/opt-6": (0.1, 1.0),}
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-0",
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+            "windows10/opt-5",
+            "windows10/opt-6",
+        },
+        1.0,
+    )
+    assert (
+        result == {"windows10/opt-0", "windows10/opt-1",}
+        or result == {"windows10/opt-0", "windows10/opt-2",}
+        or result == {"windows10/opt-0", "windows10/opt-3",}
+        or result == {"windows10/opt-0", "windows10/opt-4",}
+        or result == {"windows10/opt-0", "windows10/opt-5",}
+        or result == {"windows10/opt-0", "windows10/opt-6",}
+    )
+
+
 @st.composite
 def equivalence_graph(draw) -> Graph:
     NODES = 7
