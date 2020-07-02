@@ -365,9 +365,13 @@ def generate_failing_together_probabilities(
     all_available_configs: Set[str] = set()
     available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
 
-    for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
-        push_data, total=push_data_count
-    ):
+    for (
+        revisions,
+        fix_revision,
+        tasks,
+        likely_regressions,
+        candidate_regressions,
+    ) in tqdm(push_data, total=push_data_count):
         failures = set(likely_regressions + candidate_regressions)
         all_tasks_set = set(tasks) | failures
         all_tasks = list(all_tasks_set)
