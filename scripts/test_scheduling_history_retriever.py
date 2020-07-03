@@ -78,22 +78,22 @@ class Retriever(object):
                 # Regenerating a large amount of data when we update the mozci regression detection
                 # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
                 # run.
-                if cached and reretrieve > 0:
+                if cached:
                     value, mozci_version = cached
 
                     # Regenerate results which were generated with an older version of mozci.
-                    if mozci_version != MOZCI_VERSION:
+                    if reretrieve > 0 and mozci_version != MOZCI_VERSION:
                         cached = None
                         reretrieve -= 1
 
                     # Regenerate results which don't contain the fix revision.
-                    elif len(value) == 4:
+                    elif len(value) != 5:
                         cached = None
-                        reretrieve -= 1
 
                 if cached:
                     num_cached += 1
                     value, mozci_version = cached
+                    assert len(value) == 5
                     yield value
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
@@ -120,6 +120,7 @@ class Retriever(object):
                             (value, MOZCI_VERSION),
                             adr.config["cache"]["retention"],
                         )
+                        assert len(value) == 5
                         yield value
                     except adr.errors.MissingDataError:
                         logger.warning(
