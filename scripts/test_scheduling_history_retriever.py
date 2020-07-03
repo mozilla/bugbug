@@ -222,7 +222,13 @@ class Retriever(object):
 
             for (
                 i,
-                (revisions, push_runnables, possible_regressions, likely_regressions),
+                (
+                    revisions,
+                    fix_revision,
+                    push_runnables,
+                    possible_regressions,
+                    likely_regressions,
+                ),
             ) in enumerate(tqdm(push_data_iter(), total=push_data_count)):
                 push_num += 1
 
