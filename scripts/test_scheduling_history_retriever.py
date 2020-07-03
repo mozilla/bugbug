@@ -87,7 +87,7 @@ class Retriever(object):
                         reretrieve -= 1
 
                     # Regenerate results which don't contain the fix revision.
-                    elif len(cached) == 4:
+                    elif len(value) == 4:
                         cached = None
                         reretrieve -= 1
 
