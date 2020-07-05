@@ -301,7 +301,7 @@ def compress_response(data: dict, status_code: int):
     response = Response(status=status_code)
     response.set_data(gzip_buffer)
     response.headers["Content-Encoding"] = "gzip"
-    response.headers["Content-Length"] = len(response.get_data())
+    response.headers["Content-Length"] = len(gzip_buffer)
     response.headers["Content-Type"] = "application/json"
 
     return response
