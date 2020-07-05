@@ -42,7 +42,11 @@ Group = NewType("Group", str)
 ConfigGroup = NewType("ConfigGroup", Tuple[str, Group])
 Runnable = Union[Task, Group, ConfigGroup]
 PushResult = Tuple[
-    List[Revision], Tuple[Runnable, ...], Tuple[Runnable, ...], Tuple[Runnable, ...]
+    Tuple[Revision],
+    Revision,
+    Tuple[Runnable, ...],
+    Tuple[Runnable, ...],
+    Tuple[Runnable, ...],
 ]
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
@@ -182,11 +186,12 @@ def get_push_data(
     push_data = [
         (
             revisions,
+            fix_revision,
             rename_runnables(granularity, push_tasks),
             rename_runnables(granularity, possible_regressions),
             rename_runnables(granularity, likely_regressions),
         )
-        for revisions, push_tasks, possible_regressions, likely_regressions in push_data_queue
+        for revisions, fix_revision, push_tasks, possible_regressions, likely_regressions in push_data_queue
     ]
 
     if granularity == "config_group":
@@ -194,7 +199,7 @@ def get_push_data(
             sum(
                 (
                     [Group(r[1]) for r in push_runnables]
-                    for _, push_runnables, _, _ in push_data
+                    for _, _, push_runnables, _, _ in push_data
                 ),
                 [],
             )
@@ -207,7 +212,7 @@ def get_push_data(
         logger.info(f"{len(all_groups_set)} manifests run in the last 28 pushes")
 
     all_runnables_set = set(
-        sum((list(push_runnables) for _, push_runnables, _, _ in push_data), [])
+        sum((list(push_runnables) for _, _, push_runnables, _, _ in push_data), [])
     )
     # Filter runnables we don't need.
     all_runnables = filter_runnables(
@@ -220,6 +225,7 @@ def get_push_data(
         return (
             (
                 revisions,
+                fix_revision,
                 filter_runnables(
                     rename_runnables(granularity, push_tasks),
                     all_runnables_set,
@@ -236,7 +242,7 @@ def get_push_data(
                     granularity,
                 ),
             )
-            for revisions, push_tasks, possible_regressions, likely_regressions in db.read(
+            for revisions, fix_revision, push_tasks, possible_regressions, likely_regressions in db.read(
                 push_data_db
             )
         )
@@ -359,9 +365,13 @@ def generate_failing_together_probabilities(
     all_available_configs: Set[str] = set()
     available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
 
-    for revisions, tasks, likely_regressions, candidate_regressions in tqdm(
-        push_data, total=push_data_count
-    ):
+    for (
+        revisions,
+        fix_revision,
+        tasks,
+        likely_regressions,
+        candidate_regressions,
+    ) in tqdm(push_data, total=push_data_count):
         failures = set(likely_regressions + candidate_regressions)
         all_tasks_set = set(tasks) | failures
         all_tasks = list(all_tasks_set)

@@ -29,7 +29,7 @@ logger = getLogger(__name__)
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
-MOZCI_VERSION = 4
+MOZCI_VERSION = 5
 
 
 class Retriever(object):
@@ -78,33 +78,22 @@ class Retriever(object):
                 # Regenerating a large amount of data when we update the mozci regression detection
                 # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
                 # run.
-                if cached and reretrieve > 0:
+                if cached:
                     value, mozci_version = cached
 
-                    # Regenerate results which were generated when we were not cleaning
-                    # up WPT groups.
-                    if granularity == "group" and any(
-                        runnable.startswith("/") for runnable in value[1]
-                    ):
-                        cached = None
-                        reretrieve -= 1
-
-                    # Regenerate results which were generated when we didn't get a correct
-                    # configuration for test-verify tasks.
-                    elif granularity == "config_group" and any(
-                        "test-verify" in runnable[0] for runnable in value[1]
-                    ):
-                        cached = None
-                        reretrieve -= 1
-
                     # Regenerate results which were generated with an older version of mozci.
-                    elif mozci_version != MOZCI_VERSION:
+                    if reretrieve > 0 and mozci_version != MOZCI_VERSION:
                         cached = None
                         reretrieve -= 1
+
+                    # Regenerate results which don't contain the fix revision.
+                    elif len(value) != 5:
+                        cached = None
 
                 if cached:
                     num_cached += 1
                     value, mozci_version = cached
+                    assert len(value) == 5
                     yield value
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
@@ -120,7 +109,8 @@ class Retriever(object):
                             runnables = push.config_group_summaries.keys()
 
                         value = (
-                            push.revs,
+                            tuple(push.revs),
+                            push.backedoutby or push.bustage_fixed_by,
                             tuple(runnables),
                             tuple(push.get_possible_regressions(granularity)),
                             tuple(push.get_likely_regressions(granularity)),
@@ -130,6 +120,7 @@ class Retriever(object):
                             (value, MOZCI_VERSION),
                             adr.config["cache"]["retention"],
                         )
+                        assert len(value) == 5
                         yield value
                     except adr.errors.MissingDataError:
                         logger.warning(
@@ -232,7 +223,13 @@ class Retriever(object):
 
             for (
                 i,
-                (revisions, push_runnables, possible_regressions, likely_regressions),
+                (
+                    revisions,
+                    fix_revision,
+                    push_runnables,
+                    possible_regressions,
+                    likely_regressions,
+                ),
             ) in enumerate(tqdm(push_data_iter(), total=push_data_count)):
                 push_num += 1
 

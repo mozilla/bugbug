@@ -202,6 +202,44 @@ def test_reduce6(failing_together: LMDBDict) -> None:
     )
 
 
+@pytest.mark.xfail
+def test_reduce7(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {"windows10/opt-5": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {"windows10/opt-6": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {"windows10/opt-4": (0.1, 1.0), "windows10/opt-5": (0.1, 1.0),}
+    )
+    failing_together[b"windows10/opt-4"] = pickle.dumps(
+        {"windows10/opt-6": (0.1, 1.0),}
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-0",
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+            "windows10/opt-5",
+            "windows10/opt-6",
+        },
+        1.0,
+    )
+    assert (
+        result == {"windows10/opt-0", "windows10/opt-1",}
+        or result == {"windows10/opt-0", "windows10/opt-2",}
+        or result == {"windows10/opt-0", "windows10/opt-3",}
+        or result == {"windows10/opt-0", "windows10/opt-4",}
+        or result == {"windows10/opt-0", "windows10/opt-5",}
+        or result == {"windows10/opt-0", "windows10/opt-6",}
+    )
+
+
 @st.composite
 def equivalence_graph(draw) -> Graph:
     NODES = 7
@@ -233,7 +271,10 @@ def equivalence_graph(draw) -> Graph:
 def test_all(g: Graph) -> None:
     tasks = [f"windows10/opt-{chr(i)}" for i in range(len(g.vs))]
 
-    test_scheduling.close_failing_together_db("label")
+    try:
+        test_scheduling.close_failing_together_db("label")
+    except AssertionError:
+        pass
     test_scheduling.remove_failing_together_db("label")
 
     # TODO: Also add some couples that are *not* failing together.
