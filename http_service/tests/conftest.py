@@ -241,7 +241,7 @@ def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str
     return local_dir, remote_dir
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_data(tmp_path):
     os.mkdir(tmp_path / "data")
     os.chdir(tmp_path)
@@ -275,7 +275,7 @@ def mock_schedule_tests_classify(
 
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):
-        past_failures_data = test_scheduling.get_past_failures(granularity)
+        past_failures_data = test_scheduling.get_past_failures(granularity, False)
         past_failures_data["push_num"] = 1
         past_failures_data["all_runnables"] = [
             "test-linux1804-64-opt-label1",
@@ -287,15 +287,37 @@ def mock_schedule_tests_classify(
         ]
         past_failures_data.close()
 
-    failing_together = test_scheduling.get_failing_together_db("label")
+    try:
+        test_scheduling.close_failing_together_db("label")
+    except AssertionError:
+        pass
+    failing_together = test_scheduling.get_failing_together_db("label", False)
     failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
         {"test-windows10/opt": (0.1, 1.0),}
     )
     test_scheduling.close_failing_together_db("label")
 
-    failing_together = test_scheduling.get_failing_together_db("config_group")
+    try:
+        test_scheduling.close_failing_together_db("config_group")
+    except AssertionError:
+        pass
+    failing_together = test_scheduling.get_failing_together_db("config_group", False)
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
+    )
+    failing_together[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+        {
+            "test-group1": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+            "test-group2": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+        }
     )
     failing_together[b"test-group1"] = pickle.dumps(
         {
@@ -307,6 +329,13 @@ def mock_schedule_tests_classify(
         }
     )
     test_scheduling.close_failing_together_db("config_group")
+
+    try:
+        test_scheduling.close_touched_together_db()
+    except AssertionError:
+        pass
+    test_scheduling.get_touched_together_db(False)
+    test_scheduling.close_touched_together_db()
 
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.

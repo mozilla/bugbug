@@ -93,13 +93,15 @@ def test_simple_schedule(
         ]
 
     # Assert the test selection result is stored in Redis.
-    assert json.loads(
+    result = json.loads(
         models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
-    ) == {
-        "tasks": labels_to_choose,
-        "groups": groups_to_choose,
-        "reduced_tasks": reduced_labels,
-        "reduced_tasks_higher": reduced_labels,
-        "known_tasks": ["prova"],
-        "config_groups": config_groups,
+    )
+    assert len(result) == 6
+    assert result["tasks"] == labels_to_choose
+    assert result["groups"] == groups_to_choose
+    assert result["reduced_tasks"] == reduced_labels
+    assert result["reduced_tasks_higher"] == reduced_labels
+    assert result["known_tasks"] == ["prova"]
+    assert {k: set(v) for k, v in result["config_groups"].items()} == {
+        k: set(v) for k, v in config_groups.items()
     }

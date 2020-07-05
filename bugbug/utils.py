@@ -14,6 +14,7 @@ import tarfile
 from collections import deque
 from contextlib import contextmanager
 from functools import lru_cache
+from typing import Any
 
 import boto3
 import dateutil.parser
@@ -361,7 +362,7 @@ class ExpQueue:
 
 
 class LMDBDict:
-    def __init__(self, path, readonly=False):
+    def __init__(self, path: str, readonly: bool = False):
         self.readonly = readonly
         self.db = lmdb.open(
             path,
@@ -373,22 +374,22 @@ class LMDBDict:
         )
         self.txn = self.db.begin(buffers=True, write=not readonly)
 
-    def close(self):
+    def close(self) -> None:
         self.txn.commit()
         if not self.readonly:
             self.db.sync()
         self.db.close()
 
-    def __contains__(self, key):
+    def __contains__(self, key: bytes) -> bool:
         return self.txn.get(key) is not None
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: bytes) -> Any:
         val = self.txn.get(key)
         if val is None:
             raise KeyError
         return val
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: bytes, value: Any) -> None:
         self.txn.put(key, value, dupdata=False)
 
 

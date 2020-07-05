@@ -209,6 +209,8 @@ tasks:
           - bugbug-data-test-scheduling-history
           - retrieve
           - label
+          - --reretrieve=0
+          - --training-months=7
 
         artifacts:
           public/push_data_label.json.zst:
@@ -250,6 +252,8 @@ tasks:
           - bugbug-data-test-scheduling-history
           - retrieve
           - group
+          - --reretrieve=0
+          - --training-months=7
 
         artifacts:
           public/push_data_group.json.zst:
@@ -281,7 +285,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-relman
-      workerType: batch
+      workerType: compute-small
       payload:
         env:
           TC_SECRET_ID: project/relman/bugbug/production
@@ -291,6 +295,8 @@ tasks:
           - bugbug-data-test-scheduling-history
           - retrieve
           - config_group
+          - --reretrieve=0
+          - --training-months=4
 
         artifacts:
           public/push_data_config_group.json.zst:
@@ -335,6 +341,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - label
+          - --training-months=7
 
         artifacts:
           public/test_label_scheduling_history.pickle.zst:
@@ -384,6 +391,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - group
+          - --training-months=7
 
         artifacts:
           public/test_group_scheduling_history.pickle.zst:
@@ -432,8 +440,12 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - config_group
+          - --training-months=4
 
         artifacts:
+          public/test_config_group_scheduling_history.pickle.version:
+            path: /data/test_config_group_scheduling_history.pickle.version
+            type: file
           public/past_failures_config_group.lmdb.tar.zst:
             path: /data/past_failures_config_group.lmdb.tar.zst
             type: file

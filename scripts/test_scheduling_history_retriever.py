@@ -29,23 +29,17 @@ logger = getLogger(__name__)
 # The mozci version (to bump whenever we change the mozci regression algorithm),
 # so we can keep track of which version of mozci was used to analyze a given push
 # and we can decide when we want to regenerate parts of the dataset.
-MOZCI_VERSION = 3
-
-TRAINING_MONTHS = {
-    "label": 7,
-    "group": 7,
-    "config_group": 4,
-}
+MOZCI_VERSION = 5
 
 
 class Retriever(object):
-    def generate_push_data(self, granularity: str) -> None:
-        # We'll use the past TRAINING_MONTHS months only for training the model,
-        # but we use half TRAINING_MONTHS months more than that to calculate the
+    def generate_push_data(
+        self, granularity: str, training_months: int, reretrieve: int
+    ) -> None:
+        # We'll use the past training_months months only for training the model,
+        # but we use half training_months months more than that to calculate the
         # failure statistics.
-        from_months = TRAINING_MONTHS[granularity] + math.floor(
-            TRAINING_MONTHS[granularity] / 2
-        )
+        from_months = training_months + math.floor(training_months / 2)
 
         # We use the actual date instead of 'today-X' aliases to avoid adr caching
         # this query.
@@ -71,13 +65,9 @@ class Retriever(object):
         def generate(
             futures: List[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
+            nonlocal reretrieve
             num_cached = 0
             num_pushes = len(pushes)
-
-            # Regenerating a large amount of data when we update the mozci regression detection
-            # algorithm is currently pretty slow, so we only regenerate 1000 pushes whenever we
-            # run.
-            to_regenerate = 1000
 
             for _ in tqdm(range(num_pushes)):
                 push = pushes.pop(0)
@@ -85,33 +75,25 @@ class Retriever(object):
 
                 semaphore.release()
 
-                if cached and to_regenerate > 0:
+                # Regenerating a large amount of data when we update the mozci regression detection
+                # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
+                # run.
+                if cached:
                     value, mozci_version = cached
 
-                    # Regenerate results which were generated when we were not cleaning
-                    # up WPT groups.
-                    if granularity == "group" and any(
-                        runnable.startswith("/") for runnable in value[1]
-                    ):
-                        cached = None
-                        to_regenerate -= 1
-
-                    # Regenerate results which were generated when we didn't get a correct
-                    # configuration for test-verify tasks.
-                    elif granularity == "config_group" and any(
-                        "test-verify" in runnable[0] for runnable in value[1]
-                    ):
-                        cached = None
-                        to_regenerate -= 1
-
                     # Regenerate results which were generated with an older version of mozci.
-                    elif mozci_version != MOZCI_VERSION:
+                    if reretrieve > 0 and mozci_version != MOZCI_VERSION:
                         cached = None
-                        to_regenerate -= 1
+                        reretrieve -= 1
+
+                    # Regenerate results which don't contain the fix revision.
+                    elif len(value) != 5:
+                        cached = None
 
                 if cached:
                     num_cached += 1
                     value, mozci_version = cached
+                    assert len(value) == 5
                     yield value
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
@@ -127,7 +109,8 @@ class Retriever(object):
                             runnables = push.config_group_summaries.keys()
 
                         value = (
-                            push.revs,
+                            tuple(push.revs),
+                            push.backedoutby or push.bustage_fixed_by,
                             tuple(runnables),
                             tuple(push.get_possible_regressions(granularity)),
                             tuple(push.get_likely_regressions(granularity)),
@@ -137,6 +120,7 @@ class Retriever(object):
                             (value, MOZCI_VERSION),
                             adr.config["cache"]["retention"],
                         )
+                        assert len(value) == 5
                         yield value
                     except adr.errors.MissingDataError:
                         logger.warning(
@@ -171,14 +155,14 @@ class Retriever(object):
 
         zstd_compress(push_data_db)
 
-    def generate_test_scheduling_history(self, granularity: str) -> None:
+    def generate_test_scheduling_history(
+        self, granularity: str, training_months: int
+    ) -> None:
         if granularity != "config_group":
             # Get the commits DB.
             assert db.download(repository.COMMITS_DB)
 
-        HISTORY_DATE_START = datetime.now() - relativedelta(
-            months=TRAINING_MONTHS[granularity]
-        )
+        HISTORY_DATE_START = datetime.now() - relativedelta(months=training_months)
 
         if granularity == "label":
             test_scheduling_db = test_scheduling.TEST_LABEL_SCHEDULING_DB
@@ -215,7 +199,7 @@ class Retriever(object):
             )
 
         def generate_all_data() -> Generator[Dict[str, Any], None, None]:
-            past_failures = test_scheduling.get_past_failures(granularity)
+            past_failures = test_scheduling.get_past_failures(granularity, False)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
 
@@ -239,7 +223,13 @@ class Retriever(object):
 
             for (
                 i,
-                (revisions, push_runnables, possible_regressions, likely_regressions),
+                (
+                    revisions,
+                    fix_revision,
+                    push_runnables,
+                    possible_regressions,
+                    likely_regressions,
+                ),
             ) in enumerate(tqdm(push_data_iter(), total=push_data_count)):
                 push_num += 1
 
@@ -287,6 +277,7 @@ class Retriever(object):
 
                 result_data = []
                 for data in test_scheduling.generate_data(
+                    granularity,
                     past_failures,
                     merged_commits,
                     push_num,
@@ -344,14 +335,27 @@ def main():
         help="Which test granularity to use.",
         choices=["label", "group", "config_group"],
     )
+    parser.add_argument(
+        "--reretrieve", type=int, default=0, help="How many results to reretrieve.",
+    )
+    parser.add_argument(
+        "--training-months",
+        type=int,
+        required=True,
+        help="How many months of pushes to use for training.",
+    )
 
     args = parser.parse_args()
 
     retriever = Retriever()
     if args.op == "retrieve":
-        retriever.generate_push_data(args.granularity)
+        retriever.generate_push_data(
+            args.granularity, args.training_months, args.reretrieve
+        )
     elif args.op == "generate":
-        retriever.generate_test_scheduling_history(args.granularity)
+        retriever.generate_test_scheduling_history(
+            args.granularity, args.training_months
+        )
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from bugbug import bugzilla, repository
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def mock_data(tmp_path):
     os.mkdir(tmp_path / "data")
 
