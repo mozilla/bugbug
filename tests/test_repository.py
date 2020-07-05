@@ -1770,3 +1770,42 @@ function inner_func() {
     touched_functions = repository.get_touched_functions(metrics["spaces"], [], [4],)
 
     assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
+
+def test_get_commits():
+    # By default get_commits utilizes the following parameters:
+    #   include_no_bug: bool = False
+    #   include_backouts: bool = False
+    #   include_ignored: bool = False
+
+    # 10 mock commits, 1 ignored, 1 backouts, 1 no_bug, 1 no_bug and ignored, 1 no_bug, ignored, and backouts
+    retrieved_commits = list(repository.get_commits())
+    assert len(retrieved_commits) == 5
+    assert (retrieved_commits[0]["node"] == "9d576871fd33bed006dcdccfba880a4ed591f870")
+
+    retrieved_commits = list(repository.get_commits(include_backouts=True))
+    assert len(retrieved_commits) == 6
+    assert (retrieved_commits[5]["node"] == "ec01c146f756b74d18e4892b4fd3aecba00da93e")
+
+    retrieved_commits = list(repository.get_commits(include_ignored=True))
+    assert len(retrieved_commits) == 6
+    assert (retrieved_commits[5]["node"] == "7f27080ffee35521c42fe9d4025caabef7b6258c")
+
+    retrieved_commits = list(repository.get_commits(include_no_bug=True))
+    assert len(retrieved_commits) == 6
+    assert (retrieved_commits[5]["node"] == "75966ee1fe658b1767d7459256175c0662d14c25")
+
+    retrieved_commits = list(repository.get_commits(include_ignored=True, include_backouts=True))
+    assert len(retrieved_commits) == 7
+    assert (retrieved_commits[6]["node"] == "7f27080ffee35521c42fe9d4025caabef7b6258c")
+
+    retrieved_commits = list(repository.get_commits(include_ignored=True, include_no_bug=True))
+    assert len(retrieved_commits) == 8
+    assert (retrieved_commits[7]["node"] == "75276e64701bfde7cf2dd1f851adfea6a92d5747")
+
+    retrieved_commits = list(repository.get_commits(include_no_bug=True, include_backouts=True))
+    assert len(retrieved_commits) == 7
+    assert (retrieved_commits[6]["node"] == "75966ee1fe658b1767d7459256175c0662d14c25")
+
+    retrieved_commits = list(repository.get_commits(include_ignored=True, include_backouts=True, include_no_bug=True))
+    assert len(retrieved_commits) == 10
+    assert (retrieved_commits[9]["node"] == "46c1c161cbe189a59d8274e011085d76163db7f4")
