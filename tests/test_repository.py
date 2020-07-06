@@ -1774,49 +1774,89 @@ function inner_func() {
 
 def test_get_commits():
     # By default get_commits utilizes the following parameters:
-    #   include_no_bug: bool = False
-    #   include_backouts: bool = False
-    #   include_ignored: bool = False
+    # include_no_bug: bool = False
+    # include_backouts: bool = False
+    # include_ignored: bool = False
+
+
+    retrieved_commits = list(repository.get_commits())
+
+    excluded_commits = [
+        "7f27080ffee35521c42fe9d4025caabef7b6258c",
+        "75966ee1fe658b1767d7459256175c0662d14c25",
+        "ec01c146f756b74d18e4892b4fd3aecba00da93e",
+        "75276e64701bfde7cf2dd1f851adfea6a92d5747",
+        "10c9e57fb4f8c70d4772a7809ba3d652536b984d",
+    ]
 
     # 10 mock commits, 1 ignored, 1 backouts, 1 no_bug, 1 no_bug and ignored, 1 no_bug, ignored, and backouts
-    retrieved_commits = list(repository.get_commits())
     assert len(retrieved_commits) == 5
-    assert retrieved_commits[0]["node"] == "9d576871fd33bed006dcdccfba880a4ed591f870"
+
+    for commit in excluded_commits:
+        assert commit not in {c["node"] for c in retrieved_commits}
 
     retrieved_commits = list(repository.get_commits(include_backouts=True))
+
     assert len(retrieved_commits) == 6
-    assert retrieved_commits[5]["node"] == "ec01c146f756b74d18e4892b4fd3aecba00da93e"
+
+    assert "ec01c146f756b74d18e4892b4fd3aecba00da93e" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(repository.get_commits(include_ignored=True))
+
     assert len(retrieved_commits) == 6
-    assert retrieved_commits[5]["node"] == "7f27080ffee35521c42fe9d4025caabef7b6258c"
+
+    assert "7f27080ffee35521c42fe9d4025caabef7b6258c" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(repository.get_commits(include_no_bug=True))
+
     assert len(retrieved_commits) == 6
-    assert retrieved_commits[5]["node"] == "75966ee1fe658b1767d7459256175c0662d14c25"
+
+    assert "75966ee1fe658b1767d7459256175c0662d14c25" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(
         repository.get_commits(include_ignored=True, include_backouts=True)
     )
+
     assert len(retrieved_commits) == 7
-    assert retrieved_commits[6]["node"] == "7f27080ffee35521c42fe9d4025caabef7b6258c"
+
+    assert "7f27080ffee35521c42fe9d4025caabef7b6258c" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(
         repository.get_commits(include_ignored=True, include_no_bug=True)
     )
+
     assert len(retrieved_commits) == 8
-    assert retrieved_commits[7]["node"] == "75276e64701bfde7cf2dd1f851adfea6a92d5747"
+
+    assert "75276e64701bfde7cf2dd1f851adfea6a92d5747" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(
         repository.get_commits(include_no_bug=True, include_backouts=True)
     )
+
     assert len(retrieved_commits) == 7
-    assert retrieved_commits[6]["node"] == "75966ee1fe658b1767d7459256175c0662d14c25"
+
+    assert "75966ee1fe658b1767d7459256175c0662d14c25" in {
+        c["node"] for c in retrieved_commits
+    }
 
     retrieved_commits = list(
         repository.get_commits(
             include_ignored=True, include_backouts=True, include_no_bug=True
         )
     )
+
     assert len(retrieved_commits) == 10
-    assert retrieved_commits[9]["node"] == "46c1c161cbe189a59d8274e011085d76163db7f4"
+
+    assert "46c1c161cbe189a59d8274e011085d76163db7f4" in {
+        c["node"] for c in retrieved_commits
+    }
