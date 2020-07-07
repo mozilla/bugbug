@@ -3,10 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
 import json
 import time
 
+import orjson
+
 from bugbug_http.app import API_TOKEN
+
+
+def retrieve_compressed_reponse(response):
+    # Response is of type "<class 'flask.wrappers.Response'>" -  Flask Client's  Response
+    # Not applicable for "<class 'requests.models.Response'> "
+    if response.headers["Content-Encoding"] == "gzip":
+        return orjson.loads(gzip.decompress(response.data))
+    return response.json
 
 
 def test_model_predict_id(client, jobs, add_result, responses):
@@ -28,12 +39,12 @@ def test_model_predict_id(client, jobs, add_result, responses):
 
     rv = do_request()
     assert rv.status_code == 202
-    assert rv.json == {"ready": False}
+    assert retrieve_compressed_reponse(rv) == {"ready": False}
 
     # request still not ready
     rv = do_request()
     assert rv.status_code == 202
-    assert rv.json == {"ready": False}
+    assert retrieve_compressed_reponse(rv) == {"ready": False}
     assert len(jobs) == 1
 
     # now it's ready
@@ -42,7 +53,7 @@ def test_model_predict_id(client, jobs, add_result, responses):
 
     rv = do_request()
     assert rv.status_code == 200
-    assert rv.json == result
+    assert retrieve_compressed_reponse(rv) == result
 
 
 def test_model_predict_batch(client, jobs, add_result, add_change_time, responses):
@@ -73,7 +84,9 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
     rv = do_request()
     assert rv.status_code == 202
-    assert rv.json == {"bugs": {str(bug_id): {"ready": False} for bug_id in bug_ids}}
+    assert retrieve_compressed_reponse(rv) == {
+        "bugs": {str(bug_id): {"ready": False} for bug_id in bug_ids}
+    }
     assert len(jobs) == 1
 
     # one of the bugs is ready
@@ -86,7 +99,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
     rv = do_request()
     assert rv.status_code == 202
-    assert rv.json == {
+    assert retrieve_compressed_reponse(rv) == {
         "bugs": {str(bug_ids[0]): result, str(bug_ids[1]): {"ready": False}}
     }
 
@@ -95,7 +108,9 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
     rv = do_request()
     assert rv.status_code == 200
-    assert rv.json == {"bugs": {str(bug_id): result for bug_id in bug_ids}}
+    assert retrieve_compressed_reponse(rv) == {
+        "bugs": {str(bug_id): result for bug_id in bug_ids}
+    }
 
 
 def test_empty_batch(client):
