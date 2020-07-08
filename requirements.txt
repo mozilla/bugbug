@@ -1,5 +1,5 @@
 adr==0.19.0
-boto3==1.14.16
+boto3==1.14.18
 imbalanced-learn==0.7.0
 joblib==0.16.0
 libmozdata==0.1.68
@@ -7,7 +7,7 @@ lmdb==0.98
 matplotlib==3.2.2
 mercurial==5.3.2
 microannotate==0.0.20
-mozci==1.6.2
+mozci==1.6.4
 numpy==1.19.0
 orjson==3.2.1
 ortools==7.7.7810
@@ -23,7 +23,7 @@ scikit-learn==0.23.1
 scipy==1.5.1
 shap[plots]==0.35.0
 tabulate==0.8.7
-taskcluster==31.0.0
+taskcluster==32.0.0
 tenacity==6.2.0
 tqdm==4.47.0
 xgboost==1.0.2
