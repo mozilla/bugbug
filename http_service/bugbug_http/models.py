@@ -113,9 +113,10 @@ def schedule_tests(branch: str, rev: str) -> str:
     from bugbug_http import REPO_DIR
 
     job = JobInfo(schedule_tests, branch, rev)
-    LOGGER.debug(f"Processing {job}")
+    LOGGER.info(f"Processing {job}...")
 
     # Load the full stack of patches leading to that revision
+    LOGGER.info("Loading commits to analyze using automationrelevance...")
     try:
         stack = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
@@ -123,6 +124,7 @@ def schedule_tests(branch: str, rev: str) -> str:
         return "NOK"
 
     # Apply the stack on the local repository
+    LOGGER.info("Pulling commits from the remote repository...")
     try:
         revs = repository.apply_stack(REPO_DIR, stack, branch, rev)
     except Exception as e:

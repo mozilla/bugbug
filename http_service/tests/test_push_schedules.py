@@ -3,7 +3,19 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
+
+import orjson
+
 from bugbug_http.app import API_TOKEN
+
+
+def retrieve_compressed_reponse(response):
+    # Response is of type "<class 'flask.wrappers.Response'>" -  Flask Client's  Response
+    # Not applicable for "<class 'requests.models.Response'> "
+    if response.headers["Content-Encoding"] == "gzip":
+        return orjson.loads(gzip.decompress(response.data))
+    return response.json
 
 
 def test_queue_job_valid(client, add_result, jobs):
@@ -29,7 +41,7 @@ def test_queue_job_valid(client, add_result, jobs):
 
     rv = client.get("/push/autoland/abcdef/schedules", headers={API_TOKEN: "test"},)
     assert rv.status_code == 200
-    assert rv.json == result
+    assert retrieve_compressed_reponse(rv) == result
 
 
 def test_no_api_key(client):

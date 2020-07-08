@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import gzip
 import logging
 import os
 import uuid
@@ -16,7 +17,7 @@ from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
 from cerberus import Validator
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields
 from redis import Redis
@@ -284,6 +285,28 @@ def get_result(job):
     return None
 
 
+def compress_response(data: dict, status_code: int):
+    """Compress data using gzip compressor and frame response
+
+    :param data: data
+    :type data: dict
+    :param status_code: response status code
+    :type status_code: int
+    :return: response with gzip compressed data
+    :rtype: Response
+    """
+
+    gzip_buffer = gzip.compress(orjson.dumps(data), compresslevel=9)
+
+    response = Response(status=status_code)
+    response.set_data(gzip_buffer)
+    response.headers["Content-Encoding"] = "gzip"
+    response.headers["Content-Length"] = len(gzip_buffer)
+    response.headers["Content-Type"] = "application/json"
+
+    return response
+
+
 @application.route("/<model_name>/predict/<int:bug_id>")
 @cross_origin()
 def model_prediction(model_name, bug_id):
@@ -348,7 +371,7 @@ def model_prediction(model_name, bug_id):
         status_code = 202
         data = {"ready": False}
 
-    return jsonify(**data), status_code
+    return compress_response(data, status_code)
 
 
 @application.route("/<model_name>/predict/batch", methods=["POST"])
@@ -522,7 +545,7 @@ def batch_prediction(model_name):
         # not like getting 1 million bug at a time
         schedule_bug_classification(model_name, missing_bugs)
 
-    return jsonify({"bugs": data}), status_code
+    return compress_response({"bugs": data}, status_code)
 
 
 @application.route("/push/<path:branch>/<rev>/schedules")
@@ -576,7 +599,7 @@ def push_schedules(branch, rev):
     job = JobInfo(schedule_tests, branch, rev)
     data = get_result(job)
     if data:
-        return jsonify(data), 200
+        return compress_response(data, 200)
 
     if not is_pending(job):
         schedule_job(job)
