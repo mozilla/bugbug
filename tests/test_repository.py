@@ -1782,13 +1782,22 @@ def test_get_commits():
     IGNORED_COMMIT = "7f27080ffee35521c42fe9d4025caabef7b6258c"
     NOBUG_COMMIT = "75966ee1fe658b1767d7459256175c0662d14c25"
     NOBUG_IGNORED_COMMIT = "75276e64701bfde7cf2dd1f851adfea6a92d5747"
-    NOBUG_IGNORED_BACKOUT_COMMIT  = "46c1c161cbe189a59d8274e011085d76163db7f4"
+    NOBUG_IGNORED_BACKOUT_COMMIT = "46c1c161cbe189a59d8274e011085d76163db7f4"
 
     retrieved_commits = list(repository.get_commits())
-    excluded_commits = [IGNORED_COMMIT, BACKOUT_COMMIT, NOBUG_COMMIT, NOBUG_IGNORED_COMMIT, NOBUG_IGNORED_BACKOUT_COMMIT]
+    excluded_commits = [
+        IGNORED_COMMIT,
+        BACKOUT_COMMIT,
+        NOBUG_COMMIT,
+        NOBUG_IGNORED_COMMIT,
+        NOBUG_IGNORED_BACKOUT_COMMIT,
+    ]
     # 10 mock commits, 1 ignored, 1 backouts, 1 no_bug, 1 no_bug and ignored, 1 no_bug, ignored, and backouts
     assert len(retrieved_commits) == 5
-    assert not any(excluded_commit in {c["node"] for c in retrieved_commits} for excluded_commit in excluded_commits)
+    assert not any(
+        excluded_commit in {c["node"] for c in retrieved_commits}
+        for excluded_commit in excluded_commits
+    )
 
     retrieved_commits = list(repository.get_commits(include_backouts=True))
     assert len(retrieved_commits) == 6
@@ -1802,22 +1811,46 @@ def test_get_commits():
     assert len(retrieved_commits) == 6
     assert NOBUG_COMMIT in (c["node"] for c in retrieved_commits)
 
-    retrieved_commits = list(repository.get_commits(include_ignored=True, include_backouts=True))
+    retrieved_commits = list(
+        repository.get_commits(include_ignored=True, include_backouts=True)
+    )
     included_commits = [IGNORED_COMMIT, BACKOUT_COMMIT]
     assert len(retrieved_commits) == 7
-    assert all({c["node"] for c in retrieved_commits} for included_commit in included_commits)
+    assert all(
+        {c["node"] for c in retrieved_commits} for included_commit in included_commits
+    )
 
-    retrieved_commits = list(repository.get_commits(include_ignored=True, include_no_bug=True))
+    retrieved_commits = list(
+        repository.get_commits(include_ignored=True, include_no_bug=True)
+    )
     included_commits = [IGNORED_COMMIT, NOBUG_COMMIT]
     assert len(retrieved_commits) == 8
-    assert all({c["node"] for c in retrieved_commits} for included_commit in included_commits)
+    assert all(
+        {c["node"] for c in retrieved_commits} for included_commit in included_commits
+    )
 
-    retrieved_commits = list(repository.get_commits(include_no_bug=True, include_backouts=True))
+    retrieved_commits = list(
+        repository.get_commits(include_no_bug=True, include_backouts=True)
+    )
     included_commits = [BACKOUT_COMMIT, NOBUG_COMMIT]
     assert len(retrieved_commits) == 7
-    assert all({c["node"] for c in retrieved_commits} for included_commit in included_commits)
+    assert all(
+        {c["node"] for c in retrieved_commits} for included_commit in included_commits
+    )
 
-    retrieved_commits = list(repository.get_commits(include_ignored=True, include_backouts=True, include_no_bug=True))
-    included_commits = [IGNORED_COMMIT, BACKOUT_COMMIT, NOBUG_COMMIT, NOBUG_IGNORED_COMMIT, NOBUG_IGNORED_BACKOUT_COMMIT]
+    retrieved_commits = list(
+        repository.get_commits(
+            include_ignored=True, include_backouts=True, include_no_bug=True
+        )
+    )
+    included_commits = [
+        IGNORED_COMMIT,
+        BACKOUT_COMMIT,
+        NOBUG_COMMIT,
+        NOBUG_IGNORED_COMMIT,
+        NOBUG_IGNORED_BACKOUT_COMMIT,
+    ]
     assert len(retrieved_commits) == 10
-    assert all({c["node"] for c in retrieved_commits} for included_commit in included_commits)
+    assert all(
+        {c["node"] for c in retrieved_commits} for included_commit in included_commits
+    )
