@@ -1122,18 +1122,17 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
     logger.info(f"{repo_dir} cloned")
 
 
-def apply_stack(
-    repo_dir: str, stack: List[dict], branch: str, revision: str
-) -> List[bytes]:
-    """Apply a stack of patches on a repository"""
-    assert len(stack) > 0, "Empty stack"
+def pull(repo_dir: str, branch: str, revision: str) -> None:
+    """Pull a revision from a branch of a remote repository into a local repository"""
+    cmd = hglib.util.cmdbuilder(
+        "pull",
+        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+        r=revision.encode("ascii"),
+    )
 
-    with hglib.open(repo_dir) as hg:
-        hg.pull(
-            source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            rev=revision.encode("ascii"),
-        )
-        return [rev["node"].encode("ascii") for rev in stack]
+    cmd.insert(0, hglib.HGPATH)
+
+    subprocess.run(cmd, check=True, cwd=repo_dir)
 
 
 if __name__ == "__main__":

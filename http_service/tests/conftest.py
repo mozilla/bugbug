@@ -229,14 +229,16 @@ def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
 
-    orig_hgclient_pull = hglib.client.hgclient.pull
+    orig_hgutil_cmdbuilder = hglib.util.cmdbuilder
 
-    def hglib_pull(hgclient, source=None, rev=None, update=False):
-        orig_hgclient_pull(
-            hgclient, source=str(remote_dir).encode("ascii"), rev=rev, update=update
-        )
+    def hglib_cmdbuilder(name, *args, **kwargs):
+        if name == "pull":
+            args = list(args)
+            args[0] = str(remote_dir).encode("ascii")
 
-    monkeypatch.setattr(hglib.client.hgclient, "pull", hglib_pull)
+        return orig_hgutil_cmdbuilder(name, *args, **kwargs)
+
+    monkeypatch.setattr(hglib.util, "cmdbuilder", hglib_cmdbuilder)
 
     return local_dir, remote_dir
 

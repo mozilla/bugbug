@@ -118,17 +118,17 @@ def schedule_tests(branch: str, rev: str) -> str:
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
     try:
-        stack = get_hgmo_stack(branch, rev)
+        revs = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
 
-    # Apply the stack on the local repository
+    # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
     try:
-        revs = repository.apply_stack(REPO_DIR, stack, branch, rev)
+        repository.pull(REPO_DIR, branch, rev)
     except Exception as e:
-        LOGGER.warning(f"Failed to apply stack {branch} @ {rev}: {e}")
+        LOGGER.warning(f"Failed to pull {branch} @ {rev}: {e}")
         return "NOK"
 
     test_selection_threshold = float(
