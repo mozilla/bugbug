@@ -1140,6 +1140,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
             "pull",
             f"https://hg.mozilla.org/{branch}/".encode("ascii"),
             r=revision.encode("ascii"),
+            debug=True,
         )
 
     try:
