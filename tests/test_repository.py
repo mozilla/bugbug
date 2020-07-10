@@ -1814,43 +1814,35 @@ def test_get_commits():
     retrieved_commits = list(
         repository.get_commits(include_ignored=True, include_backouts=True)
     )
-    included_commits = [IGNORED_COMMIT, BACKOUT_COMMIT]
+    included_commits = {IGNORED_COMMIT, BACKOUT_COMMIT}
     assert len(retrieved_commits) == 7
-    assert all(
-        {c["node"] for c in retrieved_commits} for included_commit in included_commits
-    )
+    assert included_commits.issubset({c["node"] for c in retrieved_commits})
 
     retrieved_commits = list(
         repository.get_commits(include_ignored=True, include_no_bug=True)
     )
-    included_commits = [IGNORED_COMMIT, NOBUG_COMMIT]
+    included_commits = {IGNORED_COMMIT, NOBUG_COMMIT}
     assert len(retrieved_commits) == 8
-    assert all(
-        {c["node"] for c in retrieved_commits} for included_commit in included_commits
-    )
+    assert included_commits.issubset({c["node"] for c in retrieved_commits})
 
     retrieved_commits = list(
         repository.get_commits(include_no_bug=True, include_backouts=True)
     )
-    included_commits = [BACKOUT_COMMIT, NOBUG_COMMIT]
+    included_commits = {BACKOUT_COMMIT, NOBUG_COMMIT}
     assert len(retrieved_commits) == 7
-    assert all(
-        {c["node"] for c in retrieved_commits} for included_commit in included_commits
-    )
+    assert included_commits.issubset({c["node"] for c in retrieved_commits})
 
     retrieved_commits = list(
         repository.get_commits(
             include_ignored=True, include_backouts=True, include_no_bug=True
         )
     )
-    included_commits = [
+    included_commits = {
         IGNORED_COMMIT,
         BACKOUT_COMMIT,
         NOBUG_COMMIT,
         NOBUG_IGNORED_COMMIT,
         NOBUG_IGNORED_BACKOUT_COMMIT,
-    ]
+    }
     assert len(retrieved_commits) == 10
-    assert all(
-        {c["node"] for c in retrieved_commits} for included_commit in included_commits
-    )
+    assert included_commits.issubset({c["node"] for c in retrieved_commits})
