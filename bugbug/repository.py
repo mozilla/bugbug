@@ -1082,7 +1082,19 @@ def clean(hg, repo_dir):
             raise
 
 
-def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
+def _run_hg_cmd(repo_dir, cmd, *args, **kwargs):
+    cmd = hglib.util.cmdbuilder(cmd, *args, **kwargs,)
+
+    cmd.insert(0, hglib.HGPATH)
+
+    subprocess.run(cmd, cwd=repo_dir, check=True)
+
+
+def clone(
+    repo_dir: str,
+    url: str = "https://hg.mozilla.org/mozilla-central",
+    update: bool = False,
+) -> None:
     try:
         with hglib.open(repo_dir) as hg:
             clean(hg, repo_dir)
@@ -1101,10 +1113,11 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
 
         return
     except hglib.error.ServerError as e:
-        if "abort: repository" not in str(e) and b"not found" not in str(e):
+        if "abort: repository" not in str(e) and "not found" not in str(e):
             raise
 
-    cmd = hglib.util.cmdbuilder(
+    _run_hg_cmd(
+        None,
         "robustcheckout",
         url,
         repo_dir,
@@ -1115,25 +1128,26 @@ def clone(repo_dir, url="https://hg.mozilla.org/mozilla-central", update=False):
         noupdate=not update,
     )
 
-    cmd.insert(0, hglib.HGPATH)
-
-    subprocess.run(cmd, check=True)
-
     logger.info(f"{repo_dir} cloned")
 
 
-def apply_stack(
-    repo_dir: str, stack: List[dict], branch: str, revision: str
-) -> List[bytes]:
-    """Apply a stack of patches on a repository"""
-    assert len(stack) > 0, "Empty stack"
+def pull(repo_dir: str, branch: str, revision: str) -> None:
+    """Pull a revision from a branch of a remote repository into a local repository"""
 
-    with hglib.open(repo_dir) as hg:
-        hg.pull(
-            source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            rev=revision.encode("ascii"),
+    def do_pull() -> None:
+        _run_hg_cmd(
+            repo_dir,
+            "pull",
+            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+            r=revision.encode("ascii"),
+            debug=True,
         )
-        return [rev["node"].encode("ascii") for rev in stack]
+
+    try:
+        do_pull()
+    except subprocess.CalledProcessError:
+        _run_hg_cmd(repo_dir, "recover")
+        do_pull()
 
 
 if __name__ == "__main__":

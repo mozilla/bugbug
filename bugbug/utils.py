@@ -14,7 +14,7 @@ import tarfile
 from collections import deque
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Any
+from typing import Any, List
 
 import boto3
 import dateutil.parser
@@ -440,7 +440,7 @@ def get_session(name):
     return session
 
 
-def get_hgmo_stack(branch: str, revision: str) -> list:
+def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
     """Load descriptions of patches in the stack for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)
@@ -466,7 +466,9 @@ def get_hgmo_stack(branch: str, revision: str) -> list:
 
         return False
 
-    return [c for c in r.json()["changesets"] if not should_skip(c)]
+    return [
+        c["node"].encode("ascii") for c in r.json()["changesets"] if not should_skip(c)
+    ]
 
 
 def get_physical_cpu_count() -> int:
