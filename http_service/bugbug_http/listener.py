@@ -67,7 +67,7 @@ def _on_message(body, message):
 
         if branch in ["autoland", "try"]:
             user = body["payload"]["data"]["pushlog_pushes"][0]["user"]
-            if user == "reviewbot":
+            if user in ("reviewbot", "wptsync@mozilla.com"):
                 return
 
             url = "{}/push/{}/{}/schedules".format(BUGBUG_HTTP_SERVER, branch, rev)
