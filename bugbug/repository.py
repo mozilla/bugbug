@@ -1005,9 +1005,10 @@ def download_commits(
     with hglib.open(repo_dir) as hg:
         if revs is None:
             revs = get_revs(hg, rev_start)
-            if len(revs) == 0:
-                logger.info("No commits to analyze")
-                return tuple()
+
+        if len(revs) == 0:
+            logger.info("No commits to analyze")
+            return tuple()
 
         first_pushdate = get_first_pushdate(repo_dir)
 
