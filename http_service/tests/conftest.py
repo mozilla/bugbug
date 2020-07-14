@@ -232,7 +232,7 @@ def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str
     orig_hgutil_cmdbuilder = hglib.util.cmdbuilder
 
     def hglib_cmdbuilder(name, *args, **kwargs):
-        if name == "pull":
+        if name == "robustcheckout":
             args = list(args)
             args[0] = str(remote_dir).encode("ascii")
 
