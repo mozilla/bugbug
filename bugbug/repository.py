@@ -626,6 +626,9 @@ def _transform(commit):
 
 
 def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
+    if len(revs) == 0:
+        return []
+
     template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
