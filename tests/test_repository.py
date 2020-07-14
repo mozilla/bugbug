@@ -557,6 +557,14 @@ def test_download_commits(fake_hg_repo, use_single_process):
     )
     assert len(list(repository.get_commits())) == 2
 
+    os.remove("data/commits.json")
+    shutil.rmtree("data/commit_experiences.lmdb")
+    commits = repository.download_commits(
+        local, revs=[], use_single_process=use_single_process,
+    )
+    assert len(commits) == 0
+    assert len(list(repository.get_commits())) == 0
+
 
 def test_get_directories():
     assert repository.get_directories("") == []
