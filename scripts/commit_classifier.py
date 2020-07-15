@@ -125,7 +125,15 @@ def replace_reviewers(commit_description, reviewers):
 
 
 class CommitClassifier(object):
-    def __init__(self, model_name, repo_dir, git_repo_dir, method_defect_predictor_dir):
+    def __init__(
+        self, 
+        model_name, 
+        repo_dir, 
+        git_repo_dir, 
+        method_defect_predictor_dir, 
+        phabricator_deployment=None, 
+        diff_id=None
+    ):
         self.model_name = model_name
         self.repo_dir = repo_dir
 
@@ -144,6 +152,23 @@ class CommitClassifier(object):
                 "https://github.com/lucapascarella/MethodDefectPredictor",
                 method_defect_predictor_dir,
                 "8cc47f47ffb686a29324435a0151b5fabd37f865",
+            )
+
+        if diff_id is not None:
+            assert phabricator_deployment is not None
+            assert revision is None
+
+        self.update_commit_db()
+
+        with hglib.open(self.repo_dir) as hg:
+            if phabricator_deployment is not None and diff_id is not None:
+                self.apply_phab(hg, phabricator_deployment, diff_id)
+
+                revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
+
+            # Analyze patch.
+            commits = repository.download_commits(
+                self.repo_dir, rev_start=revision, save=False
             )
 
         if model_name == "regressor":
@@ -552,30 +577,11 @@ class CommitClassifier(object):
     def classify(
         self,
         revision=None,
-        phabricator_deployment=None,
-        diff_id=None,
         runnable_jobs_path=None,
     ):
         if revision is not None:
             assert phabricator_deployment is None
             assert diff_id is None
-
-        if diff_id is not None:
-            assert phabricator_deployment is not None
-            assert revision is None
-
-        self.update_commit_db()
-
-        with hglib.open(self.repo_dir) as hg:
-            if phabricator_deployment is not None and diff_id is not None:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
-
-                revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
-
-            # Analyze patch.
-            commits = repository.download_commits(
-                self.repo_dir, rev_start=revision, save=False
-            )
 
         if not self.use_test_history:
             self.classify_regressor(commits)
@@ -778,10 +784,11 @@ def main():
     args = parser.parse_args()
 
     classifier = CommitClassifier(
-        args.model, args.repo_dir, args.git_repo_dir, args.method_defect_predictor_dir
+        args.model, args.repo_dir, args.git_repo_dir, args.method_defect_predictor_dir,
+        args.phabricator_deployment, args.diff_id
     )
     classifier.classify(
-        args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
+        args.revision, args.runnable_jobs,
     )
 
 
