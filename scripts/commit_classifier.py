@@ -126,19 +126,17 @@ def replace_reviewers(commit_description, reviewers):
 
 class CommitClassifier(object):
     def __init__(
-        self, 
-        model_name, 
-        repo_dir, 
-        git_repo_dir, 
-        method_defect_predictor_dir, 
-        phabricator_deployment=None, 
-        diff_id=None
+        self,
+        model_name,
+        repo_dir,
+        git_repo_dir,
+        method_defect_predictor_dir,
+        revision=None,
+        phabricator_deployment=None,
+        diff_id=None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
-
-        self.model = download_and_load_model(model_name)
-        assert self.model is not None
 
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
@@ -154,22 +152,27 @@ class CommitClassifier(object):
                 "8cc47f47ffb686a29324435a0151b5fabd37f865",
             )
 
+        if revision is not None:
+            assert phabricator_deployment is None
+            assert diff_id is None
+            self.revision = revision
+
+        self.update_commit_db()
+
         if diff_id is not None:
             assert phabricator_deployment is not None
             assert revision is None
 
-        self.update_commit_db()
+            with hglib.open(self.repo_dir) as hg:
+                if phabricator_deployment is not None:
+                    self.apply_phab(hg, phabricator_deployment, diff_id)
 
-        with hglib.open(self.repo_dir) as hg:
-            if phabricator_deployment is not None and diff_id is not None:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
+                    self.revision = hg.log(revrange="not public()")[0].node.decode(
+                        "utf-8"
+                    )
 
-                revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
-
-            # Analyze patch.
-            commits = repository.download_commits(
-                self.repo_dir, rev_start=revision, save=False
-            )
+        self.model = download_and_load_model(model_name)
+        assert self.model is not None
 
         if model_name == "regressor":
             self.use_test_history = False
@@ -575,14 +578,11 @@ class CommitClassifier(object):
             json.dump(features, f)
 
     def classify(
-        self,
-        revision=None,
-        runnable_jobs_path=None,
+        self, runnable_jobs_path=None,
     ):
-        if revision is not None:
-            assert phabricator_deployment is None
-            assert diff_id is None
-
+        commits = repository.download_commits(
+            self.repo_dir, rev_start=self.revision, save=False
+        )
         if not self.use_test_history:
             self.classify_regressor(commits)
         else:
@@ -784,12 +784,15 @@ def main():
     args = parser.parse_args()
 
     classifier = CommitClassifier(
-        args.model, args.repo_dir, args.git_repo_dir, args.method_defect_predictor_dir,
-        args.phabricator_deployment, args.diff_id
+        args.model,
+        args.repo_dir,
+        args.git_repo_dir,
+        args.method_defect_predictor_dir,
+        args.revision,
+        args.phabricator_deployment,
+        args.diff_id,
     )
-    classifier.classify(
-        args.revision, args.runnable_jobs,
-    )
+    classifier.classify(args.runnable_jobs)
 
 
 if __name__ == "__main__":
