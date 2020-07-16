@@ -1137,24 +1137,16 @@ def clone(
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository"""
-
-    def do_pull() -> None:
-        _run_hg_cmd(
-            None,
-            "robustcheckout",
-            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            repo_dir,
-            sharebase=repo_dir + "-shared",
-            networkattempts=7,
-            revision=revision,
-            noupdate=True,
-        )
-
-    try:
-        do_pull()
-    except subprocess.CalledProcessError:
-        _run_hg_cmd(repo_dir, "recover")
-        do_pull()
+    _run_hg_cmd(
+        None,
+        "robustcheckout",
+        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+        repo_dir,
+        sharebase=repo_dir + "-shared",
+        networkattempts=7,
+        revision=revision,
+        noupdate=True,
+    )
 
 
 if __name__ == "__main__":
