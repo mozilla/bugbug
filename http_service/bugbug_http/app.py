@@ -57,8 +57,8 @@ redis_conn = Redis.from_url(redis_url)
 JOB_TIMEOUT = 21 * 60
 # Remove jobs from the queue if they haven't started within 5 minutes.
 QUEUE_TIMEOUT = 5 * 60
-# Store the information that a job failed for 30 minutes.
-FAILURE_TTL = 30 * 60
+# Store the information that a job failed for 3 minutes.
+FAILURE_TTL = 3 * 60
 
 q = Queue(
     connection=redis_conn, default_timeout=JOB_TIMEOUT
