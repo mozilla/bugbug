@@ -90,6 +90,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
+            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -99,9 +100,10 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -111,9 +113,10 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -123,9 +126,10 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
+            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -135,9 +139,10 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer2",),
+            reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -147,7 +152,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
     ]
     commits = [c.to_dict() for c in commits]
@@ -213,6 +218,7 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
+            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -222,9 +228,10 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -234,9 +241,10 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -246,9 +254,10 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
+            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -258,9 +267,10 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer2",),
+            reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -270,7 +280,7 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
     ]
     commits = [c.to_dict() for c in commits]
@@ -348,6 +358,7 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
+            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -357,9 +368,10 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -369,9 +381,10 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -381,9 +394,10 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
+            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -393,9 +407,10 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer2",),
+            reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -405,7 +420,7 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
     ]
     commits = [c.to_dict() for c in commits]
@@ -489,6 +504,7 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
+            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -498,9 +514,10 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -510,9 +527,10 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
+            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -522,7 +540,7 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
     ]
     commits = [c.to_dict() for c in commits]
