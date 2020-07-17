@@ -123,7 +123,6 @@ class Commit:
         node: str,
         author: str,
         desc: str,
-        date: datetime,
         pushdate: datetime,
         bug_id: Optional[int],
         backsout: List[str],
@@ -137,7 +136,6 @@ class Commit:
         self.author = author
         self.bug_id = bug_id
         self.desc = desc
-        self.date = date
         self.pushdate = pushdate
         self.backsout = backsout
         self.backedoutby = backedoutby
@@ -234,7 +232,6 @@ class Commit:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
-        d["date"] = str(d["date"])
         return CommitDict(d)
 
 
@@ -641,7 +638,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
     if len(revs) == 0:
         return []
 
-    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0{rev}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0{rev}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log", template=template, no_merges=True, rev=revs, branch="tip",
@@ -651,42 +648,38 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
 
     commits = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        assert b" " in rev[3]
-        date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
-
-        assert b" " in rev[7]
-        pushdate_timestamp = rev[7].split(b" ", 1)[0]
+        assert b" " in rev[6]
+        pushdate_timestamp = rev[6].split(b" ", 1)[0]
         if pushdate_timestamp != b"0":
             pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
         else:
             pushdate = datetime.utcnow()
 
-        bug_id = int(rev[4].decode("ascii")) if rev[4] else None
+        bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
         reviewers = (
+            list(set(sys.intern(r) for r in rev[7].decode("utf-8").split(" ")))
+            if rev[7] != b""
+            else []
+        )
+
+        backsout = (
             list(set(sys.intern(r) for r in rev[8].decode("utf-8").split(" ")))
             if rev[8] != b""
             else []
         )
 
-        backsout = (
-            list(set(sys.intern(r) for r in rev[9].decode("utf-8").split(" ")))
-            if rev[9] != b""
-            else []
-        )
-
         commits.append(
             Commit(
-                revision=int(rev[10].decode("ascii")),
+                revision=int(rev[9].decode("ascii")),
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
                 desc=rev[2].decode("utf-8"),
-                date=date,
                 pushdate=pushdate,
                 bug_id=bug_id,
                 backsout=backsout,
-                backedoutby=rev[5].decode("ascii"),
-                author_email=rev[6].decode("utf-8"),
+                backedoutby=rev[4].decode("ascii"),
+                author_email=rev[5].decode("utf-8"),
                 reviewers=reviewers,
             )
         )

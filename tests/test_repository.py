@@ -285,7 +285,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[0].node == revision1
     assert commits[0].author == "Moz Illa <milla@mozilla.org>"
     assert commits[0].desc == "Commit A file1"
-    assert commits[0].date == datetime(1991, 4, 16)
     assert (
         first_push_date - relativedelta(seconds=1)
         <= commits[0].pushdate
@@ -299,7 +298,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[1].node == revision2
     assert commits[1].author == "Moz Illa <milla@mozilla.org>"
     assert commits[1].desc == "Bug 123 - Prova. r=moz,rev2"
-    assert commits[1].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[1].pushdate
@@ -313,7 +311,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].node == revision3
     assert commits[2].author == "Moz Illa <milla@mozilla.org>"
     assert commits[2].desc == "Commit A file2copy"
-    assert commits[2].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[2].pushdate
@@ -327,7 +324,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[3].node == revision4
     assert commits[3].author == "Moz Illa <milla@mozilla.org>"
     assert commits[3].desc == "Commit A file2copymove R file2copy"
-    assert commits[3].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[3].pushdate
@@ -341,7 +337,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[4].node == revision5
     assert commits[4].author == "sheriff"
     assert commits[4].desc == f"Backout {revision4[:12]}"
-    assert commits[4].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[4].pushdate
@@ -355,7 +350,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[5].node == revision6
     assert commits[5].author == "Moz Illa <milla@mozilla.org>"
     assert commits[5].desc == "Commit A file3"
-    assert commits[5].date == datetime(2019, 4, 16)
     assert (
         hg_log_date - relativedelta(seconds=1)
         <= commits[5].pushdate
@@ -607,7 +601,6 @@ def ignored_commits_to_test(fake_hg_repo):
             revision=1,
             author="author",
             desc=desc,
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=bug_id,
             backsout=backsout,
@@ -722,7 +715,6 @@ def test_calculate_experiences() -> None:
             node="commit1",
             author="author1",
             desc="commit1",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -735,7 +727,6 @@ def test_calculate_experiences() -> None:
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -748,7 +739,6 @@ def test_calculate_experiences() -> None:
             node="commit2",
             author="author2",
             desc="commit2",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -761,7 +751,6 @@ def test_calculate_experiences() -> None:
             node="commit2refactoring",
             author="author2",
             desc="commit2refactoring",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -775,7 +764,6 @@ def test_calculate_experiences() -> None:
             node="commit3",
             author="author1",
             desc="commit3",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -788,7 +776,6 @@ def test_calculate_experiences() -> None:
             node="commit4",
             author="author2",
             desc="commit4",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
             backsout=[],
@@ -801,7 +788,6 @@ def test_calculate_experiences() -> None:
             node="commit5",
             author="author3",
             desc="commit5",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
             backsout=[],
@@ -814,7 +800,6 @@ def test_calculate_experiences() -> None:
             node="commit6",
             author="author3",
             desc="commit6",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
             backsout=[],
@@ -1222,7 +1207,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit1",
             author="author1",
             desc="commit1",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1235,7 +1219,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1248,7 +1231,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit2",
             author="author2",
             desc="commit2",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1261,7 +1243,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit2refactoring",
             author="author2",
             desc="commit2refactoring",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1275,7 +1256,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit3",
             author="author1",
             desc="commit3",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1288,7 +1268,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit4",
             author="author2",
             desc="commit4",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
             backsout=[],
@@ -1301,7 +1280,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit5",
             author="author3",
             desc="commit5",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
             backsout=[],
@@ -1314,7 +1292,6 @@ def test_calculate_experiences_no_save() -> None:
             node="commit6",
             author="author3",
             desc="commit6",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
             backsout=[],
