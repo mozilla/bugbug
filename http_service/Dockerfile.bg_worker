@@ -14,7 +14,7 @@ RUN pip install --disable-pip-version-check --quiet --no-cache-dir /code/http_se
 WORKDIR /code/
 
 ARG CHECK_MODELS
-ENV CHECK_MODELS="${CHECK_MODELS}"
+ENV CHECK_MODELS="${CHECK_MODELS:-0}"
 
 ARG TAG
 ENV TAG="${TAG}"
