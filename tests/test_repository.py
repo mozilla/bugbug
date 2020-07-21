@@ -285,7 +285,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[0].node == revision1
     assert commits[0].author == "Moz Illa <milla@mozilla.org>"
     assert commits[0].desc == "Commit A file1"
-    assert commits[0].date == datetime(1991, 4, 16)
     assert (
         first_push_date - relativedelta(seconds=1)
         <= commits[0].pushdate
@@ -299,7 +298,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[1].node == revision2
     assert commits[1].author == "Moz Illa <milla@mozilla.org>"
     assert commits[1].desc == "Bug 123 - Prova. r=moz,rev2"
-    assert commits[1].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[1].pushdate
@@ -313,7 +311,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].node == revision3
     assert commits[2].author == "Moz Illa <milla@mozilla.org>"
     assert commits[2].desc == "Commit A file2copy"
-    assert commits[2].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[2].pushdate
@@ -327,7 +324,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[3].node == revision4
     assert commits[3].author == "Moz Illa <milla@mozilla.org>"
     assert commits[3].desc == "Commit A file2copymove R file2copy"
-    assert commits[3].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[3].pushdate
@@ -341,7 +337,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[4].node == revision5
     assert commits[4].author == "sheriff"
     assert commits[4].desc == f"Backout {revision4[:12]}"
-    assert commits[4].date == datetime(2019, 4, 16)
     assert (
         second_push_date - relativedelta(seconds=1)
         <= commits[4].pushdate
@@ -355,7 +350,6 @@ def test_hg_log(fake_hg_repo):
     assert commits[5].node == revision6
     assert commits[5].author == "Moz Illa <milla@mozilla.org>"
     assert commits[5].desc == "Commit A file3"
-    assert commits[5].date == datetime(2019, 4, 16)
     assert (
         hg_log_date - relativedelta(seconds=1)
         <= commits[5].pushdate
@@ -604,15 +598,15 @@ def ignored_commits_to_test(fake_hg_repo):
     def create_commit(node, desc, bug_id, backsout, backedoutby):
         return repository.Commit(
             node=node,
+            revision=1,
             author="author",
             desc=desc,
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=bug_id,
             backsout=backsout,
             backedoutby=backedoutby,
             author_email="author@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp"], {})
 
     commits = [
@@ -706,7 +700,7 @@ def test_filter_commits(ignored_commits_to_test):
     }
 
 
-def test_calculate_experiences():
+def test_calculate_experiences() -> None:
     repository.path_to_component = {
         b"dom/file1.cpp": memoryview(b"Core::DOM"),
         b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
@@ -717,105 +711,105 @@ def test_calculate_experiences():
 
     commits = {
         "commit1": repository.Commit(
+            revision=0,
             node="commit1",
             author="author1",
             desc="commit1",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commitbackedout": repository.Commit(
+            revision=1,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commit2": repository.Commit(
+            revision=2,
             node="commit2",
             author="author2",
             desc="commit2",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file1.cpp"], {}),
         "commit2refactoring": repository.Commit(
+            revision=3,
             node="commit2refactoring",
             author="author2",
             desc="commit2refactoring",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
             ignored=True,
         ).set_files(["dom/file1.cpp"], {}),
         "commit3": repository.Commit(
+            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer2",),
+            reviewers=["reviewer2"],
         ).set_files(["dom/file2.cpp", "apps/file1.jsm"], {}),
         "commit4": repository.Commit(
+            revision=54750,
             node="commit4",
             author="author2",
             desc="commit4",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file2.jsm"], {}),
         "commit5": repository.Commit(
+            revision=54900,
             node="commit5",
             author="author3",
             desc="commit5",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
-            reviewers=("reviewer3",),
+            reviewers=["reviewer3"],
         ).set_files(["dom/file1.cpp"], {"dom/file1.cpp": "dom/file1copied.cpp"}),
         "commit6": repository.Commit(
+            revision=55050,
             node="commit6",
             author="author3",
             desc="commit6",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
-            reviewers=("reviewer3",),
+            reviewers=["reviewer3"],
         ).set_files(["dom/file1.cpp", "dom/file1copied.cpp"], {}),
     }
 
-    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+    repository.calculate_experiences(commits.values())
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0
@@ -992,23 +986,31 @@ def test_calculate_experiences():
     assert commits["commit6"].touched_prev_90_days_component_min == 2
 
     commits["commit1"].pushdate = datetime(2020, 1, 4)
+    commits["commit1"].revision = 55200
     commits["commit1"].node = "commit1copy"
     commits["commitbackedout"].pushdate = datetime(2020, 1, 4)
+    commits["commitbackedout"].revision = 55201
     commits["commitbackedout"].node = "commitbackedoutcopy"
     commits["commit2"].pushdate = datetime(2020, 1, 4)
+    commits["commit2"].revision = 55202
     commits["commit2"].node = "commit2copy"
     commits["commit2refactoring"].pushdate = datetime(2020, 1, 4)
+    commits["commit2refactoring"].revision = 55203
     commits["commit2refactoring"].node = "commit2refactoringcopy"
     commits["commit3"].pushdate = datetime(2020, 1, 4)
+    commits["commit3"].revision = 55204
     commits["commit3"].node = "commit3copy"
     commits["commit4"].pushdate = datetime(2021, 1, 4)
+    commits["commit4"].revision = 109950
     commits["commit4"].node = "commit4copy"
     commits["commit5"].pushdate = datetime(2021, 1, 5)
+    commits["commit5"].revision = 110100
     commits["commit5"].node = "commit5copy"
     commits["commit6"].pushdate = datetime(2021, 1, 6)
+    commits["commit6"].revision = 110250
     commits["commit6"].node = "commit6copy"
 
-    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+    repository.calculate_experiences(commits.values())
 
     assert commits["commit1"].seniority_author == 86400.0 * 368
     assert commits["commitbackedout"].seniority_author == 86400.0 * 368
@@ -1185,12 +1187,12 @@ def test_calculate_experiences():
     assert commits["commit6"].touched_prev_90_days_component_min == 2
 
     with pytest.raises(
-        Exception, match=r"Can't get a day \(368\) from earlier than start day \(644\)"
+        Exception, match=r"Can't get a day \(368\) from earlier than start day \(643\)"
     ):
-        repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
+        repository.calculate_experiences(commits.values())
 
 
-def test_calculate_experiences_no_save():
+def test_calculate_experiences_no_save() -> None:
     repository.path_to_component = {
         b"dom/file1.cpp": memoryview(b"Core::DOM"),
         b"dom/file1copied.cpp": memoryview(b"Core::DOM"),
@@ -1201,105 +1203,105 @@ def test_calculate_experiences_no_save():
 
     commits = {
         "commit1": repository.Commit(
+            revision=0,
             node="commit1",
             author="author1",
             desc="commit1",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commitbackedout": repository.Commit(
+            revision=1,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="commitbackout",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file1.jsm"], {}),
         "commit2": repository.Commit(
+            revision=2,
             node="commit2",
             author="author2",
             desc="commit2",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
         ).set_files(["dom/file1.cpp"], {}),
         "commit2refactoring": repository.Commit(
+            revision=3,
             node="commit2refactoring",
             author="author2",
             desc="commit2refactoring",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1",),
+            reviewers=["reviewer1"],
             ignored=True,
         ).set_files(["dom/file1.cpp"], {}),
         "commit3": repository.Commit(
+            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2019, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author1@mozilla.org",
-            reviewers=("reviewer2",),
+            reviewers=["reviewer2"],
         ).set_files(["dom/file2.cpp", "apps/file1.jsm"], {}),
         "commit4": repository.Commit(
+            revision=54750,
             node="commit4",
             author="author2",
             desc="commit4",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 1),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author2@mozilla.org",
-            reviewers=("reviewer1", "reviewer2"),
+            reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "apps/file2.jsm"], {}),
         "commit5": repository.Commit(
+            revision=54900,
             node="commit5",
             author="author3",
             desc="commit5",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 2),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
-            reviewers=("reviewer3",),
+            reviewers=["reviewer3"],
         ).set_files(["dom/file1.cpp"], {"dom/file1.cpp": "dom/file1copied.cpp"}),
         "commit6": repository.Commit(
+            revision=55050,
             node="commit6",
             author="author3",
             desc="commit6",
-            date=datetime(2019, 1, 1),
             pushdate=datetime(2020, 1, 3),
             bug_id=123,
             backsout=[],
             backedoutby="",
             author_email="author3@mozilla.org",
-            reviewers=("reviewer3",),
+            reviewers=["reviewer3"],
         ).set_files(["dom/file1.cpp", "dom/file1copied.cpp"], {}),
     }
 
-    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1), save=False)
+    repository.calculate_experiences(commits.values(), save=False)
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0
@@ -1475,7 +1477,7 @@ def test_calculate_experiences_no_save():
     assert commits["commit6"].touched_prev_90_days_component_max == 2
     assert commits["commit6"].touched_prev_90_days_component_min == 2
 
-    repository.calculate_experiences(commits.values(), datetime(2019, 1, 1), save=False)
+    repository.calculate_experiences(commits.values(), save=False)
 
     assert commits["commit1"].seniority_author == 0
     assert commits["commitbackedout"].seniority_author == 0

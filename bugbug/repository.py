@@ -17,8 +17,18 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
-from functools import lru_cache
-from typing import Generator, Iterable, List, NewType, Optional, Tuple
+from typing import (
+    Collection,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    NewType,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import hglib
 import lmdb
@@ -43,7 +53,7 @@ COMMIT_EXPERIENCES_DB = "commit_experiences.lmdb.tar.zst"
 db.register(
     COMMITS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst",
-    13,
+    14,
     [COMMIT_EXPERIENCES_DB],
 )
 
@@ -109,23 +119,23 @@ def get_type(path: str) -> str:
 class Commit:
     def __init__(
         self,
-        node,
-        author,
-        desc,
-        date,
-        pushdate,
-        bug_id,
-        backsout,
-        backedoutby,
-        author_email,
-        reviewers,
-        ignored=False,
-    ):
+        revision: int,
+        node: str,
+        author: str,
+        desc: str,
+        pushdate: datetime,
+        bug_id: Optional[int],
+        backsout: List[str],
+        backedoutby: str,
+        author_email: str,
+        reviewers: List[str],
+        ignored: bool = False,
+    ) -> None:
+        self.revision = revision
         self.node = node
         self.author = author
         self.bug_id = bug_id
         self.desc = desc
-        self.date = date
         self.pushdate = pushdate
         self.backsout = backsout
         self.backedoutby = backedoutby
@@ -138,21 +148,21 @@ class Commit:
         self.source_code_deleted = 0
         self.other_deleted = 0
         self.test_deleted = 0
-        self.types = set()
-        self.functions = {}
+        self.types: Set[str] = set()
+        self.functions: Dict[str, List[Tuple[str, int, int]]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
-        self.average_source_code_file_size = 0
+        self.average_source_code_file_size = 0.0
         self.maximum_source_code_file_size = 0
         self.minimum_source_code_file_size = 0
         self.source_code_files_modified_num = 0
         self.total_other_file_size = 0
-        self.average_other_file_size = 0
+        self.average_other_file_size = 0.0
         self.maximum_other_file_size = 0
         self.minimum_other_file_size = 0
         self.other_files_modified_num = 0
         self.total_test_file_size = 0
-        self.average_test_file_size = 0
+        self.average_test_file_size = 0.0
         self.maximum_test_file_size = 0
         self.minimum_test_file_size = 0
         self.test_files_modified_num = 0
@@ -222,7 +232,6 @@ class Commit:
             del d[f]
         d["types"] = list(d["types"])
         d["pushdate"] = str(d["pushdate"])
-        d["date"] = str(d["date"])
         return CommitDict(d)
 
 
@@ -629,7 +638,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
     if len(revs) == 0:
         return []
 
-    template = "{node}\\0{author}\\0{desc}\\0{date|hgdate}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0{rev}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log", template=template, no_merges=True, rev=revs, branch="tip",
@@ -639,41 +648,38 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
 
     commits = []
     for rev in hglib.util.grouper(template.count("\\0"), out):
-        assert b" " in rev[3]
-        date = datetime.utcfromtimestamp(float(rev[3].split(b" ", 1)[0]))
-
-        assert b" " in rev[7]
-        pushdate_timestamp = rev[7].split(b" ", 1)[0]
+        assert b" " in rev[6]
+        pushdate_timestamp = rev[6].split(b" ", 1)[0]
         if pushdate_timestamp != b"0":
             pushdate = datetime.utcfromtimestamp(float(pushdate_timestamp))
         else:
             pushdate = datetime.utcnow()
 
-        bug_id = int(rev[4].decode("ascii")) if rev[4] else None
+        bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
         reviewers = (
+            list(set(sys.intern(r) for r in rev[7].decode("utf-8").split(" ")))
+            if rev[7] != b""
+            else []
+        )
+
+        backsout = (
             list(set(sys.intern(r) for r in rev[8].decode("utf-8").split(" ")))
             if rev[8] != b""
             else []
         )
 
-        backsout = (
-            list(set(sys.intern(r) for r in rev[9].decode("utf-8").split(" ")))
-            if rev[9] != b""
-            else []
-        )
-
         commits.append(
             Commit(
+                revision=int(rev[9].decode("ascii")),
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
                 desc=rev[2].decode("utf-8"),
-                date=date,
                 pushdate=pushdate,
                 bug_id=bug_id,
                 backsout=backsout,
-                backedoutby=rev[5].decode("ascii"),
-                author_email=rev[6].decode("utf-8"),
+                backedoutby=rev[4].decode("ascii"),
+                author_email=rev[5].decode("utf-8"),
                 reviewers=reviewers,
             )
         )
@@ -741,7 +747,7 @@ class Experiences:
             self.mem_experiences[key] = value
 
 
-def calculate_experiences(commits, first_pushdate, save=True):
+def calculate_experiences(commits: Collection[Commit], save: bool = True) -> None:
     logger.info(f"Analyzing seniorities from {len(commits)} commits...")
 
     experiences = Experiences(save)
@@ -762,10 +768,12 @@ def calculate_experiences(commits, first_pushdate, save=True):
     # "dir1" and a commit C which modifies "dir1" and "dir2". The number of previous commits touching the same directories
     # for C should be 2 (A + B), and not 3 (A twice + B).
 
-    def get_key(exp_type, commit_type, item):
+    def get_key(exp_type: str, commit_type: str, item: str) -> str:
         return f"{exp_type}${commit_type}${item}"
 
-    def get_experience(exp_type, commit_type, item, day, default):
+    def get_experience(
+        exp_type: str, commit_type: str, item: str, day: int, default: Union[int, Tuple]
+    ) -> utils.ExpQueue:
         key = get_key(exp_type, commit_type, item)
         try:
             return experiences[key]
@@ -774,7 +782,9 @@ def calculate_experiences(commits, first_pushdate, save=True):
             experiences[key] = queue
             return queue
 
-    def update_experiences(experience_type, day, items):
+    def update_experiences(
+        experience_type: str, day: int, items: Collection[str]
+    ) -> None:
         for commit_type in ("", "backout"):
             exp_queues = tuple(
                 get_experience(experience_type, commit_type, item, day, 0)
@@ -816,7 +826,9 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 for i in range(len(items)):
                     exp_queues[i][day] = total_exps[i] + 1
 
-    def update_complex_experiences(experience_type, day, items):
+    def update_complex_experiences(
+        experience_type: str, day: int, items: Collection[str]
+    ) -> None:
         for commit_type in ("", "backout"):
             exp_queues = tuple(
                 get_experience(experience_type, commit_type, item, day, tuple())
@@ -881,18 +893,18 @@ def calculate_experiences(commits, first_pushdate, save=True):
                 for i in range(len(items)):
                     exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
-    # prev_day = 0
-    # prev_commit = None
+    # A "day" is defined as 150 commits.
+    prev_day = 0
+    prev_commit = None
     for i, commit in enumerate(tqdm(commits)):
-        day = (commit.pushdate - first_pushdate).days
+        day = int(commit.revision / 150)
         assert day >= 0
-        # TODO: Bring back this assertion, but using pushid instead.
-        # pushdate is unreliable, e.g. 4d0e3037210dd03bdb21964a6a8c2e201c45794b was pushed after 06b578dfadc9db8b683090e0e110ba75b84fb766, but it has an earlier push date...
-        # assert (
-        #     day >= prev_day
-        # ), f"Commit {commit.node} pushed on {commit.pushdate} should come after {prev_commit.node} pushed on {prev_commit.pushdate}"
-        # prev_day = day
-        # prev_commit = commit
+        if prev_commit is not None:
+            assert (
+                day >= prev_day
+            ), f"Commit {commit.node} with revision {commit.revision} should come after {prev_commit.node} with revision {prev_commit.revision}"
+        prev_day = day
+        prev_commit = commit
 
         # When a file is moved/copied, copy original experience values to the copied path.
         for orig, copied in commit.file_copies.items():
@@ -987,12 +999,6 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
-@lru_cache(maxsize=None)
-def get_first_pushdate(repo_dir):
-    with hglib.open(repo_dir) as hg:
-        return hg_log(hg, [b"0"])[0].pushdate
-
-
 def download_commits(
     repo_dir: str,
     rev_start: str = None,
@@ -1012,8 +1018,6 @@ def download_commits(
         if len(revs) == 0:
             logger.info("No commits to analyze")
             return tuple()
-
-        first_pushdate = get_first_pushdate(repo_dir)
 
         logger.info(f"Mining {len(revs)} commits...")
 
@@ -1052,7 +1056,7 @@ def download_commits(
 
     code_analysis_server.terminate()
 
-    calculate_experiences(commits, first_pushdate, save)
+    calculate_experiences(commits, save)
 
     logger.info("Applying final commits filtering...")
 
@@ -1137,21 +1141,16 @@ def clone(
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository"""
-
-    def do_pull() -> None:
-        _run_hg_cmd(
-            repo_dir,
-            "pull",
-            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-            r=revision.encode("ascii"),
-            debug=True,
-        )
-
-    try:
-        do_pull()
-    except subprocess.CalledProcessError:
-        _run_hg_cmd(repo_dir, "recover")
-        do_pull()
+    _run_hg_cmd(
+        None,
+        "robustcheckout",
+        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+        repo_dir,
+        sharebase=repo_dir + "-shared",
+        networkattempts=7,
+        revision=revision,
+        noupdate=True,
+    )
 
 
 if __name__ == "__main__":
