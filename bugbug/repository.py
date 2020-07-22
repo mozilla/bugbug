@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import math
+import multiprocessing
 import os
 import pickle
 import shelve
@@ -33,6 +34,7 @@ from typing import (
 import hglib
 import lmdb
 import rs_parsepatch
+import tenacity
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -1141,16 +1143,30 @@ def clone(
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository"""
-    _run_hg_cmd(
-        None,
-        "robustcheckout",
-        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-        repo_dir,
-        sharebase=repo_dir + "-shared",
-        networkattempts=7,
-        revision=revision,
-        noupdate=True,
+
+    def do_pull() -> None:
+        with hglib.open(repo_dir) as hg:
+            hg.pull(
+                source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+                rev=revision.encode("ascii"),
+            )
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        reraise=True,
+        after=tenacity.after_log(logger, logging.DEBUG),
     )
+    def trigger_pull() -> None:
+        p = multiprocessing.Process(target=do_pull)
+        p.start()
+        p.join(60 * 3)
+
+        if p.is_alive():
+            p.terminate()
+            p.join()
+            raise Exception(f"Timed out while pulling from {branch} after 3 minutes")
+
+    trigger_pull()
 
 
 if __name__ == "__main__":
