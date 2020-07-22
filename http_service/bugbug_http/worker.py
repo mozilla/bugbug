@@ -7,10 +7,20 @@
 import os
 import sys
 
+import sentry_sdk
 from redis import Redis
 from rq import Connection, Worker
+from sentry_sdk.integrations.rq import RqIntegration
 
 import bugbug_http.boot
+from bugbug import get_bugbug_version
+
+if os.environ.get("SENTRY_DSN"):
+    sentry_sdk.init(
+        os.environ.get("SENTRY_DSN"),
+        integrations=[RqIntegration()],
+        release=get_bugbug_version(),
+    )
 
 
 def main():
