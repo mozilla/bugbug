@@ -53,8 +53,8 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 
-# Kill jobs which don't finish within 21 minutes.
-JOB_TIMEOUT = 21 * 60
+# Kill jobs which don't finish within 12 minutes.
+JOB_TIMEOUT = 12 * 60
 # Remove jobs from the queue if they haven't started within 7 minutes.
 QUEUE_TIMEOUT = 7 * 60
 # Store the information that a job failed for 3 minutes.
