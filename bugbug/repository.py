@@ -10,7 +10,6 @@ import itertools
 import json
 import logging
 import math
-import multiprocessing
 import os
 import pickle
 import shelve
@@ -1092,12 +1091,12 @@ def clean(hg, repo_dir):
             raise
 
 
-def _run_hg_cmd(repo_dir, cmd, *args, **kwargs):
+def _build_hg_cmd(cmd, *args, **kwargs):
     cmd = hglib.util.cmdbuilder(cmd, *args, **kwargs,)
 
     cmd.insert(0, hglib.HGPATH)
 
-    subprocess.run(cmd, cwd=repo_dir, check=True)
+    return cmd
 
 
 def clone(
@@ -1126,8 +1125,7 @@ def clone(
         if "abort: repository" not in str(e) and "not found" not in str(e):
             raise
 
-    _run_hg_cmd(
-        None,
+    cmd = _build_hg_cmd(
         "robustcheckout",
         url,
         repo_dir,
@@ -1137,6 +1135,7 @@ def clone(
         branch=b"tip",
         noupdate=not update,
     )
+    subprocess.run(cmd, check=True)
 
     logger.info(f"{repo_dir} cloned")
 
@@ -1144,27 +1143,27 @@ def clone(
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository"""
 
-    def do_pull() -> None:
-        with hglib.open(repo_dir) as hg:
-            hg.pull(
-                source=f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-                rev=revision.encode("ascii"),
-            )
-
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(3),
         reraise=True,
         after=tenacity.after_log(logger, logging.DEBUG),
     )
     def trigger_pull() -> None:
-        p = multiprocessing.Process(target=do_pull)
-        p.start()
-        p.join(60 * 3)
+        cmd = _build_hg_cmd(
+            "pull",
+            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+            r=revision.encode("ascii"),
+            debug=True,
+        )
 
-        if p.is_alive():
+        p = subprocess.Popen(cmd, cwd=repo_dir)
+
+        try:
+            p.wait(timeout=180)
+        except subprocess.TimeoutExpired:
             p.terminate()
-            p.join()
-            raise Exception(f"Timed out while pulling from {branch} after 3 minutes")
+            p.wait()
+            raise
 
     trigger_pull()
 
