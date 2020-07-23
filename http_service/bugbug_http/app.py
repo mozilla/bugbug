@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 import libmozdata
 import orjson
@@ -53,10 +53,12 @@ application = Flask(__name__)
 redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
 redis_conn = Redis.from_url(redis_url)
 
-# Kill jobs which don't finish within 21 minutes.
-JOB_TIMEOUT = 21 * 60
-# Remove jobs from the queue if they haven't started within 5 minutes.
-QUEUE_TIMEOUT = 5 * 60
+# Kill jobs which don't finish within 12 minutes.
+JOB_TIMEOUT = 12 * 60
+# Kill Bugzilla jobs which don't finish within 5 minutes.
+BUGZILLA_JOB_TIMEOUT = 5 * 60
+# Remove jobs from the queue if they haven't started within 7 minutes.
+QUEUE_TIMEOUT = 7 * 60
 # Store the information that a job failed for 3 minutes.
 FAILURE_TTL = 3 * 60
 
@@ -158,20 +160,27 @@ class JobInfo:
         return f"bugbug:change_time:{self}"
 
 
-def get_job_id():
+def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
-def schedule_job(job, job_id=None):
+def schedule_job(
+    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+) -> None:
     job_id = job_id or get_job_id()
 
     redis_conn.mset({job.mapping_key: job_id})
     q.enqueue(
-        job.func, *job.args, job_id=job_id, ttl=QUEUE_TIMEOUT, failure_ttl=FAILURE_TTL
+        job.func,
+        *job.args,
+        job_id=job_id,
+        timeout=timeout,
+        ttl=QUEUE_TIMEOUT,
+        failure_ttl=FAILURE_TTL,
     )
 
 
-def schedule_bug_classification(model_name, bug_ids):
+def schedule_bug_classification(model_name: str, bug_ids: List[int]) -> None:
     """ Schedule the classification of a bug_id list
     """
     job_id = get_job_id()
@@ -185,7 +194,9 @@ def schedule_bug_classification(model_name, bug_ids):
     redis_conn.mset(job_id_mapping)
 
     schedule_job(
-        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN), job_id=job_id
+        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+        job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
     )
 
 
