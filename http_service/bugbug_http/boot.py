@@ -97,10 +97,10 @@ def boot_worker() -> None:
             utils.extract_file(os.path.join("data", repository.COMMIT_EXPERIENCES_DB))
             logger.info("Commit experiences DB extracted.")
         except FileNotFoundError:
+            assert ALLOW_MISSING_MODELS
             logger.info(
                 "Commit experiences DB not extracted, but missing models are allowed."
             )
-            assert ALLOW_MISSING_MODELS
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
