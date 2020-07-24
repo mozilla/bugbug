@@ -1165,6 +1165,11 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
             p.wait()
             raise
 
+        if p.returncode != 0:
+            raise Exception(
+                f"Error {p.returncode} when pulling {revision} from {branch}"
+            )
+
     trigger_pull()
 
 
