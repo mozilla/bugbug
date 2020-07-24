@@ -1147,6 +1147,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
         stop=tenacity.stop_after_attempt(3),
         reraise=True,
         after=tenacity.after_log(logger, logging.DEBUG),
+        retry=tenacity.retry_if_exception_type(subprocess.TimeoutExpired),
     )
     def trigger_pull() -> None:
         cmd = _build_hg_cmd(
