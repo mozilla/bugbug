@@ -125,11 +125,7 @@ def schedule_tests(branch: str, rev: str) -> str:
 
     # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
-    try:
-        repository.pull(REPO_DIR, branch, rev)
-    except Exception as e:
-        LOGGER.warning(f"Failed to pull {branch} @ {rev}: {e}")
-        raise
+    repository.pull(REPO_DIR, branch, rev)
 
     test_selection_threshold = float(
         os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
