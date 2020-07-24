@@ -174,7 +174,7 @@ def schedule_job(
         job.func,
         *job.args,
         job_id=job_id,
-        timeout=timeout,
+        job_timeout=timeout,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
