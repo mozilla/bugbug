@@ -101,6 +101,7 @@ HISTORICAL_TIMESPAN = 4500
 
 JOBS_TO_CONSIDER = ("test-", "build-")
 JOBS_TO_IGNORE = (
+    "docker-image-",
     "build-docker-image-",
     "-android-hw-",
     "-awsy-",
