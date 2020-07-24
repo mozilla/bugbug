@@ -115,6 +115,10 @@ def schedule_tests(branch: str, rev: str) -> str:
     job = JobInfo(schedule_tests, branch, rev)
     LOGGER.info(f"Processing {job}...")
 
+    # Pull the revision to the local repository
+    LOGGER.info("Pulling commits from the remote repository...")
+    repository.pull(REPO_DIR, branch, rev)
+
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
     try:
@@ -122,10 +126,6 @@ def schedule_tests(branch: str, rev: str) -> str:
     except requests.exceptions.RequestException:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
         return "NOK"
-
-    # Pull the revision to the local repository
-    LOGGER.info("Pulling commits from the remote repository...")
-    repository.pull(REPO_DIR, branch, rev)
 
     test_selection_threshold = float(
         os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
