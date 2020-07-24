@@ -91,7 +91,9 @@ def patch_resources(monkeypatch, jobs):
         def __init__(self, *args, **kwargs):
             pass
 
-        def enqueue(self, func, *args, job_id=None, ttl=None, failure_ttl=None):
+        def enqueue(
+            self, func, *args, job_id=None, job_timeout=None, ttl=None, failure_ttl=None
+        ):
             pass
 
     class JobMock:
