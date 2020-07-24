@@ -129,7 +129,7 @@ def schedule_tests(branch: str, rev: str) -> str:
         repository.pull(REPO_DIR, branch, rev)
     except Exception as e:
         LOGGER.warning(f"Failed to pull {branch} @ {rev}: {e}")
-        return "NOK"
+        raise
 
     test_selection_threshold = float(
         os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
