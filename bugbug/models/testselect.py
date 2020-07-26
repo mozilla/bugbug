@@ -185,8 +185,7 @@ class TestSelectModel(Model):
             commits = tuple(
                 commit_map.pop(revision) for revision in revs if revision in commit_map
             )
-            if len(commits) == 0:
-                continue
+            assert len(commits) > 0
 
             for test_data in test_datas:
                 name = test_data["name"]

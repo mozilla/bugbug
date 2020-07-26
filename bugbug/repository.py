@@ -33,6 +33,7 @@ from typing import (
 import hglib
 import lmdb
 import rs_parsepatch
+import tenacity
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
@@ -1090,12 +1091,12 @@ def clean(hg, repo_dir):
             raise
 
 
-def _run_hg_cmd(repo_dir, cmd, *args, **kwargs):
+def _build_hg_cmd(cmd, *args, **kwargs):
     cmd = hglib.util.cmdbuilder(cmd, *args, **kwargs,)
 
     cmd.insert(0, hglib.HGPATH)
 
-    subprocess.run(cmd, cwd=repo_dir, check=True)
+    return cmd
 
 
 def clone(
@@ -1124,8 +1125,7 @@ def clone(
         if "abort: repository" not in str(e) and "not found" not in str(e):
             raise
 
-    _run_hg_cmd(
-        None,
+    cmd = _build_hg_cmd(
         "robustcheckout",
         url,
         repo_dir,
@@ -1135,22 +1135,43 @@ def clone(
         branch=b"tip",
         noupdate=not update,
     )
+    subprocess.run(cmd, check=True)
 
     logger.info(f"{repo_dir} cloned")
 
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
     """Pull a revision from a branch of a remote repository into a local repository"""
-    _run_hg_cmd(
-        None,
-        "robustcheckout",
-        f"https://hg.mozilla.org/{branch}/".encode("ascii"),
-        repo_dir,
-        sharebase=repo_dir + "-shared",
-        networkattempts=7,
-        revision=revision,
-        noupdate=True,
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(2),
+        reraise=True,
+        after=tenacity.after_log(logger, logging.DEBUG),
+        retry=tenacity.retry_if_exception_type(subprocess.TimeoutExpired),
     )
+    def trigger_pull() -> None:
+        cmd = _build_hg_cmd(
+            "pull",
+            f"https://hg.mozilla.org/{branch}/".encode("ascii"),
+            r=revision.encode("ascii"),
+            debug=True,
+        )
+
+        p = subprocess.Popen(cmd, cwd=repo_dir)
+
+        try:
+            p.wait(timeout=180)
+        except subprocess.TimeoutExpired:
+            p.terminate()
+            p.wait()
+            raise
+
+        if p.returncode != 0:
+            raise Exception(
+                f"Error {p.returncode} when pulling {revision} from {branch}"
+            )
+
+    trigger_pull()
 
 
 if __name__ == "__main__":

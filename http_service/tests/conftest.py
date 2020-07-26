@@ -91,7 +91,9 @@ def patch_resources(monkeypatch, jobs):
         def __init__(self, *args, **kwargs):
             pass
 
-        def enqueue(self, func, *args, job_id=None, ttl=None, failure_ttl=None):
+        def enqueue(
+            self, func, *args, job_id=None, job_timeout=None, ttl=None, failure_ttl=None
+        ):
             pass
 
     class JobMock:
@@ -232,7 +234,7 @@ def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str
     orig_hgutil_cmdbuilder = hglib.util.cmdbuilder
 
     def hglib_cmdbuilder(name, *args, **kwargs):
-        if name == "robustcheckout":
+        if name == "pull":
             args = list(args)
             args[0] = str(remote_dir).encode("ascii")
 

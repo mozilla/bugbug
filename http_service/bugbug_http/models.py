@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Iterable, Tuple
+from typing import Collection, Tuple
 
 import orjson
 import requests
@@ -47,7 +47,7 @@ def setkey(key: str, value: bytes) -> None:
     redis.expire(key, DEFAULT_EXPIRATION_TTL)
 
 
-def classify_bug(model_name: str, bug_ids: Iterable[int], bugzilla_token: str) -> str:
+def classify_bug(model_name: str, bug_ids: Collection[int], bugzilla_token: str) -> str:
     from bugbug_http.app import JobInfo
 
     # This should be called in a process worker so it should be safe to set
@@ -115,20 +115,16 @@ def schedule_tests(branch: str, rev: str) -> str:
     job = JobInfo(schedule_tests, branch, rev)
     LOGGER.info(f"Processing {job}...")
 
+    # Pull the revision to the local repository
+    LOGGER.info("Pulling commits from the remote repository...")
+    repository.pull(REPO_DIR, branch, rev)
+
     # Load the full stack of patches leading to that revision
     LOGGER.info("Loading commits to analyze using automationrelevance...")
     try:
         revs = get_hgmo_stack(branch, rev)
     except requests.exceptions.RequestException:
         LOGGER.warning(f"Push not found for {branch} @ {rev}!")
-        return "NOK"
-
-    # Pull the revision to the local repository
-    LOGGER.info("Pulling commits from the remote repository...")
-    try:
-        repository.pull(REPO_DIR, branch, rev)
-    except Exception as e:
-        LOGGER.warning(f"Failed to pull {branch} @ {rev}: {e}")
         return "NOK"
 
     test_selection_threshold = float(
