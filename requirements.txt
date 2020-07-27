@@ -20,7 +20,7 @@ python-hglib==2.6.1
 requests==2.24.0
 rs_parsepatch==0.3.2
 scikit-learn==0.23.1
-scipy==1.5.1
+scipy==1.5.2
 shap[plots]==0.35.0
 tabulate==0.8.7
 taskcluster==34.0.1
