@@ -10,6 +10,7 @@ services:
       - PORT=8000
       - PULSE_USER
       - PULSE_PASSWORD
+      - SENTRY_DSN
     ports:
       - target: 8000
         published: 8000

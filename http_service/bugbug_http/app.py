@@ -24,9 +24,14 @@ from redis import Redis
 from rq import Queue
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import get_bugbug_version, utils
 from bugbug_http.models import MODELS_NAMES, classify_bug, schedule_tests
+from bugbug_http.sentry import setup_sentry
+
+if os.environ.get("SENTRY_DSN"):
+    setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
 
 API_TOKEN = "X-Api-Key"
 

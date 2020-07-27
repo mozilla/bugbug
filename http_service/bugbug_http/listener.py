@@ -18,6 +18,8 @@ import requests
 from kombu import Connection, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 
+from bugbug_http.sentry import setup_sentry
+
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -25,6 +27,9 @@ logger.setLevel(logging.INFO)
 PORT = os.environ.get("PORT", 8000)
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", f"http://localhost:{PORT}")
 CONNECTION_URL = "amqp://{}:{}@pulse.mozilla.org:5671/?ssl=1"
+
+if os.environ.get("SENTRY_DSN"):
+    setup_sentry(dsn=os.environ.get("SENTRY_DSN"))
 
 
 class _GenericConsumer(ConsumerMixin):
