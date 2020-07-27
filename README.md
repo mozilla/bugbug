@@ -10,7 +10,7 @@ Bugbug aims at leveraging machine learning techniques to help with bug and quali
 
 Chat with us in the [bugbug](https://chat.mozilla.org/#/room/#bugbug:mozilla.org) Matrix room.
 
-More information on the Mozilla hacks blog:
+More information on the Mozilla Hacks blog:
 - https://hacks.mozilla.org/2020/07/testing-firefox-more-efficiently-with-machine-learning/
 - https://hacks.mozilla.org/2019/04/teaching-machines-to-triage-firefox-bugs/
 
