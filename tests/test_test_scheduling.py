@@ -16,17 +16,24 @@ from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
 
 def test_rename_runnables() -> None:
     assert test_scheduling.rename_runnables(
+        "label", (Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
         "label", (Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),),
-    ) == (Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),)
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
+        "label",
+        (Task("test-linux64-shippable-qr/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64-qr/opt-mochitest-browser-chrome-e10s-2"),)
     assert test_scheduling.rename_runnables(
         "label",
         (
-            Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),
-            Task("test-linux64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
+            Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),
+            Task("test-linux64-qr/opt-web-platform-tests-wdspec-e10s-1"),
         ),
     ) == (
-        Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),
-        Task("test-linux1804-64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
+        Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),
+        Task("test-linux1804-64-qr/opt-web-platform-tests-wdspec-e10s-1"),
     )
     assert test_scheduling.rename_runnables(
         "label",
@@ -37,7 +44,7 @@ def test_rename_runnables() -> None:
         ),
     ) == (
         Task(
-            "test-android-hw-p2-8-0-android-aarch64-shippable/opt-geckoview-mochitest-media-e10s-2"
+            "test-android-hw-p2-8-0-android-aarch64/opt-geckoview-mochitest-media-e10s-2"
         ),
     )
 
@@ -68,7 +75,7 @@ def test_rename_runnables() -> None:
     ) == (
         ConfigGroup(
             (
-                "test-linux1804-64-shippable/opt-*-e10s",
+                "test-linux1804-64/opt-*-e10s",
                 Group(
                     "toolkit/components/extensions/test/mochitest/mochitest-remote.ini"
                 ),
