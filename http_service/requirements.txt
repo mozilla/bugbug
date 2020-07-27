@@ -8,6 +8,6 @@ gunicorn==20.0.4
 kombu==4.6.11
 marshmallow==3.7.1
 requests==2.24.0
-rq==1.4.3
+rq==1.5.0
 rq-dashboard==0.6.1
 sentry-sdk==0.16.1
