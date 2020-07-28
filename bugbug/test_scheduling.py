@@ -136,7 +136,7 @@ def filter_runnables(
 
 def rename_task(task: str) -> str:
     # https://bugzilla.mozilla.org/show_bug.cgi?id=1602863
-    task = task.replace("test-linux64-", "test-linux1804-64-")
+    task = task.replace("test-linux64", "test-linux1804-64")
 
     # https://bugzilla.mozilla.org/show_bug.cgi?id=1623355
     task = re.sub(r"android(.+)/pgo", r"android\g<1>-shippable/opt", task,)
@@ -152,6 +152,9 @@ def rename_task(task: str) -> str:
         "android-hw-p2-8-0-android-aarch64-qr/opt",
         "android-hw-p2-8-0-android-aarch64-shippable-qr/opt",
     )
+
+    # https://bugzilla.mozilla.org/show_bug.cgi?id=1650208
+    task = task.replace("-shippable", "")
 
     return task
 
