@@ -1023,6 +1023,8 @@ def download_commits(
             logger.info("No commits to analyze")
             return tuple()
 
+        first_pushdate = get_first_pushdate(repo_dir)
+
         logger.info(f"Mining {len(revs)} commits...")
 
         if not use_single_process:
@@ -1060,7 +1062,7 @@ def download_commits(
 
     code_analysis_server.terminate()
 
-    calculate_experiences(commits, get_first_pushdate(repo_dir), save)
+    calculate_experiences(commits, first_pushdate, save)
 
     logger.info("Applying final commits filtering...")
 
