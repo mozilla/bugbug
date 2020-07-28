@@ -203,6 +203,9 @@ class Commit:
     def __hash__(self):
         return hash(self.node)
 
+    def __repr__(self):
+        return str(self.__dict__)
+
     def set_files(self, files, file_copies):
         self.files = files
         self.file_copies = file_copies
