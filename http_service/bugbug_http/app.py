@@ -13,6 +13,7 @@ from typing import Any, Callable, List, Optional
 
 import libmozdata
 import orjson
+import zstandard
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec_webframeworks.flask import FlaskPlugin
@@ -78,6 +79,7 @@ BUGZILLA_API_URL = (
     + "/rest/bug"
 )
 
+dctx = zstandard.ZstdDecompressor()
 
 logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger()
@@ -296,7 +298,7 @@ def get_result(job):
 
     if result:
         LOGGER.debug(f"Found {result}")
-        return orjson.loads(result)
+        return orjson.loads(dctx.decompress(result))
 
     return None
 
