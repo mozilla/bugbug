@@ -16,17 +16,24 @@ from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
 
 def test_rename_runnables() -> None:
     assert test_scheduling.rename_runnables(
+        "label", (Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
         "label", (Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),),
-    ) == (Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),)
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
+        "label",
+        (Task("test-linux64-shippable-qr/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64-qr/opt-mochitest-browser-chrome-e10s-2"),)
     assert test_scheduling.rename_runnables(
         "label",
         (
-            Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),
-            Task("test-linux64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
+            Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),
+            Task("test-linux64-qr/opt-web-platform-tests-wdspec-e10s-1"),
         ),
     ) == (
-        Task("test-linux1804-64-shippable/opt-mochitest-browser-chrome-e10s-2"),
-        Task("test-linux1804-64-shippable-qr/opt-web-platform-tests-wdspec-e10s-1"),
+        Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),
+        Task("test-linux1804-64-qr/opt-web-platform-tests-wdspec-e10s-1"),
     )
     assert test_scheduling.rename_runnables(
         "label",
@@ -37,7 +44,7 @@ def test_rename_runnables() -> None:
         ),
     ) == (
         Task(
-            "test-android-hw-p2-8-0-android-aarch64-shippable/opt-geckoview-mochitest-media-e10s-2"
+            "test-android-hw-p2-8-0-android-aarch64/opt-geckoview-mochitest-media-e10s-2"
         ),
     )
 
@@ -68,7 +75,7 @@ def test_rename_runnables() -> None:
     ) == (
         ConfigGroup(
             (
-                "test-linux1804-64-shippable/opt-*-e10s",
+                "test-linux1804-64/opt-*-e10s",
                 Group(
                     "toolkit/components/extensions/test/mochitest/mochitest-remote.ini"
                 ),
@@ -90,7 +97,6 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
-            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -102,7 +108,6 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -114,7 +119,6 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -126,7 +130,6 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
-            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -138,7 +141,6 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -213,7 +215,6 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
-            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -225,7 +226,6 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -237,7 +237,6 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -249,7 +248,6 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
-            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -261,7 +259,6 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -348,7 +345,6 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
-            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -360,7 +356,6 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -372,7 +367,6 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",
@@ -384,7 +378,6 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1"],
         ).set_files(["dom/file2.cpp", "layout/tests/manifest2.ini"], {}),
         repository.Commit(
-            revision=4,
             node="commit3",
             author="author1",
             desc="commit3",
@@ -396,7 +389,6 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer2"],
         ).set_files(["layout/file.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=5,
             node="commit4",
             author="author1",
             desc="commit4",
@@ -489,7 +481,6 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
 
     commits = [
         repository.Commit(
-            revision=1,
             node="commit1",
             author="author1",
             desc="commit1",
@@ -501,7 +492,6 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=2,
             node="commitbackedout",
             author="author1",
             desc="commitbackedout",
@@ -513,7 +503,6 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
             reviewers=["reviewer1", "reviewer2"],
         ).set_files(["dom/file1.cpp", "dom/tests/manifest1.ini"], {}),
         repository.Commit(
-            revision=3,
             node="commit2",
             author="author2",
             desc="commit2",

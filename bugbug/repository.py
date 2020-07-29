@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 from datetime import datetime
+from functools import lru_cache
 from typing import (
     Collection,
     Dict,
@@ -120,7 +121,6 @@ def get_type(path: str) -> str:
 class Commit:
     def __init__(
         self,
-        revision: int,
         node: str,
         author: str,
         desc: str,
@@ -132,7 +132,6 @@ class Commit:
         reviewers: List[str],
         ignored: bool = False,
     ) -> None:
-        self.revision = revision
         self.node = node
         self.author = author
         self.bug_id = bug_id
@@ -202,6 +201,9 @@ class Commit:
 
     def __hash__(self):
         return hash(self.node)
+
+    def __repr__(self):
+        return str(self.__dict__)
 
     def set_files(self, files, file_copies):
         self.files = files
@@ -639,7 +641,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
     if len(revs) == 0:
         return []
 
-    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0{rev}\\0"
+    template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
         b"log", template=template, no_merges=True, rev=revs, branch="tip",
@@ -672,7 +674,6 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
 
         commits.append(
             Commit(
-                revision=int(rev[9].decode("ascii")),
                 node=sys.intern(rev[0].decode("ascii")),
                 author=sys.intern(rev[1].decode("utf-8")),
                 desc=rev[2].decode("utf-8"),
@@ -748,7 +749,9 @@ class Experiences:
             self.mem_experiences[key] = value
 
 
-def calculate_experiences(commits: Collection[Commit], save: bool = True) -> None:
+def calculate_experiences(
+    commits: Collection[Commit], first_pushdate: datetime, save: bool = True
+) -> None:
     logger.info(f"Analyzing seniorities from {len(commits)} commits...")
 
     experiences = Experiences(save)
@@ -894,18 +897,12 @@ def calculate_experiences(commits: Collection[Commit], save: bool = True) -> Non
                 for i in range(len(items)):
                     exp_queues[i][day] = all_commit_lists[i] + (commit.node,)
 
-    # A "day" is defined as 150 commits.
-    prev_day = 0
-    prev_commit = None
     for i, commit in enumerate(tqdm(commits)):
-        day = int(commit.revision / 150)
+        # The push date is unreliable, e.g. 4d0e3037210dd03bdb21964a6a8c2e201c45794b was pushed after
+        # 06b578dfadc9db8b683090e0e110ba75b84fb766, but it has an earlier push date.
+        # We accept the unreliability as it is small enough.
+        day = (commit.pushdate - first_pushdate).days
         assert day >= 0
-        if prev_commit is not None:
-            assert (
-                day >= prev_day
-            ), f"Commit {commit.node} with revision {commit.revision} should come after {prev_commit.node} with revision {prev_commit.revision}"
-        prev_day = day
-        prev_commit = commit
 
         # When a file is moved/copied, copy original experience values to the copied path.
         for orig, copied in commit.file_copies.items():
@@ -1000,6 +997,12 @@ def hg_log_multi(repo_dir, revs):
     return commits
 
 
+@lru_cache(maxsize=None)
+def get_first_pushdate(repo_dir):
+    with hglib.open(repo_dir) as hg:
+        return hg_log(hg, [b"0"])[0].pushdate
+
+
 def download_commits(
     repo_dir: str,
     rev_start: str = None,
@@ -1019,6 +1022,8 @@ def download_commits(
         if len(revs) == 0:
             logger.info("No commits to analyze")
             return tuple()
+
+        first_pushdate = get_first_pushdate(repo_dir)
 
         logger.info(f"Mining {len(revs)} commits...")
 
@@ -1057,7 +1062,7 @@ def download_commits(
 
     code_analysis_server.terminate()
 
-    calculate_experiences(commits, save)
+    calculate_experiences(commits, first_pushdate, save)
 
     logger.info("Applying final commits filtering...")
 
