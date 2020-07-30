@@ -11,6 +11,7 @@ from typing import Collection, Tuple
 
 import orjson
 import requests
+import zstandard
 from redis import Redis
 
 from bugbug import bugzilla, repository
@@ -40,9 +41,13 @@ MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
 )
 MODEL_CACHE.start_ttl_thread()
 
+cctx = zstandard.ZstdCompressor(level=10)
 
-def setkey(key: str, value: bytes) -> None:
+
+def setkey(key: str, value: bytes, compress: bool = False) -> None:
     LOGGER.debug(f"Storing data at {key}: {value!r}")
+    if compress:
+        value = cctx.compress(value)
     redis.set(key, value)
     redis.expire(key, DEFAULT_EXPIRATION_TTL)
 
@@ -94,7 +99,7 @@ def classify_bug(model_name: str, bug_ids: Collection[int], bugzilla_token: str)
         }
 
         job = JobInfo(classify_bug, model_name, bug_id)
-        setkey(job.result_key, orjson.dumps(data))
+        setkey(job.result_key, orjson.dumps(data), compress=True)
 
         # Save the bug last change
         setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())
@@ -167,6 +172,6 @@ def schedule_tests(branch: str, rev: str) -> str:
         "reduced_tasks_higher": {t: c for t, c in tasks.items() if t in reduced_higher},
         "known_tasks": get_known_tasks(),
     }
-    setkey(job.result_key, orjson.dumps(data))
+    setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"

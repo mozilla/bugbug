@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Tuple
 
 import hglib
 import pytest
+import zstandard
 
 from bugbug_http import models
 
@@ -94,7 +95,9 @@ def test_simple_schedule(
 
     # Assert the test selection result is stored in Redis.
     result = json.loads(
-        models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+        zstandard.ZstdDecompressor().decompress(
+            models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+        )
     )
     assert len(result) == 6
     assert result["tasks"] == labels_to_choose

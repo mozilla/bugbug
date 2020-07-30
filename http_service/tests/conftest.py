@@ -14,9 +14,11 @@ from typing import Callable, Dict, Tuple
 
 import hglib
 import numpy as np
+import orjson
 import py.path
 import pytest
 import responses
+import zstandard
 from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
 
@@ -141,7 +143,8 @@ def add_result():
 
     def inner(key, data, change_time=None):
         result_key = f"bugbug:job_result:{key}"
-        app.redis_conn.set(result_key, json.dumps(data))
+        cctx = zstandard.ZstdCompressor(level=10)
+        app.redis_conn.set(result_key, cctx.compress(orjson.dumps(data)))
 
     return inner
 
