@@ -83,8 +83,8 @@ def _on_message(body, message):
                 logger.warning(
                     "We got status: {} for: {}".format(response.status_code, url)
                 )
-    except Exception as e:
-        traceback.print_tb(e)
+    except Exception:
+        traceback.print_exc()
     finally:
         message.ack()
 
