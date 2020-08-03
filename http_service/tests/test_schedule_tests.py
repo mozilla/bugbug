@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import json
 from typing import Callable, Dict, List, Tuple
 
 import hglib
+import orjson
 import pytest
 import zstandard
 
@@ -94,7 +94,7 @@ def test_simple_schedule(
         ]
 
     # Assert the test selection result is stored in Redis.
-    result = json.loads(
+    result = orjson.loads(
         zstandard.ZstdDecompressor().decompress(
             models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
         )
