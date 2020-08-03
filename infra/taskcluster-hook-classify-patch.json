@@ -59,7 +59,7 @@
             "maxRunTime": 7200
         },
         "priority": "normal",
-        "provisionerId": "proj-relman",
+        "provisionerId": "proj-bugbug",
         "retries": 5,
         "routes": [
             "notify.email.mcastelluccio@mozilla.com.on-failed",
