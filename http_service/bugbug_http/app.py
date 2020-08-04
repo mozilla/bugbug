@@ -292,13 +292,21 @@ def clean_prediction_cache(job):
     redis_conn.delete(job.change_time_key)
 
 
-def get_result(job):
+def get_result(job: JobInfo) -> Any:
     LOGGER.debug(f"Checking for existing results at {job.result_key}")
     result = redis_conn.get(job.result_key)
 
     if result:
         LOGGER.debug(f"Found {result}")
-        return orjson.loads(dctx.decompress(result))
+        try:
+            result = dctx.decompress(result)
+        except zstandard.ZstdError:
+            # Some job results were stored before compression was enabled.
+            # We can remove the exception handling after enough time has passed
+            # since 47114f4f47db6b73214cf946377be8da945d34b5.
+            pass
+
+        return orjson.loads(result)
 
     return None
 
