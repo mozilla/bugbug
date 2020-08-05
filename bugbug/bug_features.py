@@ -463,11 +463,13 @@ class had_severity_enhancement(single_bug_feature):
 
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return [
-            keyword
-            for keyword in whiteboard_keywords(bugs[0])
-            if keyword in whiteboard_keywords(bugs[1])
-        ]
+        return len(
+            [
+                keyword
+                for keyword in whiteboard_keywords(bugs[0])
+                if keyword in whiteboard_keywords(bugs[1])
+            ]
+        )
 
 
 class is_same_product(couple_bug_feature):
@@ -522,16 +524,44 @@ class couple_delta_creation_date(couple_bug_feature):
         return delta / timedelta(days=1)
 
 
+class couple_common_words_summary(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs):
+        return len(
+            set(bugs[0]["summary"].split()).intersection(
+                set(bugs[1]["summary"].split())
+            )
+        )
+
+
+class couple_common_words_comments(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs):
+        text1 = " ".join(
+            bugs[0]["comments"][idx]["text"] for idx in range(len(bugs[0]["comments"]))
+        )
+        text2 = " ".join(
+            bugs[1]["comments"][idx]["text"] for idx in range(len(bugs[1]["comments"]))
+        )
+        return len(set(text1.split()).intersection(set(text2.split())))
+
+
 class couple_common_keywords(couple_bug_feature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
     def __call__(self, bugs, **kwargs):
-        return [
-            keyword
-            for keyword in bugs[0]["keywords"]
-            if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
-        ]
+        return len(
+            [
+                keyword
+                for keyword in bugs[0]["keywords"]
+                if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
+            ]
+        )
 
 
 def get_author_ids():

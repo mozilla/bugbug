@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import random
-from itertools import combinations
+from itertools import combinations, islice
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -30,9 +30,14 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
         self._le.fit(y)
 
 
-class bypasscolumn(TransformerMixin, BaseEstimator):
+class BypassFeatures(TransformerMixin, BaseEstimator):
     def __init__(self):
-        pass
+        self.feature_extractors = [
+            bug_features.couple_common_keywords(),
+            bug_features.couple_common_whiteboard_keywords(),
+            bug_features.couple_common_words_summary(),
+            bug_features.couple_common_words_comments(),
+        ]
 
     def fit(self, X, y=None):
         return self
@@ -40,11 +45,15 @@ class bypasscolumn(TransformerMixin, BaseEstimator):
     def transform(self, X, y=None):
         return pd.DataFrame([couple_data for couple_data in X])
 
+    def get_feature_names(self):
+        return []
+
+    def get_feature_extractors(self):
+        return self.feature_extractors
+
 
 class DuplicateModel(BugCoupleModel):
-    def __init__(
-        self, training_size=14000, lemmatization=False, cleanup_urls=True
-    ):
+    def __init__(self, training_size=14000, lemmatization=False, cleanup_urls=True):
         self.num_duplicates = training_size // 2
         self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
@@ -60,6 +69,10 @@ class DuplicateModel(BugCoupleModel):
             bug_features.is_same_os(),
             bug_features.is_same_target_milestone(),
         ]
+
+        couple_features = BypassFeatures()
+
+        feature_extractors += couple_features.get_feature_extractors()
 
         cleanup_functions = [
             feature_cleanup.responses(),
@@ -84,7 +97,7 @@ class DuplicateModel(BugCoupleModel):
                     ColumnTransformer(
                         [
                             ("text", self.text_vectorizer(), "text"),
-                            ("couple_data", bypasscolumn(), "couple_data"),
+                            ("couple_data", couple_features, "couple_data"),
                         ]
                     ),
                 ),
@@ -99,7 +112,7 @@ class DuplicateModel(BugCoupleModel):
 
         all_ids = set(
             bug["id"]
-            for bug in islice(bugzilla.get_bugs(), 2000)
+            for bug in islice(bugzilla.get_bugs(), 14000)
             if bug["creator"] not in REPORTERS_TO_IGNORE
             and "dupeme" not in bug["keywords"]
         )
@@ -110,7 +123,7 @@ class DuplicateModel(BugCoupleModel):
         duplicate_ids = []
 
         duplicates_num = 0
-        for bug_data in islice(bugzilla.get_bugs(), 2000):
+        for bug_data in islice(bugzilla.get_bugs(), 14000):
             bug_id = bug_data["id"]
             current_duplicates = [bug_id]
 
