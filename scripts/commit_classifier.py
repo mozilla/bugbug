@@ -125,7 +125,13 @@ def replace_reviewers(commit_description, reviewers):
 
 
 class CommitClassifier(object):
-    def __init__(self, model_name, repo_dir, git_repo_dir, method_defect_predictor_dir):
+    def __init__(
+        self,
+        model_name: str,
+        repo_dir: str,
+        git_repo_dir: str,
+        method_defect_predictor_dir: str,
+    ):
         self.model_name = model_name
         self.repo_dir = repo_dir
 
@@ -183,7 +189,7 @@ class CommitClassifier(object):
                 test_scheduling.TEST_LABEL_SCHEDULING_DB,
                 test_scheduling.PAST_FAILURES_LABEL_DB,
             )
-            self.past_failures_data = test_scheduling.get_past_failures("label")
+            self.past_failures_data = test_scheduling.get_past_failures("label", True)
 
             self.testfailure_model = download_and_load_model("testfailure")
             assert self.testfailure_model is not None
