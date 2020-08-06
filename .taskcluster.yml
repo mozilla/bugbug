@@ -33,7 +33,7 @@ tasks:
       - taskId: {$eval: as_slugid("lint_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
-        provisionerId: proj-relman
+        provisionerId: proj-bugbug
         workerType: batch
         payload:
           maxRunTime: 3600
@@ -57,7 +57,7 @@ tasks:
           taskId: {$eval: as_slugid("version_check_task")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
-          provisionerId: proj-relman
+          provisionerId: proj-bugbug
           workerType: batch
           payload:
             maxRunTime: 3600
@@ -78,7 +78,7 @@ tasks:
       - taskId: {$eval: as_slugid("tests_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
-        provisionerId: proj-relman
+        provisionerId: proj-bugbug
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
@@ -112,7 +112,7 @@ tasks:
       - taskId: {$eval: as_slugid("http_tests_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
-        provisionerId: proj-relman
+        provisionerId: proj-bugbug
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
@@ -142,7 +142,7 @@ tasks:
       - taskId: {$eval: as_slugid("packaging_test_task")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '1 hour'}
-        provisionerId: proj-relman
+        provisionerId: proj-bugbug
         workerType: batch
         payload:
           maxRunTime: 3600
@@ -172,7 +172,7 @@ tasks:
       - taskId: {$eval: as_slugid("docker_build")}
         created: {$fromNow: ''}
         deadline: {$fromNow: '3 hours'}
-        provisionerId: proj-relman
+        provisionerId: proj-bugbug
         workerType: ci
         payload:
           capabilities:
@@ -221,7 +221,7 @@ tasks:
             - secrets:get:project/relman/bugbug/deploy
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
-          provisionerId: proj-relman
+          provisionerId: proj-bugbug
           workerType: batch
           payload:
             features:
@@ -256,7 +256,7 @@ tasks:
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
-          provisionerId: proj-relman
+          provisionerId: proj-bugbug
           workerType: batch
           payload:
             features:
@@ -285,7 +285,7 @@ tasks:
             - {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
-          provisionerId: proj-relman
+          provisionerId: proj-bugbug
           workerType: compute-small
           scopes:
             - secrets:get:project/relman/bugbug/integration
@@ -328,7 +328,7 @@ tasks:
             - queue:route:project.relman.bugbug.deploy_ending.*
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
-          provisionerId: proj-relman
+          provisionerId: proj-bugbug
           workerType: batch
           payload:
             features:

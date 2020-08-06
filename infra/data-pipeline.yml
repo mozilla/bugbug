@@ -14,7 +14,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         env:
@@ -50,7 +50,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         env:
@@ -86,7 +86,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         env:
@@ -123,7 +123,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-large
       payload:
         maxRunTime: 86400
@@ -158,7 +158,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - commit-retrieval
@@ -198,7 +198,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         env:
@@ -241,7 +241,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         env:
@@ -284,7 +284,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       payload:
         env:
@@ -327,7 +327,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - commit-retrieval
@@ -377,7 +377,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - commit-retrieval
@@ -427,7 +427,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '4 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - test-config_group-scheduling-history-push_data-retrieval
@@ -473,7 +473,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '2 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - bugs-retrieval
@@ -498,7 +498,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - bugs-retrieval
@@ -536,7 +536,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       dependencies:
         - bugs-retrieval
@@ -574,7 +574,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-large
       dependencies:
         - bugs-retrieval
@@ -616,7 +616,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - commit-retrieval
@@ -645,7 +645,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - commit-retrieval
@@ -677,7 +677,7 @@ tasks:
 #      created: {$fromNow: ''}
 #      deadline: {$fromNow: '5 days'}
 #      expires: {$fromNow: '1 month'}
-#      provisionerId: proj-relman
+#      provisionerId: proj-bugbug
 #      workerType: compute-large
 #      dependencies:
 #        - commit-retrieval
@@ -714,7 +714,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - commit-retrieval
@@ -748,7 +748,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - commit-retrieval
@@ -779,7 +779,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       dependencies:
         - commit-retrieval
@@ -831,7 +831,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       dependencies:
         - bugs-retrieval
@@ -873,7 +873,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       dependencies:
         - bugs-retrieval
@@ -915,7 +915,7 @@ tasks:
 #      created: {$fromNow: ''}
 #      deadline: {$fromNow: '3 days'}
 #      expires: {$fromNow: '1 year'}
-#      provisionerId: proj-relman
+#      provisionerId: proj-bugbug
 #      workerType: compute-smaller
 #      dependencies:
 #        - bugs-retrieval
@@ -953,7 +953,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-large
       dependencies:
         - commit-retrieval
@@ -993,7 +993,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-super-large
       dependencies:
         - commit-retrieval
@@ -1034,7 +1034,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
       expires: {$fromNow: '1 year'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - commit-retrieval
@@ -1073,7 +1073,7 @@ tasks:
 #      created: {$fromNow: ''}
 #      deadline: {$fromNow: '3 days'}
 #      expires: {$fromNow: '1 year'}
-#      provisionerId: proj-relman
+#      provisionerId: proj-bugbug
 #      workerType: compute-smaller
 #      dependencies:
 #        - bugs-retrieval
@@ -1111,7 +1111,7 @@ tasks:
     - ID: check_metrics
       created: {$fromNow: ''}
       deadline: {$fromNow: '5 days'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       dependencies:
         - train-component
@@ -1147,7 +1147,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: ci
       dependencies:
         - train-defectenhancementtask
@@ -1192,7 +1192,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
         - docker-build
@@ -1235,7 +1235,7 @@ tasks:
       scopes:
         - hooks:modify-hook:project-relman/bugbug-checks
         - assume:hook-id:project-relman/bugbug-checks
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         features:
@@ -1267,7 +1267,7 @@ tasks:
       scopes:
         - hooks:modify-hook:project-relman/bugbug-classify-patch
         - assume:hook-id:project-relman/bugbug-classify-patch
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         features:
@@ -1299,7 +1299,7 @@ tasks:
       scopes:
           - hooks:modify-hook:project-relman/bugbug-test-select
           - assume:hook-id:project-relman/bugbug-test-select
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: batch
       payload:
         features:
@@ -1330,7 +1330,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       payload:
         features:
@@ -1362,7 +1362,7 @@ tasks:
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
-      provisionerId: proj-relman
+      provisionerId: proj-bugbug
       workerType: compute-smaller
       payload:
         features:
