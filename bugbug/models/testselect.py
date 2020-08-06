@@ -142,9 +142,6 @@ class TestSelectModel(Model):
             for test_data in test_datas:
                 name = test_data["name"]
 
-                if self.granularity == "label" and not name.startswith("test-"):
-                    continue
-
                 if (
                     test_data["is_likely_regression"]
                     or test_data["is_possible_regression"]
@@ -241,9 +238,6 @@ class TestSelectModel(Model):
             push_num = past_failures_data["push_num"] + 1
         all_runnables = past_failures_data["all_runnables"]
 
-        if self.granularity == "label":
-            all_runnables = tuple(r for r in all_runnables if r.startswith("test-"))
-
         commit_tests = []
         for data in test_scheduling.generate_data(
             self.granularity,
@@ -267,6 +261,8 @@ class TestSelectModel(Model):
 
     def _get_cost(self, config: str) -> int:
         costs = [
+            (("build", "opt"), 1),
+            (("build", "debug"), 2),
             (("linux1804-64", "opt"), 2),
             (("linux1804-64", "debug"), 3),
             (("windows10", "opt"), 4),
