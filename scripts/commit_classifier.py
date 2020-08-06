@@ -134,7 +134,6 @@ class CommitClassifier(object):
         revision=None,
         phabricator_deployment=None,
         diff_id=None,
-
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
