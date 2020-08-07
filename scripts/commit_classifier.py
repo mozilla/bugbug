@@ -132,6 +132,7 @@ class CommitClassifier(object):
         git_repo_dir: str,
         method_defect_predictor_dir: str,
         use_single_process: bool,
+        skip_feature_importance: bool,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -154,6 +155,7 @@ class CommitClassifier(object):
             )
 
         self.use_single_process = use_single_process
+        self.skip_feature_importance = skip_feature_importance
 
         if model_name == "regressor":
             self.use_test_history = False
@@ -623,7 +625,8 @@ class CommitClassifier(object):
             importance_cutoff=0.05,
         )
 
-        self.generate_feature_importance_data(probs, importance)
+        if self.skip_feature_importance:
+            self.generate_feature_importance_data(probs, importance)
 
         with open("probs.json", "w") as f:
             json.dump(probs[0].tolist(), f)
@@ -808,6 +811,11 @@ def main():
         action="store_true",
         help="Whether to use a single process.",
     )
+    parser.add_argument(
+        "--skip-feature-importance",
+        action="store_true",
+        help="Whether to skip feature importance calculation.",
+    )
 
     args = parser.parse_args()
 
@@ -817,6 +825,7 @@ def main():
         args.git_repo_dir,
         args.method_defect_predictor_dir,
         args.use_single_process,
+        args.skip_feature_importance,
     )
     classifier.classify(
         args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
