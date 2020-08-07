@@ -572,16 +572,28 @@ class CommitClassifier(object):
 
         self.update_commit_db()
 
-        with hglib.open(self.repo_dir) as hg:
-            if phabricator_deployment is not None and diff_id is not None:
+        if phabricator_deployment is not None and diff_id is not None:
+            with hglib.open(self.repo_dir) as hg:
                 self.apply_phab(hg, phabricator_deployment, diff_id)
 
                 revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
-            # Analyze patch.
             commits = repository.download_commits(
                 self.repo_dir, rev_start=revision, save=False
             )
+        else:
+            commits = []
+
+            for commit in repository.get_commits():
+                if commit["node"] == revision:
+                    commits.append(commit)
+                    break
+
+            # The commit to analyze was not in our DB, let's mine it.
+            if len(commits) == 0:
+                commits = repository.download_commits(
+                    self.repo_dir, revs=[revision], save=False
+                )
 
         if not self.use_test_history:
             self.classify_regressor(commits)
