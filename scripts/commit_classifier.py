@@ -131,6 +131,7 @@ class CommitClassifier(object):
         repo_dir: str,
         git_repo_dir: str,
         method_defect_predictor_dir: str,
+        use_single_process: bool,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -151,6 +152,8 @@ class CommitClassifier(object):
                 method_defect_predictor_dir,
                 "8cc47f47ffb686a29324435a0151b5fabd37f865",
             )
+
+        self.use_single_process = use_single_process
 
         if model_name == "regressor":
             self.use_test_history = False
@@ -229,7 +232,9 @@ class CommitClassifier(object):
             pass
 
         repository.download_commits(
-            self.repo_dir, rev_start="children({})".format(commit["node"])
+            self.repo_dir,
+            rev_start="children({})".format(commit["node"]),
+            use_single_process=self.use_single_process,
         )
 
     def has_revision(self, hg, revision):
@@ -579,7 +584,10 @@ class CommitClassifier(object):
                 revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
             commits = repository.download_commits(
-                self.repo_dir, rev_start=revision, save=False
+                self.repo_dir,
+                rev_start=revision,
+                save=False,
+                use_single_process=self.use_single_process,
             )
         else:
             commits = []
@@ -592,7 +600,10 @@ class CommitClassifier(object):
             # The commit to analyze was not in our DB, let's mine it.
             if len(commits) == 0:
                 commits = repository.download_commits(
-                    self.repo_dir, revs=[revision], save=False
+                    self.repo_dir,
+                    revs=[revision],
+                    save=False,
+                    use_single_process=self.use_single_process,
                 )
 
         if not self.use_test_history:
@@ -792,11 +803,20 @@ def main():
         "--method_defect_predictor_dir",
         help="Path where the git repository will be cloned.",
     )
+    parser.add_argument(
+        "--use-single-process",
+        action="store_true",
+        help="Whether to use a single process.",
+    )
 
     args = parser.parse_args()
 
     classifier = CommitClassifier(
-        args.model, args.repo_dir, args.git_repo_dir, args.method_defect_predictor_dir
+        args.model,
+        args.repo_dir,
+        args.git_repo_dir,
+        args.method_defect_predictor_dir,
+        args.use_single_process,
     )
     classifier.classify(
         args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
