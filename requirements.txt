@@ -3,7 +3,7 @@ boto3==1.14.36
 imbalanced-learn==0.7.0
 joblib==0.16.0
 libmozdata==0.1.68
-lmdb==0.98
+lmdb==0.99
 matplotlib==3.3.1
 mercurial==5.4.2
 microannotate==0.0.20
