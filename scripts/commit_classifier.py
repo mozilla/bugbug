@@ -608,6 +608,8 @@ class CommitClassifier(object):
                     use_single_process=self.use_single_process,
                 )
 
+        assert len(commits) > 0, "There are no commits to analyze"
+
         if not self.use_test_history:
             self.classify_regressor(commits)
         else:
