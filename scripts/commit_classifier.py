@@ -625,7 +625,7 @@ class CommitClassifier(object):
             importance_cutoff=0.05,
         )
 
-        if self.skip_feature_importance:
+        if not self.skip_feature_importance:
             self.generate_feature_importance_data(probs, importance)
 
         with open("probs.json", "w") as f:
