@@ -195,7 +195,9 @@ def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
 
 
 @pytest.fixture
-def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str]:
+def mock_repo(
+    tmpdir: py.path.local, monkeypatch: MonkeyPatch
+) -> Tuple[py.path.local, py.path.local]:
     """Create an empty mercurial repo"""
     local_dir = tmpdir / "local"
     remote_dir = tmpdir / "remote"
