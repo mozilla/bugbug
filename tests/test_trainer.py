@@ -22,7 +22,10 @@ def test_trainer():
     )
 
     responses.add(
-        responses.HEAD, f"{url}.zst", status=200, headers={"ETag": "etag"},
+        responses.HEAD,
+        f"{url}.zst",
+        status=200,
+        headers={"ETag": "etag"},
     )
 
     trainer.Trainer().go(trainer.parse_args(["defect"]))

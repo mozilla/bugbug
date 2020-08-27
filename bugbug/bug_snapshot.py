@@ -882,6 +882,7 @@ def get_inconsistencies(bugs):
 
 if __name__ == "__main__":
     import argparse
+
     from tqdm import tqdm
 
     parser = argparse.ArgumentParser()

@@ -99,7 +99,10 @@ def test_download_check_etag():
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "123",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(responses.GET, url, status=200, body="prova")
@@ -128,7 +131,10 @@ def test_download_check_etag_changed():
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "123",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(responses.GET, url, status=200, body="prova")
@@ -137,7 +143,10 @@ def test_download_check_etag_changed():
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "456", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "456",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(responses.GET, url, status=200, body="prova2")
@@ -164,7 +173,10 @@ def test_download_check_etag_unchanged():
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "123",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(responses.GET, url, status=200, body="prova")
@@ -173,7 +185,10 @@ def test_download_check_etag_unchanged():
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "123",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(responses.GET, url, status=200, body="prova2")
@@ -200,7 +215,10 @@ def test_download_check_missing():
         responses.HEAD,
         url,
         status=404,
-        headers={"ETag": "123", "Last-Modified": "2019-04-16",},
+        headers={
+            "ETag": "123",
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     responses.add(
@@ -217,7 +235,12 @@ def test_get_last_modified():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
-        responses.HEAD, url, status=200, headers={"Last-Modified": "2019-04-16",},
+        responses.HEAD,
+        url,
+        status=200,
+        headers={
+            "Last-Modified": "2019-04-16",
+        },
     )
 
     assert utils.get_last_modified(url) == datetime(2019, 4, 16, 0, 0)
@@ -227,7 +250,10 @@ def test_get_last_modified_not_present():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
-        responses.HEAD, url, status=200, headers={"ETag": "123"},
+        responses.HEAD,
+        url,
+        status=200,
+        headers={"ETag": "123"},
     )
 
     assert utils.get_last_modified(url) is None
@@ -237,7 +263,10 @@ def test_get_last_modified_missing():
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
 
     responses.add(
-        responses.HEAD, url, status=404, headers={},
+        responses.HEAD,
+        url,
+        status=404,
+        headers={},
     )
 
     assert utils.get_last_modified(url) is None

@@ -20,13 +20,19 @@ def retrieve_compressed_reponse(response):
 
 def test_queue_job_valid(client, add_result, jobs):
     # schedule job
-    rv = client.get("/push/autoland/abcdef/schedules", headers={API_TOKEN: "test"},)
+    rv = client.get(
+        "/push/autoland/abcdef/schedules",
+        headers={API_TOKEN: "test"},
+    )
 
     assert rv.status_code == 202
     assert rv.json == {"ready": False}
 
     # still not ready
-    rv = client.get("/push/autoland/abcdef/schedules", headers={API_TOKEN: "test"},)
+    rv = client.get(
+        "/push/autoland/abcdef/schedules",
+        headers={API_TOKEN: "test"},
+    )
 
     assert rv.status_code == 202
     assert rv.json == {"ready": False}
@@ -39,7 +45,10 @@ def test_queue_job_valid(client, add_result, jobs):
     keys = next(iter(jobs.values()))
     add_result(keys[0], result)
 
-    rv = client.get("/push/autoland/abcdef/schedules", headers={API_TOKEN: "test"},)
+    rv = client.get(
+        "/push/autoland/abcdef/schedules",
+        headers={API_TOKEN: "test"},
+    )
     assert rv.status_code == 200
     assert retrieve_compressed_reponse(rv) == result
 

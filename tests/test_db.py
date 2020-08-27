@@ -231,14 +231,20 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "123", "Accept-Encoding": "zstd",},
+        headers={
+            "ETag": "123",
+            "Accept-Encoding": "zstd",
+        },
     )
 
     responses.add(
         responses.HEAD,
         url,
         status=200,
-        headers={"ETag": "456", "Accept-Encoding": "zstd",},
+        headers={
+            "ETag": "456",
+            "Accept-Encoding": "zstd",
+        },
     )
 
     tmp_zst_path1 = tmp_path / "prova_tmp.zst"

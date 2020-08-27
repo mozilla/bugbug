@@ -333,8 +333,7 @@ class Model:
         return train_test_split(X, y, test_size=0.1, random_state=0)
 
     def evaluation(self):
-        """Subclasses can implement their own additional evaluation.
-        """
+        """Subclasses can implement their own additional evaluation."""
         pass
 
     def train(self, importance_cutoff=0.15, limit=None):
@@ -644,13 +643,13 @@ class Model:
         return classes
 
     def check(self):
-        """ Subclasses can implement their own check, the base model doesn't
+        """Subclasses can implement their own check, the base model doesn't
         check anything at the moment
         """
         return True
 
     def get_extra_data(self):
-        """ Returns a dict that can be used for customers who need static
+        """Returns a dict that can be used for customers who need static
         extra data for a given model. Must return a dict and JSON-encodable
         types.
         """

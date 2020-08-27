@@ -189,7 +189,7 @@ class ComponentModel(BugModel):
         return product in self.PRODUCTS and component not in ["General", "Untriaged"]
 
     def get_meaningful_product_components(self, full_comp_tuples, threshold_ratio=100):
-        """ From the given full_comp_tuples iterable of (product, component)
+        """From the given full_comp_tuples iterable of (product, component)
         tuples, returns the set of tuples which have at least 1% of the most
         common tuple
         """
@@ -323,8 +323,10 @@ class ComponentModel(BugModel):
         ):
             print("Meaningful product components mismatch")
 
-            new_meaningful_product_components = meaningful_product_components.difference(
-                self.meaningful_product_components
+            new_meaningful_product_components = (
+                meaningful_product_components.difference(
+                    self.meaningful_product_components
+                )
             )
             print(
                 f"New meaningful product components {new_meaningful_product_components!r}"

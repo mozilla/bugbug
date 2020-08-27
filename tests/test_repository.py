@@ -554,7 +554,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
     commits = repository.download_commits(
-        local, revs=[], use_single_process=use_single_process,
+        local,
+        revs=[],
+        use_single_process=use_single_process,
     )
     assert len(commits) == 0
     assert len(list(repository.get_commits())) == 0
@@ -1648,7 +1650,11 @@ void func2() {
     )
 
     # No function touched.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [],
+    )
 
     assert touched_functions == set()
 
@@ -1665,7 +1671,11 @@ void func2() {
     )
 
     # A function touched by adding a line.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [1],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [1],
+    )
 
     assert touched_functions == {("func1", 1, 3)}
 
@@ -1687,7 +1697,9 @@ void func4() {
 
     # A function touched by removing a line, another function touched by adding a line.
     touched_functions = repository.get_touched_functions(
-        metrics["spaces"], [2, 5, 6, 7, 8], [6],
+        metrics["spaces"],
+        [2, 5, 6, 7, 8],
+        [6],
     )
 
     assert touched_functions == {("func3", 5, 7), ("func1", 1, 3)}
@@ -1705,7 +1717,11 @@ void func2() {
     )
 
     # A function touched by replacing a line.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [6], [6],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [6],
+        [6],
+    )
 
     assert touched_functions == {("func2", 5, 7)}
 
@@ -1720,7 +1736,11 @@ let i = 0;
     )
 
     # top-level and a JavaScript function touched.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [1, 4],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [1, 4],
+    )
 
     assert touched_functions == {("func", 3, 5)}
 
@@ -1736,7 +1756,11 @@ let f = function() {
     )
 
     # An anonymous function touched inside another function.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [4],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [4],
+    )
 
     assert touched_functions == {("outer_func", 1, 6)}
 
@@ -1752,7 +1776,11 @@ function inner_func() {
     )
 
     # A function touched inside another function.
-    touched_functions = repository.get_touched_functions(metrics["spaces"], [], [4],)
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [4],
+    )
 
     assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
 

@@ -217,7 +217,10 @@ class CommitClassifier(object):
             stop=tenacity.stop_after_attempt(5),
         )(
             lambda: subprocess.run(
-                ["git", "fetch"], cwd=repo_dir, capture_output=True, check=True,
+                ["git", "fetch"],
+                cwd=repo_dir,
+                capture_output=True,
+                check=True,
             )
         )()
 
@@ -721,7 +724,13 @@ class CommitClassifier(object):
         assert stop_hash is not None
 
         p = subprocess.run(
-            ["git", "rev-list", "-n", "1", "HEAD",],
+            [
+                "git",
+                "rev-list",
+                "-n",
+                "1",
+                "HEAD",
+            ],
             check=True,
             capture_output=True,
             cwd=self.git_repo_dir,

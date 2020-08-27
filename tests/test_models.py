@@ -8,7 +8,7 @@ from bugbug.models import MODELS, get_model_class
 
 
 def test_import_all_models():
-    """ Try loading all defined models to ensure that their full qualified
+    """Try loading all defined models to ensure that their full qualified
     names are still good
     """
 

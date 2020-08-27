@@ -127,8 +127,7 @@ def get_taskcluster_options():
 
 
 def get_secret(secret_id):
-    """ Return the secret value
-    """
+    """Return the secret value"""
     env_variable_name = f"BUGBUG_{secret_id}"
 
     # Try in the environment first
@@ -296,8 +295,7 @@ def extract_file(path: str) -> None:
 
 
 class CustomJsonEncoder(json.JSONEncoder):
-    """ A custom Json Encoder to support Numpy types
-    """
+    """A custom Json Encoder to support Numpy types"""
 
     def default(self, obj):
         try:

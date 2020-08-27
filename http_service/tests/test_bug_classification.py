@@ -31,11 +31,16 @@ def test_model_predict_id(client, jobs, add_result, responses):
         responses.GET,
         f"https://bugzilla.mozilla.org/rest/bug?id={bug_id}&include_fields=last_change_time&include_fields=id",
         status=200,
-        json={"bugs": [{"id": bug_id, "last_change_time": time.time()}],},
+        json={
+            "bugs": [{"id": bug_id, "last_change_time": time.time()}],
+        },
     )
 
     def do_request():
-        return client.get("/component/predict/123456", headers={API_TOKEN: "test"},)
+        return client.get(
+            "/component/predict/123456",
+            headers={API_TOKEN: "test"},
+        )
 
     rv = do_request()
     assert rv.status_code == 202
@@ -187,7 +192,9 @@ def test_no_api_key(client):
     bugs = [1, 2, 3]
 
     rv = client.post(
-        "/component/predict/batch", data=json.dumps({"bugs": bugs}), headers={},
+        "/component/predict/batch",
+        data=json.dumps({"bugs": bugs}),
+        headers={},
     )
 
     assert rv.status_code == 401

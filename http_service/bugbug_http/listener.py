@@ -49,7 +49,9 @@ class HgPushesConsumer:
             Queue(
                 name="queue/{}/pushes".format(user),
                 exchange=Exchange(
-                    "exchange/hgpushes/v2", type="topic", no_declare=True,
+                    "exchange/hgpushes/v2",
+                    type="topic",
+                    no_declare=True,
                 ),
                 routing_key="#",
                 durable=True,

@@ -444,13 +444,15 @@ def get_metrics(commit, metrics_space):
             commit.maximum_cyclomatic, metrics["cyclomatic"]
         )
         commit.maximum_halstead_n2 = max(
-            commit.maximum_halstead_n2, metrics["halstead"]["n2"],
+            commit.maximum_halstead_n2,
+            metrics["halstead"]["n2"],
         )
         commit.maximum_halstead_N2 = max(
             metrics["halstead"]["N2"], commit.maximum_halstead_N2
         )
         commit.maximum_halstead_n1 = max(
-            metrics["halstead"]["n1"], commit.maximum_halstead_n1,
+            metrics["halstead"]["n1"],
+            commit.maximum_halstead_n1,
         )
         commit.maximum_halstead_N1 = max(
             metrics["halstead"]["N1"], commit.maximum_halstead_N1
@@ -466,13 +468,15 @@ def get_metrics(commit, metrics_space):
             commit.minimum_cyclomatic, metrics["cyclomatic"]
         )
         commit.minimum_halstead_n2 = min(
-            commit.minimum_halstead_n2, metrics["halstead"]["n2"],
+            commit.minimum_halstead_n2,
+            metrics["halstead"]["n2"],
         )
         commit.minimum_halstead_N2 = min(
             metrics["halstead"]["N2"], commit.minimum_halstead_N2
         )
         commit.minimum_halstead_n1 = min(
-            metrics["halstead"]["n1"], commit.minimum_halstead_n1,
+            metrics["halstead"]["n1"],
+            commit.minimum_halstead_n1,
         )
         commit.minimum_halstead_N1 = min(
             metrics["halstead"]["N1"], commit.minimum_halstead_N1
@@ -644,7 +648,11 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
     template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
     args = hglib.util.cmdbuilder(
-        b"log", template=template, no_merges=True, rev=revs, branch="tip",
+        b"log",
+        template=template,
+        no_merges=True,
+        rev=revs,
+        branch="tip",
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -1097,7 +1105,11 @@ def clean(hg, repo_dir):
 
 
 def _build_hg_cmd(cmd, *args, **kwargs):
-    cmd = hglib.util.cmdbuilder(cmd, *args, **kwargs,)
+    cmd = hglib.util.cmdbuilder(
+        cmd,
+        *args,
+        **kwargs,
+    )
 
     cmd.insert(0, hglib.HGPATH)
 

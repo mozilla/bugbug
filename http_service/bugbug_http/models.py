@@ -114,8 +114,8 @@ def get_known_tasks() -> Tuple[str, ...]:
 
 
 def schedule_tests(branch: str, rev: str) -> str:
-    from bugbug_http.app import JobInfo
     from bugbug_http import REPO_DIR
+    from bugbug_http.app import JobInfo
 
     job = JobInfo(schedule_tests, branch, rev)
     LOGGER.info(f"Processing {job}...")

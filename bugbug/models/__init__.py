@@ -33,7 +33,7 @@ MODELS = {
 
 
 def load_model_class(full_qualified_class_name):
-    """ Load the class dynamically in order to speed up the boot and allow for
+    """Load the class dynamically in order to speed up the boot and allow for
     dynamic optional dependencies to be declared and check at import time
     """
     module_name, class_name = full_qualified_class_name.rsplit(".", 1)

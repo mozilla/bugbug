@@ -171,7 +171,12 @@ def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
 
         content = json.dumps(
             {
-                "changesets": [{"node": "PULLED_FROM_REMOTE", "parents": ["xxxxx"],}],
+                "changesets": [
+                    {
+                        "node": "PULLED_FROM_REMOTE",
+                        "parents": ["xxxxx"],
+                    }
+                ],
                 "visible": True,
             }
         )
@@ -302,7 +307,9 @@ def mock_schedule_tests_classify(
         pass
     failing_together = test_scheduling.get_failing_together_db("label", False)
     failing_together[b"test-linux1804-64/opt"] = pickle.dumps(
-        {"test-windows10/opt": (0.1, 1.0),}
+        {
+            "test-windows10/opt": (0.1, 1.0),
+        }
     )
     test_scheduling.close_failing_together_db("label")
 
@@ -334,7 +341,9 @@ def mock_schedule_tests_classify(
                 "test-windows10/debug": (1.0, 0.0),
                 "test-windows10/opt": (1.0, 1.0),
             },
-            "test-windows10/debug": {"test-windows10/opt": (1.0, 0.0),},
+            "test-windows10/debug": {
+                "test-windows10/opt": (1.0, 0.0),
+            },
         }
     )
     test_scheduling.close_failing_together_db("config_group")

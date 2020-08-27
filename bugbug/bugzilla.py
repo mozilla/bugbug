@@ -237,7 +237,7 @@ def get_product_component_csv_report():
 
 
 def get_product_component_count():
-    """ Returns a dictionary where keys are full components (in the form of
+    """Returns a dictionary where keys are full components (in the form of
     `{product}::{component}`) and the value of the number of bugs for the
     given full components. Full component with 0 bugs are returned.
     """

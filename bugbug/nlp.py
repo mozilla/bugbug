@@ -15,9 +15,8 @@ HAS_OPTIONAL_DEPENDENCIES = False
 
 try:
     import spacy
-
-    from spacy.tokenizer import Tokenizer
     from gensim.models import KeyedVectors
+    from spacy.tokenizer import Tokenizer
 
     HAS_OPTIONAL_DEPENDENCIES = True
 except ImportError:

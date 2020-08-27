@@ -29,21 +29,21 @@ OPT_MSG_MISSING = (
 )
 
 try:
-    import nltk
     import gensim
+    import nltk
+    import spacy
+    from elasticsearch import Elasticsearch
+    from elasticsearch.helpers import bulk
     from gensim import models, similarities
-    from gensim.models import Word2Vec, WordEmbeddingSimilarityIndex, TfidfModel
-    from gensim.models.ldamodel import LdaModel
+    from gensim.corpora import Dictionary
     from gensim.matutils import sparse2full
+    from gensim.models import TfidfModel, Word2Vec, WordEmbeddingSimilarityIndex
+    from gensim.models.ldamodel import LdaModel
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.summarization.bm25 import BM25
-    from gensim.corpora import Dictionary
-    from elasticsearch.helpers import bulk
-    from elasticsearch import Elasticsearch
     from nltk.corpus import stopwords
     from nltk.stem.porter import PorterStemmer
     from nltk.tokenize import word_tokenize
-    import spacy
     from wmd import WMD
 except ImportError:
     raise ImportError(OPT_MSG_MISSING)

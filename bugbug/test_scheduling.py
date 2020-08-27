@@ -139,7 +139,11 @@ def rename_task(task: str) -> str:
     task = task.replace("test-linux64", "test-linux1804-64")
 
     # https://bugzilla.mozilla.org/show_bug.cgi?id=1623355
-    task = re.sub(r"android(.+)/pgo", r"android\g<1>-shippable/opt", task,)
+    task = re.sub(
+        r"android(.+)/pgo",
+        r"android\g<1>-shippable/opt",
+        task,
+    )
 
     # https://bugzilla.mozilla.org/show_bug.cgi?id=1641948
     task = task.replace(
@@ -172,7 +176,12 @@ def rename_runnables(
     elif granularity == "config_group":
         config_groups = cast(List[ConfigGroup], runnables)
         return tuple(
-            ConfigGroup((rename_task(config), Group(group.split(":")[0]),))
+            ConfigGroup(
+                (
+                    rename_task(config),
+                    Group(group.split(":")[0]),
+                )
+            )
             for config, group in config_groups
         )
     else:
@@ -340,7 +349,8 @@ def failing_together_key(item: str) -> bytes:
 
 def remove_failing_together_db(granularity: str) -> None:
     shutil.rmtree(
-        get_failing_together_db_path(granularity), ignore_errors=True,
+        get_failing_together_db_path(granularity),
+        ignore_errors=True,
     )
 
 
@@ -721,7 +731,12 @@ def generate_data(
             past_1400_pushes_types_failures,
             past_2800_pushes_types_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "type", runnable, commit["types"], push_num, is_regression,
+            past_failures,
+            "type",
+            runnable,
+            commit["types"],
+            push_num,
+            is_regression,
         )
 
         (
@@ -730,7 +745,12 @@ def generate_data(
             past_1400_pushes_files_failures,
             past_2800_pushes_files_failures,
         ) = _read_and_update_past_failures(
-            past_failures, "file", runnable, commit["files"], push_num, is_regression,
+            past_failures,
+            "file",
+            runnable,
+            commit["files"],
+            push_num,
+            is_regression,
         )
 
         (

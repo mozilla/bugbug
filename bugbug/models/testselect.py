@@ -155,7 +155,11 @@ class TestSelectModel(Model):
                     continue
 
             pushes.append(
-                {"revs": revs, "failures": failures, "passes": passes,}
+                {
+                    "revs": revs,
+                    "failures": failures,
+                    "passes": passes,
+                }
             )
 
         return pushes, math.floor(0.9 * len(pushes))
@@ -787,7 +791,12 @@ def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, min
             selected = model.reduce(selected, reduction)
         elif model.granularity == "group":
             number_configs = len(
-                set(sum(model.select_configs(selected, reduction).values(), [],))
+                set(
+                    sum(
+                        model.select_configs(selected, reduction).values(),
+                        [],
+                    )
+                )
             )
 
     if minimum is not None and len(selected) < minimum:

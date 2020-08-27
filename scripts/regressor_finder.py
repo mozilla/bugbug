@@ -465,7 +465,8 @@ class RegressorFinder(object):
                 }
 
                 for future in tqdm(
-                    concurrent.futures.as_completed(futures), total=len(futures),
+                    concurrent.futures.as_completed(futures),
+                    total=len(futures),
                 ):
                     exc = future.exception()
                     if exc is not None:

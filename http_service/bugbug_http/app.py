@@ -188,8 +188,7 @@ def schedule_job(
 
 
 def schedule_bug_classification(model_name: str, bug_ids: List[int]) -> None:
-    """ Schedule the classification of a bug_id list
-    """
+    """Schedule the classification of a bug_id list"""
     job_id = get_job_id()
 
     # Set the mapping before queuing to avoid some race conditions
