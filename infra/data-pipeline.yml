@@ -18,7 +18,7 @@ tasks:
       workerType: batch
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 604800
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
@@ -33,13 +33,13 @@ tasks:
             true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.microannotate_gecko-dev-wordified.${version}
-        - index.project.relman.bugbug.microannotate_gecko-dev-wordified.latest
+        - index.project.bugbug.microannotate_gecko-dev-wordified.${version}
+        - index.project.bugbug.microannotate_gecko-dev-wordified.latest
       metadata:
         name: bugbug microannotate tokenized repository generator
         description: bugbug microannotate tokenized repository generator
@@ -54,7 +54,7 @@ tasks:
       workerType: batch
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 432000
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
@@ -69,13 +69,13 @@ tasks:
             true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.microannotate_gecko-dev-comments-removed.${version}
-        - index.project.relman.bugbug.microannotate_gecko-dev-comments-removed.latest
+        - index.project.bugbug.microannotate_gecko-dev-comments-removed.${version}
+        - index.project.bugbug.microannotate_gecko-dev-comments-removed.latest
       metadata:
         name: bugbug microannotate repository with comments removed generator
         description: bugbug microannotate repository with comments removed generator
@@ -90,7 +90,7 @@ tasks:
       workerType: batch
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 432000
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
@@ -106,13 +106,13 @@ tasks:
             true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
-        - index.project.relman.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
+        - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.${version}
+        - index.project.bugbug.microannotate_gecko-dev-wordified-and-comments-removed.latest
       metadata:
         name: bugbug microannotate tokenized repository with comments removed generator
         description: bugbug microannotate tokenized repository with comments removed generator
@@ -146,8 +146,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_commits.${version}
-        - index.project.relman.bugbug.data_commits.latest
+        - index.project.bugbug.data_commits.${version}
+        - index.project.bugbug.data_commits.latest
       metadata:
         name: bugbug commit retrieval
         description: bugbug commit retrieval
@@ -164,7 +164,7 @@ tasks:
         - commit-retrieval
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
@@ -182,12 +182,12 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_bugs.${version}
-        - index.project.relman.bugbug.data_bugs.latest
+        - index.project.bugbug.data_bugs.${version}
+        - index.project.bugbug.data_bugs.latest
       metadata:
         name: bugbug bugs retrieval
         description: bugbug bugs retrieval
@@ -202,7 +202,7 @@ tasks:
       workerType: batch
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -224,13 +224,13 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_label_scheduling_history_push_data.${version}
-        - index.project.relman.bugbug.data_test_label_scheduling_history_push_data.latest
+        - index.project.bugbug.data_test_label_scheduling_history_push_data.${version}
+        - index.project.bugbug.data_test_label_scheduling_history_push_data.latest
       metadata:
         name: bugbug test label scheduling history push data retrieval
         description: bugbug test label scheduling history push data retrieval
@@ -245,7 +245,7 @@ tasks:
       workerType: batch
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -267,13 +267,13 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_group_scheduling_history_push_data.${version}
-        - index.project.relman.bugbug.data_test_group_scheduling_history_push_data.latest
+        - index.project.bugbug.data_test_group_scheduling_history_push_data.${version}
+        - index.project.bugbug.data_test_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test group scheduling history push data retrieval
         description: bugbug test group scheduling history push data retrieval
@@ -288,7 +288,7 @@ tasks:
       workerType: compute-small
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -310,13 +310,13 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_config_group_scheduling_history_push_data.${version}
-        - index.project.relman.bugbug.data_test_config_group_scheduling_history_push_data.latest
+        - index.project.bugbug.data_test_config_group_scheduling_history_push_data.${version}
+        - index.project.bugbug.data_test_config_group_scheduling_history_push_data.latest
       metadata:
         name: bugbug test config_group scheduling history push data retrieval
         description: bugbug test config_group scheduling history push data retrieval
@@ -334,7 +334,7 @@ tasks:
         - test-label-scheduling-history-push_data-retrieval
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
@@ -361,12 +361,12 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_label_scheduling_history.${version}
-        - index.project.relman.bugbug.data_test_label_scheduling_history.latest
+        - index.project.bugbug.data_test_label_scheduling_history.${version}
+        - index.project.bugbug.data_test_label_scheduling_history.latest
       metadata:
         name: bugbug test label scheduling history retrieval
         description: bugbug test label scheduling history retrieval
@@ -384,7 +384,7 @@ tasks:
         - test-group-scheduling-history-push_data-retrieval
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
@@ -411,12 +411,12 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_group_scheduling_history.${version}
-        - index.project.relman.bugbug.data_test_group_scheduling_history.latest
+        - index.project.bugbug.data_test_group_scheduling_history.${version}
+        - index.project.bugbug.data_test_group_scheduling_history.latest
       metadata:
         name: bugbug test group scheduling history retrieval
         description: bugbug test group scheduling history retrieval
@@ -433,7 +433,7 @@ tasks:
         - test-config_group-scheduling-history-push_data-retrieval
       payload:
         env:
-          TC_SECRET_ID: project/relman/bugbug/production
+          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
@@ -457,12 +457,12 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/relman/bugbug/production"
+        - "secrets:get:project/bugbug/production"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.data_test_config_group_scheduling_history.${version}
-        - index.project.relman.bugbug.data_test_config_group_scheduling_history.latest
+        - index.project.bugbug.data_test_config_group_scheduling_history.${version}
+        - index.project.bugbug.data_test_config_group_scheduling_history.latest
       metadata:
         name: bugbug test config_group scheduling history retrieval
         description: bugbug test config_group scheduling history retrieval
@@ -522,10 +522,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_component.${version}
-        - index.project.relman.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_component.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_component.latest
+        - index.project.bugbug.train_component.${version}
+        - index.project.bugbug.train_component.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_component.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_component.latest
       metadata:
         name: bugbug train component model
         description: bugbug train component model
@@ -560,10 +560,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_defectenhancementtask.${version}
-        - index.project.relman.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_defectenhancementtask.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_defectenhancementtask.latest
+        - index.project.bugbug.train_defectenhancementtask.${version}
+        - index.project.bugbug.train_defectenhancementtask.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_defectenhancementtask.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_defectenhancementtask.latest
       metadata:
         name: bugbug train defect/enhancement/task model
         description: bugbug train defect/enhancement/task model
@@ -602,10 +602,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_regression.${version}
-        - index.project.relman.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_regression.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_regression.latest
+        - index.project.bugbug.train_regression.${version}
+        - index.project.bugbug.train_regression.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_regression.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_regression.latest
       metadata:
         name: bugbug train regression model
         description: bugbug train regression model
@@ -634,7 +634,7 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder_commits_to_ignore.latest
+        - index.project.bugbug_annotate.regressor_finder_commits_to_ignore.latest
       metadata:
         name: bugbug regressor finder (commits to ignore)
         description: bugbug regressor finder (commits to ignore)
@@ -666,7 +666,7 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
+        - index.project.bugbug_annotate.regressor_finder_bug_fixing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-fixing commits)
         description: bugbug regressor finder (bug-fixing commits)
@@ -703,7 +703,7 @@ tasks:
 #      routes:
 #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
 #        - notify.irc-channel.#bugbug.on-failed
-#        - index.project.relman.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
+#        - index.project.bugbug_annotate.regressor_finder_tokenized_bug_introducing_commits.latest
 #      metadata:
 #        name: bugbug regressor finder (tokenized bug-introducing commits)
 #        description: bugbug regressor finder (tokenized bug-introducing commits)
@@ -737,7 +737,7 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
+        - index.project.bugbug_annotate.regressor_finder_bug_introducing_commits.latest
       metadata:
         name: bugbug regressor finder (bug-introducing commits)
         description: bugbug regressor finder (bug-introducing commits)
@@ -767,8 +767,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.past_bugs_by_function.${version}
-        - index.project.relman.bugbug.past_bugs_by_function.latest
+        - index.project.bugbug.past_bugs_by_function.${version}
+        - index.project.bugbug.past_bugs_by_function.latest
       metadata:
         name: bugbug past bugs by function
         description: bugbug past bugs by function
@@ -817,10 +817,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_regressor.${version}
-        - index.project.relman.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_regressor.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_regressor.latest
+        - index.project.bugbug.train_regressor.${version}
+        - index.project.bugbug.train_regressor.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_regressor.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_regressor.latest
       metadata:
         name: bugbug train regressor model
         description: bugbug train regressor model
@@ -859,10 +859,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_stepstoreproduce.${version}
-        - index.project.relman.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_stepstoreproduce.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_stepstoreproduce.latest
+        - index.project.bugbug.train_stepstoreproduce.${version}
+        - index.project.bugbug.train_stepstoreproduce.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_stepstoreproduce.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_stepstoreproduce.latest
       metadata:
         name: bugbug train stepstoreproduce model
         description: bugbug train stepstoreproduce model
@@ -901,10 +901,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_spambug.${version}
-        - index.project.relman.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_spambug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_spambug.latest
+        - index.project.bugbug.train_spambug.${version}
+        - index.project.bugbug.train_spambug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_spambug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_spambug.latest
       metadata:
         name: bugbug train spambug model
         description: bugbug train spambug model
@@ -939,10 +939,10 @@ tasks:
 #      routes:
 #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
 #        - notify.irc-channel.#bugbug.on-failed
-#        - index.project.relman.bugbug.train_duplicate.${version}
-#        - index.project.relman.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-#        - index.project.relman.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-#        - index.project.relman.bugbug.train_duplicate.latest
+#        - index.project.bugbug.train_duplicate.${version}
+#        - index.project.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+#        - index.project.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+#        - index.project.bugbug.train_duplicate.latest
 #      metadata:
 #        name: bugbug train duplicate model
 #        description: bugbug train duplicate model
@@ -979,10 +979,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_testlabelselect.${version}
-        - index.project.relman.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_testlabelselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_testlabelselect.latest
+        - index.project.bugbug.train_testlabelselect.${version}
+        - index.project.bugbug.train_testlabelselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testlabelselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testlabelselect.latest
       metadata:
         name: bugbug train test label selection model
         description: bugbug train test label selection model
@@ -1020,10 +1020,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_testgroupselect.${version}
-        - index.project.relman.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_testgroupselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_testgroupselect.latest
+        - index.project.bugbug.train_testgroupselect.${version}
+        - index.project.bugbug.train_testgroupselect.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testgroupselect.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testgroupselect.latest
       metadata:
         name: bugbug train test group selection model
         description: bugbug train test group selection model
@@ -1059,10 +1059,10 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.relman.bugbug.train_testfailure.${version}
-        - index.project.relman.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-        - index.project.relman.bugbug.train_testfailure.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-        - index.project.relman.bugbug.train_testfailure.latest
+        - index.project.bugbug.train_testfailure.${version}
+        - index.project.bugbug.train_testfailure.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_testfailure.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_testfailure.latest
       metadata:
         name: bugbug train test failure model
         description: bugbug train test failure model
@@ -1098,10 +1098,10 @@ tasks:
 #      routes:
 #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
 #        - notify.irc-channel.#bugbug.on-failed
-#        - index.project.relman.bugbug.train_similarity.${version}
-#        - index.project.relman.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-#        - index.project.relman.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-#        - index.project.relman.bugbug.train_similarity.latest
+#        - index.project.bugbug.train_similarity.${version}
+#        - index.project.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+#        - index.project.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+#        - index.project.bugbug.train_similarity.latest
 #      metadata:
 #        name: bugbug train similarity model
 #        description: bugbug train similarity model
@@ -1197,7 +1197,7 @@ tasks:
       dependencies:
         - docker-build
       scopes:
-        - secrets:get:project/relman/bugbug/integration
+        - secrets:get:project/bugbug/integration
         - "docker-worker:cache:bugbug-mercurial-repository"
       payload:
         features:
@@ -1206,7 +1206,7 @@ tasks:
         maxRunTime: 10800
         image: mozilla/bugbug-commit-retrieval:${version}
         env:
-          TC_SECRET_ID: project/relman/bugbug/integration
+          TC_SECRET_ID: project/bugbug/integration
           CACHE_DIR: "/cache"
         command:
           - "/bin/bash"
@@ -1233,8 +1233,8 @@ tasks:
       dependencies:
         - integration-test
       scopes:
-        - hooks:modify-hook:project-relman/bugbug-checks
-        - assume:hook-id:project-relman/bugbug-checks
+        - hooks:modify-hook:project-bugbug/bugbug-checks
+        - assume:hook-id:project-bugbug/bugbug-checks
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -1250,7 +1250,7 @@ tasks:
              cd bugbug &&
              git -c advice.detachedHead=false checkout ${version} &&
              python infra/set_hook_version.py ${version} infra/taskcluster-hook-check-models-start.json &&
-             taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-relman bugbug-checks"
+             taskboot --target . build-hook infra/taskcluster-hook-check-models-start.json project-bugbug bugbug-checks"
       metadata:
         name: bugbug update check hook
         description: bugbug update check hook
@@ -1265,8 +1265,8 @@ tasks:
         - past-bugs-by-function
         - train-regressor
       scopes:
-        - hooks:modify-hook:project-relman/bugbug-classify-patch
-        - assume:hook-id:project-relman/bugbug-classify-patch
+        - hooks:modify-hook:project-bugbug/bugbug-classify-patch
+        - assume:hook-id:project-bugbug/bugbug-classify-patch
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -1282,7 +1282,7 @@ tasks:
              cd bugbug &&
              git -c advice.detachedHead=false checkout ${version} &&
              python infra/set_hook_version.py ${version} infra/taskcluster-hook-classify-patch.json &&
-             taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-relman bugbug-classify-patch"
+             taskboot --target . build-hook infra/taskcluster-hook-classify-patch.json project-bugbug bugbug-classify-patch"
       metadata:
         name: bugbug update classify patch hook
         description: bugbug update classify patch hook
@@ -1297,8 +1297,8 @@ tasks:
         - train-test-failure
         - train-test-label-select
       scopes:
-          - hooks:modify-hook:project-relman/bugbug-test-select
-          - assume:hook-id:project-relman/bugbug-test-select
+          - hooks:modify-hook:project-bugbug/bugbug-test-select
+          - assume:hook-id:project-bugbug/bugbug-test-select
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -1314,7 +1314,7 @@ tasks:
              cd bugbug &&
              git -c advice.detachedHead=false checkout ${version} &&
              python infra/set_hook_version.py ${version} infra/taskcluster-hook-test-select.json &&
-             taskboot --target . build-hook infra/taskcluster-hook-test-select.json project-relman bugbug-test-select"
+             taskboot --target . build-hook infra/taskcluster-hook-test-select.json project-bugbug bugbug-test-select"
       metadata:
         name: bugbug update test select hook
         description: bugbug update test select hook
@@ -1326,7 +1326,7 @@ tasks:
         - docker-build
         - integration-test
       scopes:
-        - secrets:get:project/relman/bugbug/deploy
+        - secrets:get:project/bugbug/deploy
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
@@ -1339,7 +1339,7 @@ tasks:
         maxRunTime: 3600
         image: ${taskboot_image}
         env:
-          TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+          TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
           - taskboot
           - push-artifact
@@ -1358,7 +1358,7 @@ tasks:
         - docker-build
         - integration-test
       scopes:
-        - secrets:get:project/relman/bugbug/deploy
+        - secrets:get:project/bugbug/deploy
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 month'}
@@ -1371,7 +1371,7 @@ tasks:
         maxRunTime: 3600
         image: ${taskboot_image}
         env:
-          TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+          TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
           - "/bin/sh"
           - "-lcxe"

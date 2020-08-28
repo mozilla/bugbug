@@ -49,7 +49,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-checks"
+            "assume:hook-id:project-bugbug/bugbug-checks"
         ],
         "tags": {},
         "workerType": "batch"

@@ -218,7 +218,7 @@ tasks:
             - {$eval: as_slugid("version_check_task")}
             - {$eval: as_slugid("integration_test")}
           scopes:
-            - secrets:get:project/relman/bugbug/deploy
+            - secrets:get:project/bugbug/deploy
           created: {$fromNow: ''}
           deadline: {$fromNow: '1 hour'}
           provisionerId: proj-bugbug
@@ -233,7 +233,7 @@ tasks:
               - taskboot
               - deploy-pypi
             env:
-              TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+              TASKCLUSTER_SECRET: project/bugbug/deploy
               GIT_REPOSITORY: "${repository}"
               GIT_REVISION: "${head_rev}"
           metadata:
@@ -252,7 +252,7 @@ tasks:
             - {$eval: as_slugid("http_tests_task")}
             - {$eval: as_slugid("packaging_test_task")}
           scopes:
-            - secrets:get:project/relman/bugbug/deploy
+            - secrets:get:project/bugbug/deploy
           taskId: {$eval: as_slugid("docker_push")}
           created: {$fromNow: ''}
           deadline: {$fromNow: '4 hours'}
@@ -265,7 +265,7 @@ tasks:
             maxRunTime: 3600
             image: "${taskboot_image}"
             env:
-              TASKCLUSTER_SECRET: project/relman/bugbug/deploy
+              TASKCLUSTER_SECRET: project/bugbug/deploy
             command:
               - taskboot
               - push-artifact
@@ -288,7 +288,7 @@ tasks:
           provisionerId: proj-bugbug
           workerType: compute-small
           scopes:
-            - secrets:get:project/relman/bugbug/integration
+            - secrets:get:project/bugbug/integration
             - "docker-worker:cache:bugbug-mercurial-repository"
           payload:
             features:
@@ -297,7 +297,7 @@ tasks:
             maxRunTime: 10800
             image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
             env:
-              TC_SECRET_ID: project/relman/bugbug/integration
+              TC_SECRET_ID: project/bugbug/integration
               CACHE_DIR: "/cache"
             command:
               - "/bin/bash"
@@ -323,9 +323,9 @@ tasks:
           dependencies:
             - {$eval: as_slugid("integration_test")}
           scopes:
-            - hooks:modify-hook:project-relman/bugbug
-            - assume:hook-id:project-relman/bugbug
-            - queue:route:project.relman.bugbug.deploy_ending.*
+            - hooks:modify-hook:project-bugbug/bugbug
+            - assume:hook-id:project-bugbug/bugbug
+            - queue:route:project.bugbug.deploy_ending.*
           created: {$fromNow: ''}
           deadline: {$fromNow: '5 hours'}
           provisionerId: proj-bugbug
@@ -343,9 +343,9 @@ tasks:
                  cd bugbug &&
                  git -c advice.detachedHead=false checkout ${head_rev} &&
                  python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
-                 taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-relman bugbug"
+                 taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"
           routes:
-            - project.relman.bugbug.deploy_ending
+            - project.bugbug.deploy_ending
           metadata:
             name: bugbug update data hook
             description: bugbug update data hook

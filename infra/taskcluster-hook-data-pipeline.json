@@ -46,11 +46,11 @@
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed",
-            "index.project.relman.bugbug.data-pipeline-start"
+            "index.project.bugbug.data-pipeline-start"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug"
+            "assume:hook-id:project-bugbug/bugbug"
         ],
         "tags": {},
         "workerType": "batch"

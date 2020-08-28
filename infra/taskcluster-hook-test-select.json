@@ -40,7 +40,7 @@
             },
             "capabilities": {},
             "env": {
-                "TC_SECRET_ID": "project/relman/bugbug/production"
+                "TC_SECRET_ID": "project/bugbug/production"
             },
             "features": {
                 "taskclusterProxy": true
@@ -62,14 +62,14 @@
         "routes": [
             "notify.email.mcastelluccio@mozilla.com.on-failed",
             "notify.irc-channel.#bugbug.on-failed",
-            "index.project.relman.bugbug.test_select.latest",
-            "index.project.relman.bugbug.test_select.diff.${payload['DIFF_ID']}",
-            "project.relman.bugbug.test_select"
+            "index.project.bugbug.test_select.latest",
+            "index.project.bugbug.test_select.diff.${payload['DIFF_ID']}",
+            "project.bugbug.test_select"
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-relman/bugbug-test-select",
-            "queue:route:project.relman.bugbug.test_select.*"
+            "assume:hook-id:project-bugbug/bugbug-test-select",
+            "queue:route:project.bugbug.test_select.*"
         ],
         "tags": {},
         "workerType": "compute-small"
