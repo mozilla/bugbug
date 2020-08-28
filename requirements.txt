@@ -26,5 +26,5 @@ tabulate==0.8.7
 taskcluster==37.0.0
 tenacity==6.2.0
 tqdm==4.48.2
-xgboost==1.0.2
+xgboost==1.2.0
 zstandard==0.14.0
