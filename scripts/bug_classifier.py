@@ -17,7 +17,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_bugs(model_name, classifier, bug_id):
+def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
     if classifier != "default":
         assert (
             model_name in MODELS_WITH_TYPE
@@ -74,7 +74,7 @@ def classify_bugs(model_name, classifier, bug_id):
         input()
 
 
-def main():
+def main() -> None:
     description = "Perform evaluation on bugs using the specified model"
     parser = argparse.ArgumentParser(description=description)
 
@@ -85,7 +85,7 @@ def main():
         choices=["default", "nn"],
         default="default",
     )
-    parser.add_argument("--bug-id", help="Classify the given bug id")
+    parser.add_argument("--bug-id", help="Classify the given bug id", type=int)
 
     args = parser.parse_args()
 
