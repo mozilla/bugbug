@@ -12,7 +12,7 @@ from scripts import trainer
 def test_trainer():
     # Pretend the DB was already downloaded and no new DB is available.
 
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_bugs.latest/artifacts/public/bugs.json"
 
     responses.add(
         responses.GET,

@@ -64,7 +64,7 @@ REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.b
 
 def download_similarity_model(model_name):
     path = f"{model_name_to_class[model_name].__name__.lower()}.similaritymodel"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.train_similarity.latest/artifacts/public/{path}.zst"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_similarity.latest/artifacts/public/{path}.zst"
 
     logger.info(f"Downloading similarity model from {url}...")
     updated = download_check_etag(url)

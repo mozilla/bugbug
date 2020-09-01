@@ -121,8 +121,8 @@ def test_exists_db(tmp_path):
 
 
 def test_download(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -157,8 +157,8 @@ def test_download(tmp_path, mock_zst):
 
 
 def test_download_missing(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -184,8 +184,8 @@ def test_download_missing(tmp_path, mock_zst):
 
 
 def test_download_old_schema(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 2)
@@ -219,8 +219,8 @@ def test_download_old_schema(tmp_path, mock_zst):
 
 
 def test_download_same_schema_new_db(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url, 1)
@@ -279,8 +279,8 @@ def test_download_same_schema_new_db(tmp_path, mock_zst):
 
 
 def test_download_support_file(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
     support_filename = "support.zst"
     url_support = urljoin(url, support_filename)
 
@@ -317,8 +317,8 @@ def test_download_support_file(tmp_path, mock_zst):
 
 
 def test_download_with_support_files_too(tmp_path, mock_zst):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
     support_filename = "support.zst"
     url_support = urljoin(url, support_filename)
 
@@ -368,8 +368,8 @@ def test_download_with_support_files_too(tmp_path, mock_zst):
 
 
 def test_download_support_file_missing(tmp_path, caplog):
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/commits.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
     support_filename = "support_mock.zst"
     url_support = urljoin(url, support_filename)
 
@@ -399,8 +399,8 @@ def test_download_support_file_missing(tmp_path, caplog):
 
 
 def test_is_old_schema(tmp_path):
-    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
     db_path = tmp_path / "prova.json"
     db.register(db_path, url_zst, 1, support_files=[])

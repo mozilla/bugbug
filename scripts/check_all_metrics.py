@@ -19,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
 
-QUEUE_ROUTE_PATTERN = "index.project.relman.bugbug.train_*.per_date.*"
+QUEUE_ROUTE_PATTERN = "index.project.bugbug.train_*.per_date.*"
 
 CURRENT_DIR = Path(__file__).resolve().parent
 

@@ -93,7 +93,7 @@ def test_exp_queue():
 
 
 def test_download_check_etag():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -125,7 +125,7 @@ def test_download_check_etag():
 
 
 def test_download_check_etag_changed():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -167,7 +167,7 @@ def test_download_check_etag_changed():
 
 
 def test_download_check_etag_unchanged():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -209,7 +209,7 @@ def test_download_check_etag_unchanged():
 
 
 def test_download_check_missing():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -232,7 +232,7 @@ def test_download_check_missing():
 
 
 def test_get_last_modified():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -247,7 +247,7 @@ def test_get_last_modified():
 
 
 def test_get_last_modified_not_present():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,
@@ -260,7 +260,7 @@ def test_get_last_modified_not_present():
 
 
 def test_get_last_modified_missing():
-    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug/prova.txt"
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
 
     responses.add(
         responses.HEAD,

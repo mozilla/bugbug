@@ -87,7 +87,7 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
     # TODO: Might be better storing it in the file
     file_path_parts = metric_file_path.stem.split("_")
 
-    assert file_path_parts[:5] == ["metric", "project", "relman", "bugbug", "train"]
+    assert file_path_parts[:5] == ["metric", "project", "bugbug", "train"]
     model_name = file_path_parts[5]
     assert file_path_parts[6:8] == ["per", "date"]
     date_parts = list(map(int, file_path_parts[8:14]))

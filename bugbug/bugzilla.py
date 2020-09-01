@@ -16,7 +16,7 @@ from bugbug import db, utils
 BUGS_DB = "data/bugs.json"
 db.register(
     BUGS_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.relman.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
     6,
 )
 
