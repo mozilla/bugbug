@@ -511,9 +511,9 @@ class is_first_affected_same(couple_bug_feature):
         version_status2 = get_versions_statuses(bugs[1])[1]
 
         if len(version_status1) > 0 and len(version_status2) > 0:
-            return min(version_status1) == min(version_status2)
+            return int(min(version_status1) == min(version_status2))
 
-        return False
+        return 0
 
 
 class couple_delta_creation_date(couple_bug_feature):

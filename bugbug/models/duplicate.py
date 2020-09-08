@@ -4,15 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import random
-from itertools import combinations, islice
+from itertools import combinations
 
-import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
-from sklearn.svm import LinearSVC
+from xgboost import XGBClassifier
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugCoupleModel
@@ -30,30 +29,8 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
         self._le.fit(y)
 
 
-class BypassFeatures(TransformerMixin, BaseEstimator):
-    def __init__(self):
-        self.feature_extractors = [
-            bug_features.couple_common_keywords(),
-            bug_features.couple_common_whiteboard_keywords(),
-            bug_features.couple_common_words_summary(),
-            bug_features.couple_common_words_comments(),
-        ]
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        return pd.DataFrame([couple_data for couple_data in X])
-
-    def get_feature_names(self):
-        return []
-
-    def get_feature_extractors(self):
-        return self.feature_extractors
-
-
 class DuplicateModel(BugCoupleModel):
-    def __init__(self, training_size=14000, lemmatization=False, cleanup_urls=True):
+    def __init__(self, training_size=2000, lemmatization=False, cleanup_urls=True):
         self.num_duplicates = training_size // 2
         self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
@@ -68,11 +45,13 @@ class DuplicateModel(BugCoupleModel):
             bug_features.is_same_version(),
             bug_features.is_same_os(),
             bug_features.is_same_target_milestone(),
+            bug_features.is_first_affected_same(),
+            bug_features.couple_common_words_comments(),
+            bug_features.couple_delta_creation_date(),
+            bug_features.couple_common_keywords(),
+            bug_features.couple_common_whiteboard_keywords(),
+            bug_features.couple_common_words_summary(),
         ]
-
-        couple_features = BypassFeatures()
-
-        feature_extractors += couple_features.get_feature_extractors()
 
         cleanup_functions = [
             feature_cleanup.responses(),
@@ -90,21 +69,23 @@ class DuplicateModel(BugCoupleModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors, cleanup_functions, rollback=True
+                    ),
                 ),
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("text", self.text_vectorizer(), "text"),
-                            ("couple_data", couple_features, "couple_data"),
+                            ("couple_data", DictVectorizer(), "couple_data"),
                         ]
                     ),
                 ),
             ]
         )
 
-        self.clf = LinearSVCWithLabelEncoding(LinearSVC())
+        self.clf = XGBClassifier(n_jobs=4)
 
     def get_labels(self):
 
@@ -112,7 +93,7 @@ class DuplicateModel(BugCoupleModel):
 
         all_ids = set(
             bug["id"]
-            for bug in islice(bugzilla.get_bugs(), 14000)
+            for bug in bugzilla.get_bugs()
             if bug["creator"] not in REPORTERS_TO_IGNORE
             and "dupeme" not in bug["keywords"]
         )
@@ -123,7 +104,7 @@ class DuplicateModel(BugCoupleModel):
         duplicate_ids = []
 
         duplicates_num = 0
-        for bug_data in islice(bugzilla.get_bugs(), 14000):
+        for bug_data in bugzilla.get_bugs():
             bug_id = bug_data["id"]
             current_duplicates = [bug_id]
 
