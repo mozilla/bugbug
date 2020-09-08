@@ -463,23 +463,21 @@ class had_severity_enhancement(single_bug_feature):
 
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return len(
-            [
-                keyword
-                for keyword in whiteboard_keywords(bugs[0])
-                if keyword in whiteboard_keywords(bugs[1])
-            ]
-        )
+        return [
+            keyword
+            for keyword in whiteboard_keywords(bugs[0])
+            if keyword in whiteboard_keywords(bugs[1])
+        ]
 
 
 class is_same_product(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(bugs[0]["product"] == bugs[1]["product"])
+        return bugs[0]["product"] == bugs[1]["product"]
 
 
 class is_same_component(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(
+        return (
             bugs[0]["product"] == bugs[1]["product"]
             and bugs[0]["component"] == bugs[1]["component"]
         )
@@ -487,22 +485,22 @@ class is_same_component(couple_bug_feature):
 
 class is_same_platform(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(bugs[0]["platform"] == bugs[1]["platform"])
+        return bugs[0]["platform"] == bugs[1]["platform"]
 
 
 class is_same_version(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(bugs[0]["version"] == bugs[1]["version"])
+        return bugs[0]["version"] == bugs[1]["version"]
 
 
 class is_same_os(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(bugs[0]["op_sys"] == bugs[1]["op_sys"])
+        return bugs[0]["op_sys"] == bugs[1]["op_sys"]
 
 
 class is_same_target_milestone(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
-        return int(bugs[0]["target_milestone"] == bugs[1]["target_milestone"])
+        return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
 
 
 class is_first_affected_same(couple_bug_feature):
@@ -511,9 +509,9 @@ class is_first_affected_same(couple_bug_feature):
         version_status2 = get_versions_statuses(bugs[1])[1]
 
         if len(version_status1) > 0 and len(version_status2) > 0:
-            return int(min(version_status1) == min(version_status2))
+            return min(version_status1) == min(version_status2)
 
-        return 0
+        return False
 
 
 class couple_delta_creation_date(couple_bug_feature):
@@ -529,10 +527,8 @@ class couple_common_words_summary(couple_bug_feature):
         self.to_ignore = to_ignore
 
     def __call__(self, bugs):
-        return len(
-            set(bugs[0]["summary"].split()).intersection(
-                set(bugs[1]["summary"].split())
-            )
+        return set(bugs[0]["summary"].split()).intersection(
+            set(bugs[1]["summary"].split())
         )
 
 
@@ -541,13 +537,9 @@ class couple_common_words_comments(couple_bug_feature):
         self.to_ignore = to_ignore
 
     def __call__(self, bugs):
-        text1 = " ".join(
-            bugs[0]["comments"][idx]["text"] for idx in range(len(bugs[0]["comments"]))
-        )
-        text2 = " ".join(
-            bugs[1]["comments"][idx]["text"] for idx in range(len(bugs[1]["comments"]))
-        )
-        return len(set(text1.split()).intersection(set(text2.split())))
+        text1 = " ".join(comment["text"] for comment in bugs[0]["comments"])
+        text2 = " ".join(comment["text"] for comment in bugs[1]["comments"])
+        return set(text1.split()).intersection(set(text2.split()))
 
 
 class couple_common_keywords(couple_bug_feature):
@@ -555,13 +547,11 @@ class couple_common_keywords(couple_bug_feature):
         self.to_ignore = to_ignore
 
     def __call__(self, bugs, **kwargs):
-        return len(
-            [
-                keyword
-                for keyword in bugs[0]["keywords"]
-                if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
-            ]
-        )
+        return [
+            keyword
+            for keyword in bugs[0]["keywords"]
+            if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
+        ]
 
 
 def get_author_ids():

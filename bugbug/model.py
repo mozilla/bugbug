@@ -248,7 +248,10 @@ class Model:
 
             class_name = self.le.inverse_transform([num])[0]
 
-            important_features["classes"][class_name] = (top_item_features, top_avg)
+            important_features["classes"][class_name] = (
+                top_item_features,
+                top_avg,
+            )
 
         return important_features
 

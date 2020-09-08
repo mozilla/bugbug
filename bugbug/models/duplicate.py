@@ -11,7 +11,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
-from xgboost import XGBClassifier
+from sklearn.svm import LinearSVC
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugCoupleModel
@@ -30,7 +30,7 @@ class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
 
 
 class DuplicateModel(BugCoupleModel):
-    def __init__(self, training_size=2000, lemmatization=False, cleanup_urls=True):
+    def __init__(self, training_size=14000, lemmatization=False, cleanup_urls=True):
         self.num_duplicates = training_size // 2
         self.num_nondups_nondups = self.num_dup_nondups = training_size // 4
 
@@ -85,7 +85,7 @@ class DuplicateModel(BugCoupleModel):
             ]
         )
 
-        self.clf = XGBClassifier(n_jobs=4)
+        self.clf = LinearSVCWithLabelEncoding(LinearSVC())
 
     def get_labels(self):
 
