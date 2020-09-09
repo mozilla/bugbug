@@ -243,6 +243,15 @@ class Retriever(object):
                     skipped_no_commits += 1
                     continue
 
+                # Skip wptsync commits, since they are not like normal pushes made by developers.
+                if any(
+                    "wptsync" in commit["author_email"]
+                    or "wpt-pr:" in commit["desc"]
+                    or "wpt-type:" in commit["desc"]
+                    for commit in commits
+                ):
+                    continue
+
                 merged_commits = commit_features.merge_commits(commits)
 
                 # XXX: For now, skip commits which are too large.
