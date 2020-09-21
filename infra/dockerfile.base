@@ -12,6 +12,7 @@ RUN apt-get update && \
 ENV LD_PRELOAD="libjemalloc.so.2"
 
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
+COPY infra/adr_config.toml /root/.config/adr/config.toml
 
 COPY . /tmp/bugbug
 RUN pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
