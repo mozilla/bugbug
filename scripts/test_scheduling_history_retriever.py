@@ -115,10 +115,10 @@ class Retriever(object):
                             tuple(push.get_possible_regressions(granularity)),
                             tuple(push.get_likely_regressions(granularity)),
                         )
-                        adr.config.cache.put(
+                        mozci.config.cache.put(
                             key,
                             (value, MOZCI_VERSION),
-                            adr.config["cache"]["retention"],
+                            mozci.config["cache"]["retention"],
                         )
                         assert len(value) == 5
                         yield value
@@ -135,7 +135,7 @@ class Retriever(object):
 
         def retrieve_from_cache(push):
             semaphore.acquire()
-            return adr.config.cache.get(cache_key(push))
+            return mozci.config.cache.get(cache_key(push))
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(retrieve_from_cache, push) for push in pushes]
