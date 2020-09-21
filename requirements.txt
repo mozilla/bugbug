@@ -7,7 +7,7 @@ lmdb==0.99
 matplotlib==3.3.2
 mercurial==5.5.1
 microannotate==0.0.20
-mozci==1.6.7
+mozci==1.8.1
 numpy==1.19.2
 orjson==3.3.1
 ortools==7.8.7959
