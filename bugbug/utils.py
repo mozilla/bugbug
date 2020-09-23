@@ -32,7 +32,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder
 
 from bugbug import get_bugbug_version
-from bugbug.model import Model
 from bugbug.models import get_model_class
 
 logging.basicConfig(level=logging.INFO)
@@ -230,7 +229,7 @@ def download_model(model_name):
     return path
 
 
-def download_and_load_model(model_name: str) -> Model:
+def download_and_load_model(model_name):
     path = download_model(model_name)
     return get_model_class(model_name).load(path)
 
