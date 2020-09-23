@@ -3,6 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from typing import Any, Dict, List, Tuple
+
+from bugbug.bugzilla import BugID
 from bugbug.models.defect import DefectModel
 
 
@@ -11,7 +14,7 @@ class RegressionModel(DefectModel):
         DefectModel.__init__(self, lemmatization, historical)
         self.calculate_importance = False
 
-    def get_labels(self):
+    def get_labels(self) -> Tuple[Dict[BugID, Any], List[Any]]:
         classes = self.get_bugbug_labels("regression")
 
         print(

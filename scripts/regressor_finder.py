@@ -12,6 +12,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
+from typing import Any, Dict, cast
 
 import dateutil.parser
 import tenacity
@@ -21,6 +22,9 @@ from microannotate import utils as microannotate_utils
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
+from bugbug.bugzilla import BugID
+from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
+from bugbug.models.regression import RegressionModel
 from bugbug.models.regressor import (
     BUG_FIXING_COMMITS_DB,
     BUG_INTRODUCING_COMMITS_DB,
@@ -174,7 +178,7 @@ class RegressorFinder(object):
         zstd_compress(IGNORED_COMMITS_DB)
         db.upload(IGNORED_COMMITS_DB)
 
-    def find_bug_fixing_commits(self):
+    def find_bug_fixing_commits(self) -> None:
         logger.info("Downloading commits database...")
         assert db.download(repository.COMMITS_DB)
 
@@ -193,10 +197,12 @@ class RegressorFinder(object):
 
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
-        defect_model = download_and_load_model("defectenhancementtask")
+        defect_model = cast(
+            DefectEnhancementTaskModel, download_and_load_model("defectenhancementtask")
+        )
 
         logger.info("Downloading regression model...")
-        regression_model = download_and_load_model("regression")
+        regression_model = cast(RegressionModel, download_and_load_model("regression"))
 
         start_date = datetime.now() - RELATIVE_START_DATE
         end_date = datetime.now() - RELATIVE_END_DATE
@@ -227,8 +233,8 @@ class RegressorFinder(object):
             f"{bug_count} bugs in total, {len(commit_map) - bug_count} bugs linked to commits missing"
         )
 
-        known_defect_labels = defect_model.get_labels()
-        known_regression_labels = regression_model.get_labels()
+        known_defect_labels: Dict[BugID, Any] = defect_model.get_labels()[0]
+        known_regression_labels: Dict[BugID, Any] = regression_model.get_labels()[0]
 
         bug_fixing_commits = []
 

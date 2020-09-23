@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import joblib
 import matplotlib
@@ -334,6 +334,10 @@ class Model:
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
+        pass
+
+    def get_labels(self) -> Tuple[Dict[Any, Any], List[Any]]:
+        """Subclasses implement their own function to gather labels."""
         pass
 
     def train(self, importance_cutoff=0.15, limit=None):
