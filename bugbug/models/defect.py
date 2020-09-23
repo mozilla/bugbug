@@ -212,7 +212,7 @@ class DefectModel(BugModel):
             can_use_defect_type = False
 
             # We can use the type as a label for all bugs after the migration (https://bugzilla.mozilla.org/show_bug.cgi?id=1524738), if they are not defects.
-            if bug["id"] > 1_540_807:
+            if bug_id > 1540807:
                 can_use_type = True
 
             # And we can use the type as a label for bugs whose type has been modified.
@@ -226,23 +226,23 @@ class DefectModel(BugModel):
             if can_use_type:
                 if bug["type"] == "enhancement":
                     if kind == "bug":
-                        classes[int(bug_id)] = 0
+                        classes[bug_id] = 0
                     elif kind == "regression":
-                        classes[int(bug_id)] = 0
+                        classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
-                        classes[int(bug_id)] = "enhancement"
+                        classes[bug_id] = "enhancement"
                 elif bug["type"] == "task":
                     if kind == "bug":
-                        classes[int(bug_id)] = 0
+                        classes[bug_id] = 0
                     elif kind == "regression":
-                        classes[int(bug_id)] = 0
+                        classes[bug_id] = 0
                     elif kind == "defect_enhancement_task":
-                        classes[int(bug_id)] = "task"
+                        classes[bug_id] = "task"
                 elif bug["type"] == "defect" and can_use_defect_type:
                     if kind == "bug":
-                        classes[int(bug_id)] = 1
+                        classes[bug_id] = 1
                     elif kind == "defect_enhancement_task":
-                        classes[int(bug_id)] = "defect"
+                        classes[bug_id] = "defect"
 
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
