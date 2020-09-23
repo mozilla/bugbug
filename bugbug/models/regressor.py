@@ -20,7 +20,7 @@ BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
     BUG_FIXING_COMMITS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/bug_fixing_commits.json.zst",
-    1,
+    2,
 )
 
 BUG_INTRODUCING_COMMITS_DB = "data/bug_introducing_commits.json"
