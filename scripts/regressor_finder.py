@@ -12,7 +12,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, cast
+from typing import cast
 
 import dateutil.parser
 import tenacity
@@ -22,7 +22,6 @@ from microannotate import utils as microannotate_utils
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, repository
-from bugbug.bugzilla import BugID
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
 from bugbug.models.regressor import (
@@ -233,8 +232,8 @@ class RegressorFinder(object):
             f"{bug_count} bugs in total, {len(commit_map) - bug_count} bugs linked to commits missing"
         )
 
-        known_defect_labels: Dict[BugID, Any] = defect_model.get_labels()[0]
-        known_regression_labels: Dict[BugID, Any] = regression_model.get_labels()[0]
+        known_defect_labels, _ = defect_model.get_labels()
+        known_regression_labels, _ = regression_model.get_labels()
 
         bug_fixing_commits = []
 
