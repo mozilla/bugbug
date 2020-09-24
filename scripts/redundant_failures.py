@@ -13,7 +13,7 @@ def count(is_first_task, is_second_task):
 
     print(f"Analyzing {len(push_data)} pushes...")
 
-    all_tasks = set(task for _, push_tasks, _, _ in push_data for task in push_tasks)
+    all_tasks = set(task for _, _, push_tasks, _, _ in push_data for task in push_tasks)
 
     print(f"Considering {len(all_tasks)} tasks...")
 
@@ -23,7 +23,13 @@ def count(is_first_task, is_second_task):
     count_second_but_not_first = 0
 
     for push in push_data:
-        (revisions, push_tasks, possible_regressions, likely_regressions) = push
+        (
+            revisions,
+            fix_revision,
+            push_tasks,
+            possible_regressions,
+            likely_regressions,
+        ) = push
 
         first_group_tasks = [
             task.split("/")[1] for task in push_tasks if is_first_task(task)
