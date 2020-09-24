@@ -13,7 +13,6 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
-from bugbug.bugzilla import BugID
 from bugbug.model import BugModel
 
 
@@ -86,21 +85,21 @@ class DefectModel(BugModel):
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
-    def get_bugbug_labels(self, kind="bug") -> Dict[BugID, Any]:
+    def get_bugbug_labels(self, kind="bug") -> Dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]
 
-        classes: Dict[BugID, Any] = {}
+        classes: Dict[int, Any] = {}
 
         for bug_id, category in labels.get_labels("bug_nobug"):
             assert category in ["True", "False"], f"unexpected category {category}"
             if kind == "bug":
-                classes[BugID(bug_id)] = 1 if category == "True" else 0
+                classes[int(bug_id)] = 1 if category == "True" else 0
             elif kind == "regression":
                 if category == "False":
-                    classes[BugID(bug_id)] = 0
+                    classes[int(bug_id)] = 0
             elif kind == "defect_enhancement_task":
                 if category == "True":
-                    classes[BugID(bug_id)] = "defect"
+                    classes[int(bug_id)] = "defect"
 
         for bug_id, category in labels.get_labels("regression_bug_nobug"):
             assert category in [
@@ -110,15 +109,15 @@ class DefectModel(BugModel):
                 "regression",
             ], f"unexpected category {category}"
             if kind == "bug":
-                classes[BugID(bug_id)] = 1 if category != "nobug" else 0
+                classes[int(bug_id)] = 1 if category != "nobug" else 0
             elif kind == "regression":
                 if category == "bug_unknown_regression":
                     continue
 
-                classes[BugID(bug_id)] = 1 if category == "regression" else 0
+                classes[int(bug_id)] = 1 if category == "regression" else 0
             elif kind == "defect_enhancement_task":
                 if category != "nobug":
-                    classes[BugID(bug_id)] = "defect"
+                    classes[int(bug_id)] = "defect"
 
         defect_enhancement_task_e = {
             bug_id: category
@@ -162,18 +161,18 @@ class DefectModel(BugModel):
         ):
             assert category in ["defect", "enhancement", "task"]
             if kind == "bug":
-                classes[BugID(bug_id)] = 1 if category == "defect" else 0
+                classes[int(bug_id)] = 1 if category == "defect" else 0
             elif kind == "regression":
                 if category in ["enhancement", "task"]:
-                    classes[BugID(bug_id)] = 0
+                    classes[int(bug_id)] = 0
             elif kind == "defect_enhancement_task":
-                classes[BugID(bug_id)] = category
+                classes[int(bug_id)] = category
 
         # Augment labes by using bugs marked as 'regression' or 'feature', as they are basically labelled.
         # And also use the new bug type field.
         bug_ids = set()
         for bug in bugzilla.get_bugs():
-            bug_id = BugID(bug["id"])
+            bug_id = int(bug["id"])
 
             bug_ids.add(bug_id)
 
@@ -249,7 +248,7 @@ class DefectModel(BugModel):
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
-    def get_labels(self) -> Tuple[Dict[BugID, Any], List[Any]]:
+    def get_labels(self) -> Tuple[Dict[int, Any], List[Any]]:
         classes = self.get_bugbug_labels("bug")
 
         print("{} bugs".format(sum(1 for label in classes.values() if label == 1)))

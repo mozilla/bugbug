@@ -5,7 +5,6 @@
 
 import csv
 from datetime import datetime
-from typing import NewType
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -13,8 +12,6 @@ from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
 from bugbug import db, utils
-
-BugID = NewType("BugID", int)
 
 BUGS_DB = "data/bugs.json"
 db.register(

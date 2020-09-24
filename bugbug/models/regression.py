@@ -5,7 +5,6 @@
 
 from typing import Any, Dict, List, Tuple
 
-from bugbug.bugzilla import BugID
 from bugbug.models.defect import DefectModel
 
 
@@ -14,7 +13,7 @@ class RegressionModel(DefectModel):
         DefectModel.__init__(self, lemmatization, historical)
         self.calculate_importance = False
 
-    def get_labels(self) -> Tuple[Dict[BugID, Any], List[Any]]:
+    def get_labels(self) -> Tuple[Dict[int, Any], List[Any]]:
         classes = self.get_bugbug_labels("regression")
 
         print(
