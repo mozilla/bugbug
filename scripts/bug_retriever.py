@@ -65,9 +65,9 @@ class Retriever(object):
             commit_bug_ids = commit_bug_ids[-limit:]
         logger.info(f"{len(commit_bug_ids)} bugs linked to commits to download.")
 
-        # Get IDs of bugs which caused regressions fixed by commits (useful for the regressor model).
+        # Get IDs of bugs which are regressions and bugs which caused regressions (useful for the regressor model).
         regressed_by_bug_ids = sum(
-            (bug["regressed_by"] for bug in bugzilla.get_bugs()),
+            (bug["regressed_by"] + bug["regressions"] for bug in bugzilla.get_bugs()),
             [],
         )
         if limit:
@@ -91,7 +91,7 @@ class Retriever(object):
 
         # Get regressed_by_bug_ids again (the set could have changed after downloading new bugs).
         regressed_by_bug_ids = sum(
-            (bug["regressed_by"] for bug in bugzilla.get_bugs()),
+            (bug["regressed_by"] + bug["regressions"] for bug in bugzilla.get_bugs()),
             [],
         )
         logger.info(
