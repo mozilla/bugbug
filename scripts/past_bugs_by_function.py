@@ -41,7 +41,7 @@ class PastBugsCollector(object):
             if bug_fixing_commit["type"] in ("d", "r")
         )
 
-        logger.info(f"{bug_fixing_commits_nodes} bug-fixing commits to analyze")
+        logger.info(f"{len(bug_fixing_commits_nodes)} bug-fixing commits to analyze")
 
         all_bug_ids = set(
             commit["bug_id"]
