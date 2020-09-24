@@ -54,7 +54,7 @@ class Retriever(object):
             assert db.download(repository.COMMITS_DB)
 
         # Get IDs of bugs linked to commits (used for some commit-based models, e.g. backout and regressor).
-        start_date = datetime.now() - relativedelta(years=2, months=6)
+        start_date = datetime.now() - relativedelta(years=3)
         commit_bug_ids = [
             commit["bug_id"]
             for commit in repository.get_commits()
