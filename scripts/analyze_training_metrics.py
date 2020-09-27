@@ -87,10 +87,10 @@ def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, 
     # TODO: Might be better storing it in the file
     file_path_parts = metric_file_path.stem.split("_")
 
-    assert file_path_parts[:5] == ["metric", "project", "bugbug", "train"]
-    model_name = file_path_parts[5]
-    assert file_path_parts[6:8] == ["per", "date"]
-    date_parts = list(map(int, file_path_parts[8:14]))
+    assert file_path_parts[:4] == ["metric", "project", "bugbug", "train"]
+    model_name = file_path_parts[4]
+    assert file_path_parts[5:7] == ["per", "date"]
+    date_parts = list(map(int, file_path_parts[7:13]))
     date = datetime(
         date_parts[0],
         date_parts[1],
@@ -130,6 +130,15 @@ def analyze_metrics(
                 continue
 
             metrics[model_name][key][date] = value
+
+        # Add individual targets for binary case
+        if len(metric["report"]["targets"]) == 2:
+            for class_, class_metrics in metric["report"]["targets"].items():
+                for key, value in class_metrics.items():
+                    if key not in REPORT_METRICS:
+                        continue
+
+                    metrics[model_name][f"{key}_{class_}"][date] = value
 
         # Also process the test_* metrics
         for key, value in metric.items():
