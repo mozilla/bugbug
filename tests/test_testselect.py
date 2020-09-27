@@ -206,7 +206,7 @@ def test_reduce5(failing_together: LMDBDict) -> None:
         {"linux1804-64/opt-a", "windows10/opt-c", "windows10/opt-d"}, 1.0
     )
     assert result == {
-        "linux1804-64/opt-a",
+        "windows10/opt-d",
     }
 
 
@@ -255,8 +255,32 @@ def test_reduce6(failing_together: LMDBDict) -> None:
     )
 
 
-@pytest.mark.xfail
 def test_reduce7(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {
+            "windows10/opt-3": (0.1, 0.0),
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-1",
+            "windows10/opt-3",
+            "windows10/opt-5",
+        },
+        1.0,
+    )
+    assert result == {"windows10/opt-5"}
+
+
+def test_reduce8(failing_together: LMDBDict) -> None:
     failing_together[b"windows10/opt-1"] = pickle.dumps(
         {
             "windows10/opt-5": (0.1, 1.0),
@@ -292,37 +316,250 @@ def test_reduce7(failing_together: LMDBDict) -> None:
         },
         1.0,
     )
-    assert (
-        result
-        == {
+    assert result == {"windows10/opt-0", "windows10/opt-5", "windows10/opt-6"}
+
+
+def test_reduce9(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-0"] = pickle.dumps(
+        {
+            "windows10/opt-5": (0.1, 0.0),
+        }
+    )
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {
+            "windows10/opt-6": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-4": (0.1, 1.0),
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-4"] = pickle.dumps(
+        {
+            "windows10/opt-6": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
             "windows10/opt-0",
             "windows10/opt-1",
-        }
-        or result
-        == {
-            "windows10/opt-0",
             "windows10/opt-2",
-        }
-        or result
-        == {
-            "windows10/opt-0",
             "windows10/opt-3",
-        }
-        or result
-        == {
-            "windows10/opt-0",
             "windows10/opt-4",
-        }
-        or result
-        == {
-            "windows10/opt-0",
             "windows10/opt-5",
-        }
-        or result
-        == {
-            "windows10/opt-0",
             "windows10/opt-6",
+        },
+        1.0,
+    )
+    assert result == {"windows10/opt-0", "windows10/opt-5", "windows10/opt-6"}
+
+
+def test_reduce10(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-5": (0.1, 1.0),
         }
+    )
+    failing_together[b"windows10/opt-4"] = pickle.dumps(
+        {
+            "windows10/opt-6": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-5"] = pickle.dumps(
+        {
+            "windows10/opt-6": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-0",
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+            "windows10/opt-5",
+            "windows10/opt-6",
+        },
+        1.0,
+    )
+    assert result == {
+        "windows10/opt-0",
+        "windows10/opt-1",
+        "windows10/opt-2",
+        "windows10/opt-3",
+        "windows10/opt-6",
+    } or result == {
+        "windows10/opt-0",
+        "windows10/opt-1",
+        "windows10/opt-2",
+        "windows10/opt-4",
+        "windows10/opt-5",
+    }
+
+
+def test_reduce11(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {
+            "windows10/opt-2": (0.1, 0.0),
+            "windows10/opt-3": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {
+            "windows10/opt-3": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+        },
+        1.0,
+    )
+    assert result == {"windows10/opt-3"}
+
+
+def test_reduce12(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-0"] = pickle.dumps(
+        {
+            "windows10/opt-1": (0.1, 0.0),
+            "windows10/opt-2": (0.1, 0.0),
+            "windows10/opt-3": (0.1, 0.0),
+            "windows10/opt-4": (0.1, 0.0),
+            "windows10/opt-5": (0.1, 0.0),
+        }
+    )
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {
+            "windows10/opt-2": (0.1, 0.0),
+            "windows10/opt-3": (0.1, 0.0),
+            "windows10/opt-4": (0.1, 0.0),
+            "windows10/opt-5": (0.1, 0.0),
+        }
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {
+            "windows10/opt-3": (0.1, 0.0),
+            "windows10/opt-4": (0.1, 1.0),
+            "windows10/opt-5": (0.1, 0.0),
+        }
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-4": (0.1, 0.0),
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-4"] = pickle.dumps(
+        {
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-0",
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+            "windows10/opt-5",
+        },
+        1.0,
+    )
+    assert result == {
+        "windows10/opt-0",
+        "windows10/opt-1",
+        "windows10/opt-2",
+        "windows10/opt-5",
+    } or result == {
+        "windows10/opt-0",
+        "windows10/opt-1",
+        "windows10/opt-3",
+        "windows10/opt-4",
+    }
+
+
+def test_reduce13(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {
+            "windows10/opt-3": (0.1, 0.0),
+            "windows10/opt-4": (0.1, 1.0),
+            "windows10/opt-5": (0.1, 0.0),
+        }
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-4": (0.1, 0.0),
+            "windows10/opt-5": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+            "windows10/opt-5",
+        },
+        1.0,
+        True,
+    )
+    assert result == {"windows10/opt-2", "windows10/opt-5"} or result == {
+        "windows10/opt-3",
+        "windows10/opt-4",
+    }
+
+
+def test_reduce14(failing_together: LMDBDict) -> None:
+    failing_together[b"windows10/opt-1"] = pickle.dumps(
+        {
+            "windows10/opt-3": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-2"] = pickle.dumps(
+        {
+            "windows10/opt-4": (0.1, 1.0),
+        }
+    )
+    failing_together[b"windows10/opt-3"] = pickle.dumps(
+        {
+            "windows10/opt-4": (0.1, 1.0),
+        }
+    )
+
+    model = TestLabelSelectModel()
+    result = model.reduce(
+        {
+            "windows10/opt-1",
+            "windows10/opt-2",
+            "windows10/opt-3",
+            "windows10/opt-4",
+        },
+        1.0,
+        True,
+    )
+    assert (
+        result == {"windows10/opt-1"}
+        or result == {"windows10/opt-2"}
+        or result == {"windows10/opt-3"}
+        or result == {"windows10/opt-4"}
     )
 
 

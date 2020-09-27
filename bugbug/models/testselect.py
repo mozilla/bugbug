@@ -355,21 +355,19 @@ class TestSelectModel(Model):
 
         sorted_tasks = sorted(tasks)
         for i, task1 in enumerate(sorted_tasks):
+            create_group(task1)
+
             try:
                 failing_together_stats = load_failing_together(task1)
             except KeyError:
-                if not assume_redundant:
-                    create_group(task1)
-                    continue
-                else:
-                    failing_together_stats = {}
+                failing_together_stats = {}
 
             for task2 in sorted_tasks[i + 1 :]:
                 try:
                     support, confidence = failing_together_stats[task2]
                 except KeyError:
                     if not assume_redundant:
-                        continue
+                        confidence = 0.0
                     else:
                         confidence = 1.0
 
@@ -377,10 +375,6 @@ class TestSelectModel(Model):
                     add_to_groups(task1, task2)
                 else:
                     mark_incompatible(task1, task2)
-
-            # Create group consisting only of task1, if there was nothing equivalent
-            # with it.
-            create_group(task1)
 
         return groups
 
@@ -447,7 +441,10 @@ class TestSelectModel(Model):
         return True
 
     def reduce(
-        self, tasks: Collection[str], min_redundancy_confidence: float
+        self,
+        tasks: Collection[str],
+        min_redundancy_confidence: float,
+        assume_redundant: bool = False,
     ) -> Set[str]:
         failing_together = test_scheduling.get_failing_together_db(
             self.granularity, True
@@ -464,7 +461,7 @@ class TestSelectModel(Model):
         task_vars = {task: solver.BoolVar(task) for task in tasks}
 
         equivalence_sets = self._generate_equivalence_sets(
-            tasks, min_redundancy_confidence, load_failing_together, False
+            tasks, min_redundancy_confidence, load_failing_together, assume_redundant
         )
 
         # Create constraints to ensure at least one task from each set of equivalent
