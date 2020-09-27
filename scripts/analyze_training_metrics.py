@@ -125,6 +125,15 @@ def analyze_metrics(
         date, model_name, metric = parse_metric_file(metric_file_path)
 
         # Then process the report
+        is_binary = len(metric["report"]["targets"]) == 2
+        if is_binary:
+            for target, target_metrics in metric["report"]["targets"].items():
+                for key, value in target_metrics.items():
+                    if key not in REPORT_METRICS:
+                        continue
+
+                    metrics[model_name][f"{key}_class_{target}"][date] = value
+
         for key, value in metric["report"]["average"].items():
             if key not in REPORT_METRICS:
                 continue
