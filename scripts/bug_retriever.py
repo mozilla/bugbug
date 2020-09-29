@@ -65,19 +65,23 @@ class Retriever(object):
             commit_bug_ids = commit_bug_ids[-limit:]
         logger.info(f"{len(commit_bug_ids)} bugs linked to commits to download.")
 
-        # Get IDs of bugs which are regressions and bugs which caused regressions (useful for the regressor model).
-        regressed_by_bug_ids = sum(
-            (bug["regressed_by"] + bug["regressions"] for bug in bugzilla.get_bugs()),
+        # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
+        # and blocked bugs.
+        regression_related_ids = sum(
+            (
+                bug["regressed_by"] + bug["regressions"] + bug["blocks"]
+                for bug in bugzilla.get_bugs()
+            ),
             [],
         )
         if limit:
-            regressed_by_bug_ids = regressed_by_bug_ids[-limit:]
+            regression_related_ids = regression_related_ids[-limit:]
         logger.info(
-            f"{len(regressed_by_bug_ids)} bugs which caused regressions fixed by commits."
+            f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
         )
 
         all_ids = (
-            timespan_ids + labelled_bug_ids + commit_bug_ids + regressed_by_bug_ids
+            timespan_ids + labelled_bug_ids + commit_bug_ids + regression_related_ids
         )
         all_ids_set = set(all_ids)
 
@@ -89,16 +93,19 @@ class Retriever(object):
 
         bugzilla.download_bugs(all_ids)
 
-        # Get regressed_by_bug_ids again (the set could have changed after downloading new bugs).
-        regressed_by_bug_ids = sum(
-            (bug["regressed_by"] + bug["regressions"] for bug in bugzilla.get_bugs()),
+        # Get regression_related_ids again (the set could have changed after downloading new bugs).
+        regression_related_ids = sum(
+            (
+                bug["regressed_by"] + bug["regressions"] + bug["blocks"]
+                for bug in bugzilla.get_bugs()
+            ),
             [],
         )
         logger.info(
-            f"{len(regressed_by_bug_ids)} bugs which caused regressions fixed by commits."
+            f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
         )
 
-        bugzilla.download_bugs(regressed_by_bug_ids)
+        bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
         inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
