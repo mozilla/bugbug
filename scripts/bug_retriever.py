@@ -94,18 +94,19 @@ class Retriever(object):
         bugzilla.download_bugs(all_ids)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
-        regression_related_ids = sum(
-            (
-                bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                for bug in bugzilla.get_bugs()
-            ),
-            [],
-        )
-        logger.info(
-            f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
-        )
+        for i in range(3):
+            regression_related_ids = sum(
+                (
+                    bug["regressed_by"] + bug["regressions"] + bug["blocks"]
+                    for bug in bugzilla.get_bugs()
+                ),
+                [],
+            )
+            logger.info(
+                f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
+            )
 
-        bugzilla.download_bugs(regression_related_ids)
+            bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
         inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
