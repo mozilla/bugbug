@@ -131,21 +131,6 @@ def test_empty_batch(client):
     assert rv.json == {"errors": {"bugs": ["min length is 1"]}}
 
 
-def test_too_big_batch(client):
-    """Start with a blank database."""
-
-    bugs = list(range(1001))
-
-    rv = client.post(
-        "/component/predict/batch",
-        data=json.dumps({"bugs": bugs}),
-        headers={API_TOKEN: "test"},
-    )
-
-    assert rv.status_code == 400
-    assert rv.json == {"errors": {"bugs": ["max length is 1000"]}}
-
-
 def test_non_int_batch(client):
     """Start with a blank database."""
 
