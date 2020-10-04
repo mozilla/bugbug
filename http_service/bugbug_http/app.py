@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Optional, Sequence
 
 import libmozdata
 import orjson
@@ -128,7 +128,7 @@ spec.components.security_scheme("api_key", api_key_scheme)
 @dataclass(init=False, frozen=True)
 class JobInfo:
     func: Callable[..., str]
-    args: List[Any] = field(default_factory=list)
+    args: Sequence[Any] = field(default_factory=list)
 
     def __init__(self, func, *args):
         # Custom __init__ is needed to support *args, and object.__setattr__ is
@@ -187,7 +187,7 @@ def schedule_job(
     )
 
 
-def schedule_bug_classification(model_name: str, bug_ids: List[int]) -> None:
+def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None:
     """Schedule the classification of a bug_id list"""
     job_id = get_job_id()
 
