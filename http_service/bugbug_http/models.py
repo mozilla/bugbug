@@ -12,7 +12,7 @@ from typing import Sequence, Tuple
 import orjson
 import requests
 import zstandard
-from libmozdata import Bugzilla
+from libmozdata.bugzilla import Bugzilla
 from redis import Redis
 
 from bugbug import bugzilla, repository
