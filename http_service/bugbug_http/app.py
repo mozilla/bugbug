@@ -533,7 +533,6 @@ def batch_prediction(model_name):
         "bugs": {
             "type": "list",
             "minlength": 1,
-            "maxlength": 1000,
             "schema": {"type": "integer"},
         }
     }
@@ -566,8 +565,7 @@ def batch_prediction(model_name):
 
     if missing_bugs:
         # TODO: We should probably schedule chunks of bugs to avoid jobs that
-        # are running for too long and reduce pressure on bugzilla, it mights
-        # not like getting 1 million bug at a time
+        # are running for too long
         schedule_bug_classification(model_name, missing_bugs)
 
     return compress_response({"bugs": data}, status_code)
