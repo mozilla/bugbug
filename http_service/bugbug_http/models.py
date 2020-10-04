@@ -7,11 +7,12 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Collection, Tuple
+from typing import Sequence, Tuple
 
 import orjson
 import requests
 import zstandard
+from libmozdata import Bugzilla
 from redis import Redis
 
 from bugbug import bugzilla, repository
@@ -52,14 +53,17 @@ def setkey(key: str, value: bytes, compress: bool = False) -> None:
     redis.expire(key, DEFAULT_EXPIRATION_TTL)
 
 
-def classify_bug(model_name: str, bug_ids: Collection[int], bugzilla_token: str) -> str:
+def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
     from bugbug_http.app import JobInfo
 
     # This should be called in a process worker so it should be safe to set
     # the token here
     bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
-    bugs = bugzilla.get(bug_ids)
+
+    bugs = {}
+    for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
+        bugs.update(bugzilla.get(bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]))
 
     missing_bugs = bug_ids_set.difference(bugs.keys())
 
