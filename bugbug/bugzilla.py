@@ -171,11 +171,9 @@ def download_bugs(bug_ids, products=None, security=False):
 
     new_bug_ids = sorted(list(new_bug_ids))
 
-    CHUNK_SIZE = 100
-
     chunks = (
-        new_bug_ids[i : (i + CHUNK_SIZE)]
-        for i in range(0, len(new_bug_ids), CHUNK_SIZE)
+        new_bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
+        for i in range(0, len(new_bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE)
     )
 
     @tenacity.retry(
