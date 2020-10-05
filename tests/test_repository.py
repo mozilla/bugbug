@@ -1859,3 +1859,15 @@ def test_get_commits():
     }
     assert len(retrieved_commits) == 10
     assert included_commits.issubset({c["node"] for c in retrieved_commits})
+
+
+def test_get_revision_id():
+    commit = {
+        "desc": "My desc",
+    }
+    assert repository.get_revision_id(commit) is None
+
+    commit = {
+        "desc": "Bug 1667333: Remove unnecessary prefs for mime type checking r=necko-reviewers,evilpie,valentin\n\nDifferential Revision: https://phabricator.services.mozilla.com/D91406",
+    }
+    assert repository.get_revision_id(commit) == 91406
