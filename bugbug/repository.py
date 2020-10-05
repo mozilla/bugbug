@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import pickle
+import re
 import shelve
 import subprocess
 import sys
@@ -107,6 +108,10 @@ HARDCODED_TYPES = {".eslintrc.js": ".eslintrc.js"}
 TYPES_TO_EXT = {**SOURCE_CODE_TYPES_TO_EXT, **OTHER_TYPES_TO_EXT}
 
 EXT_TO_TYPES = {ext: typ for typ, exts in TYPES_TO_EXT.items() for ext in exts}
+
+PHABRICATOR_REVISION_REGEX = re.compile(
+    "Differential Revision: (https://phabricator.services.mozilla.com/D([0-9]+))"
+)
 
 
 def get_type(path: str) -> str:
@@ -288,6 +293,13 @@ def get_commits(
         include_backouts=include_backouts,
         include_ignored=include_ignored,
     )
+
+
+def get_revision_id(commit):
+    match = PHABRICATOR_REVISION_REGEX.search(commit["desc"])
+    if not match:
+        return None
+    return int(match.group(2))
 
 
 def _init_process(repo_dir):
