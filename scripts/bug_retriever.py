@@ -13,6 +13,11 @@ from bugbug.utils import get_secret, zstd_compress
 logger = getLogger(__name__)
 
 
+DELETED_COMPONENTS = {
+    ("Firefox", "WebPayments UI"),
+}
+
+
 class Retriever(object):
     def retrieve_bugs(self, limit=None):
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
@@ -28,6 +33,16 @@ class Retriever(object):
             {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
         )
         logger.info(f"Retrieved {len(changed_ids)} IDs.")
+
+        deleted_component_ids = [
+            bug["id"]
+            for bug in bugzilla.get_bugs()
+            if (bug["product"], bug["component"]) in DELETED_COMPONENTS
+        ]
+        logger.info(
+            f"{len(deleted_component_ids)} bugs belonging to deleted components"
+        )
+        changed_ids += deleted_component_ids
 
         # Get IDs of bugs between (two years and six months ago) and (six months ago).
         six_months_ago = datetime.utcnow() - relativedelta(months=6)
