@@ -758,7 +758,7 @@ tasks:
         maxRunTime: 7200
         image: mozilla/bugbug-base:${version}
         command:
-          - "bugbug-past-bugs-by-function"
+          - "bugbug-past-bugs-by-unit"
 
         artifacts:
           public/past_bugs_by_function.pickle.zst:
@@ -767,8 +767,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.bugbug.past_bugs_by_function.${version}
-        - index.project.bugbug.past_bugs_by_function.latest
+        - index.project.bugbug.past_bugs_by_unit.${version}
+        - index.project.bugbug.past_bugs_by_unit.latest
       metadata:
         name: bugbug past bugs by function
         description: bugbug past bugs by function

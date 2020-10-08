@@ -38,7 +38,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.latest/artifacts/public/{file_name}"
-PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_function.latest/artifacts/public/past_bugs_by_function.pickle.zst"
+PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_bugs_by_function.pickle.zst"
 PHAB_PROD = "prod"
 PHAB_DEV = "dev"
 
