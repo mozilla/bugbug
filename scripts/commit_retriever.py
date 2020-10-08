@@ -13,8 +13,6 @@ logger = getLogger(__name__)
 
 class Retriever(object):
     def __init__(self, cache_root):
-        self.cache_root = cache_root
-
         assert os.path.isdir(cache_root), f"Cache root {cache_root} is not a dir."
         self.repo_dir = os.path.join(cache_root, "mozilla-central")
 

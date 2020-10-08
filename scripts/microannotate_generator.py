@@ -24,7 +24,6 @@ COMMITS_STEP = 5000
 
 class MicroannotateGenerator(object):
     def __init__(self, cache_root, repo_url, tokenize, remove_comments):
-        self.cache_root = cache_root
         self.repo_url = repo_url
         self.git_repo_path = os.path.basename(self.repo_url)
         self.tokenize = tokenize
