@@ -522,6 +522,26 @@ class couple_delta_creation_date(couple_bug_feature):
         return delta / timedelta(days=1)
 
 
+class couple_common_words_summary(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs):
+        return set(bugs[0]["summary"].split()).intersection(
+            set(bugs[1]["summary"].split())
+        )
+
+
+class couple_common_words_comments(couple_bug_feature):
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
+    def __call__(self, bugs):
+        text1 = " ".join(comment["text"] for comment in bugs[0]["comments"])
+        text2 = " ".join(comment["text"] for comment in bugs[1]["comments"])
+        return set(text1.split()).intersection(set(text2.split()))
+
+
 class couple_common_keywords(couple_bug_feature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore

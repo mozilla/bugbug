@@ -8,6 +8,7 @@ from itertools import combinations
 
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import LinearSVC
@@ -37,7 +38,20 @@ class DuplicateModel(BugCoupleModel):
 
         self.calculate_importance = False
 
-        feature_extractors = [bug_features.is_same_product()]
+        feature_extractors = [
+            bug_features.is_same_product(),
+            bug_features.is_same_component(),
+            bug_features.is_same_platform(),
+            bug_features.is_same_version(),
+            bug_features.is_same_os(),
+            bug_features.is_same_target_milestone(),
+            bug_features.is_first_affected_same(),
+            bug_features.couple_common_words_comments(),
+            bug_features.couple_delta_creation_date(),
+            bug_features.couple_common_keywords(),
+            bug_features.couple_common_whiteboard_keywords(),
+            bug_features.couple_common_words_summary(),
+        ]
 
         cleanup_functions = [
             feature_cleanup.responses(),
@@ -55,11 +69,18 @@ class DuplicateModel(BugCoupleModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors, cleanup_functions, rollback=True
+                    ),
                 ),
                 (
                     "union",
-                    ColumnTransformer([("text", self.text_vectorizer(), "text")]),
+                    ColumnTransformer(
+                        [
+                            ("text", self.text_vectorizer(), "text"),
+                            ("couple_data", DictVectorizer(), "couple_data"),
+                        ]
+                    ),
                 ),
             ]
         )
