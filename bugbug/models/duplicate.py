@@ -6,27 +6,15 @@
 import random
 from itertools import combinations
 
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import LabelEncoder
-from sklearn.svm import LinearSVC
+from xgboost import XGBClassifier
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugCoupleModel
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
-
-
-class LinearSVCWithLabelEncoding(CalibratedClassifierCV):
-    def __init__(self, clf):
-        super().__init__(clf)
-        self._le = LabelEncoder()
-
-    def fit(self, X, y):
-        super().fit(X, y)
-        self._le.fit(y)
 
 
 class DuplicateModel(BugCoupleModel):
@@ -85,7 +73,7 @@ class DuplicateModel(BugCoupleModel):
             ]
         )
 
-        self.clf = LinearSVCWithLabelEncoding(LinearSVC())
+        self.clf = XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
 
