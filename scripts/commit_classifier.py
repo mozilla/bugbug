@@ -6,7 +6,6 @@ import csv
 import io
 import json
 import os
-import pickle
 import re
 import subprocess
 from datetime import datetime
@@ -38,7 +37,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.latest/artifacts/public/{file_name}"
-PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_bugs_by_function.pickle.zst"
+PAST_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bugs_by_function.json.zst"
 PHAB_PROD = "prod"
 PHAB_DEV = "dev"
 
@@ -179,14 +178,14 @@ class CommitClassifier(object):
             self.X = to_array(joblib.load(model_data_X_path))
             self.y = to_array(joblib.load(model_data_y_path))
 
-            past_bugs_by_function_path = "data/past_bugs_by_function.pickle"
+            past_bugs_by_function_path = "data/past_fixed_bugs_by_function.json"
             download_check_etag(
                 PAST_BUGS_BY_FUNCTION_URL, path=f"{past_bugs_by_function_path}.zst"
             )
             zstd_decompress(past_bugs_by_function_path)
             assert os.path.exists(past_bugs_by_function_path)
-            with open(past_bugs_by_function_path, "rb") as f:
-                self.past_bugs_by_function = pickle.load(f)
+            with open(past_bugs_by_function_path, "r") as f:
+                self.past_bugs_by_function = json.load(f)
 
         if model_name == "testlabelselect":
             self.use_test_history = True
@@ -780,9 +779,12 @@ class CommitClassifier(object):
                         continue
 
                     if method_level_result["method_name"].endswith(function_name):
-                        method_level_result["past_bugs"] = list(
-                            self.past_bugs_by_function[path][function_name]["bugs"]
-                        )
+                        method_level_result["past_bugs"] = [
+                            "Bug {} - {}".format(bug["id"], bug["summary"])
+                            for bug in self.past_bugs_by_function[path][function_name][
+                                -3:
+                            ]
+                        ]
 
         with open("method_level.json", "w") as f:
             json.dump(method_level_results, f)

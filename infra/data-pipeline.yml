@@ -761,8 +761,17 @@ tasks:
           - "bugbug-past-bugs-by-unit"
 
         artifacts:
-          public/past_bugs_by_function.pickle.zst:
-            path: /data/past_bugs_by_function.pickle.zst
+          public/past_regressions_by_file.json.zst:
+            path: /data/past_regressions_by_file.json.zst
+            type: file
+          public/past_fixed_bugs_by_file.json.zst:
+            path: /data/past_fixed_bugs_by_file.json.zst
+            type: file
+          public/past_regressions_by_function.json.zst:
+            path: /data/past_regressions_by_function.json.zst
+            type: file
+          public/past_fixed_bugs_by_function.json.zst:
+            path: /data/past_fixed_bugs_by_function.json.zst
             type: file
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed

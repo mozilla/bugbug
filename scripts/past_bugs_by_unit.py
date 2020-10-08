@@ -4,9 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import json
 import logging
-import pickle
-from collections import deque
+from collections import defaultdict
 
 from tqdm import tqdm
 
@@ -58,48 +58,101 @@ class PastBugsCollector(object):
             bug_map[bug["id"]] = bug
 
         logger.info(
-            "Generate a map from function to the three last bugs which were fixed by touching that function"
+            "Generate a map from files/functions to the bugs which were fixed/introduced by touching them"
         )
 
-        past_bugs_by_function = {}
+        # TODO: Support "moving" past bugs between files when they are renamed and between functions when they are
+        # moved across files.
+
+        past_regressions_by_file = defaultdict(list)
+        past_fixed_bugs_by_file = defaultdict(list)
+        past_regressions_by_function = defaultdict(lambda: defaultdict(list))
+        past_fixed_bugs_by_function = defaultdict(lambda: defaultdict(list))
 
         for commit in tqdm(repository.get_commits()):
-            if commit["node"] not in bug_fixing_commits_nodes:
-                continue
-
             if commit["bug_id"] not in bug_map:
                 continue
 
             bug = bug_map[commit["bug_id"]]
 
-            bug_str = "Bug {} - {}".format(bug["id"], bug["summary"])
+            if len(bug["regressions"]) > 0:
+                for path in commit["files"]:
+                    past_regressions_by_file[path].extend(
+                        bug_id for bug_id in bug["regressions"] if bug_id in bug_map
+                    )
 
-            for path, f_group in commit["functions"].items():
-                if path not in past_bugs_by_function:
-                    past_bugs_by_function[path] = {}
+                for path, f_group in commit["functions"].items():
+                    for f in f_group:
+                        past_regressions_by_function[path][f[0]].extend(
+                            bug_id
+                            for bug_id in bug["regressions"]
+                            if bug_id in bug_map and bug_id
+                        )
 
-                for f in f_group:
-                    if f[0] not in past_bugs_by_function[path]:
-                        bugs_deque = deque(maxlen=3)
-                    else:
-                        bugs_deque = past_bugs_by_function[path][f[0]]["bugs"]
+            if commit["node"] in bug_fixing_commits_nodes:
+                for path in commit["files"]:
+                    past_fixed_bugs_by_file[path].append(bug["id"])
 
-                    if bug_str not in bugs_deque:
-                        bugs_deque.append(bug_str)
+                for path, f_group in commit["functions"].items():
+                    for f in f_group:
+                        past_fixed_bugs_by_function[path][f[0]].append(bug["id"])
 
-                    past_bugs_by_function[path][f[0]] = {
-                        "start": f[1],
-                        "end": f[2],
-                        "bugs": bugs_deque,
+        def _transform(bug_ids):
+            seen = set()
+            results = []
+            for bug_id in bug_ids:
+                if bug_id in seen:
+                    continue
+                seen.add(bug_id)
+
+                bug = bug_map[bug_id]
+                results.append(
+                    {
+                        "id": bug_id,
+                        "summary": bug["summary"],
+                        "product": bug["product"],
+                        "component": bug["component"],
                     }
+                )
 
-        with open("data/past_bugs_by_function.pickle", "wb") as f:
-            pickle.dump(past_bugs_by_function, f)
-        zstd_compress("data/past_bugs_by_function.pickle")
+            return results
+
+        past_regressions_by_file = {
+            path: _transform(bug_ids)
+            for path, bug_ids in past_regressions_by_file.items()
+        }
+        past_fixed_bugs_by_file = {
+            path: _transform(bug_ids)
+            for path, bug_ids in past_fixed_bugs_by_file.items()
+        }
+        past_regressions_by_function = {
+            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
+            for path, funcs_bugs in past_regressions_by_function.items()
+        }
+        past_fixed_bugs_by_function = {
+            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
+            for path, funcs_bugs in past_fixed_bugs_by_function.items()
+        }
+
+        with open("data/past_regressions_by_file.json", "w") as f:
+            json.dump(past_regressions_by_file, f)
+        zstd_compress("data/past_regressions_by_file.json")
+
+        with open("data/past_fixed_bugs_by_file.json", "w") as f:
+            json.dump(past_fixed_bugs_by_file, f)
+        zstd_compress("data/past_fixed_bugs_by_file.json")
+
+        with open("data/past_regressions_by_function.json", "w") as f:
+            json.dump(past_regressions_by_function, f)
+        zstd_compress("data/past_regressions_by_function.json")
+
+        with open("data/past_fixed_bugs_by_function.json", "w") as f:
+            json.dump(past_fixed_bugs_by_function, f)
+        zstd_compress("data/past_fixed_bugs_by_function.json")
 
 
 def main():
-    description = "Find past bugs fixed by touching given functions"
+    description = "Find past bugs linked to given units of source code"
     parser = argparse.ArgumentParser(description=description)
     parser.parse_args()
 
