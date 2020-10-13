@@ -63,12 +63,26 @@ class PastBugsCollector(object):
 
         past_regressions_by_file: Dict[str, List[int]] = defaultdict(list)
         past_fixed_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
+        past_regression_blocked_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
+        past_fixed_bug_blocked_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
         past_regressions_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
         past_fixed_bugs_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        past_regression_blocked_bugs_by_function: Dict[
+            str, Dict[str, List[int]]
+        ] = defaultdict(lambda: defaultdict(list))
+        past_fixed_bug_blocked_bugs_by_function: Dict[
+            str, Dict[str, List[int]]
+        ] = defaultdict(lambda: defaultdict(list))
+
+        def find_blocked(bug):
+            return sum(
+                (find_blocked(bug_map[b]) for b in bug["blocks"] if b in bug_map),
+                [b for b in bug["blocks"] if b in bug_map],
+            )
 
         for commit in tqdm(repository.get_commits()):
             if commit["bug_id"] not in bug_map:
@@ -82,6 +96,8 @@ class PastBugsCollector(object):
                         bug_id for bug_id in bug["regressions"] if bug_id in bug_map
                     )
 
+                    past_regression_blocked_bugs_by_file[path].extend(find_blocked(bug))
+
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
                         past_regressions_by_function[path][f[0]].extend(
@@ -90,13 +106,23 @@ class PastBugsCollector(object):
                             if bug_id in bug_map and bug_id
                         )
 
+                        past_regression_blocked_bugs_by_function[path][f[0]].extend(
+                            find_blocked(bug)
+                        )
+
             if commit["node"] in bug_fixing_commits_nodes:
                 for path in commit["files"]:
                     past_fixed_bugs_by_file[path].append(bug["id"])
 
+                    past_fixed_bug_blocked_bugs_by_file[path].extend(find_blocked(bug))
+
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
                         past_fixed_bugs_by_function[path][f[0]].append(bug["id"])
+
+                        past_fixed_bug_blocked_bugs_by_function[path][f[0]].extend(
+                            find_blocked(bug)
+                        )
 
         def _transform(bug_ids: List[int]) -> List[dict]:
             seen = set()
@@ -126,6 +152,14 @@ class PastBugsCollector(object):
             path: _transform(bug_ids)
             for path, bug_ids in past_fixed_bugs_by_file.items()
         }
+        past_regression_blocked_bug_summaries_by_file = {
+            path: _transform(bug_ids)
+            for path, bug_ids in past_regression_blocked_bugs_by_file.items()
+        }
+        past_fixed_bug_blocked_bug_summaries_by_file = {
+            path: _transform(bug_ids)
+            for path, bug_ids in past_fixed_bug_blocked_bugs_by_file.items()
+        }
         past_regression_summaries_by_function = {
             path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
             for path, funcs_bugs in past_regressions_by_function.items()
@@ -133,6 +167,14 @@ class PastBugsCollector(object):
         past_fixed_bug_summaries_by_function = {
             path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
             for path, funcs_bugs in past_fixed_bugs_by_function.items()
+        }
+        past_regression_blocked_bug_summaries_by_function = {
+            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
+            for path, funcs_bugs in past_regression_blocked_bugs_by_function.items()
+        }
+        past_fixed_bug_blocked_bug_summaries_by_function = {
+            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
+            for path, funcs_bugs in past_fixed_bug_blocked_bugs_by_function.items()
         }
 
         with open("data/past_regressions_by_file.json", "w") as f:
@@ -143,6 +185,14 @@ class PastBugsCollector(object):
             json.dump(past_fixed_bug_summaries_by_file, f)
         zstd_compress("data/past_fixed_bugs_by_file.json")
 
+        with open("data/past_regression_blocked_bugs_by_file.json", "w") as f:
+            json.dump(past_regression_blocked_bug_summaries_by_file, f)
+        zstd_compress("data/past_regression_blocked_bugs_by_file.json")
+
+        with open("data/past_fixed_bug_blocked_bugs_by_file.json", "w") as f:
+            json.dump(past_fixed_bug_blocked_bug_summaries_by_file, f)
+        zstd_compress("data/past_fixed_bug_blocked_bugs_by_file.json")
+
         with open("data/past_regressions_by_function.json", "w") as f:
             json.dump(past_regression_summaries_by_function, f)
         zstd_compress("data/past_regressions_by_function.json")
@@ -150,6 +200,14 @@ class PastBugsCollector(object):
         with open("data/past_fixed_bugs_by_function.json", "w") as f:
             json.dump(past_fixed_bug_summaries_by_function, f)
         zstd_compress("data/past_fixed_bugs_by_function.json")
+
+        with open("data/past_regression_blocked_bugs_by_function.json", "w") as f:
+            json.dump(past_regression_blocked_bug_summaries_by_function, f)
+        zstd_compress("data/past_regression_blocked_bugs_by_function.json")
+
+        with open("data/past_fixed_bug_blocked_bugs_by_function.json", "w") as f:
+            json.dump(past_fixed_bug_blocked_bug_summaries_by_function, f)
+        zstd_compress("data/past_fixed_bug_blocked_bugs_by_function.json")
 
 
 def main() -> None:

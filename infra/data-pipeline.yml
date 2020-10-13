@@ -767,11 +767,23 @@ tasks:
           public/past_fixed_bugs_by_file.json.zst:
             path: /data/past_fixed_bugs_by_file.json.zst
             type: file
+          public/past_regression_blocked_bugs_by_file.json.zst:
+            path: /data/past_regression_blocked_bugs_by_file.json.zst
+            type: file
+          public/past_fixed_bug_blocked_bugs_by_file.json.zst:
+            path: /data/past_fixed_bug_blocked_bugs_by_file.json.zst
+            type: file
           public/past_regressions_by_function.json.zst:
             path: /data/past_regressions_by_function.json.zst
             type: file
           public/past_fixed_bugs_by_function.json.zst:
             path: /data/past_fixed_bugs_by_function.json.zst
+            type: file
+          public/past_regression_blocked_bugs_by_function.json.zst:
+            path: /data/past_regression_blocked_bugs_by_function.json.zst
+            type: file
+          public/past_fixed_bug_blocked_bugs_by_function.json.zst:
+            path: /data/past_fixed_bug_blocked_bugs_by_function.json.zst
             type: file
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
