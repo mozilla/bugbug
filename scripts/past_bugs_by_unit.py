@@ -101,9 +101,7 @@ class PastBugsCollector(object):
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
                         past_regressions_by_function[path][f[0]].extend(
-                            bug_id
-                            for bug_id in bug["regressions"]
-                            if bug_id in bug_map and bug_id
+                            bug_id for bug_id in bug["regressions"] if bug_id in bug_map
                         )
 
                         past_regression_blocked_bugs_by_function[path][f[0]].extend(
