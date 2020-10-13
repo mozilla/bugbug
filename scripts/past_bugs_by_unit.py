@@ -50,13 +50,9 @@ class PastBugsCollector(object):
             if commit["node"] in bug_fixing_commits_nodes
         )
 
-        bug_map = {}
-
-        for bug in bugzilla.get_bugs():
-            if bug["id"] not in all_bug_ids:
-                continue
-
-            bug_map[bug["id"]] = bug
+        bug_map = {
+            bug["id"]: bug for bug in bugzilla.get_bugs() if bug["id"] in all_bug_ids
+        }
 
         logger.info(
             "Generate a map from files/functions to the bugs which were fixed/introduced by touching them"

@@ -715,13 +715,11 @@ class CommitModel(Model):
                 if commit["node"] in classes
             )
 
-            bug_map = {}
-
-            for bug in bugzilla.get_bugs():
-                if bug["id"] not in all_bug_ids:
-                    continue
-
-                bug_map[bug["id"]] = bug
+            bug_map = {
+                bug["id"]: bug
+                for bug in bugzilla.get_bugs()
+                if bug["id"] in all_bug_ids
+            }
 
             assert len(bug_map) > 0
 
