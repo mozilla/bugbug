@@ -7,6 +7,7 @@ import argparse
 import json
 import logging
 from collections import defaultdict
+from typing import Dict, List
 
 from tqdm import tqdm
 
@@ -29,7 +30,7 @@ class PastBugsCollector(object):
         logger.info("Download commit classifications...")
         assert db.download(BUG_FIXING_COMMITS_DB)
 
-    def go(self):
+    def go(self) -> None:
         logger.info(
             "Generate map of bug ID -> bug data for all bugs which were defects"
         )
@@ -64,10 +65,14 @@ class PastBugsCollector(object):
         # TODO: Support "moving" past bugs between files when they are renamed and between functions when they are
         # moved across files.
 
-        past_regressions_by_file = defaultdict(list)
-        past_fixed_bugs_by_file = defaultdict(list)
-        past_regressions_by_function = defaultdict(lambda: defaultdict(list))
-        past_fixed_bugs_by_function = defaultdict(lambda: defaultdict(list))
+        past_regressions_by_file: Dict[str, List[int]] = defaultdict(list)
+        past_fixed_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
+        past_regressions_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        past_fixed_bugs_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
 
         for commit in tqdm(repository.get_commits()):
             if commit["bug_id"] not in bug_map:
@@ -97,7 +102,7 @@ class PastBugsCollector(object):
                     for f in f_group:
                         past_fixed_bugs_by_function[path][f[0]].append(bug["id"])
 
-        def _transform(bug_ids):
+        def _transform(bug_ids: List[int]) -> List[dict]:
             seen = set()
             results = []
             for bug_id in bug_ids:
@@ -117,41 +122,41 @@ class PastBugsCollector(object):
 
             return results
 
-        past_regressions_by_file = {
+        past_regression_summaries_by_file = {
             path: _transform(bug_ids)
             for path, bug_ids in past_regressions_by_file.items()
         }
-        past_fixed_bugs_by_file = {
+        past_fixed_bug_summaries_by_file = {
             path: _transform(bug_ids)
             for path, bug_ids in past_fixed_bugs_by_file.items()
         }
-        past_regressions_by_function = {
+        past_regression_summaries_by_function = {
             path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
             for path, funcs_bugs in past_regressions_by_function.items()
         }
-        past_fixed_bugs_by_function = {
+        past_fixed_bug_summaries_by_function = {
             path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
             for path, funcs_bugs in past_fixed_bugs_by_function.items()
         }
 
         with open("data/past_regressions_by_file.json", "w") as f:
-            json.dump(past_regressions_by_file, f)
+            json.dump(past_regression_summaries_by_file, f)
         zstd_compress("data/past_regressions_by_file.json")
 
         with open("data/past_fixed_bugs_by_file.json", "w") as f:
-            json.dump(past_fixed_bugs_by_file, f)
+            json.dump(past_fixed_bug_summaries_by_file, f)
         zstd_compress("data/past_fixed_bugs_by_file.json")
 
         with open("data/past_regressions_by_function.json", "w") as f:
-            json.dump(past_regressions_by_function, f)
+            json.dump(past_regression_summaries_by_function, f)
         zstd_compress("data/past_regressions_by_function.json")
 
         with open("data/past_fixed_bugs_by_function.json", "w") as f:
-            json.dump(past_fixed_bugs_by_function, f)
+            json.dump(past_fixed_bug_summaries_by_function, f)
         zstd_compress("data/past_fixed_bugs_by_function.json")
 
 
-def main():
+def main() -> None:
     description = "Find past bugs linked to given units of source code"
     parser = argparse.ArgumentParser(description=description)
     parser.parse_args()
