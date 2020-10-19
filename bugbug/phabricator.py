@@ -4,9 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from libmozdata.phabricator import PhabricatorAPI
+from tqdm import tqdm
 
-DEPLOYMENT_URL = None
-API_KEY = None
+PHABRICATOR_API = None
 
 PROJECTS = {
     "PHID-PROJ-h7y4cs7m2o67iczw62pp": "testing-approved",
@@ -18,14 +18,31 @@ PROJECTS = {
 
 
 def set_api_key(url, api_key):
-    global DEPLOYMENT_URL, API_KEY
-    DEPLOYMENT_URL = url
-    API_KEY = api_key
+    global PHABRICATOR_API
+    PHABRICATOR_API = PhabricatorAPI(api_key, url)
 
 
-def get(rev_id):
-    assert DEPLOYMENT_URL is not None
-    assert API_KEY is not None
+def get(rev_ids):
+    assert PHABRICATOR_API is not None
 
-    phabricator_api = PhabricatorAPI(API_KEY, DEPLOYMENT_URL)
-    return phabricator_api.load_revision(rev_id=rev_id, attachments={"projects": True})
+    data = {}
+
+    rev_ids = list(set(rev_ids))
+    rev_ids_groups = (rev_ids[i : i + 100] for i in range(0, len(rev_ids), 100))
+
+    with tqdm(total=len(rev_ids)) as progress_bar:
+        for rev_ids_group in rev_ids_groups:
+            out = PHABRICATOR_API.request(
+                "differential.revision.search",
+                constraints={
+                    "ids": rev_ids_group,
+                },
+                attachments={"projects": True},
+            )
+
+            for result in out["data"]:
+                data[result["id"]] = result
+
+            progress_bar.update(len(rev_ids_group))
+
+    return data
