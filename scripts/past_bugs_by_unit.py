@@ -78,12 +78,6 @@ class PastBugsCollector(object):
             str, Dict[str, List[int]]
         ] = defaultdict(lambda: defaultdict(list))
 
-        def find_blocked(bug):
-            return sum(
-                (find_blocked(bug_map[b]) for b in bug["blocks"] if b in bug_map),
-                [b for b in bug["blocks"] if b in bug_map],
-            )
-
         for commit in tqdm(repository.get_commits()):
             if commit["bug_id"] not in bug_map:
                 continue
@@ -96,7 +90,9 @@ class PastBugsCollector(object):
                         bug_id for bug_id in bug["regressions"] if bug_id in bug_map
                     )
 
-                    past_regression_blocked_bugs_by_file[path].extend(find_blocked(bug))
+                    past_regression_blocked_bugs_by_file[path].extend(
+                        bugzilla.find_blocked_by(bug_map, bug)
+                    )
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
@@ -105,21 +101,23 @@ class PastBugsCollector(object):
                         )
 
                         past_regression_blocked_bugs_by_function[path][f[0]].extend(
-                            find_blocked(bug)
+                            bugzilla.find_blocked_by(bug_map, bug)
                         )
 
             if commit["node"] in bug_fixing_commits_nodes:
                 for path in commit["files"]:
                     past_fixed_bugs_by_file[path].append(bug["id"])
 
-                    past_fixed_bug_blocked_bugs_by_file[path].extend(find_blocked(bug))
+                    past_fixed_bug_blocked_bugs_by_file[path].extend(
+                        bugzilla.find_blocked_by(bug_map, bug)
+                    )
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
                         past_fixed_bugs_by_function[path][f[0]].append(bug["id"])
 
                         past_fixed_bug_blocked_bugs_by_function[path][f[0]].extend(
-                            find_blocked(bug)
+                            bugzilla.find_blocked_by(bug_map, bug)
                         )
 
         def _transform(bug_ids: List[int]) -> List[dict]:

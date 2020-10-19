@@ -5,6 +5,7 @@
 
 import csv
 from datetime import datetime
+from typing import Dict, List
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -198,6 +199,25 @@ def download_bugs(bug_ids, products=None, security=False):
             progress_bar.update(len(chunk))
 
             db.append(BUGS_DB, new_bugs)
+
+
+def _find_linked(bug_map: Dict[int, dict], bug: dict, link_type: str) -> List[int]:
+    return sum(
+        (
+            _find_linked(bug_map, bug_map[b], link_type)
+            for b in bug[link_type]
+            if b in bug_map
+        ),
+        [b for b in bug[link_type] if b in bug_map],
+    )
+
+
+def find_blocked_by(bug_map: Dict[int, dict], bug: dict) -> List[int]:
+    return _find_linked(bug_map, bug, "blocks")
+
+
+def find_blocking(bug_map: Dict[int, dict], bug: dict) -> List[int]:
+    return _find_linked(bug_map, bug, "depends_on")
 
 
 def delete_bugs(match):
