@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class PastBugsCollector(object):
-    def __init__(self):
+    def __init__(self) -> None:
         logger.info("Downloading commits database...")
         assert db.download(repository.COMMITS_DB)
 
