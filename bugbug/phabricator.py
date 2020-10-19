@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 PHABRICATOR_API = None
 
-PROJECTS = {
+TESTING_PROJECTS = {
     "PHID-PROJ-h7y4cs7m2o67iczw62pp": "testing-approved",
     "PHID-PROJ-e4fcjngxcws3egiecv3r": "testing-exception-elsewhere",
     "PHID-PROJ-iciyosoekrczpf2a4emw": "testing-exception-other",
@@ -46,3 +46,11 @@ def get(rev_ids):
             progress_bar.update(len(rev_ids_group))
 
     return data
+
+
+def get_testing_projects(rev):
+    return (
+        TESTING_PROJECTS[projectPHID]
+        for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
+        if projectPHID in TESTING_PROJECTS
+    )
