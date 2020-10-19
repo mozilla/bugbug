@@ -62,6 +62,9 @@ db.register(
 
 path_to_component = None
 
+HG = None
+REPO_DIR = None
+
 EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
@@ -295,21 +298,21 @@ def get_commits(
     )
 
 
-def get_revision_id(commit):
+def get_revision_id(commit: CommitDict) -> Optional[int]:
     match = PHABRICATOR_REVISION_REGEX.search(commit["desc"])
     if not match:
         return None
     return int(match.group(2))
 
 
-def _init_process(repo_dir):
+def _init_process(repo_dir: str) -> None:
     global HG, REPO_DIR
     REPO_DIR = repo_dir
     HG = hglib.open(REPO_DIR)
     get_component_mapping()
 
 
-def _init_thread(repo_dir):
+def _init_thread(repo_dir: str) -> None:
     hg_server = hglib.open(repo_dir)
     thread_local.hg = hg_server
     with hg_servers_lock:
@@ -317,7 +320,7 @@ def _init_thread(repo_dir):
 
 
 # This code was adapted from https://github.com/mozsearch/mozsearch/blob/2e24a308bf66b4c149683bfeb4ceeea3b250009a/router/router.py#L127
-def is_test(path):
+def is_test(path: str) -> bool:
     return (
         "/test/" in path
         or "/tests/" in path
