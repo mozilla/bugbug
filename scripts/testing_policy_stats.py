@@ -43,17 +43,22 @@ class TestingPolicyStatsGenerator(object):
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
 
-    def get_landed_since(self, days: int) -> Collection[repository.CommitDict]:
-        since = datetime.utcnow() - timedelta(days=days)
+    def get_landed_since(
+        self, days_start: int, days_end: int
+    ) -> Collection[repository.CommitDict]:
+        since = datetime.utcnow() - timedelta(days=days_start)
+        until = datetime.utcnow() - timedelta(days=days_end)
 
         return [
             commit
-            for commit in repository.get_commits()
-            if dateutil.parser.parse(commit["pushdate"]) >= since
+            for commit in repository.get_commits(
+                include_no_bug=True, include_backouts=True, include_ignored=True
+            )
+            if since <= dateutil.parser.parse(commit["pushdate"]) <= until
         ]
 
-    def go(self, days: int) -> None:
-        commits = self.get_landed_since(days)
+    def go(self, days_start: int, days_end: int) -> None:
+        commits = self.get_landed_since(days_start, days_end)
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = list(
@@ -83,14 +88,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("repo_dir", help="Path to a Gecko repository.")
     parser.add_argument(
-        "days",
+        "days_start",
         type=int,
-        help="How many days of commits to analyze.",
+        help="First day of commits to analyze.",
+    )
+    parser.add_argument(
+        "days_end",
+        type=int,
+        help="Last day of commits to analyze.",
     )
     args = parser.parse_args()
 
     testing_policy_stats_generator = TestingPolicyStatsGenerator(args.repo_dir)
-    testing_policy_stats_generator.go(args.days)
+    testing_policy_stats_generator.go(args.days_start, args.days_end)
 
 
 if __name__ == "__main__":
