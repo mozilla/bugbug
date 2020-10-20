@@ -12,7 +12,7 @@ from typing import Collection, Iterable
 
 import dateutil.parser
 
-from bugbug import db, phabricator, repository
+from bugbug import bugzilla, db, phabricator, repository
 from bugbug.utils import get_secret
 
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,9 @@ class TestingPolicyStatsGenerator(object):
             rev_start="children({})".format(commit["node"]),
         )
 
+        logger.info("Downloading bugs database...")
+        assert db.download(bugzilla.BUGS_DB)
+
         phabricator.set_api_key(
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
@@ -58,6 +61,11 @@ class TestingPolicyStatsGenerator(object):
 
     def go(self, days_start: int, days_end: int) -> None:
         commits = self.get_landed_since(days_start, days_end)
+
+        logger.info("Download bugs of interest...")
+        bugzilla.download_bugs(
+            commit["bug_id"] for commit in commits if commit["bug_id"]
+        )
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = list(
@@ -98,6 +106,24 @@ class TestingPolicyStatsGenerator(object):
         ).most_common():
             print(
                 f"{testing_project} - {round(100 * count / len(backedout_testing_projects), 1)}%"
+            )
+
+        regressor_bug_ids = {
+            bug["id"] for bug in bugzilla.get_bugs() if len(bug["regressions"]) > 0
+        }
+
+        regressor_testing_projects = list_testing_projects(
+            commit for commit in commits if commit["bug_id"] in regressor_bug_ids
+        )
+
+        print(
+            f"Most common testing tags for revisions which caused regressions ({len(regressor_testing_projects)}):"
+        )
+        for testing_project, count in collections.Counter(
+            regressor_testing_projects
+        ).most_common():
+            print(
+                f"{testing_project} - {round(100 * count / len(regressor_testing_projects), 1)}%"
             )
 
 
