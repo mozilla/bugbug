@@ -48,9 +48,10 @@ def get(rev_ids):
     return data
 
 
-def get_testing_projects(rev):
+def get_testing_projects(revs):
     return (
         TESTING_PROJECTS[projectPHID]
+        for rev in revs
         for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
         if projectPHID in TESTING_PROJECTS
     )

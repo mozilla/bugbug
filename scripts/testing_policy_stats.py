@@ -5,11 +5,10 @@
 
 import argparse
 import collections
-import itertools
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Collection
+from typing import Collection, Iterable
 
 import dateutil.parser
 
@@ -64,22 +63,41 @@ class TestingPolicyStatsGenerator(object):
         revision_ids = list(
             filter(None, (repository.get_revision_id(commit) for commit in commits))
         )
-        revisions_map = phabricator.get(revision_ids)
+        revision_map = phabricator.get(revision_ids)
 
-        testing_projects = list(
-            itertools.chain(
-                *(
-                    phabricator.get_testing_projects(revision)
-                    for revision in revisions_map.values()
+        def list_testing_projects(
+            commits: Iterable[repository.CommitDict],
+        ) -> Collection[str]:
+            return list(
+                phabricator.get_testing_projects(
+                    revision_map[repository.get_revision_id(commit)]
+                    for commit in commits
+                    if repository.get_revision_id(commit) in revision_map
                 )
             )
-        )
 
-        counter = collections.Counter(testing_projects)
+        testing_projects = list_testing_projects(commits)
 
-        for testing_project, count in counter.most_common():
+        print("Most common testing tags:")
+        for testing_project, count in collections.Counter(
+            testing_projects
+        ).most_common():
             print(
                 f"{testing_project} - {round(100 * count / len(testing_projects), 1)}%"
+            )
+
+        backedout_testing_projects = list_testing_projects(
+            commit for commit in commits if commit["backedoutby"]
+        )
+
+        print(
+            f"Most common testing tags for backed-out revisions ({len(backedout_testing_projects)}):"
+        )
+        for testing_project, count in collections.Counter(
+            backedout_testing_projects
+        ).most_common():
+            print(
+                f"{testing_project} - {round(100 * count / len(backedout_testing_projects), 1)}%"
             )
 
 
