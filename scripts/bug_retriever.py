@@ -147,6 +147,15 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
+        # TODO: Figure out why.
+        missing_history_bug_ids = {
+            bug["id"] for bug in bugzilla.get_bugs() if "history" not in bug
+        }
+        bugzilla.delete_bugs(lambda bug: bug["id"] in missing_history_bug_ids)
+        logger.info(
+            f"Deleted {len(missing_history_bug_ids)} bugs as we couldn't retrieve their history"
+        )
+
         zstd_compress("data/bugs.json")
 
 
