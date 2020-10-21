@@ -78,7 +78,14 @@ class TestingPolicyStatsGenerator(object):
             commit
             for commit in commits
             if repository.get_revision_id(commit) in revision_map
-            and sum(
+        ]
+        logger.info(f"{len(commits)} revisions")
+
+        # Filter-out commits with no testing tags.
+        commits = [
+            commit
+            for commit in commits
+            if sum(
                 1
                 for _ in phabricator.get_testing_projects(
                     [revision_map[repository.get_revision_id(commit)]]
@@ -86,6 +93,7 @@ class TestingPolicyStatsGenerator(object):
             )
             > 0
         ]
+        logger.info(f"{len(commits)} revisions with testing tags")
 
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],
