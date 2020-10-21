@@ -54,13 +54,13 @@ class Retriever(object):
             two_years_and_six_months_ago, six_months_ago
         )
         if limit:
-            timespan_ids = timespan_ids[:limit]
+            timespan_ids = timespan_ids[-limit:]
         logger.info(f"Retrieved {len(timespan_ids)} IDs.")
 
         # Get IDs of labelled bugs.
         labelled_bug_ids = labels.get_all_bug_ids()
         if limit:
-            labelled_bug_ids = labelled_bug_ids[:limit]
+            labelled_bug_ids = labelled_bug_ids[-limit:]
         logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
@@ -120,6 +120,8 @@ class Retriever(object):
             logger.info(
                 f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
             )
+            if limit:
+                regression_related_ids = regression_related_ids[-limit:]
 
             bugzilla.download_bugs(regression_related_ids)
 
