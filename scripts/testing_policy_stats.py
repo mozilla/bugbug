@@ -62,16 +62,30 @@ class TestingPolicyStatsGenerator(object):
     def go(self, days_start: int, days_end: int) -> None:
         commits = self.get_landed_since(days_start, days_end)
 
-        logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(
-            commit["bug_id"] for commit in commits if commit["bug_id"]
-        )
-
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = list(
             filter(None, (repository.get_revision_id(commit) for commit in commits))
         )
         revision_map = phabricator.get(revision_ids)
+
+        logger.info("Download bugs of interest...")
+        bugzilla.download_bugs(
+            commit["bug_id"] for commit in commits if commit["bug_id"]
+        )
+
+        # Filter-out commits with no Phabricator revision linked to them, or with no testing tags.
+        commits = [
+            commit
+            for commit in commits
+            if repository.get_revision_id(commit) in revision_map
+            and sum(
+                1
+                for _ in phabricator.get_testing_projects(
+                    [revision_map[repository.get_revision_id(commit)]]
+                )
+            )
+            > 0
+        ]
 
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],
@@ -80,13 +94,12 @@ class TestingPolicyStatsGenerator(object):
                 phabricator.get_testing_projects(
                     revision_map[repository.get_revision_id(commit)]
                     for commit in commits
-                    if repository.get_revision_id(commit) in revision_map
                 )
             )
 
         testing_projects = list_testing_projects(commits)
 
-        print("Most common testing tags:")
+        print(f"Most common testing tags (in {len(commits)} revisions):")
         for testing_project, count in collections.Counter(
             testing_projects
         ).most_common():
@@ -94,12 +107,11 @@ class TestingPolicyStatsGenerator(object):
                 f"{testing_project} - {round(100 * count / len(testing_projects), 1)}%"
             )
 
-        backedout_testing_projects = list_testing_projects(
-            commit for commit in commits if commit["backedoutby"]
-        )
+        backedout_commits = [commit for commit in commits if commit["backedoutby"]]
+        backedout_testing_projects = list_testing_projects(backedout_commits)
 
         print(
-            f"Most common testing tags for backed-out revisions ({len(backedout_testing_projects)}):"
+            f"\nMost common testing tags for backed-out revisions (in {len(backedout_commits)} revisions):"
         )
         for testing_project, count in collections.Counter(
             backedout_testing_projects
@@ -112,12 +124,13 @@ class TestingPolicyStatsGenerator(object):
             bug["id"] for bug in bugzilla.get_bugs() if len(bug["regressions"]) > 0
         }
 
-        regressor_testing_projects = list_testing_projects(
+        regressor_commits = [
             commit for commit in commits if commit["bug_id"] in regressor_bug_ids
-        )
+        ]
+        regressor_testing_projects = list_testing_projects(regressor_commits)
 
         print(
-            f"Most common testing tags for revisions which caused regressions ({len(regressor_testing_projects)}):"
+            f"\nMost common testing tags for revisions which caused regressions (in {len(regressor_commits)} revisions):"
         )
         for testing_project, count in collections.Counter(
             regressor_testing_projects
