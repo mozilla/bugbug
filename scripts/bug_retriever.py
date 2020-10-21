@@ -123,6 +123,10 @@ class Retriever(object):
             if limit:
                 regression_related_ids = regression_related_ids[-limit:]
 
+            # If we got all bugs we needed, break.
+            if regression_related_ids.issubset(all_ids):
+                break
+
             bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to three times.
