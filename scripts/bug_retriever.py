@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime
 from logging import getLogger
+from typing import List
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
@@ -19,7 +20,7 @@ DELETED_COMPONENTS = {
 
 
 class Retriever(object):
-    def retrieve_bugs(self, limit=None):
+    def retrieve_bugs(self, limit=None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
         db.download(bugzilla.BUGS_DB)
@@ -82,7 +83,7 @@ class Retriever(object):
 
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
-        regression_related_ids = sum(
+        regression_related_ids: List[int] = sum(
             (
                 bug["regressed_by"] + bug["regressions"] + bug["blocks"]
                 for bug in bugzilla.get_bugs()
@@ -124,7 +125,7 @@ class Retriever(object):
                 regression_related_ids = regression_related_ids[-limit:]
 
             # If we got all bugs we needed, break.
-            if regression_related_ids.issubset(all_ids):
+            if set(regression_related_ids).issubset(all_ids):
                 break
 
             bugzilla.download_bugs(regression_related_ids)
@@ -149,7 +150,7 @@ class Retriever(object):
         zstd_compress("data/bugs.json")
 
 
-def main():
+def main() -> None:
     description = "Retrieve and extract the information from Bugzilla instance"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
