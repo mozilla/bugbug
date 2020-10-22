@@ -35,6 +35,7 @@ parameters = [
             "RUNNABLE_JOBS": "http://localhost",
         },
     ),
+    (os.path.realpath("infra/taskcluster-hook-landings-risk-report.json"), {}),
 ]
 
 for infra_path in os.listdir("infra"):

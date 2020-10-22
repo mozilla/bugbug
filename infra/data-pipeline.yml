@@ -1342,6 +1342,37 @@ tasks:
         owner: mcastelluccio@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: update_hook_landings_risk_report
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '3 days'}
+      expires: {$fromNow: '1 month'}
+      dependencies:
+        - past-bugs-by-unit
+      scopes:
+          - hooks:modify-hook:project-bugbug/bugbug-landings-risk-report
+          - assume:hook-id:project-bugbug/bugbug-landings-risk-report
+      provisionerId: proj-bugbug
+      workerType: batch
+      payload:
+        features:
+          taskclusterProxy:
+            true
+        maxRunTime: 3600
+        image: ${taskboot_image}
+        command:
+          - "/bin/sh"
+          - "-lcxe"
+          - "git clone --quiet ${repository} &&
+             cd bugbug &&
+             git -c advice.detachedHead=false checkout ${version} &&
+             python infra/set_hook_version.py ${version} infra/taskcluster-hook-landings-risk-report.json &&
+             taskboot --target . build-hook infra/taskcluster-hook-landings-risk-report.json project-bugbug bugbug-landings-risk-report"
+      metadata:
+        name: bugbug update landings risk report hook
+        description: bugbug update landings risk report hook
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: docker-push
       dependencies:
         - docker-build
