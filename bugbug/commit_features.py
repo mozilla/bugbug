@@ -675,12 +675,10 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
             # TODO: Try simply using all possible fields instead of extracting features manually.
 
-            for cleanup_function in self.cleanup_functions:
-                commit["desc"] = cleanup_function(commit["desc"])
-
             result = {"data": data}
             if "desc" in commit:
-                result["desc"] = commit["desc"]
+                for cleanup_function in self.cleanup_functions:
+                    result["desc"] = cleanup_function(commit["desc"])
 
             results.append(result)
 
