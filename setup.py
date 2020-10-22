@@ -58,6 +58,7 @@ setup(
             "bugbug-check-all-metrics = scripts.check_all_metrics:main",
             "bugbug-past-bugs-by-unit = scripts.past_bugs_by_unit:main",
             "bugbug-testing-policy-stats = scripts.testing_policy_stats:main",
+            "bugbug-generate-landings-risk-report = scripts.generate_landings_risk_report:main",
         ]
     },
     classifiers=[
