@@ -63,7 +63,7 @@
             "assume:hook-id:project-bugbug/bugbug-landings-risk-report"
         ],
         "tags": {},
-        "workerType": "batch"
+        "workerType": "compute-small"
     },
     "triggerSchema": {
         "additionalProperties": false,
