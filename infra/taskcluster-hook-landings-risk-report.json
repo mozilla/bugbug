@@ -60,7 +60,7 @@
         ],
         "schedulerId": "-",
         "scopes": [
-            "assume:hook-id:project-bugbug/bugbug"
+            "assume:hook-id:project-bugbug/bugbug-landings-risk-report"
         ],
         "tags": {},
         "workerType": "batch"
