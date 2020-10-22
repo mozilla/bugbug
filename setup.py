@@ -57,6 +57,7 @@ setup(
             "bugbug-analyze-training-metrics = scripts.analyze_training_metrics:main",
             "bugbug-check-all-metrics = scripts.check_all_metrics:main",
             "bugbug-past-bugs-by-unit = scripts.past_bugs_by_unit:main",
+            "bugbug-testing-policy-stats = scripts.testing_policy_stats:main",
         ]
     },
     classifiers=[
