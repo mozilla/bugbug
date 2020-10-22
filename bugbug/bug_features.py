@@ -662,18 +662,17 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
                 # TODO: Try simply using all possible fields instead of extracting features manually.
 
+                summary = bug["summary"]
+                comments = [c["text"] for c in bug["comments"]]
                 for cleanup_function in self.cleanup_functions:
-                    bug["summary"] = cleanup_function(bug["summary"])
-                    for c in bug["comments"]:
-                        c["text"] = cleanup_function(c["text"])
+                    summary = cleanup_function(summary)
+                    comments = [cleanup_function(comment) for comment in comments]
 
                 return {
                     "data": data,
-                    "title": bug["summary"],
-                    "first_comment": ""
-                    if len(bug["comments"]) == 0
-                    else bug["comments"][0]["text"],
-                    "comments": " ".join([c["text"] for c in bug["comments"]]),
+                    "title": summary,
+                    "first_comment": "" if len(comments) == 0 else comments[0],
+                    "comments": " ".join(comments),
                 }
 
         for bug in bugs():
