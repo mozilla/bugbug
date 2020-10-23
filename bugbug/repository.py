@@ -447,7 +447,7 @@ def get_metrics(commit, metrics_space):
 
     if metrics_space["kind"] == "function" and not error:
         metrics = metrics_space["metrics"]
-        commit.total_cyclomatic += metrics["cyclomatic"]
+        commit.total_cyclomatic += metrics["cyclomatic"]["sum"]
         commit.total_halstead_n2 += metrics["halstead"]["n2"]
         commit.total_halstead_N2 += metrics["halstead"]["N2"]
         commit.total_halstead_n1 += metrics["halstead"]["n1"]
@@ -456,7 +456,7 @@ def get_metrics(commit, metrics_space):
         commit.total_logical_loc += metrics["loc"]["lloc"]
 
         commit.maximum_cyclomatic = max(
-            commit.maximum_cyclomatic, metrics["cyclomatic"]
+            commit.maximum_cyclomatic, metrics["cyclomatic"]["sum"]
         )
         commit.maximum_halstead_n2 = max(
             commit.maximum_halstead_n2,
@@ -480,7 +480,7 @@ def get_metrics(commit, metrics_space):
         )
 
         commit.minimum_cyclomatic = min(
-            commit.minimum_cyclomatic, metrics["cyclomatic"]
+            commit.minimum_cyclomatic, metrics["cyclomatic"]["sum"]
         )
         commit.minimum_halstead_n2 = min(
             commit.minimum_halstead_n2,
