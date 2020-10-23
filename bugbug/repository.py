@@ -180,6 +180,7 @@ class Commit:
         self.average_halstead_N2 = 0.0
         self.average_halstead_n2 = 0.0
         self.average_source_loc = 0.0
+        self.average_instruction_loc = 0.0
         self.average_logical_loc = 0.0
         self.maximum_cyclomatic = 0
         self.maximum_halstead_N2 = 0
@@ -187,6 +188,7 @@ class Commit:
         self.maximum_halstead_N1 = 0
         self.maximum_halstead_n1 = 0
         self.maximum_source_loc = 0
+        self.maximum_instruction_loc = 0
         self.maximum_logical_loc = 0
         self.minimum_cyclomatic = sys.maxsize
         self.minimum_halstead_N1 = sys.maxsize
@@ -194,6 +196,7 @@ class Commit:
         self.minimum_halstead_N2 = sys.maxsize
         self.minimum_halstead_n2 = sys.maxsize
         self.minimum_source_loc = sys.maxsize
+        self.minimum_instruction_loc = sys.maxsize
         self.minimum_logical_loc = sys.maxsize
         self.total_cyclomatic = 0
         self.total_halstead_N1 = 0
@@ -201,6 +204,7 @@ class Commit:
         self.total_halstead_N2 = 0
         self.total_halstead_n2 = 0
         self.total_source_loc = 0
+        self.total_instruction_loc = 0
         self.total_logical_loc = 0
 
     def __eq__(self, other):
@@ -453,6 +457,7 @@ def get_metrics(commit, metrics_space):
         commit.total_halstead_n1 += metrics["halstead"]["n1"]
         commit.total_halstead_N1 += metrics["halstead"]["N1"]
         commit.total_source_loc += metrics["loc"]["sloc"]
+        commit.total_instruction_loc += metrics["loc"]["ploc"]
         commit.total_logical_loc += metrics["loc"]["lloc"]
 
         commit.maximum_cyclomatic = max(
@@ -474,6 +479,9 @@ def get_metrics(commit, metrics_space):
         )
         commit.maximum_source_loc = max(
             metrics["loc"]["sloc"], commit.maximum_source_loc
+        )
+        commit.maximum_instruction_loc = max(
+            metrics["loc"]["ploc"], commit.maximum_instruction_loc
         )
         commit.maximum_logical_loc = max(
             metrics["loc"]["lloc"], commit.maximum_logical_loc
@@ -498,6 +506,9 @@ def get_metrics(commit, metrics_space):
         )
         commit.minimum_source_loc = min(
             metrics["loc"]["sloc"], commit.minimum_source_loc
+        )
+        commit.minimum_instruction_loc = min(
+            metrics["loc"]["ploc"], commit.minimum_instruction_loc
         )
         commit.minimum_logical_loc = min(
             metrics["loc"]["lloc"], commit.minimum_logical_loc
@@ -637,6 +648,9 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
         commit.average_halstead_n1 = commit.total_halstead_n1 / metrics_file_count
         commit.average_halstead_N1 = commit.total_halstead_N1 / metrics_file_count
         commit.average_source_loc = commit.total_source_loc / metrics_file_count
+        commit.average_instruction_loc = (
+            commit.total_instruction_loc / metrics_file_count
+        )
         commit.average_logical_loc = commit.total_logical_loc / metrics_file_count
     else:
         # these values are initialized with sys.maxsize (because we take the min)
@@ -647,6 +661,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
         commit.minimum_halstead_N1 = 0
         commit.minimum_halstead_n1 = 0
         commit.minimum_source_loc = 0
+        commit.minimum_instruction_loc = 0
         commit.minimum_logical_loc = 0
 
     return commit
