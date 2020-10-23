@@ -141,6 +141,7 @@ class LandingsRiskReportGenerator(object):
             for commit in repository.get_commits()
             if commit["bug_id"] in bugs_set
         ]
+        hash_to_rev = {commit["node"]: i for i, commit in enumerate(commits)}
 
         logger.info(f"{len(commits)} commits to analyze.")
 
@@ -205,6 +206,7 @@ class LandingsRiskReportGenerator(object):
                 continue
 
             commit_list = list(commit_iter)
+            commit_list.sort(key=lambda x: hash_to_rev[x["node"]])
 
             # Find previous regressions occurred in the same files as those touched by these commits.
             # And find previous bugs that were fixed by touching the same files as these commits.
