@@ -142,6 +142,7 @@ class source_code_file_metrics(object):
             "Average number of unique operators": commit["average_halstead_n1"],
             "Average number of operators": commit["average_halstead_N1"],
             "Average number of source loc": commit["average_source_loc"],
+            "Average number of instruction loc": commit["average_instruction_loc"],
             "Average number of logical loc": commit["average_logical_loc"],
             "Maximum cyclomatic": commit["maximum_cyclomatic"],
             "Maximum number of unique operands": commit["maximum_halstead_n2"],
@@ -149,6 +150,7 @@ class source_code_file_metrics(object):
             "Maximum number of unique operators": commit["maximum_halstead_n1"],
             "Maximum number of operators": commit["maximum_halstead_N1"],
             "Maximum number of source loc": commit["maximum_source_loc"],
+            "Maximum number of instruction loc": commit["maximum_instruction_loc"],
             "Maximum number of logical loc": commit["maximum_logical_loc"],
             "Minimum cyclomatic": commit["minimum_cyclomatic"],
             "Minimum number of unique operands": commit["minimum_halstead_n2"],
@@ -156,11 +158,13 @@ class source_code_file_metrics(object):
             "Minimum number of unique operators": commit["minimum_halstead_n1"],
             "Minimum number of operators": commit["minimum_halstead_N1"],
             "Minimum number of source loc": commit["minimum_source_loc"],
+            "Minimum number of instruction loc": commit["minimum_instruction_loc"],
             "Minimum number of logical loc": commit["minimum_logical_loc"],
             "Total of number of operands": commit["total_halstead_N2"],
             "Total of number of unique operators": commit["total_halstead_n1"],
             "Total number of operators": commit["total_halstead_N1"],
             "Total number of source loc": commit["total_source_loc"],
+            "Total number of instruction loc": commit["total_instruction_loc"],
             "Total number of logical loc": commit["total_logical_loc"],
         }
 
@@ -558,6 +562,10 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
                 commit["average_source_loc"] for commit in commits
             )
             / len(commits),
+            "average_instruction_loc": sum(
+                commit["average_instruction_loc"] for commit in commits
+            )
+            / len(commits),
             "average_logical_loc": sum(
                 commit["average_logical_loc"] for commit in commits
             )
@@ -580,6 +588,9 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "maximum_source_loc": max(
                 commit["maximum_source_loc"] for commit in commits
             ),
+            "maximum_instruction_loc": max(
+                commit["maximum_instruction_loc"] for commit in commits
+            ),
             "maximum_logical_loc": max(
                 commit["maximum_logical_loc"] for commit in commits
             ),
@@ -601,6 +612,9 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "minimum_source_loc": min(
                 commit["minimum_source_loc"] for commit in commits
             ),
+            "minimum_instruction_loc": min(
+                commit["minimum_instruction_loc"] for commit in commits
+            ),
             "minimum_logical_loc": min(
                 commit["minimum_logical_loc"] for commit in commits
             ),
@@ -609,6 +623,9 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
             "total_halstead_N1": sum(commit["total_halstead_N1"] for commit in commits),
             "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
+            "total_instruction_loc": sum(
+                commit["total_instruction_loc"] for commit in commits
+            ),
             "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
         }
     )
