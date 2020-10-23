@@ -145,6 +145,8 @@ class source_code_file_metrics(object):
             "Average number of instruction loc": commit["average_instruction_loc"],
             "Average number of logical loc": commit["average_logical_loc"],
             "Average number of comment loc": commit["average_comment_loc"],
+            "Average number of function arguments": commit["average_nargs"],
+            "Average number of function exit points": commit["average_nexit"],
             "Maximum cyclomatic": commit["maximum_cyclomatic"],
             "Maximum number of unique operands": commit["maximum_halstead_n2"],
             "Maximum number of operands": commit["maximum_halstead_N2"],
@@ -154,6 +156,8 @@ class source_code_file_metrics(object):
             "Maximum number of instruction loc": commit["maximum_instruction_loc"],
             "Maximum number of logical loc": commit["maximum_logical_loc"],
             "Maximum number of comment loc": commit["maximum_comment_loc"],
+            "Maximum number of function arguments": commit["maximum_nargs"],
+            "Maximum number of function exit points": commit["maximum_nexit"],
             "Minimum cyclomatic": commit["minimum_cyclomatic"],
             "Minimum number of unique operands": commit["minimum_halstead_n2"],
             "Minimum number of operands": commit["minimum_halstead_N2"],
@@ -163,6 +167,8 @@ class source_code_file_metrics(object):
             "Minimum number of instruction loc": commit["minimum_instruction_loc"],
             "Minimum number of logical loc": commit["minimum_logical_loc"],
             "Minimum number of comment loc": commit["minimum_comment_loc"],
+            "Minimum number of function arguments": commit["minimum_nargs"],
+            "Minimum number of function exit points": commit["minimum_nexit"],
             "Total of number of operands": commit["total_halstead_N2"],
             "Total of number of unique operators": commit["total_halstead_n1"],
             "Total number of operators": commit["total_halstead_N1"],
@@ -170,6 +176,8 @@ class source_code_file_metrics(object):
             "Total number of instruction loc": commit["total_instruction_loc"],
             "Total number of logical loc": commit["total_logical_loc"],
             "Total number of comment loc": commit["total_comment_loc"],
+            "Total number of function arguments": commit["total_nargs"],
+            "Total number of function exit points": commit["total_nexit"],
         }
 
 
@@ -578,6 +586,10 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
                 commit["average_comment_loc"] for commit in commits
             )
             / len(commits),
+            "average_nargs": sum(commit["average_nargs"] for commit in commits)
+            / len(commits),
+            "average_nexit": sum(commit["average_nexit"] for commit in commits)
+            / len(commits),
             "maximum_cyclomatic": max(
                 commit["maximum_cyclomatic"] for commit in commits
             ),
@@ -605,6 +617,8 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "maximum_comment_loc": max(
                 commit["maximum_comment_loc"] for commit in commits
             ),
+            "maximum_nargs": max(commit["maximum_nargs"] for commit in commits),
+            "maximum_nexit": max(commit["maximum_nexit"] for commit in commits),
             "minimum_cyclomatic": min(
                 commit["minimum_cyclomatic"] for commit in commits
             ),
@@ -632,6 +646,8 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "minimum_comment_loc": min(
                 commit["minimum_comment_loc"] for commit in commits
             ),
+            "minimum_nargs": min(commit["minimum_nargs"] for commit in commits),
+            "minimum_nexit": min(commit["minimum_nexit"] for commit in commits),
             "total_halstead_n2": sum(commit["total_halstead_n2"] for commit in commits),
             "total_halstead_N2": sum(commit["total_halstead_N2"] for commit in commits),
             "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
@@ -642,6 +658,8 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             ),
             "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
             "total_comment_loc": sum(commit["total_comment_loc"] for commit in commits),
+            "total_nargs": sum(commit["total_nargs"] for commit in commits),
+            "total_nexit": sum(commit["total_nexit"] for commit in commits),
         }
     )
 
