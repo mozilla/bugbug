@@ -255,15 +255,6 @@ class LandingsRiskReportGenerator(object):
                 prev_fixed_bug_blocked_bugs
             )
 
-            # Get the testing-related tags for the revisions associated to this bug.
-            testing_tags = set(
-                phabricator.get_testing_projects(
-                    revision_map[repository.get_revision_id(commit)]
-                    for commit in commit_list
-                    if repository.get_revision_id(commit) in revision_map
-                )
-            )
-
             # Evaluate risk of commits associated to this bug.
             probs = self.regressor_model.classify(commit_list, probabilities=True)
 
@@ -275,8 +266,18 @@ class LandingsRiskReportGenerator(object):
                         dateutil.parser.parse(commit["pushdate"])
                         for commit in commit_list
                     ).strftime("%Y-%m-%d"),
+                    "commits": [
+                        {
+                            "testing": phabricator.get_testing_projects(
+                                revision_map[repository.get_revision_id(commit)]
+                            )
+                            if repository.get_revision_id(commit) in revision_map
+                            else None,
+                            "risk": float(probs[i][1]),
+                        }
+                        for i, commit in enumerate(commit_list)
+                    ],
                     "meta_ids": list(blocker_to_meta[bug_id]),
-                    "risk": float(max(probs[:, 1])),
                     "prev_regressions": prev_regressions[-3:],
                     "prev_fixed_bugs": prev_fixed_bugs[-3:],
                     "prev_regression_blocked_bugs": prev_regression_blocked_bugs[-3:],
@@ -285,7 +286,6 @@ class LandingsRiskReportGenerator(object):
                     "most_common_fixed_bugs_components": fixed_bugs_components,
                     "most_common_regression_blocked_bug_components": regression_blocked_bug_components,
                     "most_common_fixed_bug_blocked_bug_components": fixed_bug_blocked_bug_components,
-                    "testing": list(testing_tags),
                 }
             )
 

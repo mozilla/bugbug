@@ -85,10 +85,9 @@ class TestingPolicyStatsGenerator(object):
         commits = [
             commit
             for commit in commits
-            if sum(
-                1
-                for _ in phabricator.get_testing_projects(
-                    [revision_map[repository.get_revision_id(commit)]]
+            if len(
+                phabricator.get_testing_projects(
+                    revision_map[repository.get_revision_id(commit)]
                 )
             )
             > 0
@@ -98,11 +97,14 @@ class TestingPolicyStatsGenerator(object):
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],
         ) -> Collection[str]:
-            return list(
-                phabricator.get_testing_projects(
-                    revision_map[repository.get_revision_id(commit)]
+            return sum(
+                (
+                    phabricator.get_testing_projects(
+                        revision_map[repository.get_revision_id(commit)]
+                    )
                     for commit in commits
-                )
+                ),
+                [],
             )
 
         testing_projects = list_testing_projects(commits)
