@@ -268,6 +268,7 @@ class LandingsRiskReportGenerator(object):
                     ).strftime("%Y-%m-%d"),
                     "commits": [
                         {
+                            "id": commit["node"],
                             "testing": phabricator.get_testing_projects(
                                 revision_map[repository.get_revision_id(commit)]
                             )
