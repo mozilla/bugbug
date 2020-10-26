@@ -156,7 +156,7 @@ class Retriever(object):
             f"Deleted {len(missing_history_bug_ids)} bugs as we couldn't retrieve their history"
         )
 
-        zstd_compress("data/bugs.json")
+        zstd_compress(bugzilla.BUGS_DB)
 
 
 def main() -> None:
