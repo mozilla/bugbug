@@ -38,6 +38,9 @@ class TestingPolicyStatsGenerator(object):
             rev_start="children({})".format(commit["node"]),
         )
 
+        logger.info("Downloading revisions database...")
+        assert db.download(phabricator.REVISIONS_DB)
+
         logger.info("Downloading bugs database...")
         assert db.download(bugzilla.BUGS_DB)
 
@@ -63,10 +66,18 @@ class TestingPolicyStatsGenerator(object):
         commits = self.get_landed_since(days_start, days_end)
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
-        revision_ids = list(
+        revision_ids = set(
             filter(None, (repository.get_revision_id(commit) for commit in commits))
         )
-        revision_map = phabricator.get(revision_ids)
+
+        logger.info("Download revisions of interest...")
+        phabricator.download_revisions(revision_ids)
+
+        revision_map = {
+            revision["id"]: revision
+            for revision in phabricator.get_revisions()
+            if revision["id"] in revision_ids
+        }
 
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(

@@ -67,6 +67,9 @@ class LandingsRiskReportGenerator(object):
             rev_start="children({})".format(commit["node"]),
         )
 
+        logger.info("Downloading revisions database...")
+        assert db.download(phabricator.REVISIONS_DB)
+
         logger.info("Downloading bugs database...")
         assert db.download(bugzilla.BUGS_DB)
 
@@ -154,10 +157,18 @@ class LandingsRiskReportGenerator(object):
         }
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
-        revisions = list(
+        revision_ids = set(
             filter(None, (repository.get_revision_id(commit) for commit in commits))
         )
-        revision_map = phabricator.get(revisions)
+
+        logger.info("Download revisions of interest...")
+        phabricator.download_revisions(revision_ids)
+
+        revision_map = {
+            revision["id"]: revision
+            for revision in phabricator.get_revisions()
+            if revision["id"] in revision_ids
+        }
 
         if meta_bugs is not None:
             blocker_to_meta = collections.defaultdict(set)

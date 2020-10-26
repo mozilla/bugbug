@@ -194,6 +194,46 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: revisions-retrieval
+      created: {$fromNow: ''}
+      deadline: {$fromNow: '2 days'}
+      expires: {$fromNow: '1 month'}
+      provisionerId: proj-bugbug
+      workerType: batch
+      dependencies:
+        - commit-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "bugbug-data-revisions"
+
+        artifacts:
+          public/revisions.json.zst:
+            path: /data/revisions.json.zst
+            type: file
+          public/revisions.json.version:
+            path: /data/revisions.json.version
+            type: file
+
+        features:
+          taskclusterProxy:
+            true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.data_revisions.${version}
+        - index.project.bugbug.data_revisions.latest
+      metadata:
+        name: bugbug revisions retrieval
+        description: bugbug revisions retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: test-label-scheduling-history-push_data-retrieval
       created: {$fromNow: ''}
       deadline: {$fromNow: '3 days'}
@@ -1348,6 +1388,7 @@ tasks:
       expires: {$fromNow: '1 month'}
       dependencies:
         - past-bugs-by-unit
+        - revisions-retrieval
       scopes:
           - hooks:modify-hook:project-bugbug/bugbug-landings-risk-report
           - assume:hook-id:project-bugbug/bugbug-landings-risk-report

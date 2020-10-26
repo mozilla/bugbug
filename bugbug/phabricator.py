@@ -3,8 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from typing import Collection, Iterator, List, NewType
+
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
+
+from bugbug import db
+
+RevisionDict = NewType("RevisionDict", dict)
+
+REVISIONS_DB = "data/revisions.json"
+db.register(
+    REVISIONS_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
+    1,
+)
 
 PHABRICATOR_API = None
 
@@ -17,38 +30,54 @@ TESTING_PROJECTS = {
 }
 
 
-def set_api_key(url, api_key):
+def get_revisions() -> Iterator[RevisionDict]:
+    yield from db.read(REVISIONS_DB)
+
+
+def set_api_key(url: str, api_key: str) -> None:
     global PHABRICATOR_API
     PHABRICATOR_API = PhabricatorAPI(api_key, url)
 
 
-def get(rev_ids):
+def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
     assert PHABRICATOR_API is not None
 
-    data = {}
+    out = PHABRICATOR_API.request(
+        "differential.revision.search",
+        constraints={
+            "ids": rev_ids,
+        },
+        attachments={"projects": True},
+    )
 
-    rev_ids = list(set(rev_ids))
-    rev_ids_groups = (rev_ids[i : i + 100] for i in range(0, len(rev_ids), 100))
+    return out["data"]
 
-    with tqdm(total=len(rev_ids)) as progress_bar:
+
+def download_revisions(rev_ids: Collection[int]) -> None:
+    old_rev_count = 0
+    new_rev_ids = set(int(rev_id) for rev_id in rev_ids)
+    for rev in get_revisions():
+        old_rev_count += 1
+        if rev["id"] in new_rev_ids:
+            new_rev_ids.remove(rev["id"])
+
+    print(f"Loaded {old_rev_count} revisions.")
+
+    new_rev_ids_list = sorted(list(new_rev_ids))
+    rev_ids_groups = (
+        new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
+    )
+
+    with tqdm(total=len(new_rev_ids)) as progress_bar:
         for rev_ids_group in rev_ids_groups:
-            out = PHABRICATOR_API.request(
-                "differential.revision.search",
-                constraints={
-                    "ids": rev_ids_group,
-                },
-                attachments={"projects": True},
-            )
-
-            for result in out["data"]:
-                data[result["id"]] = result
+            revisions = get(rev_ids_group)
 
             progress_bar.update(len(rev_ids_group))
 
-    return data
+            db.append(REVISIONS_DB, revisions)
 
 
-def get_testing_projects(rev):
+def get_testing_projects(rev: RevisionDict) -> List[str]:
     return [
         TESTING_PROJECTS[projectPHID]
         for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
