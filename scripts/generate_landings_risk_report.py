@@ -308,7 +308,16 @@ class LandingsRiskReportGenerator(object):
             landings_by_date[commit_group["date"]].append(commit_group)
 
         with open("landings_by_date.json", "w") as f:
-            json.dump(landings_by_date, f)
+            output: dict = {
+                "landings": landings_by_date,
+            }
+            if meta_bugs is not None:
+                output["featureMetaBugs"] = [
+                    {"id": meta_bug, "summary": bug_map[meta_bug]["summary"]}
+                    for meta_bug in meta_bugs
+                ]
+
+            json.dump(output, f)
 
 
 def main() -> None:
