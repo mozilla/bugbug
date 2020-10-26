@@ -166,7 +166,7 @@ def download_bugs(bug_ids, products=None, security=False):
     for bug in get_bugs(include_invalid=True):
         old_bug_count += 1
         if int(bug["id"]) in new_bug_ids:
-            new_bug_ids.remove(bug["id"])
+            new_bug_ids.remove(int(bug["id"]))
 
     print(f"Loaded {old_bug_count} bugs.")
 
