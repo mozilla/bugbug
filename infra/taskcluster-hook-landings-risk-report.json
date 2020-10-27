@@ -44,7 +44,7 @@
             "command": [
                 "bugbug-generate-landings-risk-report",
                 "/cache/mozilla-central",
-                "--days=35",
+                "--days=365",
                 "--meta-bugs"
             ],
             "image": "mozilla/bugbug-commit-retrieval",
