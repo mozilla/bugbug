@@ -1,3 +1,6 @@
+[mozci]
+data_sources = ["hgmo", "taskcluster", "treeherder_client", "adr"]
+
 [mozci.cache]
 retention = 40320
 serializer = "compressedpickle"
