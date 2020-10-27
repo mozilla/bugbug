@@ -31,6 +31,6 @@ def get_all_bug_ids():
             if "bug_id" not in reader.fieldnames:
                 continue
 
-            bug_ids.update([int(row["bug_id"]) for row in reader])
+            bug_ids.update(int(row["bug_id"]) for row in reader)
 
     return list(bug_ids)
