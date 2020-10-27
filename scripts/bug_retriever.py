@@ -71,24 +71,30 @@ class Retriever(object):
 
         # Get IDs of bugs linked to commits (used for some commit-based models, e.g. backout and regressor).
         start_date = datetime.now() - relativedelta(years=3)
-        commit_bug_ids = [
-            commit["bug_id"]
-            for commit in repository.get_commits()
-            if commit["bug_id"]
-            and dateutil.parser.parse(commit["pushdate"]) >= start_date
-        ]
+        commit_bug_ids = list(
+            set(
+                commit["bug_id"]
+                for commit in repository.get_commits()
+                if commit["bug_id"]
+                and dateutil.parser.parse(commit["pushdate"]) >= start_date
+            )
+        )
         if limit:
             commit_bug_ids = commit_bug_ids[-limit:]
         logger.info(f"{len(commit_bug_ids)} bugs linked to commits to download.")
 
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
-        regression_related_ids: List[int] = sum(
-            (
-                bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                for bug in bugzilla.get_bugs()
-            ),
-            [],
+        regression_related_ids: List[int] = list(
+            set(
+                sum(
+                    (
+                        bug["regressed_by"] + bug["regressions"] + bug["blocks"]
+                        for bug in bugzilla.get_bugs()
+                    ),
+                    [],
+                )
+            )
         )
         if limit:
             regression_related_ids = regression_related_ids[-limit:]
@@ -111,12 +117,16 @@ class Retriever(object):
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
         for i in range(3):
-            regression_related_ids = sum(
-                (
-                    bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                    for bug in bugzilla.get_bugs()
-                ),
-                [],
+            regression_related_ids = list(
+                set(
+                    sum(
+                        (
+                            bug["regressed_by"] + bug["regressions"] + bug["blocks"]
+                            for bug in bugzilla.get_bugs()
+                        ),
+                        [],
+                    )
+                )
             )
             logger.info(
                 f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
