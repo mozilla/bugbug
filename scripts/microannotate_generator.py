@@ -56,7 +56,10 @@ class MicroannotateGenerator(object):
             )
 
             if not is_old_version:
-                executor.submit(self.clone_git_repo)
+                git_cloner = executor.submit(self.clone_git_repo)
+                git_cloner.add_done_callback(
+                    lambda future: logger.info("git repo cloned")
+                )
             else:
                 executor.submit(self.init_git_repo)
 
