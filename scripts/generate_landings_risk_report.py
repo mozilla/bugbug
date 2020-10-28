@@ -152,9 +152,14 @@ class LandingsRiskReportGenerator(object):
 
         logger.info(f"{len(bug_ids)} bugs to analyze.")
 
-        bug_map = {
-            bug["id"]: bug for bug in bugzilla.get_bugs() if bug["id"] in bugs_set
-        }
+        bug_map = {}
+        regressor_bug_ids = set()
+        for bug in bugzilla.get_bugs():
+            if bug["id"] in bugs_set:
+                bug_map[bug["id"]] = bug
+
+            if len(bug["regressions"]) > 0:
+                regressor_bug_ids.add(bug["id"])
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = set(
@@ -288,6 +293,7 @@ class LandingsRiskReportGenerator(object):
                         "testing": testing,
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
+                        "regressor": commit["bug_id"] in regressor_bug_ids,
                     }
                 )
 
