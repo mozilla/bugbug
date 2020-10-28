@@ -133,8 +133,7 @@ class PastBugsCollector(object):
                     {
                         "id": bug_id,
                         "summary": bug["summary"],
-                        "product": bug["product"],
-                        "component": bug["component"],
+                        "component": "{}::{}".format(bug["product"], bug["component"]),
                     }
                 )
 
