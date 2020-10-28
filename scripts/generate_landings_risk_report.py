@@ -297,10 +297,13 @@ class LandingsRiskReportGenerator(object):
                     }
                 )
 
+            bug = bug_map[bug_id]
+
             commit_groups.append(
                 {
                     "id": bug_id,
-                    "summary": bug_map[bug_id]["summary"],
+                    "component": "{}::{}".format(bug["product"], bug["component"]),
+                    "summary": bug["summary"],
                     "date": max(
                         dateutil.parser.parse(commit["pushdate"])
                         for commit in commit_list
