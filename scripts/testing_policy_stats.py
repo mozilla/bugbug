@@ -96,26 +96,26 @@ class TestingPolicyStatsGenerator(object):
         commits = [
             commit
             for commit in commits
-            if len(
-                phabricator.get_testing_projects(
-                    revision_map[repository.get_revision_id(commit)]
-                )
+            if phabricator.get_testing_project(
+                revision_map[repository.get_revision_id(commit)]
             )
-            > 0
+            is not None
         ]
         logger.info(f"{len(commits)} revisions with testing tags")
 
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],
         ) -> Collection[str]:
-            return sum(
-                (
-                    phabricator.get_testing_projects(
-                        revision_map[repository.get_revision_id(commit)]
-                    )
-                    for commit in commits
-                ),
-                [],
+            return list(
+                filter(
+                    None,
+                    (
+                        phabricator.get_testing_project(
+                            revision_map[repository.get_revision_id(commit)]
+                        )
+                        for commit in commits
+                    ),
+                )
             )
 
         testing_projects = list_testing_projects(commits)

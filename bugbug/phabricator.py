@@ -3,12 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Collection, Iterator, List, NewType
+import logging
+from typing import Collection, Iterator, NewType, Optional
 
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
 from bugbug import db
+
+logger = logging.getLogger(__name__)
 
 RevisionDict = NewType("RevisionDict", dict)
 
@@ -77,9 +80,17 @@ def download_revisions(rev_ids: Collection[int]) -> None:
             db.append(REVISIONS_DB, revisions)
 
 
-def get_testing_projects(rev: RevisionDict) -> List[str]:
-    return [
+def get_testing_project(rev: RevisionDict) -> Optional[str]:
+    testing_projects = [
         TESTING_PROJECTS[projectPHID]
         for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
         if projectPHID in TESTING_PROJECTS
     ]
+
+    if len(testing_projects) > 1:
+        logger.warning("Revision D{} has more than one testing tag.".format(rev["id"]))
+
+    if len(testing_projects) == 0:
+        return None
+
+    return testing_projects[-1]

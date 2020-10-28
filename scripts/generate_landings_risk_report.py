@@ -271,6 +271,25 @@ class LandingsRiskReportGenerator(object):
             # Evaluate risk of commits associated to this bug.
             probs = self.regressor_model.classify(commit_list, probabilities=True)
 
+            commits_data = []
+            for i, commit in enumerate(commit_list):
+                revision_id = repository.get_revision_id(commit)
+                if revision_id in revision_map:
+                    testing = phabricator.get_testing_project(revision_map[revision_id])
+
+                    if testing is None:
+                        testing = "none"
+                else:
+                    testing = None
+
+                commits_data.append(
+                    {
+                        "id": commit["node"],
+                        "testing": testing,
+                        "risk": float(probs[i][1]),
+                    }
+                )
+
             commit_groups.append(
                 {
                     "id": bug_id,
@@ -279,18 +298,7 @@ class LandingsRiskReportGenerator(object):
                         dateutil.parser.parse(commit["pushdate"])
                         for commit in commit_list
                     ).strftime("%Y-%m-%d"),
-                    "commits": [
-                        {
-                            "id": commit["node"],
-                            "testing": phabricator.get_testing_projects(
-                                revision_map[repository.get_revision_id(commit)]
-                            )
-                            if repository.get_revision_id(commit) in revision_map
-                            else None,
-                            "risk": float(probs[i][1]),
-                        }
-                        for i, commit in enumerate(commit_list)
-                    ],
+                    "commits": commits_data,
                     "meta_ids": list(blocker_to_meta[bug_id]),
                     "prev_regressions": prev_regressions[-3:],
                     "prev_fixed_bugs": prev_fixed_bugs[-3:],
