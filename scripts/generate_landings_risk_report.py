@@ -287,6 +287,7 @@ class LandingsRiskReportGenerator(object):
                         "id": commit["node"],
                         "testing": testing,
                         "risk": float(probs[i][1]),
+                        "backedout": bool(commit["backedoutby"]),
                     }
                 )
 
