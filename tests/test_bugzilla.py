@@ -21,3 +21,56 @@ def test_get_bugs():
 
     assert 1572747 in all_bugs
     assert 1572747 in legitimate_bugs
+
+
+def test_get_fixed_versions():
+    assert (
+        bugzilla.get_fixed_versions(
+            {
+                "target_milestone": "mozilla81",
+                "cf_tracking_firefox83": "blocking",
+                "cf_status_firefox82": "fixed",
+                "cf_status_firefox81": "unaffected",
+            }
+        )
+        == [81, 82]
+    )
+
+    assert (
+        bugzilla.get_fixed_versions(
+            {
+                "target_milestone": "mozilla82",
+                "cf_tracking_firefox82": "---",
+                "cf_status_firefox82": "fixed",
+                "cf_status_firefox83": "fixed",
+            }
+        )
+        == [82, 83]
+    )
+
+    assert (
+        bugzilla.get_fixed_versions(
+            {
+                "target_milestone": "mozilla82",
+            }
+        )
+        == [82]
+    )
+
+    assert (
+        bugzilla.get_fixed_versions(
+            {
+                "target_milestone": "82 Branch",
+            }
+        )
+        == [82]
+    )
+
+    assert (
+        bugzilla.get_fixed_versions(
+            {
+                "target_milestone": "Firefox 82",
+            }
+        )
+        == [82]
+    )

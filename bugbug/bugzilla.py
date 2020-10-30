@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import csv
+import re
 from datetime import datetime
 from typing import Dict, List
 
@@ -218,6 +219,31 @@ def find_blocked_by(bug_map: Dict[int, dict], bug: dict) -> List[int]:
 
 def find_blocking(bug_map: Dict[int, dict], bug: dict) -> List[int]:
     return _find_linked(bug_map, bug, "depends_on")
+
+
+def get_fixed_versions(bug):
+    versions = set()
+
+    target_milestone_patterns = [
+        re.compile("mozilla([0-9]+)"),
+        re.compile("([0-9]+) Branch"),
+        re.compile("Firefox ([0-9]+)"),
+    ]
+    for target_milestone_pattern in target_milestone_patterns:
+        m = target_milestone_pattern.match(bug["target_milestone"])
+        if m:
+            versions.add(int(m.group(1)))
+
+    status_pattern = re.compile("cf_status_firefox([0-9]+)")
+    for field, value in bug.items():
+        if value != "fixed":
+            continue
+
+        m = status_pattern.match(field)
+        if m:
+            versions.add(int(m.group(1)))
+
+    return list(versions)
 
 
 def delete_bugs(match):

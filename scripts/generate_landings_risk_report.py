@@ -302,6 +302,7 @@ class LandingsRiskReportGenerator(object):
             commit_groups.append(
                 {
                     "id": bug_id,
+                    "versions": bugzilla.get_fixed_versions(bug),
                     "component": "{}::{}".format(bug["product"], bug["component"]),
                     "summary": bug["summary"],
                     "date": max(
