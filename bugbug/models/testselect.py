@@ -230,7 +230,7 @@ class TestSelectModel(Model):
 
     def select_tests(
         self,
-        commits: Iterable[dict],
+        commits: Sequence[repository.CommitDict],
         confidence: float = 0.5,
         push_num: Optional[int] = None,
     ) -> Dict[str, float]:
@@ -438,10 +438,17 @@ class TestSelectModel(Model):
             logger.warning("Optimization problem could not be solved in time")
             return False
 
+        return True
+
     def reduce(
-        self, tasks: Iterable[str], min_redundancy_confidence: float
+        self,
+        tasks: Collection[str],
+        min_redundancy_confidence: float,
+        assume_redundant: bool = False,
     ) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db(self.granularity)
+        failing_together = test_scheduling.get_failing_together_db(
+            self.granularity, True
+        )
 
         def load_failing_together(task: str) -> Dict[str, Tuple[float, float]]:
             key = test_scheduling.failing_together_key(task)
@@ -491,9 +498,9 @@ class TestSelectModel(Model):
             return set(tasks)
 
     def select_configs(
-        self, groups: Iterable[str], min_redundancy_confidence: float
+        self, groups: Collection[str], min_redundancy_confidence: float
     ) -> Dict[str, List[str]]:
-        failing_together = test_scheduling.get_failing_together_db("config_group")
+        failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
         all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
@@ -513,19 +520,7 @@ class TestSelectModel(Model):
             )
         }
 
-        for group in groups:
-            key = test_scheduling.failing_together_key(group)
-            try:
-                failing_together_stats = pickle.loads(failing_together[key])
-            except KeyError:
-                failing_together_stats = {}
-
-            def load_failing_together(config: str) -> Dict[str, Tuple[float, float]]:
-                return failing_together_stats[config]
-
-            equivalence_sets = self._generate_equivalence_sets(
-                all_configs, min_redundancy_confidence, load_failing_together, True
-            )
+        equivalence_sets = self._get_equivalence_sets(min_redundancy_confidence)
 
         for group in groups:
             # Create constraints to ensure at least one task from each set of equivalent
@@ -561,13 +556,14 @@ class TestSelectModel(Model):
         for group in groups:
             configs_by_group[group] = []
 
-        configs_by_group: Dict[str, List[str]] = {}
-        for group in groups:
-            configs_by_group[group] = []
-
-        for (config, group), config_group_var in config_group_vars.items():
-            if config_group_var.solution_value() == 1:
-                configs_by_group[group].append(config)
+        if self._solve_optimization(solver):
+            for (config, group), config_group_var in config_group_vars.items():
+                if config_group_var.solution_value() == 1:
+                    configs_by_group[group].append(config)
+        else:
+            least_cost_config = min(config_costs, key=config_costs.get)
+            for group in groups:
+                configs_by_group[group].append(least_cost_config)
 
         return configs_by_group
 
@@ -636,49 +632,37 @@ class TestSelectModel(Model):
             # past failure data for the push itself.
             # The number 100 comes from the fact that in the past failure data
             # generation we store past failures in batches of 100 pushes.
-            test_pushes[rev]["all_possibly_selected"] = self.select_tests(
+            push["all_possibly_selected"] = self.select_tests(
                 commits, 0.5, push_num - 100
             )
 
-        reductions: List[Optional[float]] = [None, 0.9, 1.0]
-
         def do_eval(
+            executor: concurrent.futures.ProcessPoolExecutor,
             confidence_threshold: float,
             reduction: Optional[float],
             cap: Optional[int],
             minimum: Optional[int],
         ) -> None:
-            for rev, push in test_pushes.items():
-                selected = set(
-                    name
-                    for name, confidence in push["all_possibly_selected"].items()
-                    if confidence >= confidence_threshold
-                )
-
-                if minimum is not None and len(selected) < minimum:
-                    remaining = [
-                        (name, confidence)
-                        for name, confidence in push["all_possibly_selected"].items()
-                        if name not in selected
-                    ]
-                    selected.update(
-                        name
-                        for name, _ in sorted(remaining, key=lambda x: -x[1])[
-                            : minimum - len(selected)
-                        ]
+            futures: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
+            for push in test_pushes.values():
+                futures[
+                    executor.submit(
+                        eval_apply_transforms,
+                        self,
+                        push,
+                        confidence_threshold,
+                        reduction,
+                        cap,
+                        minimum,
                     )
+                ] = push
 
-                if reduction is not None:
-                    if self.granularity == "label":
-                        selected = self.reduce(selected, reduction)
-                    elif self.granularity == "group":
-                        push["number_configs"] = len(
-                            set(
-                                sum(
-                                    self.select_configs(selected, reduction).values(),
-                                    [],
-                                )
-                            )
+            for future in concurrent.futures.as_completed(futures):
+                exc = future.exception()
+                if exc is not None:
+                    print(
+                        "Exception {} while running {}".format(
+                            exc, futures[future]["revs"][0]
                         )
                     )
                     for f in futures:
