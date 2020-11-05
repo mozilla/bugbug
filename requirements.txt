@@ -7,12 +7,12 @@ lmdb==0.99
 matplotlib==3.3.2
 mercurial==5.5.2
 microannotate==0.0.20
-mozci==1.9.5
-numpy==1.19.4
-orjson==3.4.3
-ortools==8.0.8283
-pandas==1.1.4
-psutil==5.7.3
+mozci==1.5.1
+numpy==1.18.5
+orjson==3.1.0
+ortools==7.6.7691
+pandas==1.0.4
+psutil==5.7.0
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.8.1

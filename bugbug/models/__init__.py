@@ -29,6 +29,7 @@ MODELS = {
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
+    "bugtypeclassification": "bugbug.models.bug_type_classification.BugTypeClassificationModel",
 }
 
 

@@ -161,7 +161,7 @@ def schedule_tests(branch: str, rev: str) -> str:
 
         groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
 
-        config_groups = testgroupselect_model.select_configs(groups.keys(), 0.9)
+        config_groups = testgroupselect_model.select_configs(groups.keys(), 1.0)
     else:
         tasks = {}
         reduced = {}

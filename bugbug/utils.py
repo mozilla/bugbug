@@ -464,9 +464,7 @@ def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
 
         return False
 
-    return [
-        c["node"].encode("ascii") for c in r.json()["changesets"] if not should_skip(c)
-    ]
+    return [c for c in r.json()["changesets"] if not should_skip(c)]
 
 
 def get_physical_cpu_count() -> int:
