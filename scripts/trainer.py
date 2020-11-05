@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+from collections import OrderedDict
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import db
@@ -37,6 +38,7 @@ class Trainer(object):
             model_name = args.model
 
         model_class = get_model_class(model_name)
+
         if args.model in HISTORICAL_SUPPORTED_TASKS:
             model_obj = model_class(args.lemmatization, args.historical)
         elif args.model == "regressor":
@@ -44,6 +46,17 @@ class Trainer(object):
         elif args.model == "duplicate":
             model_obj = model_class(
                 args.training_set_size, args.lemmatization, args.cleanup_urls
+            )
+        elif args.model == "bugtypeclassification":
+            model_obj = model_class(
+                lemmatization=args.lemmatization,
+                all_labels=args.all_labels,
+                single_class=args.single_class,
+                grid_search=args.grid_search,
+                classifier=args.clf_type,
+                clf_params=args.clf_params,
+                compact_statistics=args.compact_statistics,
+                cv=args.cv,
             )
         else:
             model_obj = model_class(args.lemmatization)
@@ -58,7 +71,27 @@ class Trainer(object):
             logger.info("Skipping download of the databases")
 
         logger.info(f"Training *{model_name}* model")
-        metrics = model_obj.train(limit=args.limit)
+
+        # Train
+        if args.model == "bugtypeclassification":
+            if args.grid_search:
+                logger.info("Train with GridSearch")
+                metrics = model_obj.train_with_gridserach()
+            elif args.compact_statistics:
+                logger.info("Train with compact statistics")
+                metrics = model_obj.train_compact_statistics(
+                    limit=args.limit, cv=model_obj.cv, clf_type=args.clf_type
+                )
+            else:
+                logger.info("Model compressed")
+                metrics = model_obj.train(
+                    limit=args.limit,
+                    cv=model_obj.cv,
+                    clf_type=args.clf_type,
+                    is_bugtypeclassification=True,
+                )
+        else:
+            metrics = model_obj.train(limit=args.limit, cv=model_obj.cv)
 
         # Save the metrics as a file that can be uploaded as an artifact.
         metric_file_path = "metrics.json"
@@ -138,6 +171,52 @@ def parse_args(args):
         help="""Only use human-interpretable features. Only used for regressor task.""",
         action="store_true",
     )
+    parser.add_argument(
+        "--single_class",
+        help="""Use an existing one class. Only used for bugtypeclassfication task. Used in combination with the args --mode_use=sub in order to specify a subcategory.""",
+        type=str,
+    )
+    parser.add_argument(
+        "--grid_search",
+        help="""Only use this args to perform a grid search with the specified classifier. Only used for Bug Type Classification""",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--all_labels",
+        help="""Only use for specifing the operational mode. use this args to select all the label, i.e. the subcategory classification mode. Only used for Bug Type Classification""",
+        action="store_false",
+    )
+    parser.add_argument(
+        "--clf_type",
+        help="""Only use for specifing the classifier to use inside the bugtypeclassifier one. Only used for Bug Type Classification.""",
+        choices=["linear_svc", "bayes", "knn", "xgboost"],
+        default="linear_svc",
+    )
+    parser.add_argument(
+        "--clf_params",
+        help="""Only use for use the classifier without any tutning. Only used for Bug Type Classification.""",
+        action="store_false",
+    )
+    parser.add_argument(
+        "--compact_statistics",
+        help="""Only use basic statistics for a fast analisys of the model. Only used for Bug Type Classification.""",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--cv",
+        nargs="?",
+        default=5,
+        type=int,
+        help="The size of the cross-validation slitting strategy. Only used for Bug Type Classification.",
+    )
+    '''
+    parser.add_argument(
+        "--tune",
+        help="""Only use for tuning the classifier in the Bug Type Classification model.""",
+        choices=["True", "False"],
+        default="False",
+    )
+    '''
     return parser.parse_args(args)
 
 
