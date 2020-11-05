@@ -14,9 +14,11 @@ from typing import Callable, Dict, Tuple
 
 import hglib
 import numpy as np
+import orjson
 import py.path
 import pytest
 import responses
+import zstandard
 from _pytest.monkeypatch import MonkeyPatch
 from rq.exceptions import NoSuchJobError
 
@@ -198,7 +200,9 @@ def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
 
 
 @pytest.fixture
-def mock_repo(tmpdir: py.path.local, monkeypatch: MonkeyPatch) -> Tuple[str, str]:
+def mock_repo(
+    tmpdir: py.path.local, monkeypatch: MonkeyPatch
+) -> Tuple[py.path.local, py.path.local]:
     """Create an empty mercurial repo"""
     local_dir = tmpdir / "local"
     remote_dir = tmpdir / "remote"
@@ -309,9 +313,27 @@ def mock_schedule_tests_classify(
     )
     test_scheduling.close_failing_together_db("label")
 
-    failing_together = test_scheduling.get_failing_together_db("config_group")
+    try:
+        test_scheduling.close_failing_together_db("config_group")
+    except AssertionError:
+        pass
+    failing_together = test_scheduling.get_failing_together_db("config_group", False)
     failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
         ["test-linux1804-64/opt", "test-windows10/debug", "test-windows10/opt"]
+    )
+    failing_together[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+        {
+            "test-group1": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+            "test-group2": {
+                "test-linux1804-64/opt",
+                "test-windows10/debug",
+                "test-windows10/opt",
+            },
+        }
     )
     failing_together[b"test-group1"] = pickle.dumps(
         {
@@ -319,10 +341,19 @@ def mock_schedule_tests_classify(
                 "test-windows10/debug": (1.0, 0.0),
                 "test-windows10/opt": (1.0, 1.0),
             },
-            "test-windows10/debug": {"test-windows10/opt": (1.0, 0.0),},
+            "test-windows10/debug": {
+                "test-windows10/opt": (1.0, 0.0),
+            },
         }
     )
     test_scheduling.close_failing_together_db("config_group")
+
+    try:
+        test_scheduling.close_touched_together_db()
+    except AssertionError:
+        pass
+    test_scheduling.get_touched_together_db(False)
+    test_scheduling.close_touched_together_db()
 
     def do_mock(labels_to_choose, groups_to_choose):
         # Add a mock test selection model.
