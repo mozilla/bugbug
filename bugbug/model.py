@@ -4,11 +4,15 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import defaultdict
+from itertools import cycle
 from typing import Any, Dict, List, Tuple
 
 import joblib
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sn
 import shap
 from imblearn.metrics import (
     classification_report_imbalanced,
@@ -17,30 +21,28 @@ from imblearn.metrics import (
     specificity_score,
 )
 from imblearn.pipeline import make_pipeline
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import f1_score
-from sklearn.model_selection import cross_val_predict
-from sklearn.metrics import plot_confusion_matrix
 from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.metrics import (
+    average_precision_score,
+    f1_score,
+    plot_confusion_matrix,
+    plot_precision_recall_curve,
+    precision_recall_curve,
+    precision_recall_fscore_support,
+)
+from sklearn.model_selection import (
+    GridSearchCV,
+    cross_val_predict,
+    cross_validate,
+    train_test_split,
+)
 from tabulate import tabulate
 
 from bugbug import bugzilla, db, repository
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
-
-from sklearn.metrics import average_precision_score
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import plot_precision_recall_curve
-import seaborn as sn
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import average_precision_score
-from itertools import cycle
 
 def classification_report_imbalanced_values(
     y_true, y_pred, labels, target_names=None, sample_weight=None, digits=2, alpha=0.1
@@ -354,7 +356,6 @@ class Model:
         """Subclasses implement their own function to gather labels."""
         pass
 
-
     def train_with_gridserach(self):
         # load the dataset
         classes, self.class_names = self.get_labels()
@@ -376,10 +377,13 @@ class Model:
 
         model_tunning.fit(X.toarray(), y)
 
-        print(f"GridSearch for CLASSIFIER {self.type_classifier}\n best score: {model_tunning.best_score_}\nbest params: {model_tunning.best_params_}")
+        print(
+            f"GridSearch for CLASSIFIER {self.type_classifier}\n best score: {model_tunning.best_score_}\nbest params: {model_tunning.best_params_}"
+        )
 
-
-    def train_compact_statistics(self, importance_cutoff=0.15, limit=None, cv=5, clf_type=None):
+    def train_compact_statistics(
+        self, importance_cutoff=0.15, limit=None, cv=5, clf_type=None
+    ):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -428,50 +432,80 @@ class Model:
         if is_multilabel:
             print("Training Set scores:")
             y_eval = self.clf.predict(X_train.toarray())
-            print("Test Set scores:")         
+            print("Test Set scores:")
             y_pred = self.clf.predict(X_test.toarray())
-            assert isinstance(y_pred[0], np.ndarray), "The predictions should be multilabel"
+            assert isinstance(
+                y_pred[0], np.ndarray
+            ), "The predictions should be multilabel"
 
             predicted = cross_val_predict(self.clf, X_train, y_train, cv=cv)
             print(f"accuracy {metrics.accuracy_score(y_train, predicted)}")
-            print(f"f1 score macro {metrics.f1_score(y_train, predicted, average='macro', zero_division=0)}")
-            print(f"f1 score micro {metrics.f1_score(y_train, predicted, average='micro', zero_division=0)}")
-            print(f"precision score {metrics.precision_score(y_train, predicted, average='macro', zero_division=0)}")
-            print(f"recall score {metrics.recall_score(y_train, predicted, average='macro')}")
+            print(
+                f"f1 score macro {metrics.f1_score(y_train, predicted, average='macro', zero_division=0)}"
+            )
+            print(
+                f"f1 score micro {metrics.f1_score(y_train, predicted, average='micro', zero_division=0)}"
+            )
+            print(
+                f"precision score {metrics.precision_score(y_train, predicted, average='macro', zero_division=0)}"
+            )
+            print(
+                f"recall score {metrics.recall_score(y_train, predicted, average='macro')}"
+            )
             print(f"hamming_loss {metrics.hamming_loss(y_train, predicted)}")
-            print(f"classification_report {metrics.classification_report(y_train, predicted)}")
+            print(
+                f"classification_report {metrics.classification_report(y_train, predicted)}"
+            )
             print(f"log_loss {metrics.log_loss(y_train, predicted)}")
             print(f"zero_one_loss {metrics.zero_one_loss(y_train, predicted)}")
             print(f"AUC&ROC {metrics.roc_auc_score(y_train, predicted)}")
 
-            if clf_type == 'linear_svc':
+            if clf_type == "linear_svc":
                 y_score = self.clf.decision_function(X_test)
                 # For each class
                 precision = dict()
                 recall = dict()
                 average_precision = dict()
                 for i in range(self.target_size):
-                    precision[i], recall[i], _ = precision_recall_curve(y_test[:, i], y_score[:, i])
-                    average_precision[i] = average_precision_score(y_test[:, i], y_score[:, i])
+                    precision[i], recall[i], _ = precision_recall_curve(
+                        y_test[:, i], y_score[:, i]
+                    )
+                    average_precision[i] = average_precision_score(
+                        y_test[:, i], y_score[:, i]
+                    )
 
                 # A "micro-average": quantifying score on all classes jointly
-                precision["micro"], recall["micro"], _ = precision_recall_curve(y_test.ravel(), y_score.ravel())
-                average_precision["micro"] = average_precision_score(y_test, y_score, average="micro")
-                print('Average precision score, micro-averaged over all classes: {0:0.2f}'.format(average_precision["micro"]))
+                precision["micro"], recall["micro"], _ = precision_recall_curve(
+                    y_test.ravel(), y_score.ravel()
+                )
+                average_precision["micro"] = average_precision_score(
+                    y_test, y_score, average="micro"
+                )
+                print(
+                    "Average precision score, micro-averaged over all classes: {0:0.2f}".format(
+                        average_precision["micro"]
+                    )
+                )
 
                 # PLOT for all the classes
                 plt.figure()
-                plt.step(recall['micro'], precision['micro'], where='post')
+                plt.step(recall["micro"], precision["micro"], where="post")
 
-                plt.xlabel('Recall')
-                plt.ylabel('Precision')
+                plt.xlabel("Recall")
+                plt.ylabel("Precision")
                 plt.ylim([0.0, 1.05])
                 plt.xlim([0.0, 1.0])
-                plt.title('Average precision score, micro-averaged over all classes: AP={0:0.2f}'.format(average_precision["micro"]))
+                plt.title(
+                    "Average precision score, micro-averaged over all classes: AP={0:0.2f}".format(
+                        average_precision["micro"]
+                    )
+                )
 
-                # PLOT the single class 
+                # PLOT the single class
                 # setup plot details
-                colors = cycle(['navy', 'turquoise', 'darkorange', 'cornflowerblue', 'teal'])
+                colors = cycle(
+                    ["navy", "turquoise", "darkorange", "cornflowerblue", "teal"]
+                )
 
                 plt.figure(figsize=(7, 8))
                 f_scores = np.linspace(0.2, 0.8, num=4)
@@ -480,67 +514,90 @@ class Model:
                 for f_score in f_scores:
                     x = np.linspace(0.01, 1)
                     y = f_score * x / (2 * x - f_score)
-                    l, = plt.plot(x[y >= 0], y[y >= 0], color='gray', alpha=0.2)
-                    plt.annotate('f1={0:0.1f}'.format(f_score), xy=(0.9, y[45] + 0.02))
+                    (l,) = plt.plot(x[y >= 0], y[y >= 0], color="gray", alpha=0.2)
+                    plt.annotate("f1={0:0.1f}".format(f_score), xy=(0.9, y[45] + 0.02))
 
                 lines.append(l)
-                labels.append('iso-f1 curves')
-                l, = plt.plot(recall["micro"], precision["micro"], color='gold', lw=2)
+                labels.append("iso-f1 curves")
+                (l,) = plt.plot(recall["micro"], precision["micro"], color="gold", lw=2)
                 lines.append(l)
-                labels.append('micro-average Precision-recall (area = {0:0.2f})'
-                            ''.format(average_precision["micro"]))
+                labels.append(
+                    "micro-average Precision-recall (area = {0:0.2f})"
+                    "".format(average_precision["micro"])
+                )
 
                 for i, color in zip(range(self.target_size), colors):
-                    l, = plt.plot(recall[i], precision[i], color=color, lw=2)
+                    (l,) = plt.plot(recall[i], precision[i], color=color, lw=2)
                     lines.append(l)
-                    labels.append('Precision-recall for class {0} (area = {1:0.2f})'
-                                ''.format(i, average_precision[i]))
+                    labels.append(
+                        "Precision-recall for class {0} (area = {1:0.2f})"
+                        "".format(i, average_precision[i])
+                    )
 
                 fig = plt.gcf()
                 fig.subplots_adjust(bottom=0.25)
                 plt.xlim([0.0, 1.0])
                 plt.ylim([0.0, 1.05])
-                plt.xlabel('Recall')
-                plt.ylabel('Precision')
-                plt.title('Extension of Precision-Recall curve to multi-class')
-                plt.legend(lines, labels, loc=(0, -.38), prop=dict(size=14))
-
+                plt.xlabel("Recall")
+                plt.ylabel("Precision")
+                plt.title("Extension of Precision-Recall curve to multi-class")
+                plt.legend(lines, labels, loc=(0, -0.38), prop=dict(size=14))
 
                 plt.show()
-
 
         else:
             print("Training Set scores:")
             y_eval = self.clf.predict(X_train)
-            print("Test Set scores:")         
+            print("Test Set scores:")
             y_pred = self.clf.predict(X_test)
-            #predicted = cross_val_predict(self.clf, X_train, y_train, cv=cv)
-            #print(predicted)
-            
+            # predicted = cross_val_predict(self.clf, X_train, y_train, cv=cv)
+            # print(predicted)
+
             predicted = cross_val_predict(self.clf, X_train, y_train, cv=cv)
             print(f"accuracy {metrics.accuracy_score(y_train, predicted)}")
-            print(f"f1 score macro {metrics.f1_score(y_train, predicted, average='macro', zero_division=0)}")
-            print(f"f1 score micro {metrics.f1_score(y_train, predicted, average='micro', zero_division=0)}")
-            print(f"precision score {metrics.precision_score(y_train, predicted, average='macro', zero_division=0)}")
-            print(f"recall score {metrics.recall_score(y_train, predicted, average='macro')}")
+            print(
+                f"f1 score macro {metrics.f1_score(y_train, predicted, average='macro', zero_division=0)}"
+            )
+            print(
+                f"f1 score micro {metrics.f1_score(y_train, predicted, average='micro', zero_division=0)}"
+            )
+            print(
+                f"precision score {metrics.precision_score(y_train, predicted, average='macro', zero_division=0)}"
+            )
+            print(
+                f"recall score {metrics.recall_score(y_train, predicted, average='macro')}"
+            )
             print(f"hamming_loss {metrics.hamming_loss(y_train, predicted)}")
-            print(f"classification_report {metrics.classification_report(y_train, predicted)}")
+            print(
+                f"classification_report {metrics.classification_report(y_train, predicted)}"
+            )
             print(f"log_loss {metrics.log_loss(y_train, predicted)}")
             print(f"zero_one_loss {metrics.zero_one_loss(y_train, predicted)}")
             print(f"AUC&ROC {metrics.roc_auc_score(y_train, predicted)}")
 
-            if clf_type == 'linear_svc':
+            if clf_type == "linear_svc":
                 y_score = self.clf.decision_function(X_test)
                 average_precision = average_precision_score(y_test, y_score)
-                print('Average precision-recall score: {0:0.2f}'.format(average_precision))
+                print(
+                    "Average precision-recall score: {0:0.2f}".format(average_precision)
+                )
                 disp = plot_precision_recall_curve(self.clf, X_test, y_test)
-                disp.ax_.set_title('2-class Precision-Recall curve: AP={0:0.2f}'.format(average_precision))
+                disp.ax_.set_title(
+                    "2-class Precision-Recall curve: AP={0:0.2f}".format(
+                        average_precision
+                    )
+                )
 
         return tracking_metrics
 
-
-
-    def train(self, importance_cutoff=0.15, limit=None, cv=5, clf_type=None, is_bugtypeclassification=False):
+    def train(
+        self,
+        importance_cutoff=0.15,
+        limit=None,
+        cv=5,
+        clf_type=None,
+        is_bugtypeclassification=False,
+    ):
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -577,7 +634,9 @@ class Model:
             if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
-            scores = cross_validate(pipeline, X_train.toarray(), y_train, scoring=scorings, cv=cv)
+            scores = cross_validate(
+                pipeline, X_train.toarray(), y_train, scoring=scorings, cv=cv
+            )
 
             print("Cross Validation scores:")
             for scoring in scorings:
@@ -608,14 +667,14 @@ class Model:
         shap_analysis = False
 
         if self.calculate_importance and len(feature_names):
-            if is_bugtypeclassification is False or clf_type == 'xbgoost':
+            if is_bugtypeclassification is False or clf_type == "xbgoost":
                 explainer = shap.TreeExplainer(self.clf)
-                shap_values = explainer.shap_values(X_train)  
+                shap_values = explainer.shap_values(X_train)
                 shap_analysis = True
             elif is_bugtypeclassification and is_binary:
-                if clf_type == 'linear_svc' and clf_type == 'bayes':
+                if clf_type == "linear_svc" and clf_type == "bayes":
                     explainer = shap.LinearExplainer(self.clf, X_train)
-                    shap_values = explainer.shap_values(X_train) 
+                    shap_values = explainer.shap_values(X_train)
                     shap_analysis = True
 
             if shap_analysis:
@@ -684,14 +743,18 @@ class Model:
 
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
-            
+
             for num, array in enumerate(confusion_matrix):
-                df_cm = pd.DataFrame(array, index = [self.class_names[num], "Other"], columns = [self.class_names[num], "Other"])
+                df_cm = pd.DataFrame(
+                    array,
+                    index=[self.class_names[num], "Other"],
+                    columns=[self.class_names[num], "Other"],
+                )
                 sn.set(font_scale=1)
-                sn.heatmap(df_cm, annot=True, annot_kws={"size": 16}) # font size
+                sn.heatmap(df_cm, annot=True, annot_kws={"size": 16})  # font size
                 plt.title(self.class_names[num] + " Confusion Matrix")
                 plt.show()
-                
+
         else:
             confusion_matrix = metrics.confusion_matrix(
                 y_test, y_pred, labels=self.class_names
@@ -718,7 +781,6 @@ class Model:
 
         if is_binary:
             confidence_thresholds = [0.1, 0.2, 0.3, 0.4] + confidence_thresholds
-
 
         # Evaluate results on the test set for some confidence thresholds.
         for confidence_threshold in confidence_thresholds:
@@ -775,7 +837,6 @@ class Model:
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
             )
-
 
         self.evaluation()
 

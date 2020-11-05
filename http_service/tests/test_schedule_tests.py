@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 from typing import Callable, Dict, List, Tuple
 
 import hglib
@@ -94,6 +95,7 @@ def test_simple_schedule(
         ]
 
     # Assert the test selection result is stored in Redis.
+<<<<<<< HEAD
     result = orjson.loads(
         zstandard.ZstdDecompressor().decompress(
             models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
@@ -107,4 +109,15 @@ def test_simple_schedule(
     assert result["known_tasks"] == ["prova"]
     assert {k: set(v) for k, v in result["config_groups"].items()} == {
         k: set(v) for k, v in config_groups.items()
+=======
+    assert json.loads(
+        models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    ) == {
+        "tasks": labels_to_choose,
+        "groups": groups_to_choose,
+        "reduced_tasks": reduced_labels,
+        "reduced_tasks_higher": reduced_labels,
+        "known_tasks": ["prova"],
+        "config_groups": config_groups,
+>>>>>>> Return configs on which to run groups as part of the HTTP service's test scheduling response
     }

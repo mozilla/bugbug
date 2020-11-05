@@ -4,8 +4,9 @@ import argparse
 import json
 import os
 import sys
-from logging import INFO, basicConfig, getLogger
 from collections import OrderedDict
+from logging import INFO, basicConfig, getLogger
+
 from bugbug import db
 from bugbug.models import get_model_class
 from bugbug.utils import CustomJsonEncoder, zstd_compress
@@ -48,14 +49,18 @@ class Trainer(object):
             )
         elif args.model == "bugtypeclassification":
             model_obj = model_class(
-                lemmatization=args.lemmatization, 
-                all_labels=args.all_labels, single_class=args.single_class, grid_search=args.grid_search,
-                classifier=args.clf_type, clf_params=args.clf_params, compact_statistics=args.compact_statistics,
-                cv=args.cv
-                )
+                lemmatization=args.lemmatization,
+                all_labels=args.all_labels,
+                single_class=args.single_class,
+                grid_search=args.grid_search,
+                classifier=args.clf_type,
+                clf_params=args.clf_params,
+                compact_statistics=args.compact_statistics,
+                cv=args.cv,
+            )
         else:
             model_obj = model_class(args.lemmatization)
-        
+
         if args.download_db:
             for required_db in model_obj.training_dbs:
                 assert db.download(required_db)
@@ -68,16 +73,23 @@ class Trainer(object):
         logger.info(f"Training *{model_name}* model")
 
         # Train
-        if args.model == "bugtypeclassification":    
+        if args.model == "bugtypeclassification":
             if args.grid_search:
                 logger.info("Train with GridSearch")
                 metrics = model_obj.train_with_gridserach()
             elif args.compact_statistics:
                 logger.info("Train with compact statistics")
-                metrics = model_obj.train_compact_statistics(limit=args.limit, cv=model_obj.cv, clf_type=args.clf_type)
+                metrics = model_obj.train_compact_statistics(
+                    limit=args.limit, cv=model_obj.cv, clf_type=args.clf_type
+                )
             else:
                 logger.info("Model compressed")
-                metrics = model_obj.train(limit=args.limit, cv=model_obj.cv, clf_type=args.clf_type, is_bugtypeclassification=True)    
+                metrics = model_obj.train(
+                    limit=args.limit,
+                    cv=model_obj.cv,
+                    clf_type=args.clf_type,
+                    is_bugtypeclassification=True,
+                )
         else:
             metrics = model_obj.train(limit=args.limit, cv=model_obj.cv)
 

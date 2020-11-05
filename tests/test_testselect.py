@@ -20,13 +20,13 @@ from bugbug.utils import LMDBDict
 
 @pytest.fixture
 def failing_together() -> Iterator[LMDBDict]:
-    yield test_scheduling.get_failing_together_db("label", False)
+    yield test_scheduling.get_failing_together_db("label")
     test_scheduling.close_failing_together_db("label")
 
 
 @pytest.fixture
 def failing_together_config_group() -> Iterator[LMDBDict]:
-    yield test_scheduling.get_failing_together_db("config_group", False)
+    yield test_scheduling.get_failing_together_db("config_group")
     test_scheduling.close_failing_together_db("config_group")
 
 
@@ -109,6 +109,8 @@ def test_reduce2(failing_together: LMDBDict) -> None:
 
 
 def test_reduce3(failing_together: LMDBDict) -> None:
+    test_scheduling.remove_failing_together_db("label")
+    failing_together = test_scheduling.get_failing_together_db("label")
     failing_together[b"windows10/opt-a"] = pickle.dumps(
         {
             "windows10/opt-b": (0.1, 1.0),
@@ -624,10 +626,6 @@ def test_all(g: Graph) -> None:
 
 
 def test_select_configs(failing_together_config_group: LMDBDict) -> None:
-    past_failures_data = test_scheduling.get_past_failures("group", False)
-    past_failures_data["all_runnables"] = ["group1", "group2"]
-    past_failures_data.close()
-
     failing_together_config_group[b"group1"] = pickle.dumps(
         {
             "linux1804-64-asan/debug": {

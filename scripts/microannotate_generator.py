@@ -104,7 +104,7 @@ class MicroannotateGenerator(object):
             stop=tenacity.stop_after_attempt(5),
         )(
             lambda: subprocess.run(
-                ["git", "clone", self.repo_url, self.git_repo_path],
+                ["git", "clone", "--quiet", self.repo_url, self.git_repo_path],
                 check=True,
             )
         )()
@@ -115,7 +115,7 @@ class MicroannotateGenerator(object):
                 stop=tenacity.stop_after_attempt(5),
             )(
                 lambda: subprocess.run(
-                    ["git", "pull", self.repo_url, "master"],
+                    ["git", "pull", "--quiet", self.repo_url, "master"],
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,
