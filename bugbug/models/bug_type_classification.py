@@ -273,7 +273,7 @@ class BugTypeClassificationModel(BugModel):
         self.cv = cv
 
     #
-    # Define a function that compute the priors no more longer usefull
+    # Define a function that compute the priors no more longer useful
     #
     def get_class_weight(self):
         cw = self.get_labels(True)

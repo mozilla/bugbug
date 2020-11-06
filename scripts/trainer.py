@@ -182,12 +182,12 @@ def parse_args(args):
     )
     parser.add_argument(
         "--all_labels",
-        help="""Only use for specifing the operational mode. use this args to select all the label, i.e. the subcategory classification mode. Only used for Bug Type Classification""",
+        help="""Only use for specifying the operational mode. use this args to select all the label, i.e. the subcategory classification mode. Only used for Bug Type Classification""",
         action="store_false",
     )
     parser.add_argument(
         "--clf_type",
-        help="""Only use for specifing the classifier to use inside the bugtypeclassifier one. Only used for Bug Type Classification.""",
+        help="""Only use for specifying the classifier to use inside the bugtypeclassifier one. Only used for Bug Type Classification.""",
         choices=["linear_svc", "bayes", "knn", "xgboost"],
         default="linear_svc",
     )
