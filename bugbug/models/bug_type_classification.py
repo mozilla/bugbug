@@ -5,21 +5,17 @@
 
 import numpy as np
 import xgboost
-from imblearn.combine import SMOTEENN
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.naive_bayes import BernoulliNB, ComplementNB, MultinomialNB
+from sklearn.naive_bayes import ComplementNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC, LinearSVC
+from sklearn.svm import LinearSVC
 
-from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
+from bugbug import bug_features, feature_cleanup, labels, utils
 from bugbug.model import BugModel
 
 
@@ -283,10 +279,10 @@ class BugTypeClassificationModel(BugModel):
         cw = self.get_labels(True)
         for i, v in cw.items():
             cw[i] = sum(cw.values()) / (self.target_size * cw[i])
-        l = [n for _, n in cw.items()]
-        print(l)
+        weight = [n for _, n in cw.items()]
+        print(weight)
         print(self.target_size)
-        return l
+        return weight
 
     def get_labels(self, requestCategories=None):
         classes = {}

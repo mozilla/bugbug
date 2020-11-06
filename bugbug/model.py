@@ -25,8 +25,6 @@ from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import (
     average_precision_score,
-    f1_score,
-    plot_confusion_matrix,
     plot_precision_recall_curve,
     precision_recall_curve,
     precision_recall_fscore_support,
@@ -407,10 +405,6 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
-        if self.sampler is not None:
-            pipeline = make_pipeline(self.sampler, self.clf)
-        else:
-            pipeline = self.clf
 
         tracking_metrics = {}
 
@@ -430,8 +424,6 @@ class Model:
 
         # Evaluate results on the test set.
         if is_multilabel:
-            print("Training Set scores:")
-            y_eval = self.clf.predict(X_train.toarray())
             print("Test Set scores:")
             y_pred = self.clf.predict(X_test.toarray())
             assert isinstance(
@@ -546,8 +538,6 @@ class Model:
                 plt.show()
 
         else:
-            print("Training Set scores:")
-            y_eval = self.clf.predict(X_train)
             print("Test Set scores:")
             y_pred = self.clf.predict(X_test)
             # predicted = cross_val_predict(self.clf, X_train, y_train, cv=cv)

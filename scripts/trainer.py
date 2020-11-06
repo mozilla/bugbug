@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import sys
-from collections import OrderedDict
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import db
