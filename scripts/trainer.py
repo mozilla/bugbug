@@ -90,7 +90,7 @@ class Trainer(object):
                     is_bugtypeclassification=True,
                 )
         else:
-            metrics = model_obj.train(limit=args.limit, cv=model_obj.cv)
+            metrics = model_obj.train(limit=args.limit)
 
         # Save the metrics as a file that can be uploaded as an artifact.
         metric_file_path = "metrics.json"
