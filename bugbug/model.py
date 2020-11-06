@@ -401,7 +401,6 @@ class Model:
         print(f"X: {X.shape}, y: {y.shape}")
 
         is_multilabel = isinstance(y[0], np.ndarray)
-        is_binary = len(self.class_names) == 2
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
