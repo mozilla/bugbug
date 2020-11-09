@@ -20,6 +20,7 @@ from apispec_webframeworks.flask import FlaskPlugin
 from cerberus import Validator
 from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import cross_origin
+from libmozdata.bugzilla import Bugzilla
 from marshmallow import Schema, fields
 from redis import Redis
 from rq import Queue
@@ -254,8 +255,8 @@ def get_bugs_last_change_time(bug_ids):
     header = {"X-Bugzilla-API-Key": BUGZILLA_TOKEN, "User-Agent": "bugbug"}
 
     bugs = {}
-    for i in range(0, len(bug_ids), libmozdata.Bugzilla.BUGZILLA_CHUNK_SIZE):
-        query["id"] = bug_ids[i : (i + libmozdata.Bugzilla.BUGZILLA_CHUNK_SIZE)]
+    for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
+        query["id"] = bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
         response = utils.get_session("bugzilla").get(
             BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
         )
