@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 from dateutil import parser
-from libmozdata import versions
+from libmozdata import versions, bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from bugbug import bug_snapshot, repository
@@ -206,6 +206,18 @@ class delta_request_merge(single_bug_feature):
 
         return None
 
+class delta_nightly_request_merge(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        for history in bug["history"]:
+            for change in history["changes"]:
+                if change["added"].startswith("approval-mozilla"):
+                    uplift_request_datetime = datetime.strptime(history['when'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                    
+                    landing_comments = bugzilla.get_landing_comments(bug["comments"], ["nightly"])
+                    nightly_patch = datetime.strptime(landing_comments[0]["comment"]["creation_time"], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+
+                    time_delta = nightly_patch - uplift_request_datetime
+                    return time_delta.days + time_delta.seconds / (24 * 60 * 60)
 
 class blocked_bugs_number(single_bug_feature):
     name = "# of blocked bugs"
