@@ -251,7 +251,7 @@ def get_bugs_last_change_time(bug_ids):
     query = {
         "include_fields": ["last_change_time", "id"],
     }
-    header = {"X-Bugzilla-API-Key": "", "User-Agent": "bugbug"}
+    header = {"X-Bugzilla-API-Key": BUGZILLA_TOKEN, "User-Agent": "bugbug"}
 
     bugs = {}
     for i in range(0, len(bug_ids), libmozdata.Bugzilla.BUGZILLA_CHUNK_SIZE):
