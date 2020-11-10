@@ -789,7 +789,7 @@ tasks:
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-bugbug
-      workerType: batch
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - bugs-retrieval
