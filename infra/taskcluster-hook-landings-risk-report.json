@@ -29,6 +29,10 @@
                 "public/landings_by_date.json": {
                     "path": "/landings_by_date.json",
                     "type": "file"
+                },
+                "public/component_connections.json": {
+                    "path": "/component_connections.json",
+                    "type": "file"
                 }
             },
             "cache": {
