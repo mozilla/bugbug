@@ -69,6 +69,11 @@ class HgPushesConsumer:
 
 def _on_message(body, message):
     try:
+        # Only act on messages describing a push that introduced commits on a repository.
+        # Skip repository creations and obsolescence markers additions.
+        if body["payload"]["type"] != "changegroup.1":
+            return
+
         branch = body["payload"]["data"]["repo_url"].split("/")[-1]
         rev = body["payload"]["data"]["heads"][0]
 
