@@ -1389,6 +1389,7 @@ tasks:
       dependencies:
         - past-bugs-by-unit
         - revisions-retrieval
+        - test-group-scheduling-history-push_data-retrieval
       scopes:
           - hooks:modify-hook:project-bugbug/bugbug-landings-risk-report
           - assume:hook-id:project-bugbug/bugbug-landings-risk-report
