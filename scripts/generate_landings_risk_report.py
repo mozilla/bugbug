@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional
 
 import dateutil.parser
 import requests
+from tqdm import tqdm
 
-from bugbug import bugzilla, db, phabricator, repository
+from bugbug import bugzilla, db, phabricator, repository, test_scheduling
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB
 from bugbug.utils import (
     download_and_load_model,
@@ -144,6 +145,7 @@ class LandingsRiskReportGenerator(object):
             for commit in repository.get_commits()
             if commit["bug_id"] in bugs_set
         ]
+        commit_map = {commit["node"]: commit for commit in commits}
         hash_to_rev = {commit["node"]: i for i, commit in enumerate(commits)}
 
         logger.info(f"{len(commits)} commits to analyze.")
@@ -207,12 +209,15 @@ class LandingsRiskReportGenerator(object):
         def get_full_component(bug):
             return "{}::{}".format(bug["product"], bug["component"])
 
-        def component_histogram(bugs: List[dict]) -> Dict[str, float]:
-            counter = collections.Counter(bug["component"] for bug in bugs)
+        def histogram(components: List[str]) -> Dict[str, float]:
+            counter = collections.Counter(components)
             return {
-                component: count / len(bugs)
+                component: count / len(components)
                 for component, count in counter.most_common()
             }
+
+        def component_histogram(bugs: List[dict]) -> Dict[str, float]:
+            return histogram([bug["component"] for bug in bugs])
 
         def get_prev_bugs(
             commit_group: dict,
@@ -358,6 +363,44 @@ class LandingsRiskReportGenerator(object):
 
             json.dump(output, f)
 
+        # Retrieve components of test failures that occurred when landing patches to fix bugs in specific components.
+        component_failures = collections.defaultdict(list)
+
+        push_data_iter, push_data_count, all_runnables = test_scheduling.get_push_data(
+            "group"
+        )
+
+        for revisions, _, _, possible_regressions, likely_regressions in tqdm(
+            push_data_iter(), total=push_data_count
+        ):
+            commit_list = [
+                commit_map[revision] for revision in revisions if revision in commit_map
+            ]
+            if len(commit_list) == 0:
+                continue
+
+            bugs = [
+                bug_map[commit["bug_id"]]
+                for commit in commit_list
+                if commit["bug_id"] in bug_map
+            ]
+
+            components = list(set(get_full_component(bug) for bug in bugs))
+
+            groups = [
+                group
+                for group in list(set(possible_regressions + likely_regressions))
+                if group.encode("utf-8") in path_to_component
+            ]
+
+            for group in groups:
+                for component in components:
+                    component_failures[component].append(
+                        path_to_component[group.encode("utf-8")]
+                        .tobytes()
+                        .decode("utf-8")
+                    )
+
         # Filter out commits for which we have no bugs.
         commits = [commit for commit in commits if commit["bug_id"] in bug_map]
 
@@ -370,6 +413,11 @@ class LandingsRiskReportGenerator(object):
         ):
             commit_group = {
                 "component": component,
+                "most_common_test_failure_components": histogram(
+                    component_failures[component]
+                )
+                if component in component_failures
+                else {},
             }
             get_prev_bugs(commit_group, list(commit_iter), component)
             commit_groups.append(commit_group)
