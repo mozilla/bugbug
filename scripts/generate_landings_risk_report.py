@@ -240,28 +240,19 @@ class LandingsRiskReportGenerator(object):
                         continue
 
                     if path in past_regressions_by_file:
-                        prev_regressions.extend(
-                            bug_summary
-                            for bug_summary in past_regressions_by_file[path]
-                        )
+                        prev_regressions += past_regressions_by_file[path]
 
                     if path in past_fixed_bugs_by_file:
-                        prev_fixed_bugs.extend(
-                            bug_summary for bug_summary in past_fixed_bugs_by_file[path]
-                        )
+                        prev_fixed_bugs += past_fixed_bugs_by_file[path]
 
                     if path in past_regression_blocked_bugs_by_file:
-                        prev_regression_blocked_bugs.extend(
-                            bug_summary
-                            for bug_summary in past_regression_blocked_bugs_by_file[
-                                path
-                            ]
+                        prev_regression_blocked_bugs += (
+                            past_regression_blocked_bugs_by_file[path]
                         )
 
                     if path in past_fixed_bug_blocked_bugs_by_file:
-                        prev_fixed_bug_blocked_bugs.extend(
-                            bug_summary
-                            for bug_summary in past_fixed_bug_blocked_bugs_by_file[path]
+                        prev_fixed_bug_blocked_bugs += (
+                            past_fixed_bug_blocked_bugs_by_file[path]
                         )
 
             prev_regressions = _deduplicate(prev_regressions)
