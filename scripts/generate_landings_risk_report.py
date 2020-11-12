@@ -274,7 +274,7 @@ class LandingsRiskReportGenerator(object):
                 prev_fixed_bug_blocked_bugs
             )
 
-            commit_group["prev_regressions"] = prev_regressions
+            commit_group["prev_regressions"] = prev_regressions[-3:]
             commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
             commit_group["prev_regression_blocked_bugs"] = prev_regression_blocked_bugs[
                 -3:
