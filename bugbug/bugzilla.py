@@ -263,13 +263,13 @@ def count_bugs(bug_query_params):
 
 
 def get_product_component_csv_report():
-    six_month_ago = datetime.utcnow() - relativedelta(months=6)
+    since = datetime.utcnow() - relativedelta(months=12)
 
     # Base params
     url_params = {
         "f1": "creation_ts",
         "o1": "greaterthan",
-        "v1": six_month_ago.strftime("%Y-%m-%d"),
+        "v1": since.strftime("%Y-%m-%d"),
         "x_axis_field": "product",
         "y_axis_field": "component",
         "action": "wrap",
