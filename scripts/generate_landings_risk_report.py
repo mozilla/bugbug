@@ -313,6 +313,8 @@ class LandingsRiskReportGenerator(object):
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
                         "regressor": commit["bug_id"] in regressor_bug_ids,
+                        "author": commit["author_email"],
+                        "reviewers": commit["reviewers"],
                     }
                 )
 
