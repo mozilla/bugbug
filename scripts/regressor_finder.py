@@ -12,7 +12,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import cast
+from typing import Iterator, cast
 
 import dateutil.parser
 import tenacity
@@ -224,7 +224,7 @@ class RegressorFinder(object):
         )
         assert len(commit_map) > 0
 
-        def get_relevant_bugs():
+        def get_relevant_bugs() -> Iterator[dict]:
             return (bug for bug in bugzilla.get_bugs() if bug["id"] in commit_map)
 
         bug_count = sum(1 for bug in get_relevant_bugs())
@@ -237,7 +237,7 @@ class RegressorFinder(object):
 
         bug_fixing_commits = []
 
-        def append_bug_fixing_commits(bug_id, type_):
+        def append_bug_fixing_commits(bug_id: int, type_: str) -> None:
             for commit in commit_map[bug_id]:
                 bug_fixing_commits.append({"rev": commit, "type": type_})
 
