@@ -381,13 +381,13 @@ class LandingsRiskReportGenerator(object):
             if len(commit_list) == 0:
                 continue
 
-            bugs = [
+            commit_bugs = [
                 bug_map[commit["bug_id"]]
                 for commit in commit_list
                 if commit["bug_id"] in bug_map
             ]
 
-            components = list(set(get_full_component(bug) for bug in bugs))
+            components = list(set(get_full_component(bug) for bug in commit_bugs))
 
             groups = [
                 group
