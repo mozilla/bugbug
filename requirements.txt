@@ -4,7 +4,7 @@ imbalanced-learn==0.7.0
 joblib==0.17.0
 libmozdata==0.1.68
 lmdb==0.99
-matplotlib==3.3.2
+matplotlib==3.3.3
 mercurial==5.5.2
 microannotate==0.0.21
 mozci==1.10.2
