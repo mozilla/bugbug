@@ -11,7 +11,7 @@ from bugbug import bugzilla
 from bugbug.models import get_model_class
 
 
-def generate_sheet(model_name, token, days, threshold):
+def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> None:
     model_file_name = f"{model_name}model"
 
     assert os.path.exists(
@@ -61,7 +61,7 @@ def generate_sheet(model_name, token, days, threshold):
         writer.writerows(rows)
 
 
-def main():
+def main() -> None:
     description = "Perform evaluation on bugs from specified days back on the specified model and generate a csv file "
     parser = argparse.ArgumentParser(description=description)
 
