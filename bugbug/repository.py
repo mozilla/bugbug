@@ -22,8 +22,8 @@ from functools import lru_cache
 from typing import (
     Collection,
     Dict,
-    Generator,
     Iterable,
+    Iterator,
     List,
     NewType,
     Optional,
@@ -287,7 +287,7 @@ def filter_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[CommitDict, None, None]:
+) -> Iterator[CommitDict]:
     for commit in commits:
         if not include_ignored and commit["ignored"]:
             continue
@@ -305,7 +305,7 @@ def get_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[CommitDict, None, None]:
+) -> Iterator[CommitDict]:
     return filter_commits(
         db.read(COMMITS_DB),
         include_no_bug=include_no_bug,
