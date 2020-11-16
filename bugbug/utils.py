@@ -13,8 +13,9 @@ import subprocess
 import tarfile
 from collections import deque
 from contextlib import contextmanager
+from datetime import datetime
 from functools import lru_cache
-from typing import Any, List
+from typing import Any, Iterator, List, Optional
 
 import boto3
 import dateutil.parser
@@ -107,7 +108,7 @@ class MissingOrdinalEncoder(OrdinalEncoder):
         return X_int.astype(self.dtype, copy=False)
 
 
-def get_taskcluster_options():
+def get_taskcluster_options() -> dict:
     """
     Helper to get the Taskcluster setup options
     according to current environment (local or Taskcluster)
@@ -126,7 +127,7 @@ def get_taskcluster_options():
     return options
 
 
-def get_secret(secret_id):
+def get_secret(secret_id: str) -> Any:
     """Return the secret value"""
     env_variable_name = f"BUGBUG_{secret_id}"
 
@@ -149,13 +150,13 @@ def get_secret(secret_id):
         raise ValueError("Failed to find secret {}".format(secret_id))
 
 
-def get_s3_credentials():
+def get_s3_credentials() -> dict:
     auth = taskcluster.Auth(get_taskcluster_options())
     response = auth.awsS3Credentials("read-write", "communitytc-bugbug", "data/")
     return response["credentials"]
 
 
-def upload_s3(paths):
+def upload_s3(paths: str) -> None:
     credentials = get_s3_credentials()
 
     client = boto3.client(
@@ -201,7 +202,7 @@ def download_check_etag(url, path=None):
     return True
 
 
-def get_last_modified(url):
+def get_last_modified(url: str) -> Optional[datetime]:
     r = requests.head(url, allow_redirects=True)
 
     if "Last-Modified" not in r.headers:
@@ -210,7 +211,7 @@ def get_last_modified(url):
     return dateutil.parser.parse(r.headers["Last-Modified"])
 
 
-def download_model(model_name):
+def download_model(model_name: str) -> str:
     version = os.getenv("TAG")
     if not version:
         try:
@@ -234,14 +235,14 @@ def download_and_load_model(model_name):
     return get_model_class(model_name).load(path)
 
 
-def zstd_compress(path):
+def zstd_compress(path: str) -> None:
     cctx = zstandard.ZstdCompressor(threads=-1)
     with open(path, "rb") as input_f:
         with open(f"{path}.zst", "wb") as output_f:
             cctx.copy_stream(input_f, output_f)
 
 
-def zstd_decompress(path):
+def zstd_decompress(path: str) -> None:
     dctx = zstandard.ZstdDecompressor()
     with open(f"{path}.zst", "rb") as input_f:
         with open(path, "wb") as output_f:
@@ -249,7 +250,7 @@ def zstd_decompress(path):
 
 
 @contextmanager
-def open_tar_zst(path, mode):
+def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
     if mode == "w":
         cctx = zstandard.ZstdCompressor(threads=-1)
         with open(path, "wb") as f:
@@ -307,7 +308,7 @@ class CustomJsonEncoder(json.JSONEncoder):
 
 
 class ExpQueue:
-    def __init__(self, start_day, maxlen, default):
+    def __init__(self, start_day: int, maxlen: int, default: Any) -> None:
         self.list = deque([default] * maxlen, maxlen=maxlen)
         self.start_day = start_day - (maxlen - 1)
         self.default = default
@@ -323,10 +324,11 @@ class ExpQueue:
         return result
 
     @property
-    def last_day(self):
+    def last_day(self) -> int:
+        assert self.list.maxlen is not None
         return self.start_day + (self.list.maxlen - 1)
 
-    def __getitem__(self, day):
+    def __getitem__(self, day: int) -> Any:
         assert (
             day >= self.start_day
         ), f"Can't get a day ({day}) from earlier than start day ({self.start_day})"
@@ -339,7 +341,8 @@ class ExpQueue:
 
         return self.list[day - self.start_day]
 
-    def __setitem__(self, day, value):
+    def __setitem__(self, day: int, value: Any) -> None:
+        assert self.list.maxlen is not None
         if day == self.last_day:
             self.list[day - self.start_day] = value
         elif day > self.last_day:
@@ -391,7 +394,7 @@ class LMDBDict:
         self.txn.put(key, value, dupdata=False)
 
 
-def get_free_tcp_port():
+def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp.bind(("", 0))
     addr, port = tcp.getsockname()
@@ -421,7 +424,7 @@ class ThreadPoolExecutorResult(concurrent.futures.ThreadPoolExecutor):
 
 
 @lru_cache(maxsize=None)
-def get_session(name):
+def get_session(name: str) -> requests.Session:
     session = requests.Session()
 
     retry = Retry(total=9, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
