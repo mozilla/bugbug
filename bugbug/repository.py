@@ -702,9 +702,9 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
+def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return []
+        return tuple()
 
     template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
@@ -755,10 +755,10 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
             )
         )
 
-    return commits
+    return tuple(commits)
 
 
-def _hg_log(revs: List[bytes]) -> List[Commit]:
+def _hg_log(revs: List[bytes]) -> Tuple[Commit, ...]:
     return hg_log(thread_local.hg, revs)
 
 
@@ -999,7 +999,7 @@ def calculate_experiences(
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: List[Commit]):
+def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: Iterable[Commit]):
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
@@ -1043,11 +1043,12 @@ def close_component_mapping():
     path_to_component = None
 
 
-def hg_log_multi(repo_dir, revs):
+def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return []
+        return tuple()
 
-    threads_num = os.cpu_count() + 1
+    cpu_count = os.cpu_count()
+    threads_num = cpu_count + 1 if cpu_count is not None else 1
     REVS_COUNT = len(revs)
     CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
     revs_groups = [revs[i : i + CHUNK_SIZE] for i in range(0, REVS_COUNT, CHUNK_SIZE)]
@@ -1055,9 +1056,9 @@ def hg_log_multi(repo_dir, revs):
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
-        commits = executor.map(_hg_log, revs_groups)
-        commits = tqdm(commits, total=len(revs_groups))
-        commits = list(itertools.chain.from_iterable(commits))
+        commits_iter = executor.map(_hg_log, revs_groups)
+        commits_iter = tqdm(commits_iter, total=len(revs_groups))
+        commits = tuple(itertools.chain.from_iterable(commits_iter))
 
     while len(hg_servers) > 0:
         hg_server = hg_servers.pop()
@@ -1119,9 +1120,9 @@ def download_commits(
             with concurrent.futures.ProcessPoolExecutor(
                 initializer=_init_process, initargs=(repo_dir,)
             ) as executor:
-                commits = executor.map(_transform, commits, chunksize=64)
-                commits = tqdm(commits, total=commits_num)
-                commits = tuple(commits)
+                commits_iter = executor.map(_transform, commits, chunksize=64)
+                commits_iter = tqdm(commits_iter, total=commits_num)
+                commits = tuple(commits_iter)
         else:
             get_component_mapping()
 
@@ -1135,14 +1136,14 @@ def download_commits(
 
     logger.info("Applying final commits filtering...")
 
-    commits = tuple(commit.to_dict() for commit in commits)
+    commit_dicts = tuple(commit.to_dict() for commit in commits)
 
     if save:
-        db.append(COMMITS_DB, commits)
+        db.append(COMMITS_DB, commit_dicts)
 
     return tuple(
         filter_commits(
-            commits,
+            commit_dicts,
             include_no_bug=include_no_bug,
             include_backouts=include_backouts,
             include_ignored=include_ignored,
