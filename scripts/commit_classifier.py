@@ -10,6 +10,7 @@ import re
 import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
+from typing import Optional, Tuple
 
 import dateutil.parser
 import hglib
@@ -566,11 +567,11 @@ class CommitClassifier(object):
 
     def classify(
         self,
-        revision=None,
-        phabricator_deployment=None,
-        diff_id=None,
-        runnable_jobs_path=None,
-    ):
+        revision: Optional[str] = None,
+        phabricator_deployment: Optional[str] = None,
+        diff_id: Optional[int] = None,
+        runnable_jobs_path: Optional[str] = None,
+    ) -> None:
         if revision is not None:
             assert phabricator_deployment is None
             assert diff_id is None
@@ -594,18 +595,18 @@ class CommitClassifier(object):
                 use_single_process=self.use_single_process,
             )
         else:
-            commits = []
-
-            for commit in repository.get_commits():
-                if commit["node"] == revision:
-                    commits.append(commit)
-                    break
+            assert revision is not None
+            commits = tuple(
+                commit
+                for commit in repository.get_commits()
+                if commit["node"] == revision
+            )
 
             # The commit to analyze was not in our DB, let's mine it.
             if len(commits) == 0:
                 commits = repository.download_commits(
                     self.repo_dir,
-                    revs=[revision],
+                    revs=[revision.encode("ascii")],
                     save=False,
                     use_single_process=self.use_single_process,
                 )
@@ -617,7 +618,7 @@ class CommitClassifier(object):
         else:
             self.classify_test_select(commits, runnable_jobs_path)
 
-    def classify_regressor(self, commits):
+    def classify_regressor(self, commits: Tuple[repository.CommitDict, ...]) -> None:
         # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
         # the current commit from the "clean" (or "dirty") commits.
@@ -790,7 +791,7 @@ class CommitClassifier(object):
             json.dump(method_level_results, f)
 
 
-def main():
+def main() -> None:
     description = "Classify a commit"
     parser = argparse.ArgumentParser(description=description)
 
