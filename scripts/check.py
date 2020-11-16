@@ -11,7 +11,7 @@ logger = getLogger(__name__)
 
 
 class ModelChecker:
-    def go(self, model_name):
+    def go(self, model_name: str) -> None:
         # Load the model
         model = download_and_load_model(model_name)
 
@@ -24,7 +24,7 @@ class ModelChecker:
             sys.exit(1)
 
 
-def main():
+def main() -> None:
     description = "Check the models"
     parser = argparse.ArgumentParser(description=description)
 
