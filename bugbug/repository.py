@@ -1217,6 +1217,18 @@ def download_commits(
     )
 
 
+def update_commits() -> None:
+    commits = list(
+        get_commits(include_no_bug=True, include_backouts=True, include_ignored=True)
+    )
+
+    # Add coverage information for previous commits too.
+    # We need to do this because coverage information is sometimes slow to come in.
+    set_commit_coverage(commits)
+
+    db.write(COMMITS_DB, commits)
+
+
 def clean(hg, repo_dir):
     logger.info("Restoring files to their checkout state...")
     hg.revert(repo_dir.encode("utf-8"), all=True)
