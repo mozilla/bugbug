@@ -999,7 +999,9 @@ def calculate_experiences(
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: Iterable[Commit]):
+def set_commits_to_ignore(
+    hg: hglib.client, repo_dir: str, commits: Iterable[Commit]
+) -> None:
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
