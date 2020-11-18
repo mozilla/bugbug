@@ -61,6 +61,7 @@ def test_simple_schedule(
     mock_hgmo: None,
     mock_repo: Tuple[str, str],
     mock_component_taskcluster_artifact: None,
+    mock_coverage_mapping_artifact: None,
     mock_schedule_tests_classify: Callable[[Dict[str, float], Dict[str, float]], None],
 ) -> None:
     # The repo should be almost empty at first

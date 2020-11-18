@@ -262,6 +262,27 @@ def mock_data(tmp_path):
 
 
 @pytest.fixture
+def mock_coverage_mapping_artifact() -> None:
+    cctx = zstandard.ZstdCompressor()
+
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        headers={"ETag": "100"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        body=cctx.compress(json.dumps({}).encode("ascii")),
+    )
+
+    repository.download_coverage_mapping()
+
+
+@pytest.fixture
 def mock_component_taskcluster_artifact() -> None:
     responses.add(
         responses.HEAD,

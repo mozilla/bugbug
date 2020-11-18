@@ -39,7 +39,7 @@ import tenacity
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
-from bugbug.utils import LMDBDict
+from bugbug.utils import LMDBDict, zstd_decompress
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,7 @@ db.register(
     [COMMIT_EXPERIENCES_DB],
 )
 
+commit_to_coverage = None
 path_to_component = None
 
 HG = None
@@ -1016,6 +1017,63 @@ def set_commits_to_ignore(
         )
 
 
+def download_coverage_mapping() -> None:
+    commit_to_coverage = get_coverage_mapping(False)
+
+    utils.download_check_etag(
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        "data/coverage_mapping.json.zst",
+    )
+
+    zstd_decompress("data/coverage_mapping.json")
+    assert os.path.exists("data/coverage_mapping.json")
+
+    with open("data/coverage_mapping.json", "r") as f:
+        data = json.load(f)
+
+    for commit_hash, commit_stats in data.items():
+        commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+
+    close_coverage_mapping()
+
+
+def get_coverage_mapping(readonly: bool = True) -> LMDBDict:
+    global commit_to_coverage
+    commit_to_coverage = LMDBDict("data/coverage_mapping.lmdb", readonly=readonly)
+    return commit_to_coverage
+
+
+def close_coverage_mapping() -> None:
+    global commit_to_coverage
+    assert commit_to_coverage is not None
+    commit_to_coverage.close()
+    commit_to_coverage = None
+
+
+def set_commit_coverage(commits: Iterable[CommitDict]) -> None:
+    commit_to_coverage = get_coverage_mapping(True)
+
+    for commit in commits:
+        try:
+            commit_stats = pickle.loads(
+                commit_to_coverage[commit["node"].encode("utf-8")]
+            )
+            if commit_stats is not None:
+                added = commit_stats["added"]
+                covered = commit_stats["covered"]
+                unknown = commit_stats["unknown"]
+            else:
+                added = covered = unknown = None
+        except KeyError:
+            added = covered = unknown = None
+
+        commit["cov_added"] = added
+        commit["cov_covered"] = covered
+        commit["cov_unknown"] = unknown
+
+    close_coverage_mapping()
+
+
 def download_component_mapping():
     path_to_component = get_component_mapping(False)
 
@@ -1109,6 +1167,10 @@ def download_commits(
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
+        if save or not os.path.exists("data/coverage_mapping.lmdb"):
+            logger.info("Downloading commit->coverage mapping...")
+            download_coverage_mapping()
+
         set_commits_to_ignore(hg, repo_dir, commits)
 
         commits_num = len(commits)
@@ -1139,6 +1201,8 @@ def download_commits(
     logger.info("Applying final commits filtering...")
 
     commit_dicts = tuple(commit.to_dict() for commit in commits)
+
+    set_commit_coverage(commit_dicts)
 
     if save:
         db.append(COMMITS_DB, commit_dicts)
