@@ -50,12 +50,3 @@ def get_model_class(model_name):
 
     full_qualified_class_name = MODELS[model_name]
     return load_model_class(full_qualified_class_name)
-
-
-def load_model(model_name):
-    model_class = get_model_class(model_name)
-
-    model_file_path = f"{model_name}model"
-
-    LOGGER.debug(f"Lookup model in {model_file_path}")
-    return model_class.load(model_file_path)
