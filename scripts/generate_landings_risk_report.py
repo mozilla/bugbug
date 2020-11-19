@@ -315,6 +315,11 @@ class LandingsRiskReportGenerator(object):
                         "regressor": commit["bug_id"] in regressor_bug_ids,
                         "author": commit["author_email"],
                         "reviewers": commit["reviewers"],
+                        "coverage": [
+                            commit["cov_added"],
+                            commit["cov_covered"],
+                            commit["cov_unknown"],
+                        ],
                     }
                 )
 
