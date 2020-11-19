@@ -29,11 +29,7 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import (
-    ThreadPoolExecutorResult,
-    download_and_load_model,
-    zstd_compress,
-)
+from bugbug.utils import ThreadPoolExecutorResult, download_model, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -197,11 +193,14 @@ class RegressorFinder(object):
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
         defect_model = cast(
-            DefectEnhancementTaskModel, download_and_load_model("defectenhancementtask")
+            DefectEnhancementTaskModel,
+            DefectEnhancementTaskModel.load(download_model("defectenhancementtask")),
         )
 
         logger.info("Downloading regression model...")
-        regression_model = cast(RegressionModel, download_and_load_model("regression"))
+        regression_model = cast(
+            RegressionModel, RegressionModel.load(download_model("regression"))
+        )
 
         start_date = datetime.now() - RELATIVE_START_DATE
         end_date = datetime.now() - RELATIVE_END_DATE

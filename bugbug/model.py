@@ -574,7 +574,7 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_file_name):
+    def load(model_file_name: str) -> "Model":
         return joblib.load(model_file_name)
 
     def overwrite_classes(self, items, classes, probabilities):

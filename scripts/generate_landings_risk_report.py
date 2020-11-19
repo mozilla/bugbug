@@ -10,17 +10,17 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import dateutil.parser
 import requests
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.regressor import BUG_FIXING_COMMITS_DB
+from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
-    download_and_load_model,
     download_check_etag,
+    download_model,
     get_secret,
     zstd_decompress,
 )
@@ -77,7 +77,9 @@ class LandingsRiskReportGenerator(object):
         logger.info("Download commit classifications...")
         assert db.download(BUG_FIXING_COMMITS_DB)
 
-        self.regressor_model = download_and_load_model("regressor")
+        self.regressor_model = cast(
+            RegressorModel, RegressorModel.load(download_model("regressor"))
+        )
 
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
         phabricator.set_api_key(
