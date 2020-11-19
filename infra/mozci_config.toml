@@ -1,5 +1,5 @@
 [mozci]
-data_sources = ["hgmo", "taskcluster", "treeherder_client", "adr"]
+data_sources = ["hgmo", "taskcluster", "treeherder_client"]
 
 [mozci.cache]
 retention = 40320
