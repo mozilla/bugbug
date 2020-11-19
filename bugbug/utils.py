@@ -193,7 +193,7 @@ def download_check_etag(url, path=None):
     r.raise_for_status()
 
     with open(path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=4096):
+        for chunk in r.iter_content(chunk_size=1048576):
             f.write(chunk)
 
     with open(f"{path}.etag", "w") as f:
