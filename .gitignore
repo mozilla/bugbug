@@ -44,6 +44,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 cache/
+node_modules/
 
 # Logs
 *.log

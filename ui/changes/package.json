@@ -1,0 +1,32 @@
+{
+  "name": "changes",
+  "version": "1.0.0",
+  "description": "To update Temporal polyfill:",
+  "private": true,
+  "scripts": {
+    "build": "webpack --config webpack.dev.js",
+    "release": "webpack --config webpack.prod.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "clean-webpack-plugin": "^3.0.0",
+    "copy-webpack-plugin": "^6.3.2",
+    "css-minimizer-webpack-plugin": "^1.1.5",
+    "eslint-config-standard": "^16.0.2",
+    "eslint-plugin-mozilla": "^2.9.1",
+    "eslint-webpack-plugin": "^2.4.0",
+    "html-webpack-plugin": "^4.5.0",
+    "prettier": "^1.19.1",
+    "webpack": "^5.6.0",
+    "webpack-cli": "^4.2.0",
+    "webpack-merge": "^5.4.0"
+  },
+  "dependencies": {
+    "apexcharts": "^3.6.12",
+    "localforage": "^1.9.0",
+    "proposal-temporal": "^0.6.0"
+  }
+}

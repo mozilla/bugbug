@@ -1,0 +1,421 @@
+{
+    "Crypto": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Security: PSM"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "JSS": {
+            "all_components": true
+        },
+        "NSS": {
+            "all_components": true
+        }
+    },
+    "DOM": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Image Blocking",
+                "Security: CAPS",
+                "XBL",
+                "XML",
+                "XPConnect",
+                "XSLT",
+                "XUL"
+            ],
+            "prefixed_components": [
+                "DOM",
+                "Storage"
+            ]
+        }
+    },
+    "DevTools": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Gecko Profiler",
+                "Web Replay"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "DevTools": {
+            "all_components": true
+        }
+    },
+    "Frontend": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "AutoConfig (Mission Control Desktop)",
+                "Find Backend",
+                "Window Management"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "about:logins",
+                "Address Bar",
+                "Bookmarks & History",
+                "Disability Access",
+                "Distributions",
+                "Downloads Panel",
+                "Enterprise Policies",
+                "File Handling",
+                "General",
+                "Installer",
+                "Keyboard Navigation",
+                "Menus",
+                "Migration",
+                "Page Info Window",
+                "Preferences",
+                "Search",
+                "Session Restore",
+                "Tabbed Browser",
+                "Theme",
+                "Toolbars and Customization",
+                "Tours",
+                "Translation",
+                "WebPayments UI"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Toolkit": {
+            "all_components": false,
+            "named_components": [
+                   "Application Update",
+                "Autocomplete",
+                "Downloads API",
+                "Find Toolbar",
+                "Form Autofill",
+                "Form Manager",
+                "General",
+                "Notifications and Alerts",
+                "Password Manager",
+                "Password Manager: Site Compatibility",
+                "Places",
+                "Preferences",
+                "Printing",
+                "Reader Mode",
+                "Startup and Profile System",
+             "Storage",
+                "Themes",
+                "Toolbars and Toolbar Customization",
+                "Video/Audio Controls",
+                "View Source",
+                "WebPayments UI",
+                "XUL Widgets"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    },
+    "GFX": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Canvas: 2D",
+                "ImageLib",
+                "Panning and Zooming",
+                "Web Painting"
+            ],
+            "prefixed_components": [
+                "GFX",
+                "Graphics"
+            ]
+        }
+    },
+    "Javascript": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "js-ctypes"
+            ],
+            "prefixed_components": [
+                "Javascript"
+            ]
+        }
+    },
+    "Layout": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Internationalization",
+                "MathML",
+                "SVG"
+            ],
+            "prefixed_components": [
+                "CSS",
+                "Layout",
+                "Print"
+            ]
+        }
+    },
+    "Media": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Web Audio"
+            ],
+            "prefixed_components": [
+                "Audio/Video",
+                "WebRTC"
+            ]
+        }
+    },
+    "Mobile": {
+        "Emerging Markets": {
+            "all_components": true
+        },
+        "Fenix": {
+            "all_components": true
+        },
+        "Firefox for Android": {
+            "all_components": true
+        },
+        "Firefox for Echo Show": {
+            "all_components": true
+        },
+        "Firefox for FireTV": {
+            "all_components": true
+        },
+        "Firefox for iOS": {
+            "all_components": true
+        },
+        "Focus": {
+            "all_components": true
+        },
+        "Focus-iOS": {
+            "all_components": true
+        },
+        "GeckoView": {
+            "all_components": true
+        }
+    },
+    "Networking": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+
+            ],
+            "prefixed_components": [
+                "Networking"
+            ]
+        }
+    },
+    "Other": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Disability Access APIs",
+                "General",
+                "Performance",
+                "Platform Fuzzing Team",
+                "Spelling checker",
+                "Web Speech",
+                "WebVR",
+                "Untriaged"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "External Software Affecting Firefox": {
+            "all_components": true
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Headless",
+                "Normandy Client",
+                "Normandy Server",
+                "PDF Viewer",
+                "Screenshots",
+                "Shell Integration",
+                "System Add-ons: Off-train Deployment",
+                "Untriaged"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Firefox Build System": {
+            "all_components": true
+        },
+        "NSPR": {
+            "all_components": true
+        },
+        "Toolkit": {
+            "all_components": false,
+            "named_components": [
+                "about:memory",
+                "Crash Reporting",
+                "FeatureGate",
+                "Performance Monitoring",
+                "Telemetry"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    },
+    "Platform": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Canvas: WebGL",
+                "DMD",
+                "Hardware Abstraction Layer (HAL)",
+                "IPC",
+                "IPC: MSCOM",
+                "MFBT",
+                "Memory Allocator",
+                "Plug-ins",
+                "Preferences: Backend",
+                "Security: Process Sandboxing",
+                "String",
+                "XPCOM",
+                "mfbt",
+                "mozglue"
+            ],
+            "prefixed_components": [
+                "Embedding",
+                "Widget"
+            ]
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Launcher Process"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Toolkit": {
+            "all_components": false,
+            "named_components": [
+                "Async Tooling",
+                "NSIS Installer",
+                "OS.File"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    },
+    "Pocket and User Journey": {
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Messaging System",
+                "New Tab Page",
+                "Pocket"
+            ],
+            "prefixed_components": [
+                "Activity Stream"
+            ]
+        },
+        "Pocket": {
+            "all_components": true
+        }
+    },
+    "Privacy and Security": {
+        "Core": {
+            "all_components": false,
+            "named_components": [
+                "Image Blocking",
+                "Permission Manager",
+                "Privacy: Anti-Tracking",
+                "Security",
+                "Security Blacklists, Whitelists, and other State"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Firefox Monitor",
+                "Private Browsing",
+                "Protections UI",
+                "Site Identity",
+                "Site Permissions"
+            ],
+            "prefixed_components": [
+                "Security"
+            ]
+        },
+        "Firefox Private Network": {
+            "all_components": true
+        },
+        "Lockwise": {
+            "all_components": true
+        },
+        "Toolkit": {
+            "all_components": false,
+            "named_components": [
+                "Data Sanitization",
+                "Safe Browsing"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    },
+    "Services": {
+        "Cloud Services": {
+            "all_components": true
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Firefox Accounts",
+                "Remote Settings Client",
+                "Sync"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    },
+    "Web Extensions": {
+        "WebExtensions": {
+            "all_components": true
+        },
+        "Firefox": {
+            "all_components": false,
+            "named_components": [
+                "Extension Compatibility"
+            ],
+            "prefixed_components": [
+
+            ]
+        },
+        "Toolkit": {
+            "all_components": false,
+            "named_components": [
+                "Add-ons Manager",
+                "Blocklist Implementation",
+                "Blocklist Policy Requests"
+            ],
+            "prefixed_components": [
+
+            ]
+        }
+    }
+}
