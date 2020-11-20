@@ -1,0 +1,342 @@
+
+
+/* Photon Colors CSS Variables v3.3.2:
+    https://github.com/FirefoxUX/photon-colors/blob/master/photon-colors.css */
+html {
+  --magenta-50: #ff1ad9;
+  --magenta-60: #ed00b5;
+  --magenta-70: #b5007f;
+  --magenta-80: #7d004f;
+  --magenta-90: #440027;
+
+  --purple-30: #c069ff;
+  --purple-40: #ad3bff;
+  --purple-50: #9400ff;
+  --purple-60: #8000d7;
+  --purple-70: #6200a4;
+  --purple-80: #440071;
+  --purple-90: #25003e;
+
+  --blue-40: #45a1ff;
+  --blue-50: #0a84ff;
+  --blue-50-a30: rgba(10, 132, 255, 0.3);
+  --blue-60: #0060df;
+  --blue-70: #003eaa;
+  --blue-80: #002275;
+  --blue-90: #000f40;
+
+  --teal-50: #00feff;
+  --teal-60: #00c8d7;
+  --teal-70: #008ea4;
+  --teal-80: #005a71;
+  --teal-90: #002d3e;
+
+  --green-50: #30e60b;
+  --green-60: #12bc00;
+  --green-70: #058b00;
+  --green-80: #006504;
+  --green-90: #003706;
+
+  --yellow-50: #ffe900;
+  --yellow-60: #d7b600;
+  --yellow-60-a30: rgba(215, 182, 0, 0.3);
+  --yellow-70: #a47f00;
+  --yellow-80: #715100;
+  --yellow-90: #3e2800;
+
+  --red-50: #ff0039;
+  --red-60: #d70022;
+  --red-60-a30: rgba(215, 0, 34, 0.3);
+  --red-70: #a4000f;
+  --red-80: #5a0002;
+  --red-90: #3e0200;
+
+  --orange-50: #ff9400;
+  --orange-60: #d76e00;
+  --orange-70: #a44900;
+  --orange-80: #712b00;
+  --orange-90: #3e1300;
+
+  --grey-10: #f9f9fa;
+  --grey-10-a10: rgba(249, 249, 250, 0.1);
+  --grey-10-a20: rgba(249, 249, 250, 0.2);
+  --grey-10-a40: rgba(249, 249, 250, 0.4);
+  --grey-10-a60: rgba(249, 249, 250, 0.6);
+  --grey-10-a80: rgba(249, 249, 250, 0.8);
+  --grey-20: #ededf0;
+  --grey-30: #d7d7db;
+  --grey-40: #b1b1b3;
+  --grey-50: #737373;
+  --grey-60: #4a4a4f;
+  --grey-70: #38383d;
+  --grey-80: #2a2a2e;
+  --grey-90: #0c0c0d;
+  --grey-90-a05: rgba(12, 12, 13, 0.05);
+  --grey-90-a10: rgba(12, 12, 13, 0.1);
+  --grey-90-a20: rgba(12, 12, 13, 0.2);
+  --grey-90-a30: rgba(12, 12, 13, 0.3);
+  --grey-90-a40: rgba(12, 12, 13, 0.4);
+  --grey-90-a50: rgba(12, 12, 13, 0.5);
+  --grey-90-a60: rgba(12, 12, 13, 0.6);
+  --grey-90-a70: rgba(12, 12, 13, 0.7);
+  --grey-90-a80: rgba(12, 12, 13, 0.8);
+  --grey-90-a90: rgba(12, 12, 13, 0.9);
+
+  --ink-40: #7175A8;
+  --ink-50: #595E91;
+  --ink-60: #464B76;
+  --ink-70: #363959;
+  --ink-80: #202340;
+  --ink-90: #0f1126;
+}
+
+html {
+  --main-background: white;
+  --main-text-color: var(--ink-90);
+  --main-font-family: 'Fira Sans', 'Open Sans', sans-serif, Arial;
+  --main-font: 400 14px/1.5 var(--main-font-family);
+
+  --mono-font-family: 'Fira Mono', monospace;
+  --mono-font: 400 14px/1.5 var(--mono-font-family);
+
+  --heading-color: var(--ink-70);
+  --heading-background: var(--grey-20);
+}
+
+html {
+  font-family: 'Fira Sans', 'Open Sans', sans-serif, Arial;
+  font: 400 14px/1.5 "Fira Sans";
+}
+
+body,
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--main-background);
+  color: var(--main-text-color);
+  font: var(--main-font);
+}
+
+hr {
+  color: rgba(0, 0, 0, .2);
+}
+
+h1 {
+  font-weight: 300;
+  color: var(--heading-color);
+  background: var(--heading-background);
+  padding: 5px;
+  text-align: center;
+  margin: 0;
+  margin-bottom: 5px;
+}
+
+.iframe-container {
+  width: 50%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.iframe-container > div {
+  height: 0;
+  padding-bottom: 50%;
+  position: relative;
+}
+
+.iframe-container > div > iframe {
+  border: none;
+  position:absolute;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  display: block;
+}
+
+.summary-box {
+  width: 95%;
+  margin: 0 auto;
+  padding-left: 33px;
+  padding-right: 17px;
+  padding-bottom: 30px;
+}
+
+.summary-box h2 {
+  text-align: center;
+  border-bottom: solid 1px rgba(0, 0, 0, 0.1);
+}
+
+.desc-box {
+  width: 230px;
+  padding-left: 33px;
+  padding-right: 17px;
+  padding-bottom: 30px;
+  box-shadow: 1px 2px 2px 2px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+}
+
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 90%;
+  margin: 0 auto;
+  margin-bottom: 20px;
+}
+
+.milestones > .desc-box {
+  width: auto;
+  margin: 10px;
+  padding-bottom: 18px;
+}
+
+.desc-box h2,
+.summary-box h2 {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 33px;
+}
+
+.desc-box p,
+.summary-box p {
+  font-size: 15px;
+  font-weight: 300;
+}
+
+.arewe-timeline {
+  position: relative;
+  padding: 1em 10px;
+  margin-left: -10px;
+  margin-right: -10px;
+  margin-top: 10px;
+  border: solid 1px #d7e4ed;
+  color: #7f8c97;
+  background-color: #e9f0f5;
+}
+
+.arewe-timeline h2 {
+  font-weight: normal;
+  margin: 0;
+  padding: 0;
+}
+.arewe-date {
+  font-weight: bold;
+}
+
+.arewe-timeline::before {
+  /* this is the vertical line */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28px;
+  height: 100%;
+  width: 4px;
+  background: #d7e4ed;
+}
+
+.arewe-timeline-block {
+  position: relative;
+  margin: 2em 0;
+}
+
+.arewe-timeline-block:first-child {
+  margin-top: 0;
+}
+.arewe-timeline-block:last-child {
+  margin-bottom: 0;
+}
+
+.arewe-timeline-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px white, inset 0 2px 0 rgba(0, 0, 0, 0.08), 0 3px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.arewe-timeline-img.arewe-subtraction {
+  background: var(--green-50);
+}
+.arewe-timeline-img.arewe-addition {
+  background: var(--red-50);
+}
+.arewe-timeline-content {
+  position: relative;
+  margin-left: 60px;
+  background: white;
+  border-radius: 0.25em;
+  padding: .5em;
+  box-shadow: 0 3px 0 #d7e4ed;
+}
+.arewe-timeline-content h2 {
+  color: #303e49;
+}
+.arewe-timeline-content p {
+  margin: 1em 0;
+  line-height: 1.6;
+}
+.arewe-timeline-content .arewe-read-more {
+  float: right;
+  padding: .8em 1em;
+  background: #acb7c0;
+  color: white;
+  border-radius: 0.25em;
+}
+.arewe-timeline-content::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  right: 100%;
+  height: 0;
+  width: 0;
+  border: 7px solid transparent;
+  border-right: 7px solid white;
+}
+
+.arewe-timeline-content small {
+  border: solid 1px;
+  border-radius: 5px;
+  background: rgba(0, 0, 255, .05);
+  font-size: 90%;
+  vertical-align: middle;
+  margin-right: 2px;
+  padding: 3px;
+}
+
+.arewe-timeline-path {
+  font: var(--mono-font);
+}
+
+.arewe-timeline-details {
+  margin: 0 auto;
+  width: 95%;
+}
+
+.arewe-timeline-details summary {
+  cursor: pointer;
+}
+
+.arewe-timeline-details h2 {
+  display: inline-block;
+}
+
+.arewe-update {
+  position: relative;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  color: #032f62;
+  background-color: #dbedff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+}
+
+.arewe-update-warn {
+  color: #735c0f;
+  background-color: #fff3dd;
+}

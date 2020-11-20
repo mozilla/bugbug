@@ -1,0 +1,185 @@
+@import url("./common.css");
+
+* {
+  box-sizing: border-box;
+}
+
+th,
+td {
+  vertical-align: top;
+}
+
+table {
+  table-layout: fixed;
+  width: 100%;
+  white-space: nowrap;
+}
+table td,
+table th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+table tr td:nth-child(1),
+table tr th:nth-child(1) {
+  width: 3em;
+}
+table tr td:nth-child(2),
+table tr th:nth-child(2) {
+  text-align: left;
+}
+table tr td:nth-child(3),
+table tr th:nth-child(3),
+table tr td:nth-child(4),
+table tr th:nth-child(4),
+table tr td:nth-child(5),
+table tr th:nth-child(5) {
+  width: 100px;
+}
+
+table td ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+tr {
+  padding: 4px 0;
+  border-bottom: solid 1px rgba(0, 0, 0, 0.2);
+}
+
+td .desc-box {
+  width: auto;
+  padding: 3px;
+}
+td .desc-box ul {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+#links {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
+
+h3 {
+  margin: 0;
+  border-bottom: solid 1px rgba(0, 0, 0, 0.2);
+}
+details h3 {
+  display: inline-block;
+  border-bottom: none;
+}
+details summary {
+  border-bottom: solid 1px rgba(0, 0, 0, 0.2);
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  padding: 0 5px;
+  max-width: 100vw;
+  overflow: hidden;
+}
+#grid aside {
+  padding-right: 5px;
+}
+#grid main {
+  overflow: auto;
+}
+
+#filter-container input:not([type="checkbox"]),
+#filter-container select {
+  width: 180px;
+  display: block;
+  margin: 2px 0;
+  padding: 0;
+}
+#filter-container label {
+  font-style: italic;
+}
+
+/* For testing/ graph page */
+aside ul {
+  margin: 0;
+  padding: 0;
+}
+aside ul li {
+  list-style: none;
+}
+/*
+.chart-container {
+  display: flex;
+  justify-content: center;
+}
+*/
+
+.loading-data #grid,
+.loader {
+  display: none;
+}
+.loading-data .loader {
+  display: block;
+}
+
+/* Spinner */
+.loader,
+.loader:before,
+.loader:after {
+  background: var(--heading-color);
+  -webkit-animation: load1 1s infinite ease-in-out;
+  animation: load1 1s infinite ease-in-out;
+  width: 1em;
+  height: 4em;
+}
+.loader {
+  color: var(--heading-color);
+  text-indent: -9999em;
+  margin: 88px auto;
+  position: relative;
+  font-size: 11px;
+  -webkit-transform: translateZ(0);
+  -ms-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-animation-delay: -0.16s;
+  animation-delay: -0.16s;
+}
+.loader:before,
+.loader:after {
+  position: absolute;
+  top: 0;
+  content: "";
+}
+.loader:before {
+  left: -1.5em;
+  -webkit-animation-delay: -0.32s;
+  animation-delay: -0.32s;
+}
+.loader:after {
+  left: 1.5em;
+}
+@-webkit-keyframes load1 {
+  0%,
+  80%,
+  100% {
+    box-shadow: 0 0;
+    height: 4em;
+  }
+  40% {
+    box-shadow: 0 -2em;
+    height: 5em;
+  }
+}
+@keyframes load1 {
+  0%,
+  80%,
+  100% {
+    box-shadow: 0 0;
+    height: 4em;
+  }
+  40% {
+    box-shadow: 0 -2em;
+    height: 5em;
+  }
+}
