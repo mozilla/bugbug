@@ -1,0 +1,40 @@
+version: 1
+tasks:
+  - ID: landings-risk-report-generator
+    created: {$fromNow: ''}
+    deadline: {$fromNow: '2 hours'}
+    expires: {$fromNow: '2 weeks'}
+    provisionerId: proj-bugbug
+    workerType: compute-small
+    payload:
+      features:
+        taskclusterProxy:
+          true
+      maxRunTime: 7200
+      image: mozilla/bugbug-commit-retrieval
+      env:
+        TC_SECRET_ID: project/bugbug/production
+      command:
+        - bugbug-generate-landings-risk-report
+        - /cache/mozilla-central
+        - --days=365
+        - --meta-bugs
+
+      artifacts:
+        public/landings_by_date.json:
+          path: /landings_by_date.json
+          type: file
+        public/component_connections.json:
+          path: /component_connections.json
+          type: file
+      cache:
+        bugbug-mercurial-repository: /cache
+    routes:
+      - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+      - notify.irc-channel.#bugbug.on-failed
+      - index.project.bugbug.landings_risk_report.latest
+    metadata:
+      name: BugBug landings risk report
+      description: BugBug landings risk report
+      owner: release-mgmt-analysis@mozilla.com
+      source: https://github.com/mozilla/bugbug/raw/master/infra/landings-pipeline.yml
