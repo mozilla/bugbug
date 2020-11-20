@@ -64,6 +64,10 @@ tasks:
           public/frontend:
             path: /bugbug/ui/changes/dist
             type: directory
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.landings_risk_report_ui.latest
       metadata:
         name: bugbug ui build
         description: bugbug ui build
