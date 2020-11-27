@@ -147,9 +147,30 @@ function addRow(bugSummary) {
   }
   testing_tags_column.append(testing_tags_list);
 
+  let coverage_column = row.insertCell(4);
+  let lines_added = 0;
+  let lines_covered = 0;
+  let lines_unknown = 0;
+  for (let commit of bugSummary.commits) {
+    if (commit["coverage"]) {
+      lines_added += commit["coverage"][0];
+      lines_covered += commit["coverage"][1];
+      lines_unknown += commit["coverage"][2];
+    }
+  }
+  if (lines_added != 0) {
+    if (lines_unknown != 0) {
+      coverage_column.textContent = `${lines_covered}-${lines_covered + lines_unknown} of ${lines_added}`;
+    } else {
+      coverage_column.textContent = `${lines_covered} of ${lines_added}`;
+    }
+  } else {
+    coverage_column.textContent = "";
+  }
+
   if (getOption("riskinessEnabled")) {
     let risk_list = document.createElement("ul");
-    let risk_column = row.insertCell(4);
+    let risk_column = row.insertCell(5);
 
     for (let commit of bugSummary.commits) {
       let risk = commit.risk;
