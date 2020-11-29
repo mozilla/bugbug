@@ -212,20 +212,41 @@ class delta_nightly_request_merge(single_bug_feature):
         for history in bug["history"]:
             for change in history["changes"]:
                 if change["added"].startswith("approval-mozilla"):
-                    uplift_request_datetime = datetime.strptime(
-                        history["when"], "%Y-%m-%dT%H:%M:%SZ"
-                    ).replace(tzinfo=timezone.utc)
+                    status = change["added"]["status"]
 
-                    landing_comments = bugzilla.get_landing_comments(
-                        bug["comments"], ["nightly"]
-                    )
-                    nightly_patch = datetime.strptime(
-                        landing_comments[0]["comment"]["creation_time"],
-                        "%Y-%m-%dT%H:%M:%SZ",
-                    ).replace(tzinfo=timezone.utc)
+                    if status == "+":
+                        uplift_request_datetime = parser.parse(history["when"])
 
-                    time_delta = nightly_patch - uplift_request_datetime
-                    return time_delta.days + time_delta.seconds / (24 * 60 * 60)
+                        landing_comments = bugzilla.get_landing_comments(
+                            bug["comments"], ["nightly"]
+                        )
+
+                        # Retrieve the last landing found.
+                        last_landing = landing_comments[len(landing_comments) - 1]
+
+                        nightly_patch = parser.parse(
+                            last_landing["comment"]["creation_time"]
+                        )
+
+                        # This will help us to find the closest landing before the uplift request
+                        last_distance = nightly_patch
+                        for landing in landing_comments:
+                            current_time = parser.parse(
+                                landing["comment"]["creation_time"]
+                            )
+                            delta_here = current_time - uplift_request_datetime
+
+                            # Only accept if the uplift is on the future and
+                            # if the last_distance is greater than the calculated now
+                            if (
+                                uplift_request_datetime >= current_time
+                                and last_distance >= delta_here
+                            ):
+                                last_distance = delta_here
+                                nightly_patch = current_time
+
+                        time_delta = nightly_patch - uplift_request_datetime
+                        return time_delta.days + time_delta.seconds / (24 * 60 * 60)
 
 
 class blocked_bugs_number(single_bug_feature):
