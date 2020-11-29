@@ -6,7 +6,7 @@
 import csv
 import re
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, Iterator, List, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -14,6 +14,8 @@ from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
 from bugbug import db, utils
+
+BugDict = NewType("BugDict", dict)
 
 BUGS_DB = "data/bugs.json"
 db.register(
@@ -62,7 +64,7 @@ COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
 
-def get_bugs(include_invalid=False):
+def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     yield from (
         bug
         for bug in db.read(BUGS_DB)
@@ -202,7 +204,9 @@ def download_bugs(bug_ids, products=None, security=False):
             db.append(BUGS_DB, new_bugs)
 
 
-def _find_linked(bug_map: Dict[int, dict], bug: dict, link_type: str) -> List[int]:
+def _find_linked(
+    bug_map: Dict[int, BugDict], bug: BugDict, link_type: str
+) -> List[int]:
     return sum(
         (
             _find_linked(bug_map, bug_map[b], link_type)
@@ -213,11 +217,11 @@ def _find_linked(bug_map: Dict[int, dict], bug: dict, link_type: str) -> List[in
     )
 
 
-def find_blocked_by(bug_map: Dict[int, dict], bug: dict) -> List[int]:
+def find_blocked_by(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
     return _find_linked(bug_map, bug, "blocks")
 
 
-def find_blocking(bug_map: Dict[int, dict], bug: dict) -> List[int]:
+def find_blocking(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
     return _find_linked(bug_map, bug, "depends_on")
 
 

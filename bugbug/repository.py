@@ -22,8 +22,8 @@ from functools import lru_cache
 from typing import (
     Collection,
     Dict,
-    Generator,
     Iterable,
+    Iterator,
     List,
     NewType,
     Optional,
@@ -39,7 +39,7 @@ import tenacity
 from tqdm import tqdm
 
 from bugbug import db, rust_code_analysis_server, utils
-from bugbug.utils import LMDBDict
+from bugbug.utils import LMDBDict, zstd_decompress
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,7 @@ db.register(
     [COMMIT_EXPERIENCES_DB],
 )
 
+commit_to_coverage = None
 path_to_component = None
 
 HG = None
@@ -287,7 +288,7 @@ def filter_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[CommitDict, None, None]:
+) -> Iterator[CommitDict]:
     for commit in commits:
         if not include_ignored and commit["ignored"]:
             continue
@@ -305,7 +306,7 @@ def get_commits(
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Generator[CommitDict, None, None]:
+) -> Iterator[CommitDict]:
     return filter_commits(
         db.read(COMMITS_DB),
         include_no_bug=include_no_bug,
@@ -702,9 +703,9 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
+def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return []
+        return tuple()
 
     template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
@@ -755,10 +756,10 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> List[Commit]:
             )
         )
 
-    return commits
+    return tuple(commits)
 
 
-def _hg_log(revs: List[bytes]) -> List[Commit]:
+def _hg_log(revs: List[bytes]) -> Tuple[Commit, ...]:
     return hg_log(thread_local.hg, revs)
 
 
@@ -999,7 +1000,9 @@ def calculate_experiences(
             update_complex_experiences("component", day, commit.components)
 
 
-def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: List[Commit]):
+def set_commits_to_ignore(
+    hg: hglib.client, repo_dir: str, commits: Iterable[Commit]
+) -> None:
     # Skip commits which are in .hg-annotate-ignore-revs or which have
     # 'ignore-this-changeset' in their description (mostly consisting of very
     # large and not meaningful formatting changes).
@@ -1012,6 +1015,63 @@ def set_commits_to_ignore(hg: hglib.client, repo_dir: str, commits: List[Commit]
         commit.ignored = (
             commit.node in ignore_revs or "ignore-this-changeset" in commit.desc
         )
+
+
+def download_coverage_mapping() -> None:
+    commit_to_coverage = get_coverage_mapping(False)
+
+    utils.download_check_etag(
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        "data/coverage_mapping.json.zst",
+    )
+
+    zstd_decompress("data/coverage_mapping.json")
+    assert os.path.exists("data/coverage_mapping.json")
+
+    with open("data/coverage_mapping.json", "r") as f:
+        data = json.load(f)
+
+    for commit_hash, commit_stats in data.items():
+        commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+
+    close_coverage_mapping()
+
+
+def get_coverage_mapping(readonly: bool = True) -> LMDBDict:
+    global commit_to_coverage
+    commit_to_coverage = LMDBDict("data/coverage_mapping.lmdb", readonly=readonly)
+    return commit_to_coverage
+
+
+def close_coverage_mapping() -> None:
+    global commit_to_coverage
+    assert commit_to_coverage is not None
+    commit_to_coverage.close()
+    commit_to_coverage = None
+
+
+def set_commit_coverage(commits: Iterable[CommitDict]) -> None:
+    commit_to_coverage = get_coverage_mapping(True)
+
+    for commit in commits:
+        try:
+            commit_stats = pickle.loads(
+                commit_to_coverage[commit["node"].encode("utf-8")]
+            )
+            if commit_stats is not None:
+                added = commit_stats["added"]
+                covered = commit_stats["covered"]
+                unknown = commit_stats["unknown"]
+            else:
+                added = covered = unknown = None
+        except KeyError:
+            added = covered = unknown = None
+
+        commit["cov_added"] = added
+        commit["cov_covered"] = covered
+        commit["cov_unknown"] = unknown
+
+    close_coverage_mapping()
 
 
 def download_component_mapping():
@@ -1043,11 +1103,12 @@ def close_component_mapping():
     path_to_component = None
 
 
-def hg_log_multi(repo_dir, revs):
+def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return []
+        return tuple()
 
-    threads_num = os.cpu_count() + 1
+    cpu_count = os.cpu_count()
+    threads_num = cpu_count + 1 if cpu_count is not None else 1
     REVS_COUNT = len(revs)
     CHUNK_SIZE = int(math.ceil(REVS_COUNT / threads_num))
     revs_groups = [revs[i : i + CHUNK_SIZE] for i in range(0, REVS_COUNT, CHUNK_SIZE)]
@@ -1055,9 +1116,9 @@ def hg_log_multi(repo_dir, revs):
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
-        commits = executor.map(_hg_log, revs_groups)
-        commits = tqdm(commits, total=len(revs_groups))
-        commits = list(itertools.chain.from_iterable(commits))
+        commits_iter = executor.map(_hg_log, revs_groups)
+        commits_iter = tqdm(commits_iter, total=len(revs_groups))
+        commits = tuple(itertools.chain.from_iterable(commits_iter))
 
     while len(hg_servers) > 0:
         hg_server = hg_servers.pop()
@@ -1106,6 +1167,10 @@ def download_commits(
             logger.info("Downloading file->component mapping...")
             download_component_mapping()
 
+        if save or not os.path.exists("data/coverage_mapping.lmdb"):
+            logger.info("Downloading commit->coverage mapping...")
+            download_coverage_mapping()
+
         set_commits_to_ignore(hg, repo_dir, commits)
 
         commits_num = len(commits)
@@ -1119,9 +1184,9 @@ def download_commits(
             with concurrent.futures.ProcessPoolExecutor(
                 initializer=_init_process, initargs=(repo_dir,)
             ) as executor:
-                commits = executor.map(_transform, commits, chunksize=64)
-                commits = tqdm(commits, total=commits_num)
-                commits = tuple(commits)
+                commits_iter = executor.map(_transform, commits, chunksize=64)
+                commits_iter = tqdm(commits_iter, total=commits_num)
+                commits = tuple(commits_iter)
         else:
             get_component_mapping()
 
@@ -1135,19 +1200,33 @@ def download_commits(
 
     logger.info("Applying final commits filtering...")
 
-    commits = tuple(commit.to_dict() for commit in commits)
+    commit_dicts = tuple(commit.to_dict() for commit in commits)
+
+    set_commit_coverage(commit_dicts)
 
     if save:
-        db.append(COMMITS_DB, commits)
+        db.append(COMMITS_DB, commit_dicts)
 
     return tuple(
         filter_commits(
-            commits,
+            commit_dicts,
             include_no_bug=include_no_bug,
             include_backouts=include_backouts,
             include_ignored=include_ignored,
         )
     )
+
+
+def update_commits() -> None:
+    commits = list(
+        get_commits(include_no_bug=True, include_backouts=True, include_ignored=True)
+    )
+
+    # Add coverage information for previous commits too.
+    # We need to do this because coverage information is sometimes slow to come in.
+    set_commit_coverage(commits)
+
+    db.write(COMMITS_DB, commits)
 
 
 def clean(hg, repo_dir):

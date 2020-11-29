@@ -4,16 +4,17 @@ import argparse
 import sys
 from logging import INFO, basicConfig, getLogger
 
-from bugbug.utils import download_and_load_model
+from bugbug.model import Model
+from bugbug.utils import download_model
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
 class ModelChecker:
-    def go(self, model_name):
+    def go(self, model_name: str) -> None:
         # Load the model
-        model = download_and_load_model(model_name)
+        model = Model.load(download_model(model_name))
 
         # Then call the check method of the model
         success = model.check()
@@ -24,7 +25,7 @@ class ModelChecker:
             sys.exit(1)
 
 
-def main():
+def main() -> None:
     description = "Check the models"
     parser = argparse.ArgumentParser(description=description)
 

@@ -18,3 +18,8 @@ updates:
   allow:
   - dependency-type: direct
   - dependency-type: indirect
+- package-ecosystem: npm
+  directory: "/ui"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 99

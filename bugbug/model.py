@@ -195,6 +195,9 @@ class Model:
             elif type_ == "data":
                 if " in " in feature_name and feature_name.endswith("=True"):
                     feature_name = feature_name[: -len("=True")]
+            elif type_ == "couple_data":
+                if " in " in feature_name and feature_name.endswith("=True"):
+                    feature_name = feature_name[: -len("=True")]
             else:
                 raise Exception(f"Unexpected feature type for: {full_feature_name}")
 
@@ -571,7 +574,7 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_file_name):
+    def load(model_file_name: str) -> "Model":
         return joblib.load(model_file_name)
 
     def overwrite_classes(self, items, classes, probabilities):

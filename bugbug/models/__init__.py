@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import importlib
 import logging
+from typing import Type
+
+from bugbug.model import Model
 
 LOGGER = logging.getLogger()
 
@@ -32,30 +35,14 @@ MODELS = {
 }
 
 
-def load_model_class(full_qualified_class_name):
-    """Load the class dynamically in order to speed up the boot and allow for
-    dynamic optional dependencies to be declared and check at import time
-    """
-    module_name, class_name = full_qualified_class_name.rsplit(".", 1)
-
-    module = importlib.import_module(module_name)
-
-    return getattr(module, class_name)
-
-
-def get_model_class(model_name):
+def get_model_class(model_name: str) -> Type[Model]:
     if model_name not in MODELS:
         err_msg = f"Invalid name {model_name}, not in {list(MODELS.keys())}"
         raise ValueError(err_msg)
 
     full_qualified_class_name = MODELS[model_name]
-    return load_model_class(full_qualified_class_name)
+    module_name, class_name = full_qualified_class_name.rsplit(".", 1)
 
+    module = importlib.import_module(module_name)
 
-def load_model(model_name):
-    model_class = get_model_class(model_name)
-
-    model_file_path = f"{model_name}model"
-
-    LOGGER.debug(f"Lookup model in {model_file_path}")
-    return model_class.load(model_file_path)
+    return getattr(module, class_name)

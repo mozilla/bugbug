@@ -4,7 +4,7 @@
     ],
     "metadata": {
         "description": "",
-        "name": "BugBug landings risk report",
+        "name": "BugBug landings risk report pipeline",
         "owner": "mcastelluccio@mozilla.com"
     },
     "task": {
@@ -15,43 +15,29 @@
             "$fromNow": "2 hours"
         },
         "expires": {
-            "$fromNow": "1 month"
+            "$fromNow": "1 week"
         },
         "extra": {},
         "metadata": {
             "description": "",
-            "name": "BugBug landings risk report",
+            "name": "BugBug landings risk report pipeline",
             "owner": "mcastelluccio@mozilla.com",
             "source": "https://github.com/mozilla/bugbug"
         },
         "payload": {
-            "artifacts": {
-                "public/landings_by_date.json": {
-                    "path": "/landings_by_date.json",
-                    "type": "file"
-                },
-                "public/component_connections.json": {
-                    "path": "/component_connections.json",
-                    "type": "file"
-                }
-            },
-            "cache": {
-                "bugbug-mercurial-repository": "/cache"
-            },
+            "artifacts": {},
+            "cache": {},
             "capabilities": {},
-            "env": {
-                "TC_SECRET_ID": "project/bugbug/production"
-            },
+            "env": {},
             "features": {
                 "taskclusterProxy": true
             },
             "command": [
-                "bugbug-generate-landings-risk-report",
-                "/cache/mozilla-central",
-                "--days=365",
-                "--meta-bugs"
+                "/usr/local/bin/python3",
+                "/code/spawn_pipeline.py",
+                "/code/landings-pipeline.yml"
             ],
-            "image": "mozilla/bugbug-commit-retrieval",
+            "image": "mozilla/bugbug-spawn-pipeline",
             "maxRunTime": 7200
         },
         "priority": "normal",
@@ -59,15 +45,14 @@
         "retries": 5,
         "routes": [
             "notify.email.release-mgmt-analysis@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed",
-            "index.project.bugbug.landings_risk_report.latest"
+            "notify.irc-channel.#bugbug.on-failed"
         ],
         "schedulerId": "-",
         "scopes": [
             "assume:hook-id:project-bugbug/bugbug-landings-risk-report"
         ],
         "tags": {},
-        "workerType": "compute-small"
+        "workerType": "batch"
     },
     "triggerSchema": {
         "additionalProperties": false,

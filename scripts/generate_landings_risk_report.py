@@ -10,17 +10,17 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import dateutil.parser
 import requests
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.regressor import BUG_FIXING_COMMITS_DB
+from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
-    download_and_load_model,
     download_check_etag,
+    download_model,
     get_secret,
     zstd_decompress,
 )
@@ -77,7 +77,9 @@ class LandingsRiskReportGenerator(object):
         logger.info("Download commit classifications...")
         assert db.download(BUG_FIXING_COMMITS_DB)
 
-        self.regressor_model = download_and_load_model("regressor")
+        self.regressor_model = cast(
+            RegressorModel, RegressorModel.load(download_model("regressor"))
+        )
 
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
         phabricator.set_api_key(
@@ -274,7 +276,7 @@ class LandingsRiskReportGenerator(object):
                 prev_fixed_bug_blocked_bugs
             )
 
-            commit_group["prev_regressions"] = prev_regressions
+            commit_group["prev_regressions"] = prev_regressions[-3:]
             commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
             commit_group["prev_regression_blocked_bugs"] = prev_regression_blocked_bugs[
                 -3:
@@ -313,6 +315,13 @@ class LandingsRiskReportGenerator(object):
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
                         "regressor": commit["bug_id"] in regressor_bug_ids,
+                        "author": commit["author_email"],
+                        "reviewers": commit["reviewers"],
+                        "coverage": [
+                            commit["cov_added"],
+                            commit["cov_covered"],
+                            commit["cov_unknown"],
+                        ],
                     }
                 )
 
@@ -379,13 +388,13 @@ class LandingsRiskReportGenerator(object):
             if len(commit_list) == 0:
                 continue
 
-            bugs = [
+            commit_bugs = [
                 bug_map[commit["bug_id"]]
                 for commit in commit_list
                 if commit["bug_id"] in bug_map
             ]
 
-            components = list(set(get_full_component(bug) for bug in bugs))
+            components = list(set(get_full_component(bug) for bug in commit_bugs))
 
             groups = [
                 group

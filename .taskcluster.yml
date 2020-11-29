@@ -208,12 +208,41 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      - taskId: {$eval: as_slugid("frontend_build")}
+        created: {$fromNow: ''}
+        deadline: {$fromNow: '1 hour'}
+        provisionerId: proj-bugbug
+        workerType: batch
+        payload:
+          maxRunTime: 3600
+          image: node
+          command:
+            - "/bin/sh"
+            - "-lcxe"
+            - "git clone --quiet ${repository} /bugbug &&
+               cd /bugbug &&
+               git -c advice.detachedHead=false checkout ${head_rev} &&
+               cd ui/changes &&
+               npm install --no-progress &&
+               npm run release"
+          artifacts:
+            public/frontend:
+              expires: {$fromNow: '2 weeks'}
+              path: /bugbug/ui/changes/dist
+              type: directory
+        metadata:
+          name: bugbug ui build
+          description: bugbug ui build
+          owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
       - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
         then:
           dependencies:
             - {$eval: as_slugid("lint_task")}
             - {$eval: as_slugid("tests_task")}
             - {$eval: as_slugid("http_tests_task")}
+            - {$eval: as_slugid("frontend_build")}
             - {$eval: as_slugid("packaging_test_task")}
             - {$eval: as_slugid("version_check_task")}
             - {$eval: as_slugid("integration_test")}
@@ -250,6 +279,7 @@ tasks:
             - {$eval: as_slugid("version_check_task")}
             - {$eval: as_slugid("tests_task")}
             - {$eval: as_slugid("http_tests_task")}
+            - {$eval: as_slugid("frontend_build")}
             - {$eval: as_slugid("packaging_test_task")}
           scopes:
             - secrets:get:project/bugbug/deploy

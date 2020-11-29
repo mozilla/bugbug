@@ -24,7 +24,11 @@ COMMITS_STEP = 5000
 
 class MicroannotateGenerator(object):
     def __init__(self, cache_root, repo_url, tokenize, remove_comments):
-        self.repo_url = repo_url
+        git_user = get_secret("GIT_USER")
+        git_password = get_secret("GIT_PASSWORD")
+        self.repo_url = repo_url.replace(
+            "https://", f"https://{git_user}:{git_password}@"
+        )
         self.git_repo_path = os.path.basename(self.repo_url)
         self.tokenize = tokenize
         self.remove_comments = remove_comments
@@ -48,13 +52,6 @@ class MicroannotateGenerator(object):
                 lambda future: logger.info("mozilla-central cloned")
             )
 
-            git_user = get_secret("GIT_USER")
-            git_password = get_secret("GIT_PASSWORD")
-
-            repo_push_url = self.repo_url.replace(
-                "https://", f"https://{git_user}:{git_password}@"
-            )
-
             if not is_old_version:
                 git_cloner = executor.submit(self.clone_git_repo)
                 git_cloner.add_done_callback(
@@ -67,7 +64,7 @@ class MicroannotateGenerator(object):
             ["git", "config", "--global", "http.postBuffer", "12M"], check=True
         )
 
-        push_args = ["git", "push", repo_push_url, "master"]
+        push_args = ["git", "push", self.repo_url, "master"]
         if is_old_version:
             push_args.append("--force")
 

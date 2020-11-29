@@ -17,7 +17,6 @@ from redis import Redis
 
 from bugbug import bugzilla, repository
 from bugbug.model import Model
-from bugbug.models import load_model
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -38,7 +37,7 @@ DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
 redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
 
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
-    timedelta(hours=1), load_model
+    timedelta(hours=1), lambda m: Model.load(f"{m}model")
 )
 MODEL_CACHE.start_ttl_thread()
 

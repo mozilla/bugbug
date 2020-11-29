@@ -12,7 +12,7 @@ import time
 from collections import defaultdict
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import cast
+from typing import Iterator, cast
 
 import dateutil.parser
 import tenacity
@@ -29,11 +29,7 @@ from bugbug.models.regressor import (
     BUG_INTRODUCING_COMMITS_DB,
     TOKENIZED_BUG_INTRODUCING_COMMITS_DB,
 )
-from bugbug.utils import (
-    ThreadPoolExecutorResult,
-    download_and_load_model,
-    zstd_compress,
-)
+from bugbug.utils import ThreadPoolExecutorResult, download_model, zstd_compress
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -197,11 +193,14 @@ class RegressorFinder(object):
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
         defect_model = cast(
-            DefectEnhancementTaskModel, download_and_load_model("defectenhancementtask")
+            DefectEnhancementTaskModel,
+            DefectEnhancementTaskModel.load(download_model("defectenhancementtask")),
         )
 
         logger.info("Downloading regression model...")
-        regression_model = cast(RegressionModel, download_and_load_model("regression"))
+        regression_model = cast(
+            RegressionModel, RegressionModel.load(download_model("regression"))
+        )
 
         start_date = datetime.now() - RELATIVE_START_DATE
         end_date = datetime.now() - RELATIVE_END_DATE
@@ -224,7 +223,7 @@ class RegressorFinder(object):
         )
         assert len(commit_map) > 0
 
-        def get_relevant_bugs():
+        def get_relevant_bugs() -> Iterator[dict]:
             return (bug for bug in bugzilla.get_bugs() if bug["id"] in commit_map)
 
         bug_count = sum(1 for bug in get_relevant_bugs())
@@ -237,7 +236,7 @@ class RegressorFinder(object):
 
         bug_fixing_commits = []
 
-        def append_bug_fixing_commits(bug_id, type_):
+        def append_bug_fixing_commits(bug_id: int, type_: str) -> None:
             for commit in commit_map[bug_id]:
                 bug_fixing_commits.append({"rev": commit, "type": type_})
 

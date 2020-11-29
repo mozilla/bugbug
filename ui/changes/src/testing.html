@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>testing policy - mc-changes</title>
+  <link href='css/page.css' rel='stylesheet' type='text/css'>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>➲</text></svg>">
+</head>
+
+<body class="loading-data">
+  <h1>mc changes</h1>
+  <div id="links">
+    <a href="index.html">Changes</a> |
+    <a href="testing.html">Testing Policy</a>
+  </div>
+  <div class="loader"></div>
+  <div id="grid">
+    <aside>
+      <h3>Controls</h3>
+      <ul>
+        <li><label><input name="grouping" type="radio" value="daily" />Daily</label></li>
+        <li><label><input name="grouping" type="radio" value="weekly" checked />Weekly</label></li>
+        <li><label><input name="grouping" type="radio" value="monthly" />Monthly</label></li>
+      </ul>
+    </aside>
+    <main>
+      <div class="arewe-update">
+        See the <a href="https://firefox-source-docs.mozilla.org/testing/testing-policy/">Testing Policy for code landing in mozilla-central</a> for a description of each tag.
+        In addition to these:
+        <ul>
+          <li>`unknown` is for commits that don't have an accessible phabricator revision associated with them (i.e. automated wpt vendoring or restricted bugs).</li>
+          <li>`missing` is for commits that haven't had any tags applied.</li>
+        </ul>
+      </div>
+      <details open>
+        <summary>
+          <h3>All Commits</h3>
+        </summary>
+        <div id="all-chart" class="chart-container">
+          <div class="chart"></div>
+        </div>
+        <textarea id="all-data">
+        </textarea>
+      </details>
+      <details open>
+        <summary>
+          <h3>Backed Out Commits</h3>
+        </summary>
+        <div class="arewe-update arewe-update-warn">
+          Note that this includes _all_ commits in a bug that gets backed out,
+          so if there are a stack of commits this can overestimate tags.
+        </div>
+        <div id="backedout-chart" class="chart-container">
+          <div class="chart"></div>
+        </div>
+        <textarea id="backedout-data">
+        </textarea>
+      </details>
+
+      <details open>
+        <summary>
+          <h3>Commits that caused a regression</h3>
+        </summary>
+        <div class="arewe-update arewe-update-warn">
+          Note that this includes _all_ commits in a bug that gets backed out,
+          so if there are a stack of commits this can overestimate tags.
+        </div>
+        <div id="regression-chart" class="chart-container">
+          <div class="chart"></div>
+        </div>
+        <textarea id="regression-data">
+        </textarea>
+      </details>
+    </main>
+  </div>
+
+  <script src="testing.js"></script>
+  <script>
+  </script>
+</body>
+
+</html>

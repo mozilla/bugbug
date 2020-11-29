@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import re
+import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -683,9 +684,9 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 if res is None:
                     continue
 
-                if isinstance(res, list):
+                if isinstance(res, list) or isinstance(res, set):
                     for item in res:
-                        data[f"{item} in {feature_extractor_name}"] = "True"
+                        data[sys.intern(f"{item} in {feature_extractor_name}")] = "True"
                     continue
 
                 if isinstance(res, bool):

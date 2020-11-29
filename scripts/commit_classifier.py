@@ -10,6 +10,7 @@ import re
 import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
+from typing import Optional, Tuple, cast
 
 import dateutil.parser
 import hglib
@@ -25,9 +26,11 @@ from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
 from bugbug import db, repository, test_scheduling
+from bugbug.model import Model
+from bugbug.models.testfailure import TestFailureModel
 from bugbug.utils import (
-    download_and_load_model,
     download_check_etag,
+    download_model,
     get_secret,
     to_array,
     zstd_decompress,
@@ -136,7 +139,7 @@ class CommitClassifier(object):
         self.model_name = model_name
         self.repo_dir = repo_dir
 
-        self.model = download_and_load_model(model_name)
+        self.model = Model.load(download_model(model_name))
         assert self.model is not None
 
         self.git_repo_dir = git_repo_dir
@@ -195,7 +198,9 @@ class CommitClassifier(object):
             )
             self.past_failures_data = test_scheduling.get_past_failures("label", True)
 
-            self.testfailure_model = download_and_load_model("testfailure")
+            self.testfailure_model = cast(
+                TestFailureModel, TestFailureModel.load(download_model("testfailure"))
+            )
             assert self.testfailure_model is not None
 
     def clone_git_repo(self, repo_url, repo_dir, rev="origin/branches/default/tip"):
@@ -566,11 +571,11 @@ class CommitClassifier(object):
 
     def classify(
         self,
-        revision=None,
-        phabricator_deployment=None,
-        diff_id=None,
-        runnable_jobs_path=None,
-    ):
+        revision: Optional[str] = None,
+        phabricator_deployment: Optional[str] = None,
+        diff_id: Optional[int] = None,
+        runnable_jobs_path: Optional[str] = None,
+    ) -> None:
         if revision is not None:
             assert phabricator_deployment is None
             assert diff_id is None
@@ -594,18 +599,18 @@ class CommitClassifier(object):
                 use_single_process=self.use_single_process,
             )
         else:
-            commits = []
-
-            for commit in repository.get_commits():
-                if commit["node"] == revision:
-                    commits.append(commit)
-                    break
+            assert revision is not None
+            commits = tuple(
+                commit
+                for commit in repository.get_commits()
+                if commit["node"] == revision
+            )
 
             # The commit to analyze was not in our DB, let's mine it.
             if len(commits) == 0:
                 commits = repository.download_commits(
                     self.repo_dir,
-                    revs=[revision],
+                    revs=[revision.encode("ascii")],
                     save=False,
                     use_single_process=self.use_single_process,
                 )
@@ -617,7 +622,7 @@ class CommitClassifier(object):
         else:
             self.classify_test_select(commits, runnable_jobs_path)
 
-    def classify_regressor(self, commits):
+    def classify_regressor(self, commits: Tuple[repository.CommitDict, ...]) -> None:
         # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
         # the current commit from the "clean" (or "dirty") commits.
@@ -790,7 +795,7 @@ class CommitClassifier(object):
             json.dump(method_level_results, f)
 
 
-def main():
+def main() -> None:
     description = "Classify a commit"
     parser = argparse.ArgumentParser(description=description)
 

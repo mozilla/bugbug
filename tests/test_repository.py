@@ -3,7 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import os
+import pickle
 import shutil
 import time
 from datetime import datetime, timezone
@@ -11,6 +13,7 @@ from datetime import datetime, timezone
 import hglib
 import pytest
 import responses
+import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import repository, rust_code_analysis_server
@@ -378,6 +381,90 @@ def test_hg_log(fake_hg_repo):
     assert commits[1].node == revision4
 
 
+def test_download_coverage_mapping() -> None:
+    cctx = zstandard.ZstdCompressor()
+
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        headers={"ETag": "100"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        body=cctx.compress(json.dumps({}).encode("ascii")),
+    )
+
+    repository.download_coverage_mapping()
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        body=cctx.compress(
+            json.dumps(
+                {
+                    "revision1": {
+                        "added": 7,
+                        "covered": 3,
+                        "unknown": 0,
+                    },
+                    "revision2": None,
+                }
+            ).encode("ascii")
+        ),
+    )
+
+    repository.download_coverage_mapping()
+    commit_to_coverage = repository.get_coverage_mapping()
+    assert pickle.loads(commit_to_coverage[b"revision1"]) == {
+        "added": 7,
+        "covered": 3,
+        "unknown": 0,
+    }
+    assert pickle.loads(commit_to_coverage[b"revision2"]) is None
+
+    responses.reset()
+    commit_to_coverage = repository.get_coverage_mapping()
+    assert pickle.loads(commit_to_coverage[b"revision1"]) == {
+        "added": 7,
+        "covered": 3,
+        "unknown": 0,
+    }
+    assert pickle.loads(commit_to_coverage[b"revision2"]) is None
+    repository.close_coverage_mapping()
+
+    responses.reset()
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        headers={"ETag": "101"},
+    )
+
+    repository.download_coverage_mapping()
+    repository.get_coverage_mapping()
+    commit_to_coverage = repository.get_coverage_mapping()
+    assert pickle.loads(commit_to_coverage[b"revision1"]) == {
+        "added": 7,
+        "covered": 3,
+        "unknown": 0,
+    }
+    assert pickle.loads(commit_to_coverage[b"revision2"]) is None
+    repository.close_coverage_mapping()
+
+
 def test_download_component_mapping():
     responses.add(
         responses.HEAD,
@@ -476,9 +563,28 @@ def test_download_commits(fake_hg_repo, use_single_process):
     add_file(hg, local, ".hg-annotate-ignore-revs", "not_existing_hash\n")
 
     add_file(hg, local, "file1", "1\n2\n3\n4\n5\n6\n7\n")
-    commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
+    revision1 = commit(hg, date=datetime(1991, 4, 16, tzinfo=timezone.utc))
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
+
+    responses.add(
+        responses.HEAD,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        status=200,
+        headers={"ETag": "123"},
+    )
+
+    cctx = zstandard.ZstdCompressor()
+    coverage_mapping = {revision1: None}
+
+    def request_callback(request):
+        return 200, {}, cctx.compress(json.dumps(coverage_mapping).encode("ascii"))
+
+    responses.add_callback(
+        responses.GET,
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+        callback=request_callback,
+    )
 
     commits = repository.download_commits(
         local, rev_start=0, use_single_process=use_single_process
@@ -495,6 +601,17 @@ def test_download_commits(fake_hg_repo, use_single_process):
     hg.push(dest=bytes(remote, "ascii"))
     copy_pushlog_database(remote, local)
 
+    coverage_mapping = {
+        revision1: None,
+        revision2: {
+            "added": 7,
+            "covered": 3,
+            "unknown": 0,
+        },
+    }
+
+    os.remove("data/coverage_mapping.json.zst.etag")
+
     commits = repository.download_commits(
         local, rev_start=0, use_single_process=use_single_process
     )
@@ -504,6 +621,9 @@ def test_download_commits(fake_hg_repo, use_single_process):
     assert commits[0]["node"] == revision2
     assert commits[0]["touched_prev_total_author_sum"] == 0
     assert commits[0]["seniority_author"] > 0
+    assert commits[0]["cov_added"] == 7
+    assert commits[0]["cov_covered"] == 3
+    assert commits[0]["cov_unknown"] == 0
 
     # Wait one second, to have a different pushdate.
     time.sleep(1)
@@ -522,9 +642,15 @@ def test_download_commits(fake_hg_repo, use_single_process):
     assert commits[0]["node"] == revision2
     assert commits[0]["touched_prev_total_author_sum"] == 0
     assert commits[0]["seniority_author"] > 0
+    assert commits[0]["cov_added"] == 7
+    assert commits[0]["cov_covered"] == 3
+    assert commits[0]["cov_unknown"] == 0
     assert commits[1]["node"] == revision3
     assert commits[1]["touched_prev_total_author_sum"] == 1
     assert commits[1]["seniority_author"] > commits[0]["seniority_author"]
+    assert commits[1]["cov_added"] is None
+    assert commits[1]["cov_covered"] is None
+    assert commits[1]["cov_unknown"] is None
 
     os.remove("data/commits.json")
     shutil.rmtree("data/commit_experiences.lmdb")
