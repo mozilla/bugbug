@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional
 
 import dateutil.parser
 import requests
+from tqdm import tqdm
 
-from bugbug import bugzilla, db, phabricator, repository
+from bugbug import bugzilla, db, phabricator, repository, test_scheduling
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB
 from bugbug.utils import (
     download_and_load_model,
@@ -144,6 +145,7 @@ class LandingsRiskReportGenerator(object):
             for commit in repository.get_commits()
             if commit["bug_id"] in bugs_set
         ]
+        commit_map = {commit["node"]: commit for commit in commits}
         hash_to_rev = {commit["node"]: i for i, commit in enumerate(commits)}
 
         logger.info(f"{len(commits)} commits to analyze.")
@@ -155,8 +157,7 @@ class LandingsRiskReportGenerator(object):
         bug_map = {}
         regressor_bug_ids = set()
         for bug in bugzilla.get_bugs():
-            if bug["id"] in bugs_set:
-                bug_map[bug["id"]] = bug
+            bug_map[bug["id"]] = bug
 
             if len(bug["regressions"]) > 0:
                 regressor_bug_ids.add(bug["id"])
@@ -186,8 +187,6 @@ class LandingsRiskReportGenerator(object):
                 ):
                     blocker_to_meta[blocker_bug_id].add(meta_bug)
 
-        # TODO: Use past regressions by function information too (maybe first by function and if no results by file? or prioritize function and recentness?)
-
         def _download_past_bugs(url: str) -> dict:
             path = os.path.join("data", os.path.basename(url)[:-4])
             download_check_etag(url, path=f"{path}.zst")
@@ -205,24 +204,27 @@ class LandingsRiskReportGenerator(object):
             PAST_FIXED_BUG_BLOCKED_BUGS_BY_FILE_URL
         )
 
-        def component_histogram(bugs: List[dict]) -> Dict[str, float]:
-            counter = collections.Counter(bug["component"] for bug in bugs)
+        path_to_component = repository.get_component_mapping()
+
+        def get_full_component(bug):
+            return "{}::{}".format(bug["product"], bug["component"])
+
+        def histogram(components: List[str]) -> Dict[str, float]:
+            counter = collections.Counter(components)
             return {
-                component: count / len(bugs)
+                component: count / len(components)
                 for component, count in counter.most_common()
             }
 
-        # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
-        commits.sort(key=lambda x: x["bug_id"])
+        def component_histogram(bugs: List[dict]) -> Dict[str, float]:
+            return histogram([bug["component"] for bug in bugs])
 
-        commit_groups = []
-        for bug_id, commit_iter in itertools.groupby(commits, lambda x: x["bug_id"]):
-            # TODO: Figure out what to do with bugs we couldn't download (security bugs).
-            if bug_id not in bug_map:
-                continue
-
-            commit_list = list(commit_iter)
-            commit_list.sort(key=lambda x: hash_to_rev[x["node"]])
+        def get_prev_bugs(
+            commit_group: dict,
+            commit_list: List[repository.CommitDict],
+            component: str = None,
+        ) -> None:
+            # TODO: Use past regressions by function information too (maybe first by function and if no results by file and if no results by directory/component? or prioritize function and recentness?)
 
             # Find previous regressions occurred in the same files as those touched by these commits.
             # And find previous bugs that were fixed by touching the same files as these commits.
@@ -234,29 +236,28 @@ class LandingsRiskReportGenerator(object):
             prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = []
             for commit in commit_list:
                 for path in commit["files"]:
+                    if (
+                        component is not None
+                        and path.encode("utf-8") in path_to_component
+                        and path_to_component[path.encode("utf-8")]
+                        != component.encode("utf-8")
+                    ):
+                        continue
+
                     if path in past_regressions_by_file:
-                        prev_regressions.extend(
-                            bug_summary
-                            for bug_summary in past_regressions_by_file[path]
-                        )
+                        prev_regressions += past_regressions_by_file[path]
 
                     if path in past_fixed_bugs_by_file:
-                        prev_fixed_bugs.extend(
-                            bug_summary for bug_summary in past_fixed_bugs_by_file[path]
-                        )
+                        prev_fixed_bugs += past_fixed_bugs_by_file[path]
 
                     if path in past_regression_blocked_bugs_by_file:
-                        prev_regression_blocked_bugs.extend(
-                            bug_summary
-                            for bug_summary in past_regression_blocked_bugs_by_file[
-                                path
-                            ]
+                        prev_regression_blocked_bugs += (
+                            past_regression_blocked_bugs_by_file[path]
                         )
 
                     if path in past_fixed_bug_blocked_bugs_by_file:
-                        prev_fixed_bug_blocked_bugs.extend(
-                            bug_summary
-                            for bug_summary in past_fixed_bug_blocked_bugs_by_file[path]
+                        prev_fixed_bug_blocked_bugs += (
+                            past_fixed_bug_blocked_bugs_by_file[path]
                         )
 
             prev_regressions = _deduplicate(prev_regressions)
@@ -273,6 +274,24 @@ class LandingsRiskReportGenerator(object):
                 prev_fixed_bug_blocked_bugs
             )
 
+            commit_group["prev_regressions"] = prev_regressions
+            commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
+            commit_group["prev_regression_blocked_bugs"] = prev_regression_blocked_bugs[
+                -3:
+            ]
+            commit_group["prev_fixed_bug_blocked_bugs"] = prev_fixed_bug_blocked_bugs[
+                -3:
+            ]
+            commit_group["most_common_regression_components"] = regression_components
+            commit_group["most_common_fixed_bugs_components"] = fixed_bugs_components
+            commit_group[
+                "most_common_regression_blocked_bug_components"
+            ] = regression_blocked_bug_components
+            commit_group[
+                "most_common_fixed_bug_blocked_bug_components"
+            ] = fixed_bug_blocked_bug_components
+
+        def get_commit_data(commit_list: List[repository.CommitDict]) -> List[dict]:
             # Evaluate risk of commits associated to this bug.
             probs = self.regressor_model.classify(commit_list, probabilities=True)
 
@@ -297,30 +316,36 @@ class LandingsRiskReportGenerator(object):
                     }
                 )
 
+            return commits_data
+
+        # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
+        commits.sort(key=lambda x: x["bug_id"])
+
+        commit_groups = []
+        for bug_id, commit_iter in itertools.groupby(commits, lambda x: x["bug_id"]):
+            # TODO: Figure out what to do with bugs we couldn't download (security bugs).
+            if bug_id not in bug_map:
+                continue
+
+            commit_list = sorted(commit_iter, key=lambda x: hash_to_rev[x["node"]])
+
             bug = bug_map[bug_id]
 
-            commit_groups.append(
-                {
-                    "id": bug_id,
-                    "versions": bugzilla.get_fixed_versions(bug),
-                    "component": "{}::{}".format(bug["product"], bug["component"]),
-                    "summary": bug["summary"],
-                    "date": max(
-                        dateutil.parser.parse(commit["pushdate"])
-                        for commit in commit_list
-                    ).strftime("%Y-%m-%d"),
-                    "commits": commits_data,
-                    "meta_ids": list(blocker_to_meta[bug_id]),
-                    "prev_regressions": prev_regressions[-3:],
-                    "prev_fixed_bugs": prev_fixed_bugs[-3:],
-                    "prev_regression_blocked_bugs": prev_regression_blocked_bugs[-3:],
-                    "prev_fixed_bug_blocked_bugs": prev_fixed_bug_blocked_bugs[-3:],
-                    "most_common_regression_components": regression_components,
-                    "most_common_fixed_bugs_components": fixed_bugs_components,
-                    "most_common_regression_blocked_bug_components": regression_blocked_bug_components,
-                    "most_common_fixed_bug_blocked_bug_components": fixed_bug_blocked_bug_components,
-                }
-            )
+            commit_group = {
+                "id": bug_id,
+                "versions": bugzilla.get_fixed_versions(bug),
+                "component": get_full_component(bug),
+                "summary": bug["summary"],
+                "date": max(
+                    dateutil.parser.parse(commit["pushdate"]) for commit in commit_list
+                ).strftime("%Y-%m-%d"),
+                "commits": get_commit_data(commit_list),
+                "meta_ids": list(blocker_to_meta[bug_id]),
+            }
+
+            get_prev_bugs(commit_group, commit_list)
+
+            commit_groups.append(commit_group)
 
         landings_by_date = collections.defaultdict(list)
         for commit_group in commit_groups:
@@ -337,6 +362,70 @@ class LandingsRiskReportGenerator(object):
                 ]
 
             json.dump(output, f)
+
+        # Retrieve components of test failures that occurred when landing patches to fix bugs in specific components.
+        component_failures = collections.defaultdict(list)
+
+        push_data_iter, push_data_count, all_runnables = test_scheduling.get_push_data(
+            "group"
+        )
+
+        for revisions, _, _, possible_regressions, likely_regressions in tqdm(
+            push_data_iter(), total=push_data_count
+        ):
+            commit_list = [
+                commit_map[revision] for revision in revisions if revision in commit_map
+            ]
+            if len(commit_list) == 0:
+                continue
+
+            bugs = [
+                bug_map[commit["bug_id"]]
+                for commit in commit_list
+                if commit["bug_id"] in bug_map
+            ]
+
+            components = list(set(get_full_component(bug) for bug in bugs))
+
+            groups = [
+                group
+                for group in list(set(possible_regressions + likely_regressions))
+                if group.encode("utf-8") in path_to_component
+            ]
+
+            for group in groups:
+                for component in components:
+                    component_failures[component].append(
+                        path_to_component[group.encode("utf-8")]
+                        .tobytes()
+                        .decode("utf-8")
+                    )
+
+        # Filter out commits for which we have no bugs.
+        commits = [commit for commit in commits if commit["bug_id"] in bug_map]
+
+        # Sort commits by bug component, so we can use itertools.groupby to group them by bug component.
+        commits.sort(key=lambda x: get_full_component(bug_map[x["bug_id"]]))
+
+        commit_groups = []
+        for component, commit_iter in itertools.groupby(
+            commits, lambda x: get_full_component(bug_map[x["bug_id"]])
+        ):
+            commit_group = {
+                "component": component,
+                "most_common_test_failure_components": histogram(
+                    component_failures[component]
+                )
+                if component in component_failures
+                else {},
+            }
+            get_prev_bugs(commit_group, list(commit_iter), component)
+            commit_groups.append(commit_group)
+
+        with open("component_connections.json", "w") as f:
+            json.dump(commit_groups, f)
+
+        repository.close_component_mapping()
 
 
 def main() -> None:

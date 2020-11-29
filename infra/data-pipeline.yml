@@ -539,7 +539,7 @@ tasks:
       deadline: {$fromNow: '3 days'}
       expires: {$fromNow: '1 year'}
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - bugs-retrieval
       payload:
@@ -789,7 +789,7 @@ tasks:
       deadline: {$fromNow: '1 day'}
       expires: {$fromNow: '1 month'}
       provisionerId: proj-bugbug
-      workerType: batch
+      workerType: compute-small
       dependencies:
         - commit-retrieval
         - bugs-retrieval
@@ -1389,6 +1389,7 @@ tasks:
       dependencies:
         - past-bugs-by-unit
         - revisions-retrieval
+        - test-group-scheduling-history-push_data-retrieval
       scopes:
           - hooks:modify-hook:project-bugbug/bugbug-landings-risk-report
           - assume:hook-id:project-bugbug/bugbug-landings-risk-report

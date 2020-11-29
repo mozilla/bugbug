@@ -44,11 +44,7 @@ class PastBugsCollector(object):
 
         logger.info(f"{len(bug_fixing_commits_nodes)} bug-fixing commits to analyze")
 
-        all_bug_ids = set(
-            commit["bug_id"]
-            for commit in repository.get_commits()
-            if commit["node"] in bug_fixing_commits_nodes
-        )
+        all_bug_ids = set(commit["bug_id"] for commit in repository.get_commits())
 
         bug_map = {
             bug["id"]: bug for bug in bugzilla.get_bugs() if bug["id"] in all_bug_ids
