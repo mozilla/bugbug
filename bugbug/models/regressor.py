@@ -43,10 +43,12 @@ EVALUATION_MONTHS = 2
 
 
 class RegressorModel(CommitModel):
-    def __init__(self, lemmatization=False, interpretable=False):
+    def __init__(
+        self, lemmatization: bool = False, interpretable: bool = False
+    ) -> None:
         CommitModel.__init__(self, lemmatization)
 
-        self.training_dbs.append(BUG_INTRODUCING_COMMITS_DB)
+        self.training_dbs += [BUG_INTRODUCING_COMMITS_DB, bugzilla.BUGS_DB]
 
         self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
