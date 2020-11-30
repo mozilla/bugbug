@@ -642,7 +642,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                 if res is None:
                     continue
 
-                if isinstance(res, list) or isinstance(res, set):
+                if isinstance(res, (list, set)):
                     for item in res:
                         data[sys.intern(f"{item} in {feature_extractor_name}")] = "True"
                     continue

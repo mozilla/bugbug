@@ -596,7 +596,7 @@ class Model:
         if not isinstance(items, list):
             items = [items]
 
-        assert isinstance(items[0], dict) or isinstance(items[0], tuple)
+        assert isinstance(items[0], (dict, tuple))
 
         X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
