@@ -385,7 +385,7 @@ def model_prediction(model_name, bug_id):
 
     # Change time could be None if it's a security bug
     job = JobInfo(classify_bug, model_name, bug_id)
-    bug_change_time = bug.get(bug_id, None)
+    bug_change_time = bug.get(bug_id)
     if bug_change_time and is_prediction_invalidated(job, bug[bug_id]):
         clean_prediction_cache(job)
 
@@ -553,7 +553,7 @@ def batch_prediction(model_name):
     for bug_id in bugs:
         job = JobInfo(classify_bug, model_name, bug_id)
 
-        change_time = bug_change_dates.get(int(bug_id), None)
+        change_time = bug_change_dates.get(int(bug_id))
         # Change time could be None if it's a security bug
         if change_time and is_prediction_invalidated(job, change_time):
             clean_prediction_cache(job)
