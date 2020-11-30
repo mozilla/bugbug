@@ -47,7 +47,7 @@ CommitDict = NewType("CommitDict", dict)
 
 code_analysis_server: Optional[rust_code_analysis_server.RustCodeAnalysisServer] = None
 
-hg_servers = list()
+hg_servers = []
 hg_servers_lock = threading.Lock()
 thread_local = threading.local()
 
@@ -705,7 +705,7 @@ def _transform(commit):
 
 def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return tuple()
+        return ()
 
     template = "{node}\\0{author}\\0{desc}\\0{bug}\\0{backedoutby}\\0{author|email}\\0{pushdate|hgdate}\\0{reviewers}\\0{backsoutnodes}\\0"
 
@@ -905,7 +905,7 @@ def calculate_experiences(
     ) -> None:
         for commit_type in ("", "backout"):
             exp_queues = tuple(
-                get_experience(experience_type, commit_type, item, day, tuple())
+                get_experience(experience_type, commit_type, item, day, ())
                 for item in items
             )
             all_commit_lists = tuple(exp_queues[i][day] for i in range(len(items)))
@@ -919,8 +919,8 @@ def calculate_experiences(
                 )
             )
 
-            all_commits = set(sum(all_commit_lists, tuple()))
-            timespan_commits = set(sum(timespan_commit_lists, tuple()))
+            all_commits = set(sum(all_commit_lists, ()))
+            timespan_commits = set(sum(timespan_commit_lists, ()))
 
             commit.set_experience(
                 experience_type,
@@ -1105,7 +1105,7 @@ def close_component_mapping():
 
 def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
     if len(revs) == 0:
-        return tuple()
+        return ()
 
     cpu_count = os.cpu_count()
     threads_num = cpu_count + 1 if cpu_count is not None else 1
@@ -1151,7 +1151,7 @@ def download_commits(
 
         if len(revs) == 0:
             logger.info("No commits to analyze")
-            return tuple()
+            return ()
 
         first_pushdate = get_first_pushdate(repo_dir)
 
