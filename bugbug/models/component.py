@@ -243,7 +243,7 @@ class ComponentModel(BugModel):
 
             matching_components = [
                 full_comp
-                for full_comp in bugs_number.keys()
+                for full_comp in bugs_number
                 if full_comp.startswith(conflated_component)
             ]
 
@@ -289,7 +289,7 @@ class ComponentModel(BugModel):
 
             matching_components = [
                 full_comp
-                for full_comp in bugs_number.keys()
+                for full_comp in bugs_number
                 if full_comp.startswith(conflated_component)
             ]
 

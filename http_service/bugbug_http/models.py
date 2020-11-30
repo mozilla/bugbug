@@ -78,7 +78,7 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
     model = MODEL_CACHE.get(model_name)
 
     if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
+        LOGGER.info("Missing model %r, aborting", model_name)
         return "NOK"
 
     model_extra_data = model.get_extra_data()

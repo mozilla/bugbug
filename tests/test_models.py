@@ -12,7 +12,7 @@ def test_import_all_models():
     names are still good
     """
 
-    for model_name in MODELS.keys():
+    for model_name in MODELS:
         print("Try loading model", model_name)
         get_model_class(model_name)
 

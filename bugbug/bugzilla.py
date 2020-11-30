@@ -104,7 +104,7 @@ def get(ids_or_query):
         bug_id = int(bug["id"])
 
         if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
+            new_bugs[bug_id] = {}
 
         new_bugs[bug_id].update(bug)
 
@@ -112,7 +112,7 @@ def get(ids_or_query):
         bug_id = int(bug_id)
 
         if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
+            new_bugs[bug_id] = {}
 
         new_bugs[bug_id]["comments"] = bug["comments"]
 
@@ -120,7 +120,7 @@ def get(ids_or_query):
         bug_id = int(bug_id)
 
         if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
+            new_bugs[bug_id] = {}
 
         new_bugs[bug_id]["attachments"] = bug
 
@@ -128,7 +128,7 @@ def get(ids_or_query):
         bug_id = int(bug["id"])
 
         if bug_id not in new_bugs:
-            new_bugs[bug_id] = dict()
+            new_bugs[bug_id] = {}
 
         new_bugs[bug_id]["history"] = bug["history"]
 

@@ -249,8 +249,8 @@ class TestSelectModel(Model):
             commit_data,
             push_num,
             all_runnables,
-            tuple(),
-            tuple(),
+            (),
+            (),
         ):
             commit_test = commit_data.copy()
             commit_test["test_job"] = data
