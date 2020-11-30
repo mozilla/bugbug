@@ -48,6 +48,8 @@ tasks:
       expires: {$fromNow: '2 weeks'}
       provisionerId: proj-bugbug
       workerType: batch
+      dependencies:
+        - landings-risk-report-generator
       payload:
         maxRunTime: 3600
         image: node
