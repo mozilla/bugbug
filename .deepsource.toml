@@ -1,0 +1,18 @@
+version = 1
+
+test_patterns = ["/tests/test_*.py"]
+
+[[analyzers]]
+name = "python"
+enabled = true
+dependency_file_paths = [
+  "requirements.txt",
+  "test-requirements.txt"
+  ]
+
+  [analyzers.meta]
+  runtime_version = "3.x.x"
+
+[[transformers]]
+name = "black"
+enabled = true
