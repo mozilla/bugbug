@@ -361,7 +361,7 @@ class CommitClassifier(object):
             )
             reviewers = set(reviewer["fields"]["username"] for reviewer in reviewers)
 
-            if len(reviewers):
+            if reviewers:
                 message = replace_reviewers(message, reviewers)
 
             logger.info(

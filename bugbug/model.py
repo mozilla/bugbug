@@ -408,7 +408,7 @@ class Model:
         print("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
-        if self.calculate_importance and len(feature_names):
+        if self.calculate_importance and feature_names:
             explainer = shap.TreeExplainer(self.clf)
             shap_values = explainer.shap_values(X_train)
 
