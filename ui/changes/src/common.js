@@ -170,7 +170,7 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
     let weeklyData = {};
     for (let daily in dailyData) {
       let date = Temporal.PlainDate.from(daily);
-      let weekStart = date.minus({ days: date.dayOfWeek }).toString();
+      let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
 
       if (!weeklyData[weekStart]) {
         weeklyData[weekStart] = getNewTestingTagCountObject();
