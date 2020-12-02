@@ -10,7 +10,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import dateutil.parser
 import requests
@@ -52,8 +52,21 @@ def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
     return results[::-1]
 
 
+def parse_risk_band(risk_band: str) -> Tuple[str, float, float]:
+    name, start, end = risk_band.split("-")
+    return (name, float(start), float(end))
+
+
 class LandingsRiskReportGenerator(object):
     def __init__(self, repo_dir: str) -> None:
+        self.risk_bands = sorted(
+            (
+                parse_risk_band(risk_band)
+                for risk_band in get_secret("REGRESSOR_RISK_BANDS").split(";")
+            ),
+            key=lambda x: x[1],
+        )
+
         repository.clone(repo_dir)
 
         logger.info("Downloading commits database...")
@@ -221,6 +234,13 @@ class LandingsRiskReportGenerator(object):
         def component_histogram(bugs: List[dict]) -> Dict[str, float]:
             return histogram([bug["component"] for bug in bugs])
 
+        def find_risk_band(risk: float) -> str:
+            for name, start, end in self.risk_bands:
+                if start <= risk <= end:
+                    return name
+
+            assert False
+
         def get_prev_bugs(
             commit_group: dict,
             commit_list: List[repository.CommitDict],
@@ -337,6 +357,7 @@ class LandingsRiskReportGenerator(object):
                 continue
 
             commit_list = sorted(commit_iter, key=lambda x: hash_to_rev[x["node"]])
+            commit_data = get_commit_data(commit_list)
 
             bug = bug_map[bug_id]
 
@@ -348,8 +369,11 @@ class LandingsRiskReportGenerator(object):
                 "date": max(
                     dateutil.parser.parse(commit["pushdate"]) for commit in commit_list
                 ).strftime("%Y-%m-%d"),
-                "commits": get_commit_data(commit_list),
+                "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
+                "risk_band": find_risk_band(
+                    max(commit["risk"] for commit in commit_data)
+                ),
             }
 
             get_prev_bugs(commit_group, commit_list)
