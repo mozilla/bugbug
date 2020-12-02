@@ -5,6 +5,8 @@ import localForage from "localforage";
 //   "https://bugzilla.mozilla.org/rest/bug?include_fields=id,summary,status&keywords=feature-testing-meta%2C%20&keywords_type=allwords";
 let LANDINGS_URL =
   "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/landings_by_date.json";
+let COMPONENT_CONNECTIONS_URL =
+  "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/component_connections.json";
 
 function getCSSVariableValue(name) {
   return getComputedStyle(document.documentElement)
@@ -81,9 +83,29 @@ let taskclusterLandingsArtifact = (async function () {
     // 30 minutes
     EXPIRE_CACHE.set("taskclusterLandingsArtifact", json, 60 * 30);
   } else {
-    console.log("cache hit", json);
+    console.log("taskclusterLandingsArtifact cache hit", json);
   }
 
+  return json;
+})();
+
+let taskclusterComponentConnectionsArtifact = (async function () {
+  let json = await EXPIRE_CACHE.get("taskclusterComponentConnectionsArtifact");
+  if (!json) {
+    let response = await fetch(COMPONENT_CONNECTIONS_URL);
+    json = await response.json();
+    // 30 minutes
+    EXPIRE_CACHE.set("taskclusterComponentConnectionsArtifact", json, 60 * 30);
+  } else {
+    console.log("taskclusterComponentConnectionsArtifact cache hit", json);
+  }
+
+  return json;
+})();
+
+
+export let componentConnections = (async function () {
+  let json = await taskclusterComponentConnectionsArtifact;
   return json;
 })();
 
