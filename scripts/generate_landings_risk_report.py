@@ -334,7 +334,6 @@ class LandingsRiskReportGenerator(object):
                         "testing": testing,
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
-                        "regressor": commit["bug_id"] in regressor_bug_ids,
                         "author": commit["author_email"],
                         "reviewers": commit["reviewers"],
                         "coverage": [
@@ -363,6 +362,7 @@ class LandingsRiskReportGenerator(object):
 
             commit_group = {
                 "id": bug_id,
+                "regressor": bug_id in regressor_bug_ids,
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"

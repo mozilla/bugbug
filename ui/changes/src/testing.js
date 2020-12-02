@@ -134,9 +134,7 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
     rerenderChart("backedout", backedoutData, grouping);
 
     let regressionData = await getTestingPolicySummaryData(grouping, (bug) => {
-      return bug.commits.some((c) => {
-        return c.regressor;
-      });
+      return bug.regressor;
     });
     rerenderChart("regression", regressionData, grouping);
   }
