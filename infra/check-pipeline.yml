@@ -33,7 +33,7 @@ tasks:
       image: mozilla/bugbug-base
       command:
         - bugbug-shadow-scheduler-stats
-        - 28
+        - "28"
 
       artifacts:
         public/shadow_scheduler_stats.json.zst:
