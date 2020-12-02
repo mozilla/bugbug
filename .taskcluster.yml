@@ -161,7 +161,6 @@ tasks:
                python -m coverage run setup.py sdist &&
                pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz &&
                pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
-               pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nn] &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
