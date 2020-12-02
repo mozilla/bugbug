@@ -2,6 +2,7 @@ import ApexCharts from 'apexcharts'
 
 // JSON from https://bugzilla.mozilla.org/show_bug.cgi?id=1669363
 import teamComponentMapping from './teams.json'
+import {componentConnections} from './common'
 
 function generateData(count, yrange) {
   var i = 0;
@@ -130,6 +131,8 @@ function rerender() {
 }
 
 (async function () {
+  let connections = await componentConnections;
+  console.log(connections);
   console.log(teamComponentMapping);
   rerender();
 })();
