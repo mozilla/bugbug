@@ -363,6 +363,9 @@ class LandingsRiskReportGenerator(object):
 
             commit_group = {
                 "id": bug_id,
+                "assignee": bug["assigned_to"]
+                if bug["assigned_to"] != "nobody@mozilla.org"
+                else None,
                 "versions": bugzilla.get_fixed_versions(bug),
                 "component": get_full_component(bug),
                 "summary": bug["summary"],
