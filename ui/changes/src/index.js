@@ -172,27 +172,23 @@ function addRow(bugSummary) {
     let risk_list = document.createElement("ul");
     let risk_column = row.insertCell(5);
 
-    for (let commit of bugSummary.commits) {
-      let risk = commit.risk;
-      let risk_list_item = document.createElement("li");
-      let riskText = document.createElement("a");
-      riskText.setAttribute(
-        "href",
-        `https://hg.mozilla.org/mozilla-central/rev/${commit.id}`
-      );
-      riskText.setAttribute("target", "_blank");
-      riskText.textContent = Math.round(100 * risk);
-      if (risk > 0.8) {
-        riskText.style.color = HIGH_RISK_COLOR;
-      } else if (risk > 0.5) {
-        riskText.style.color = MEDIUM_RISK_COLOR;
-      } else {
-        riskText.style.color = LOW_RISK_COLOR;
-      }
-      risk_list_item.append(riskText);
-      risk_list.append(risk_list_item);
+    let risk_text = document.createElement("span");
+    risk_text.textContent = `${bugSummary.risk_band} risk`;
+    if (bugSummary.risk_band == "l") {
+        // Lower than average risk.
+        risk_text.style.color = LOW_RISK_COLOR;
+        risk_text.textContent = 'Lower risk';
+    } else if (bugSummary.risk_band == "a") {
+        // Average risk.
+        risk_text.style.color = MEDIUM_RISK_COLOR;
+        risk_text.textContent = 'Average risk';
+    } else {
+        // Higher than average risk.
+        risk_text.style.color = HIGH_RISK_COLOR;
+        risk_text.textContent = 'Higher risk';
     }
-    risk_column.append(risk_list);
+
+    risk_column.append(risk_text);
   }
 }
 
