@@ -60,6 +60,7 @@ setup(
             "bugbug-past-bugs-by-unit = scripts.past_bugs_by_unit:main",
             "bugbug-testing-policy-stats = scripts.testing_policy_stats:main",
             "bugbug-generate-landings-risk-report = scripts.generate_landings_risk_report:main",
+            "bugbug-shadow-scheduler-stats = scripts.shadow_scheduler_stats:main",
         ]
     },
     classifiers=[
