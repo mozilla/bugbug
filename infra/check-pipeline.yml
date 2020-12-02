@@ -7,7 +7,7 @@ tasks:
     provisionerId: proj-bugbug
     workerType: batch
     payload:
-      maxRunTime: 43200
+      maxRunTime: 3600
       image: mozilla/bugbug-base
       command:
         - bugbug-check
