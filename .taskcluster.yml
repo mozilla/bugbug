@@ -44,7 +44,7 @@ tasks:
             - "git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r test-requirements.txt &&
                pre-commit run -a --show-diff-on-failure"
         metadata:
           name: bugbug lint
@@ -95,11 +95,11 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nlp-requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r extra-nn-requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r infra/spawn_pipeline_requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r extra-nlp-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r extra-nn-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r infra/spawn_pipeline_requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r test-requirements.txt &&
                hg clone -r 41809c2415d035efe933ca0edff833c2e45a4836 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                python -m pytest --cov=./ tests/test_*.py &&
                bash <(curl -s https://codecov.io/bash)"
@@ -127,9 +127,9 @@ tasks:
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
                cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir . &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service &&
+               pip install --disable-pip-version-check --no-cache-dir . &&
+               pip install --disable-pip-version-check --no-cache-dir -r test-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir ./http_service &&
                hg clone -r 41809c2415d035efe933ca0edff833c2e45a4836 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                pytest --cov=http_service http_service/tests/ -vvv &&
                bash <(curl -s https://codecov.io/bash)"
@@ -157,11 +157,11 @@ tasks:
                git clone --quiet ${repository} &&
                cd bugbug &&
                git -c advice.detachedHead=false checkout ${head_rev} &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir -r test-requirements.txt &&
+               pip install --disable-pip-version-check --no-cache-dir -r test-requirements.txt &&
                python -m coverage run setup.py sdist &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
-               pip install --disable-pip-version-check --quiet --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nn] &&
+               pip install --disable-pip-version-check --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz &&
+               pip install --disable-pip-version-check --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+               pip install --disable-pip-version-check --no-cache-dir dist/bugbug-$(cat VERSION).tar.gz[nn] &&
                bash <(curl -s https://codecov.io/bash)"
         metadata:
           name: bugbug packaging test
