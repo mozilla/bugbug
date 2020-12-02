@@ -363,6 +363,7 @@ class LandingsRiskReportGenerator(object):
 
             commit_group = {
                 "id": bug_id,
+                "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"
                 else None,
