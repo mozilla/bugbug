@@ -184,11 +184,13 @@ class RegressorFinder(object):
         db.download(BUG_FIXING_COMMITS_DB)
 
         logger.info("Get previously classified commits...")
-        prev_bug_fixing_commits = list(db.read(BUG_FIXING_COMMITS_DB))
         prev_bug_fixing_commits_nodes = set(
-            bug_fixing_commit["rev"] for bug_fixing_commit in prev_bug_fixing_commits
+            bug_fixing_commit["rev"]
+            for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
         )
-        logger.info(f"Already classified {len(prev_bug_fixing_commits)} commits...")
+        logger.info(
+            f"Already classified {len(prev_bug_fixing_commits_nodes)} commits..."
+        )
 
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
