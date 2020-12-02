@@ -106,6 +106,7 @@ let taskclusterComponentConnectionsArtifact = (async function () {
 
 export let componentConnections = (async function () {
   let json = await taskclusterComponentConnectionsArtifact;
+  return json;
 })();
 
 export let featureMetabugs = (async function () {
