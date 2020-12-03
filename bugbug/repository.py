@@ -1149,6 +1149,14 @@ def download_commits(
         if revs is None:
             revs = get_revs(hg, rev_start)
 
+        if save or not os.path.exists("data/component_mapping.lmdb"):
+            logger.info("Downloading file->component mapping...")
+            download_component_mapping()
+
+        if save or not os.path.exists("data/coverage_mapping.lmdb"):
+            logger.info("Downloading commit->coverage mapping...")
+            download_coverage_mapping()
+
         if len(revs) == 0:
             logger.info("No commits to analyze")
             return tuple()
@@ -1162,14 +1170,6 @@ def download_commits(
             commits = hg_log_multi(repo_dir, revs)
         else:
             commits = hg_log(hg, revs)
-
-        if save or not os.path.exists("data/component_mapping.lmdb"):
-            logger.info("Downloading file->component mapping...")
-            download_component_mapping()
-
-        if save or not os.path.exists("data/coverage_mapping.lmdb"):
-            logger.info("Downloading commit->coverage mapping...")
-            download_coverage_mapping()
 
         set_commits_to_ignore(hg, repo_dir, commits)
 

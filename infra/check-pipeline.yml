@@ -42,6 +42,8 @@ tasks:
         public/shadow_scheduler_stats.json.version:
           path: /data/shadow_scheduler_stats.json.version
           type: file
+    scopes:
+      - auth:aws-s3:read-write:communitytc-bugbug/*
     routes:
       - notify.email.release-mgmt-analysis@mozilla.com.on-failed
       - notify.irc-channel.#bugbug.on-failed
