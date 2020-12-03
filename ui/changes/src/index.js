@@ -37,6 +37,10 @@ let options = {
     value: null,
     type: "checkbox",
   },
+  whiteBoard: {
+    value: null,
+    type: "text",
+  },
 };
 
 if (new URLSearchParams(window.location.search).has("riskiness")) {
@@ -285,6 +289,7 @@ async function buildTable() {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
+  let whiteBoard = getOption("whiteBoard");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -331,6 +336,12 @@ async function buildTable() {
         }
         return commit.testing && testingTags.includes(commit.testing);
       })
+    );
+  }
+
+  if (whiteBoard) {
+    bugSummaries = bugSummaries.filter((bugSummary) =>
+      bugSummary["whiteboard"].includes(whiteBoard)
     );
   }
 
