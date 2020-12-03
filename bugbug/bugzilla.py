@@ -266,11 +266,15 @@ def count_bugs(bug_query_params):
     return count
 
 
-def get_product_component_csv_report():
-    since = datetime.utcnow() - relativedelta(months=12)
+def get_product_component_count(months: int = 12) -> Dict[str, int]:
+    """Returns a dictionary where keys are full components (in the form of
+    `{product}::{component}`) and the value of the number of bugs for the
+    given full components. Full component with 0 bugs are returned.
+    """
+    since = datetime.utcnow() - relativedelta(months=months)
 
     # Base params
-    url_params = {
+    params = {
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": since.strftime("%Y-%m-%d"),
@@ -281,16 +285,9 @@ def get_product_component_csv_report():
         "format": "table",
     }
 
-    return PRODUCT_COMPONENT_CSV_REPORT_URL, url_params
-
-
-def get_product_component_count():
-    """Returns a dictionary where keys are full components (in the form of
-    `{product}::{component}`) and the value of the number of bugs for the
-    given full components. Full component with 0 bugs are returned.
-    """
-    url, params = get_product_component_csv_report()
-    csv_file = utils.get_session("bugzilla").get(url, params=params)
+    csv_file = utils.get_session("bugzilla").get(
+        PRODUCT_COMPONENT_CSV_REPORT_URL, params=params
+    )
     csv_file.raise_for_status()
     content = csv_file.text
 
