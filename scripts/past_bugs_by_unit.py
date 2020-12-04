@@ -57,10 +57,23 @@ class PastBugsCollector(object):
         # TODO: Support "moving" past bugs between files when they are renamed and between functions when they are
         # moved across files.
 
-        past_regressions_by_file: Dict[str, List[int]] = defaultdict(list)
-        past_fixed_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
-        past_regression_blocked_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
-        past_fixed_bug_blocked_bugs_by_file: Dict[str, List[int]] = defaultdict(list)
+        by_dimensions = ["file", "directory", "component"]
+
+        def dimension_to_field(dimension: str) -> str:
+            return f"{dimension}s" if dimension != "directory" else "directories"
+
+        past_regressions_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        past_fixed_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        past_regression_blocked_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        past_fixed_bug_blocked_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         past_regressions_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
@@ -81,14 +94,15 @@ class PastBugsCollector(object):
             bug = bug_map[commit["bug_id"]]
 
             if len(bug["regressions"]) > 0:
-                for path in commit["files"]:
-                    past_regressions_by_file[path].extend(
-                        bug_id for bug_id in bug["regressions"] if bug_id in bug_map
-                    )
+                for dimension in by_dimensions:
+                    for path in commit[dimension_to_field(dimension)]:
+                        past_regressions_by[dimension][path].extend(
+                            bug_id for bug_id in bug["regressions"] if bug_id in bug_map
+                        )
 
-                    past_regression_blocked_bugs_by_file[path].extend(
-                        bugzilla.find_blocked_by(bug_map, bug)
-                    )
+                        past_regression_blocked_bugs_by[dimension][path].extend(
+                            bugzilla.find_blocked_by(bug_map, bug)
+                        )
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
@@ -101,12 +115,13 @@ class PastBugsCollector(object):
                         )
 
             if commit["node"] in bug_fixing_commits_nodes:
-                for path in commit["files"]:
-                    past_fixed_bugs_by_file[path].append(bug["id"])
+                for dimension in by_dimensions:
+                    for path in commit[dimension_to_field(dimension)]:
+                        past_fixed_bugs_by[dimension][path].append(bug["id"])
 
-                    past_fixed_bug_blocked_bugs_by_file[path].extend(
-                        bugzilla.find_blocked_by(bug_map, bug)
-                    )
+                        past_fixed_bug_blocked_bugs_by[dimension][path].extend(
+                            bugzilla.find_blocked_by(bug_map, bug)
+                        )
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
@@ -135,69 +150,80 @@ class PastBugsCollector(object):
 
             return results
 
-        past_regression_summaries_by_file = {
-            path: _transform(bug_ids)
-            for path, bug_ids in past_regressions_by_file.items()
-        }
-        past_fixed_bug_summaries_by_file = {
-            path: _transform(bug_ids)
-            for path, bug_ids in past_fixed_bugs_by_file.items()
-        }
-        past_regression_blocked_bug_summaries_by_file = {
-            path: _transform(bug_ids)
-            for path, bug_ids in past_regression_blocked_bugs_by_file.items()
-        }
-        past_fixed_bug_blocked_bug_summaries_by_file = {
-            path: _transform(bug_ids)
-            for path, bug_ids in past_fixed_bug_blocked_bugs_by_file.items()
-        }
-        past_regression_summaries_by_function = {
-            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
-            for path, funcs_bugs in past_regressions_by_function.items()
-        }
-        past_fixed_bug_summaries_by_function = {
-            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
-            for path, funcs_bugs in past_fixed_bugs_by_function.items()
-        }
-        past_regression_blocked_bug_summaries_by_function = {
-            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
-            for path, funcs_bugs in past_regression_blocked_bugs_by_function.items()
-        }
-        past_fixed_bug_blocked_bug_summaries_by_function = {
-            path: {func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()}
-            for path, funcs_bugs in past_fixed_bug_blocked_bugs_by_function.items()
-        }
+        def past_bug_ids_to_summaries(
+            past_bugs_by: Dict[str, List[int]]
+        ) -> Dict[str, List[dict]]:
+            return {path: _transform(bug_ids) for path, bug_ids in past_bugs_by.items()}
 
-        with open("data/past_regressions_by_file.json", "w") as f:
-            json.dump(past_regression_summaries_by_file, f)
-        zstd_compress("data/past_regressions_by_file.json")
+        for dimension in by_dimensions:
+            with open(f"data/past_regressions_by_{dimension}.json", "w") as f:
+                json.dump(past_bug_ids_to_summaries(past_regressions_by[dimension]), f)
+            zstd_compress(f"data/past_regressions_by_{dimension}.json")
 
-        with open("data/past_fixed_bugs_by_file.json", "w") as f:
-            json.dump(past_fixed_bug_summaries_by_file, f)
-        zstd_compress("data/past_fixed_bugs_by_file.json")
+            with open(f"data/past_fixed_bugs_by_{dimension}.json", "w") as f:
+                json.dump(past_bug_ids_to_summaries(past_fixed_bugs_by[dimension]), f)
+            zstd_compress(f"data/past_fixed_bugs_by_{dimension}.json")
 
-        with open("data/past_regression_blocked_bugs_by_file.json", "w") as f:
-            json.dump(past_regression_blocked_bug_summaries_by_file, f)
-        zstd_compress("data/past_regression_blocked_bugs_by_file.json")
+            with open(
+                f"data/past_regression_blocked_bugs_by_{dimension}.json", "w"
+            ) as f:
+                json.dump(
+                    past_bug_ids_to_summaries(
+                        past_regression_blocked_bugs_by[dimension]
+                    ),
+                    f,
+                )
+            zstd_compress(f"data/past_regression_blocked_bugs_by_{dimension}.json")
 
-        with open("data/past_fixed_bug_blocked_bugs_by_file.json", "w") as f:
-            json.dump(past_fixed_bug_blocked_bug_summaries_by_file, f)
-        zstd_compress("data/past_fixed_bug_blocked_bugs_by_file.json")
+            with open(
+                f"data/past_fixed_bug_blocked_bugs_by_{dimension}.json", "w"
+            ) as f:
+                json.dump(
+                    past_bug_ids_to_summaries(
+                        past_fixed_bug_blocked_bugs_by[dimension]
+                    ),
+                    f,
+                )
+            zstd_compress(f"data/past_fixed_bug_blocked_bugs_by_{dimension}.json")
+
+        def past_function_bug_ids_to_summaries(
+            past_bugs: Dict[str, Dict[str, List[int]]]
+        ) -> Dict[str, Dict[str, List[dict]]]:
+            return {
+                path: {
+                    func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()
+                }
+                for path, funcs_bugs in past_bugs.items()
+            }
 
         with open("data/past_regressions_by_function.json", "w") as f:
-            json.dump(past_regression_summaries_by_function, f)
+            json.dump(
+                past_function_bug_ids_to_summaries(past_regressions_by_function), f
+            )
         zstd_compress("data/past_regressions_by_function.json")
 
         with open("data/past_fixed_bugs_by_function.json", "w") as f:
-            json.dump(past_fixed_bug_summaries_by_function, f)
+            json.dump(
+                past_function_bug_ids_to_summaries(past_fixed_bugs_by_function), f
+            )
         zstd_compress("data/past_fixed_bugs_by_function.json")
 
         with open("data/past_regression_blocked_bugs_by_function.json", "w") as f:
-            json.dump(past_regression_blocked_bug_summaries_by_function, f)
+            json.dump(
+                past_function_bug_ids_to_summaries(
+                    past_regression_blocked_bugs_by_function
+                ),
+                f,
+            )
         zstd_compress("data/past_regression_blocked_bugs_by_function.json")
 
         with open("data/past_fixed_bug_blocked_bugs_by_function.json", "w") as f:
-            json.dump(past_fixed_bug_blocked_bug_summaries_by_function, f)
+            json.dump(
+                past_function_bug_ids_to_summaries(
+                    past_fixed_bug_blocked_bugs_by_function
+                ),
+                f,
+            )
         zstd_compress("data/past_fixed_bug_blocked_bugs_by_function.json")
 
 

@@ -792,6 +792,30 @@ tasks:
           - "bugbug-past-bugs-by-unit"
 
         artifacts:
+          public/past_regressions_by_component.json.zst:
+            path: /data/past_regressions_by_component.json.zst
+            type: file
+          public/past_fixed_bugs_by_component.json.zst:
+            path: /data/past_fixed_bugs_by_component.json.zst
+            type: file
+          public/past_regression_blocked_bugs_by_component.json.zst:
+            path: /data/past_regression_blocked_bugs_by_component.json.zst
+            type: file
+          public/past_fixed_bug_blocked_bugs_by_component.json.zst:
+            path: /data/past_fixed_bug_blocked_bugs_by_component.json.zst
+            type: file
+          public/past_regressions_by_directory.json.zst:
+            path: /data/past_regressions_by_directory.json.zst
+            type: file
+          public/past_fixed_bugs_by_directory.json.zst:
+            path: /data/past_fixed_bugs_by_directory.json.zst
+            type: file
+          public/past_regression_blocked_bugs_by_directory.json.zst:
+            path: /data/past_regression_blocked_bugs_by_directory.json.zst
+            type: file
+          public/past_fixed_bug_blocked_bugs_by_directory.json.zst:
+            path: /data/past_fixed_bug_blocked_bugs_by_directory.json.zst
+            type: file
           public/past_regressions_by_file.json.zst:
             path: /data/past_regressions_by_file.json.zst
             type: file
