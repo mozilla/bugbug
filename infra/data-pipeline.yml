@@ -241,8 +241,6 @@ tasks:
       provisionerId: proj-bugbug
       workerType: batch
       payload:
-        env:
-          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -264,7 +262,6 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -284,8 +281,6 @@ tasks:
       provisionerId: proj-bugbug
       workerType: batch
       payload:
-        env:
-          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -307,7 +302,6 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -327,8 +321,6 @@ tasks:
       provisionerId: proj-bugbug
       workerType: compute-small
       payload:
-        env:
-          TC_SECRET_ID: project/bugbug/production
         maxRunTime: 259200
         image: mozilla/bugbug-base:${version}
         command:
@@ -350,7 +342,6 @@ tasks:
           taskclusterProxy:
             true
       scopes:
-        - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
