@@ -42,6 +42,10 @@ tasks:
         public/shadow_scheduler_stats.json.version:
           path: /data/shadow_scheduler_stats.json.version
           type: file
+
+      features:
+        taskclusterProxy:
+          true
     scopes:
       - auth:aws-s3:read-write:communitytc-bugbug/*
     routes:
