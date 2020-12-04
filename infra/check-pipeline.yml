@@ -34,15 +34,6 @@ tasks:
       command:
         - bugbug-shadow-scheduler-stats
         - "28"
-
-      artifacts:
-        public/shadow_scheduler_stats.json.zst:
-          path: /data/shadow_scheduler_stats.json.zst
-          type: file
-        public/shadow_scheduler_stats.json.version:
-          path: /data/shadow_scheduler_stats.json.version
-          type: file
-
       features:
         taskclusterProxy:
           true
