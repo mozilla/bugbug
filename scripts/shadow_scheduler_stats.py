@@ -5,6 +5,7 @@
 
 import argparse
 import logging
+import traceback
 from datetime import datetime
 from typing import Iterator
 
@@ -88,7 +89,10 @@ def go(days: int) -> None:
 
     def results() -> Iterator[dict]:
         for i, push in enumerate(tqdm(pushes)):
-            yield analyze_shadow_schedulers(push)
+            try:
+                yield analyze_shadow_schedulers(push)
+            except Exception:
+                traceback.print_exc()
 
             # Upload every 42 pushes.
             if (i + 1) % 42 == 0:
