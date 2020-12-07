@@ -91,7 +91,7 @@ def go(days: int) -> None:
             yield analyze_shadow_schedulers(push)
 
             # Upload every 42 pushes.
-            if i % 42 == 0:
+            if (i + 1) % 42 == 0:
                 compress_and_upload()
 
     db.append(SHADOW_SCHEDULER_STATS_DB, results())
