@@ -16,7 +16,7 @@
     "snowpack": "^2.18.1"
   },
   "dependencies": {
-    "apexcharts": "^3.6.12",
+    "apexcharts": "^3.22.3",
     "localforage": "^1.9.0",
     "proposal-temporal": "^0.6.0"
   }
