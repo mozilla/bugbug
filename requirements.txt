@@ -25,6 +25,6 @@ shap[plots]==0.37.0
 tabulate==0.8.7
 taskcluster==38.0.6
 tenacity==6.2.0
-tqdm==4.54.0
+tqdm==4.54.1
 xgboost==1.2.1
 zstandard==0.14.0
