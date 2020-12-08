@@ -40,6 +40,7 @@ PRODUCTS = (
     # 'Firefox for iOS',
     "Firefox Health Report",
     # 'Focus',
+    "GeckoView",
     # 'Hello (Loop)',
     "Invalid Bugs",
     "NSPR",
