@@ -6,7 +6,7 @@
 import csv
 import re
 from datetime import datetime
-from typing import Dict, Iterator, List, NewType, Optional
+from typing import Dict, Iterable, Iterator, List, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -164,17 +164,17 @@ def get_ids_between(date_from, date_to, security=False):
     return get_ids(params)
 
 
-def download_bugs(bug_ids, products=None, security=False):
+def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
     old_bug_count = 0
-    new_bug_ids = set(int(bug_id) for bug_id in bug_ids)
+    new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs(include_invalid=True):
         old_bug_count += 1
-        if int(bug["id"]) in new_bug_ids:
-            new_bug_ids.remove(int(bug["id"]))
+        if int(bug["id"]) in new_bug_ids_set:
+            new_bug_ids_set.remove(int(bug["id"]))
 
     print(f"Loaded {old_bug_count} bugs.")
 
-    new_bug_ids = sorted(list(new_bug_ids))
+    new_bug_ids = sorted(list(new_bug_ids_set))
 
     chunks = (
         new_bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
@@ -190,9 +190,6 @@ def download_bugs(bug_ids, products=None, security=False):
 
         if not security:
             new_bugs = [bug for bug in new_bugs.values() if len(bug["groups"]) == 0]
-
-        if products is not None:
-            new_bugs = [bug for bug in new_bugs.values() if bug["product"] in products]
 
         return new_bugs
 
