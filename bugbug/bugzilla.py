@@ -169,8 +169,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs(include_invalid=True):
         old_bug_count += 1
-        if int(bug["id"]) in new_bug_ids_set:
-            new_bug_ids_set.remove(int(bug["id"]))
+        new_bug_ids_set.discard(int(bug["id"]))
 
     print(f"Loaded {old_bug_count} bugs.")
 
