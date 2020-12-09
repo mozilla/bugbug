@@ -29,14 +29,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-PAST_REGRESSIONS_BY_FILE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regressions_by_file.json.zst"
-PAST_FIXED_BUGS_BY_FILE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bugs_by_file.json.zst"
-PAST_REGRESSION_BLOCKED_BUGS_BY_FILE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regression_blocked_bugs_by_file.json.zst"
-PAST_FIXED_BUG_BLOCKED_BUGS_BY_FILE_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bug_blocked_bugs_by_file.json.zst"
-PAST_REGRESSIONS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regressions_by_function.json.zst"
-PAST_FIXED_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bugs_by_function.json.zst"
-PAST_REGRESSION_BLOCKED_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regression_blocked_bugs_by_function.json.zst"
-PAST_FIXED_BUG_BLOCKED_BUGS_BY_FUNCTION_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bug_blocked_bugs_by_function.json.zst"
+PAST_REGRESSIONS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regressions_by_{dimension}.json.zst"
+PAST_FIXED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bugs_by_{dimension}.json.zst"
+PAST_REGRESSION_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regression_blocked_bugs_by_{dimension}.json.zst"
+PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bug_blocked_bugs_by_{dimension}.json.zst"
 
 
 def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
@@ -210,14 +206,24 @@ class LandingsRiskReportGenerator(object):
             with open(path, "r") as f:
                 return json.load(f)
 
-        past_regressions_by_file = _download_past_bugs(PAST_REGRESSIONS_BY_FILE_URL)
-        past_fixed_bugs_by_file = _download_past_bugs(PAST_FIXED_BUGS_BY_FILE_URL)
-        past_regression_blocked_bugs_by_file = _download_past_bugs(
-            PAST_REGRESSION_BLOCKED_BUGS_BY_FILE_URL
-        )
-        past_fixed_bug_blocked_bugs_by_file = _download_past_bugs(
-            PAST_FIXED_BUG_BLOCKED_BUGS_BY_FILE_URL
-        )
+        past_regressions_by = {}
+        past_fixed_bugs_by = {}
+        past_regression_blocked_bugs_by = {}
+        past_fixed_bug_blocked_bugs_by = {}
+
+        for dimension in ["component", "directory", "file", "function"]:
+            past_regressions_by[dimension] = _download_past_bugs(
+                PAST_REGRESSIONS_BY_URL.format(dimension=dimension)
+            )
+            past_fixed_bugs_by[dimension] = _download_past_bugs(
+                PAST_FIXED_BUGS_BY_URL.format(dimension=dimension)
+            )
+            past_regression_blocked_bugs_by[dimension] = _download_past_bugs(
+                PAST_REGRESSION_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
+            )
+            past_fixed_bug_blocked_bugs_by[dimension] = _download_past_bugs(
+                PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
+            )
 
         path_to_component = repository.get_component_mapping()
 
@@ -242,45 +248,103 @@ class LandingsRiskReportGenerator(object):
             assert False
 
         def get_prev_bugs(
+            past_bugs_by: dict, commit: repository.CommitDict, component: str = None
+        ) -> List[dict]:
+            paths = [
+                path
+                for path in commit["files"]
+                if component is None
+                or (
+                    path.encode("utf-8") in path_to_component
+                    and path_to_component[path.encode("utf-8")]
+                    == component.encode("utf-8")
+                )
+            ]
+
+            past_bugs = []
+
+            for path, f_group in commit["functions"].items():
+                if path not in paths:
+                    continue
+
+                if path not in past_bugs_by["function"]:
+                    continue
+
+                found = False
+                for f in f_group:
+                    if f[0] not in past_bugs_by["function"][path]:
+                        continue
+
+                    found = True
+                    past_bugs += past_bugs_by["function"][path][f[0]]
+
+                if found:
+                    paths.remove(path)
+
+            for path in paths:
+                if path in past_bugs_by["file"]:
+                    past_bugs += past_bugs_by["file"][path]
+                    paths.remove(path)
+
+            for path, directories in zip(paths, repository.get_directories(paths)):
+                found = False
+                for directory in directories:
+                    if directory in past_bugs_by["directory"]:
+                        found = True
+                        past_bugs += past_bugs_by["directory"][directory]
+
+                if found:
+                    paths.remove(path)
+
+            components = [
+                path_to_component[path.encode("utf-8")].tobytes().decode("utf-8")
+                for path in paths
+                if path.encode("utf-8") in path_to_component
+            ]
+
+            for component in components:
+                if component in past_bugs_by["component"]:
+                    past_bugs += past_bugs_by["component"][component]
+
+            return past_bugs
+
+        def get_prev_bugs_stats(
             commit_group: dict,
             commit_list: List[repository.CommitDict],
             component: str = None,
         ) -> None:
-            # TODO: Use past regressions by function information too (maybe first by function and if no results by file and if no results by directory/component? or prioritize function and recentness?)
-
             # Find previous regressions occurred in the same files as those touched by these commits.
             # And find previous bugs that were fixed by touching the same files as these commits.
             # And find previous bugs that were blocked by regressions occurred in the same files as those touched by these commits.
             # And find previous bugs that were blocked by bugs that were fixed by touching the same files as those touched by these commits.
-            prev_regressions: List[Dict[str, Any]] = []
-            prev_fixed_bugs: List[Dict[str, Any]] = []
-            prev_regression_blocked_bugs: List[Dict[str, Any]] = []
-            prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = []
-            for commit in commit_list:
-                for path in commit["files"]:
-                    if (
-                        component is not None
-                        and path.encode("utf-8") in path_to_component
-                        and path_to_component[path.encode("utf-8")]
-                        != component.encode("utf-8")
-                    ):
-                        continue
-
-                    if path in past_regressions_by_file:
-                        prev_regressions += past_regressions_by_file[path]
-
-                    if path in past_fixed_bugs_by_file:
-                        prev_fixed_bugs += past_fixed_bugs_by_file[path]
-
-                    if path in past_regression_blocked_bugs_by_file:
-                        prev_regression_blocked_bugs += (
-                            past_regression_blocked_bugs_by_file[path]
-                        )
-
-                    if path in past_fixed_bug_blocked_bugs_by_file:
-                        prev_fixed_bug_blocked_bugs += (
-                            past_fixed_bug_blocked_bugs_by_file[path]
-                        )
+            prev_regressions: List[Dict[str, Any]] = sum(
+                (
+                    get_prev_bugs(past_regressions_by, commit, component)
+                    for commit in commit_list
+                ),
+                [],
+            )
+            prev_fixed_bugs: List[Dict[str, Any]] = sum(
+                (
+                    get_prev_bugs(past_fixed_bugs_by, commit, component)
+                    for commit in commit_list
+                ),
+                [],
+            )
+            prev_regression_blocked_bugs: List[Dict[str, Any]] = sum(
+                (
+                    get_prev_bugs(past_regression_blocked_bugs_by, commit, component)
+                    for commit in commit_list
+                ),
+                [],
+            )
+            prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = sum(
+                (
+                    get_prev_bugs(past_fixed_bug_blocked_bugs_by, commit, component)
+                    for commit in commit_list
+                ),
+                [],
+            )
 
             prev_regressions = _deduplicate(prev_regressions)
             prev_fixed_bugs = _deduplicate(prev_fixed_bugs)
@@ -380,7 +444,7 @@ class LandingsRiskReportGenerator(object):
                 ),
             }
 
-            get_prev_bugs(commit_group, commit_list)
+            get_prev_bugs_stats(commit_group, commit_list)
 
             commit_groups.append(commit_group)
 
@@ -456,7 +520,7 @@ class LandingsRiskReportGenerator(object):
                 if component in component_failures
                 else {},
             }
-            get_prev_bugs(commit_group, list(commit_iter), component)
+            get_prev_bugs_stats(commit_group, list(commit_iter), component)
             commit_groups.append(commit_group)
 
         with open("component_connections.json", "w") as f:
