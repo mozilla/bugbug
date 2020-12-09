@@ -732,7 +732,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
 
         reviewers = (
             list(set(sys.intern(r) for r in rev[7].decode("utf-8").split(" ")))
-            if rev[7] != b""
+            if rev[7] not in (b"", b"testonly", b"gaia-bump", b"me")
             else []
         )
 
