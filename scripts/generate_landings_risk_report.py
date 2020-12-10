@@ -149,6 +149,8 @@ class LandingsRiskReportGenerator(object):
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(bugs)
 
+        component_team_mapping = bugzilla.get_component_team_mapping()
+
         bugs_set = set(bugs)
 
         commits = [
@@ -433,6 +435,9 @@ class LandingsRiskReportGenerator(object):
                 else None,
                 "versions": bugzilla.get_fixed_versions(bug),
                 "component": get_full_component(bug),
+                "team": bugzilla.component_to_team(
+                    component_team_mapping, bug["product"], bug["component"]
+                ),
                 "summary": bug["summary"],
                 "date": max(
                     dateutil.parser.parse(commit["pushdate"]) for commit in commit_list
