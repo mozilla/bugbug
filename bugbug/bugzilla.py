@@ -308,3 +308,35 @@ def get_product_component_count(months: int = 12) -> Dict[str, int]:
             bugs_number[full_comp] = value
 
     return bugs_number
+
+
+def get_component_team_mapping() -> dict:
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/config/component_teams",
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def component_to_team(
+    component_team_mapping: dict,
+    product: str,
+    component: str,
+) -> Optional[str]:
+    for team, products_data in component_team_mapping.items():
+        if product not in products_data:
+            continue
+
+        product_data = products_data[product]
+        if (
+            product_data["all_components"]
+            or component in product_data["named_components"]
+            or any(
+                component.startswith(prefix)
+                for prefix in product_data["prefixed_components"]
+            )
+        ):
+            return team
+
+    return None

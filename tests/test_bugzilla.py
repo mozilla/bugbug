@@ -3,6 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from typing import Any
+
+import pytest
+
 from bugbug import bugzilla
 
 
@@ -73,4 +77,77 @@ def test_get_fixed_versions():
             }
         )
         == [82]
+    )
+
+
+@pytest.fixture
+def component_team_mapping():
+    return {
+        "Crypto": {
+            "Core": {
+                "all_components": False,
+                "named_components": ["Security: PSM"],
+                "prefixed_components": [],
+            },
+            "JSS": {"all_components": True},
+            "NSS": {"all_components": True},
+        },
+        "GFX": {
+            "Core": {
+                "all_components": False,
+                "named_components": [
+                    "Canvas: 2D",
+                    "ImageLib",
+                    "Panning and Zooming",
+                    "Web Painting",
+                ],
+                "prefixed_components": ["GFX", "Graphics"],
+            }
+        },
+    }
+
+
+def test_get_component_team_mapping(
+    responses: Any, component_team_mapping: dict
+) -> None:
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/config/component_teams",
+        status=200,
+        json=component_team_mapping,
+    )
+
+    assert bugzilla.get_component_team_mapping() == component_team_mapping
+
+
+def test_component_to_team(component_team_mapping: dict) -> None:
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "Security: PSM")
+        == "Crypto"
+    )
+    assert (
+        bugzilla.component_to_team(
+            component_team_mapping, "JSS", "any component you want!"
+        )
+        == "Crypto"
+    )
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "Canvas: 2D")
+        == "GFX"
+    )
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "ImageLib") == "GFX"
+    )
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "ImageLib2") is None
+    )
+    assert (
+        bugzilla.component_to_team(
+            component_team_mapping, "Core", "GFXsomethingsomething"
+        )
+        == "GFX"
+    )
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "Graphics: OK")
+        == "GFX"
     )
