@@ -41,6 +41,10 @@ let options = {
     value: null,
     type: "text",
   },
+  components: {
+    value: null,
+    type: "select",
+  },
 };
 
 if (new URLSearchParams(window.location.search).has("riskiness")) {
@@ -75,6 +79,30 @@ function getOptionType(name) {
 
 function setOption(name, value) {
   return (options[name].value = value);
+}
+
+async function buildComponentsSelect() {
+  let componentSelect = document.getElementById("components");
+
+  let data = await landingsData;
+
+  let allComponents = new Set();
+  for (let landings of Object.values(data)) {
+    for (let landing of landings) {
+      allComponents.add(landing["component"]);
+    }
+  }
+
+  let components = [...allComponents];
+  components.sort();
+
+  for (let component of components) {
+    let option = document.createElement("option");
+    option.setAttribute("value", component);
+    option.textContent = component;
+    option.selected = true;
+    componentSelect.append(option);
+  }
 }
 
 function addRow(bugSummary) {
@@ -289,6 +317,7 @@ async function buildTable() {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
+  let components = getOption("components");
   let whiteBoard = getOption("whiteBoard");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
@@ -339,6 +368,12 @@ async function buildTable() {
     );
   }
 
+  if (components) {
+    bugSummaries = bugSummaries.filter((bugSummary) =>
+      components.includes(bugSummary["component"])
+    );
+  }
+
   if (whiteBoard) {
     bugSummaries = bugSummaries.filter((bugSummary) =>
       bugSummary["whiteboard"].includes(whiteBoard)
@@ -374,8 +409,9 @@ function rebuildTable() {
   buildTable();
 }
 
-(function init() {
+(async function init() {
   buildMetabugsDropdown();
+  await buildComponentsSelect();
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
