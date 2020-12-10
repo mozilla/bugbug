@@ -120,6 +120,10 @@ class RegressorModel(CommitModel):
             if r["bug_introducing_rev"]
         )
 
+        regressor_bugs = set(
+            sum((bug["regressed_by"] for bug in bugzilla.get_bugs()), [])
+        )
+
         for commit_data in repository.get_commits():
             if commit_data["backedoutby"]:
                 continue
@@ -134,7 +138,7 @@ class RegressorModel(CommitModel):
                 continue
 
             node = commit_data["node"]
-            if node in regressors:
+            if node in regressors or commit_data["bug_id"] in regressor_bugs:
                 classes[node] = 1
             else:
                 # The labels we have are only from two years and six months ago (see the regressor finder script).
@@ -267,7 +271,7 @@ class RegressorModel(CommitModel):
         # Step 4. Define risk band 2 (average risk).
         results.sort(key=lambda x: x[0])
         for prob_start in np.arange(max_band1_prob / 2, max_band1_prob + 0.02, 0.01):
-            for prob_end in np.arange(min_band3_prob, 0.99, 0.01):
+            for prob_end in np.arange(min_band3_prob - 0.02, 0.99, 0.01):
                 total_landings = 0
                 total_regressions = 0
                 for prob, is_reg in results:
