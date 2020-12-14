@@ -140,53 +140,53 @@ export let landingsData = (async function () {
   return returnedObject;
 })();
 
-export function getNewTestingTagCountObject() {
-  let obj = {};
-  for (let tag in TESTING_TAGS) {
-    obj[tag] = 0;
+export class Counter {
+  constructor() {
+    return new Proxy(
+      {},
+      {
+        get: (target, name) => (name in target ? target[name] : 0)
+      }
+    );
   }
-  return obj;
 }
 
-export async function getTestingPolicySummaryData(grouping = "daily", filter) {
-  let data = await landingsData;
+export function getSummaryData(
+  bugSummaries,
+  grouping = "daily",
+  startDate,
+  counter,
+  filter
+) {
+  let dates = new Set(bugSummaries.map(summary => summary.date));
 
-  // console.log(data);
-  // let startDate = grouping == "daily" ? "2020-09-15" : "2020-08-16";
-  let startDate = "2020-09-01";
   let dailyData = {};
-  for (let date in data) {
-    // Ignore data before the testing policy took place.
+  for (let date of dates) {
     if (
-      Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(date),
-        Temporal.PlainDate.from(startDate)
-      ) < 1
+      Temporal.PlainDate.compare(Temporal.PlainDate.from(date), startDate) < 1
     ) {
       continue;
     }
 
-    let returnedDataForDate = getNewTestingTagCountObject();
-
-    let originalData = data[date];
-    for (let bug of originalData) {
-      if (filter && !filter(bug)) {
-        continue;
-      }
-      for (let commit of bug.commits) {
-        if (!commit.testing ) {
-          returnedDataForDate.unknown++;
-        } else {
-          returnedDataForDate[commit.testing] =
-            returnedDataForDate[commit.testing] + 1;
-        }
-      }
-    }
-
-    dailyData[date] = returnedDataForDate;
+    dailyData[date] = new Counter();
   }
 
-  console.log(dailyData);
+  for (let summary of bugSummaries) {
+    let counterObj = dailyData[summary.date];
+    if (!counterObj) {
+      continue;
+    }
+
+    if (filter && !filter(summary)) {
+      continue;
+    }
+
+    counter(counterObj, summary);
+  }
+
+  let labels = new Set(
+    Object.values(dailyData).flatMap(data => Object.keys(data))
+  );
 
   if (grouping == "weekly") {
     let weeklyData = {};
@@ -195,11 +195,11 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
       let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
 
       if (!weeklyData[weekStart]) {
-        weeklyData[weekStart] = getNewTestingTagCountObject();
+        weeklyData[weekStart] = new Counter();
       }
 
-      for (let tag in dailyData[daily]) {
-        weeklyData[weekStart][tag] += dailyData[daily][tag];
+      for (let label of labels) {
+        weeklyData[weekStart][label] += dailyData[daily][label];
       }
     }
 
@@ -211,15 +211,35 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
       let yearMonth = date.toYearMonth();
 
       if (!monthlyData[yearMonth]) {
-        monthlyData[yearMonth] = getNewTestingTagCountObject();
+        monthlyData[yearMonth] = new Counter();
       }
 
-      for (let tag in dailyData[daily]) {
-        monthlyData[yearMonth][tag] += dailyData[daily][tag];
+      for (let label of labels) {
+        monthlyData[yearMonth][label] += dailyData[daily][label];
       }
     }
     return monthlyData;
   }
 
   return dailyData;
+}
+
+export async function getTestingPolicySummaryData(grouping = "daily", filter) {
+  let bugSummaries = [].concat.apply([], Object.values(await landingsData));
+
+  return getSummaryData(
+    bugSummaries,
+    grouping,
+    Temporal.PlainDate.from("2020-09-01"), // Ignore data before the testing policy took place.
+    (counterObj, bug) => {
+      for (let commit of bug.commits) {
+        if (!commit.testing) {
+          counterObj.unknown++;
+        } else {
+          counterObj[commit.testing] += 1;
+        }
+      }
+    },
+    filter
+  );
 }
