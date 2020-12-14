@@ -227,15 +227,15 @@ function addRow(bugSummary) {
     if (bugSummary.risk_band == "l") {
         // Lower than average risk.
         risk_text.style.color = LOW_RISK_COLOR;
-        risk_text.textContent = 'Lower risk';
+        risk_text.textContent = 'Lower';
     } else if (bugSummary.risk_band == "a") {
         // Average risk.
         risk_text.style.color = MEDIUM_RISK_COLOR;
-        risk_text.textContent = 'Average risk';
+        risk_text.textContent = 'Average';
     } else {
         // Higher than average risk.
         risk_text.style.color = HIGH_RISK_COLOR;
-        risk_text.textContent = 'Higher risk';
+        risk_text.textContent = 'Higher';
     }
 
     risk_column.append(risk_text);
