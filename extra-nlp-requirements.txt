@@ -1,4 +1,4 @@
-elasticsearch==7.10.0
+elasticsearch==7.10.1
 gensim==3.8.3
 nltk==3.5
 pyemd==0.5.1
