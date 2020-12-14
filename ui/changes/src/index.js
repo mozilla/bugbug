@@ -396,7 +396,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
       curve: "smooth"
     },
     title: {
-      text: "Evolution of low/medium/high risk changes",
+      text: "Evolution of lower/average/higher risk changes",
       align: "left"
     },
     grid: {
