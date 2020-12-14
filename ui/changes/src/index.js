@@ -35,10 +35,6 @@ let options = {
     value: null,
     type: "text",
   },
-  riskinessEnabled: {
-    value: null,
-    type: "checkbox",
-  },
   whiteBoard: {
     value: null,
     type: "text",
@@ -53,9 +49,6 @@ let options = {
   },
 };
 
-if (new URLSearchParams(window.location.search).has("riskiness")) {
-  document.querySelector("#riskinessEnabled").checked = true;
-}
 let sortBy = ["Date", "DESC"];
 let resultSummary = document.getElementById("result-summary");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
@@ -218,28 +211,26 @@ function addRow(bugSummary) {
     coverage_column.textContent = "";
   }
 
-  if (getOption("riskinessEnabled")) {
-    let risk_list = document.createElement("ul");
-    let risk_column = row.insertCell(4);
+  let risk_list = document.createElement("ul");
+  let risk_column = row.insertCell(4);
 
-    let risk_text = document.createElement("span");
-    risk_text.textContent = `${bugSummary.risk_band} risk`;
-    if (bugSummary.risk_band == "l") {
-        // Lower than average risk.
-        risk_text.style.color = LOW_RISK_COLOR;
-        risk_text.textContent = 'Lower';
-    } else if (bugSummary.risk_band == "a") {
-        // Average risk.
-        risk_text.style.color = MEDIUM_RISK_COLOR;
-        risk_text.textContent = 'Average';
-    } else {
-        // Higher than average risk.
-        risk_text.style.color = HIGH_RISK_COLOR;
-        risk_text.textContent = 'Higher';
-    }
-
-    risk_column.append(risk_text);
+  let risk_text = document.createElement("span");
+  risk_text.textContent = `${bugSummary.risk_band} risk`;
+  if (bugSummary.risk_band == "l") {
+    // Lower than average risk.
+    risk_text.style.color = LOW_RISK_COLOR;
+    risk_text.textContent = 'Lower';
+  } else if (bugSummary.risk_band == "a") {
+    // Average risk.
+    risk_text.style.color = MEDIUM_RISK_COLOR;
+    risk_text.textContent = 'Average';
+  } else {
+    // Higher than average risk.
+    risk_text.style.color = HIGH_RISK_COLOR;
+    risk_text.textContent = 'Higher';
   }
+
+  risk_column.append(risk_text);
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
@@ -574,15 +565,6 @@ async function buildTable(rerender = true) {
     } else {
       bugSummaries.sort(sortFunction);
     }
-  }
-
-  if (getOption("riskinessEnabled")) {
-    // bugSummaries.sort(
-    //   (bugSummary1, bugSummary2) => bugSummary2["risk"] - bugSummary1["risk"]
-    // );
-    document.getElementById("riskinessColumn").style.removeProperty("display");
-  } else {
-    document.getElementById("riskinessColumn").style.display = "none";
   }
 
   if (rerender) {
