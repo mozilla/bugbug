@@ -9,7 +9,8 @@ import {
   TESTING_TAGS,
   featureMetabugs,
   landingsData,
-  getNewTestingTagCountObject,
+  Counter,
+  getSummaryData
 } from "./common.js";
 
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
@@ -252,19 +253,10 @@ function addRow(bugSummary) {
   }
 }
 
-function renderTestingSummary(bugSummaries) {
-  let metaBugID = getOption("metaBugID");
-
-  let changesets = [];
-  if (bugSummaries.length) {
-    changesets = bugSummaries
-      .map((summary) => summary.commits.length)
-      .reduce((a, b) => a + b);
-  }
-
-  let testingCounts = getNewTestingTagCountObject();
-  bugSummaries.forEach((summary) => {
-    summary.commits.forEach((commit) => {
+function renderTestingChart(chartEl, bugSummaries) {
+  let testingCounts = new Counter();
+  bugSummaries.forEach(summary => {
+    summary.commits.forEach(commit => {
       if (!commit.testing) {
         testingCounts.unknown++;
       } else {
@@ -272,16 +264,6 @@ function renderTestingSummary(bugSummaries) {
       }
     });
   });
-
-  let bugText = metaBugID ? `For bug ${metaBugID}: ` : ``;
-  let summaryText = `${bugText}There are ${bugSummaries.length} bugs with ${changesets} changesets.`;
-  resultSummary.textContent = summaryText;
-
-  // let pre = document.createElement("pre");
-  // pre.textContent = `${JSON.stringify(
-  //   testingCounts
-  // )}`;
-  // resultSummary.append(pre);
 
   let categories = [];
   let colors = [];
@@ -334,11 +316,155 @@ function renderTestingSummary(bugSummaries) {
     },
   };
 
-  let chartEl = document.createElement("div");
-  resultSummary.append(chartEl);
-
   var chart = new ApexCharts(chartEl, options);
   chart.render();
+}
+
+async function renderRiskChart(chartEl, bugSummaries) {
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = Temporal.PlainDate.from(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        Temporal.PlainDate.from(summary.date),
+        Temporal.PlainDate.from(minSummary.date)
+      )
+        ? summary
+        : minSummary
+    ).date
+  );
+
+  // Enforce up to 2 months history, earlier patches are in the model's training set.
+  let twoMonthsAgo = Temporal.now.plainDateISO().subtract(new Temporal.Duration(0, 2));
+  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate)) {
+    minDate = twoMonthsAgo;
+  }
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    "weekly",
+    minDate,
+    (counterObj, summary) => {
+      if (summary.risk_band == "l") {
+        counterObj.low += 1;
+      } else if (summary.risk_band == "a") {
+        counterObj.medium += 1;
+      } else {
+        counterObj.high += 1;
+      }
+    }
+  );
+
+  let dates = Object.keys(summaryData);
+  dates.sort((a, b) => Temporal.PlainDate.compare(a, b));
+
+  let high = [];
+  let medium = [];
+  let low = [];
+  for (let date of dates) {
+    low.push(summaryData[date].low);
+    medium.push(summaryData[date].medium);
+    high.push(summaryData[date].high);
+  }
+
+  let options = {
+    series: [
+      {
+        name: "Higher",
+        data: high
+      },
+      {
+        name: "Average",
+        data: medium
+      },
+      {
+        name: "Lower",
+        data: low
+      }
+    ],
+    chart: {
+      height: 350,
+      type: "line",
+      dropShadow: {
+        enabled: true,
+        color: "#000",
+        top: 18,
+        left: 7,
+        blur: 10,
+        opacity: 0.2
+      },
+      toolbar: {
+        show: false
+      }
+    },
+    colors: [HIGH_RISK_COLOR, MEDIUM_RISK_COLOR, LOW_RISK_COLOR],
+    dataLabels: {
+      enabled: true
+    },
+    stroke: {
+      curve: "smooth"
+    },
+    title: {
+      text: "Evolution of low/medium/high risk changes",
+      align: "left"
+    },
+    grid: {
+      borderColor: "#e7e7e7",
+      row: {
+        colors: ["#f3f3f3", "transparent"],
+        opacity: 0.5
+      }
+    },
+    markers: {
+      size: 1
+    },
+    xaxis: {
+      categories: dates,
+      title: {
+        text: "Date"
+      }
+    },
+    yaxis: {
+      title: {
+        text: "# of patches"
+      }
+    },
+    legend: {
+      position: "top",
+      horizontalAlign: "right",
+      floating: true,
+      offsetY: -25,
+      offsetX: -5
+    }
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
+}
+
+async function renderSummary(bugSummaries) {
+  let metaBugID = getOption("metaBugID");
+
+  let changesets = [];
+  if (bugSummaries.length) {
+    changesets = bugSummaries
+      .map(summary => summary.commits.length)
+      .reduce((a, b) => a + b);
+  }
+
+  let bugText = metaBugID ? `For bug ${metaBugID}: ` : ``;
+  let summaryText = `${bugText}There are ${bugSummaries.length} bugs with ${changesets} changesets.`;
+  resultSummary.textContent = summaryText;
+
+  let testingChartEl = document.createElement("div");
+  resultSummary.append(testingChartEl);
+  renderTestingChart(testingChartEl, bugSummaries);
+
+  let riskChartEl = document.createElement("div");
+  resultSummary.append(riskChartEl);
+  await renderRiskChart(riskChartEl, bugSummaries);
 }
 
 async function buildTable() {
@@ -425,7 +551,7 @@ async function buildTable() {
     document.getElementById("riskinessColumn").style.display = "none";
   }
 
-  renderTestingSummary(bugSummaries);
+  await renderSummary(bugSummaries);
 
   for (let bugSummary of bugSummaries) {
     addRow(bugSummary);

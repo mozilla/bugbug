@@ -1,5 +1,5 @@
 adr==0.19.4
-boto3==1.16.30
+boto3==1.16.35
 imbalanced-learn==0.7.0
 joblib==0.17.0
 libmozdata==0.1.68
@@ -9,9 +9,9 @@ mercurial==5.6.1
 microannotate==0.0.23
 mozci==1.11.3
 numpy==1.19.4
-orjson==3.4.5
-ortools==8.0.8283
-pandas==1.1.4
+orjson==3.4.6
+ortools==8.1.8487
+pandas==1.1.5
 psutil==5.7.3
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
