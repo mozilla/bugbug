@@ -141,11 +141,7 @@ function addRow(bugSummary) {
 
   let row = table.insertRow(table.rows.length);
 
-  let num_column = document.createElement("td");
-  num_column.append(document.createTextNode(table.rows.length - 1));
-  row.append(num_column);
-
-  let bug_column = row.insertCell(1);
+  let bug_column = row.insertCell(0);
   let bug_link = document.createElement("a");
   bug_link.textContent = `Bug ${bugSummary["id"]}`;
   bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
@@ -191,10 +187,10 @@ function addRow(bugSummary) {
             <li>Bug 7 - Search doesn"t work anymore <span style="background-color:gold;color:yellow;">STR</span></li>
           </ul>*/
 
-  let date_column = row.insertCell(2);
+  let date_column = row.insertCell(1);
   date_column.textContent = bugSummary.date;
 
-  let testing_tags_column = row.insertCell(3);
+  let testing_tags_column = row.insertCell(2);
   testing_tags_column.classList.add("testing-tags");
   let testing_tags_list = document.createElement("ul");
   for (let commit of bugSummary.commits) {
@@ -210,7 +206,7 @@ function addRow(bugSummary) {
   }
   testing_tags_column.append(testing_tags_list);
 
-  let coverage_column = row.insertCell(4);
+  let coverage_column = row.insertCell(3);
   let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(bugSummary);
   if (lines_added != 0) {
     if (lines_unknown != 0) {
@@ -224,7 +220,7 @@ function addRow(bugSummary) {
 
   if (getOption("riskinessEnabled")) {
     let risk_list = document.createElement("ul");
-    let risk_column = row.insertCell(5);
+    let risk_column = row.insertCell(4);
 
     let risk_text = document.createElement("span");
     risk_text.textContent = `${bugSummary.risk_band} risk`;
