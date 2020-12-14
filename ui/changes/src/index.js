@@ -320,7 +320,7 @@ function renderTestingChart(chartEl, bugSummaries) {
   chart.render();
 }
 
-function renderRiskChart(chartEl, bugSummaries) {
+async function renderRiskChart(chartEl, bugSummaries) {
   if (bugSummaries.length == 0) {
     return;
   }
@@ -342,7 +342,7 @@ function renderRiskChart(chartEl, bugSummaries) {
     minDate = twoMonthsAgo;
   }
 
-  let summaryData = getSummaryData(
+  let summaryData = await getSummaryData(
     bugSummaries,
     "weekly",
     minDate,
@@ -444,7 +444,7 @@ function renderRiskChart(chartEl, bugSummaries) {
   chart.render();
 }
 
-function renderSummary(bugSummaries) {
+async function renderSummary(bugSummaries) {
   let metaBugID = getOption("metaBugID");
 
   let changesets = [];
@@ -464,7 +464,7 @@ function renderSummary(bugSummaries) {
 
   let riskChartEl = document.createElement("div");
   resultSummary.append(riskChartEl);
-  renderRiskChart(riskChartEl, bugSummaries);
+  await renderRiskChart(riskChartEl, bugSummaries);
 }
 
 async function buildTable() {
@@ -551,7 +551,7 @@ async function buildTable() {
     document.getElementById("riskinessColumn").style.display = "none";
   }
 
-  renderSummary(bugSummaries);
+  await renderSummary(bugSummaries);
 
   for (let bugSummary of bugSummaries) {
     addRow(bugSummary);

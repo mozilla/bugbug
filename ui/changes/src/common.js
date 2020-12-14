@@ -114,6 +114,11 @@ export let featureMetabugs = (async function () {
   return json.featureMetaBugs;
 })();
 
+export async function getFirefoxReleases() {
+  let response = await fetch("https://product-details.mozilla.org/1.0/firefox_history_major_releases.json");
+  return await response.json();
+}
+
 export let landingsData = (async function () {
   let json = await taskclusterLandingsArtifact;
   json = json.landings;
@@ -151,7 +156,7 @@ export class Counter {
   }
 }
 
-export function getSummaryData(
+export async function getSummaryData(
   bugSummaries,
   grouping = "daily",
   startDate,
@@ -219,6 +224,27 @@ export function getSummaryData(
       }
     }
     return monthlyData;
+  } else if (grouping = "by_release") {
+    let byReleaseData = {};
+    let releases = await getFirefoxReleases();
+    for (const daily in dailyData) {
+      let version = null;
+      for (const [cur_version, cur_date] of Object.entries(releases)) {
+        if (Temporal.PlainDate.compare(Temporal.PlainDate.from(daily), Temporal.PlainDate.from(cur_date)) < 1) {
+          break;
+        }
+        version = cur_version;
+      }
+
+      if (!byReleaseData[version]) {
+        byReleaseData[version] = new Counter();
+      }
+
+      for (let label of labels) {
+        byReleaseData[version][label] += dailyData[daily][label];
+      }
+    }
+    return byReleaseData;
   }
 
   return dailyData;
