@@ -37,11 +37,11 @@ def is_registered(path: str) -> bool:
     return path in DATABASES
 
 
-def exists(path):
+def exists(path) -> bool:
     return os.path.exists(path)
 
 
-def is_old_schema(path):
+def is_old_schema(path) -> bool:
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     r = requests.get(url)
 
@@ -54,7 +54,7 @@ def is_old_schema(path):
     return DATABASES[path]["version"] > prev_version
 
 
-def download_support_file(path, file_name, extract=True):
+def download_support_file(path, file_name, extract=True) -> bool:
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -79,7 +79,7 @@ def download_support_file(path, file_name, extract=True):
 
 
 # Download and extract databases.
-def download(path, support_files_too=False, extract=True):
+def download(path, support_files_too=False, extract=True) -> bool:
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -106,7 +106,7 @@ def download(path, support_files_too=False, extract=True):
         return False
 
 
-def upload(path):
+def upload(path) -> None:
     support_files_paths = [
         os.path.join(os.path.dirname(path), support_file_path)
         for support_file_path in DATABASES[path]["support_files"]
