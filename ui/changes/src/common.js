@@ -213,7 +213,7 @@ export async function getSummaryData(
     let monthlyData = {};
     for (let daily in dailyData) {
       let date = Temporal.PlainDate.from(daily);
-      let yearMonth = date.toYearMonth();
+      let yearMonth = Temporal.PlainYearMonth.from(date);
 
       if (!monthlyData[yearMonth]) {
         monthlyData[yearMonth] = new Counter();
