@@ -372,15 +372,15 @@ async function renderRiskChart(chartEl, bugSummaries) {
   let options = {
     series: [
       {
-        name: "High",
+        name: "Higher",
         data: high
       },
       {
-        name: "Medium",
+        name: "Average",
         data: medium
       },
       {
-        name: "Low",
+        name: "Lower",
         data: low
       }
     ],
