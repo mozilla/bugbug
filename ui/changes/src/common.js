@@ -269,3 +269,18 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
     filter
   );
 }
+
+export function summarizeCoverage(bugSummary) {
+  let lines_added = 0;
+  let lines_covered = 0;
+  let lines_unknown = 0;
+  for (let commit of bugSummary.commits) {
+    if (commit["coverage"]) {
+      lines_added += commit["coverage"][0];
+      lines_covered += commit["coverage"][1];
+      lines_unknown += commit["coverage"][2];
+    }
+  }
+
+  return [lines_added, lines_covered, lines_unknown];
+}

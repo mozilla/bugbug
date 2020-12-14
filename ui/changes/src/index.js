@@ -10,7 +10,8 @@ import {
   featureMetabugs,
   landingsData,
   Counter,
-  getSummaryData
+  getSummaryData,
+  summarizeCoverage,
 } from "./common.js";
 
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
@@ -55,6 +56,7 @@ let options = {
 if (new URLSearchParams(window.location.search).has("riskiness")) {
   document.querySelector("#riskinessEnabled").checked = true;
 }
+let sortBy = ["Date", "DESC"];
 let resultSummary = document.getElementById("result-summary");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
 
@@ -209,16 +211,7 @@ function addRow(bugSummary) {
   testing_tags_column.append(testing_tags_list);
 
   let coverage_column = row.insertCell(4);
-  let lines_added = 0;
-  let lines_covered = 0;
-  let lines_unknown = 0;
-  for (let commit of bugSummary.commits) {
-    if (commit["coverage"]) {
-      lines_added += commit["coverage"][0];
-      lines_covered += commit["coverage"][1];
-      lines_unknown += commit["coverage"][2];
-    }
-  }
+  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(bugSummary);
   if (lines_added != 0) {
     if (lines_unknown != 0) {
       coverage_column.textContent = `${lines_covered}-${lines_covered + lines_unknown} of ${lines_added}`;
@@ -467,7 +460,7 @@ async function renderSummary(bugSummaries) {
   await renderRiskChart(riskChartEl, bugSummaries);
 }
 
-async function buildTable() {
+async function buildTable(rerender = true) {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
@@ -541,7 +534,52 @@ async function buildTable() {
     );
   }
 
-  bugSummaries.reverse();
+  let sortFunction = null;
+  if (sortBy[0] == "Date") {
+    sortFunction = function(a, b) {
+      return Temporal.PlainDate.compare(
+        Temporal.PlainDate.from(a.date),
+        Temporal.PlainDate.from(b.date)
+      );
+    };
+  } else if (sortBy[0] == "Riskiness") {
+    sortFunction = function(a, b) {
+      if (a.risk_band == b.risk_band) {
+        return 0;
+      } else if (a.risk_band == "h" || (a.risk_band == "a" && b.risk_band == "l")) {
+        return 1;
+      } else {
+        return -1;
+      }
+    };
+  } else if (sortBy[0] == "Bug") {
+    sortFunction = function(a, b) {
+      return a.id - b.id
+    };
+  } else if (sortBy[0] == "Coverage") {
+    sortFunction = function(a, b) {
+      let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(a);
+      let [lines_added_b, lines_covered_b, lines_unknown_b] = summarizeCoverage(b);
+
+      let uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
+      let uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
+
+      if (uncovered_a == uncovered_b) {
+          return lines_added_a - lines_added_b;
+      }
+
+      return uncovered_a - uncovered_b;
+    };
+  }
+
+  if (sortFunction) {
+    if (sortBy[1] == "DESC") {
+      bugSummaries.sort((a, b) => -sortFunction(a, b));
+    } else {
+      bugSummaries.sort(sortFunction);
+    }
+  }
+
   if (getOption("riskinessEnabled")) {
     // bugSummaries.sort(
     //   (bugSummary1, bugSummary2) => bugSummary2["risk"] - bugSummary1["risk"]
@@ -551,29 +589,55 @@ async function buildTable() {
     document.getElementById("riskinessColumn").style.display = "none";
   }
 
-  await renderSummary(bugSummaries);
+  if (rerender) {
+    await renderSummary(bugSummaries);
+  }
 
   for (let bugSummary of bugSummaries) {
     addRow(bugSummary);
   }
 }
 
-function rebuildTable() {
+function rebuildTable(rerender = true) {
   let table = document.getElementById("table");
-  let summary = resultSummary;
-  summary.textContent = "";
+
+  if (rerender) {
+    resultSummary.textContent = "";
+  }
 
   while (table.rows.length > 1) {
     table.deleteRow(table.rows.length - 1);
   }
 
-  buildTable();
+  buildTable(rerender);
+}
+
+function setTableHeaderHandlers() {
+  const table = document.getElementById("table");
+  const elems = table.querySelectorAll("th");
+  for (let elem of elems) {
+    elem.onclick = function () {
+      if (sortBy[0] == elem.textContent) {
+        if (sortBy[1] == "DESC") {
+          sortBy[1] = "ASC";
+        } else if (sortBy[1] == "ASC") {
+          sortBy[1] = "DESC";
+        }
+      } else {
+        sortBy[0] = elem.textContent;
+        sortBy[1] = "DESC";
+      }
+      rebuildTable(false);
+    };
+  }
 }
 
 (async function init() {
   buildMetabugsDropdown();
   await buildComponentsSelect();
   await buildTeamsSelect();
+
+  setTableHeaderHandlers();
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
