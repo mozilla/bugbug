@@ -18,6 +18,8 @@ const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
 const LOW_RISK_COLOR = "green";
 
+var LATEST_VERSION = 0;
+
 let options = {
   metaBugID: {
     value: null,
@@ -39,6 +41,7 @@ let options = {
     value: null,
     type: "text",
   },
+<<<<<<< HEAD
   components: {
     value: null,
     type: "select",
@@ -50,6 +53,11 @@ let options = {
   grouping: {
     value: null,
     type: "radio",
+=======
+  releaseVersion: {
+    value: null,
+    type: "select"
+>>>>>>> Add abaility to filter by release version.
   },
 };
 
@@ -233,6 +241,42 @@ function addRow(bugSummary) {
     risk_text.style.color = HIGH_RISK_COLOR;
     risk_text.textContent = 'Higher';
   }
+}
+
+async function populateVersions() {
+  var versionSelector = document.getElementById("releaseVersion")
+  versionSelector.addEventListener("change", () => {
+    setOption("releaseVersion", versionSelector.value);
+    rebuildTable();
+  });
+  let data = await landingsData;
+  var allVersions = new Set();
+    for (let date in data) {
+      for (let bug of data[date]) {
+        if (bug.versions.length) {
+          allVersions.add(...bug.versions)
+        }
+      }
+    }
+  var versions = [...allVersions]
+  versions.sort()
+  
+  function addOption(item, index, array) {
+    let opt = document.getElementById("releaseVersion")
+    let el = document.createElement("option")
+    if (item == array[array.length - 1]){
+      el.setAttribute("selected", "")
+    }
+    el.textContent = item
+    el.value = item
+    opt.appendChild(el)
+  }
+  versions.forEach(addOption)
+  LATEST_VERSION = versions[versions.length - 1]
+}
+
+function renderTestingSummary(bugSummaries) {
+  let metaBugID = getOption("metaBugID");
 
   risk_column.append(risk_text);
 }
@@ -457,6 +501,7 @@ async function buildTable(rerender = true) {
   let components = getOption("components");
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
+  let releaseVersion = getOption("releaseVersion")
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -523,6 +568,19 @@ async function buildTable(rerender = true) {
       bugSummary["whiteboard"].includes(whiteBoard)
     );
   }
+  releaseVersion = releaseVersion.length == 0 ? LATEST_VERSION : releaseVersion
+  if (releaseVersion) {
+    bugSummaries = bugSummaries.filter((bugSummary) => {
+      for (let item of bugSummary.versions) {
+        if (item == releaseVersion)
+          return bugSummary
+      }
+    })
+  }
+   //bugSummary.versions.some((version) => {
+      //  if (version == releaseVersion)
+      //    return true
+      //})
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
@@ -615,10 +673,15 @@ function setTableHeaderHandlers() {
 
 (async function init() {
   buildMetabugsDropdown();
+<<<<<<< HEAD
   await buildComponentsSelect();
   await buildTeamsSelect();
 
   setTableHeaderHandlers();
+=======
+  populateVersions();
+  
+>>>>>>> Add abaility to filter by release version.
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
