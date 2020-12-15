@@ -22,7 +22,7 @@ DATABASES = {}
 logger = logging.getLogger(__name__)
 
 
-def register(path, url, version, support_files=[]):
+def register(path: str, url: str, version: int, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
     # Create DB parent directory.
@@ -37,11 +37,11 @@ def is_registered(path: str) -> bool:
     return path in DATABASES
 
 
-def exists(path) -> bool:
+def exists(path: str) -> bool:
     return os.path.exists(path)
 
 
-def is_old_schema(path) -> bool:
+def is_old_schema(path: str) -> bool:
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     r = requests.get(url)
 
@@ -54,7 +54,7 @@ def is_old_schema(path) -> bool:
     return DATABASES[path]["version"] > prev_version
 
 
-def download_support_file(path, file_name, extract=True) -> bool:
+def download_support_file(path: str, file_name: str, extract=True) -> bool:
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -79,7 +79,7 @@ def download_support_file(path, file_name, extract=True) -> bool:
 
 
 # Download and extract databases.
-def download(path, support_files_too=False, extract=True) -> bool:
+def download(path: str, support_files_too=False, extract=True) -> bool:
     # If a DB with the current schema is not available yet, we can't download.
     if is_old_schema(path):
         return False
@@ -106,7 +106,7 @@ def download(path, support_files_too=False, extract=True) -> bool:
         return False
 
 
-def upload(path) -> None:
+def upload(path: str) -> None:
     support_files_paths = [
         os.path.join(os.path.dirname(path), support_file_path)
         for support_file_path in DATABASES[path]["support_files"]
@@ -114,7 +114,7 @@ def upload(path) -> None:
     utils.upload_s3([f"{path}.zst", f"{path}.version"] + support_files_paths)
 
 
-def last_modified(path):
+def last_modified(path: str):
     url = DATABASES[path]["url"]
     last_modified = utils.get_last_modified(url)
 
