@@ -324,6 +324,8 @@ def component_to_team(
     product: str,
     component: str,
 ) -> Optional[str]:
+    component = component.lower()
+
     for team, products_data in component_team_mapping.items():
         if product not in products_data:
             continue
@@ -331,9 +333,12 @@ def component_to_team(
         product_data = products_data[product]
         if (
             product_data["all_components"]
-            or component in product_data["named_components"]
             or any(
-                component.startswith(prefix)
+                component == named_component.lower()
+                for named_component in product_data["named_components"]
+            )
+            or any(
+                component.startswith(prefix.lower())
                 for prefix in product_data["prefixed_components"]
             )
         ):
