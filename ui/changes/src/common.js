@@ -163,7 +163,8 @@ export async function getSummaryData(
   counter,
   filter
 ) {
-  let dates = new Set(bugSummaries.map(summary => summary.date));
+  let dates = [...new Set(bugSummaries.map(summary => summary.date))];
+  dates.sort((a, b) => Temporal.PlainDate.compare(Temporal.PlainDate.from(a), Temporal.PlainDate.from(b)));
 
   let dailyData = {};
   for (let date of dates) {
