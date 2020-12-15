@@ -269,8 +269,7 @@ class RegressorFinder(object):
         if bugs_to_classify:
             classified_bugs = defect_model.classify(bugs_to_classify)
 
-        for i, label in enumerate(classified_bugs):
-            bug = bugs_to_classify[i]
+        for bug, label in zip(bugs_to_classify, classified_bugs):
             if label == "defect":
                 if regression_model.classify(bug)[0] == 1:
                     append_bug_fixing_commits(bug["id"], "r")
