@@ -41,7 +41,6 @@ let options = {
     value: null,
     type: "text",
   },
-<<<<<<< HEAD
   components: {
     value: null,
     type: "select",
@@ -53,11 +52,10 @@ let options = {
   grouping: {
     value: null,
     type: "radio",
-=======
+  },
   releaseVersion: {
     value: null,
     type: "select"
->>>>>>> Add abaility to filter by release version.
   },
 };
 
@@ -673,15 +671,12 @@ function setTableHeaderHandlers() {
 
 (async function init() {
   buildMetabugsDropdown();
-<<<<<<< HEAD
   await buildComponentsSelect();
   await buildTeamsSelect();
 
   setTableHeaderHandlers();
-=======
   populateVersions();
   
->>>>>>> Add abaility to filter by release version.
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
