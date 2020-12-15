@@ -104,6 +104,13 @@ def component_team_mapping():
                 "prefixed_components": ["GFX", "Graphics"],
             }
         },
+        "Javascript": {
+            "Core": {
+                "all_components": False,
+                "named_components": ["js-ctypes"],
+                "prefixed_components": ["Javascript"],
+            }
+        },
     }
 
 
@@ -150,4 +157,9 @@ def test_component_to_team(component_team_mapping: dict) -> None:
     assert (
         bugzilla.component_to_team(component_team_mapping, "Core", "Graphics: OK")
         == "GFX"
+    )
+
+    assert (
+        bugzilla.component_to_team(component_team_mapping, "Core", "JavaScript Engine")
+        == "Javascript"
     )

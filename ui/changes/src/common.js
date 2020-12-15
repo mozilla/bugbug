@@ -114,6 +114,11 @@ export let featureMetabugs = (async function () {
   return json.featureMetaBugs;
 })();
 
+export async function getFirefoxReleases() {
+  let response = await fetch("https://product-details.mozilla.org/1.0/firefox_history_major_releases.json");
+  return await response.json();
+}
+
 export let landingsData = (async function () {
   let json = await taskclusterLandingsArtifact;
   json = json.landings;
@@ -140,53 +145,53 @@ export let landingsData = (async function () {
   return returnedObject;
 })();
 
-export function getNewTestingTagCountObject() {
-  let obj = {};
-  for (let tag in TESTING_TAGS) {
-    obj[tag] = 0;
+export class Counter {
+  constructor() {
+    return new Proxy(
+      {},
+      {
+        get: (target, name) => (name in target ? target[name] : 0)
+      }
+    );
   }
-  return obj;
 }
 
-export async function getTestingPolicySummaryData(grouping = "daily", filter) {
-  let data = await landingsData;
+export async function getSummaryData(
+  bugSummaries,
+  grouping = "daily",
+  startDate,
+  counter,
+  filter
+) {
+  let dates = new Set(bugSummaries.map(summary => summary.date));
 
-  // console.log(data);
-  // let startDate = grouping == "daily" ? "2020-09-15" : "2020-08-16";
-  let startDate = "2020-09-01";
   let dailyData = {};
-  for (let date in data) {
-    // Ignore data before the testing policy took place.
+  for (let date of dates) {
     if (
-      Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(date),
-        Temporal.PlainDate.from(startDate)
-      ) < 1
+      Temporal.PlainDate.compare(Temporal.PlainDate.from(date), startDate) < 1
     ) {
       continue;
     }
 
-    let returnedDataForDate = getNewTestingTagCountObject();
-
-    let originalData = data[date];
-    for (let bug of originalData) {
-      if (filter && !filter(bug)) {
-        continue;
-      }
-      for (let commit of bug.commits) {
-        if (!commit.testing ) {
-          returnedDataForDate.unknown++;
-        } else {
-          returnedDataForDate[commit.testing] =
-            returnedDataForDate[commit.testing] + 1;
-        }
-      }
-    }
-
-    dailyData[date] = returnedDataForDate;
+    dailyData[date] = new Counter();
   }
 
-  console.log(dailyData);
+  for (let summary of bugSummaries) {
+    let counterObj = dailyData[summary.date];
+    if (!counterObj) {
+      continue;
+    }
+
+    if (filter && !filter(summary)) {
+      continue;
+    }
+
+    counter(counterObj, summary);
+  }
+
+  let labels = new Set(
+    Object.values(dailyData).flatMap(data => Object.keys(data))
+  );
 
   if (grouping == "weekly") {
     let weeklyData = {};
@@ -195,11 +200,11 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
       let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
 
       if (!weeklyData[weekStart]) {
-        weeklyData[weekStart] = getNewTestingTagCountObject();
+        weeklyData[weekStart] = new Counter();
       }
 
-      for (let tag in dailyData[daily]) {
-        weeklyData[weekStart][tag] += dailyData[daily][tag];
+      for (let label of labels) {
+        weeklyData[weekStart][label] += dailyData[daily][label];
       }
     }
 
@@ -208,18 +213,74 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
     let monthlyData = {};
     for (let daily in dailyData) {
       let date = Temporal.PlainDate.from(daily);
-      let yearMonth = date.toYearMonth();
+      let yearMonth = Temporal.PlainYearMonth.from(date);
 
       if (!monthlyData[yearMonth]) {
-        monthlyData[yearMonth] = getNewTestingTagCountObject();
+        monthlyData[yearMonth] = new Counter();
       }
 
-      for (let tag in dailyData[daily]) {
-        monthlyData[yearMonth][tag] += dailyData[daily][tag];
+      for (let label of labels) {
+        monthlyData[yearMonth][label] += dailyData[daily][label];
       }
     }
     return monthlyData;
+  } else if (grouping = "by_release") {
+    let byReleaseData = {};
+    let releases = await getFirefoxReleases();
+    for (const daily in dailyData) {
+      let version = null;
+      for (const [cur_version, cur_date] of Object.entries(releases)) {
+        if (Temporal.PlainDate.compare(Temporal.PlainDate.from(daily), Temporal.PlainDate.from(cur_date)) < 1) {
+          break;
+        }
+        version = cur_version;
+      }
+
+      if (!byReleaseData[version]) {
+        byReleaseData[version] = new Counter();
+      }
+
+      for (let label of labels) {
+        byReleaseData[version][label] += dailyData[daily][label];
+      }
+    }
+    return byReleaseData;
   }
 
   return dailyData;
+}
+
+export async function getTestingPolicySummaryData(grouping = "daily", filter) {
+  let bugSummaries = [].concat.apply([], Object.values(await landingsData));
+
+  return getSummaryData(
+    bugSummaries,
+    grouping,
+    Temporal.PlainDate.from("2020-09-01"), // Ignore data before the testing policy took place.
+    (counterObj, bug) => {
+      for (let commit of bug.commits) {
+        if (!commit.testing) {
+          counterObj.unknown++;
+        } else {
+          counterObj[commit.testing] += 1;
+        }
+      }
+    },
+    filter
+  );
+}
+
+export function summarizeCoverage(bugSummary) {
+  let lines_added = 0;
+  let lines_covered = 0;
+  let lines_unknown = 0;
+  for (let commit of bugSummary.commits) {
+    if (commit["coverage"]) {
+      lines_added += commit["coverage"][0];
+      lines_covered += commit["coverage"][1];
+      lines_unknown += commit["coverage"][2];
+    }
+  }
+
+  return [lines_added, lines_covered, lines_unknown];
 }
