@@ -362,22 +362,26 @@ class LandingsRiskReportGenerator(object):
                 prev_fixed_bug_blocked_bugs
             )
 
-            commit_group["prev_regressions"] = prev_regressions[-3:]
-            commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
-            commit_group["prev_regression_blocked_bugs"] = prev_regression_blocked_bugs[
-                -3:
-            ]
-            commit_group["prev_fixed_bug_blocked_bugs"] = prev_fixed_bug_blocked_bugs[
-                -3:
-            ]
             commit_group["most_common_regression_components"] = regression_components
-            commit_group["most_common_fixed_bugs_components"] = fixed_bugs_components
-            commit_group[
-                "most_common_regression_blocked_bug_components"
-            ] = regression_blocked_bug_components
-            commit_group[
-                "most_common_fixed_bug_blocked_bug_components"
-            ] = fixed_bug_blocked_bug_components
+            # These are only used for component connections for the time being.
+            if component:
+                commit_group["prev_regressions"] = prev_regressions[-3:]
+                commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
+                commit_group[
+                    "prev_regression_blocked_bugs"
+                ] = prev_regression_blocked_bugs[-3:]
+                commit_group[
+                    "prev_fixed_bug_blocked_bugs"
+                ] = prev_fixed_bug_blocked_bugs[-3:]
+                commit_group[
+                    "most_common_fixed_bugs_components"
+                ] = fixed_bugs_components
+                commit_group[
+                    "most_common_regression_blocked_bug_components"
+                ] = regression_blocked_bug_components
+                commit_group[
+                    "most_common_fixed_bug_blocked_bug_components"
+                ] = fixed_bug_blocked_bug_components
 
         def get_commit_data(commit_list: List[repository.CommitDict]) -> List[dict]:
             # Evaluate risk of commits associated to this bug.
