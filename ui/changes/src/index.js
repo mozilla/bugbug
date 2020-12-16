@@ -51,7 +51,7 @@ let options = {
     value: null,
     type: "radio",
   },
-  releaseVersion: {
+  releaseVersions: {
     value: null,
     type: "select"
   },
@@ -237,20 +237,22 @@ function addRow(bugSummary) {
     risk_text.style.color = HIGH_RISK_COLOR;
     risk_text.textContent = 'Higher';
   }
+
+  risk_column.append(risk_text);
 }
 
 async function populateVersions() {
-  var versionSelector = document.getElementById("releaseVersion")
+  var versionSelector = document.getElementById("releaseVersions")
 
   let data = await landingsData;
 
   var allVersions = new Set();
-    for (let date in data) {
-      for (let bug of data[date]) {
-        if (bug.versions.length) {
-          allVersions.add(...bug.versions)
+    for (let bug of Object.values(data)) {
+      bug.some(item => {
+        if (item.versions.length) {
+          allVersions.add(...item.versions)
         }
-      }
+      })
     }
   var versions = [...allVersions]
   versions.sort()
@@ -262,12 +264,6 @@ async function populateVersions() {
     el.selected = true
     versionSelector.appendChild(el)
   }
-}
-
-function renderTestingSummary(bugSummaries) {
-  let metaBugID = getOption("metaBugID");
-
-  risk_column.append(risk_text);
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
@@ -490,7 +486,7 @@ async function buildTable(rerender = true) {
   let components = getOption("components");
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
-  let releaseVersion = getOption("releaseVersion")
+  let releaseVersions = getOption("releaseVersions")
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -557,14 +553,11 @@ async function buildTable(rerender = true) {
       bugSummary["whiteboard"].includes(whiteBoard)
     );
   }
-  if (releaseVersion) {
+  if (releaseVersions) {
     bugSummaries = bugSummaries.filter((bugSummary) => {
-      for (let item of bugSummary.versions) {
-        for(let version of releaseVersion) {
-          if (item == version)
-            return bugSummary
-        }
-      }
+      return releaseVersions.some(
+        version => bugSummary.versions.includes(Number(version))
+      );
     })
   }
 
@@ -664,7 +657,7 @@ function setTableHeaderHandlers() {
   await populateVersions();
 
   setTableHeaderHandlers();
-  
+
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
