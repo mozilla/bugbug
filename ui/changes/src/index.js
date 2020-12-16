@@ -47,6 +47,10 @@ let options = {
     value: null,
     type: "select",
   },
+  grouping: {
+    value: null,
+    type: "radio",
+  },
 };
 
 let sortBy = ["Date", "DESC"];
@@ -324,7 +328,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
 
   let summaryData = await getSummaryData(
     bugSummaries,
-    "weekly",
+    getOption("grouping"),
     minDate,
     (counterObj, summary) => {
       if (summary.risk_band == "l") {
@@ -337,13 +341,12 @@ async function renderRiskChart(chartEl, bugSummaries) {
     }
   );
 
-  let dates = Object.keys(summaryData);
-  dates.sort((a, b) => Temporal.PlainDate.compare(a, b));
-
+  let categories = [];
   let high = [];
   let medium = [];
   let low = [];
-  for (let date of dates) {
+  for (let date in summaryData) {
+    categories.push(date);
     low.push(summaryData[date].low);
     medium.push(summaryData[date].medium);
     high.push(summaryData[date].high);
@@ -401,7 +404,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
       size: 1
     },
     xaxis: {
-      categories: dates,
+      categories: categories,
       title: {
         text: "Date"
       }
@@ -653,6 +656,21 @@ function setTableHeaderHandlers() {
         }
 
         setOption(optionName, value);
+        rebuildTable();
+      };
+    } else if (optionType === "radio") {
+      for (const radio of document.querySelectorAll(`input[name=${optionName}]`)) {
+        if (radio.checked) {
+          setOption(optionName, radio.value);
+        }
+      }
+
+      elem.onchange = function () {
+        for (const radio of document.querySelectorAll(`input[name=${optionName}]`)) {
+          if (radio.checked) {
+            setOption(optionName, radio.value);
+          }
+        }
         rebuildTable();
       };
     } else {
