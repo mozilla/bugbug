@@ -18,8 +18,6 @@ const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
 const LOW_RISK_COLOR = "green";
 
-var LATEST_VERSION = 0;
-
 let options = {
   metaBugID: {
     value: null,
@@ -243,11 +241,9 @@ function addRow(bugSummary) {
 
 async function populateVersions() {
   var versionSelector = document.getElementById("releaseVersion")
-  versionSelector.addEventListener("change", () => {
-    setOption("releaseVersion", versionSelector.value);
-    rebuildTable();
-  });
+
   let data = await landingsData;
+
   var allVersions = new Set();
     for (let date in data) {
       for (let bug of data[date]) {
@@ -258,19 +254,14 @@ async function populateVersions() {
     }
   var versions = [...allVersions]
   versions.sort()
-  
-  function addOption(item, index, array) {
-    let opt = document.getElementById("releaseVersion")
+
+  for (let version of versions) {
     let el = document.createElement("option")
-    if (item == array[array.length - 1]){
-      el.setAttribute("selected", "")
-    }
-    el.textContent = item
-    el.value = item
-    opt.appendChild(el)
+    el.setAttribute("value", version)
+    el.textContent = version
+    el.selected = true
+    versionSelector.appendChild(el)
   }
-  versions.forEach(addOption)
-  LATEST_VERSION = versions[versions.length - 1]
 }
 
 function renderTestingSummary(bugSummaries) {
@@ -566,19 +557,17 @@ async function buildTable(rerender = true) {
       bugSummary["whiteboard"].includes(whiteBoard)
     );
   }
-  releaseVersion = releaseVersion.length == 0 ? LATEST_VERSION : releaseVersion
   if (releaseVersion) {
+    console.log(releaseVersion)
     bugSummaries = bugSummaries.filter((bugSummary) => {
       for (let item of bugSummary.versions) {
-        if (item == releaseVersion)
-          return bugSummary
+        for(let version of releaseVersion) {
+          if (item == version)
+            return bugSummary
+        }
       }
     })
   }
-   //bugSummary.versions.some((version) => {
-      //  if (version == releaseVersion)
-      //    return true
-      //})
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
@@ -673,9 +662,9 @@ function setTableHeaderHandlers() {
   buildMetabugsDropdown();
   await buildComponentsSelect();
   await buildTeamsSelect();
+  await populateVersions();
 
   setTableHeaderHandlers();
-  populateVersions();
   
 
   Object.keys(options).forEach(function (optionName) {
