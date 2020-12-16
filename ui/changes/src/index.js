@@ -558,7 +558,6 @@ async function buildTable(rerender = true) {
     );
   }
   if (releaseVersion) {
-    console.log(releaseVersion)
     bugSummaries = bugSummaries.filter((bugSummary) => {
       for (let item of bugSummary.versions) {
         for(let version of releaseVersion) {
