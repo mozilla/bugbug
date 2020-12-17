@@ -3,10 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import pickle
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
-import joblib
 import matplotlib
 import numpy as np
 import shap
@@ -566,16 +566,22 @@ class Model:
 
             self.clf.fit(X_train, y_train)
 
-        joblib.dump(self, self.__class__.__name__.lower())
+        with open(self.__class__.__name__.lower(), "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
         if self.store_dataset:
-            joblib.dump(X, f"{self.__class__.__name__.lower()}_data_X")
-            joblib.dump(y, f"{self.__class__.__name__.lower()}_data_y")
+            with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
+                pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+            with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
+                pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         return tracking_metrics
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        return joblib.load(model_file_name)
+        with open(model_file_name, "rb") as f:
+            return pickle.load(f)
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
