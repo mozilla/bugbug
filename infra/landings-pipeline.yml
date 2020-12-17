@@ -4,15 +4,14 @@ tasks:
     repository: https://github.com/mozilla/bugbug
   in:
     - ID: landings-risk-report-generator
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '2 hours'}
-      expires: {$fromNow: '2 weeks'}
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 hours" }
+      expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: compute-small
       payload:
         features:
-          taskclusterProxy:
-            true
+          taskclusterProxy: true
         maxRunTime: 7200
         image: mozilla/bugbug-commit-retrieval
         env:
@@ -46,9 +45,9 @@ tasks:
         source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
 
     - ID: frontend-build
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '1 hour'}
-      expires: {$fromNow: '2 weeks'}
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "1 hour" }
+      expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -60,11 +59,11 @@ tasks:
           - "/bin/sh"
           - "-lcxe"
           - "git clone --quiet ${repository} /bugbug &&
-             cd /bugbug &&
-             git -c advice.detachedHead=false checkout ${version} &&
-             cd ui/changes &&
-             npm install --no-progress &&
-             npm run release"
+            cd /bugbug &&
+            git -c advice.detachedHead=false checkout ${version} &&
+            cd ui/changes &&
+            npm install --no-progress &&
+            npm run release"
         artifacts:
           public/frontend:
             path: /bugbug/ui/changes/dist

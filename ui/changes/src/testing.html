@@ -1,85 +1,119 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="utf-8" />
+    <title>testing policy - bugbug ui</title>
+    <link href="css/page.css" rel="stylesheet" type="text/css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>➲</text></svg>"
+    />
+  </head>
 
-<head>
-  <meta charset="utf-8">
-  <title>testing policy - bugbug ui</title>
-  <link href='css/page.css' rel='stylesheet' type='text/css'>
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>➲</text></svg>">
-</head>
-
-<body class="loading-data">
-  <h1>bugbug ui</h1>
-  <div id="links">
-    <a href="index.html">Changes</a> |
-    <a href="testing.html">Testing Policy</a>
-  </div>
-  <div class="loader"></div>
-  <div id="grid">
-    <aside>
-      <h3>Controls</h3>
-      <ul>
-        <li><label><input name="grouping" type="radio" value="daily" />Daily</label></li>
-        <li><label><input name="grouping" type="radio" value="weekly" checked />Weekly</label></li>
-        <li><label><input name="grouping" type="radio" value="monthly" />Monthly</label></li>
-        <li><label><input name="grouping" type="radio" value="by_release" />By Release</label></li>
-      </ul>
-    </aside>
-    <main>
-      <div class="arewe-update">
-        See the <a href="https://firefox-source-docs.mozilla.org/testing/testing-policy/">Testing Policy for code landing in mozilla-central</a> for a description of each tag.
-        In addition to these:
+  <body class="loading-data">
+    <h1>bugbug ui</h1>
+    <div id="links">
+      <a href="index.html">Changes</a> |
+      <a href="testing.html">Testing Policy</a>
+    </div>
+    <div class="loader"></div>
+    <div id="grid">
+      <aside>
+        <h3>Controls</h3>
         <ul>
-          <li>`unknown` is for commits that don't have an accessible phabricator revision associated with them (i.e. automated wpt vendoring or restricted bugs).</li>
-          <li>`missing` is for commits that haven't had any tags applied.</li>
+          <li>
+            <label
+              ><input name="grouping" type="radio" value="daily" />Daily</label
+            >
+          </li>
+          <li>
+            <label
+              ><input
+                name="grouping"
+                type="radio"
+                value="weekly"
+                checked
+              />Weekly</label
+            >
+          </li>
+          <li>
+            <label
+              ><input
+                name="grouping"
+                type="radio"
+                value="monthly"
+              />Monthly</label
+            >
+          </li>
+          <li>
+            <label
+              ><input name="grouping" type="radio" value="by_release" />By
+              Release</label
+            >
+          </li>
         </ul>
-      </div>
-      <details open>
-        <summary>
-          <h3>All Commits</h3>
-        </summary>
-        <div id="all-chart" class="chart-container">
-          <div class="chart"></div>
+      </aside>
+      <main>
+        <div class="arewe-update">
+          See the
+          <a
+            href="https://firefox-source-docs.mozilla.org/testing/testing-policy/"
+            >Testing Policy for code landing in mozilla-central</a
+          >
+          for a description of each tag. In addition to these:
+          <ul>
+            <li>
+              `unknown` is for commits that don't have an accessible phabricator
+              revision associated with them (i.e. automated wpt vendoring or
+              restricted bugs).
+            </li>
+            <li>`missing` is for commits that haven't had any tags applied.</li>
+          </ul>
         </div>
-        <textarea id="all-data">
-        </textarea>
-      </details>
-      <details open>
-        <summary>
-          <h3>Backed Out Commits</h3>
-        </summary>
-        <div class="arewe-update arewe-update-warn">
-          Note that many times _all_ commits in a bug get backed out at once, so if there are a stack of commits this can overestimate tags.
-          For instance, a commit might have been appropriately marked as `unchanged` but still get backed out.
-        </div>
-        <div id="backedout-chart" class="chart-container">
-          <div class="chart"></div>
-        </div>
-        <textarea id="backedout-data">
-        </textarea>
-      </details>
+        <details open>
+          <summary>
+            <h3>All Commits</h3>
+          </summary>
+          <div id="all-chart" class="chart-container">
+            <div class="chart"></div>
+          </div>
+          <textarea id="all-data"> </textarea>
+        </details>
+        <details open>
+          <summary>
+            <h3>Backed Out Commits</h3>
+          </summary>
+          <div class="arewe-update arewe-update-warn">
+            Note that many times _all_ commits in a bug get backed out at once,
+            so if there are a stack of commits this can overestimate tags. For
+            instance, a commit might have been appropriately marked as
+            `unchanged` but still get backed out.
+          </div>
+          <div id="backedout-chart" class="chart-container">
+            <div class="chart"></div>
+          </div>
+          <textarea id="backedout-data"> </textarea>
+        </details>
 
-      <details open>
-        <summary>
-          <h3>Commits that caused a regression</h3>
-        </summary>
-        <div class="arewe-update arewe-update-warn">
-          Note that this will include _all_ commits in a bug that caused a regression, so if there are a stack of commits this can overestimate tags.
-          For instance, a commit might have been appropriately marked as `unchanged` but still be marked as causing a regression.
-        </div>
-        <div id="regression-chart" class="chart-container">
-          <div class="chart"></div>
-        </div>
-        <textarea id="regression-data">
-        </textarea>
-      </details>
-    </main>
-  </div>
+        <details open>
+          <summary>
+            <h3>Commits that caused a regression</h3>
+          </summary>
+          <div class="arewe-update arewe-update-warn">
+            Note that this will include _all_ commits in a bug that caused a
+            regression, so if there are a stack of commits this can overestimate
+            tags. For instance, a commit might have been appropriately marked as
+            `unchanged` but still be marked as causing a regression.
+          </div>
+          <div id="regression-chart" class="chart-container">
+            <div class="chart"></div>
+          </div>
+          <textarea id="regression-data"> </textarea>
+        </details>
+      </main>
+    </div>
 
-  <script src="testing.js" type="module"></script>
-  <script>
-  </script>
-</body>
-
+    <script src="testing.js" type="module"></script>
+    <script></script>
+  </body>
 </html>

@@ -1,105 +1,146 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="utf-8" />
+    <title>bugbug ui</title>
+    <link href="css/page.css" rel="stylesheet" type="text/css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>➲</text></svg>"
+    />
+  </head>
 
-<head>
-  <meta charset="utf-8">
-  <title>bugbug ui</title>
-  <link href='css/page.css' rel='stylesheet' type='text/css'>
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>➲</text></svg>">
-</head>
-
-<body class="loading-data">
-  <h1>bugbug ui</h1>
-  <div id="links">
-    <a href="index.html">Changes</a> |
-    <a href="testing.html">Testing Policy</a>
-  </div>
-  <div class="loader"></div>
-  <div id="grid">
-    <aside>
-      <div id="filter-container">
-        <h3>Filters</h3>
-        <label>Metabug
-          <select name="featureMetabugs" id="featureMetabugs">
-            <option value="" selected>Choose a feature metabug</option>
-          </select>
-          <input type="text" name="metaBugID" id="metaBugID" placeholder="…or enter bug ID">
-        </label>
-        <hr />
-        <label>Start date<br />
-          <input id="startDate" type="date" value="2020-10-01">
-        </label>
-        <label>End date<br />
-          <input id="endDate" type="date">
-        </label>
-        <hr />
-        <label>Testing Tags<br />
-          <select name="testingTags" id="testingTags" multiple>
-            <option value="testing-approved" selected>testing-approved</option>
-            <option value="testing-exception-elsewhere" selected>exception-elsewhere</option>
-            <option value="testing-exception-other" selected>exception-other</option>
-            <option value="testing-exception-ui" selected>exception-ui</option>
-            <option value="testing-exception-unchanged" selected>exception-unchanged</option>
-            <option value="missing" selected>missing</option>
-            <option value="unknown" selected>unknown</option>
-          </select>
-        </label>
-        <hr />
-        <label>Components
-          <select name="components" id="components" multiple>
-          </select>
-        </label>
-        <label>Teams
-          <select name="teams" id="teams" multiple>
-          </select>
-        </label>
-        <hr />
-        <label>White Board
-          <input type="text" name="whiteboard" id="whiteBoard">
-        </label>
-        <label>
-          Version<br />
-          <select name="releaseVersions" id=releaseVersions multiple></select>
-        </label>
-      </div>
-    </aside>
-    <main>
-      <details open>
-        <summary>
-          <h3>Summary</h3>
-        </summary>
-        <div id="result-summary"></div>
-        <div id="grouping">
-          <label><input name="grouping" type="radio" value="daily" />Daily</label>
-          <label><input name="grouping" type="radio" value="weekly" checked />Weekly</label>
-          <label><input name="grouping" type="radio" value="monthly" />Monthly</label>
-          <label><input name="grouping" type="radio" value="by_release" />By Release</label>
+  <body class="loading-data">
+    <h1>bugbug ui</h1>
+    <div id="links">
+      <a href="index.html">Changes</a> |
+      <a href="testing.html">Testing Policy</a>
+    </div>
+    <div class="loader"></div>
+    <div id="grid">
+      <aside>
+        <div id="filter-container">
+          <h3>Filters</h3>
+          <label
+            >Metabug
+            <select name="featureMetabugs" id="featureMetabugs">
+              <option value="" selected>Choose a feature metabug</option>
+            </select>
+            <input
+              type="text"
+              name="metaBugID"
+              id="metaBugID"
+              placeholder="…or enter bug ID"
+            />
+          </label>
+          <hr />
+          <label
+            >Start date<br />
+            <input id="startDate" type="date" value="2020-10-01" />
+          </label>
+          <label
+            >End date<br />
+            <input id="endDate" type="date" />
+          </label>
+          <hr />
+          <label
+            >Testing Tags<br />
+            <select name="testingTags" id="testingTags" multiple>
+              <option value="testing-approved" selected>
+                testing-approved
+              </option>
+              <option value="testing-exception-elsewhere" selected>
+                exception-elsewhere
+              </option>
+              <option value="testing-exception-other" selected>
+                exception-other
+              </option>
+              <option value="testing-exception-ui" selected>
+                exception-ui
+              </option>
+              <option value="testing-exception-unchanged" selected>
+                exception-unchanged
+              </option>
+              <option value="missing" selected>missing</option>
+              <option value="unknown" selected>unknown</option>
+            </select>
+          </label>
+          <hr />
+          <label
+            >Components
+            <select name="components" id="components" multiple></select>
+          </label>
+          <label
+            >Teams
+            <select name="teams" id="teams" multiple></select>
+          </label>
+          <hr />
+          <label
+            >White Board
+            <input type="text" name="whiteboard" id="whiteBoard" />
+          </label>
+          <label>
+            Version<br />
+            <select
+              name="releaseVersions"
+              id="releaseVersions"
+              multiple
+            ></select>
+          </label>
         </div>
-      </details>
-      <details open>
-        <summary>
-          <h3>Bugs</h3>
-        </summary>
+      </aside>
+      <main>
+        <details open>
+          <summary>
+            <h3>Summary</h3>
+          </summary>
+          <div id="result-summary"></div>
+          <div id="grouping">
+            <label
+              ><input name="grouping" type="radio" value="daily" />Daily</label
+            >
+            <label
+              ><input
+                name="grouping"
+                type="radio"
+                value="weekly"
+                checked
+              />Weekly</label
+            >
+            <label
+              ><input
+                name="grouping"
+                type="radio"
+                value="monthly"
+              />Monthly</label
+            >
+            <label
+              ><input name="grouping" type="radio" value="by_release" />By
+              Release</label
+            >
+          </div>
+        </details>
+        <details open>
+          <summary>
+            <h3>Bugs</h3>
+          </summary>
 
-        <table id="table" class="table table-bordered table-hover">
-          <thead>
-            <tr>
-              <th scope="col">Bug</th>
-              <th scope="col">Date</th>
-              <th scope="col">Testing Tags</th>
-              <th scope="col">Coverage</th>
-              <th scope="col">Riskiness</th>
-            </tr>
-          </thead>
-          <tbody>
-          </tbody>
-        </table>
-      </details>
-    </main>
-  </div>
+          <table id="table" class="table table-bordered table-hover">
+            <thead>
+              <tr>
+                <th scope="col">Bug</th>
+                <th scope="col">Date</th>
+                <th scope="col">Testing Tags</th>
+                <th scope="col">Coverage</th>
+                <th scope="col">Riskiness</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </details>
+      </main>
+    </div>
 
-  <script src="index.js" type="module"></script>
-</body>
-
+    <script src="index.js" type="module"></script>
+  </body>
 </html>

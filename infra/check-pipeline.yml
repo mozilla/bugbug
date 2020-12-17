@@ -1,9 +1,9 @@
 version: 1
 tasks:
   - ID: check-component
-    created: {$fromNow: ''}
-    deadline: {$fromNow: '12 hours'}
-    expires: {$fromNow: '1 week'}
+    created: { $fromNow: "" }
+    deadline: { $fromNow: "12 hours" }
+    expires: { $fromNow: "1 week" }
     provisionerId: proj-bugbug
     workerType: batch
     payload:
@@ -23,9 +23,9 @@ tasks:
       source: https://github.com/mozilla/bugbug/raw/master/infra/check-pipeline.yml
 
   - ID: shadow-scheduler-stats
-    created: {$fromNow: ''}
-    deadline: {$fromNow: '12 hours'}
-    expires: {$fromNow: '1 week'}
+    created: { $fromNow: "" }
+    deadline: { $fromNow: "12 hours" }
+    expires: { $fromNow: "1 week" }
     provisionerId: proj-bugbug
     workerType: batch
     payload:
@@ -35,8 +35,7 @@ tasks:
         - bugbug-shadow-scheduler-stats
         - "28"
       features:
-        taskclusterProxy:
-          true
+        taskclusterProxy: true
     scopes:
       - auth:aws-s3:read-write:communitytc-bugbug/*
     routes:
