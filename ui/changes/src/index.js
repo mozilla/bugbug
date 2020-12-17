@@ -51,6 +51,10 @@ let options = {
     value: null,
     type: "radio",
   },
+  releaseVersions: {
+    value: null,
+    type: "select"
+  },
 };
 
 let sortBy = ["Date", "DESC"];
@@ -235,6 +239,31 @@ function addRow(bugSummary) {
   }
 
   risk_column.append(risk_text);
+}
+
+async function populateVersions() {
+  var versionSelector = document.getElementById("releaseVersions")
+
+  let data = await landingsData;
+
+  var allVersions = new Set();
+    for (let bugs of Object.values(data)) {
+      bugs.forEach(item => {
+        if (item.versions.length) {
+          allVersions.add(...item.versions)
+        }
+      })
+    }
+  var versions = [...allVersions]
+  versions.sort()
+
+  for (let version of versions) {
+    let el = document.createElement("option")
+    el.setAttribute("value", version)
+    el.textContent = version
+    el.selected = true
+    versionSelector.appendChild(el)
+  }
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
@@ -457,6 +486,7 @@ async function buildTable(rerender = true) {
   let components = getOption("components");
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
+  let releaseVersions = getOption("releaseVersions")
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -522,6 +552,13 @@ async function buildTable(rerender = true) {
     bugSummaries = bugSummaries.filter((bugSummary) =>
       bugSummary["whiteboard"].includes(whiteBoard)
     );
+  }
+  if (releaseVersions) {
+    bugSummaries = bugSummaries.filter((bugSummary) =>
+      releaseVersions.some(
+        version => bugSummary.versions.includes(Number(version))
+      )
+    )
   }
 
   let sortFunction = null;
@@ -617,6 +654,7 @@ function setTableHeaderHandlers() {
   buildMetabugsDropdown();
   await buildComponentsSelect();
   await buildTeamsSelect();
+  await populateVersions();
 
   setTableHeaderHandlers();
 
