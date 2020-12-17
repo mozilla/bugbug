@@ -1,7 +1,6 @@
-import ApexCharts from 'apexcharts'
+import ApexCharts from "apexcharts";
 
 import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
-
 
 (function () {
   let charts = {
@@ -53,7 +52,6 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
         dataContainer.textContent += `${data[date][tag]}\t`;
       }
     }
-
 
     let xaxisCategories = [];
     for (let date in data) {

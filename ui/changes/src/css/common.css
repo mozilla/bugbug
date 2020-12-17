@@ -1,5 +1,3 @@
-
-
 /* Photon Colors CSS Variables v3.3.2:
     https://github.com/FirefoxUX/photon-colors/blob/master/photon-colors.css */
 html {
@@ -82,9 +80,9 @@ html {
   --grey-90-a80: rgba(12, 12, 13, 0.8);
   --grey-90-a90: rgba(12, 12, 13, 0.9);
 
-  --ink-40: #7175A8;
-  --ink-50: #595E91;
-  --ink-60: #464B76;
+  --ink-40: #7175a8;
+  --ink-50: #595e91;
+  --ink-60: #464b76;
   --ink-70: #363959;
   --ink-80: #202340;
   --ink-90: #0f1126;
@@ -93,10 +91,10 @@ html {
 html {
   --main-background: white;
   --main-text-color: var(--ink-90);
-  --main-font-family: 'Fira Sans', 'Open Sans', sans-serif, Arial;
+  --main-font-family: "Fira Sans", "Open Sans", sans-serif, Arial;
   --main-font: 400 14px/1.5 var(--main-font-family);
 
-  --mono-font-family: 'Fira Mono', monospace;
+  --mono-font-family: "Fira Mono", monospace;
   --mono-font: 400 14px/1.5 var(--mono-font-family);
 
   --heading-color: var(--ink-70);
@@ -104,7 +102,7 @@ html {
 }
 
 html {
-  font-family: 'Fira Sans', 'Open Sans', sans-serif, Arial;
+  font-family: "Fira Sans", "Open Sans", sans-serif, Arial;
   font: 400 14px/1.5 "Fira Sans";
 }
 
@@ -122,7 +120,7 @@ body {
 }
 
 hr {
-  color: rgba(0, 0, 0, .2);
+  color: rgba(0, 0, 0, 0.2);
 }
 
 h1 {
@@ -149,11 +147,11 @@ h1 {
 
 .iframe-container > div > iframe {
   border: none;
-  position:absolute;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
@@ -256,7 +254,8 @@ h1 {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  box-shadow: 0 0 0 4px white, inset 0 2px 0 rgba(0, 0, 0, 0.08), 0 3px 0 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 4px white, inset 0 2px 0 rgba(0, 0, 0, 0.08),
+    0 3px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 .arewe-timeline-img.arewe-subtraction {
@@ -270,7 +269,7 @@ h1 {
   margin-left: 60px;
   background: white;
   border-radius: 0.25em;
-  padding: .5em;
+  padding: 0.5em;
   box-shadow: 0 3px 0 #d7e4ed;
 }
 .arewe-timeline-content h2 {
@@ -282,7 +281,7 @@ h1 {
 }
 .arewe-timeline-content .arewe-read-more {
   float: right;
-  padding: .8em 1em;
+  padding: 0.8em 1em;
   background: #acb7c0;
   color: white;
   border-radius: 0.25em;
@@ -301,7 +300,7 @@ h1 {
 .arewe-timeline-content small {
   border: solid 1px;
   border-radius: 5px;
-  background: rgba(0, 0, 255, .05);
+  background: rgba(0, 0, 255, 0.05);
   font-size: 90%;
   vertical-align: middle;
   margin-right: 2px;

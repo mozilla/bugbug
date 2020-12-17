@@ -1,67 +1,78 @@
 repos:
--   repo: https://github.com/asottile/seed-isort-config
+  - repo: https://github.com/asottile/seed-isort-config
     rev: v2.2.0
     hooks:
-    -   id: seed-isort-config
--   repo: https://github.com/timothycrosley/isort
+      - id: seed-isort-config
+  - repo: https://github.com/timothycrosley/isort
     rev: 5.4.2
     hooks:
-    -   id: isort
--   repo: https://github.com/ambv/black
+      - id: isort
+  - repo: https://github.com/ambv/black
     rev: stable
     hooks:
-    - id: black
--   repo: https://gitlab.com/pycqa/flake8
+      - id: black
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v2.2.1
+    hooks:
+      - id: prettier
+        exclude: ^tests/fixtures/
+  - repo: https://gitlab.com/pycqa/flake8
     rev: 3.8.3
     hooks:
-    -   id: flake8
-        additional_dependencies: ['flake8-coding==1.3.1', 'flake8-copyright==0.2.2', 'flake8-debugger==3.1.0', 'flake8-mypy==17.8.0']
--   repo: https://github.com/pre-commit/pre-commit-hooks
+      - id: flake8
+        additional_dependencies:
+          [
+            "flake8-coding==1.3.1",
+            "flake8-copyright==0.2.2",
+            "flake8-debugger==3.1.0",
+            "flake8-mypy==17.8.0",
+          ]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.2.0
     hooks:
-    -   id: check-ast
-    -   id: check-docstring-first
-    -   id: check-executables-have-shebangs
-    -   id: check-merge-conflict
-    -   id: check-symlinks
-    -   id: debug-statements
-    -   id: trailing-whitespace
-    -   id: check-yaml
-    -   id: mixed-line-ending
-    -   id: name-tests-test
-        args: ['--django']
-    -   id: check-json
+      - id: check-ast
+      - id: check-docstring-first
+      - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: mixed-line-ending
+      - id: name-tests-test
+        args: ["--django"]
+      - id: check-json
         exclude: ^tests/fixtures/
-    -   id: requirements-txt-fixer
-    -   id: check-vcs-permalinks
--   repo: https://github.com/codespell-project/codespell
+      - id: requirements-txt-fixer
+      - id: check-vcs-permalinks
+  - repo: https://github.com/codespell-project/codespell
     rev: v1.17.1
     hooks:
-    -   id: codespell
+      - id: codespell
         exclude_types: [json]
--   repo: https://github.com/marco-c/taskcluster_yml_validator
+  - repo: https://github.com/marco-c/taskcluster_yml_validator
     rev: v0.0.7
     hooks:
-    -   id: taskcluster_yml
--   repo: https://github.com/asottile/yesqa
+      - id: taskcluster_yml
+  - repo: https://github.com/asottile/yesqa
     rev: v1.2.1
     hooks:
-    -   id: yesqa
--   repo: https://github.com/pre-commit/mirrors-mypy
+      - id: yesqa
+  - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.782
     hooks:
-    -   id: mypy
+      - id: mypy
         name: mypy-bugbug
         files: ^bugbug/|^scripts/|^tests/
         entry: mypy bugbug/ scripts/ tests/
         pass_filenames: false
-    -   id: mypy
+      - id: mypy
         name: mypy-bugbug-http
         files: ^http_service/
         entry: mypy http_service/
         pass_filenames: false
--   repo: meta
+  - repo: meta
     hooks:
-    -   id: check-useless-excludes
+      - id: check-useless-excludes
 default_language_version:
-    python: python3
+  python: python3

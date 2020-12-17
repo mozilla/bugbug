@@ -72,7 +72,7 @@ export const TESTING_TAGS = {
   unknown: {
     color: getCSSVariableValue("--grey-30"),
     label: "unknown",
-  }
+  },
 };
 
 let taskclusterLandingsArtifact = (async function () {
@@ -103,7 +103,6 @@ let taskclusterComponentConnectionsArtifact = (async function () {
   return json;
 })();
 
-
 export let componentConnections = (async function () {
   let json = await taskclusterComponentConnectionsArtifact;
   return json;
@@ -115,7 +114,9 @@ export let featureMetabugs = (async function () {
 })();
 
 export async function getFirefoxReleases() {
-  let response = await fetch("https://product-details.mozilla.org/1.0/firefox_history_major_releases.json");
+  let response = await fetch(
+    "https://product-details.mozilla.org/1.0/firefox_history_major_releases.json"
+  );
   return await response.json();
 }
 
@@ -150,7 +151,7 @@ export class Counter {
     return new Proxy(
       {},
       {
-        get: (target, name) => (name in target ? target[name] : 0)
+        get: (target, name) => (name in target ? target[name] : 0),
       }
     );
   }
@@ -163,8 +164,13 @@ export async function getSummaryData(
   counter,
   filter
 ) {
-  let dates = [...new Set(bugSummaries.map(summary => summary.date))];
-  dates.sort((a, b) => Temporal.PlainDate.compare(Temporal.PlainDate.from(a), Temporal.PlainDate.from(b)));
+  let dates = [...new Set(bugSummaries.map((summary) => summary.date))];
+  dates.sort((a, b) =>
+    Temporal.PlainDate.compare(
+      Temporal.PlainDate.from(a),
+      Temporal.PlainDate.from(b)
+    )
+  );
 
   let dailyData = {};
   for (let date of dates) {
@@ -191,7 +197,7 @@ export async function getSummaryData(
   }
 
   let labels = new Set(
-    Object.values(dailyData).flatMap(data => Object.keys(data))
+    Object.values(dailyData).flatMap((data) => Object.keys(data))
   );
 
   if (grouping == "weekly") {
@@ -225,13 +231,18 @@ export async function getSummaryData(
       }
     }
     return monthlyData;
-  } else if (grouping = "by_release") {
+  } else if ((grouping = "by_release")) {
     let byReleaseData = {};
     let releases = await getFirefoxReleases();
     for (const daily in dailyData) {
       let version = null;
       for (const [cur_version, cur_date] of Object.entries(releases)) {
-        if (Temporal.PlainDate.compare(Temporal.PlainDate.from(daily), Temporal.PlainDate.from(cur_date)) < 1) {
+        if (
+          Temporal.PlainDate.compare(
+            Temporal.PlainDate.from(daily),
+            Temporal.PlainDate.from(cur_date)
+          ) < 1
+        ) {
           break;
         }
         version = cur_version;

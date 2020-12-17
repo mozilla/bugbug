@@ -1,97 +1,94 @@
 {
+  "metadata": {
+    "description": "",
+    "name": "BugBug test select",
+    "owner": "mcastelluccio@mozilla.com"
+  },
+  "task": {
+    "created": {
+      "$fromNow": "0 seconds"
+    },
+    "deadline": {
+      "$fromNow": "2 hours"
+    },
+    "expires": {
+      "$fromNow": "1 month"
+    },
+    "extra": {
+      "phabricator-deployment": "${payload['PHABRICATOR_DEPLOYMENT']}",
+      "phabricator-diff-id": "${payload['DIFF_ID']}"
+    },
     "metadata": {
-        "description": "",
-        "name": "BugBug test select",
-        "owner": "mcastelluccio@mozilla.com"
+      "description": "",
+      "name": "BugBug test select",
+      "owner": "mcastelluccio@mozilla.com",
+      "source": "https://github.com/mozilla/bugbug"
     },
-    "task": {
-        "created": {
-            "$fromNow": "0 seconds"
+    "payload": {
+      "artifacts": {
+        "public/selected_tasks": {
+          "path": "/selected_tasks",
+          "type": "file"
         },
-        "deadline": {
-            "$fromNow": "2 hours"
-        },
-        "expires": {
-            "$fromNow": "1 month"
-        },
-        "extra": {
-            "phabricator-deployment": "${payload['PHABRICATOR_DEPLOYMENT']}",
-            "phabricator-diff-id": "${payload['DIFF_ID']}"
-        },
-        "metadata": {
-            "description": "",
-            "name": "BugBug test select",
-            "owner": "mcastelluccio@mozilla.com",
-            "source": "https://github.com/mozilla/bugbug"
-        },
-        "payload": {
-            "artifacts": {
-                "public/selected_tasks": {
-                    "path": "/selected_tasks",
-                    "type": "file"
-                },
-                "public/failure_risk": {
-                    "path": "/failure_risk",
-                    "type": "file"
-                }
-            },
-            "cache": {
-                "bugbug-mercurial-repository": "/cache"
-            },
-            "capabilities": {},
-            "env": {
-                "TC_SECRET_ID": "project/bugbug/production"
-            },
-            "features": {
-                "taskclusterProxy": true
-            },
-            "command": [
-                "bugbug-classify-commit",
-                "testlabelselect",
-                "/cache/mozilla-central",
-                "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
-                "--diff-id=${payload['DIFF_ID']}",
-                "--runnable-jobs=${payload['RUNNABLE_JOBS']}"
-            ],
-            "image": "mozilla/bugbug-commit-retrieval",
-            "maxRunTime": 7200
-        },
-        "priority": "normal",
-        "provisionerId": "proj-bugbug",
-        "retries": 5,
-        "routes": [
-            "notify.email.mcastelluccio@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed",
-            "index.project.bugbug.test_select.latest",
-            "index.project.bugbug.test_select.diff.${payload['DIFF_ID']}",
-            "project.bugbug.test_select"
-        ],
-        "schedulerId": "-",
-        "scopes": [
-            "assume:hook-id:project-bugbug/bugbug-test-select",
-            "queue:route:project.bugbug.test_select.*"
-        ],
-        "tags": {},
-        "workerType": "compute-small"
+        "public/failure_risk": {
+          "path": "/failure_risk",
+          "type": "file"
+        }
+      },
+      "cache": {
+        "bugbug-mercurial-repository": "/cache"
+      },
+      "capabilities": {},
+      "env": {
+        "TC_SECRET_ID": "project/bugbug/production"
+      },
+      "features": {
+        "taskclusterProxy": true
+      },
+      "command": [
+        "bugbug-classify-commit",
+        "testlabelselect",
+        "/cache/mozilla-central",
+        "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
+        "--diff-id=${payload['DIFF_ID']}",
+        "--runnable-jobs=${payload['RUNNABLE_JOBS']}"
+      ],
+      "image": "mozilla/bugbug-commit-retrieval",
+      "maxRunTime": 7200
     },
-    "triggerSchema": {
-        "additionalProperties": false,
-        "properties": {
-            "PHABRICATOR_DEPLOYMENT": {
-                "type": "string",
-                "enum": ["prod", "dev"]
-            },
-            "DIFF_ID": {
-                "type": "number"
-            },
-            "RUNNABLE_JOBS": {
-                "type": "string"
-            }
-        },
-        "required": [
-            "PHABRICATOR_DEPLOYMENT",
-            "DIFF_ID"
-        ],
-        "type": "object"
-    }
+    "priority": "normal",
+    "provisionerId": "proj-bugbug",
+    "retries": 5,
+    "routes": [
+      "notify.email.mcastelluccio@mozilla.com.on-failed",
+      "notify.irc-channel.#bugbug.on-failed",
+      "index.project.bugbug.test_select.latest",
+      "index.project.bugbug.test_select.diff.${payload['DIFF_ID']}",
+      "project.bugbug.test_select"
+    ],
+    "schedulerId": "-",
+    "scopes": [
+      "assume:hook-id:project-bugbug/bugbug-test-select",
+      "queue:route:project.bugbug.test_select.*"
+    ],
+    "tags": {},
+    "workerType": "compute-small"
+  },
+  "triggerSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "PHABRICATOR_DEPLOYMENT": {
+        "type": "string",
+        "enum": ["prod", "dev"]
+      },
+      "DIFF_ID": {
+        "type": "number"
+      },
+      "RUNNABLE_JOBS": {
+        "type": "string"
+      }
+    },
+    "required": ["PHABRICATOR_DEPLOYMENT", "DIFF_ID"],
+    "type": "object"
+  }
 }

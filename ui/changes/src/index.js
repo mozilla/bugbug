@@ -1,9 +1,9 @@
 // TODO: On click, show previous components affected by similar patches.
 // TODO: On click, show previous bugs caused by similar patches.
 
-import { Temporal } from 'proposal-temporal/lib/index.mjs';
+import { Temporal } from "proposal-temporal/lib/index.mjs";
 
-import ApexCharts from 'apexcharts'
+import ApexCharts from "apexcharts";
 
 import {
   TESTING_TAGS,
@@ -53,7 +53,7 @@ let options = {
   },
   releaseVersions: {
     value: null,
-    type: "select"
+    type: "select",
   },
 };
 
@@ -208,10 +208,14 @@ function addRow(bugSummary) {
   testing_tags_column.append(testing_tags_list);
 
   let coverage_column = row.insertCell(3);
-  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(bugSummary);
+  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
+    bugSummary
+  );
   if (lines_added != 0) {
     if (lines_unknown != 0) {
-      coverage_column.textContent = `${lines_covered}-${lines_covered + lines_unknown} of ${lines_added}`;
+      coverage_column.textContent = `${lines_covered}-${
+        lines_covered + lines_unknown
+      } of ${lines_added}`;
     } else {
       coverage_column.textContent = `${lines_covered} of ${lines_added}`;
     }
@@ -227,49 +231,49 @@ function addRow(bugSummary) {
   if (bugSummary.risk_band == "l") {
     // Lower than average risk.
     risk_text.style.color = LOW_RISK_COLOR;
-    risk_text.textContent = 'Lower';
+    risk_text.textContent = "Lower";
   } else if (bugSummary.risk_band == "a") {
     // Average risk.
     risk_text.style.color = MEDIUM_RISK_COLOR;
-    risk_text.textContent = 'Average';
+    risk_text.textContent = "Average";
   } else {
     // Higher than average risk.
     risk_text.style.color = HIGH_RISK_COLOR;
-    risk_text.textContent = 'Higher';
+    risk_text.textContent = "Higher";
   }
 
   risk_column.append(risk_text);
 }
 
 async function populateVersions() {
-  var versionSelector = document.getElementById("releaseVersions")
+  var versionSelector = document.getElementById("releaseVersions");
 
   let data = await landingsData;
 
   var allVersions = new Set();
-    for (let bugs of Object.values(data)) {
-      bugs.forEach(item => {
-        if (item.versions.length) {
-          allVersions.add(...item.versions)
-        }
-      })
-    }
-  var versions = [...allVersions]
-  versions.sort()
+  for (let bugs of Object.values(data)) {
+    bugs.forEach((item) => {
+      if (item.versions.length) {
+        allVersions.add(...item.versions);
+      }
+    });
+  }
+  var versions = [...allVersions];
+  versions.sort();
 
   for (let version of versions) {
-    let el = document.createElement("option")
-    el.setAttribute("value", version)
-    el.textContent = version
-    el.selected = true
-    versionSelector.appendChild(el)
+    let el = document.createElement("option");
+    el.setAttribute("value", version);
+    el.textContent = version;
+    el.selected = true;
+    versionSelector.appendChild(el);
   }
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
   let testingCounts = new Counter();
-  bugSummaries.forEach(summary => {
-    summary.commits.forEach(commit => {
+  bugSummaries.forEach((summary) => {
+    summary.commits.forEach((commit) => {
       if (!commit.testing) {
         testingCounts.unknown++;
       } else {
@@ -350,7 +354,9 @@ async function renderRiskChart(chartEl, bugSummaries) {
   );
 
   // Enforce up to 2 months history, earlier patches are in the model's training set.
-  let twoMonthsAgo = Temporal.now.plainDateISO().subtract(new Temporal.Duration(0, 2));
+  let twoMonthsAgo = Temporal.now
+    .plainDateISO()
+    .subtract(new Temporal.Duration(0, 2));
   if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) < 0) {
     minDate = twoMonthsAgo;
   }
@@ -385,16 +391,16 @@ async function renderRiskChart(chartEl, bugSummaries) {
     series: [
       {
         name: "Higher",
-        data: high
+        data: high,
       },
       {
         name: "Average",
-        data: medium
+        data: medium,
       },
       {
         name: "Lower",
-        data: low
-      }
+        data: low,
+      },
     ],
     chart: {
       height: 350,
@@ -405,51 +411,51 @@ async function renderRiskChart(chartEl, bugSummaries) {
         top: 18,
         left: 7,
         blur: 10,
-        opacity: 0.2
+        opacity: 0.2,
       },
       toolbar: {
-        show: false
-      }
+        show: false,
+      },
     },
     colors: [HIGH_RISK_COLOR, MEDIUM_RISK_COLOR, LOW_RISK_COLOR],
     dataLabels: {
-      enabled: true
+      enabled: true,
     },
     stroke: {
-      curve: "smooth"
+      curve: "smooth",
     },
     title: {
       text: "Evolution of lower/average/higher risk changes",
-      align: "left"
+      align: "left",
     },
     grid: {
       borderColor: "#e7e7e7",
       row: {
         colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5
-      }
+        opacity: 0.5,
+      },
     },
     markers: {
-      size: 1
+      size: 1,
     },
     xaxis: {
       categories: categories,
       title: {
-        text: "Date"
-      }
+        text: "Date",
+      },
     },
     yaxis: {
       title: {
-        text: "# of patches"
-      }
+        text: "# of patches",
+      },
     },
     legend: {
       position: "top",
       horizontalAlign: "right",
       floating: true,
       offsetY: -25,
-      offsetX: -5
-    }
+      offsetX: -5,
+    },
   };
 
   let chart = new ApexCharts(chartEl, options);
@@ -462,7 +468,7 @@ async function renderSummary(bugSummaries) {
   let changesets = [];
   if (bugSummaries.length) {
     changesets = bugSummaries
-      .map(summary => summary.commits.length)
+      .map((summary) => summary.commits.length)
       .reduce((a, b) => a + b);
   }
 
@@ -486,7 +492,7 @@ async function buildTable(rerender = true) {
   let components = getOption("components");
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
-  let releaseVersions = getOption("releaseVersions")
+  let releaseVersions = getOption("releaseVersions");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -555,44 +561,51 @@ async function buildTable(rerender = true) {
   }
   if (releaseVersions) {
     bugSummaries = bugSummaries.filter((bugSummary) =>
-      releaseVersions.some(
-        version => bugSummary.versions.includes(Number(version))
+      releaseVersions.some((version) =>
+        bugSummary.versions.includes(Number(version))
       )
-    )
+    );
   }
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       return Temporal.PlainDate.compare(
         Temporal.PlainDate.from(a.date),
         Temporal.PlainDate.from(b.date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       if (a.risk_band == b.risk_band) {
         return 0;
-      } else if (a.risk_band == "h" || (a.risk_band == "a" && b.risk_band == "l")) {
+      } else if (
+        a.risk_band == "h" ||
+        (a.risk_band == "a" && b.risk_band == "l")
+      ) {
         return 1;
       } else {
         return -1;
       }
     };
   } else if (sortBy[0] == "Bug") {
-    sortFunction = function(a, b) {
-      return a.id - b.id
+    sortFunction = function (a, b) {
+      return a.id - b.id;
     };
   } else if (sortBy[0] == "Coverage") {
-    sortFunction = function(a, b) {
-      let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(a);
-      let [lines_added_b, lines_covered_b, lines_unknown_b] = summarizeCoverage(b);
+    sortFunction = function (a, b) {
+      let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(
+        a
+      );
+      let [lines_added_b, lines_covered_b, lines_unknown_b] = summarizeCoverage(
+        b
+      );
 
       let uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
       let uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
 
       if (uncovered_a == uncovered_b) {
-          return lines_added_a - lines_added_b;
+        return lines_added_a - lines_added_b;
       }
 
       return uncovered_a - uncovered_b;
@@ -697,14 +710,18 @@ function setTableHeaderHandlers() {
         rebuildTable();
       };
     } else if (optionType === "radio") {
-      for (const radio of document.querySelectorAll(`input[name=${optionName}]`)) {
+      for (const radio of document.querySelectorAll(
+        `input[name=${optionName}]`
+      )) {
         if (radio.checked) {
           setOption(optionName, radio.value);
         }
       }
 
       elem.onchange = function () {
-        for (const radio of document.querySelectorAll(`input[name=${optionName}]`)) {
+        for (const radio of document.querySelectorAll(
+          `input[name=${optionName}]`
+        )) {
           if (radio.checked) {
             setOption(optionName, radio.value);
           }

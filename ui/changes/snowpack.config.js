@@ -16,7 +16,7 @@ module.exports = {
     /* ... */
   },
   mount: {
-    "src": "/",
+    src: "/",
     /* ... */
   },
   alias: {

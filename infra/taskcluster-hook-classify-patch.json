@@ -1,94 +1,89 @@
 {
+  "metadata": {
+    "description": "",
+    "name": "BugBug classify patch",
+    "owner": "mcastelluccio@mozilla.com"
+  },
+  "task": {
+    "created": {
+      "$fromNow": "0 seconds"
+    },
+    "deadline": {
+      "$fromNow": "2 hours"
+    },
+    "expires": {
+      "$fromNow": "1 month"
+    },
+    "extra": {},
     "metadata": {
-        "description": "",
-        "name": "BugBug classify patch",
-        "owner": "mcastelluccio@mozilla.com"
+      "description": "",
+      "name": "BugBug classify patch",
+      "owner": "mcastelluccio@mozilla.com",
+      "source": "https://github.com/mozilla/bugbug"
     },
-    "task": {
-        "created": {
-            "$fromNow": "0 seconds"
+    "payload": {
+      "artifacts": {
+        "public/probs.json": {
+          "path": "/probs.json",
+          "type": "file"
         },
-        "deadline": {
-            "$fromNow": "2 hours"
+        "public/importances.json": {
+          "path": "/importances.json",
+          "type": "file"
         },
-        "expires": {
-            "$fromNow": "1 month"
-        },
-        "extra": {},
-        "metadata": {
-            "description": "",
-            "name": "BugBug classify patch",
-            "owner": "mcastelluccio@mozilla.com",
-            "source": "https://github.com/mozilla/bugbug"
-        },
-        "payload": {
-            "artifacts": {
-                "public/probs.json": {
-                    "path": "/probs.json",
-                    "type": "file"
-                },
-                "public/importances.json": {
-                    "path": "/importances.json",
-                    "type": "file"
-                },
-                "public/method_level.json": {
-                    "path": "/method_level.json",
-                    "type": "file"
-                }
-            },
-            "cache": {
-                "bugbug-mercurial-repository": "/cache"
-            },
-            "capabilities": {},
-            "env": {
-                "TC_SECRET_ID": "project/bugbug/production"
-            },
-            "features": {
-                "taskclusterProxy": true
-            },
-            "command": [
-                "bugbug-classify-commit",
-                "regressor",
-                "/cache/mozilla-central",
-                "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
-                "--diff-id=${payload['DIFF_ID']}",
-                "--git_repo_dir=/gecko-dev",
-                "--method_defect_predictor_dir=/MethodDefectPredictor"
-            ],
-            "image": "mozilla/bugbug-commit-retrieval",
-            "maxRunTime": 7200
-        },
-        "priority": "normal",
-        "provisionerId": "proj-bugbug",
-        "retries": 5,
-        "routes": [
-            "notify.email.mcastelluccio@mozilla.com.on-failed",
-            "notify.irc-channel.#bugbug.on-failed",
-            "index.project.bugbug.classify_patch.latest",
-            "index.project.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
-        ],
-        "schedulerId": "-",
-        "scopes": [
-            "assume:hook-id:project-bugbug/bugbug-classify-patch"
-        ],
-        "tags": {},
-        "workerType": "compute-small"
+        "public/method_level.json": {
+          "path": "/method_level.json",
+          "type": "file"
+        }
+      },
+      "cache": {
+        "bugbug-mercurial-repository": "/cache"
+      },
+      "capabilities": {},
+      "env": {
+        "TC_SECRET_ID": "project/bugbug/production"
+      },
+      "features": {
+        "taskclusterProxy": true
+      },
+      "command": [
+        "bugbug-classify-commit",
+        "regressor",
+        "/cache/mozilla-central",
+        "--phabricator-deployment=${payload['PHABRICATOR_DEPLOYMENT']}",
+        "--diff-id=${payload['DIFF_ID']}",
+        "--git_repo_dir=/gecko-dev",
+        "--method_defect_predictor_dir=/MethodDefectPredictor"
+      ],
+      "image": "mozilla/bugbug-commit-retrieval",
+      "maxRunTime": 7200
     },
-    "triggerSchema": {
-        "additionalProperties": false,
-        "properties": {
-            "PHABRICATOR_DEPLOYMENT": {
-                "type": "string",
-                "enum": ["prod", "dev"]
-            },
-            "DIFF_ID": {
-                "type": "number"
-            }
-        },
-        "required": [
-            "PHABRICATOR_DEPLOYMENT",
-            "DIFF_ID"
-        ],
-        "type": "object"
-    }
+    "priority": "normal",
+    "provisionerId": "proj-bugbug",
+    "retries": 5,
+    "routes": [
+      "notify.email.mcastelluccio@mozilla.com.on-failed",
+      "notify.irc-channel.#bugbug.on-failed",
+      "index.project.bugbug.classify_patch.latest",
+      "index.project.bugbug.classify_patch.diff.${payload['DIFF_ID']}"
+    ],
+    "schedulerId": "-",
+    "scopes": ["assume:hook-id:project-bugbug/bugbug-classify-patch"],
+    "tags": {},
+    "workerType": "compute-small"
+  },
+  "triggerSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "PHABRICATOR_DEPLOYMENT": {
+        "type": "string",
+        "enum": ["prod", "dev"]
+      },
+      "DIFF_ID": {
+        "type": "number"
+      }
+    },
+    "required": ["PHABRICATOR_DEPLOYMENT", "DIFF_ID"],
+    "type": "object"
+  }
 }

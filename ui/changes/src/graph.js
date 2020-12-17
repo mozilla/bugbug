@@ -147,7 +147,7 @@ function rerender(connections, teamComponentMapping) {
   );
 }
 
-(async function() {
+(async function () {
   let connections = await componentConnections;
   console.log(connections);
   console.log(teamComponentMapping);
@@ -158,7 +158,7 @@ function rerender(connections, teamComponentMapping) {
   for (let c of connections) {
     for (let regression_component in c.most_common_regression_components) {
       // Ignore < N%
-      if (c.most_common_regression_components[regression_component] < .05) {
+      if (c.most_common_regression_components[regression_component] < 0.05) {
         continue;
       }
       if (!connectionsMap[regression_component]) {
