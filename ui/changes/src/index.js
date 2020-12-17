@@ -554,7 +554,7 @@ async function buildTable(rerender = true) {
     );
   }
   if (releaseVersions) {
-    bugSummaries = bugSummaries.filter((bugSummary) => 
+    bugSummaries = bugSummaries.filter((bugSummary) =>
       releaseVersions.some(
         version => bugSummary.versions.includes(Number(version))
       )
