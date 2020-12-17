@@ -433,6 +433,15 @@ class LandingsRiskReportGenerator(object):
             commit_group = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
+                "regression": len(bug["regressed_by"]) > 0
+                or any(
+                    keyword in bug["keywords"]
+                    for keyword in ["regression", "talos-regression"]
+                )
+                or (
+                    "cf_has_regression_range" in bug
+                    and bug["cf_has_regression_range"] == "yes"
+                ),
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"
