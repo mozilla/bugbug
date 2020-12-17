@@ -247,8 +247,8 @@ async function populateVersions() {
   let data = await landingsData;
 
   var allVersions = new Set();
-    for (let bug of Object.values(data)) {
-      bug.some(item => {
+    for (let bugs of Object.values(data)) {
+      bugs.forEach(item => {
         if (item.versions.length) {
           allVersions.add(...item.versions)
         }
@@ -554,11 +554,11 @@ async function buildTable(rerender = true) {
     );
   }
   if (releaseVersions) {
-    bugSummaries = bugSummaries.filter((bugSummary) => {
-      return releaseVersions.some(
+    bugSummaries = bugSummaries.filter((bugSummary) => 
+      releaseVersions.some(
         version => bugSummary.versions.includes(Number(version))
-      );
-    })
+      )
+    )
   }
 
   let sortFunction = null;
@@ -657,7 +657,6 @@ function setTableHeaderHandlers() {
   await populateVersions();
 
   setTableHeaderHandlers();
-
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
