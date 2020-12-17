@@ -343,7 +343,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
       Temporal.PlainDate.compare(
         Temporal.PlainDate.from(summary.date),
         Temporal.PlainDate.from(minSummary.date)
-      )
+      ) < 0
         ? summary
         : minSummary
     ).date
@@ -351,7 +351,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
 
   // Enforce up to 2 months history, earlier patches are in the model's training set.
   let twoMonthsAgo = Temporal.now.plainDateISO().subtract(new Temporal.Duration(0, 2));
-  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate)) {
+  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) < 0) {
     minDate = twoMonthsAgo;
   }
 
