@@ -231,7 +231,7 @@ export async function getSummaryData(
       }
     }
     return monthlyData;
-  } else if ((grouping = "by_release")) {
+  } else if (grouping == "by_release") {
     let byReleaseData = {};
     let releases = await getFirefoxReleases();
     for (const daily in dailyData) {
