@@ -77,3 +77,33 @@ tasks:
         description: bugbug ui build
         owner: mcastelluccio@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
+
+    - ID: frontend-deploy
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "1 hour" }
+      expires: { $fromNow: "2 weeks" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      dependencies:
+        - frontend-build
+      payload:
+        features:
+          taskclusterProxy: true
+        maxRunTime: 3600
+        image: mozilla/taskboot:0.2.2
+        env:
+          TASKCLUSTER_SECRET: project/bugbug/deploy
+        command:
+          - taskboot
+          - deploy-s3
+          - --artifact-folder
+          - public/frontend
+          - --bucket
+          - "bugbug-production-bugbug-static-website-static-website"
+      scopes:
+        - secrets:get:project/bugbug/deploy
+      metadata:
+        name: bugbug ui deploy
+        description: bugbug ui deploy
+        owner: mcastelluccio@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
