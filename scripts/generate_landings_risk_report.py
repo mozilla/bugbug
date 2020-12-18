@@ -452,6 +452,9 @@ class LandingsRiskReportGenerator(object):
                     component_team_mapping, bug["product"], bug["component"]
                 ),
                 "summary": bug["summary"],
+                "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
+                    "%Y-%m-%d"
+                ),
                 "date": max(
                     dateutil.parser.parse(commit["pushdate"]) for commit in commit_list
                 ).strftime("%Y-%m-%d"),
