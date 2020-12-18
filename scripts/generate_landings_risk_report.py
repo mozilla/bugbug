@@ -95,7 +95,7 @@ class LandingsRiskReportGenerator(object):
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
 
-    def get_landed_since(self, days: int) -> List[int]:
+    def get_landed_and_filed_since(self, days: int) -> List[int]:
         since = datetime.utcnow() - timedelta(days=days)
 
         commits = [
@@ -104,7 +104,14 @@ class LandingsRiskReportGenerator(object):
             if dateutil.parser.parse(commit["pushdate"]) >= since and commit["bug_id"]
         ]
 
-        return [commit["bug_id"] for commit in commits]
+        bug_ids = set(commit["bug_id"] for commit in commits)
+        bug_ids.update(
+            bug["id"]
+            for bug in bugzilla.get_bugs()
+            if dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None) >= since
+        )
+
+        return list(bug_ids)
 
     def get_regressors_of(self, bug_ids: List[int]) -> List[int]:
         bugzilla.download_bugs(bug_ids)
@@ -163,9 +170,7 @@ class LandingsRiskReportGenerator(object):
 
         logger.info(f"{len(commits)} commits to analyze.")
 
-        bug_ids = {commit["bug_id"] for commit in commits}
-
-        logger.info(f"{len(bug_ids)} bugs to analyze.")
+        logger.info(f"{len(bugs_set)} bugs to analyze.")
 
         bug_map = {}
         regressor_bug_ids = set()
@@ -384,6 +389,9 @@ class LandingsRiskReportGenerator(object):
                 ] = fixed_bug_blocked_bug_components
 
         def get_commit_data(commit_list: List[repository.CommitDict]) -> List[dict]:
+            if len(commit_list) == 0:
+                return []
+
             # Evaluate risk of commits associated to this bug.
             probs = self.regressor_model.classify(commit_list, probabilities=True)
 
@@ -419,18 +427,27 @@ class LandingsRiskReportGenerator(object):
         # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
         commits.sort(key=lambda x: x["bug_id"])
 
-        commit_groups = []
+        bug_to_commits = {}
         for bug_id, commit_iter in itertools.groupby(commits, lambda x: x["bug_id"]):
             # TODO: Figure out what to do with bugs we couldn't download (security bugs).
             if bug_id not in bug_map:
                 continue
 
-            commit_list = sorted(commit_iter, key=lambda x: hash_to_rev[x["node"]])
+            bug_to_commits[bug_id] = sorted(
+                commit_iter, key=lambda x: hash_to_rev[x["node"]]
+            )
+
+        bug_summaries = []
+        for bug_id in bugs:
+            if bug_id not in bug_map:
+                continue
+
+            commit_list = bug_to_commits.get(bug_id, [])
             commit_data = get_commit_data(commit_list)
 
             bug = bug_map[bug_id]
 
-            commit_group = {
+            bug_summary = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
                 "regression": len(bug["regressed_by"]) > 0
@@ -457,25 +474,29 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "date": max(
                     dateutil.parser.parse(commit["pushdate"]) for commit in commit_list
-                ).strftime("%Y-%m-%d"),
+                ).strftime("%Y-%m-%d")
+                if len(commit_list) > 0
+                else None,
                 "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
                 "risk_band": find_risk_band(
                     max(commit["risk"] for commit in commit_data)
-                ),
+                )
+                if len(commit_data) > 0
+                else None,
             }
 
-            get_prev_bugs_stats(commit_group, commit_list)
+            get_prev_bugs_stats(bug_summary, commit_list)
 
-            commit_groups.append(commit_group)
+            bug_summaries.append(bug_summary)
 
         landings_by_date = collections.defaultdict(list)
-        for commit_group in commit_groups:
-            landings_by_date[commit_group["date"]].append(commit_group)
+        for bug_summary in bug_summaries:
+            landings_by_date[bug_summary["creation_date"]].append(bug_summary)
 
         with open("landings_by_date.json", "w") as f:
             output: dict = {
-                "landings": landings_by_date,
+                "summaries": landings_by_date,
             }
             if meta_bugs is not None:
                 output["featureMetaBugs"] = [
@@ -598,7 +619,7 @@ def main() -> None:
     elif args.blocking_of is not None:
         bugs = landings_risk_report_generator.get_blocking_of(args.blocking_of)
     elif args.days is not None:
-        bugs = landings_risk_report_generator.get_landed_since(args.days)
+        bugs = landings_risk_report_generator.get_landed_and_filed_since(args.days)
     else:
         assert False
 

@@ -122,7 +122,7 @@ export async function getFirefoxReleases() {
 
 export let landingsData = (async function () {
   let json = await taskclusterLandingsArtifact;
-  json = json.landings;
+  json = json.summaries;
 
   // Sort the dates so object iteration will be sequential:
   let orderedDates = [];
@@ -162,9 +162,10 @@ export async function getSummaryData(
   grouping = "daily",
   startDate,
   counter,
-  filter
+  filter,
+  dateGetter = (summary) => summary.date
 ) {
-  let dates = [...new Set(bugSummaries.map((summary) => summary.date))];
+  let dates = [...new Set(bugSummaries.map((summary) => dateGetter(summary)))];
   dates.sort((a, b) =>
     Temporal.PlainDate.compare(
       Temporal.PlainDate.from(a),
@@ -184,7 +185,7 @@ export async function getSummaryData(
   }
 
   for (let summary of bugSummaries) {
-    let counterObj = dailyData[summary.date];
+    let counterObj = dailyData[dateGetter(summary)];
     if (!counterObj) {
       continue;
     }
@@ -263,7 +264,9 @@ export async function getSummaryData(
 }
 
 export async function getTestingPolicySummaryData(grouping = "daily", filter) {
-  let bugSummaries = [].concat.apply([], Object.values(await landingsData));
+  let bugSummaries = [].concat
+    .apply([], Object.values(await landingsData))
+    .filter((summary) => summary.date);
 
   return getSummaryData(
     bugSummaries,
