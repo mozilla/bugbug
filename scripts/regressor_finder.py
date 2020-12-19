@@ -269,14 +269,23 @@ class RegressorFinder(object):
         if bugs_to_classify:
             classified_bugs = defect_model.classify(bugs_to_classify)
 
+        defect_bugs = []
+
         for bug, label in zip(bugs_to_classify, classified_bugs):
             if label == "defect":
-                if regression_model.classify(bug)[0] == 1:
-                    append_bug_fixing_commits(bug["id"], "r")
-                else:
-                    append_bug_fixing_commits(bug["id"], "d")
+                defect_bugs.append(bug)
             else:
                 append_bug_fixing_commits(bug["id"], "e")
+
+        classified_defect_bugs = []
+        if defect_bugs:
+            classified_defect_bugs = regression_model.classify(defect_bugs)
+
+        for bug, classification in zip(defect_bugs, classified_defect_bugs):
+            if classification == 1:
+                append_bug_fixing_commits(bug["id"], "r")
+            else:
+                append_bug_fixing_commits(bug["id"], "d")
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
         zstd_compress(BUG_FIXING_COMMITS_DB)
