@@ -167,12 +167,16 @@ class DefectModel(BugModel):
             if bug_id in classes:
                 continue
 
-            if any(
-                keyword in bug["keywords"]
-                for keyword in ["regression", "talos-regression"]
-            ) or (
-                "cf_has_regression_range" in bug
-                and bug["cf_has_regression_range"] == "yes"
+            if (
+                len(bug["regressed_by"]) > 0
+                or any(
+                    keyword in bug["keywords"]
+                    for keyword in ["regression", "talos-regression"]
+                )
+                or (
+                    "cf_has_regression_range" in bug
+                    and bug["cf_has_regression_range"] == "yes"
+                )
             ):
                 if kind in ["bug", "regression"]:
                     classes[bug_id] = 1

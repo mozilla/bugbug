@@ -6,7 +6,7 @@
 import csv
 import re
 from datetime import datetime
-from typing import Dict, Iterator, List, NewType, Optional
+from typing import Dict, Iterable, Iterator, List, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -32,6 +32,7 @@ PRODUCTS = (
     "DevTools",
     "DevTools Graveyard",
     "External Software Affecting Firefox",
+    "Fenix",
     "Firefox",
     "Firefox Graveyard",
     "Firefox Build System",
@@ -40,8 +41,10 @@ PRODUCTS = (
     # 'Firefox for iOS',
     "Firefox Health Report",
     # 'Focus',
+    "GeckoView",
     # 'Hello (Loop)',
     "Invalid Bugs",
+    "JSS",
     "NSPR",
     "NSS",
     "Toolkit",
@@ -163,17 +166,16 @@ def get_ids_between(date_from, date_to, security=False):
     return get_ids(params)
 
 
-def download_bugs(bug_ids, products=None, security=False):
+def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
     old_bug_count = 0
-    new_bug_ids = set(int(bug_id) for bug_id in bug_ids)
+    new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs(include_invalid=True):
         old_bug_count += 1
-        if int(bug["id"]) in new_bug_ids:
-            new_bug_ids.remove(int(bug["id"]))
+        new_bug_ids_set.discard(int(bug["id"]))
 
     print(f"Loaded {old_bug_count} bugs.")
 
-    new_bug_ids = sorted(list(new_bug_ids))
+    new_bug_ids = sorted(list(new_bug_ids_set))
 
     chunks = (
         new_bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
@@ -189,9 +191,6 @@ def download_bugs(bug_ids, products=None, security=False):
 
         if not security:
             new_bugs = [bug for bug in new_bugs.values() if len(bug["groups"]) == 0]
-
-        if products is not None:
-            new_bugs = [bug for bug in new_bugs.values() if bug["product"] in products]
 
         return new_bugs
 
@@ -266,11 +265,15 @@ def count_bugs(bug_query_params):
     return count
 
 
-def get_product_component_csv_report():
-    since = datetime.utcnow() - relativedelta(months=12)
+def get_product_component_count(months: int = 12) -> Dict[str, int]:
+    """Returns a dictionary where keys are full components (in the form of
+    `{product}::{component}`) and the value of the number of bugs for the
+    given full components. Full component with 0 bugs are returned.
+    """
+    since = datetime.utcnow() - relativedelta(months=months)
 
     # Base params
-    url_params = {
+    params = {
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": since.strftime("%Y-%m-%d"),
@@ -281,16 +284,9 @@ def get_product_component_csv_report():
         "format": "table",
     }
 
-    return PRODUCT_COMPONENT_CSV_REPORT_URL, url_params
-
-
-def get_product_component_count():
-    """Returns a dictionary where keys are full components (in the form of
-    `{product}::{component}`) and the value of the number of bugs for the
-    given full components. Full component with 0 bugs are returned.
-    """
-    url, params = get_product_component_csv_report()
-    csv_file = utils.get_session("bugzilla").get(url, params=params)
+    csv_file = utils.get_session("bugzilla").get(
+        PRODUCT_COMPONENT_CSV_REPORT_URL, params=params
+    )
     csv_file.raise_for_status()
     content = csv_file.text
 
@@ -314,3 +310,40 @@ def get_product_component_count():
             bugs_number[full_comp] = value
 
     return bugs_number
+
+
+def get_component_team_mapping() -> dict:
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/config/component_teams",
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def component_to_team(
+    component_team_mapping: dict,
+    product: str,
+    component: str,
+) -> Optional[str]:
+    component = component.lower()
+
+    for team, products_data in component_team_mapping.items():
+        if product not in products_data:
+            continue
+
+        product_data = products_data[product]
+        if (
+            product_data["all_components"]
+            or any(
+                component == named_component.lower()
+                for named_component in product_data["named_components"]
+            )
+            or any(
+                component.startswith(prefix.lower())
+                for prefix in product_data["prefixed_components"]
+            )
+        ):
+            return team
+
+    return None

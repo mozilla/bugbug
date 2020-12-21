@@ -184,11 +184,13 @@ class RegressorFinder(object):
         db.download(BUG_FIXING_COMMITS_DB)
 
         logger.info("Get previously classified commits...")
-        prev_bug_fixing_commits = list(db.read(BUG_FIXING_COMMITS_DB))
         prev_bug_fixing_commits_nodes = set(
-            bug_fixing_commit["rev"] for bug_fixing_commit in prev_bug_fixing_commits
+            bug_fixing_commit["rev"]
+            for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
         )
-        logger.info(f"Already classified {len(prev_bug_fixing_commits)} commits...")
+        logger.info(
+            f"Already classified {len(prev_bug_fixing_commits_nodes)} commits..."
+        )
 
         # TODO: Switch to the pure Defect model, as it's better in this case.
         logger.info("Downloading defect/enhancement/task model...")
@@ -235,6 +237,7 @@ class RegressorFinder(object):
         known_regression_labels, _ = regression_model.get_labels()
 
         bug_fixing_commits = []
+        bugs_to_classify = []
 
         def append_bug_fixing_commits(bug_id: int, type_: str) -> None:
             for commit in commit_map[bug_id]:
@@ -260,13 +263,29 @@ class RegressorFinder(object):
                     append_bug_fixing_commits(bug["id"], "e")
                 continue
 
-            if defect_model.classify(bug)[0] == "defect":
-                if regression_model.classify(bug)[0] == 1:
-                    append_bug_fixing_commits(bug["id"], "r")
-                else:
-                    append_bug_fixing_commits(bug["id"], "d")
+            bugs_to_classify.append(bug)
+
+        classified_bugs = []
+        if bugs_to_classify:
+            classified_bugs = defect_model.classify(bugs_to_classify)
+
+        defect_bugs = []
+
+        for bug, label in zip(bugs_to_classify, classified_bugs):
+            if label == "defect":
+                defect_bugs.append(bug)
             else:
                 append_bug_fixing_commits(bug["id"], "e")
+
+        classified_defect_bugs = []
+        if defect_bugs:
+            classified_defect_bugs = regression_model.classify(defect_bugs)
+
+        for bug, classification in zip(defect_bugs, classified_defect_bugs):
+            if classification == 1:
+                append_bug_fixing_commits(bug["id"], "r")
+            else:
+                append_bug_fixing_commits(bug["id"], "d")
 
         db.append(BUG_FIXING_COMMITS_DB, bug_fixing_commits)
         zstd_compress(BUG_FIXING_COMMITS_DB)

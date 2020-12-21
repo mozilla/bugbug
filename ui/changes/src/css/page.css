@@ -23,12 +23,10 @@ table th {
 }
 table tr td:nth-child(1),
 table tr th:nth-child(1) {
-  width: 3em;
-}
-table tr td:nth-child(2),
-table tr th:nth-child(2) {
   text-align: left;
 }
+table tr td:nth-child(2),
+table tr th:nth-child(2),
 table tr td:nth-child(3),
 table tr th:nth-child(3),
 table tr td:nth-child(4),

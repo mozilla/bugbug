@@ -7,7 +7,6 @@ RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /code/spaw
 
 ADD spawn_pipeline.py /code
 
-ADD data-pipeline.yml /code
-ADD check-pipeline.yml /code
+ADD *-pipeline.yml /code/
 
 CMD python /code/spawn_pipeline.py

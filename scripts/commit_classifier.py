@@ -6,6 +6,7 @@ import csv
 import io
 import json
 import os
+import pickle
 import re
 import subprocess
 from datetime import datetime
@@ -14,7 +15,6 @@ from typing import Optional, Tuple, cast
 
 import dateutil.parser
 import hglib
-import joblib
 import matplotlib
 import numpy as np
 import requests
@@ -178,8 +178,11 @@ class CommitClassifier(object):
                 zstd_decompress(model_data_y_path)
             assert os.path.exists(model_data_y_path), "Decompressed y dataset exists"
 
-            self.X = to_array(joblib.load(model_data_X_path))
-            self.y = to_array(joblib.load(model_data_y_path))
+            with open(model_data_X_path, "rb") as fb:
+                self.X = to_array(pickle.load(fb))
+
+            with open(model_data_y_path, "rb") as fb:
+                self.y = to_array(pickle.load(fb))
 
             past_bugs_by_function_path = "data/past_fixed_bugs_by_function.json"
             download_check_etag(

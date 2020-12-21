@@ -4,15 +4,14 @@ tasks:
     repository: https://github.com/mozilla/bugbug
   in:
     - ID: landings-risk-report-generator
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '2 hours'}
-      expires: {$fromNow: '2 weeks'}
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 hours" }
+      expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: compute-small
       payload:
         features:
-          taskclusterProxy:
-            true
+          taskclusterProxy: true
         maxRunTime: 7200
         image: mozilla/bugbug-commit-retrieval
         env:
@@ -32,6 +31,9 @@ tasks:
             type: file
         cache:
           bugbug-mercurial-repository: /cache
+      scopes:
+        - docker-worker:cache:bugbug-mercurial-repository
+        - secrets:get:project/bugbug/production
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
@@ -43,11 +45,13 @@ tasks:
         source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
 
     - ID: frontend-build
-      created: {$fromNow: ''}
-      deadline: {$fromNow: '1 hour'}
-      expires: {$fromNow: '2 weeks'}
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "1 hour" }
+      expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
+      dependencies:
+        - landings-risk-report-generator
       payload:
         maxRunTime: 3600
         image: node
@@ -55,11 +59,11 @@ tasks:
           - "/bin/sh"
           - "-lcxe"
           - "git clone --quiet ${repository} /bugbug &&
-             cd /bugbug &&
-             git -c advice.detachedHead=false checkout ${version} &&
-             cd ui/changes &&
-             npm install --no-progress &&
-             npm run release"
+            cd /bugbug &&
+            git -c advice.detachedHead=false checkout ${version} &&
+            cd ui/changes &&
+            npm install --no-progress &&
+            npm run release"
         artifacts:
           public/frontend:
             path: /bugbug/ui/changes/dist
@@ -71,5 +75,35 @@ tasks:
       metadata:
         name: bugbug ui build
         description: bugbug ui build
+        owner: mcastelluccio@mozilla.com
+        source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml
+
+    - ID: frontend-deploy
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "1 hour" }
+      expires: { $fromNow: "2 weeks" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      dependencies:
+        - frontend-build
+      payload:
+        features:
+          taskclusterProxy: true
+        maxRunTime: 3600
+        image: mozilla/taskboot:0.2.2
+        env:
+          TASKCLUSTER_SECRET: project/bugbug/deploy
+        command:
+          - taskboot
+          - deploy-s3
+          - --artifact-folder
+          - public/frontend
+          - --bucket
+          - "bugbug-production-bugbug-static-website-static-website"
+      scopes:
+        - secrets:get:project/bugbug/deploy
+      metadata:
+        name: bugbug ui deploy
+        description: bugbug ui deploy
         owner: mcastelluccio@mozilla.com
         source: https://github.com/mozilla/bugbug/raw/${version}/infra/landings-pipeline.yml

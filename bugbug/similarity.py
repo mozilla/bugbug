@@ -7,13 +7,13 @@ import abc
 import bisect
 import logging
 import os
+import pickle
 import random
 import re
 from collections import defaultdict
 from functools import lru_cache
 from itertools import chain
 
-import joblib
 import numpy as np
 from pyemd import emd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -252,12 +252,14 @@ class BaseSimilarity(abc.ABC):
 
     def save(self):
         path = f"{self.__class__.__name__.lower()}.similaritymodel"
-        joblib.dump(self, path)
+        with open(path, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
         return path
 
     @staticmethod
     def load(model_file_name):
-        return joblib.load(model_file_name)
+        with open(model_file_name, "rb") as f:
+            return pickle.load(f)
 
 
 class LSISimilarity(BaseSimilarity):

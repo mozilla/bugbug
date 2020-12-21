@@ -416,10 +416,9 @@ class files(object):
                 self.count[f] += 1
 
         # We no longer need to store counts for files which have low frequency.
-        to_del = set()
-        for f, c in self.count.items():
-            if c / self.total_commits < self.min_freq:
-                to_del.add(f)
+        to_del = set(
+            f for f, c in self.count.items() if c / self.total_commits < self.min_freq
+        )
 
         for f in to_del:
             del self.count[f]

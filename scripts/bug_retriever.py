@@ -14,11 +14,6 @@ from bugbug.utils import get_secret, zstd_compress
 logger = getLogger(__name__)
 
 
-DELETED_COMPONENTS = {
-    ("Firefox", "WebPayments UI"),
-}
-
-
 class Retriever(object):
     def retrieve_bugs(self, limit=None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
@@ -35,10 +30,12 @@ class Retriever(object):
         )
         logger.info(f"Retrieved {len(changed_ids)} IDs.")
 
+        all_components = bugzilla.get_product_component_count(9999)
+
         deleted_component_ids = [
             bug["id"]
             for bug in bugzilla.get_bugs()
-            if (bug["product"], bug["component"]) in DELETED_COMPONENTS
+            if "{}::{}".format(bug["product"], bug["component"]) not in all_components
         ]
         logger.info(
             f"{len(deleted_component_ids)} bugs belonging to deleted components"
