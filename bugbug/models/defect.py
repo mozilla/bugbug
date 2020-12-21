@@ -119,22 +119,10 @@ class DefectModel(BugModel):
                 if category != "nobug":
                     classes[int(bug_id)] = "defect"
 
-        defect_enhancement_task_e = {
-            bug_id: category
-            for bug_id, category in labels.get_labels("defect_enhancement_task_e")
-        }
-        defect_enhancement_task_p = {
-            bug_id: category
-            for bug_id, category in labels.get_labels("defect_enhancement_task_p")
-        }
-        defect_enhancement_task_s = {
-            bug_id: category
-            for bug_id, category in labels.get_labels("defect_enhancement_task_s")
-        }
-        defect_enhancement_task_h = {
-            bug_id: category
-            for bug_id, category in labels.get_labels("defect_enhancement_task_h")
-        }
+        defect_enhancement_task_e = dict(labels.get_labels("defect_enhancement_task_e"))
+        defect_enhancement_task_p = dict(labels.get_labels("defect_enhancement_task_p"))
+        defect_enhancement_task_s = dict(labels.get_labels("defect_enhancement_task_s"))
+        defect_enhancement_task_h = dict(labels.get_labels("defect_enhancement_task_h"))
 
         defect_enhancement_task_common = (
             (bug_id, category)

@@ -595,7 +595,7 @@ def update_touched_together() -> Generator[None, Optional[Revision], None]:
     )
 
     # We can start once we get to the last revision we added in the previous run.
-    can_start = True if last_analyzed is None else False
+    can_start = last_analyzed is None
 
     seen = set()
 
