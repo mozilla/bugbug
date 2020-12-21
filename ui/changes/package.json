@@ -13,7 +13,7 @@
   "license": "ISC",
   "devDependencies": {
     "prettier": "^2.2.1",
-    "snowpack": "^2.18.4"
+    "snowpack": "^2.18.5"
   },
   "dependencies": {
     "apexcharts": "^3.23.0",
