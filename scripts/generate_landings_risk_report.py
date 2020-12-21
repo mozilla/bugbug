@@ -17,6 +17,7 @@ import requests
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository, test_scheduling
+from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
@@ -469,6 +470,7 @@ class LandingsRiskReportGenerator(object):
                     component_team_mapping, bug["product"], bug["component"]
                 ),
                 "summary": bug["summary"],
+                "types": bug_to_types(bug),
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
                     "%Y-%m-%d"
                 ),

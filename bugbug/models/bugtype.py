@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from typing import Dict, Iterable, List, Tuple
+
 import numpy as np
 import xgboost
 from sklearn.compose import ColumnTransformer
@@ -28,7 +30,17 @@ KEYWORD_DICT = {
     "crashreportid": "crash",
     "perf": "performance",
 }
-KEYWORD_LIST = sorted(set(KEYWORD_DICT.values()))
+TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
+
+
+def bug_to_types(bug: bugzilla.BugDict) -> List[str]:
+    return list(
+        set(
+            KEYWORD_DICT[keyword]
+            for keyword in bug["keywords"]
+            if keyword in KEYWORD_DICT
+        )
+    )
 
 
 class BugTypeModel(BugModel):
@@ -96,29 +108,32 @@ class BugTypeModel(BugModel):
             xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
-    def get_labels(self):
+    def get_labels(self) -> Tuple[Dict[int, np.ndarray], List[str]]:
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            target = np.zeros(len(KEYWORD_LIST))
-            for keyword in bug_data["keywords"]:
-                if keyword in KEYWORD_DICT:
-                    target[KEYWORD_LIST.index(KEYWORD_DICT[keyword])] = 1
+            target = np.zeros(len(TYPE_LIST))
+            for type_ in bug_to_types(bug_data):
+                target[TYPE_LIST.index(type_)] = 1
 
             classes[int(bug_data["id"])] = target
 
-        return classes, KEYWORD_LIST
+        return classes, TYPE_LIST
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
 
-    def overwrite_classes(self, bugs, classes, probabilities):
+    def overwrite_classes(
+        self,
+        bugs: Iterable[bugzilla.BugDict],
+        classes: Dict[int, np.ndarray],
+        probabilities: bool,
+    ):
         for i, bug in enumerate(bugs):
-            for keyword in bug["keywords"]:
-                if keyword in KEYWORD_LIST:
-                    if probabilities:
-                        classes[i][KEYWORD_LIST.index(keyword)] = 1.0
-                    else:
-                        classes[i][KEYWORD_LIST.index(keyword)] = 1
+            for type_ in bug_to_types(bug):
+                if probabilities:
+                    classes[i][TYPE_LIST.index(type_)] = 1.0
+                else:
+                    classes[i][TYPE_LIST.index(type_)] = 1
 
         return classes
