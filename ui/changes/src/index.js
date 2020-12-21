@@ -590,6 +590,112 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
   chart.render();
 }
 
+async function renderTypesChart(chartEl, bugSummaries) {
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = Temporal.PlainDate.from(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        Temporal.PlainDate.from(summary.creation_date),
+        Temporal.PlainDate.from(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      for (const type of bug.types) {
+        counterObj[type] += 1;
+      }
+    },
+    null,
+    (summary) => summary.creation_date
+  );
+
+  let all_series = [];
+  for (let type of allBugTypes) {
+    all_series.push({
+      name: type,
+      data: [],
+    });
+  }
+
+  let categories = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    for (let series of all_series) {
+      series["data"].push(summaryData[date][series["name"]]);
+    }
+  }
+
+  let options = {
+    series: all_series,
+    chart: {
+      height: 350,
+      type: "line",
+      dropShadow: {
+        enabled: true,
+        color: "#000",
+        top: 18,
+        left: 7,
+        blur: 10,
+        opacity: 0.2,
+      },
+      toolbar: {
+        show: false,
+      },
+    },
+    dataLabels: {
+      enabled: true,
+    },
+    stroke: {
+      curve: "smooth",
+    },
+    title: {
+      text: "Number of bugs by type",
+      align: "left",
+    },
+    grid: {
+      borderColor: "#e7e7e7",
+      row: {
+        colors: ["#f3f3f3", "transparent"],
+        opacity: 0.5,
+      },
+    },
+    markers: {
+      size: 1,
+    },
+    xaxis: {
+      categories: categories,
+      title: {
+        text: "Date",
+      },
+    },
+    yaxis: {
+      title: {
+        text: "# of bugs",
+      },
+    },
+    legend: {
+      position: "top",
+      horizontalAlign: "right",
+      floating: true,
+      offsetY: -25,
+      offsetX: -5,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
+}
+
 async function renderSummary(bugSummaries) {
   let metaBugID = getOption("metaBugID");
 
@@ -615,6 +721,10 @@ async function renderSummary(bugSummaries) {
   let regressionsChartEl = document.createElement("div");
   resultSummary.append(regressionsChartEl);
   await renderRegressionsChart(regressionsChartEl, bugSummaries);
+
+  let typesChartEl = document.createElement("div");
+  resultSummary.append(typesChartEl);
+  await renderTypesChart(typesChartEl, bugSummaries);
 }
 
 async function buildTable(rerender = true) {
