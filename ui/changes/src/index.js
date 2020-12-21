@@ -60,6 +60,7 @@ let options = {
 let sortBy = ["Date", "DESC"];
 let resultSummary = document.getElementById("result-summary");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
+let allBugTypes;
 
 // TODO: port this to an option maybe
 async function buildMetabugsDropdown() {
@@ -134,6 +135,31 @@ async function buildTeamsSelect() {
     option.textContent = team;
     option.selected = true;
     teamsSelect.append(option);
+  }
+}
+
+async function buildTypesSelect() {
+  let typesSelect = document.getElementById("types");
+
+  let data = await landingsData;
+
+  let types = new Set();
+  for (let landings of Object.values(data)) {
+    for (let landing of landings) {
+      if (landing.types.length) {
+        types.add(...landing.types);
+      }
+    }
+  }
+
+  allBugTypes = [...types];
+
+  for (let type of allBugTypes) {
+    let option = document.createElement("option");
+    option.setAttribute("value", type);
+    option.textContent = type;
+    option.selected = true;
+    typesSelect.append(option);
   }
 }
 
@@ -779,6 +805,7 @@ function setTableHeaderHandlers() {
   await buildComponentsSelect();
   await buildTeamsSelect();
   await populateVersions();
+  await buildTypesSelect();
 
   setTableHeaderHandlers();
 
