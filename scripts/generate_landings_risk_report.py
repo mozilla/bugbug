@@ -471,6 +471,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "types": bug_to_types(bug),
+                "severity": bug["severity"],
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
                     "%Y-%m-%d"
                 ),
