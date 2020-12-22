@@ -59,6 +59,10 @@ let options = {
     value: null,
     type: "select",
   },
+  severities: {
+    value: null,
+    type: "select",
+  },
 };
 
 let sortBy = ["Date", "DESC"];
@@ -166,6 +170,29 @@ async function buildTypesSelect() {
     option.textContent = type;
     option.selected = true;
     typesSelect.append(option);
+  }
+}
+
+async function buildSeveritiesSelect() {
+  let severitiesSelect = document.getElementById("severities");
+
+  let data = await landingsData;
+
+  let allSeverities = new Set();
+  for (let landings of Object.values(data)) {
+    for (let landing of landings) {
+      allSeverities.add(landing.severity);
+    }
+  }
+
+  let severities = [...allSeverities];
+
+  for (let type of severities) {
+    let option = document.createElement("option");
+    option.setAttribute("value", type);
+    option.textContent = type;
+    option.selected = true;
+    severitiesSelect.append(option);
   }
 }
 
@@ -742,6 +769,7 @@ async function buildTable(rerender = true) {
   let whiteBoard = getOption("whiteBoard");
   let releaseVersions = getOption("releaseVersions");
   let types = getOption("types");
+  let severities = getOption("severities");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -827,6 +855,12 @@ async function buildTable(rerender = true) {
         bugSummary.types.some((type) => types.includes(type))
       );
     }
+  }
+
+  if (severities) {
+    bugSummaries = bugSummaries.filter((bugSummary) =>
+      severities.includes(bugSummary.severity)
+    );
   }
 
   let sortFunction = null;
@@ -931,6 +965,7 @@ function setTableHeaderHandlers() {
   await buildTeamsSelect();
   await populateVersions();
   await buildTypesSelect();
+  await buildSeveritiesSelect();
 
   setTableHeaderHandlers();
 
