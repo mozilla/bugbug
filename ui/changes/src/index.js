@@ -55,6 +55,10 @@ let options = {
     value: null,
     type: "select",
   },
+  types: {
+    value: null,
+    type: "select",
+  },
 };
 
 let sortBy = ["Date", "DESC"];
@@ -151,6 +155,8 @@ async function buildTypesSelect() {
       }
     }
   }
+
+  types.add("unknown");
 
   allBugTypes = [...types];
 
@@ -735,6 +741,7 @@ async function buildTable(rerender = true) {
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
   let releaseVersions = getOption("releaseVersions");
+  let types = getOption("types");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -812,6 +819,14 @@ async function buildTable(rerender = true) {
         bugSummary.versions.includes(Number(version))
       )
     );
+  }
+
+  if (types) {
+    if (!types.includes("unknown")) {
+      bugSummaries = bugSummaries.filter((bugSummary) =>
+        bugSummary.types.some((type) => types.includes(type))
+      );
+    }
   }
 
   let sortFunction = null;
