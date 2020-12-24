@@ -859,13 +859,16 @@ async function buildTable(rerender = true) {
   }
 
   if (testingTags) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      bugSummary.commits.some((commit) => {
-        if (includeUnknown && !commit.testing) {
-          return true;
-        }
-        return commit.testing && testingTags.includes(commit.testing);
-      })
+    const includeNotAvailableTestingTags = releaseVersions.includes("N/A");
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        (includeNotAvailableTestingTags && bugSummary.commits.length == 0) ||
+        bugSummary.commits.some((commit) => {
+          if (includeUnknown && !commit.testing) {
+            return true;
+          }
+          return commit.testing && testingTags.includes(commit.testing);
+        })
     );
   }
 
