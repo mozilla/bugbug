@@ -63,6 +63,10 @@ let options = {
     value: null,
     type: "select",
   },
+  riskiness: {
+    value: null,
+    type: "select",
+  },
 };
 
 let sortBy = ["Date", "DESC"];
@@ -770,6 +774,7 @@ async function buildTable(rerender = true) {
   let releaseVersions = getOption("releaseVersions");
   let types = getOption("types");
   let severities = getOption("severities");
+  let riskiness = getOption("riskiness");
   let includeUnknown = testingTags.includes("unknown");
   if (testingTags.includes("missing")) {
     testingTags[testingTags.indexOf("missing")] = "none";
@@ -860,6 +865,15 @@ async function buildTable(rerender = true) {
   if (severities) {
     bugSummaries = bugSummaries.filter((bugSummary) =>
       severities.includes(bugSummary.severity)
+    );
+  }
+
+  if (riskiness) {
+    const includeNotAvailable = riskiness.includes("N/A");
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        (includeNotAvailable && bugSummary.risk_band === null) ||
+        riskiness.includes(bugSummary.risk_band)
     );
   }
 
