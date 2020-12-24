@@ -891,10 +891,10 @@ async function buildTable(rerender = true) {
   }
 
   if (releaseVersions) {
-    const includeMissingVersion = releaseVersions.includes("N/A");
+    const includeNotAvailableVersion = releaseVersions.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeMissingVersion && bugSummary.versions.length == 0) ||
+        (includeNotAvailableVersion && bugSummary.versions.length == 0) ||
         releaseVersions.some((version) =>
           bugSummary.versions.includes(Number(version))
         )
@@ -916,10 +916,10 @@ async function buildTable(rerender = true) {
   }
 
   if (riskiness) {
-    const includeNotAvailable = riskiness.includes("N/A");
+    const includeNotAvailableRiskiness = riskiness.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeNotAvailable && bugSummary.risk_band === null) ||
+        (includeNotAvailableRiskiness && bugSummary.risk_band === null) ||
         riskiness.includes(bugSummary.risk_band)
     );
   }
