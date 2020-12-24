@@ -922,8 +922,8 @@ async function buildTable(rerender = true) {
   if (sortBy[0] == "Date") {
     sortFunction = function (a, b) {
       return Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(a.date),
-        Temporal.PlainDate.from(b.date)
+        Temporal.PlainDate.from(a.date ? a.date : a.creation_date),
+        Temporal.PlainDate.from(b.date ? b.date : b.creation_date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
