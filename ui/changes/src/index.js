@@ -534,7 +534,37 @@ async function renderRiskChart(chartEl, bugSummaries) {
   chart.render();
 }
 
+function filterByCreationDate(bugSummaries) {
+  let startDate = getOption("startDate");
+  if (startDate) {
+    startDate = Temporal.PlainDate.from(startDate);
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        Temporal.PlainDate.compare(
+          Temporal.PlainDate.from(bugSummary.creation_date),
+          startDate
+        ) >= 0
+    );
+  }
+
+  let endDate = getOption("endDate");
+  if (endDate) {
+    endDate = Temporal.PlainDate.from(endDate);
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        Temporal.PlainDate.compare(
+          Temporal.PlainDate.from(bugSummary.creation_date),
+          endDate
+        ) <= 0
+    );
+  }
+
+  return bugSummaries;
+}
+
 async function renderRegressionsChart(chartEl, bugSummaries) {
+  bugSummaries = filterByCreationDate(bugSummaries);
+
   if (bugSummaries.length == 0) {
     return;
   }
@@ -547,7 +577,7 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
       ) < 0
         ? summary
         : minSummary
-    ).date
+    ).creation_date
   );
 
   let summaryData = await getSummaryData(
@@ -637,6 +667,8 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
 }
 
 async function renderTypesChart(chartEl, bugSummaries) {
+  bugSummaries = filterByCreationDate(bugSummaries);
+
   if (bugSummaries.length == 0) {
     return;
   }
@@ -649,7 +681,7 @@ async function renderTypesChart(chartEl, bugSummaries) {
       ) < 0
         ? summary
         : minSummary
-    ).date
+    ).creation_date
   );
 
   let summaryData = await getSummaryData(
