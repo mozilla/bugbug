@@ -406,6 +406,10 @@ function renderTestingChart(chartEl, bugSummaries) {
 }
 
 async function renderRiskChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter(
+    (bugSummary) => bugSummary.risk_band !== null
+  );
+
   if (bugSummaries.length == 0) {
     return;
   }
