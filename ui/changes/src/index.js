@@ -888,10 +888,13 @@ async function buildTable(rerender = true) {
   }
 
   if (releaseVersions) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      releaseVersions.some((version) =>
-        bugSummary.versions.includes(Number(version))
-      )
+    const includeMissingVersion = releaseVersions.includes("N/A");
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        (includeMissingVersion && bugSummary.versions.length == 0) ||
+        releaseVersions.some((version) =>
+          bugSummary.versions.includes(Number(version))
+        )
     );
   }
 
