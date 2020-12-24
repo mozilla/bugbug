@@ -186,6 +186,7 @@ class Commit:
         self.average_comment_loc = 0.0
         self.average_nargs = 0.0
         self.average_nexits = 0.0
+        self.average_cognitive = 0.0
         self.maximum_cyclomatic = 0
         self.maximum_halstead_N2 = 0
         self.maximum_halstead_n2 = 0
@@ -197,6 +198,7 @@ class Commit:
         self.maximum_comment_loc = 0
         self.maximum_nargs = 0
         self.maximum_nexits = 0
+        self.maximum_cognitive = 0
         self.minimum_cyclomatic = sys.maxsize
         self.minimum_halstead_N1 = sys.maxsize
         self.minimum_halstead_n1 = sys.maxsize
@@ -208,6 +210,7 @@ class Commit:
         self.minimum_comment_loc = sys.maxsize
         self.minimum_nargs = sys.maxsize
         self.minimum_nexits = sys.maxsize
+        self.minimum_cognitive = sys.maxsize
         self.total_cyclomatic = 0
         self.total_halstead_N1 = 0
         self.total_halstead_n1 = 0
@@ -219,6 +222,7 @@ class Commit:
         self.total_comment_loc = 0
         self.total_nargs = 0
         self.total_nexits = 0
+        self.total_cognitive = 0
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -475,6 +479,7 @@ def get_metrics(commit, metrics_space):
         commit.total_comment_loc += metrics["loc"]["cloc"]
         commit.total_nargs += metrics["nargs"]
         commit.total_nexits += metrics["nexits"]
+        commit.total_cognitive += metrics["cognitive"]
 
         commit.maximum_cyclomatic = max(
             commit.maximum_cyclomatic, metrics["cyclomatic"]["sum"]
@@ -507,6 +512,7 @@ def get_metrics(commit, metrics_space):
         )
         commit.maximum_nargs = max(metrics["nargs"], commit.maximum_nargs)
         commit.maximum_nexits = max(metrics["nexits"], commit.maximum_nexits)
+        commit.maximum_cognitive = max(metrics["cognitive"], commit.maximum_cognitive)
 
         commit.minimum_cyclomatic = min(
             commit.minimum_cyclomatic, metrics["cyclomatic"]["sum"]
@@ -539,6 +545,7 @@ def get_metrics(commit, metrics_space):
         )
         commit.minimum_nargs = min(metrics["nargs"], commit.minimum_nargs)
         commit.minimum_nexits = min(metrics["nexits"], commit.minimum_nexits)
+        commit.minimum_cognitive = min(metrics["cognitive"], commit.minimum_cognitive)
 
     for space in metrics_space["spaces"]:
         error |= get_metrics(commit, space)
@@ -681,6 +688,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
         commit.average_comment_loc = commit.total_comment_loc / metrics_file_count
         commit.average_nargs = commit.total_nargs / metrics_file_count
         commit.average_nexits = commit.total_nexits / metrics_file_count
+        commit.average_cognitive = commit.total_cognitive / metrics_file_count
     else:
         # these values are initialized with sys.maxsize (because we take the min)
         # if no files, then reset them to 0 (it'd be stupid to have min > max)
@@ -695,6 +703,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
         commit.minimum_comment_loc = 0
         commit.minimum_nargs = 0
         commit.minimum_nexits = 0
+        commit.minimum_cognitive = 0
 
     return commit
 

@@ -147,6 +147,7 @@ class source_code_file_metrics(object):
             "Average number of comment loc": commit["average_comment_loc"],
             "Average number of function arguments": commit["average_nargs"],
             "Average number of function exit points": commit["average_nexits"],
+            "Average cognitive": commit["average_cognitive"],
             "Maximum cyclomatic": commit["maximum_cyclomatic"],
             "Maximum number of unique operands": commit["maximum_halstead_n2"],
             "Maximum number of operands": commit["maximum_halstead_N2"],
@@ -158,6 +159,7 @@ class source_code_file_metrics(object):
             "Maximum number of comment loc": commit["maximum_comment_loc"],
             "Maximum number of function arguments": commit["maximum_nargs"],
             "Maximum number of function exit points": commit["maximum_nexits"],
+            "Maximum cognitive": commit["maximum_cognitive"],
             "Minimum cyclomatic": commit["minimum_cyclomatic"],
             "Minimum number of unique operands": commit["minimum_halstead_n2"],
             "Minimum number of operands": commit["minimum_halstead_N2"],
@@ -169,6 +171,7 @@ class source_code_file_metrics(object):
             "Minimum number of comment loc": commit["minimum_comment_loc"],
             "Minimum number of function arguments": commit["minimum_nargs"],
             "Minimum number of function exit points": commit["minimum_nexits"],
+            "Minimum cognitive": commit["minimum_cognitive"],
             "Total of number of operands": commit["total_halstead_N2"],
             "Total of number of unique operators": commit["total_halstead_n1"],
             "Total number of operators": commit["total_halstead_N1"],
@@ -178,6 +181,7 @@ class source_code_file_metrics(object):
             "Total number of comment loc": commit["total_comment_loc"],
             "Total number of function arguments": commit["total_nargs"],
             "Total number of function exit points": commit["total_nexits"],
+            "Total cognitive": commit["total_cognitive"],
         }
 
 
