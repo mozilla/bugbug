@@ -816,7 +816,6 @@ async function buildTable(rerender = true) {
   let types = getOption("types");
   let severities = getOption("severities");
   let riskiness = getOption("riskiness");
-  let includeUnknown = testingTags.includes("unknown");
 
   let bugSummaries = [].concat.apply([], Object.values(data));
   if (metaBugID) {
@@ -856,16 +855,16 @@ async function buildTable(rerender = true) {
   }
 
   if (testingTags) {
+    const includeUnknownTestingTags = testingTags.includes("unknown");
     const includeNotAvailableTestingTags = releaseVersions.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
         (includeNotAvailableTestingTags && bugSummary.commits.length == 0) ||
-        bugSummary.commits.some((commit) => {
-          if (includeUnknown && !commit.testing) {
-            return true;
-          }
-          return commit.testing && testingTags.includes(commit.testing);
-        })
+        bugSummary.commits.some(
+          (commit) =>
+            (includeUnknownTestingTags && !commit.testing) ||
+            testingTags.includes(commit.testing)
+        )
     );
   }
 
