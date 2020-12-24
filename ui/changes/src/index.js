@@ -299,10 +299,15 @@ function addRow(bugSummary) {
     // Average risk.
     risk_text.style.color = MEDIUM_RISK_COLOR;
     risk_text.textContent = "Average";
-  } else {
+  } else if (bugSummary.risk_band == "h") {
     // Higher than average risk.
     risk_text.style.color = HIGH_RISK_COLOR;
     risk_text.textContent = "Higher";
+  } else if (bugSummary.risk_band == null) {
+    // No risk available (there are no commits associated to the bug).
+    risk_text.textContent = "N/A";
+  } else {
+    throw new Exception("Unknown risk band");
   }
 
   risk_column.append(risk_text);
