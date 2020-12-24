@@ -403,7 +403,7 @@ class LandingsRiskReportGenerator(object):
                     testing = phabricator.get_testing_project(revision_map[revision_id])
 
                     if testing is None:
-                        testing = "none"
+                        testing = "missing"
                 else:
                     testing = None
 

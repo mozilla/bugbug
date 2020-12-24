@@ -817,9 +817,6 @@ async function buildTable(rerender = true) {
   let severities = getOption("severities");
   let riskiness = getOption("riskiness");
   let includeUnknown = testingTags.includes("unknown");
-  if (testingTags.includes("missing")) {
-    testingTags[testingTags.indexOf("missing")] = "none";
-  }
 
   let bugSummaries = [].concat.apply([], Object.values(data));
   if (metaBugID) {

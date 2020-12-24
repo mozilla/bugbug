@@ -65,7 +65,7 @@ export const TESTING_TAGS = {
     color: getCSSVariableValue("--yellow-50"),
     label: "other",
   },
-  none: {
+  missing: {
     color: getCSSVariableValue("--red-60"),
     label: "missing",
   },
