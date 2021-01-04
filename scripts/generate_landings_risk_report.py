@@ -110,6 +110,15 @@ class LandingsRiskReportGenerator(object):
             bug["id"]
             for bug in bugzilla.get_bugs()
             if dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None) >= since
+            and bug["resolution"]
+            not in [
+                "INVALID",
+                "WONTFIX",
+                "INACTIVE",
+                "DUPLICATE",
+                "INCOMPLETE",
+                "MOVED",
+            ]
         )
 
         return list(bug_ids)
