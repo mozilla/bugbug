@@ -13,8 +13,8 @@ from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Any, Dict, Generator, List
 
-import adr
 import dateutil.parser
+import mozci.errors
 import mozci.push
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
@@ -41,7 +41,7 @@ class Retriever(object):
         # failure statistics.
         from_months = training_months + math.floor(training_months / 2)
 
-        # We use the actual date instead of 'today-X' aliases to avoid adr caching
+        # We use the actual date instead of 'today-X' aliases to avoid mozci caching
         # this query.
         from_date = datetime.utcnow() - relativedelta(months=from_months)
         to_date = datetime.utcnow() - relativedelta(days=3)
@@ -122,7 +122,7 @@ class Retriever(object):
                         )
                         assert len(value) == 5
                         yield value
-                    except adr.errors.MissingDataError:
+                    except mozci.errors.MissingDataError:
                         logger.warning(
                             f"Tasks for push {push.rev} can't be found on ActiveData"
                         )
