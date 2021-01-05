@@ -561,7 +561,7 @@ class TestSelectModel(Model):
                 if config_group_var.solution_value() == 1:
                     configs_by_group[group].append(config)
         else:
-            least_cost_config = min(config_costs, key=config_costs.get)
+            least_cost_config = min(config_costs, key=lambda c: config_costs[c])
             for group in groups:
                 configs_by_group[group].append(least_cost_config)
 
