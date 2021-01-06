@@ -16,7 +16,7 @@ import responses
 import zstandard
 from dateutil.relativedelta import relativedelta
 
-from bugbug import repository, rust_code_analysis_server
+from bugbug import commit_features, repository, rust_code_analysis_server
 
 
 @pytest.fixture
@@ -2004,3 +2004,20 @@ def test_get_revision_id():
         "desc": "Bug 1667333: Remove unnecessary prefs for mime type checking r=necko-reviewers,evilpie,valentin\n\nDifferential Revision: https://phabricator.services.mozilla.com/D91406",
     }
     assert repository.get_revision_id(commit) == 91406
+
+
+def test_commit_dict_matches_expected():
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    # Ensure the fields expected by commit_features functions are actually present in the commit dict.
+    commit_features.source_code_file_metrics()(commit.to_dict())
