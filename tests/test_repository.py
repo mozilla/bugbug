@@ -1942,6 +1942,110 @@ function inner_func() {
 
     assert set(touched_functions) == {("outer_func", 1, 6), ("inner_func", 3, 5)}
 
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func3() {
+    int i = 3;
+}
+
+void func4() {
+    int i = 4;
+}""",
+        unit=False,
+    )
+
+    # A function removed in the middle, no new function touched.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [5, 6, 7, 8],
+        [],
+    )
+
+    assert touched_functions == []
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func2() {
+    int i = 2;
+}
+
+void func3() {
+    int i = 3;
+}
+
+void func4() {
+    int i = 4;
+}""",
+        unit=False,
+    )
+
+    # A function removed at the beginning, no new function touched.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [1, 2, 3, 4],
+        [],
+    )
+
+    assert touched_functions == []
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}
+
+void func3() {
+    int i = 3;
+}""",
+        unit=False,
+    )
+
+    # A function removed at the end, no new function touched.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [12, 13, 14],
+        [],
+    )
+
+    assert touched_functions == []
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}
+
+void func3() {
+    int i = 3;
+}
+
+void func4() {
+    int i = 4;
+}""",
+        unit=False,
+    )
+
+    # A function removed at the beginning, no new function touched.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [1, 2, 3, 4],
+        [1, 2, 3, 4],
+    )
+
+    assert touched_functions == [("func1", 1, 3)]
+
 
 def test_get_metrics():
     # Allow using the local code analysis server.

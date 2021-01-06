@@ -444,7 +444,7 @@ def get_touched_functions(
 
     for line in deleted_lines:
         for func in prev_functions:
-            if line < func["start_line"]:
+            if line <= func["start_line"]:
                 func["start_line"] += 1
 
             if line < func["end_line"]:
