@@ -21,7 +21,7 @@ RUN apt-get update && \
     git config --global fetch.prune true && \
     git cinnabar download && \
     rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
-    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.18/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
+    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.19/rust-code-analysis-linux-x86_64.tar.gz | tar -C /usr/bin -xzv --strip=1 && \
     apt-get purge -y curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*

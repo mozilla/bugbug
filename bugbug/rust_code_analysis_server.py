@@ -45,7 +45,7 @@ class RustCodeAnalysisServer:
 
         try:
             self.proc = subprocess.Popen(
-                ["rust-code-analysis-cli", "--serve", "--port", str(self.port)]
+                ["rust-code-analysis-web", "--port", str(self.port)]
             )
         except FileNotFoundError:
             raise Exception("rust-code-analysis is required for code analysis")

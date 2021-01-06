@@ -477,9 +477,9 @@ def get_metrics(commit, metrics_space):
         commit.total_instruction_loc += metrics["loc"]["ploc"]
         commit.total_logical_loc += metrics["loc"]["lloc"]
         commit.total_comment_loc += metrics["loc"]["cloc"]
-        commit.total_nargs += metrics["nargs"]
-        commit.total_nexits += metrics["nexits"]
-        commit.total_cognitive += metrics["cognitive"]
+        commit.total_nargs += metrics["nargs"]["sum"]
+        commit.total_nexits += metrics["nexits"]["sum"]
+        commit.total_cognitive += metrics["cognitive"]["sum"]
 
         commit.maximum_cyclomatic = max(
             commit.maximum_cyclomatic, metrics["cyclomatic"]["sum"]
@@ -510,9 +510,11 @@ def get_metrics(commit, metrics_space):
         commit.maximum_comment_loc = max(
             metrics["loc"]["cloc"], commit.maximum_comment_loc
         )
-        commit.maximum_nargs = max(metrics["nargs"], commit.maximum_nargs)
-        commit.maximum_nexits = max(metrics["nexits"], commit.maximum_nexits)
-        commit.maximum_cognitive = max(metrics["cognitive"], commit.maximum_cognitive)
+        commit.maximum_nargs = max(metrics["nargs"]["sum"], commit.maximum_nargs)
+        commit.maximum_nexits = max(metrics["nexits"]["sum"], commit.maximum_nexits)
+        commit.maximum_cognitive = max(
+            metrics["cognitive"]["sum"], commit.maximum_cognitive
+        )
 
         commit.minimum_cyclomatic = min(
             commit.minimum_cyclomatic, metrics["cyclomatic"]["sum"]
@@ -543,9 +545,11 @@ def get_metrics(commit, metrics_space):
         commit.minimum_comment_loc = min(
             metrics["loc"]["cloc"], commit.minimum_comment_loc
         )
-        commit.minimum_nargs = min(metrics["nargs"], commit.minimum_nargs)
-        commit.minimum_nexits = min(metrics["nexits"], commit.minimum_nexits)
-        commit.minimum_cognitive = min(metrics["cognitive"], commit.minimum_cognitive)
+        commit.minimum_nargs = min(metrics["nargs"]["sum"], commit.minimum_nargs)
+        commit.minimum_nexits = min(metrics["nexits"]["sum"], commit.minimum_nexits)
+        commit.minimum_cognitive = min(
+            metrics["cognitive"]["sum"], commit.minimum_cognitive
+        )
 
     for space in metrics_space["spaces"]:
         error |= get_metrics(commit, space)
