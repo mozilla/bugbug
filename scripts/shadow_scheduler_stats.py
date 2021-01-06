@@ -22,7 +22,7 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    1,
+    2,
 )
 
 
