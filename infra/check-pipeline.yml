@@ -8,7 +8,7 @@ tasks:
     workerType: batch
     payload:
       maxRunTime: 3600
-      image: mozilla/bugbug-base
+      image: mozilla/bugbug-base:${version}
       command:
         - bugbug-check
         - component
@@ -30,7 +30,7 @@ tasks:
     workerType: batch
     payload:
       maxRunTime: 43200
-      image: mozilla/bugbug-base
+      image: mozilla/bugbug-base:${version}
       command:
         - bugbug-shadow-scheduler-stats
         - "28"

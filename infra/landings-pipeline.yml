@@ -13,7 +13,7 @@ tasks:
         features:
           taskclusterProxy: true
         maxRunTime: 7200
-        image: mozilla/bugbug-commit-retrieval
+        image: mozilla/bugbug-commit-retrieval:${version}
         env:
           TC_SECRET_ID: project/bugbug/production
         command:
