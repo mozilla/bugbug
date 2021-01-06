@@ -1918,6 +1918,137 @@ function inner_func() {
     assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
 
 
+def test_get_metrics():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func3() {
+    int i = 3;
+}
+
+void func4() {
+    int i = 4;
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.cpp",
+        """void func1() {
+    int i = 1;
+}
+
+void func2() {
+    int i = 2;
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.js",
+        """let j = 0;
+
+function func() {
+let i = 0;
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.jsm",
+        """function outer_func() {
+let i = 0;
+let f = function() {
+  let j = 0;
+}();
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+    metrics = code_analysis_server.metrics(
+        "file.jsm",
+        """function outer_func() {
+let i = 0;
+function inner_func() {
+  let j = 0;
+}
+}""",
+        unit=False,
+    )
+
+    error = repository.get_metrics(commit, metrics["spaces"])
+    assert not error
+    # TODO: Assert metrics.
+
+
 def test_get_commits():
     # By default get_commits utilizes the following parameters:
     # include_no_bug: bool = False
