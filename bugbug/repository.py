@@ -408,9 +408,10 @@ def get_functions_from_metrics(metrics_space):
     return functions
 
 
-def get_touched_functions(metrics_space, deleted_lines, added_lines):
-    touched_functions = set()
-    touched_function_names = set()
+def get_touched_functions(
+    metrics_space: dict, deleted_lines: Iterable[int], added_lines: Iterable[int]
+) -> List[Tuple[str, int, int]]:
+    touched_functions_indexes = set()
 
     functions = get_functions_from_metrics(metrics_space)
 
@@ -424,7 +425,7 @@ def get_touched_functions(metrics_space, deleted_lines, added_lines):
 
                 # If the line belongs to this function, add the function to the set of touched functions.
                 elif function["start_line"] <= line:
-                    touched_function_names.add(function["name"])
+                    touched_functions_indexes.add(functions.index(function))
                     last_f += 1
 
     # Get functions touched by added lines.
@@ -453,11 +454,13 @@ def get_touched_functions(metrics_space, deleted_lines, added_lines):
     get_touched(prev_functions, deleted_lines)
 
     # Return touched functions, with their new positions.
-    for function in functions:
-        if function["name"] in touched_function_names:
-            touched_functions.add(
-                (function["name"], function["start_line"], function["end_line"])
-            )
+    touched_functions = []
+
+    for i in touched_functions_indexes:
+        function = functions[i]
+        touched_functions.append(
+            (function["name"], function["start_line"], function["end_line"])
+        )
 
     return touched_functions
 
@@ -636,7 +639,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
                             stats["added_lines"],
                         )
                         if len(touched_functions) > 0:
-                            commit.functions[path] = list(touched_functions)
+                            commit.functions[path] = touched_functions
 
                     # Replace type with "Objective-C/C++" if rust-code-analysis detected this is an Objective-C/C++ file.
                     if type_ == "C/C++" and metrics.get("language") == "obj-c/c++":

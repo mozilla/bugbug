@@ -1789,7 +1789,7 @@ void func2() {
         [],
     )
 
-    assert touched_functions == set()
+    assert touched_functions == []
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -1810,7 +1810,7 @@ void func2() {
         [1],
     )
 
-    assert touched_functions == {("func1", 1, 3)}
+    assert set(touched_functions) == {("func1", 1, 3)}
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -1835,7 +1835,7 @@ void func4() {
         [6],
     )
 
-    assert touched_functions == {("func3", 5, 7), ("func1", 1, 3)}
+    assert set(touched_functions) == {("func3", 5, 7), ("func1", 1, 3)}
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -1856,7 +1856,7 @@ void func2() {
         [6],
     )
 
-    assert touched_functions == {("func2", 5, 7)}
+    assert set(touched_functions) == {("func2", 5, 7)}
 
     metrics = code_analysis_server.metrics(
         "file.js",
@@ -1875,7 +1875,7 @@ let i = 0;
         [1, 4],
     )
 
-    assert touched_functions == {("func", 3, 5)}
+    assert set(touched_functions) == {("func", 3, 5)}
 
     metrics = code_analysis_server.metrics(
         "file.jsm",
@@ -1895,7 +1895,7 @@ let f = function() {
         [4],
     )
 
-    assert touched_functions == {("outer_func", 1, 6)}
+    assert set(touched_functions) == {("outer_func", 1, 6)}
 
     metrics = code_analysis_server.metrics(
         "file.jsm",
@@ -1915,7 +1915,32 @@ function inner_func() {
         [4],
     )
 
-    assert touched_functions == {("outer_func", 1, 6), ("inner_func", 3, 5)}
+    assert set(touched_functions) == {("outer_func", 1, 6), ("inner_func", 3, 5)}
+
+    metrics = code_analysis_server.metrics(
+        "file.jsm",
+        """function outer_func() {
+let i = 0;
+function inner_func() {
+  let j = 0;
+}
+}
+
+function inner_func() {
+  let j = 0;
+}
+""",
+        unit=False,
+    )
+
+    # A function touched inside another function, and a function with the same name somewhere else.
+    touched_functions = repository.get_touched_functions(
+        metrics["spaces"],
+        [],
+        [4],
+    )
+
+    assert set(touched_functions) == {("outer_func", 1, 6), ("inner_func", 3, 5)}
 
 
 def test_get_metrics():
