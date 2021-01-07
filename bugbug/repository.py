@@ -127,6 +127,36 @@ def get_type(path: str) -> str:
     return EXT_TO_TYPES.get(ext, ext)
 
 
+METRIC_NAMES = [
+    "cyclomatic",
+    "halstead_N1",
+    "halstead_n1",
+    "halstead_N2",
+    "halstead_n2",
+    "sloc",
+    "ploc",
+    "lloc",
+    "cloc",
+    "nargs",
+    "nexits",
+    "cognitive",
+]
+
+
+def get_metrics_dict() -> dict:
+    metrics = {}
+    for metric in METRIC_NAMES:
+        metrics.update(
+            {
+                f"{metric}_avg": 0.0,
+                f"{metric}_max": 0,
+                f"{metric}_min": sys.maxsize,
+                f"{metric}_total": 0,
+            }
+        )
+    return metrics
+
+
 class Commit:
     def __init__(
         self,
@@ -158,7 +188,7 @@ class Commit:
         self.other_deleted = 0
         self.test_deleted = 0
         self.types: Set[str] = set()
-        self.functions: Dict[str, List[Tuple[str, int, int]]] = {}
+        self.functions: Dict[str, List[dict]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
         self.average_source_code_file_size = 0.0
@@ -175,54 +205,7 @@ class Commit:
         self.maximum_test_file_size = 0
         self.minimum_test_file_size = 0
         self.test_files_modified_num = 0
-        self.average_cyclomatic = 0.0
-        self.average_halstead_N1 = 0.0
-        self.average_halstead_n1 = 0.0
-        self.average_halstead_N2 = 0.0
-        self.average_halstead_n2 = 0.0
-        self.average_source_loc = 0.0
-        self.average_instruction_loc = 0.0
-        self.average_logical_loc = 0.0
-        self.average_comment_loc = 0.0
-        self.average_nargs = 0.0
-        self.average_nexits = 0.0
-        self.average_cognitive = 0.0
-        self.maximum_cyclomatic = 0
-        self.maximum_halstead_N2 = 0
-        self.maximum_halstead_n2 = 0
-        self.maximum_halstead_N1 = 0
-        self.maximum_halstead_n1 = 0
-        self.maximum_source_loc = 0
-        self.maximum_instruction_loc = 0
-        self.maximum_logical_loc = 0
-        self.maximum_comment_loc = 0
-        self.maximum_nargs = 0
-        self.maximum_nexits = 0
-        self.maximum_cognitive = 0
-        self.minimum_cyclomatic = sys.maxsize
-        self.minimum_halstead_N1 = sys.maxsize
-        self.minimum_halstead_n1 = sys.maxsize
-        self.minimum_halstead_N2 = sys.maxsize
-        self.minimum_halstead_n2 = sys.maxsize
-        self.minimum_source_loc = sys.maxsize
-        self.minimum_instruction_loc = sys.maxsize
-        self.minimum_logical_loc = sys.maxsize
-        self.minimum_comment_loc = sys.maxsize
-        self.minimum_nargs = sys.maxsize
-        self.minimum_nexits = sys.maxsize
-        self.minimum_cognitive = sys.maxsize
-        self.total_cyclomatic = 0
-        self.total_halstead_N1 = 0
-        self.total_halstead_n1 = 0
-        self.total_halstead_N2 = 0
-        self.total_halstead_n2 = 0
-        self.total_source_loc = 0
-        self.total_instruction_loc = 0
-        self.total_logical_loc = 0
-        self.total_comment_loc = 0
-        self.total_nargs = 0
-        self.total_nexits = 0
-        self.total_cognitive = 0
+        self.metrics = get_metrics_dict()
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -394,13 +377,7 @@ def get_functions_from_metrics(metrics_space):
         and metrics_space["name"]
         and metrics_space["name"] != "<anonymous>"
     ):
-        functions.append(
-            {
-                "end_line": metrics_space["end_line"],
-                "name": metrics_space["name"],
-                "start_line": metrics_space["start_line"],
-            }
-        )
+        functions.append(metrics_space)
 
     for space in metrics_space["spaces"]:
         functions += get_functions_from_metrics(space)
@@ -410,7 +387,7 @@ def get_functions_from_metrics(metrics_space):
 
 def get_touched_functions(
     metrics_space: dict, deleted_lines: Iterable[int], added_lines: Iterable[int]
-) -> List[Tuple[str, int, int]]:
+) -> List[dict]:
     touched_functions_indexes = set()
 
     functions = get_functions_from_metrics(metrics_space)
@@ -454,110 +431,77 @@ def get_touched_functions(
     get_touched(prev_functions, deleted_lines)
 
     # Return touched functions, with their new positions.
-    touched_functions = []
-
-    for i in touched_functions_indexes:
-        function = functions[i]
-        touched_functions.append(
-            (function["name"], function["start_line"], function["end_line"])
-        )
-
-    return touched_functions
+    return [functions[i] for i in touched_functions_indexes]
 
 
-def get_metrics(commit, metrics_space):
-    name = metrics_space["name"]
-    error = metrics_space["kind"] in {"unit", "function"} and name == ""
+class AnalysisException(Exception):
+    """Raised when rust-code-analysis failed to analyze a file."""
 
-    if metrics_space["kind"] == "function" and not error:
+    pass
+
+
+def get_summary_metrics(obj, metrics_space):
+    if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
+        raise AnalysisException("Analysis error")
+
+    if metrics_space["kind"] == "function":
         metrics = metrics_space["metrics"]
-        commit.total_cyclomatic += metrics["cyclomatic"]["sum"]
-        commit.total_halstead_n2 += metrics["halstead"]["n2"]
-        commit.total_halstead_N2 += metrics["halstead"]["N2"]
-        commit.total_halstead_n1 += metrics["halstead"]["n1"]
-        commit.total_halstead_N1 += metrics["halstead"]["N1"]
-        commit.total_source_loc += metrics["loc"]["sloc"]
-        commit.total_instruction_loc += metrics["loc"]["ploc"]
-        commit.total_logical_loc += metrics["loc"]["lloc"]
-        commit.total_comment_loc += metrics["loc"]["cloc"]
-        commit.total_nargs += metrics["nargs"]["sum"]
-        commit.total_nexits += metrics["nexits"]["sum"]
-        commit.total_cognitive += metrics["cognitive"]["sum"]
 
-        commit.maximum_cyclomatic = max(
-            commit.maximum_cyclomatic, metrics["cyclomatic"]["sum"]
-        )
-        commit.maximum_halstead_n2 = max(
-            commit.maximum_halstead_n2,
-            metrics["halstead"]["n2"],
-        )
-        commit.maximum_halstead_N2 = max(
-            metrics["halstead"]["N2"], commit.maximum_halstead_N2
-        )
-        commit.maximum_halstead_n1 = max(
-            metrics["halstead"]["n1"],
-            commit.maximum_halstead_n1,
-        )
-        commit.maximum_halstead_N1 = max(
-            metrics["halstead"]["N1"], commit.maximum_halstead_N1
-        )
-        commit.maximum_source_loc = max(
-            metrics["loc"]["sloc"], commit.maximum_source_loc
-        )
-        commit.maximum_instruction_loc = max(
-            metrics["loc"]["ploc"], commit.maximum_instruction_loc
-        )
-        commit.maximum_logical_loc = max(
-            metrics["loc"]["lloc"], commit.maximum_logical_loc
-        )
-        commit.maximum_comment_loc = max(
-            metrics["loc"]["cloc"], commit.maximum_comment_loc
-        )
-        commit.maximum_nargs = max(metrics["nargs"]["sum"], commit.maximum_nargs)
-        commit.maximum_nexits = max(metrics["nexits"]["sum"], commit.maximum_nexits)
-        commit.maximum_cognitive = max(
-            metrics["cognitive"]["sum"], commit.maximum_cognitive
-        )
+        obj["cyclomatic_max"] = max(obj["cyclomatic_max"], metrics["cyclomatic"]["sum"])
+        obj["halstead_n2_max"] = max(obj["halstead_n2_max"], metrics["halstead"]["n2"])
+        obj["halstead_N2_max"] = max(obj["halstead_N2_max"], metrics["halstead"]["N2"])
+        obj["halstead_n1_max"] = max(obj["halstead_n1_max"], metrics["halstead"]["n1"])
+        obj["halstead_N1_max"] = max(obj["halstead_N1_max"], metrics["halstead"]["N1"])
+        obj["sloc_max"] = max(obj["sloc_max"], metrics["loc"]["sloc"])
+        obj["ploc_max"] = max(obj["ploc_max"], metrics["loc"]["ploc"])
+        obj["lloc_max"] = max(obj["lloc_max"], metrics["loc"]["lloc"])
+        obj["cloc_max"] = max(obj["cloc_max"], metrics["loc"]["cloc"])
+        obj["nargs_max"] = max(obj["nargs_max"], metrics["nargs"]["sum"])
+        obj["nexits_max"] = max(obj["nexits_max"], metrics["nexits"]["sum"])
+        obj["cognitive_max"] = max(obj["cognitive_max"], metrics["cognitive"]["sum"])
 
-        commit.minimum_cyclomatic = min(
-            commit.minimum_cyclomatic, metrics["cyclomatic"]["sum"]
-        )
-        commit.minimum_halstead_n2 = min(
-            commit.minimum_halstead_n2,
-            metrics["halstead"]["n2"],
-        )
-        commit.minimum_halstead_N2 = min(
-            metrics["halstead"]["N2"], commit.minimum_halstead_N2
-        )
-        commit.minimum_halstead_n1 = min(
-            metrics["halstead"]["n1"],
-            commit.minimum_halstead_n1,
-        )
-        commit.minimum_halstead_N1 = min(
-            metrics["halstead"]["N1"], commit.minimum_halstead_N1
-        )
-        commit.minimum_source_loc = min(
-            metrics["loc"]["sloc"], commit.minimum_source_loc
-        )
-        commit.minimum_instruction_loc = min(
-            metrics["loc"]["ploc"], commit.minimum_instruction_loc
-        )
-        commit.minimum_logical_loc = min(
-            metrics["loc"]["lloc"], commit.minimum_logical_loc
-        )
-        commit.minimum_comment_loc = min(
-            metrics["loc"]["cloc"], commit.minimum_comment_loc
-        )
-        commit.minimum_nargs = min(metrics["nargs"]["sum"], commit.minimum_nargs)
-        commit.minimum_nexits = min(metrics["nexits"]["sum"], commit.minimum_nexits)
-        commit.minimum_cognitive = min(
-            metrics["cognitive"]["sum"], commit.minimum_cognitive
-        )
+        obj["cyclomatic_min"] = min(obj["cyclomatic_min"], metrics["cyclomatic"]["sum"])
+        obj["halstead_n2_min"] = min(obj["halstead_n2_min"], metrics["halstead"]["n2"])
+        obj["halstead_N2_min"] = min(obj["halstead_N2_min"], metrics["halstead"]["N2"])
+        obj["halstead_n1_min"] = min(obj["halstead_n1_min"], metrics["halstead"]["n1"])
+        obj["halstead_N1_min"] = min(obj["halstead_N1_min"], metrics["halstead"]["N1"])
+        obj["sloc_min"] = min(obj["sloc_min"], metrics["loc"]["sloc"])
+        obj["ploc_min"] = min(obj["ploc_min"], metrics["loc"]["ploc"])
+        obj["lloc_min"] = min(obj["lloc_min"], metrics["loc"]["lloc"])
+        obj["cloc_min"] = min(obj["cloc_min"], metrics["loc"]["cloc"])
+        obj["nargs_min"] = min(obj["nargs_min"], metrics["nargs"]["sum"])
+        obj["nexits_min"] = min(obj["nexits_min"], metrics["nexits"]["sum"])
+        obj["cognitive_min"] = min(obj["cognitive_min"], metrics["cognitive"]["sum"])
 
     for space in metrics_space["spaces"]:
-        error |= get_metrics(commit, space)
+        get_summary_metrics(obj, space)
 
-    return error
+    return obj
+
+
+def get_space_metrics(
+    obj: dict, metrics_space: dict, calc_summaries: bool = True
+) -> None:
+    if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
+        raise AnalysisException("Analysis error")
+
+    metrics = metrics_space["metrics"]
+    obj["cyclomatic_total"] += metrics["cyclomatic"]["sum"]
+    obj["halstead_n2_total"] += metrics["halstead"]["n2"]
+    obj["halstead_N2_total"] += metrics["halstead"]["N2"]
+    obj["halstead_n1_total"] += metrics["halstead"]["n1"]
+    obj["halstead_N1_total"] += metrics["halstead"]["N1"]
+    obj["sloc_total"] += metrics["loc"]["sloc"]
+    obj["ploc_total"] += metrics["loc"]["ploc"]
+    obj["lloc_total"] += metrics["loc"]["lloc"]
+    obj["cloc_total"] += metrics["loc"]["cloc"]
+    obj["nargs_total"] += metrics["nargs"]["sum"]
+    obj["nexits_total"] += metrics["nexits"]["sum"]
+    obj["cognitive_total"] += metrics["cognitive"]["sum"]
+
+    if calc_summaries:
+        for space in metrics_space["spaces"]:
+            get_summary_metrics(obj, space)
 
 
 def transform(hg: hglib.client, repo_dir: str, commit: Commit):
@@ -627,8 +571,10 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
                     metrics = code_analysis_server.metrics(path, after, unit=False)
                     if metrics.get("spaces"):
                         metrics_file_count += 1
-                        error = get_metrics(commit, metrics["spaces"])
-                        if error:
+
+                        try:
+                            get_space_metrics(commit.metrics, metrics["spaces"])
+                        except AnalysisException:
                             logger.debug(
                                 f"rust-code-analysis error on commit {commit.node}, path {path}"
                             )
@@ -639,7 +585,32 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
                             stats["added_lines"],
                         )
                         if len(touched_functions) > 0:
-                            commit.functions[path] = touched_functions
+                            commit.functions[path] = []
+
+                            for func in touched_functions:
+                                metrics_dict = get_metrics_dict()
+
+                                try:
+                                    get_space_metrics(
+                                        metrics_dict, func, calc_summaries=False
+                                    )
+                                except AnalysisException:
+                                    logger.debug(
+                                        f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
+                                    )
+
+                                commit.functions[path].append(
+                                    {
+                                        "name": func["name"],
+                                        "start": func["start_line"],
+                                        "end": func["end_line"],
+                                        "metrics": {
+                                            key: value
+                                            for key, value in metrics_dict.items()
+                                            if key.endswith("_total")
+                                        },
+                                    }
+                                )
 
                     # Replace type with "Objective-C/C++" if rust-code-analysis detected this is an Objective-C/C++ file.
                     if type_ == "C/C++" and metrics.get("language") == "obj-c/c++":
@@ -682,35 +653,15 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
     commit.minimum_test_file_size = min(test_sizes, default=0)
 
     if metrics_file_count:
-        commit.average_cyclomatic = commit.total_cyclomatic / metrics_file_count
-        commit.average_halstead_n2 = commit.total_halstead_n2 / metrics_file_count
-        commit.average_halstead_N2 = commit.total_halstead_N2 / metrics_file_count
-        commit.average_halstead_n1 = commit.total_halstead_n1 / metrics_file_count
-        commit.average_halstead_N1 = commit.total_halstead_N1 / metrics_file_count
-        commit.average_source_loc = commit.total_source_loc / metrics_file_count
-        commit.average_instruction_loc = (
-            commit.total_instruction_loc / metrics_file_count
-        )
-        commit.average_logical_loc = commit.total_logical_loc / metrics_file_count
-        commit.average_comment_loc = commit.total_comment_loc / metrics_file_count
-        commit.average_nargs = commit.total_nargs / metrics_file_count
-        commit.average_nexits = commit.total_nexits / metrics_file_count
-        commit.average_cognitive = commit.total_cognitive / metrics_file_count
+        for metric in METRIC_NAMES:
+            commit.metrics[f"{metric}_avg"] = (
+                commit.metrics[f"{metric}_total"] / metrics_file_count
+            )
     else:
         # these values are initialized with sys.maxsize (because we take the min)
         # if no files, then reset them to 0 (it'd be stupid to have min > max)
-        commit.minimum_cyclomatic = 0
-        commit.minimum_halstead_N2 = 0
-        commit.minimum_halstead_n2 = 0
-        commit.minimum_halstead_N1 = 0
-        commit.minimum_halstead_n1 = 0
-        commit.minimum_source_loc = 0
-        commit.minimum_instruction_loc = 0
-        commit.minimum_logical_loc = 0
-        commit.minimum_comment_loc = 0
-        commit.minimum_nargs = 0
-        commit.minimum_nexits = 0
-        commit.minimum_cognitive = 0
+        for metric in METRIC_NAMES:
+            commit.metrics[f"{metric}_min"] = 0
 
     return commit
 
