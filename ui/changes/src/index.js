@@ -71,6 +71,7 @@ let options = {
 
 let sortBy = ["Date", "DESC"];
 let resultSummary = document.getElementById("result-summary");
+let resultGraphs = document.getElementById("result-graphs");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
 let allBugTypes;
 
@@ -334,9 +335,13 @@ async function populateVersions() {
     let el = document.createElement("option");
     el.setAttribute("value", version);
     el.textContent = version;
-    el.selected = true;
+    el.selected = false;
     versionSelector.appendChild(el);
   }
+
+  // For now, previous two releases by default:
+  versionSelector.lastChild.selected = true;
+  versionSelector.lastChild.previousSibling.selected = true;
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
@@ -799,20 +804,21 @@ async function renderSummary(bugSummaries) {
   let summaryText = `${bugText}There are ${bugSummaries.length} bugs with ${changesets} changesets.`;
   resultSummary.textContent = summaryText;
 
+  resultGraphs.textContent = "";
   let testingChartEl = document.createElement("div");
-  resultSummary.append(testingChartEl);
+  resultGraphs.append(testingChartEl);
   renderTestingChart(testingChartEl, bugSummaries);
 
   let riskChartEl = document.createElement("div");
-  resultSummary.append(riskChartEl);
+  resultGraphs.append(riskChartEl);
   await renderRiskChart(riskChartEl, bugSummaries);
 
   let regressionsChartEl = document.createElement("div");
-  resultSummary.append(regressionsChartEl);
+  resultGraphs.append(regressionsChartEl);
   await renderRegressionsChart(regressionsChartEl, bugSummaries);
 
   let typesChartEl = document.createElement("div");
-  resultSummary.append(typesChartEl);
+  resultGraphs.append(typesChartEl);
   await renderTypesChart(typesChartEl, bugSummaries);
 }
 
