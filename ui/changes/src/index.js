@@ -74,11 +74,12 @@ let resultSummary = document.getElementById("result-summary");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
 let allBugTypes;
 
+let bugDetails = document.querySelector("#bug-details");
 // TODO: port this to an option maybe
 async function buildMetabugsDropdown() {
   metabugsDropdown.addEventListener("change", () => {
     setOption("metaBugID", metabugsDropdown.value);
-    rebuildTable();
+    renderUI();
   });
   let bugs = await featureMetabugs;
   metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
@@ -276,9 +277,8 @@ function addRow(bugSummary) {
   );
   if (lines_added != 0) {
     if (lines_unknown != 0) {
-      coverage_column.textContent = `${lines_covered}-${
-        lines_covered + lines_unknown
-      } of ${lines_added}`;
+      coverage_column.textContent = `${lines_covered}-${lines_covered +
+        lines_unknown} of ${lines_added}`;
     } else {
       coverage_column.textContent = `${lines_covered} of ${lines_added}`;
     }
@@ -774,6 +774,16 @@ async function renderTypesChart(chartEl, bugSummaries) {
   chart.render();
 }
 
+async function renderTable(bugSummaries) {
+  let table = document.getElementById("table");
+  while (table.rows.length > 1) {
+    table.deleteRow(table.rows.length - 1);
+  }
+  for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
+    addRow(bugSummary);
+  }
+}
+
 async function renderSummary(bugSummaries) {
   let metaBugID = getOption("metaBugID");
 
@@ -805,7 +815,7 @@ async function renderSummary(bugSummaries) {
   await renderTypesChart(typesChartEl, bugSummaries);
 }
 
-async function buildTable(rerender = true) {
+async function renderUI(rerenderSummary = true) {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
@@ -922,14 +932,14 @@ async function buildTable(rerender = true) {
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
-    sortFunction = function (a, b) {
+    sortFunction = function(a, b) {
       return Temporal.PlainDate.compare(
         Temporal.PlainDate.from(a.date ? a.date : a.creation_date),
         Temporal.PlainDate.from(b.date ? b.date : b.creation_date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
-    sortFunction = function (a, b) {
+    sortFunction = function(a, b) {
       if (a.risk_band == b.risk_band) {
         return 0;
       } else if (
@@ -942,11 +952,11 @@ async function buildTable(rerender = true) {
       }
     };
   } else if (sortBy[0] == "Bug") {
-    sortFunction = function (a, b) {
+    sortFunction = function(a, b) {
       return a.id - b.id;
     };
   } else if (sortBy[0] == "Coverage") {
-    sortFunction = function (a, b) {
+    sortFunction = function(a, b) {
       let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(
         a
       );
@@ -973,34 +983,20 @@ async function buildTable(rerender = true) {
     }
   }
 
-  if (rerender) {
+  if (rerenderSummary) {
     await renderSummary(bugSummaries);
   }
 
-  for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
-    addRow(bugSummary);
+  if (bugDetails.open) {
+    await renderTable(bugSummaries);
   }
-}
-
-function rebuildTable(rerender = true) {
-  let table = document.getElementById("table");
-
-  if (rerender) {
-    resultSummary.textContent = "";
-  }
-
-  while (table.rows.length > 1) {
-    table.deleteRow(table.rows.length - 1);
-  }
-
-  buildTable(rerender);
 }
 
 function setTableHeaderHandlers() {
   const table = document.getElementById("table");
   const elems = table.querySelectorAll("th");
   for (let elem of elems) {
-    elem.onclick = function () {
+    elem.onclick = function() {
       if (sortBy[0] == elem.textContent) {
         if (sortBy[1] == "DESC") {
           sortBy[1] = "ASC";
@@ -1011,7 +1007,7 @@ function setTableHeaderHandlers() {
         sortBy[0] = elem.textContent;
         sortBy[1] = "DESC";
       }
-      rebuildTable(false);
+      renderUI(false);
     };
   }
 }
@@ -1026,22 +1022,22 @@ function setTableHeaderHandlers() {
 
   setTableHeaderHandlers();
 
-  Object.keys(options).forEach(function (optionName) {
+  Object.keys(options).forEach(function(optionName) {
     let optionType = getOptionType(optionName);
     let elem = document.getElementById(optionName);
 
     if (optionType === "text") {
       setOption(optionName, elem.value);
-      elem.addEventListener("change", function () {
+      elem.addEventListener("change", function() {
         setOption(optionName, elem.value);
-        rebuildTable();
+        renderUI();
       });
     } else if (optionType === "checkbox") {
       setOption(optionName, elem.checked);
 
-      elem.onchange = function () {
+      elem.onchange = function() {
         setOption(optionName, elem.checked);
-        rebuildTable();
+        renderUI();
       };
     } else if (optionType === "select") {
       let value = [];
@@ -1053,7 +1049,7 @@ function setTableHeaderHandlers() {
 
       setOption(optionName, value);
 
-      elem.onchange = function () {
+      elem.onchange = function() {
         let value = [];
         for (let option of elem.options) {
           if (option.selected) {
@@ -1062,7 +1058,7 @@ function setTableHeaderHandlers() {
         }
 
         setOption(optionName, value);
-        rebuildTable();
+        renderUI();
       };
     } else if (optionType === "radio") {
       for (const radio of document.querySelectorAll(
@@ -1073,7 +1069,7 @@ function setTableHeaderHandlers() {
         }
       }
 
-      elem.onchange = function () {
+      elem.onchange = function() {
         for (const radio of document.querySelectorAll(
           `input[name=${optionName}]`
         )) {
@@ -1081,11 +1077,20 @@ function setTableHeaderHandlers() {
             setOption(optionName, radio.value);
           }
         }
-        rebuildTable();
+        renderUI();
       };
     } else {
       throw new Error("Unexpected option type.");
     }
   });
-  buildTable();
+
+  if (localStorage.getItem("detailsToggle") !== null) {
+    bugDetails.open = !!JSON.parse(localStorage.getItem("detailsToggle"));
+  }
+  bugDetails.addEventListener("toggle", () => {
+    localStorage.setItem("detailsToggle", bugDetails.open);
+    renderUI(false);
+  });
+
+  renderUI();
 })();
