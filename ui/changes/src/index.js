@@ -1,10 +1,9 @@
 // TODO: On click, show previous components affected by similar patches.
 // TODO: On click, show previous bugs caused by similar patches.
 
+import localForage from "localforage";
 import { Temporal } from "proposal-temporal/lib/index.mjs";
-
 import ApexCharts from "apexcharts";
-
 import {
   TESTING_TAGS,
   featureMetabugs,
@@ -13,6 +12,11 @@ import {
   getSummaryData,
   summarizeCoverage,
 } from "./common.js";
+
+localForage.config({
+  driver: localForage.INDEXEDDB,
+  name: "bugbug-index",
+});
 
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
@@ -75,11 +79,12 @@ let resultGraphs = document.getElementById("result-graphs");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
 let allBugTypes;
 
+let bugDetails = document.querySelector("#bug-details");
 // TODO: port this to an option maybe
 async function buildMetabugsDropdown() {
   metabugsDropdown.addEventListener("change", () => {
     setOption("metaBugID", metabugsDropdown.value);
-    rebuildTable();
+    renderUI();
   });
   let bugs = await featureMetabugs;
   metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
@@ -779,6 +784,16 @@ async function renderTypesChart(chartEl, bugSummaries) {
   chart.render();
 }
 
+async function renderTable(bugSummaries) {
+  let table = document.getElementById("table");
+  while (table.rows.length > 1) {
+    table.deleteRow(table.rows.length - 1);
+  }
+  for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
+    addRow(bugSummary);
+  }
+}
+
 async function renderSummary(bugSummaries) {
   let metaBugID = getOption("metaBugID");
 
@@ -811,7 +826,7 @@ async function renderSummary(bugSummaries) {
   await renderTypesChart(typesChartEl, bugSummaries);
 }
 
-async function buildTable(rerender = true) {
+async function renderUI(rerenderSummary = true) {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
@@ -979,27 +994,13 @@ async function buildTable(rerender = true) {
     }
   }
 
-  if (rerender) {
+  if (rerenderSummary) {
     await renderSummary(bugSummaries);
   }
 
-  for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
-    addRow(bugSummary);
+  if (bugDetails.open) {
+    await renderTable(bugSummaries);
   }
-}
-
-function rebuildTable(rerender = true) {
-  let table = document.getElementById("table");
-
-  if (rerender) {
-    resultSummary.textContent = "";
-  }
-
-  while (table.rows.length > 1) {
-    table.deleteRow(table.rows.length - 1);
-  }
-
-  buildTable(rerender);
 }
 
 function setTableHeaderHandlers() {
@@ -1017,7 +1018,7 @@ function setTableHeaderHandlers() {
         sortBy[0] = elem.textContent;
         sortBy[1] = "DESC";
       }
-      rebuildTable(false);
+      renderUI(false);
     };
   }
 }
@@ -1040,14 +1041,14 @@ function setTableHeaderHandlers() {
       setOption(optionName, elem.value);
       elem.addEventListener("change", function () {
         setOption(optionName, elem.value);
-        rebuildTable();
+        renderUI();
       });
     } else if (optionType === "checkbox") {
       setOption(optionName, elem.checked);
 
       elem.onchange = function () {
         setOption(optionName, elem.checked);
-        rebuildTable();
+        renderUI();
       };
     } else if (optionType === "select") {
       let value = [];
@@ -1068,7 +1069,7 @@ function setTableHeaderHandlers() {
         }
 
         setOption(optionName, value);
-        rebuildTable();
+        renderUI();
       };
     } else if (optionType === "radio") {
       for (const radio of document.querySelectorAll(
@@ -1087,11 +1088,21 @@ function setTableHeaderHandlers() {
             setOption(optionName, radio.value);
           }
         }
-        rebuildTable();
+        renderUI();
       };
     } else {
       throw new Error("Unexpected option type.");
     }
   });
-  buildTable();
+
+  let toggle = await localForage.getItem("detailsToggle");
+  if (toggle) {
+    bugDetails.open = true;
+  }
+  bugDetails.addEventListener("toggle", async () => {
+    await localForage.setItem("detailsToggle", bugDetails.open);
+    renderUI(false);
+  });
+
+  renderUI();
 })();
