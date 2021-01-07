@@ -1770,6 +1770,11 @@ def test_get_touched_functions():
 
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
+    def _func_list_to_set(functions):
+        return set(
+            (func["name"], func["start_line"], func["end_line"]) for func in functions
+        )
+
     metrics = code_analysis_server.metrics(
         "file.cpp",
         """void func1() {
@@ -1810,7 +1815,7 @@ void func2() {
         [1],
     )
 
-    assert set(touched_functions) == {("func1", 1, 3)}
+    assert _func_list_to_set(touched_functions) == {("func1", 1, 3)}
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -1835,7 +1840,7 @@ void func4() {
         [6],
     )
 
-    assert set(touched_functions) == {("func3", 5, 7), ("func1", 1, 3)}
+    assert _func_list_to_set(touched_functions) == {("func3", 5, 7), ("func1", 1, 3)}
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -1856,7 +1861,7 @@ void func2() {
         [6],
     )
 
-    assert set(touched_functions) == {("func2", 5, 7)}
+    assert _func_list_to_set(touched_functions) == {("func2", 5, 7)}
 
     metrics = code_analysis_server.metrics(
         "file.js",
@@ -1875,7 +1880,7 @@ let i = 0;
         [1, 4],
     )
 
-    assert set(touched_functions) == {("func", 3, 5)}
+    assert _func_list_to_set(touched_functions) == {("func", 3, 5)}
 
     metrics = code_analysis_server.metrics(
         "file.jsm",
@@ -1895,7 +1900,7 @@ let f = function() {
         [4],
     )
 
-    assert set(touched_functions) == {("outer_func", 1, 6)}
+    assert _func_list_to_set(touched_functions) == {("outer_func", 1, 6)}
 
     metrics = code_analysis_server.metrics(
         "file.jsm",
@@ -1915,7 +1920,10 @@ function inner_func() {
         [4],
     )
 
-    assert set(touched_functions) == {("outer_func", 1, 6), ("inner_func", 3, 5)}
+    assert _func_list_to_set(touched_functions) == {
+        ("outer_func", 1, 6),
+        ("inner_func", 3, 5),
+    }
 
     metrics = code_analysis_server.metrics(
         "file.jsm",
@@ -1940,7 +1948,10 @@ function inner_func() {
         [4],
     )
 
-    assert set(touched_functions) == {("outer_func", 1, 6), ("inner_func", 3, 5)}
+    assert _func_list_to_set(touched_functions) == {
+        ("outer_func", 1, 6),
+        ("inner_func", 3, 5),
+    }
 
     metrics = code_analysis_server.metrics(
         "file.cpp",
@@ -2044,10 +2055,10 @@ void func4() {
         [1, 2, 3, 4],
     )
 
-    assert touched_functions == [("func1", 1, 3)]
+    assert _func_list_to_set(touched_functions) == {("func1", 1, 3)}
 
 
-def test_get_metrics():
+def test_get_space_metrics():
     # Allow using the local code analysis server.
     responses.add_passthru("http://127.0.0.1")
 
@@ -2077,8 +2088,7 @@ void func2() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2093,8 +2103,7 @@ void func2() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2113,8 +2122,7 @@ void func4() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2129,8 +2137,7 @@ void func2() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2143,8 +2150,7 @@ let i = 0;
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2158,8 +2164,7 @@ let f = function() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
     metrics = code_analysis_server.metrics(
@@ -2173,8 +2178,7 @@ function inner_func() {
         unit=False,
     )
 
-    error = repository.get_metrics(commit, metrics["spaces"])
-    assert not error
+    repository.get_space_metrics(commit.metrics, metrics["spaces"])
     # TODO: Assert metrics.
 
 
@@ -2267,6 +2271,32 @@ def test_get_revision_id():
 
 
 def test_commit_dict_matches_expected():
+    commit = (
+        repository.Commit(
+            node="commit",
+            author="author",
+            desc="commit",
+            pushdate=datetime(2021, 1, 1),
+            bug_id=123,
+            backsout=[],
+            backedoutby="",
+            author_email="author@mozilla.org",
+            reviewers=["reviewer"],
+        )
+        .set_files([], {})
+        .to_dict()
+    )
+
+    # Ensure the fields expected by commit_features functions are actually present in the commit dict.
+    commit_features.source_code_file_metrics()(commit)
+    commit_features.source_code_function_metrics()(commit)
+    commit_features.functions_touched_size()(commit)
+
+    merged_commit = commit_features.merge_commits([commit, commit])
+    commit_features.source_code_file_metrics()(merged_commit)
+    # TODO: Support merging functions in commit_features.merge_commits
+    # commit_features.source_code_function_metrics()(merged_commit)
+
     commit = repository.Commit(
         node="commit",
         author="author",
@@ -2279,5 +2309,35 @@ def test_commit_dict_matches_expected():
         reviewers=["reviewer"],
     ).set_files([], {})
 
-    # Ensure the fields expected by commit_features functions are actually present in the commit dict.
-    commit_features.source_code_file_metrics()(commit.to_dict())
+    commit.functions["file"] = [
+        {
+            "name": "ciao",
+            "start": 1,
+            "end": 5,
+            "metrics": {
+                key: value
+                for key, value in repository.get_metrics_dict().items()
+                if key.endswith("_total")
+            },
+        },
+        {
+            "name": "ciao2",
+            "start": 6,
+            "end": 42,
+            "metrics": {
+                key: value
+                for key, value in repository.get_metrics_dict().items()
+                if key.endswith("_total")
+            },
+        },
+    ]
+
+    commit = commit.to_dict()
+
+    commit_features.source_code_function_metrics()(commit)
+    commit_features.functions_touched_size()(commit)
+
+    merged_commit = commit_features.merge_commits([commit, commit])
+    commit_features.source_code_file_metrics()(merged_commit)
+    # TODO: Support merging functions in commit_features.merge_commits
+    # commit_features.source_code_function_metrics()(merged_commit)

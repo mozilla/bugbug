@@ -118,7 +118,9 @@ class functions_touched_num(object):
 class functions_touched_size(object):
     def __call__(self, commit, **kwargs):
         function_sizes = [
-            f[2] - f[1] + 1 for f_group in commit["functions"].values() for f in f_group
+            f["end"] - f["start"] + 1
+            for f_group in commit["functions"].values()
+            for f in f_group
         ]
 
         return {
@@ -136,54 +138,197 @@ class source_code_file_metrics(object):
 
     def __call__(self, commit, **kwargs):
         return {
-            "Average cyclomatic": commit["average_cyclomatic"],
-            "Average number of unique operands": commit["average_halstead_n2"],
-            "Average number of operands": commit["average_halstead_N2"],
-            "Average number of unique operators": commit["average_halstead_n1"],
-            "Average number of operators": commit["average_halstead_N1"],
-            "Average number of source loc": commit["average_source_loc"],
-            "Average number of instruction loc": commit["average_instruction_loc"],
-            "Average number of logical loc": commit["average_logical_loc"],
-            "Average number of comment loc": commit["average_comment_loc"],
-            "Average number of function arguments": commit["average_nargs"],
-            "Average number of function exit points": commit["average_nexits"],
-            "Average cognitive": commit["average_cognitive"],
-            "Maximum cyclomatic": commit["maximum_cyclomatic"],
-            "Maximum number of unique operands": commit["maximum_halstead_n2"],
-            "Maximum number of operands": commit["maximum_halstead_N2"],
-            "Maximum number of unique operators": commit["maximum_halstead_n1"],
-            "Maximum number of operators": commit["maximum_halstead_N1"],
-            "Maximum number of source loc": commit["maximum_source_loc"],
-            "Maximum number of instruction loc": commit["maximum_instruction_loc"],
-            "Maximum number of logical loc": commit["maximum_logical_loc"],
-            "Maximum number of comment loc": commit["maximum_comment_loc"],
-            "Maximum number of function arguments": commit["maximum_nargs"],
-            "Maximum number of function exit points": commit["maximum_nexits"],
-            "Maximum cognitive": commit["maximum_cognitive"],
-            "Minimum cyclomatic": commit["minimum_cyclomatic"],
-            "Minimum number of unique operands": commit["minimum_halstead_n2"],
-            "Minimum number of operands": commit["minimum_halstead_N2"],
-            "Minimum number of unique operators": commit["minimum_halstead_n1"],
-            "Minimum number of operators": commit["minimum_halstead_N1"],
-            "Minimum number of source loc": commit["minimum_source_loc"],
-            "Minimum number of instruction loc": commit["minimum_instruction_loc"],
-            "Minimum number of logical loc": commit["minimum_logical_loc"],
-            "Minimum number of comment loc": commit["minimum_comment_loc"],
-            "Minimum number of function arguments": commit["minimum_nargs"],
-            "Minimum number of function exit points": commit["minimum_nexits"],
-            "Minimum cognitive": commit["minimum_cognitive"],
-            "Total cyclomatic": commit["total_cyclomatic"],
-            "Total number of unique operands": commit["total_halstead_n2"],
-            "Total number of operands": commit["total_halstead_N2"],
-            "Total number of unique operators": commit["total_halstead_n1"],
-            "Total number of operators": commit["total_halstead_N1"],
-            "Total number of source loc": commit["total_source_loc"],
-            "Total number of instruction loc": commit["total_instruction_loc"],
-            "Total number of logical loc": commit["total_logical_loc"],
-            "Total number of comment loc": commit["total_comment_loc"],
-            "Total number of function arguments": commit["total_nargs"],
-            "Total number of function exit points": commit["total_nexits"],
-            "Total cognitive": commit["total_cognitive"],
+            "Average file cyclomatic": commit["metrics"]["cyclomatic_avg"],
+            "Average file number of unique operands": commit["metrics"][
+                "halstead_n2_avg"
+            ],
+            "Average file number of operands": commit["metrics"]["halstead_N2_avg"],
+            "Average file number of unique operators": commit["metrics"][
+                "halstead_n1_avg"
+            ],
+            "Average file number of operators": commit["metrics"]["halstead_N1_avg"],
+            "Average file number of source loc": commit["metrics"]["sloc_avg"],
+            "Average file number of instruction loc": commit["metrics"]["ploc_avg"],
+            "Average file number of logical loc": commit["metrics"]["lloc_avg"],
+            "Average file number of comment loc": commit["metrics"]["cloc_avg"],
+            "Average file number of function arguments": commit["metrics"]["nargs_avg"],
+            "Average file number of function exit points": commit["metrics"][
+                "nexits_avg"
+            ],
+            "Average file cognitive": commit["metrics"]["cognitive_avg"],
+            "Maximum file cyclomatic": commit["metrics"]["cyclomatic_max"],
+            "Maximum file number of unique operands": commit["metrics"][
+                "halstead_n2_max"
+            ],
+            "Maximum file number of operands": commit["metrics"]["halstead_N2_max"],
+            "Maximum file number of unique operators": commit["metrics"][
+                "halstead_n1_max"
+            ],
+            "Maximum file number of operators": commit["metrics"]["halstead_N1_max"],
+            "Maximum file number of source loc": commit["metrics"]["sloc_max"],
+            "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
+            "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
+            "Maximum file number of comment loc": commit["metrics"]["cloc_max"],
+            "Maximum file number of function arguments": commit["metrics"]["nargs_max"],
+            "Maximum file number of function exit points": commit["metrics"][
+                "nexits_max"
+            ],
+            "Maximum file cognitive": commit["metrics"]["cognitive_max"],
+            "Minimum file cyclomatic": commit["metrics"]["cyclomatic_min"],
+            "Minimum file number of unique operands": commit["metrics"][
+                "halstead_n2_min"
+            ],
+            "Minimum file number of operands": commit["metrics"]["halstead_N2_min"],
+            "Minimum file number of unique operators": commit["metrics"][
+                "halstead_n1_min"
+            ],
+            "Minimum file number of operators": commit["metrics"]["halstead_N1_min"],
+            "Minimum file number of source loc": commit["metrics"]["sloc_min"],
+            "Minimum file number of instruction loc": commit["metrics"]["ploc_min"],
+            "Minimum file number of logical loc": commit["metrics"]["lloc_min"],
+            "Minimum file number of comment loc": commit["metrics"]["cloc_min"],
+            "Minimum file number of function arguments": commit["metrics"]["nargs_min"],
+            "Minimum file number of function exit points": commit["metrics"][
+                "nexits_min"
+            ],
+            "Minimum file cognitive": commit["metrics"]["cognitive_min"],
+            "Total file cyclomatic": commit["metrics"]["cyclomatic_total"],
+            "Total file number of unique operands": commit["metrics"][
+                "halstead_n2_total"
+            ],
+            "Total file number of operands": commit["metrics"]["halstead_N2_total"],
+            "Total file number of unique operators": commit["metrics"][
+                "halstead_n1_total"
+            ],
+            "Total file number of operators": commit["metrics"]["halstead_N1_total"],
+            "Total file number of source loc": commit["metrics"]["sloc_total"],
+            "Total file number of instruction loc": commit["metrics"]["ploc_total"],
+            "Total file number of logical loc": commit["metrics"]["lloc_total"],
+            "Total file number of comment loc": commit["metrics"]["cloc_total"],
+            "Total file number of function arguments": commit["metrics"]["nargs_total"],
+            "Total file number of function exit points": commit["metrics"][
+                "nexits_total"
+            ],
+            "Total file cognitive": commit["metrics"]["cognitive_total"],
+        }
+
+
+def merge_function_metrics(objects):
+    metrics = {}
+
+    for metric in repository.METRIC_NAMES:
+        metrics.update(
+            {
+                f"{metric}_avg": sum(
+                    obj["metrics"][f"{metric}_total"] for obj in objects
+                )
+                / len(objects)
+                if len(objects) > 0
+                else 0.0,
+                f"{metric}_max": max(
+                    (obj["metrics"][f"{metric}_total"] for obj in objects), default=0
+                ),
+                f"{metric}_min": min(
+                    (obj["metrics"][f"{metric}_total"] for obj in objects), default=0
+                ),
+                f"{metric}_total": sum(
+                    obj["metrics"][f"{metric}_total"] for obj in objects
+                ),
+            }
+        )
+
+    return metrics
+
+
+class source_code_function_metrics(object):
+    name = "metrics on source code functions"
+
+    def __call__(self, commit, **kwargs):
+        merged_metrics = merge_function_metrics(
+            [func for funcs in commit["functions"].values() for func in funcs]
+        )
+
+        return {
+            "Average function cyclomatic": merged_metrics["cyclomatic_avg"],
+            "Average function number of unique operands": merged_metrics[
+                "halstead_n2_avg"
+            ],
+            "Average function number of operands": merged_metrics["halstead_N2_avg"],
+            "Average function number of unique operators": merged_metrics[
+                "halstead_n1_avg"
+            ],
+            "Average function number of operators": merged_metrics["halstead_N1_avg"],
+            "Average function number of source loc": merged_metrics["sloc_avg"],
+            "Average function number of instruction loc": merged_metrics["ploc_avg"],
+            "Average function number of logical loc": merged_metrics["lloc_avg"],
+            "Average function number of comment loc": merged_metrics["cloc_avg"],
+            "Average function number of function arguments": merged_metrics[
+                "nargs_avg"
+            ],
+            "Average function number of function exit points": merged_metrics[
+                "nexits_avg"
+            ],
+            "Average function cognitive": merged_metrics["cognitive_avg"],
+            "Maximum function cyclomatic": merged_metrics["cyclomatic_max"],
+            "Maximum function number of unique operands": merged_metrics[
+                "halstead_n2_max"
+            ],
+            "Maximum function number of operands": merged_metrics["halstead_N2_max"],
+            "Maximum function number of unique operators": merged_metrics[
+                "halstead_n1_max"
+            ],
+            "Maximum function number of operators": merged_metrics["halstead_N1_max"],
+            "Maximum function number of source loc": merged_metrics["sloc_max"],
+            "Maximum function number of instruction loc": merged_metrics["ploc_max"],
+            "Maximum function number of logical loc": merged_metrics["lloc_max"],
+            "Maximum function number of comment loc": merged_metrics["cloc_max"],
+            "Maximum function number of function arguments": merged_metrics[
+                "nargs_max"
+            ],
+            "Maximum function number of function exit points": merged_metrics[
+                "nexits_max"
+            ],
+            "Maximum function cognitive": merged_metrics["cognitive_max"],
+            "Minimum function cyclomatic": merged_metrics["cyclomatic_min"],
+            "Minimum function number of unique operands": merged_metrics[
+                "halstead_n2_min"
+            ],
+            "Minimum function number of operands": merged_metrics["halstead_N2_min"],
+            "Minimum function number of unique operators": merged_metrics[
+                "halstead_n1_min"
+            ],
+            "Minimum function number of operators": merged_metrics["halstead_N1_min"],
+            "Minimum function number of source loc": merged_metrics["sloc_min"],
+            "Minimum function number of instruction loc": merged_metrics["ploc_min"],
+            "Minimum function number of logical loc": merged_metrics["lloc_min"],
+            "Minimum function number of comment loc": merged_metrics["cloc_min"],
+            "Minimum function number of function arguments": merged_metrics[
+                "nargs_min"
+            ],
+            "Minimum function number of function exit points": merged_metrics[
+                "nexits_min"
+            ],
+            "Minimum function cognitive": merged_metrics["cognitive_min"],
+            "Total function cyclomatic": merged_metrics["cyclomatic_total"],
+            "Total function number of unique operands": merged_metrics[
+                "halstead_n2_total"
+            ],
+            "Total function number of operands": merged_metrics["halstead_N2_total"],
+            "Total function number of unique operators": merged_metrics[
+                "halstead_n1_total"
+            ],
+            "Total function number of operators": merged_metrics["halstead_N1_total"],
+            "Total function number of source loc": merged_metrics["sloc_total"],
+            "Total function number of instruction loc": merged_metrics["ploc_total"],
+            "Total function number of logical loc": merged_metrics["lloc_total"],
+            "Total function number of comment loc": merged_metrics["cloc_total"],
+            "Total function number of function arguments": merged_metrics[
+                "nargs_total"
+            ],
+            "Total function number of function exit points": merged_metrics[
+                "nexits_total"
+            ],
+            "Total function cognitive": merged_metrics["cognitive_total"],
         }
 
 
@@ -483,6 +628,29 @@ class types(object):
         return commit["types"]
 
 
+def merge_metrics(objects):
+    metrics = {}
+
+    for metric in repository.METRIC_NAMES:
+        metrics.update(
+            {
+                f"{metric}_avg": sum(obj["metrics"][f"{metric}_avg"] for obj in objects)
+                / len(objects),
+                f"{metric}_max": max(
+                    (obj["metrics"][f"{metric}_max"] for obj in objects)
+                ),
+                f"{metric}_min": min(
+                    (obj["metrics"][f"{metric}_min"] for obj in objects)
+                ),
+                f"{metric}_total": sum(
+                    obj["metrics"][f"{metric}_total"] for obj in objects
+                ),
+            }
+        )
+
+    return metrics
+
+
 def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.CommitDict:
     return repository.CommitDict(
         {
@@ -555,116 +723,7 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             ),
             "other_deleted": sum(commit["other_deleted"] for commit in commits),
             "test_deleted": sum(commit["test_deleted"] for commit in commits),
-            "average_cyclomatic": sum(
-                commit["average_cyclomatic"] for commit in commits
-            )
-            / len(commits),
-            "average_halstead_n2": sum(
-                commit["average_halstead_n2"] for commit in commits
-            )
-            / len(commits),
-            "average_halstead_N2": sum(
-                commit["average_halstead_N2"] for commit in commits
-            )
-            / len(commits),
-            "average_halstead_n1": sum(
-                commit["average_halstead_n1"] for commit in commits
-            )
-            / len(commits),
-            "average_halstead_N1": sum(
-                commit["average_halstead_N1"] for commit in commits
-            )
-            / len(commits),
-            "average_source_loc": sum(
-                commit["average_source_loc"] for commit in commits
-            )
-            / len(commits),
-            "average_instruction_loc": sum(
-                commit["average_instruction_loc"] for commit in commits
-            )
-            / len(commits),
-            "average_logical_loc": sum(
-                commit["average_logical_loc"] for commit in commits
-            )
-            / len(commits),
-            "average_comment_loc": sum(
-                commit["average_comment_loc"] for commit in commits
-            )
-            / len(commits),
-            "average_nargs": sum(commit["average_nargs"] for commit in commits)
-            / len(commits),
-            "average_nexits": sum(commit["average_nexits"] for commit in commits)
-            / len(commits),
-            "maximum_cyclomatic": max(
-                commit["maximum_cyclomatic"] for commit in commits
-            ),
-            "maximum_halstead_n2": max(
-                commit["maximum_halstead_n2"] for commit in commits
-            ),
-            "maximum_halstead_N2": max(
-                commit["maximum_halstead_N2"] for commit in commits
-            ),
-            "maximum_halstead_n1": max(
-                commit["maximum_halstead_n1"] for commit in commits
-            ),
-            "maximum_halstead_N1": max(
-                commit["maximum_halstead_N1"] for commit in commits
-            ),
-            "maximum_source_loc": max(
-                commit["maximum_source_loc"] for commit in commits
-            ),
-            "maximum_instruction_loc": max(
-                commit["maximum_instruction_loc"] for commit in commits
-            ),
-            "maximum_logical_loc": max(
-                commit["maximum_logical_loc"] for commit in commits
-            ),
-            "maximum_comment_loc": max(
-                commit["maximum_comment_loc"] for commit in commits
-            ),
-            "maximum_nargs": max(commit["maximum_nargs"] for commit in commits),
-            "maximum_nexits": max(commit["maximum_nexits"] for commit in commits),
-            "minimum_cyclomatic": min(
-                commit["minimum_cyclomatic"] for commit in commits
-            ),
-            "minimum_halstead_n2": min(
-                commit["minimum_halstead_n2"] for commit in commits
-            ),
-            "minimum_halstead_N2": min(
-                commit["minimum_halstead_N2"] for commit in commits
-            ),
-            "minimum_halstead_n1": min(
-                commit["minimum_halstead_n1"] for commit in commits
-            ),
-            "minimum_halstead_N1": min(
-                commit["minimum_halstead_N1"] for commit in commits
-            ),
-            "minimum_source_loc": min(
-                commit["minimum_source_loc"] for commit in commits
-            ),
-            "minimum_instruction_loc": min(
-                commit["minimum_instruction_loc"] for commit in commits
-            ),
-            "minimum_logical_loc": min(
-                commit["minimum_logical_loc"] for commit in commits
-            ),
-            "minimum_comment_loc": min(
-                commit["minimum_comment_loc"] for commit in commits
-            ),
-            "minimum_nargs": min(commit["minimum_nargs"] for commit in commits),
-            "minimum_nexits": min(commit["minimum_nexits"] for commit in commits),
-            "total_halstead_n2": sum(commit["total_halstead_n2"] for commit in commits),
-            "total_halstead_N2": sum(commit["total_halstead_N2"] for commit in commits),
-            "total_halstead_n1": sum(commit["total_halstead_n1"] for commit in commits),
-            "total_halstead_N1": sum(commit["total_halstead_N1"] for commit in commits),
-            "total_source_loc": sum(commit["total_source_loc"] for commit in commits),
-            "total_instruction_loc": sum(
-                commit["total_instruction_loc"] for commit in commits
-            ),
-            "total_logical_loc": sum(commit["total_logical_loc"] for commit in commits),
-            "total_comment_loc": sum(commit["total_comment_loc"] for commit in commits),
-            "total_nargs": sum(commit["total_nargs"] for commit in commits),
-            "total_nexits": sum(commit["total_nexits"] for commit in commits),
+            "metrics": merge_metrics(commits),
         }
     )
 

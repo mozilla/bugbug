@@ -782,7 +782,8 @@ class CommitClassifier(object):
                 if method_level_result_path != path:
                     continue
 
-                for function_name, _, _ in functions:
+                for function in functions:
+                    function_name = function["name"]
                     if function_name not in self.past_bugs_by_function[path]:
                         continue
 

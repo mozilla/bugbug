@@ -289,11 +289,11 @@ class LandingsRiskReportGenerator(object):
 
                 found = False
                 for f in f_group:
-                    if f[0] not in past_bugs_by["function"][path]:
+                    if f["name"] not in past_bugs_by["function"][path]:
                         continue
 
                     found = True
-                    past_bugs += past_bugs_by["function"][path][f[0]]
+                    past_bugs += past_bugs_by["function"][path][f["name"]]
 
                 if found:
                     paths.remove(path)

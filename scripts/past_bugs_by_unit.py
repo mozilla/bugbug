@@ -106,13 +106,13 @@ class PastBugsCollector(object):
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
-                        past_regressions_by_function[path][f[0]].extend(
+                        past_regressions_by_function[path][f["name"]].extend(
                             bug_id for bug_id in bug["regressions"] if bug_id in bug_map
                         )
 
-                        past_regression_blocked_bugs_by_function[path][f[0]].extend(
-                            bugzilla.find_blocked_by(bug_map, bug)
-                        )
+                        past_regression_blocked_bugs_by_function[path][
+                            f["name"]
+                        ].extend(bugzilla.find_blocked_by(bug_map, bug))
 
             if commit["node"] in bug_fixing_commits_nodes:
                 for dimension in by_dimensions:
@@ -125,9 +125,9 @@ class PastBugsCollector(object):
 
                 for path, f_group in commit["functions"].items():
                     for f in f_group:
-                        past_fixed_bugs_by_function[path][f[0]].append(bug["id"])
+                        past_fixed_bugs_by_function[path][f["name"]].append(bug["id"])
 
-                        past_fixed_bug_blocked_bugs_by_function[path][f[0]].extend(
+                        past_fixed_bug_blocked_bugs_by_function[path][f["name"]].extend(
                             bugzilla.find_blocked_by(bug_map, bug)
                         )
 
