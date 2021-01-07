@@ -1,10 +1,9 @@
 // TODO: On click, show previous components affected by similar patches.
 // TODO: On click, show previous bugs caused by similar patches.
 
+import localForage from "localforage";
 import { Temporal } from "proposal-temporal/lib/index.mjs";
-
 import ApexCharts from "apexcharts";
-
 import {
   TESTING_TAGS,
   featureMetabugs,
@@ -13,6 +12,11 @@ import {
   getSummaryData,
   summarizeCoverage,
 } from "./common.js";
+
+localForage.config({
+  driver: localForage.INDEXEDDB,
+  name: "bugbug-index",
+});
 
 const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
@@ -1091,11 +1095,12 @@ function setTableHeaderHandlers() {
     }
   });
 
-  if (localStorage.getItem("detailsToggle") !== null) {
-    bugDetails.open = !!JSON.parse(localStorage.getItem("detailsToggle"));
+  let toggle = await localForage.getItem("detailsToggle");
+  if (toggle) {
+    bugDetails.open = true;
   }
-  bugDetails.addEventListener("toggle", () => {
-    localStorage.setItem("detailsToggle", bugDetails.open);
+  bugDetails.addEventListener("toggle", async () => {
+    await localForage.setItem("detailsToggle", bugDetails.open);
     renderUI(false);
   });
 
