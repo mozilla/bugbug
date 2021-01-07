@@ -333,9 +333,13 @@ async function populateVersions() {
     let el = document.createElement("option");
     el.setAttribute("value", version);
     el.textContent = version;
-    el.selected = true;
+    el.selected = false;
     versionSelector.appendChild(el);
   }
+
+  // For now, previous two releases by default:
+  versionSelector.lastChild.selected = true;
+  versionSelector.lastChild.previousSibling.selected = true;
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
