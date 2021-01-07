@@ -277,8 +277,9 @@ function addRow(bugSummary) {
   );
   if (lines_added != 0) {
     if (lines_unknown != 0) {
-      coverage_column.textContent = `${lines_covered}-${lines_covered +
-        lines_unknown} of ${lines_added}`;
+      coverage_column.textContent = `${lines_covered}-${
+        lines_covered + lines_unknown
+      } of ${lines_added}`;
     } else {
       coverage_column.textContent = `${lines_covered} of ${lines_added}`;
     }
@@ -932,14 +933,14 @@ async function renderUI(rerenderSummary = true) {
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       return Temporal.PlainDate.compare(
         Temporal.PlainDate.from(a.date ? a.date : a.creation_date),
         Temporal.PlainDate.from(b.date ? b.date : b.creation_date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       if (a.risk_band == b.risk_band) {
         return 0;
       } else if (
@@ -952,11 +953,11 @@ async function renderUI(rerenderSummary = true) {
       }
     };
   } else if (sortBy[0] == "Bug") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       return a.id - b.id;
     };
   } else if (sortBy[0] == "Coverage") {
-    sortFunction = function(a, b) {
+    sortFunction = function (a, b) {
       let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(
         a
       );
@@ -996,7 +997,7 @@ function setTableHeaderHandlers() {
   const table = document.getElementById("table");
   const elems = table.querySelectorAll("th");
   for (let elem of elems) {
-    elem.onclick = function() {
+    elem.onclick = function () {
       if (sortBy[0] == elem.textContent) {
         if (sortBy[1] == "DESC") {
           sortBy[1] = "ASC";
@@ -1022,20 +1023,20 @@ function setTableHeaderHandlers() {
 
   setTableHeaderHandlers();
 
-  Object.keys(options).forEach(function(optionName) {
+  Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
     let elem = document.getElementById(optionName);
 
     if (optionType === "text") {
       setOption(optionName, elem.value);
-      elem.addEventListener("change", function() {
+      elem.addEventListener("change", function () {
         setOption(optionName, elem.value);
         renderUI();
       });
     } else if (optionType === "checkbox") {
       setOption(optionName, elem.checked);
 
-      elem.onchange = function() {
+      elem.onchange = function () {
         setOption(optionName, elem.checked);
         renderUI();
       };
@@ -1049,7 +1050,7 @@ function setTableHeaderHandlers() {
 
       setOption(optionName, value);
 
-      elem.onchange = function() {
+      elem.onchange = function () {
         let value = [];
         for (let option of elem.options) {
           if (option.selected) {
@@ -1069,7 +1070,7 @@ function setTableHeaderHandlers() {
         }
       }
 
-      elem.onchange = function() {
+      elem.onchange = function () {
         for (const radio of document.querySelectorAll(
           `input[name=${optionName}]`
         )) {
