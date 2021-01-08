@@ -4,8 +4,11 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import Counter
+from datetime import datetime
 
+import dateutil.parser
 import xgboost
+from dateutil.relativedelta import relativedelta
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -129,6 +132,11 @@ class ComponentModel(BugModel):
     def get_labels(self):
         product_components = {}
         for bug_data in bugzilla.get_bugs():
+            if dateutil.parser.parse(bug_data["creation_time"]).replace(
+                tzinfo=None
+            ) < datetime.utcnow() - relativedelta(years=2):
+                continue
+
             product_components[bug_data["id"]] = (
                 bug_data["product"],
                 bug_data["component"],
