@@ -1,4 +1,4 @@
-boto3==1.16.49
+boto3==1.16.51
 imbalanced-learn==0.7.0
 libmozdata==0.1.68
 lmdb==1.0.0
