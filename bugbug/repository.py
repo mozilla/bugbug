@@ -143,15 +143,18 @@ METRIC_NAMES = [
 ]
 
 
+def get_total_metrics_dict() -> dict:
+    return {f"{metric}_total": 0 for metric in METRIC_NAMES}
+
+
 def get_metrics_dict() -> dict:
-    metrics = {}
+    metrics = get_total_metrics_dict()
     for metric in METRIC_NAMES:
         metrics.update(
             {
                 f"{metric}_avg": 0.0,
                 f"{metric}_max": 0,
                 f"{metric}_min": sys.maxsize,
-                f"{metric}_total": 0,
             }
         )
     return metrics
@@ -206,6 +209,7 @@ class Commit:
         self.minimum_test_file_size = 0
         self.test_files_modified_num = 0
         self.metrics = get_metrics_dict()
+        self.metrics_diff = get_total_metrics_dict()
 
     def __eq__(self, other):
         assert isinstance(other, Commit)
@@ -504,6 +508,63 @@ def get_space_metrics(
             get_summary_metrics(obj, space)
 
 
+def set_commit_metrics(
+    commit: Commit,
+    path: str,
+    deleted_lines: List[int],
+    added_lines: List[int],
+    before_metrics: dict,
+    after_metrics: dict,
+) -> None:
+    try:
+        get_space_metrics(commit.metrics, after_metrics["spaces"])
+    except AnalysisException:
+        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+
+    before_metrics_dict = get_total_metrics_dict()
+    try:
+        get_space_metrics(
+            before_metrics_dict, before_metrics["spaces"], calc_summaries=False
+        )
+    except AnalysisException:
+        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+
+    commit.metrics_diff = {
+        f"{metric}_total": commit.metrics[f"{metric}_total"]
+        - before_metrics_dict[f"{metric}_total"]
+        for metric in METRIC_NAMES
+    }
+
+    touched_functions = get_touched_functions(
+        after_metrics["spaces"],
+        deleted_lines,
+        added_lines,
+    )
+    if len(touched_functions) > 0:
+        return
+
+    commit.functions[path] = []
+
+    for func in touched_functions:
+        metrics_dict = get_total_metrics_dict()
+
+        try:
+            get_space_metrics(metrics_dict, func, calc_summaries=False)
+        except AnalysisException:
+            logger.debug(
+                f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
+            )
+
+        commit.functions[path].append(
+            {
+                "name": func["name"],
+                "start": func["start_line"],
+                "end": func["end_line"],
+                "metrics": metrics_dict.items(),
+            }
+        )
+
+
 def transform(hg: hglib.client, repo_dir: str, commit: Commit):
     hg_modified_files(hg, commit)
 
@@ -568,52 +629,41 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit):
                 source_code_sizes.append(size)
 
                 if type_ != "IDL/IPDL/WebIDL":
-                    metrics = code_analysis_server.metrics(path, after, unit=False)
-                    if metrics.get("spaces"):
+                    after_metrics = code_analysis_server.metrics(
+                        path, after, unit=False
+                    )
+                    if after_metrics.get("spaces"):
                         metrics_file_count += 1
 
-                        try:
-                            get_space_metrics(commit.metrics, metrics["spaces"])
-                        except AnalysisException:
-                            logger.debug(
-                                f"rust-code-analysis error on commit {commit.node}, path {path}"
-                            )
+                        before = None
+                        if not stats["new"]:
+                            try:
+                                before = hg.cat(
+                                    [os.path.join(repo_dir, path).encode("utf-8")],
+                                    rev=commit.node.encode("ascii"),
+                                )
+                            except hglib.error.CommandError as e:
+                                if b"no such file in rev" not in e.err:
+                                    raise
 
-                        touched_functions = get_touched_functions(
-                            metrics["spaces"],
+                        before_metrics = code_analysis_server.metrics(
+                            path, before, unit=False
+                        )
+
+                        set_commit_metrics(
+                            commit,
+                            path,
                             stats["deleted_lines"],
                             stats["added_lines"],
+                            before_metrics,
+                            after_metrics,
                         )
-                        if len(touched_functions) > 0:
-                            commit.functions[path] = []
-
-                            for func in touched_functions:
-                                metrics_dict = get_metrics_dict()
-
-                                try:
-                                    get_space_metrics(
-                                        metrics_dict, func, calc_summaries=False
-                                    )
-                                except AnalysisException:
-                                    logger.debug(
-                                        f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
-                                    )
-
-                                commit.functions[path].append(
-                                    {
-                                        "name": func["name"],
-                                        "start": func["start_line"],
-                                        "end": func["end_line"],
-                                        "metrics": {
-                                            key: value
-                                            for key, value in metrics_dict.items()
-                                            if key.endswith("_total")
-                                        },
-                                    }
-                                )
 
                     # Replace type with "Objective-C/C++" if rust-code-analysis detected this is an Objective-C/C++ file.
-                    if type_ == "C/C++" and metrics.get("language") == "obj-c/c++":
+                    if (
+                        type_ == "C/C++"
+                        and after_metrics.get("language") == "obj-c/c++"
+                    ):
                         type_ = "Objective-C/C++"
 
             commit.types.add(type_)

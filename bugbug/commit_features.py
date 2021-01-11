@@ -332,6 +332,34 @@ class source_code_function_metrics(object):
         }
 
 
+class source_code_metrics_diff(object):
+    name = "diff in metrics on source code"
+
+    def __call__(self, commit, **kwargs):
+        return {
+            "Diff in cyclomatic": commit["metrics_diff"]["cyclomatic_total"],
+            "Diff in number of unique operands": commit["metrics_diff"][
+                "halstead_n2_total"
+            ],
+            "Diff in number of operands": commit["metrics_diff"]["halstead_N2_total"],
+            "Diff in number of unique operators": commit["metrics_diff"][
+                "halstead_n1_total"
+            ],
+            "Diff in number of operators": commit["metrics_diff"]["halstead_N1_total"],
+            "Diff in number of source loc": commit["metrics_diff"]["sloc_total"],
+            "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
+            "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
+            "Diff in number of comment loc": commit["metrics_diff"]["cloc_total"],
+            "Diff in number of function arguments": commit["metrics_diff"][
+                "nargs_total"
+            ],
+            "Diff in number of function exit points": commit["metrics_diff"][
+                "nexits_total"
+            ],
+            "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
+        }
+
+
 def get_exps(exp_type, commit):
     items_key = f"{exp_type}s" if exp_type != "directory" else "directories"
     items_num = len(commit[items_key])

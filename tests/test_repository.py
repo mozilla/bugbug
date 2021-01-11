@@ -2291,11 +2291,14 @@ def test_commit_dict_matches_expected():
     commit_features.source_code_file_metrics()(commit)
     commit_features.source_code_function_metrics()(commit)
     commit_features.functions_touched_size()(commit)
+    commit_features.source_code_metrics_diff()(commit)
 
     merged_commit = commit_features.merge_commits([commit, commit])
     commit_features.source_code_file_metrics()(merged_commit)
     # TODO: Support merging functions in commit_features.merge_commits
     # commit_features.source_code_function_metrics()(merged_commit)
+    # TODO: Support merging diff metrics in commit_features.merge_commits
+    # commit_features.source_code_metrics_diff()(commit)
 
     commit = repository.Commit(
         node="commit",
@@ -2341,3 +2344,5 @@ def test_commit_dict_matches_expected():
     commit_features.source_code_file_metrics()(merged_commit)
     # TODO: Support merging functions in commit_features.merge_commits
     # commit_features.source_code_function_metrics()(merged_commit)
+    # TODO: Support merging diff metrics in commit_features.merge_commits
+    # commit_features.source_code_metrics_diff()(commit)
