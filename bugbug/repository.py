@@ -565,7 +565,7 @@ def set_commit_metrics(
         )
 
 
-def transform(hg: hglib.client, repo_dir: str, commit: Commit):
+def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     hg_modified_files(hg, commit)
 
     if commit.ignored or len(commit.backsout) > 0 or commit.bug_id is None:
