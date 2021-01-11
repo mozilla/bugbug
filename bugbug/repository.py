@@ -523,9 +523,10 @@ def set_commit_metrics(
 
     before_metrics_dict = get_total_metrics_dict()
     try:
-        get_space_metrics(
-            before_metrics_dict, before_metrics["spaces"], calc_summaries=False
-        )
+        if before_metrics.get("spaces"):
+            get_space_metrics(
+                before_metrics_dict, before_metrics["spaces"], calc_summaries=False
+            )
     except AnalysisException:
         logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
 
@@ -635,20 +636,20 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
                     if after_metrics.get("spaces"):
                         metrics_file_count += 1
 
-                        before = None
+                        before_metrics = {}
                         if not stats["new"]:
                             try:
                                 before = hg.cat(
                                     [os.path.join(repo_dir, path).encode("utf-8")],
                                     rev=commit.node.encode("ascii"),
                                 )
+
+                                before_metrics = code_analysis_server.metrics(
+                                    path, before, unit=False
+                                )
                             except hglib.error.CommandError as e:
                                 if b"no such file in rev" not in e.err:
                                     raise
-
-                        before_metrics = code_analysis_server.metrics(
-                            path, before, unit=False
-                        )
 
                         set_commit_metrics(
                             commit,
