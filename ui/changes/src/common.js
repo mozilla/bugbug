@@ -299,3 +299,28 @@ export function summarizeCoverage(bugSummary) {
 
   return [lines_added, lines_covered, lines_unknown];
 }
+
+export async function getComponentRegressionMap(threshold = 0.05) {
+  let connections = await componentConnections;
+
+  // // Return an object with each component and the components that are most likely
+  // // to cause regressions to that component.
+  let connectionsMap = {};
+  for (let c of connections) {
+    for (let regression_component in c.most_common_regression_components) {
+      // Ignore < N%
+      if (
+        c.most_common_regression_components[regression_component] < threshold
+      ) {
+        continue;
+      }
+      if (!connectionsMap[regression_component]) {
+        connectionsMap[regression_component] = {};
+      }
+      connectionsMap[regression_component][c.component] =
+        c.most_common_regression_components[regression_component];
+    }
+  }
+
+  return connectionsMap;
+}

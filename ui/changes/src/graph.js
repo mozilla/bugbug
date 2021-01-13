@@ -2,7 +2,7 @@ import ApexCharts from "apexcharts";
 
 // JSON from https://bugzilla.mozilla.org/show_bug.cgi?id=1669363
 import teamComponentMapping from "./teams.json";
-import { componentConnections } from "./common";
+import { getComponentRegressionMap } from "./common";
 
 function generateData(count, yrange) {
   var i = 0;
@@ -148,26 +148,7 @@ function rerender(connections, teamComponentMapping) {
 }
 
 (async function () {
-  let connections = await componentConnections;
-  console.log(connections);
-  console.log(teamComponentMapping);
-
-  // Return an object with each component and the components that are most likely
-  // to cause regressions to that component.
-  let connectionsMap = {};
-  for (let c of connections) {
-    for (let regression_component in c.most_common_regression_components) {
-      // Ignore < N%
-      if (c.most_common_regression_components[regression_component] < 0.05) {
-        continue;
-      }
-      if (!connectionsMap[regression_component]) {
-        connectionsMap[regression_component] = {};
-      }
-      connectionsMap[regression_component][c.component] =
-        c.most_common_regression_components[regression_component];
-    }
-  }
-
+  let connectionsMap = await getComponentRegressionMap();
+  console.log(connectionsMap);
   rerender(connectionsMap, teamComponentMapping);
 })();
