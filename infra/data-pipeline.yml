@@ -1464,7 +1464,7 @@ tasks:
         command:
           - "/bin/sh"
           - "-lcxe"
-          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar'"
+          - "taskboot deploy-heroku --heroku-app bugbug 'web:public/bugbug/bugbug-http-service.tar.zst' 'worker:public/bugbug/bugbug-http-service-bg-worker.tar.zst'"
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
