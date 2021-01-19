@@ -127,7 +127,7 @@ def go(days: int) -> None:
         )
 
     start_time = time.monotonic()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_push = {
             executor.submit(
                 analyze_shadow_schedulers,
