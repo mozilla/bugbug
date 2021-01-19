@@ -33,7 +33,7 @@ tasks:
       image: mozilla/bugbug-base:${version}
       command:
         - bugbug-shadow-scheduler-stats
-        - "28"
+        - "7"
       features:
         taskclusterProxy: true
     scopes:

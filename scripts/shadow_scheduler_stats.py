@@ -69,7 +69,7 @@ def analyze_shadow_schedulers(
     }
 
 
-def go(days: int) -> None:
+def go(months: int) -> None:
     logger.info("Download previous shadow scheduler statistics...")
     db.download(SHADOW_SCHEDULER_STATS_DB)
 
@@ -81,7 +81,7 @@ def go(days: int) -> None:
     logger.info(f"Already gathered statistics for {len(scheduler_stats)} pushes...")
 
     to_date = datetime.utcnow() - relativedelta(days=3)
-    from_date = to_date - relativedelta(days=days)
+    from_date = to_date - relativedelta(months=months)
     pushes = mozci.push.make_push_objects(
         from_date=from_date.strftime("%Y-%m-%d"),
         to_date=to_date.strftime("%Y-%m-%d"),
@@ -170,13 +170,13 @@ def main() -> None:
     description = "Analyze results of shadow schedulers"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
-        "days",
+        "months",
         type=int,
-        help="How many days of pushes to analyze.",
+        help="How many months of pushes to analyze.",
     )
     args = parser.parse_args()
 
-    go(args.days)
+    go(args.months)
 
 
 if __name__ == "__main__":
