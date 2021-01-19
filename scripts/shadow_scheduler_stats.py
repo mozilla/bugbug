@@ -46,13 +46,19 @@ def analyze_shadow_schedulers(
             {
                 "name": name,
                 "num_group_scheduled": len(groups),
-                "num_group_regressions": len(group_regressions),
-                "num_group_caught": len(group_regressions & groups),
+                "num_group_regressions": len(group_regressions)
+                if group_regressions is not None
+                else None,
+                "num_group_caught": len(group_regressions & groups)
+                if group_regressions is not None
+                else None,
                 "num_config_group_scheduled": len(config_groups),
-                "num_config_group_regressions": len(config_group_regressions),
-                "num_config_group_caught": len(
-                    config_group_regressions & config_groups
-                ),
+                "num_config_group_regressions": len(config_group_regressions)
+                if config_group_regressions is not None
+                else None,
+                "num_config_group_caught": len(config_group_regressions & config_groups)
+                if config_group_regressions is not None
+                else None,
             }
         )
 
@@ -125,12 +131,14 @@ def go(days: int) -> None:
         future_to_push = {
             executor.submit(
                 analyze_shadow_schedulers,
-                group_regressions[push.rev],
-                config_group_regressions[push.rev],
+                group_regressions[push.rev] if push.rev in group_regressions else None,
+                config_group_regressions[push.rev]
+                if push.rev in config_group_regressions
+                else None,
                 push,
             ): push
             for push in pushes
-            if push.rev in group_regressions and push.rev in config_group_regressions
+            if push.rev in group_regressions or push.rev in config_group_regressions
         }
 
         try:
