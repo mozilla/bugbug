@@ -146,7 +146,7 @@ def go(days: int) -> None:
                     traceback.print_exc()
 
                 # Upload every 60 minutes.
-                if time.monotonic() - start_time >= 3600:
+                if time.monotonic() - start_time >= 600:
                     compress_and_upload()
                     start_time = time.monotonic()
         except Exception:
