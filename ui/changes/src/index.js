@@ -893,6 +893,113 @@ async function renderFixTimesChart(chartEl, bugSummaries) {
   chart.render();
 }
 
+async function renderTimeToBugChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter(
+    (bugSummary) => bugSummary.time_to_bug !== null
+  );
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = Temporal.PlainDate.from(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        Temporal.PlainDate.from(summary.creation_date),
+        Temporal.PlainDate.from(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).creation_date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      counterObj.time_to_bug += bug.time_to_bug;
+      counterObj.bugs += 1;
+    },
+    null,
+    (summary) => summary.creation_date
+  );
+
+  let categories = [];
+  let average_time_to_bug = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    average_time_to_bug.push(
+      Math.ceil(summaryData[date].time_to_bug / summaryData[date].bugs)
+    );
+  }
+
+  let options = {
+    series: [
+      {
+        name: "Average time to bug",
+        data: average_time_to_bug,
+      },
+    ],
+    chart: {
+      height: 350,
+      type: "line",
+      dropShadow: {
+        enabled: true,
+        color: "#000",
+        top: 18,
+        left: 7,
+        blur: 10,
+        opacity: 0.2,
+      },
+      toolbar: {
+        show: false,
+      },
+    },
+    dataLabels: {
+      enabled: true,
+    },
+    stroke: {
+      curve: "smooth",
+    },
+    title: {
+      text: "Average time to bug",
+      align: "left",
+    },
+    grid: {
+      borderColor: "#e7e7e7",
+      row: {
+        colors: ["#f3f3f3", "transparent"],
+        opacity: 0.5,
+      },
+    },
+    markers: {
+      size: 1,
+    },
+    xaxis: {
+      categories: categories,
+      title: {
+        text: "Date",
+      },
+    },
+    yaxis: {
+      title: {
+        text: "Average time to bug",
+      },
+    },
+    legend: {
+      position: "top",
+      horizontalAlign: "right",
+      floating: true,
+      offsetY: -25,
+      offsetX: -5,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
+}
+
 async function renderTable(bugSummaries) {
   let table = document.getElementById("table");
   while (table.rows.length > 1) {
@@ -937,6 +1044,10 @@ async function renderSummary(bugSummaries) {
   let fixTimesChartEl = document.createElement("div");
   resultGraphs.append(fixTimesChartEl);
   await renderFixTimesChart(fixTimesChartEl, bugSummaries);
+
+  let timeToBugChartEl = document.createElement("div");
+  resultGraphs.append(timeToBugChartEl);
+  await renderTimeToBugChart(timeToBugChartEl, bugSummaries);
 }
 
 async function renderUI(rerenderSummary = true) {
