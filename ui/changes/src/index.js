@@ -11,6 +11,7 @@ import {
   landingsData,
   Counter,
   getSummaryData,
+  renderChart,
   summarizeCoverage,
 } from "./common.js";
 
@@ -470,8 +471,9 @@ async function renderRiskChart(chartEl, bugSummaries) {
     high.push(summaryData[date].high);
   }
 
-  let options = {
-    series: [
+  renderChart(
+    chartEl,
+    [
       {
         name: "Higher",
         data: high,
@@ -485,64 +487,10 @@ async function renderRiskChart(chartEl, bugSummaries) {
         data: low,
       },
     ],
-    chart: {
-      height: 350,
-      type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
-      toolbar: {
-        show: false,
-      },
-    },
-    colors: [HIGH_RISK_COLOR, MEDIUM_RISK_COLOR, LOW_RISK_COLOR],
-    dataLabels: {
-      enabled: true,
-    },
-    stroke: {
-      curve: "smooth",
-    },
-    title: {
-      text: "Evolution of lower/average/higher risk changes",
-      align: "left",
-    },
-    grid: {
-      borderColor: "#e7e7e7",
-      row: {
-        colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5,
-      },
-    },
-    markers: {
-      size: 1,
-    },
-    xaxis: {
-      categories: categories,
-      title: {
-        text: "Date",
-      },
-    },
-    yaxis: {
-      title: {
-        text: "# of patches",
-      },
-    },
-    legend: {
-      position: "top",
-      horizontalAlign: "right",
-      floating: true,
-      offsetY: -25,
-      offsetX: -5,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
+    categories,
+    "Evolution of lower/average/higher risk changes",
+    "# of patches"
+  );
 }
 
 function filterByCreationDate(bugSummaries) {
@@ -611,70 +559,18 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
     regressions.push(summaryData[date].regressions);
   }
 
-  let options = {
-    series: [
+  renderChart(
+    chartEl,
+    [
       {
         name: "Regressions",
         data: regressions,
       },
     ],
-    chart: {
-      height: 350,
-      type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
-      toolbar: {
-        show: false,
-      },
-    },
-    dataLabels: {
-      enabled: true,
-    },
-    stroke: {
-      curve: "smooth",
-    },
-    title: {
-      text: "Number of regressions",
-      align: "left",
-    },
-    grid: {
-      borderColor: "#e7e7e7",
-      row: {
-        colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5,
-      },
-    },
-    markers: {
-      size: 1,
-    },
-    xaxis: {
-      categories: categories,
-      title: {
-        text: "Date",
-      },
-    },
-    yaxis: {
-      title: {
-        text: "# of regressions",
-      },
-    },
-    legend: {
-      position: "top",
-      horizontalAlign: "right",
-      floating: true,
-      offsetY: -25,
-      offsetX: -5,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
+    categories,
+    "Number of regressions",
+    "# of regressions"
+  );
 }
 
 async function renderTypesChart(chartEl, bugSummaries) {
@@ -724,65 +620,13 @@ async function renderTypesChart(chartEl, bugSummaries) {
     }
   }
 
-  let options = {
-    series: all_series,
-    chart: {
-      height: 350,
-      type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
-      toolbar: {
-        show: false,
-      },
-    },
-    dataLabels: {
-      enabled: true,
-    },
-    stroke: {
-      curve: "smooth",
-    },
-    title: {
-      text: "Number of bugs by type",
-      align: "left",
-    },
-    grid: {
-      borderColor: "#e7e7e7",
-      row: {
-        colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5,
-      },
-    },
-    markers: {
-      size: 1,
-    },
-    xaxis: {
-      categories: categories,
-      title: {
-        text: "Date",
-      },
-    },
-    yaxis: {
-      title: {
-        text: "# of bugs",
-      },
-    },
-    legend: {
-      position: "top",
-      horizontalAlign: "right",
-      floating: true,
-      offsetY: -25,
-      offsetX: -5,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
+  renderChart(
+    chartEl,
+    all_series,
+    categories,
+    "Number of bugs by type",
+    "# of bugs"
+  );
 }
 
 async function renderFixTimesChart(chartEl, bugSummaries) {
@@ -829,70 +673,18 @@ async function renderFixTimesChart(chartEl, bugSummaries) {
     );
   }
 
-  let options = {
-    series: [
+  renderChart(
+    chartEl,
+    [
       {
-        name: "Average fix times",
+        name: "Average fix time",
         data: average_fix_times,
       },
     ],
-    chart: {
-      height: 350,
-      type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
-      toolbar: {
-        show: false,
-      },
-    },
-    dataLabels: {
-      enabled: true,
-    },
-    stroke: {
-      curve: "smooth",
-    },
-    title: {
-      text: "Average fix times",
-      align: "left",
-    },
-    grid: {
-      borderColor: "#e7e7e7",
-      row: {
-        colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5,
-      },
-    },
-    markers: {
-      size: 1,
-    },
-    xaxis: {
-      categories: categories,
-      title: {
-        text: "Date",
-      },
-    },
-    yaxis: {
-      title: {
-        text: "Average fix times",
-      },
-    },
-    legend: {
-      position: "top",
-      horizontalAlign: "right",
-      floating: true,
-      offsetY: -25,
-      offsetX: -5,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
+    categories,
+    "Average fix time",
+    "Time"
+  );
 }
 
 async function renderTimeToBugChart(chartEl, bugSummaries) {
@@ -936,70 +728,18 @@ async function renderTimeToBugChart(chartEl, bugSummaries) {
     );
   }
 
-  let options = {
-    series: [
+  renderChart(
+    chartEl,
+    [
       {
         name: "Average time to bug",
         data: average_time_to_bug,
       },
     ],
-    chart: {
-      height: 350,
-      type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
-      toolbar: {
-        show: false,
-      },
-    },
-    dataLabels: {
-      enabled: true,
-    },
-    stroke: {
-      curve: "smooth",
-    },
-    title: {
-      text: "Average time to bug",
-      align: "left",
-    },
-    grid: {
-      borderColor: "#e7e7e7",
-      row: {
-        colors: ["#f3f3f3", "transparent"],
-        opacity: 0.5,
-      },
-    },
-    markers: {
-      size: 1,
-    },
-    xaxis: {
-      categories: categories,
-      title: {
-        text: "Date",
-      },
-    },
-    yaxis: {
-      title: {
-        text: "Average time to bug",
-      },
-    },
-    legend: {
-      position: "top",
-      horizontalAlign: "right",
-      floating: true,
-      offsetY: -25,
-      offsetX: -5,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
+    categories,
+    "Average time to bug",
+    "Time"
+  );
 }
 
 async function renderTable(bugSummaries) {

@@ -1,3 +1,4 @@
+import ApexCharts from "apexcharts";
 import { Temporal } from "proposal-temporal/lib/index.mjs";
 import localForage from "localforage";
 
@@ -290,6 +291,68 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
     },
     filter
   );
+}
+
+export function renderChart(chartEl, series, dates, title, yaxis_text) {
+  let options = {
+    series: series,
+    chart: {
+      height: 350,
+      type: "line",
+      dropShadow: {
+        enabled: true,
+        color: "#000",
+        top: 18,
+        left: 7,
+        blur: 10,
+        opacity: 0.2,
+      },
+      toolbar: {
+        show: false,
+      },
+    },
+    dataLabels: {
+      enabled: true,
+    },
+    stroke: {
+      curve: "smooth",
+    },
+    title: {
+      text: title,
+      align: "left",
+    },
+    grid: {
+      borderColor: "#e7e7e7",
+      row: {
+        colors: ["#f3f3f3", "transparent"],
+        opacity: 0.5,
+      },
+    },
+    markers: {
+      size: 1,
+    },
+    xaxis: {
+      categories: dates,
+      title: {
+        text: "Date",
+      },
+    },
+    yaxis: {
+      title: {
+        text: yaxis_text,
+      },
+    },
+    legend: {
+      position: "top",
+      horizontalAlign: "right",
+      floating: true,
+      offsetY: -25,
+      offsetX: -5,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
 }
 
 export function summarizeCoverage(bugSummary) {
