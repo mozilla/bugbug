@@ -88,9 +88,9 @@ def go(months: int) -> None:
         branch="autoland",
     )
 
-    pushes = [push for push in pushes if push.rev not in scheduler_stats]
+    pushes_to_analyze = [push for push in pushes if push.rev not in scheduler_stats]
 
-    logger.info(f"{len(pushes)} left to analyze")
+    logger.info(f"{len(pushes_to_analyze)} left to analyze")
 
     def compress_and_upload() -> None:
         for push in pushes:
@@ -137,7 +137,7 @@ def go(months: int) -> None:
                 else None,
                 push,
             ): push
-            for push in pushes
+            for push in pushes_to_analyze
             if push.rev in group_regressions or push.rev in config_group_regressions
         }
 
