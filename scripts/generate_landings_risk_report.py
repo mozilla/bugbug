@@ -168,19 +168,24 @@ class LandingsRiskReportGenerator(object):
 
         component_team_mapping = bugzilla.get_component_team_mapping()
 
-        bugs_set = set(bugs)
+        # A map from bug ID to the list of commits associated to the bug (in order of landing).
+        bug_to_commits = collections.defaultdict(list)
 
-        commits = [
-            commit
-            for commit in repository.get_commits()
-            if commit["bug_id"] in bugs_set
-        ]
+        for commit in repository.get_commits():
+            bug_id = commit["bug_id"]
+            if not bug_id:
+                continue
+
+            bug_to_commits[bug_id].append(commit)
+
+        commits: List[repository.CommitDict] = sum(
+            (bug_to_commits[bug_id] for bug_id in bugs), []
+        )
         commit_map = {commit["node"]: commit for commit in commits}
-        hash_to_rev = {commit["node"]: i for i, commit in enumerate(commits)}
 
         logger.info(f"{len(commits)} commits to analyze.")
 
-        logger.info(f"{len(bugs_set)} bugs to analyze.")
+        logger.info(f"{len(bugs)} bugs to analyze.")
 
         bug_map = {}
         regressor_bug_ids = set()
@@ -434,19 +439,6 @@ class LandingsRiskReportGenerator(object):
 
             return commits_data
 
-        # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
-        commits.sort(key=lambda x: x["bug_id"])
-
-        bug_to_commits = {}
-        for bug_id, commit_iter in itertools.groupby(commits, lambda x: x["bug_id"]):
-            # TODO: Figure out what to do with bugs we couldn't download (security bugs).
-            if bug_id not in bug_map:
-                continue
-
-            bug_to_commits[bug_id] = sorted(
-                commit_iter, key=lambda x: hash_to_rev[x["node"]]
-            )
-
         bug_summaries = []
         for bug_id in bugs:
             if bug_id not in bug_map:
@@ -456,6 +448,32 @@ class LandingsRiskReportGenerator(object):
             commit_data = get_commit_data(commit_list)
 
             bug = bug_map[bug_id]
+
+            time_to_bug = None
+            for regressor_bug_id in bug["regressed_by"]:
+                # Get the date of the last commit in the regressor bug that landed before the regression bug.
+                last_commit_date = max(
+                    (
+                        dateutil.parser.parse(commit["pushdate"])
+                        for commit in bug_to_commits.get(regressor_bug_id, [])
+                        if dateutil.parser.parse(commit["pushdate"])
+                        < dateutil.parser.parse(bug["creation_time"]).replace(
+                            tzinfo=None
+                        )
+                    ),
+                    default=None,
+                )
+
+                if last_commit_date is None:
+                    continue
+
+                # Get the minimum "time to bug" (from the fix time of the closest regressor to the regression bug).
+                cur_time_to_bug = (
+                    dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+                    - last_commit_date
+                ).days
+                if time_to_bug is None or cur_time_to_bug < time_to_bug:
+                    time_to_bug = cur_time_to_bug
 
             bug_summary = {
                 "id": bug_id,
@@ -469,6 +487,7 @@ class LandingsRiskReportGenerator(object):
                     "cf_has_regression_range" in bug
                     and bug["cf_has_regression_range"] == "yes"
                 ),
+                "time_to_bug": time_to_bug,
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"
