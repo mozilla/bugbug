@@ -44,6 +44,21 @@ const EXPIRE_CACHE = (() => {
     },
   };
 })();
+
+export let getPlainDate = (() => {
+  let cache = new Map();
+
+  return (date) => {
+    let plainDate = cache.get(date);
+    if (!plainDate) {
+      plainDate = Temporal.PlainDate.from(date);
+      cache.set(date, plainDate);
+    }
+
+    return plainDate;
+  };
+})();
+
 export const TESTING_TAGS = {
   "testing-approved": {
     color: getCSSVariableValue("--green-60"),
@@ -130,10 +145,7 @@ export let landingsData = (async function () {
     orderedDates.push(date);
   }
   orderedDates.sort((a, b) => {
-    return Temporal.PlainDate.compare(
-      Temporal.PlainDate.from(a),
-      Temporal.PlainDate.from(b)
-    );
+    return Temporal.PlainDate.compare(getPlainDate(a), getPlainDate(b));
   });
 
   let returnedObject = {};
@@ -167,17 +179,12 @@ export async function getSummaryData(
 ) {
   let dates = [...new Set(bugSummaries.map((summary) => dateGetter(summary)))];
   dates.sort((a, b) =>
-    Temporal.PlainDate.compare(
-      Temporal.PlainDate.from(a),
-      Temporal.PlainDate.from(b)
-    )
+    Temporal.PlainDate.compare(getPlainDate(a), getPlainDate(b))
   );
 
   let dailyData = {};
   for (let date of dates) {
-    if (
-      Temporal.PlainDate.compare(Temporal.PlainDate.from(date), startDate) < 1
-    ) {
+    if (Temporal.PlainDate.compare(getPlainDate(date), startDate) < 1) {
       continue;
     }
 
@@ -204,7 +211,7 @@ export async function getSummaryData(
   if (grouping == "weekly") {
     let weeklyData = {};
     for (let daily in dailyData) {
-      let date = Temporal.PlainDate.from(daily);
+      let date = getPlainDate(daily);
       let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
 
       if (!weeklyData[weekStart]) {
@@ -220,7 +227,7 @@ export async function getSummaryData(
   } else if (grouping == "monthly") {
     let monthlyData = {};
     for (let daily in dailyData) {
-      let date = Temporal.PlainDate.from(daily);
+      let date = getPlainDate(daily);
       let yearMonth = Temporal.PlainYearMonth.from(date);
 
       if (!monthlyData[yearMonth]) {
@@ -240,8 +247,8 @@ export async function getSummaryData(
       for (const [cur_version, cur_date] of Object.entries(releases)) {
         if (
           Temporal.PlainDate.compare(
-            Temporal.PlainDate.from(daily),
-            Temporal.PlainDate.from(cur_date)
+            getPlainDate(daily),
+            getPlainDate(cur_date)
           ) < 1
         ) {
           break;
@@ -271,7 +278,7 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
   return getSummaryData(
     bugSummaries,
     grouping,
-    Temporal.PlainDate.from("2020-09-01"), // Ignore data before the testing policy took place.
+    getPlainDate("2020-09-01"), // Ignore data before the testing policy took place.
     (counterObj, bug) => {
       for (let commit of bug.commits) {
         if (!commit.testing) {

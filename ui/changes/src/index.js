@@ -5,6 +5,7 @@ import localForage from "localforage";
 import { Temporal } from "proposal-temporal/lib/index.mjs";
 import ApexCharts from "apexcharts";
 import {
+  getPlainDate,
   TESTING_TAGS,
   featureMetabugs,
   landingsData,
@@ -424,11 +425,11 @@ async function renderRiskChart(chartEl, bugSummaries) {
     return;
   }
 
-  let minDate = Temporal.PlainDate.from(
+  let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(summary.date),
-        Temporal.PlainDate.from(minSummary.date)
+        getPlainDate(summary.date),
+        getPlainDate(minSummary.date)
       ) < 0
         ? summary
         : minSummary
@@ -551,7 +552,7 @@ function filterByCreationDate(bugSummaries) {
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
         Temporal.PlainDate.compare(
-          Temporal.PlainDate.from(bugSummary.creation_date),
+          getPlainDate(bugSummary.creation_date),
           startDate
         ) >= 0
     );
@@ -563,7 +564,7 @@ function filterByCreationDate(bugSummaries) {
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
         Temporal.PlainDate.compare(
-          Temporal.PlainDate.from(bugSummary.creation_date),
+          getPlainDate(bugSummary.creation_date),
           endDate
         ) <= 0
     );
@@ -579,11 +580,11 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
     return;
   }
 
-  let minDate = Temporal.PlainDate.from(
+  let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(summary.creation_date),
-        Temporal.PlainDate.from(minSummary.creation_date)
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
       ) < 0
         ? summary
         : minSummary
@@ -683,11 +684,11 @@ async function renderTypesChart(chartEl, bugSummaries) {
     return;
   }
 
-  let minDate = Temporal.PlainDate.from(
+  let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(summary.creation_date),
-        Temporal.PlainDate.from(minSummary.creation_date)
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
       ) < 0
         ? summary
         : minSummary
@@ -793,11 +794,11 @@ async function renderFixTimesChart(chartEl, bugSummaries) {
     return;
   }
 
-  let minDate = Temporal.PlainDate.from(
+  let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(summary.creation_date),
-        Temporal.PlainDate.from(minSummary.creation_date)
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
       ) < 0
         ? summary
         : minSummary
@@ -809,9 +810,10 @@ async function renderFixTimesChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.fix_time += Temporal.PlainDate.from(
-        bug.creation_date
-      ).until(Temporal.PlainDate.from(bug.date), { largestUnit: "days" }).days;
+      counterObj.fix_time += getPlainDate(bug.creation_date).until(
+        getPlainDate(bug.date),
+        { largestUnit: "days" }
+      ).days;
       counterObj.bugs += 1;
     },
     null,
@@ -902,11 +904,11 @@ async function renderTimeToBugChart(chartEl, bugSummaries) {
     return;
   }
 
-  let minDate = Temporal.PlainDate.from(
+  let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(summary.creation_date),
-        Temporal.PlainDate.from(minSummary.creation_date)
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
       ) < 0
         ? summary
         : minSummary
@@ -1075,7 +1077,7 @@ async function renderUI(rerenderSummary = true) {
     bugSummaries = bugSummaries.filter((bugSummary) => {
       return (
         Temporal.PlainDate.compare(
-          Temporal.PlainDate.from(
+          getPlainDate(
             bugSummary.date ? bugSummary.date : bugSummary.creation_date
           ),
           startDate
@@ -1090,7 +1092,7 @@ async function renderUI(rerenderSummary = true) {
     bugSummaries = bugSummaries.filter((bugSummary) => {
       return (
         Temporal.PlainDate.compare(
-          Temporal.PlainDate.from(
+          getPlainDate(
             bugSummary.date ? bugSummary.date : bugSummary.creation_date
           ),
           endDate
@@ -1169,8 +1171,8 @@ async function renderUI(rerenderSummary = true) {
   if (sortBy[0] == "Date") {
     sortFunction = function (a, b) {
       return Temporal.PlainDate.compare(
-        Temporal.PlainDate.from(a.date ? a.date : a.creation_date),
-        Temporal.PlainDate.from(b.date ? b.date : b.creation_date)
+        getPlainDate(a.date ? a.date : a.creation_date),
+        getPlainDate(b.date ? b.date : b.creation_date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
