@@ -599,6 +599,10 @@ async function renderTypesChart(chartEl, bugSummaries) {
       for (const type of bug.types) {
         counterObj[type] += 1;
       }
+
+      if (bug.types.length == 0) {
+        counterObj["unknown"] += 1;
+      }
     },
     null,
     (summary) => summary.creation_date
