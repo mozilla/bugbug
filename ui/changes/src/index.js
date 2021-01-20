@@ -342,12 +342,12 @@ async function populateVersions() {
     el.setAttribute("value", version);
     el.textContent = version;
     el.selected = false;
-    versionSelector.appendChild(el);
+    versionSelector.prepend(el);
   }
 
   // For now, previous two releases by default:
-  versionSelector.lastChild.selected = true;
-  versionSelector.lastChild.previousSibling.selected = true;
+  versionSelector.firstChild.selected = true;
+  versionSelector.firstChild.nextSibling.selected = true;
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
