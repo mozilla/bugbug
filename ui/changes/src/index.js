@@ -546,6 +546,9 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
     (counterObj, bug) => {
       if (bug.regression) {
         counterObj.regressions += 1;
+        if (bug.fixed) {
+          counterObj.fixed_regressions += 1;
+        }
       }
     },
     null,
@@ -554,9 +557,11 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
 
   let categories = [];
   let regressions = [];
+  let fixed_regressions = [];
   for (let date in summaryData) {
     categories.push(date);
     regressions.push(summaryData[date].regressions);
+    fixed_regressions.push(summaryData[date].fixed_regressions);
   }
 
   renderChart(
@@ -565,6 +570,10 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
       {
         name: "Regressions",
         data: regressions,
+      },
+      {
+        name: "Fixed regressions",
+        data: fixed_regressions,
       },
     ],
     categories,
