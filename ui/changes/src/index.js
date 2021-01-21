@@ -33,11 +33,19 @@ let options = {
     value: null,
     type: "select",
   },
-  startDate: {
+  fixStartDate: {
     value: null,
     type: "text",
   },
-  endDate: {
+  fixEndDate: {
+    value: null,
+    type: "text",
+  },
+  createStartDate: {
+    value: null,
+    type: "text",
+  },
+  createEndDate: {
     value: null,
     type: "text",
   },
@@ -493,41 +501,7 @@ async function renderRiskChart(chartEl, bugSummaries) {
   );
 }
 
-function filterByCreationDate(bugSummaries) {
-  let startDate = getOption("startDate");
-  if (startDate) {
-    startDate = Temporal.PlainDate.from(startDate);
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        Temporal.PlainDate.compare(
-          getPlainDate(bugSummary.creation_date),
-          startDate
-        ) >= 0
-    );
-  }
-
-  let endDate = getOption("endDate");
-  if (endDate) {
-    endDate = Temporal.PlainDate.from(endDate);
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        Temporal.PlainDate.compare(
-          getPlainDate(bugSummary.creation_date),
-          endDate
-        ) <= 0
-    );
-  }
-
-  return bugSummaries;
-}
-
 async function renderRegressionsChart(chartEl, bugSummaries) {
-  bugSummaries = filterByCreationDate(bugSummaries);
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
   let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
@@ -583,12 +557,6 @@ async function renderRegressionsChart(chartEl, bugSummaries) {
 }
 
 async function renderTypesChart(chartEl, bugSummaries) {
-  bugSummaries = filterByCreationDate(bugSummaries);
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
   let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
@@ -644,8 +612,6 @@ async function renderTypesChart(chartEl, bugSummaries) {
 
 async function renderFixTimesChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
-
-  bugSummaries = filterByCreationDate(bugSummaries);
 
   if (bugSummaries.length == 0) {
     return;
@@ -824,34 +790,60 @@ async function renderUI(rerenderSummary = true) {
     );
   }
 
-  let startDate = getOption("startDate");
-  if (startDate) {
-    startDate = Temporal.PlainDate.from(startDate);
+  let fixStartDate = getOption("fixStartDate");
+  if (fixStartDate) {
+    fixStartDate = Temporal.PlainDate.from(fixStartDate);
     bugSummaries = bugSummaries.filter((bugSummary) => {
+      if (!bugSummary.date) {
+        return false;
+      }
+
       return (
         Temporal.PlainDate.compare(
-          getPlainDate(
-            bugSummary.date ? bugSummary.date : bugSummary.creation_date
-          ),
-          startDate
+          getPlainDate(bugSummary.date),
+          fixStartDate
         ) >= 0
       );
     });
   }
 
-  let endDate = getOption("endDate");
-  if (endDate) {
-    endDate = Temporal.PlainDate.from(endDate);
+  let fixEndDate = getOption("fixEndDate");
+  if (fixEndDate) {
+    fixEndDate = Temporal.PlainDate.from(fixEndDate);
     bugSummaries = bugSummaries.filter((bugSummary) => {
+      if (!bugSummary.date) {
+        return false;
+      }
+
       return (
-        Temporal.PlainDate.compare(
-          getPlainDate(
-            bugSummary.date ? bugSummary.date : bugSummary.creation_date
-          ),
-          endDate
-        ) <= 0
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), fixEndDate) <=
+        0
       );
     });
+  }
+
+  let createStartDate = getOption("createStartDate");
+  if (createStartDate) {
+    createStartDate = Temporal.PlainDate.from(createStartDate);
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        Temporal.PlainDate.compare(
+          getPlainDate(bugSummary.creation_date),
+          createStartDate
+        ) >= 0
+    );
+  }
+
+  let createEndDate = getOption("createEndDate");
+  if (createEndDate) {
+    createEndDate = Temporal.PlainDate.from(createEndDate);
+    bugSummaries = bugSummaries.filter(
+      (bugSummary) =>
+        Temporal.PlainDate.compare(
+          getPlainDate(bugSummary.creation_date),
+          createEndDate
+        ) <= 0
+    );
   }
 
   if (testingTags) {
