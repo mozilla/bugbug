@@ -498,6 +498,7 @@ class LandingsRiskReportGenerator(object):
                     component_team_mapping, bug["product"], bug["component"]
                 ),
                 "summary": bug["summary"],
+                "fixed": bug["resolution"] == "FIXED",
                 "types": bug_to_types(bug),
                 "severity": bug["severity"],
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
