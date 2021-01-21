@@ -69,6 +69,10 @@ let options = {
     value: null,
     type: "select",
   },
+  includeUnfixed: {
+    value: null,
+    type: "checkbox",
+  },
   types: {
     value: null,
     type: "select",
@@ -879,10 +883,10 @@ async function renderUI(rerenderSummary = true) {
   }
 
   if (releaseVersions) {
-    const includeNotAvailableVersion = releaseVersions.includes("N/A");
+    const includeUnfixed = getOption("includeUnfixed");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
-        (includeNotAvailableVersion && bugSummary.versions.length == 0) ||
+        (includeUnfixed && bugSummary.versions.length == 0) ||
         releaseVersions.some((version) =>
           bugSummary.versions.includes(Number(version))
         )
