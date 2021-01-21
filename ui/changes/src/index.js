@@ -608,10 +608,6 @@ async function renderTypesChart(chartEl, bugSummaries) {
       for (const type of bug.types) {
         counterObj[type] += 1;
       }
-
-      if (bug.types.length == 0) {
-        counterObj["unknown"] += 1;
-      }
     },
     null,
     (summary) => summary.creation_date
@@ -619,6 +615,10 @@ async function renderTypesChart(chartEl, bugSummaries) {
 
   let all_series = [];
   for (let type of allBugTypes) {
+    if (type == "unknown") {
+      continue;
+    }
+
     all_series.push({
       name: type,
       data: [],
