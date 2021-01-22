@@ -93,15 +93,14 @@ def go(months: int) -> None:
     logger.info(f"{len(pushes_to_analyze)} left to analyze")
 
     def compress_and_upload() -> None:
-        for push in pushes:
-            db.write(
-                SHADOW_SCHEDULER_STATS_DB,
-                (
-                    scheduler_stats[push.rev]
-                    for push in pushes
-                    if push.rev in scheduler_stats
-                ),
-            )
+        db.write(
+            SHADOW_SCHEDULER_STATS_DB,
+            (
+                scheduler_stats[push.rev]
+                for push in pushes
+                if push.rev in scheduler_stats
+            ),
+        )
 
         utils.zstd_compress(SHADOW_SCHEDULER_STATS_DB)
         db.upload(SHADOW_SCHEDULER_STATS_DB)
