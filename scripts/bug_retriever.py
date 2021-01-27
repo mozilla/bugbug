@@ -42,14 +42,13 @@ class Retriever(object):
         )
         changed_ids += deleted_component_ids
 
-        # Get IDs of bugs between (two years and six months ago) and (six months ago).
-        six_months_ago = datetime.utcnow() - relativedelta(months=6)
-        two_years_and_six_months_ago = six_months_ago - relativedelta(years=2)
-        logger.info(
-            f"Retrieving bug IDs from {two_years_and_six_months_ago} to {six_months_ago}"
+        # Get IDs of bugs between (two years and six months ago) and now.
+        two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
+            years=2, months=6
         )
+        logger.info(f"Retrieving bug IDs since {two_years_and_six_months_ago}")
         timespan_ids = bugzilla.get_ids_between(
-            two_years_and_six_months_ago, six_months_ago
+            two_years_and_six_months_ago, datetime.utcnow()
         )
         if limit:
             timespan_ids = timespan_ids[-limit:]
