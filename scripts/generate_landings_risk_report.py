@@ -105,6 +105,10 @@ class LandingsRiskReportGenerator(object):
             if dateutil.parser.parse(commit["pushdate"]) >= since and commit["bug_id"]
         ]
 
+        logger.info(f"Retrieving bug IDs since {days} days ago")
+        timespan_ids = bugzilla.get_ids_between(since, datetime.utcnow())
+        bugzilla.download_bugs(timespan_ids)
+
         bug_ids = set(commit["bug_id"] for commit in commits)
         bug_ids.update(
             bug["id"]
