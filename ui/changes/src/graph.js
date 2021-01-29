@@ -4,7 +4,7 @@ import ApexCharts from "apexcharts";
 import teamComponentMapping from "./teams.json";
 import { getComponentRegressionMap } from "./common";
 
-function generateData(count, yrange) {
+function _generateData(count, yrange) {
   var i = 0;
   var series = [];
   while (i < count) {
@@ -21,80 +21,34 @@ function generateData(count, yrange) {
   return series;
 }
 
-function rerender(connections, teamComponentMapping) {
+async function generateData() {
+  let map = await getComponentRegressionMap();
+  let return_map = []
+  Object.keys(map).slice(0, 10).forEach(element => {
+    let values = {}
+    values.data = []
+    values.name = element
+    for (const value in map[element]){
+      let obj = {}
+      obj.x = value
+      obj.y = Math.trunc(map[element][value] * 100)
+      values.data.push(obj)
+    }
+    return_map.push(values)
+  });
+  return return_map;
+}
+
+async function rerender(connections, teamComponentMapping) {
   var options = {
-    series: [
-      {
-        name: "Metric1",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric2",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric3",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric4",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric5",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric6",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric7",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric8",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-      {
-        name: "Metric8",
-        data: generateData(20, {
-          min: 0,
-          max: 90,
-        }),
-      },
-    ],
+    series: [...await generateData()],
     chart: {
-      height: 300,
-      width: 800,
+      height: 700,
+      width: 1200,
       type: "heatmap",
     },
     stroke: {
-      width: 0,
+      width: 1,
     },
     plotOptions: {
       heatmap: {
@@ -150,5 +104,5 @@ function rerender(connections, teamComponentMapping) {
 (async function () {
   let connectionsMap = await getComponentRegressionMap();
   console.log(connectionsMap);
-  rerender(connectionsMap, teamComponentMapping);
+  await rerender(connectionsMap, teamComponentMapping);
 })();
