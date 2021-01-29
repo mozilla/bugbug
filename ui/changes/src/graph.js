@@ -23,20 +23,20 @@ function _generateData(count, yrange) {
 
 async function generateData() {
   let map = await getComponentRegressionMap();
-  let return_map = []
+  let return_map = [];
   Object.keys(map)
     .slice(0, 10)
     .forEach(element => {
-      let values = {}
-      values.data = []
-      values.name = element
+      let values = {};
+      values.data = [];
+      values.name = element;
       for (const value in map[element]){
-        let obj = {}
-        obj.x = value
-        obj.y = Math.trunc(map[element][value] * 100)
-        values.data.push(obj)
+        let obj = {};
+        obj.x = value;
+        obj.y = Math.trunc(map[element][value] * 100);
+        values.data.push(obj);
       }
-      return_map.push(values)
+      return_map.push(values);
     });
   return return_map;
 }
