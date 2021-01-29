@@ -26,11 +26,11 @@ async function generateData() {
   let return_map = [];
   Object.keys(map)
     .slice(0, 10)
-    .forEach(element => {
+    .forEach((element) => {
       let values = {};
       values.data = [];
       values.name = element;
-      for (const value in map[element]){
+      for (const value in map[element]) {
         let obj = {};
         obj.x = value;
         obj.y = Math.trunc(map[element][value] * 100);
