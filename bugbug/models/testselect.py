@@ -766,7 +766,7 @@ class TestLabelSelectModel(TestSelectModel):
 
 class TestGroupSelectModel(TestSelectModel):
     def __init__(self, lemmatization=False):
-        TestSelectModel.__init__(self, lemmatization, "group")
+        TestSelectModel.__init__(self, lemmatization, "group", failures_skip=60)
 
 
 class TestConfigGroupSelectModel(TestSelectModel):
