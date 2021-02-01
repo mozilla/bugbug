@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import csv
 import re
 from datetime import datetime
@@ -312,38 +313,16 @@ def get_product_component_count(months: int = 12) -> Dict[str, int]:
     return bugs_number
 
 
-def get_component_team_mapping() -> dict:
+def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/config/component_teams",
+        "https://bugzilla.mozilla.org/rest/product?type=accessible&include_fields=name&include_fields=components.name&include_fields=components.team_name",
         headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
     )
     r.raise_for_status()
-    return r.json()
 
+    mapping: Dict[str, Dict[str, str]] = collections.defaultdict(dict)
+    for product in r.json()["products"]:
+        for component in product["components"]:
+            mapping[product["name"]][component["name"]] = component["team_name"]
 
-def component_to_team(
-    component_team_mapping: dict,
-    product: str,
-    component: str,
-) -> Optional[str]:
-    component = component.lower()
-
-    for team, products_data in component_team_mapping.items():
-        if product not in products_data:
-            continue
-
-        product_data = products_data[product]
-        if (
-            product_data["all_components"]
-            or any(
-                component == named_component.lower()
-                for named_component in product_data["named_components"]
-            )
-            or any(
-                component.startswith(prefix.lower())
-                for prefix in product_data["prefixed_components"]
-            )
-        ):
-            return team
-
-    return None
+    return mapping
