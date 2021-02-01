@@ -12,9 +12,6 @@ module.exports = {
     out: "dist",
     /* ... */
   },
-  proxy: {
-    /* ... */
-  },
   mount: {
     src: "/",
     /* ... */
