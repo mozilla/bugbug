@@ -732,7 +732,7 @@ class CommitModel(Model):
 
             assert len(bug_map) > 0
 
-        for commit in repository.get_commits():
+        for commit in repository.get_commits(include_ignored=True):
             if commit["node"] not in classes:
                 continue
 

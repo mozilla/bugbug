@@ -9,6 +9,7 @@ LOGGER = logging.getLogger()
 
 
 MODELS = {
+    "annotateignore": "bugbug.models.annotate_ignore.AnnotateIgnoreModel",
     "assignee": "bugbug.models.assignee.AssigneeModel",
     "backout": "bugbug.models.backout.BackoutModel",
     "bug": "bugbug.model.BugModel",
