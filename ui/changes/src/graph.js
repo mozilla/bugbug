@@ -4,22 +4,20 @@ import ApexCharts from "apexcharts";
 import teamComponentMapping from "./teams.json";
 import { getComponentRegressionMap } from "./common";
 
-
 async function generateData() {
   let map = await getComponentRegressionMap();
-  return Object.keys(map[Object.keys(map)[0]])
-    .map((element) => {
-      let values = {};
-      values.data = [];
-      values.name = element;
-      for (const value in map[element]) {
-        let obj = {};
-        obj.x = value;
-        obj.y = Math.trunc(map[element][value] * 100);
-        values.data.push(obj);
-      }
-      return values
-    });
+  return Object.keys(map[Object.keys(map)[0]]).map((element) => {
+    let values = {};
+    values.data = [];
+    values.name = element;
+    for (const value in map[element]) {
+      let obj = {};
+      obj.x = value;
+      obj.y = Math.trunc(map[element][value] * 100);
+      values.data.push(obj);
+    }
+    return values
+  });
 }
 
 async function rerender(connections, teamComponentMapping) {
