@@ -9,7 +9,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bugzilla, commit_features, feature_cleanup, repository, utils
+from bugbug import bugzilla, commit_features, feature_cleanup, labels, repository, utils
 from bugbug.model import CommitModel
 
 
@@ -101,6 +101,9 @@ class AnnotateIgnoreModel(CommitModel):
                 classes[node] = 1
             elif commit_data["bug_id"] in regression_related_bugs:
                 classes[node] = 0
+
+        for node, label in labels.get_labels("annotateignore"):
+            classes[node] = int(label)
 
         print(
             "{} commits that can be ignored".format(
