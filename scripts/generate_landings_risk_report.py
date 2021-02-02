@@ -498,8 +498,8 @@ class LandingsRiskReportGenerator(object):
                 else None,
                 "versions": bugzilla.get_fixed_versions(bug),
                 "component": get_full_component(bug),
-                "team": bugzilla.component_to_team(
-                    component_team_mapping, bug["product"], bug["component"]
+                "team": component_team_mapping.get(bug["product"], {}).get(
+                    bug["component"]
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["resolution"] == "FIXED",

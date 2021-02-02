@@ -83,34 +83,30 @@ def test_get_fixed_versions():
 @pytest.fixture
 def component_team_mapping():
     return {
-        "Crypto": {
-            "Core": {
-                "all_components": False,
-                "named_components": ["Security: PSM"],
-                "prefixed_components": [],
-            },
-            "JSS": {"all_components": True},
-            "NSS": {"all_components": True},
-        },
-        "GFX": {
-            "Core": {
-                "all_components": False,
-                "named_components": [
-                    "Canvas: 2D",
-                    "ImageLib",
-                    "Panning and Zooming",
-                    "Web Painting",
+        "products": [
+            {
+                "name": "JSS",
+                "components": [
+                    {
+                        "name": "Library",
+                        "team_name": "Crypto",
+                    },
+                    {
+                        "name": "Tests",
+                        "team_name": "Crypto",
+                    },
                 ],
-                "prefixed_components": ["GFX", "Graphics"],
-            }
-        },
-        "Javascript": {
-            "Core": {
-                "all_components": False,
-                "named_components": ["js-ctypes"],
-                "prefixed_components": ["Javascript"],
-            }
-        },
+            },
+            {
+                "name": "Core",
+                "components": [
+                    {
+                        "name": "Graphics",
+                        "team_name": "GFX",
+                    },
+                ],
+            },
+        ]
     }
 
 
@@ -119,47 +115,12 @@ def test_get_component_team_mapping(
 ) -> None:
     responses.add(
         responses.GET,
-        "https://bugzilla.mozilla.org/rest/config/component_teams",
+        "https://bugzilla.mozilla.org/rest/product?type=accessible&include_fields=name&include_fields=components.name&include_fields=components.team_name",
         status=200,
         json=component_team_mapping,
     )
 
-    assert bugzilla.get_component_team_mapping() == component_team_mapping
-
-
-def test_component_to_team(component_team_mapping: dict) -> None:
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "Security: PSM")
-        == "Crypto"
-    )
-    assert (
-        bugzilla.component_to_team(
-            component_team_mapping, "JSS", "any component you want!"
-        )
-        == "Crypto"
-    )
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "Canvas: 2D")
-        == "GFX"
-    )
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "ImageLib") == "GFX"
-    )
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "ImageLib2") is None
-    )
-    assert (
-        bugzilla.component_to_team(
-            component_team_mapping, "Core", "GFXsomethingsomething"
-        )
-        == "GFX"
-    )
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "Graphics: OK")
-        == "GFX"
-    )
-
-    assert (
-        bugzilla.component_to_team(component_team_mapping, "Core", "JavaScript Engine")
-        == "Javascript"
-    )
+    assert bugzilla.get_component_team_mapping() == {
+        "Core": {"Graphics": "GFX"},
+        "JSS": {"Library": "Crypto", "Tests": "Crypto"},
+    }
