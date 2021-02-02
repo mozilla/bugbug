@@ -21,7 +21,7 @@ from libmozdata import vcs_map
 from microannotate import utils as microannotate_utils
 from tqdm import tqdm
 
-from bugbug import bugzilla, db, repository
+from bugbug import bugzilla, db, labels, repository
 from bugbug.models.defect_enhancement_task import DefectEnhancementTaskModel
 from bugbug.models.regression import RegressionModel
 from bugbug.models.regressor import (
@@ -125,6 +125,10 @@ class RegressorFinder(object):
         commits_to_ignore = []
         all_commits = set()
 
+        annotate_ignore_nodes = {
+            node for node, label in labels.get_labels("annotateignore") if label == "1"
+        }
+
         for commit in repository.get_commits(
             include_no_bug=True, include_backouts=True, include_ignored=True
         ):
@@ -136,6 +140,7 @@ class RegressorFinder(object):
                 or not commit["bug_id"]
                 or len(commit["backsout"]) > 0
                 or repository.is_wptsync(commit)
+                or commit["node"] in annotate_ignore_nodes
             ):
                 commits_to_ignore.append(
                     {
