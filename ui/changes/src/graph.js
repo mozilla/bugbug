@@ -4,29 +4,11 @@ import ApexCharts from "apexcharts";
 import teamComponentMapping from "./teams.json";
 import { getComponentRegressionMap } from "./common";
 
-function _generateData(count, yrange) {
-  var i = 0;
-  var series = [];
-  while (i < count) {
-    var x = (i + 1).toString();
-    var y =
-      Math.floor(Math.random() * (yrange.max - yrange.min + 1)) + yrange.min;
-
-    series.push({
-      x: x,
-      y: y,
-    });
-    i++;
-  }
-  return series;
-}
 
 async function generateData() {
   let map = await getComponentRegressionMap();
-  let return_map = [];
-  Object.keys(map)
-    .slice(0, 10)
-    .forEach((element) => {
+  return Object.keys(map[Object.keys(map)[0]])
+    .map((element) => {
       let values = {};
       values.data = [];
       values.name = element;
@@ -36,9 +18,8 @@ async function generateData() {
         obj.y = Math.trunc(map[element][value] * 100);
         values.data.push(obj);
       }
-      return_map.push(values);
+      return values
     });
-  return return_map;
 }
 
 async function rerender(connections, teamComponentMapping) {
@@ -55,21 +36,7 @@ async function rerender(connections, teamComponentMapping) {
     plotOptions: {
       heatmap: {
         radius: 30,
-        enableShades: false,
-        colorScale: {
-          ranges: [
-            {
-              from: 0,
-              to: 50,
-              color: "#008FFB",
-            },
-            {
-              from: 51,
-              to: 100,
-              color: "#00E396",
-            },
-          ],
-        },
+        enableShades: true,
       },
     },
     dataLabels: {
@@ -78,6 +45,7 @@ async function rerender(connections, teamComponentMapping) {
         colors: ["#fff"],
       },
     },
+    colors: ["#008FFB"],
     xaxis: {
       type: "category",
     },
