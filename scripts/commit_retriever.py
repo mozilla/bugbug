@@ -4,6 +4,8 @@ import argparse
 import os
 from logging import INFO, basicConfig, getLogger
 
+import hglib
+
 from bugbug import db, repository
 from bugbug.utils import create_tar_zst, zstd_compress
 
@@ -29,7 +31,13 @@ class Retriever(object):
             for commit in repository.get_commits():
                 rev_start = f"children({commit['node']})"
 
-        repository.download_commits(self.repo_dir, rev_start=rev_start)
+        with hglib.open(self.repo_dir) as hg:
+            revs = repository.get_revs(hg, rev_start)
+
+        chunk_size = 70000
+
+        for i in range(0, len(revs), chunk_size):
+            repository.download_commits(self.repo_dir, revs=revs[i : (i + chunk_size)])
 
         logger.info("commit data extracted from repository")
 
