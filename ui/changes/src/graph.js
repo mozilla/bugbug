@@ -16,7 +16,7 @@ async function generateData() {
       obj.y = Math.trunc(map[element][value] * 100);
       values.data.push(obj);
     }
-    return values
+    return values;
   });
 }
 
