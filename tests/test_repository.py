@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import hglib
 import pytest
 import responses
+import rs_parsepatch
 import zstandard
 from dateutil.relativedelta import relativedelta
 
@@ -2346,3 +2347,312 @@ def test_commit_dict_matches_expected():
     # commit_features.source_code_function_metrics()(merged_commit)
     # TODO: Support merging diff metrics in commit_features.merge_commits
     # commit_features.source_code_metrics_diff()(commit)
+
+
+def test_set_commit_metrics():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    before = """#include <iostream>
+
+void main() {
+    cout << "Ciao1" << endl;
+}
+"""
+
+    after = """#include <iostream>
+
+void main() {
+    cout << "Ciao2" << endl;
+}
+"""
+
+    patch = """--- prova.cpp	2021-02-03 11:32:47.398531225 +0100
++++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
+@@ -1,6 +1,6 @@
+ #include <iostream>
+ 
+ void main() {
+-    cout << "Ciao1" << endl;
++    cout << "Ciao2" << endl;
+ }
+ """
+
+    patch_data = rs_parsepatch.get_lines(patch)
+
+    print(patch_data)
+
+    assert len(patch_data) == 1
+
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    stats = patch_data[0]
+
+    path = stats["filename"]
+
+    after_metrics = code_analysis_server.metrics(path, after, unit=False)
+    before_metrics = code_analysis_server.metrics(path, before, unit=False)
+
+    repository.set_commit_metrics(
+        commit,
+        "prova.cpp",
+        stats["deleted_lines"],
+        stats["added_lines"],
+        before_metrics,
+        after_metrics,
+    )
+
+    assert commit.metrics == {
+        "cloc_avg": 0.0,
+        "cloc_max": 0,
+        "cloc_min": 0.0,
+        "cloc_total": 0.0,
+        "cognitive_avg": 0.0,
+        "cognitive_max": 0,
+        "cognitive_min": 0.0,
+        "cognitive_total": 0.0,
+        "cyclomatic_avg": 0.0,
+        "cyclomatic_max": 1.0,
+        "cyclomatic_min": 1.0,
+        "cyclomatic_total": 2.0,
+        "halstead_N1_avg": 0.0,
+        "halstead_N1_max": 6.0,
+        "halstead_N1_min": 6.0,
+        "halstead_N1_total": 6.0,
+        "halstead_N2_avg": 0.0,
+        "halstead_N2_max": 4.0,
+        "halstead_N2_min": 4.0,
+        "halstead_N2_total": 4.0,
+        "halstead_n1_avg": 0.0,
+        "halstead_n1_max": 5.0,
+        "halstead_n1_min": 5.0,
+        "halstead_n1_total": 5.0,
+        "halstead_n2_avg": 0.0,
+        "halstead_n2_max": 4.0,
+        "halstead_n2_min": 4.0,
+        "halstead_n2_total": 4.0,
+        "lloc_avg": 0.0,
+        "lloc_max": 1.0,
+        "lloc_min": 1.0,
+        "lloc_total": 1.0,
+        "nargs_avg": 0.0,
+        "nargs_max": 0,
+        "nargs_min": 0.0,
+        "nargs_total": 0.0,
+        "nexits_avg": 0.0,
+        "nexits_max": 0,
+        "nexits_min": 0.0,
+        "nexits_total": 0.0,
+        "ploc_avg": 0.0,
+        "ploc_max": 3.0,
+        "ploc_min": 3.0,
+        "ploc_total": 4.0,
+        "sloc_avg": 0.0,
+        "sloc_max": 3.0,
+        "sloc_min": 3.0,
+        "sloc_total": 5.0,
+    }
+    assert commit.metrics_diff == {
+        "cloc_total": 0.0,
+        "cognitive_total": 0.0,
+        "cyclomatic_total": 0.0,
+        "halstead_N1_total": 0.0,
+        "halstead_N2_total": 0.0,
+        "halstead_n1_total": 0.0,
+        "halstead_n2_total": 0.0,
+        "lloc_total": 0.0,
+        "nargs_total": 0.0,
+        "nexits_total": 0.0,
+        "ploc_total": 0.0,
+        "sloc_total": 0.0,
+    }
+    assert commit.functions == {
+        "prova.cpp": [
+            {
+                "end": 5,
+                "metrics": {
+                    "cloc_total": 0.0,
+                    "cognitive_total": 0.0,
+                    "cyclomatic_total": 1.0,
+                    "halstead_N1_total": 6.0,
+                    "halstead_N2_total": 4.0,
+                    "halstead_n1_total": 5.0,
+                    "halstead_n2_total": 4.0,
+                    "lloc_total": 1.0,
+                    "nargs_total": 0.0,
+                    "nexits_total": 0.0,
+                    "ploc_total": 3.0,
+                    "sloc_total": 3.0,
+                },
+                "name": "main",
+                "start": 3,
+            }
+        ]
+    }
+
+
+def test_set_commit_metrics_meaningful_diff():
+    # Allow using the local code analysis server.
+    responses.add_passthru("http://127.0.0.1")
+
+    commit = repository.Commit(
+        node="commit",
+        author="author",
+        desc="commit",
+        pushdate=datetime(2021, 1, 1),
+        bug_id=123,
+        backsout=[],
+        backedoutby="",
+        author_email="author@mozilla.org",
+        reviewers=["reviewer"],
+    ).set_files([], {})
+
+    before = """#include <iostream>
+
+void main() {
+    cout << "Ciao1" << endl;
+}
+"""
+
+    after = """#include <iostream>
+
+void main() {
+    cout << "Ciao1" << endl;
+    cout << "Ciao2" << endl;
+}
+"""
+
+    patch = """--- prova.cpp	2021-02-03 11:32:47.398531225 +0100
++++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
+@@ -1,6 +1,6 @@
+ #include <iostream>
+ 
+ void main() {
+     cout << "Ciao1" << endl;
++    cout << "Ciao2" << endl;
+ }
+ """
+
+    patch_data = rs_parsepatch.get_lines(patch)
+
+    print(patch_data)
+
+    assert len(patch_data) == 1
+
+    code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    stats = patch_data[0]
+
+    path = stats["filename"]
+
+    after_metrics = code_analysis_server.metrics(path, after, unit=False)
+    before_metrics = code_analysis_server.metrics(path, before, unit=False)
+
+    repository.set_commit_metrics(
+        commit,
+        "prova.cpp",
+        stats["deleted_lines"],
+        stats["added_lines"],
+        before_metrics,
+        after_metrics,
+    )
+
+    assert commit.metrics == {
+        "cloc_avg": 0.0,
+        "cloc_max": 0,
+        "cloc_min": 0.0,
+        "cloc_total": 0.0,
+        "cognitive_avg": 0.0,
+        "cognitive_max": 0,
+        "cognitive_min": 0.0,
+        "cognitive_total": 0.0,
+        "cyclomatic_avg": 0.0,
+        "cyclomatic_max": 1.0,
+        "cyclomatic_min": 1.0,
+        "cyclomatic_total": 2.0,
+        "halstead_N1_avg": 0.0,
+        "halstead_N1_max": 9.0,
+        "halstead_N1_min": 9.0,
+        "halstead_N1_total": 9.0,
+        "halstead_N2_avg": 0.0,
+        "halstead_N2_max": 7.0,
+        "halstead_N2_min": 7.0,
+        "halstead_N2_total": 7.0,
+        "halstead_n1_avg": 0.0,
+        "halstead_n1_max": 5.0,
+        "halstead_n1_min": 5.0,
+        "halstead_n1_total": 5.0,
+        "halstead_n2_avg": 0.0,
+        "halstead_n2_max": 5.0,
+        "halstead_n2_min": 5.0,
+        "halstead_n2_total": 5.0,
+        "lloc_avg": 0.0,
+        "lloc_max": 2.0,
+        "lloc_min": 2.0,
+        "lloc_total": 2.0,
+        "nargs_avg": 0.0,
+        "nargs_max": 0,
+        "nargs_min": 0.0,
+        "nargs_total": 0.0,
+        "nexits_avg": 0.0,
+        "nexits_max": 0,
+        "nexits_min": 0.0,
+        "nexits_total": 0.0,
+        "ploc_avg": 0.0,
+        "ploc_max": 4.0,
+        "ploc_min": 4.0,
+        "ploc_total": 5.0,
+        "sloc_avg": 0.0,
+        "sloc_max": 4.0,
+        "sloc_min": 4.0,
+        "sloc_total": 6.0,
+    }
+    assert commit.metrics_diff == {
+        "cloc_total": 0.0,
+        "cognitive_total": 0.0,
+        "cyclomatic_total": 0.0,
+        "halstead_N1_total": 3.0,
+        "halstead_N2_total": 3.0,
+        "halstead_n1_total": 0.0,
+        "halstead_n2_total": 1.0,
+        "lloc_total": 1.0,
+        "nargs_total": 0.0,
+        "nexits_total": 0.0,
+        "ploc_total": 1.0,
+        "sloc_total": 1.0,
+    }
+    assert commit.functions == {
+        "prova.cpp": [
+            {
+                "end": 6,
+                "metrics": {
+                    "cloc_total": 0.0,
+                    "cognitive_total": 0.0,
+                    "cyclomatic_total": 1.0,
+                    "halstead_N1_total": 9.0,
+                    "halstead_N2_total": 7.0,
+                    "halstead_n1_total": 5.0,
+                    "halstead_n2_total": 5.0,
+                    "lloc_total": 2.0,
+                    "nargs_total": 0.0,
+                    "nexits_total": 0.0,
+                    "ploc_total": 4.0,
+                    "sloc_total": 4.0,
+                },
+                "name": "main",
+                "start": 3,
+            }
+        ]
+    }

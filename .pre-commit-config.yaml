@@ -37,6 +37,7 @@ repos:
       - id: check-symlinks
       - id: debug-statements
       - id: trailing-whitespace
+        exclude: ^tests/test_repository.py
       - id: check-yaml
       - id: mixed-line-ending
       - id: name-tests-test

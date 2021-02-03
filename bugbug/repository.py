@@ -541,7 +541,7 @@ def set_commit_metrics(
         deleted_lines,
         added_lines,
     )
-    if len(touched_functions) > 0:
+    if len(touched_functions) == 0:
         return
 
     commit.functions[path] = []
@@ -561,7 +561,7 @@ def set_commit_metrics(
                 "name": func["name"],
                 "start": func["start_line"],
                 "end": func["end_line"],
-                "metrics": metrics_dict.items(),
+                "metrics": metrics_dict,
             }
         )
 
