@@ -30,6 +30,7 @@ KEYWORD_DICT = {
     "crashreportid": "crash",
     "perf": "performance",
     "topperf": "performance",
+    "power": "power",
 }
 TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
