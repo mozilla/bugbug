@@ -13,20 +13,20 @@ def test_get_bugtype_labels():
     model = BugTypeModel()
     classes, keyword_list = model.get_labels()
 
-    assert np.array_equal(classes[1319957], np.zeros(4))
+    assert np.array_equal(classes[1319957], np.zeros(5))
 
-    target = np.zeros(4)
+    target = np.zeros(5)
     target[keyword_list.index("crash")] = 1
     assert np.array_equal(classes[1319973], target)
 
-    target = np.zeros(4)
+    target = np.zeros(5)
     target[keyword_list.index("memory")] = 1
     assert np.array_equal(classes[1325215], target)
 
-    target = np.zeros(4)
+    target = np.zeros(5)
     target[keyword_list.index("performance")] = 1
     assert np.array_equal(classes[1320195], target)
 
-    target = np.zeros(4)
+    target = np.zeros(5)
     target[keyword_list.index("security")] = 1
     assert np.array_equal(classes[1320039], target)
