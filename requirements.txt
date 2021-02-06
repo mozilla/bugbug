@@ -1,5 +1,5 @@
 amqp==5.0.5
-boto3==1.16.63
+boto3==1.17.3
 imbalanced-learn==0.7.0
 libmozdata==0.1.68
 lmdb==1.0.0
