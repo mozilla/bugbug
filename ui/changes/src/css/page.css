@@ -183,15 +183,13 @@ aside ul li {
 }
 
 /* for organizing charts in flex-wrap  */
-
-details #result-graphs{
+details #result-graphs {
   display: flex;
   width: 100%;
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
 }
-
 details #result-graphs .apexcharts-canvas {
   min-width: 500px;
   min-height: 400px;
@@ -203,8 +201,7 @@ details #result-graphs .apexcharts-canvas {
   border-radius: 10px;
   align-items: center;
 }
-
-details #result-graphs .apexcharts-legend{
+details #result-graphs .apexcharts-legend {
   display: flex;
   justify-content: center;
   align-items: center;
