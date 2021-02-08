@@ -188,22 +188,31 @@ details #result-graphs {
   width: 100%;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: space-evenly;
 }
 details #result-graphs .apexcharts-canvas {
-  min-width: 500px;
-  min-height: 400px;
   display: flex;
+  min-width: 450px;
+  min-height: 450px;
   flex-direction: column;
   justify-content: center;
   margin: 10px;
+  padding: 20px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   border-radius: 10px;
   align-items: center;
+}
+@media screen and (max-width: 1200px) {
+  details #result-graphs .apexcharts-canvas {
+    min-width: 300px;
+    min-height: 400px;
+  }
 }
 details #result-graphs .apexcharts-legend {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 10px 0px;
+  border: none;
+  width: 100%;
 }
