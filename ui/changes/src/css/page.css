@@ -182,7 +182,7 @@ aside ul li {
   }
 }
 
-/* for organizing charts in flex-wrap  */
+/* for organizing charts in flex-wrap */
 details #result-graphs {
   display: flex;
   width: 100%;
