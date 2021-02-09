@@ -603,6 +603,21 @@ class TestSelectModel(Model):
 
         test_pushes = {push["revs"][0]: push for push in test_pushes_list}
 
+        if self.granularity == "group":
+            for (
+                revisions,
+                fix_revision,
+                push_runnables,
+                possible_regressions,
+                likely_regressions,
+            ) in tqdm(push_data_iter(), total=push_data_count):
+                if revisions[0] not in test_pushes:
+                    continue
+
+                test_pushes[revisions[0]]["config_group_failures"] = (
+                    possible_regressions + likely_regressions
+                )
+
         print(
             f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
         )
@@ -669,10 +684,35 @@ class TestSelectModel(Model):
                         f.cancel()
 
                 push = futures[future]
-                selected, number_configs = future.result()
+                selected, group_configs = future.result()
 
                 if reduction is not None and self.granularity == "group":
-                    push["number_configs"] = number_configs
+                    push["number_configs"] = len(
+                        set(
+                            sum(
+                                group_configs.values(),
+                                [],
+                            )
+                        )
+                    )
+                    selected_config_groups = set(
+                        (config, group)
+                        for group, configs in group_configs.items()
+                        for config in configs
+                    )
+                    caught_config_groups = selected_config_groups & set(
+                        push["config_group_failures"]
+                    )
+                    push["caught_one_config_group"] = (
+                        len(caught_config_groups) > 0
+                        if len(push["config_group_failures"]) != 0
+                        else None
+                    )
+                    push["caught_percentage_config_group"] = (
+                        len(caught_config_groups) / len(push["config_group_failures"])
+                        if len(push["config_group_failures"]) != 0
+                        else None
+                    )
 
                 caught = selected & set(push["failures"])
 
@@ -732,7 +772,26 @@ class TestSelectModel(Model):
                 average_configs = statistics.mean(
                     result["number_configs"] for result in test_pushes.values()
                 )
-                message += f" On average, we selected {average_configs} configs."
+                median_configs = statistics.median(
+                    result["number_configs"] for result in test_pushes.values()
+                )
+                message += f" On average, we selected {average_configs} configs (a median of {median_configs} configs)."
+
+                num_caught_one_config_group = sum(
+                    1
+                    for result in test_pushes.values()
+                    if result["caught_one_config_group"]
+                )
+                percentage_caught_one_config_group = (
+                    100 * num_caught_one_config_group / num_failing_pushes
+                )
+                average_caught_percentage_config_group = 100 * statistics.mean(
+                    result["caught_percentage_config_group"]
+                    for result in test_pushes.values()
+                    if result["caught_percentage_config_group"] is not None
+                )
+
+                message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
 
             print(message)
 
@@ -775,7 +834,7 @@ class TestConfigGroupSelectModel(TestSelectModel):
 
 
 def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, minimum):
-    number_configs = None
+    group_configs = None
 
     selected = set(
         name
@@ -787,14 +846,7 @@ def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, min
         if model.granularity == "label":
             selected = model.reduce(selected, reduction)
         elif model.granularity == "group":
-            number_configs = len(
-                set(
-                    sum(
-                        model.select_configs(selected, reduction).values(),
-                        [],
-                    )
-                )
-            )
+            group_configs = model.select_configs(selected, reduction)
 
     if minimum is not None and len(selected) < minimum:
         remaining = [
@@ -822,4 +874,4 @@ def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, min
             )[:cap]
         )
 
-    return selected, number_configs
+    return selected, group_configs
