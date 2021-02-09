@@ -631,6 +631,56 @@ def push_schedules(branch, rev):
     return jsonify({"ready": False}), 202
 
 
+@application.route("/config_specific_groups/<config>")
+@cross_origin()
+def config_specific_groups(config):
+    """
+    ---
+    get:
+      description: Determine which groups could possibly exclusively fail on the given configuration.
+      summary: Get config-specific groups.
+      parameters:
+      - name: config
+        in: path
+        schema:
+          type: str
+          example: test-windows7-32/opt-*-e10s
+      responses:
+        200:
+          description: A list of groups that could specifically fail on the given configuration.
+          content:
+            application/json:
+              schema: fields.List(fields.Str)
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    job = JobInfo(config_specific_groups, config)
+    data = get_result(job)
+    if data:
+        return compress_response(data, 200)
+
+    if not is_pending(job):
+        schedule_job(job)
+    return jsonify({"ready": False}), 202
+
+
 @application.route("/swagger")
 @cross_origin()
 def swagger():

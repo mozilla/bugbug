@@ -15,7 +15,7 @@ import zstandard
 from libmozdata.bugzilla import Bugzilla
 from redis import Redis
 
-from bugbug import bugzilla, repository
+from bugbug import bugzilla, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
@@ -176,5 +176,35 @@ def schedule_tests(branch: str, rev: str) -> str:
         "known_tasks": get_known_tasks(),
     }
     setkey(job.result_key, orjson.dumps(data), compress=True)
+
+    return "OK"
+
+
+def config_specific_groups(config: str) -> str:
+    from bugbug_http.app import JobInfo
+
+    job = JobInfo(config_specific_groups, config)
+    LOGGER.info(f"Processing {job}...")
+
+    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
+    equivalence_sets = testgroupselect_model._get_equivalence_sets(0.9)
+
+    past_failures_data = test_scheduling.get_past_failures("group", True)
+    all_runnables = past_failures_data["all_runnables"]
+
+    setkey(
+        job.result_key,
+        orjson.dumps(
+            [
+                {"name": group}
+                for group in all_runnables
+                if any(
+                    equivalence_set == {config}
+                    for equivalence_set in equivalence_sets[group]
+                )
+            ]
+        ),
+        compress=True,
+    )
 
     return "OK"

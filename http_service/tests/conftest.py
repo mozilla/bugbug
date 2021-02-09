@@ -301,6 +301,68 @@ def mock_component_taskcluster_artifact() -> None:
     repository.download_component_mapping()
 
 
+class MockModelCache:
+    def get(self, model_name):
+        if "group" in model_name:
+            return bugbug.models.testselect.TestGroupSelectModel()
+        else:
+            return bugbug.models.testselect.TestLabelSelectModel()
+
+
+@pytest.fixture
+def mock_config_specific_groups(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    with open("known_tasks", "w") as f:
+        f.write("prova")
+
+    # Initialize a mock past failures DB.
+    past_failures_data = test_scheduling.get_past_failures("group", False)
+    past_failures_data["push_num"] = 1
+    past_failures_data["all_runnables"] = [
+        "test-group1",
+        "test-group2",
+    ]
+    past_failures_data.close()
+
+    try:
+        test_scheduling.close_failing_together_db("config_group")
+    except AssertionError:
+        pass
+    failing_together = test_scheduling.get_failing_together_db("config_group", False)
+    failing_together[b"$ALL_CONFIGS$"] = pickle.dumps(
+        ["test-linux1804-64/opt-*", "test-windows10/debug-*", "test-windows10/opt-*"]
+    )
+    failing_together[b"$CONFIGS_BY_GROUP$"] = pickle.dumps(
+        {
+            "test-group1": {
+                "test-linux1804-64/opt-*",
+                "test-windows10/debug-*",
+                "test-windows10/opt-*",
+            },
+            "test-group2": {
+                "test-linux1804-64/opt-*",
+                "test-windows10/debug-*",
+                "test-windows10/opt-*",
+            },
+        }
+    )
+    failing_together[b"test-group1"] = pickle.dumps(
+        {
+            "test-linux1804-64/opt-*": {
+                "test-windows10/debug-*": (1.0, 0.0),
+                "test-windows10/opt-*": (1.0, 0.0),
+            },
+            "test-windows10/debug-*": {
+                "test-windows10/opt-*": (1.0, 1.0),
+            },
+        }
+    )
+    test_scheduling.close_failing_together_db("config_group")
+
+    monkeypatch.setattr(bugbug_http.models, "MODEL_CACHE", MockModelCache())
+
+
 @pytest.fixture
 def mock_schedule_tests_classify(
     monkeypatch: MonkeyPatch,
@@ -404,13 +466,6 @@ def mock_schedule_tests_classify(
                     else:
                         results.append([0.9, 0.1])
             return np.array(results)
-
-        class MockModelCache:
-            def get(self, model_name):
-                if "group" in model_name:
-                    return bugbug.models.testselect.TestGroupSelectModel()
-                else:
-                    return bugbug.models.testselect.TestLabelSelectModel()
 
         monkeypatch.setattr(bugbug_http.models, "MODEL_CACHE", MockModelCache())
         monkeypatch.setattr(
