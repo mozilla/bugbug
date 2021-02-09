@@ -715,12 +715,67 @@ async function renderTimeToBugChart(chartEl, bugSummaries) {
     chartEl,
     [
       {
-        name: "Average time to bug",
+        name: "Average time to bug (in days)",
         data: average_time_to_bug,
       },
     ],
     categories,
-    "Average time to bug",
+    "Average time to bug (in days)",
+    "Time"
+  );
+}
+
+async function renderTimeToConfirmChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter(
+    (bugSummary) => bugSummary.time_to_confirm !== null
+  );
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = getPlainDate(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).creation_date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      counterObj.time_to_confirm += bug.time_to_confirm;
+      counterObj.bugs += 1;
+    },
+    null,
+    (summary) => summary.creation_date
+  );
+
+  let categories = [];
+  let average_time_to_confirm = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    average_time_to_confirm.push(
+      Math.ceil(summaryData[date].time_to_confirm / summaryData[date].bugs)
+    );
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "Average time to confirm (in hours)",
+        data: average_time_to_confirm,
+      },
+    ],
+    categories,
+    "Average time to confirm (in hours)",
     "Time"
   );
 }
@@ -773,6 +828,10 @@ async function renderSummary(bugSummaries) {
   let timeToBugChartEl = document.createElement("div");
   resultGraphs.append(timeToBugChartEl);
   await renderTimeToBugChart(timeToBugChartEl, bugSummaries);
+
+  let timeToConfirmChartEl = document.createElement("div");
+  resultGraphs.append(timeToConfirmChartEl);
+  await renderTimeToConfirmChart(timeToConfirmChartEl, bugSummaries);
 }
 
 async function renderUI(rerenderSummary = true) {
