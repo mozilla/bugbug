@@ -34,6 +34,27 @@ tasks:
       command:
         - bugbug-shadow-scheduler-stats
         - "7"
+
+      artifacts:
+        public/average_group_scheduled.svg:
+          path: /average_group_scheduled.svg
+          type: file
+        public/percentage_group_caught_at_least_one.svg:
+          path: /percentage_group_caught_at_least_one.svg
+          type: file
+        public/percentage_group_caught.svg:
+          path: /percentage_group_caught.svg
+          type: file
+        public/average_config_group_scheduled.svg:
+          path: /average_config_group_scheduled.svg
+          type: file
+        public/percentage_config_group_caught_at_least_one.svg:
+          path: /percentage_config_group_caught_at_least_one.svg
+          type: file
+        public/percentage_config_group_caught.svg:
+          path: /percentage_config_group_caught.svg
+          type: file
+
       features:
         taskclusterProxy: true
     scopes:

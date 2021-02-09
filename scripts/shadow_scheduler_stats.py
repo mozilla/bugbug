@@ -11,8 +11,10 @@ import traceback
 from datetime import datetime
 from typing import Set
 
+import matplotlib.pyplot as plt
 import mozci.push
 from dateutil.relativedelta import relativedelta
+from pandas import DataFrame
 from tqdm import tqdm
 
 from bugbug import db, test_scheduling, utils
@@ -165,6 +167,100 @@ def go(months: int) -> None:
     compress_and_upload()
 
 
+def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
+    df.plot.bar()
+
+    plt.tight_layout()
+
+    logger.info("Saving %s figure", file_path)
+    plt.savefig(file_path)
+
+    plt.show()
+
+    plt.close()
+
+
+def plot_graphs(granularity) -> None:
+    scheduled = []
+    caught = []
+
+    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
+        if len(scheduler_stat["schedulers"]) == 0:
+            continue
+
+        obj = {
+            "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
+        }
+
+        obj.update(
+            {
+                scheduler["name"]: scheduler[f"num_{granularity}_scheduled"]
+                for scheduler in scheduler_stat["schedulers"]
+            }
+        )
+
+        scheduled.append(obj)
+
+    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
+        if len(scheduler_stat["schedulers"]) == 0:
+            continue
+
+        obj = {
+            "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
+            "regressions": scheduler_stat["schedulers"][0][
+                f"num_{granularity}_regressions"
+            ],
+        }
+
+        obj.update(
+            {
+                scheduler["name"]: scheduler[f"num_{granularity}_caught"]
+                for scheduler in scheduler_stat["schedulers"]
+            }
+        )
+
+        caught.append(obj)
+
+    scheduled_df = DataFrame(scheduled)
+    scheduled_df.index = scheduled_df["date"]
+    del scheduled_df["date"]
+
+    caught_df = DataFrame(caught)
+    caught_df.index = caught_df["date"]
+    del caught_df["date"]
+
+    df = scheduled_df.resample("W").mean()
+
+    plot_graph(
+        df,
+        f"Average number of scheduled {granularity}s",
+        f"average_{granularity}_scheduled.svg",
+    )
+
+    df = (
+        caught_df[caught_df.regressions > 0]
+        .drop(columns=["regressions"])
+        .clip(0, 1)
+        .resample("W")
+        .mean()
+    )
+
+    plot_graph(
+        df,
+        "Percentage of regressing pushes where we caught at least one regression",
+        f"percentage_{granularity}_caught_at_least_one.svg",
+    )
+
+    plot_graph(
+        caught_df.drop(columns=["regressions"])
+        .div(caught_df.regressions, axis=0)
+        .resample("W")
+        .mean(),
+        "Percentage of regressions we caught",
+        "percentage_{granularity}_caught.svg",
+    )
+
+
 def main() -> None:
     description = "Analyze results of shadow schedulers"
     parser = argparse.ArgumentParser(description=description)
@@ -176,6 +272,8 @@ def main() -> None:
     args = parser.parse_args()
 
     go(args.months)
+    plot_graphs("group")
+    plot_graphs("config_group")
 
 
 if __name__ == "__main__":
