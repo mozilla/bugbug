@@ -8,6 +8,7 @@ import collections
 import itertools
 import json
 import logging
+import math
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -479,6 +480,31 @@ class LandingsRiskReportGenerator(object):
                 if time_to_bug is None or cur_time_to_bug < time_to_bug:
                     time_to_bug = cur_time_to_bug
 
+            time_to_confirm = None
+            if bug["is_confirmed"]:
+                for history in bug["history"]:
+                    for change in history["changes"]:
+                        if (
+                            change["field_name"] == "status"
+                            and change["removed"] == "UNCONFIRMED"
+                            and change["added"] in ("NEW", "ASSIGNED")
+                        ):
+                            time_to_confirm = math.ceil(
+                                (
+                                    dateutil.parser.parse(history["when"]).replace(
+                                        tzinfo=None
+                                    )
+                                    - dateutil.parser.parse(
+                                        bug["creation_time"]
+                                    ).replace(tzinfo=None)
+                                ).total_seconds()
+                                / 3600
+                            )
+                            break
+
+                    if time_to_confirm is not None:
+                        break
+
             bug_summary = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
@@ -492,6 +518,7 @@ class LandingsRiskReportGenerator(object):
                     and bug["cf_has_regression_range"] == "yes"
                 ),
                 "time_to_bug": time_to_bug,
+                "time_to_confirm": time_to_confirm,
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"
