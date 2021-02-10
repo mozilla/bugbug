@@ -180,10 +180,10 @@ def schedule_tests(branch: str, rev: str) -> str:
     return "OK"
 
 
-def config_specific_groups(config: str) -> str:
+def get_config_specific_groups(config: str) -> str:
     from bugbug_http.app import JobInfo
 
-    job = JobInfo(config_specific_groups, config)
+    job = JobInfo(get_config_specific_groups, config)
     LOGGER.info(f"Processing {job}...")
 
     testgroupselect_model = MODEL_CACHE.get("testgroupselect")

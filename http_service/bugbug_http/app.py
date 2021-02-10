@@ -29,7 +29,12 @@ from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from bugbug import get_bugbug_version, utils
-from bugbug_http.models import MODELS_NAMES, classify_bug, schedule_tests
+from bugbug_http.models import (
+    MODELS_NAMES,
+    classify_bug,
+    get_config_specific_groups,
+    schedule_tests,
+)
 from bugbug_http.sentry import setup_sentry
 
 if os.environ.get("SENTRY_DSN"):
@@ -671,7 +676,7 @@ def config_specific_groups(config):
     else:
         LOGGER.info("Request with API TOKEN %r", auth)
 
-    job = JobInfo(config_specific_groups, config)
+    job = JobInfo(get_config_specific_groups, config)
     data = get_result(job)
     if data:
         return compress_response(data, 200)
