@@ -310,7 +310,7 @@ class MockModelCache:
 
 
 @pytest.fixture
-def mock_config_specific_groups(
+def mock_get_config_specific_groups(
     monkeypatch: MonkeyPatch,
 ) -> None:
     with open("known_tasks", "w") as f:
