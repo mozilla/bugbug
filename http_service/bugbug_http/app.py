@@ -655,7 +655,10 @@ def config_specific_groups(config):
           description: A list of groups that could specifically fail on the given configuration.
           content:
             application/json:
-              schema: fields.List(fields.Str)
+              schema:
+                type: array
+                items:
+                  type: string
         202:
           description: Request is still being processed.
           content:
