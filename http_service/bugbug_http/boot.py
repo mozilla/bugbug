@@ -3,10 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import collections
 import concurrent.futures
 import logging
 import os
 
+import hglib
 import requests
 import tenacity
 
@@ -151,18 +153,30 @@ def boot_worker() -> None:
         if commits_db_extracted:
             # Update the commits DB.
             logger.info("Browsing all commits...")
-            for commit in repository.get_commits():
-                pass
+            nodes = collections.deque(
+                (commit["node"] for commit in repository.get_commits()), maxlen=4096
+            )
+            nodes.reverse()
             logger.info("All commits browsed.")
 
             # Wait repository to be cloned, as it's required to call repository.download_commits.
             logger.info("Waiting autoland to be cloned...")
             clone_autoland_future.result()
 
-            rev_start = "children({})".format(commit["node"])
+            with hglib.open(REPO_DIR) as hg:
+                # Try using nodes backwards, in case we have some node that was on central at the time
+                # we mined commits, but is not yet on autoland.
+                for node in nodes:
+                    try:
+                        revs = repository.get_revs(hg, rev_start=f"children({node})")
+                        break
+                    except hglib.error.CommandError as e:
+                        if b"abort: unknown revision" not in e.err:
+                            raise
+
             logger.info("Updating commits DB...")
             commits = repository.download_commits(
-                REPO_DIR, rev_start, use_single_process=True
+                REPO_DIR, revs=revs, use_single_process=True
             )
             logger.info("Commits DB updated.")
 
