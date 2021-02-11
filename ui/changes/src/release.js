@@ -1,5 +1,11 @@
 import ApexCharts from "apexcharts";
-import { landingsData, Counter, getFirefoxReleases } from "./common.js";
+import {
+  landingsData,
+  Counter,
+  getFirefoxReleases,
+  setupOptions,
+  getFilteredBugSummaries,
+} from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
 
@@ -43,33 +49,18 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
   chart.render();
 }
 
-async function renderSummary(bugSummaries) {
+async function renderUI() {
   resultGraphs.textContent = "";
+
+  const bugSummaries = await getFilteredBugSummaries();
 
   let componentChangesChartEl = document.createElement("div");
   resultGraphs.append(componentChangesChartEl);
   await renderComponentChangesChart(componentChangesChartEl, bugSummaries);
 }
 
-async function renderUI(rerenderSummary = true) {
-  let data = await landingsData;
-
-  let bugSummaries = [].concat.apply([], Object.values(data));
-
-  let releases = await getFirefoxReleases();
-  let latestRelease = Object.keys(releases).reduce((latestRelease, release) =>
-    latestRelease > Number(release) ? latestRelease : Number(release)
-  );
-
-  bugSummaries = bugSummaries.filter((bugSummary) =>
-    bugSummary.versions.includes(latestRelease)
-  );
-
-  if (rerenderSummary) {
-    await renderSummary(bugSummaries);
-  }
-}
-
 (async function init() {
+  await setupOptions(renderUI);
+
   renderUI();
 })();

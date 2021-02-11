@@ -13,6 +13,10 @@ import {
   getSummaryData,
   renderChart,
   summarizeCoverage,
+  setupOptions,
+  allBugTypes,
+  getOption,
+  getFilteredBugSummaries,
 } from "./common.js";
 
 localForage.config({
@@ -24,74 +28,10 @@ const HIGH_RISK_COLOR = "rgb(255, 13, 87)";
 const MEDIUM_RISK_COLOR = "darkkhaki";
 const LOW_RISK_COLOR = "green";
 
-let options = {
-  metaBugID: {
-    value: null,
-    type: "text",
-  },
-  testingTags: {
-    value: null,
-    type: "select",
-  },
-  fixStartDate: {
-    value: null,
-    type: "text",
-  },
-  fixEndDate: {
-    value: null,
-    type: "text",
-  },
-  createStartDate: {
-    value: null,
-    type: "text",
-  },
-  createEndDate: {
-    value: null,
-    type: "text",
-  },
-  whiteBoard: {
-    value: null,
-    type: "text",
-  },
-  components: {
-    value: null,
-    type: "select",
-  },
-  teams: {
-    value: null,
-    type: "select",
-  },
-  grouping: {
-    value: null,
-    type: "radio",
-  },
-  releaseVersions: {
-    value: null,
-    type: "select",
-  },
-  includeUnfixed: {
-    value: null,
-    type: "checkbox",
-  },
-  types: {
-    value: null,
-    type: "select",
-  },
-  severities: {
-    value: null,
-    type: "select",
-  },
-  riskiness: {
-    value: null,
-    type: "select",
-  },
-};
-
 let sortBy = ["Date", "DESC"];
 let resultSummary = document.getElementById("result-summary");
 let resultGraphs = document.getElementById("result-graphs");
 let metabugsDropdown = document.querySelector("#featureMetabugs");
-let allBugTypes;
 
 let bugDetails = document.querySelector("#bug-details");
 // TODO: port this to an option maybe
@@ -107,116 +47,6 @@ async function buildMetabugsDropdown() {
     option.setAttribute("value", bug.id);
     option.textContent = bug.summary;
     metabugsDropdown.append(option);
-  }
-}
-
-function getOption(name) {
-  return options[name].value;
-}
-
-function getOptionType(name) {
-  return options[name].type;
-}
-
-function setOption(name, value) {
-  return (options[name].value = value);
-}
-
-async function buildComponentsSelect() {
-  let componentSelect = document.getElementById("components");
-
-  let data = await landingsData;
-
-  let allComponents = new Set();
-  for (let landings of Object.values(data)) {
-    for (let landing of landings) {
-      allComponents.add(landing["component"]);
-    }
-  }
-
-  let components = [...allComponents];
-  components.sort();
-
-  for (let component of components) {
-    let option = document.createElement("option");
-    option.setAttribute("value", component);
-    option.textContent = component;
-    option.selected = true;
-    componentSelect.append(option);
-  }
-}
-
-async function buildTeamsSelect() {
-  let teamsSelect = document.getElementById("teams");
-
-  let data = await landingsData;
-
-  let allTeams = new Set();
-  for (let landings of Object.values(data)) {
-    for (let landing of landings) {
-      allTeams.add(landing["team"]);
-    }
-  }
-
-  let teams = [...allTeams];
-  teams.sort();
-
-  for (let team of teams) {
-    let option = document.createElement("option");
-    option.setAttribute("value", team);
-    option.textContent = team;
-    option.selected = true;
-    teamsSelect.append(option);
-  }
-}
-
-async function buildTypesSelect() {
-  let typesSelect = document.getElementById("types");
-
-  let data = await landingsData;
-
-  let types = new Set();
-  for (let landings of Object.values(data)) {
-    for (let landing of landings) {
-      if (landing.types.length) {
-        types.add(...landing.types);
-      }
-    }
-  }
-
-  types.add("unknown");
-
-  allBugTypes = [...types];
-
-  for (let type of allBugTypes) {
-    let option = document.createElement("option");
-    option.setAttribute("value", type);
-    option.textContent = type;
-    option.selected = true;
-    typesSelect.append(option);
-  }
-}
-
-async function buildSeveritiesSelect() {
-  let severitiesSelect = document.getElementById("severities");
-
-  let data = await landingsData;
-
-  let allSeverities = new Set();
-  for (let landings of Object.values(data)) {
-    for (let landing of landings) {
-      allSeverities.add(landing.severity);
-    }
-  }
-
-  let severities = [...allSeverities];
-
-  for (let type of severities) {
-    let option = document.createElement("option");
-    option.setAttribute("value", type);
-    option.textContent = type;
-    option.selected = true;
-    severitiesSelect.append(option);
   }
 }
 
@@ -331,35 +161,6 @@ function addRow(bugSummary) {
   }
 
   risk_column.append(risk_text);
-}
-
-async function populateVersions() {
-  var versionSelector = document.getElementById("releaseVersions");
-
-  let data = await landingsData;
-
-  var allVersions = new Set();
-  for (let bugs of Object.values(data)) {
-    bugs.forEach((item) => {
-      if (item.versions.length) {
-        allVersions.add(...item.versions);
-      }
-    });
-  }
-  var versions = [...allVersions];
-  versions.sort();
-
-  for (let version of versions) {
-    let el = document.createElement("option");
-    el.setAttribute("value", version);
-    el.textContent = version;
-    el.selected = false;
-    versionSelector.prepend(el);
-  }
-
-  // For now, previous two releases by default:
-  versionSelector.firstChild.selected = true;
-  versionSelector.firstChild.nextSibling.selected = true;
 }
 
 function renderTestingChart(chartEl, bugSummaries) {
@@ -835,145 +636,7 @@ async function renderSummary(bugSummaries) {
 }
 
 async function renderUI(rerenderSummary = true) {
-  let data = await landingsData;
-  let metaBugID = getOption("metaBugID");
-  let testingTags = getOption("testingTags");
-  let components = getOption("components");
-  let teams = getOption("teams");
-  let whiteBoard = getOption("whiteBoard");
-  let releaseVersions = getOption("releaseVersions");
-  let types = getOption("types");
-  let severities = getOption("severities");
-  let riskiness = getOption("riskiness");
-
-  let bugSummaries = [].concat.apply([], Object.values(data));
-  if (metaBugID) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      bugSummary["meta_ids"].includes(Number(metaBugID))
-    );
-  }
-
-  let fixStartDate = getOption("fixStartDate");
-  if (fixStartDate) {
-    fixStartDate = Temporal.PlainDate.from(fixStartDate);
-    bugSummaries = bugSummaries.filter((bugSummary) => {
-      if (!bugSummary.date) {
-        return false;
-      }
-
-      return (
-        Temporal.PlainDate.compare(
-          getPlainDate(bugSummary.date),
-          fixStartDate
-        ) >= 0
-      );
-    });
-  }
-
-  let fixEndDate = getOption("fixEndDate");
-  if (fixEndDate) {
-    fixEndDate = Temporal.PlainDate.from(fixEndDate);
-    bugSummaries = bugSummaries.filter((bugSummary) => {
-      if (!bugSummary.date) {
-        return false;
-      }
-
-      return (
-        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), fixEndDate) <=
-        0
-      );
-    });
-  }
-
-  let createStartDate = getOption("createStartDate");
-  if (createStartDate) {
-    createStartDate = Temporal.PlainDate.from(createStartDate);
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        Temporal.PlainDate.compare(
-          getPlainDate(bugSummary.creation_date),
-          createStartDate
-        ) >= 0
-    );
-  }
-
-  let createEndDate = getOption("createEndDate");
-  if (createEndDate) {
-    createEndDate = Temporal.PlainDate.from(createEndDate);
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        Temporal.PlainDate.compare(
-          getPlainDate(bugSummary.creation_date),
-          createEndDate
-        ) <= 0
-    );
-  }
-
-  if (testingTags) {
-    const includeUnknownTestingTags = testingTags.includes("unknown");
-    const includeNotAvailableTestingTags = releaseVersions.includes("N/A");
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        (includeNotAvailableTestingTags && bugSummary.commits.length == 0) ||
-        bugSummary.commits.some(
-          (commit) =>
-            (includeUnknownTestingTags && !commit.testing) ||
-            testingTags.includes(commit.testing)
-        )
-    );
-  }
-
-  if (components) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      components.includes(bugSummary["component"])
-    );
-  }
-
-  if (teams) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      teams.includes(bugSummary["team"])
-    );
-  }
-
-  if (whiteBoard) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      bugSummary["whiteboard"].includes(whiteBoard)
-    );
-  }
-
-  if (releaseVersions) {
-    const includeUnfixed = getOption("includeUnfixed");
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        (includeUnfixed && bugSummary.versions.length == 0) ||
-        releaseVersions.some((version) =>
-          bugSummary.versions.includes(Number(version))
-        )
-    );
-  }
-
-  if (types) {
-    if (!types.includes("unknown")) {
-      bugSummaries = bugSummaries.filter((bugSummary) =>
-        bugSummary.types.some((type) => types.includes(type))
-      );
-    }
-  }
-
-  if (severities) {
-    bugSummaries = bugSummaries.filter((bugSummary) =>
-      severities.includes(bugSummary.severity)
-    );
-  }
-
-  if (riskiness) {
-    const includeNotAvailableRiskiness = riskiness.includes("N/A");
-    bugSummaries = bugSummaries.filter(
-      (bugSummary) =>
-        (includeNotAvailableRiskiness && bugSummary.risk_band === null) ||
-        riskiness.includes(bugSummary.risk_band)
-    );
-  }
+  const bugSummaries = await getFilteredBugSummaries();
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
@@ -1059,75 +722,10 @@ function setTableHeaderHandlers() {
 
 (async function init() {
   buildMetabugsDropdown();
-  await buildComponentsSelect();
-  await buildTeamsSelect();
-  await populateVersions();
-  await buildTypesSelect();
-  await buildSeveritiesSelect();
 
   setTableHeaderHandlers();
 
-  Object.keys(options).forEach(function (optionName) {
-    let optionType = getOptionType(optionName);
-    let elem = document.getElementById(optionName);
-
-    if (optionType === "text") {
-      setOption(optionName, elem.value);
-      elem.addEventListener("change", function () {
-        setOption(optionName, elem.value);
-        renderUI();
-      });
-    } else if (optionType === "checkbox") {
-      setOption(optionName, elem.checked);
-
-      elem.onchange = function () {
-        setOption(optionName, elem.checked);
-        renderUI();
-      };
-    } else if (optionType === "select") {
-      let value = [];
-      for (let option of elem.options) {
-        if (option.selected) {
-          value.push(option.value);
-        }
-      }
-
-      setOption(optionName, value);
-
-      elem.onchange = function () {
-        let value = [];
-        for (let option of elem.options) {
-          if (option.selected) {
-            value.push(option.value);
-          }
-        }
-
-        setOption(optionName, value);
-        renderUI();
-      };
-    } else if (optionType === "radio") {
-      for (const radio of document.querySelectorAll(
-        `input[name=${optionName}]`
-      )) {
-        if (radio.checked) {
-          setOption(optionName, radio.value);
-        }
-      }
-
-      elem.onchange = function () {
-        for (const radio of document.querySelectorAll(
-          `input[name=${optionName}]`
-        )) {
-          if (radio.checked) {
-            setOption(optionName, radio.value);
-          }
-        }
-        renderUI();
-      };
-    } else {
-      throw new Error("Unexpected option type.");
-    }
-  });
+  await setupOptions(renderUI);
 
   let toggle = await localForage.getItem("detailsToggle");
   if (toggle) {
