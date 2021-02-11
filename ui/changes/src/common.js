@@ -456,6 +456,10 @@ let options = {
     value: null,
     type: "select",
   },
+  changeGrouping: {
+    value: null,
+    type: "select",
+  },
 };
 
 export function getOption(name) {

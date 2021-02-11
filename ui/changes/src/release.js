@@ -4,6 +4,7 @@ import {
   Counter,
   getFirefoxReleases,
   setupOptions,
+  getOption,
   getFilteredBugSummaries,
 } from "./common.js";
 
@@ -19,7 +20,7 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
 
   let componentCounter = new Counter();
   for (let bugSummary of bugSummaries) {
-    componentCounter[bugSummary.component] += 1;
+    componentCounter[bugSummary[getOption("changeGrouping")]] += 1;
   }
 
   let data = Object.entries(componentCounter)
