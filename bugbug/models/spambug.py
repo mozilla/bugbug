@@ -81,11 +81,20 @@ class SpamBugModel(BugModel):
             if "@mozilla" in bug_data["creator"]:
                 continue
 
-            # Legitimate bugs
+            # A bug that was moved out of 'Invalid Bugs' is definitely a legitimate bug.
+            for history in bug_data["history"]:
+                for change in history["changes"]:
+                    if (
+                        change["field_name"] == "product"
+                        and change["removed"] == "Invalid Bugs"
+                    ):
+                        classes[bug_id] = 0
+
+            # A fixed bug is definitely a legitimate bug.
             if bug_data["resolution"] == "FIXED":
                 classes[bug_id] = 0
 
-            # Spam bugs
+            # A bug in the 'Invalid Bugs' product is definitely a spam bug.
             elif bug_data["product"] == "Invalid Bugs":
                 classes[bug_id] = 1
 

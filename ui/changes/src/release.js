@@ -18,9 +18,11 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
     return;
   }
 
+  let dimension = getOption("changeGrouping")[0];
+
   let componentCounter = new Counter();
   for (let bugSummary of bugSummaries) {
-    componentCounter[bugSummary[getOption("changeGrouping")]] += 1;
+    componentCounter[bugSummary[dimension]] += 1;
   }
 
   let data = Object.entries(componentCounter)
@@ -42,7 +44,7 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
       type: "treemap",
     },
     title: {
-      text: "Component Changes",
+      text: `${dimension.charAt(0).toUpperCase()}${dimension.slice(1)} changes`,
     },
   };
 
