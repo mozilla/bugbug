@@ -156,6 +156,7 @@ class source_code_file_metrics(object):
                 "nexits_avg"
             ],
             "Average file cognitive": commit["metrics"]["cognitive_avg"],
+            "Average blank": commit["metrics"]["blank_avg"],
             "Maximum file cyclomatic": commit["metrics"]["cyclomatic_max"],
             "Maximum file number of unique operands": commit["metrics"][
                 "halstead_n2_max"
@@ -173,6 +174,7 @@ class source_code_file_metrics(object):
             "Maximum file number of function exit points": commit["metrics"][
                 "nexits_max"
             ],
+            "Maximum blank": commit["metrics"]["blank_max"],
             "Maximum file cognitive": commit["metrics"]["cognitive_max"],
             "Minimum file cyclomatic": commit["metrics"]["cyclomatic_min"],
             "Minimum file number of unique operands": commit["metrics"][
@@ -192,6 +194,7 @@ class source_code_file_metrics(object):
                 "nexits_min"
             ],
             "Minimum file cognitive": commit["metrics"]["cognitive_min"],
+            "Minimum blank": commit["metrics"]["blank_min"],
             "Total file cyclomatic": commit["metrics"]["cyclomatic_total"],
             "Total file number of unique operands": commit["metrics"][
                 "halstead_n2_total"
@@ -210,6 +213,7 @@ class source_code_file_metrics(object):
                 "nexits_total"
             ],
             "Total file cognitive": commit["metrics"]["cognitive_total"],
+            "Total blank": commit["metrics"]["blank_total"],
         }
 
 
