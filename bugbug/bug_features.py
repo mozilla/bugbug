@@ -220,6 +220,11 @@ class priority(single_bug_feature):
         return bug["priority"]
 
 
+class version(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return bug["version"] if bug["version"] != "unspecified" else None
+
+
 class has_cve_in_alias(single_bug_feature):
     name = "CVE in alias"
 
