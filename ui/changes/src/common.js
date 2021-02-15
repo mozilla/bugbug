@@ -625,6 +625,8 @@ export async function setupOptions(callback) {
   await buildTypesSelect();
   await buildSeveritiesSelect();
 
+  const queryVars = new URL(location.href).search.substring(1).split("&");
+
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
     let elem = document.getElementById(optionName);
@@ -632,13 +634,29 @@ export async function setupOptions(callback) {
       return;
     }
 
+    let queryValues = [];
+    for (const queryVar of queryVars) {
+      if (queryVar.startsWith(optionName + "=")) {
+        queryValues.push(queryVar.substring((optionName + "=").length).trim());
+      }
+    }
+
     if (optionType === "text") {
+      if (queryValues.length != 0) {
+        elem.value = queryValues[0];
+      }
+
       setOption(optionName, elem.value);
+
       elem.addEventListener("change", function () {
         setOption(optionName, elem.value);
         callback();
       });
     } else if (optionType === "checkbox") {
+      if (queryValues.length != 0) {
+        elem.checked = queryValues[0] != "0" && queryValues[0] != "false";
+      }
+
       setOption(optionName, elem.checked);
 
       elem.onchange = function () {
@@ -646,6 +664,12 @@ export async function setupOptions(callback) {
         callback();
       };
     } else if (optionType === "select") {
+      if (queryValues.length != 0) {
+        for (const option of elem.options) {
+          option.selected = queryValues.includes(option.textContent);
+        }
+      }
+
       let value = [];
       for (let option of elem.options) {
         if (option.selected) {
@@ -667,6 +691,14 @@ export async function setupOptions(callback) {
         callback();
       };
     } else if (optionType === "radio") {
+      if (queryValues.length != 0) {
+        for (const radio of document.querySelectorAll(
+          `input[name=${optionName}]`
+        )) {
+          radio.checked = radio.value == queryValues[0];
+        }
+      }
+
       for (const radio of document.querySelectorAll(
         `input[name=${optionName}]`
       )) {
