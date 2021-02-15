@@ -650,6 +650,11 @@ export async function setupOptions(callback) {
 
       elem.addEventListener("change", function () {
         setOption(optionName, elem.value);
+
+        let url = new URL(location.href);
+        url.searchParams.set(optionName, elem.value);
+        history.replaceState({}, document.title, url.href);
+
         callback();
       });
     } else if (optionType === "checkbox") {
@@ -661,6 +666,11 @@ export async function setupOptions(callback) {
 
       elem.onchange = function () {
         setOption(optionName, elem.checked);
+
+        let url = new URL(location.href);
+        url.searchParams.set(optionName, elem.checked ? "1" : "0");
+        history.replaceState({}, document.title, url.href);
+
         callback();
       };
     } else if (optionType === "select") {
@@ -680,14 +690,21 @@ export async function setupOptions(callback) {
       setOption(optionName, value);
 
       elem.onchange = function () {
+        let url = new URL(location.href);
+        url.searchParams.delete(optionName);
+
         let value = [];
         for (let option of elem.options) {
           if (option.selected) {
             value.push(option.value);
+            url.searchParams.append(optionName, option.value);
           }
         }
 
         setOption(optionName, value);
+
+        history.replaceState({}, document.title, url.href);
+
         callback();
       };
     } else if (optionType === "radio") {
@@ -708,13 +725,20 @@ export async function setupOptions(callback) {
       }
 
       elem.onchange = function () {
+        let url = new URL(location.href);
+        url.searchParams.delete(optionName);
+
         for (const radio of document.querySelectorAll(
           `input[name=${optionName}]`
         )) {
           if (radio.checked) {
             setOption(optionName, radio.value);
+            url.searchParams.set(optionName, radio.value);
           }
         }
+
+        history.replaceState({}, document.title, url.href);
+
         callback();
       };
     } else {
