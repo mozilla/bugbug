@@ -671,7 +671,7 @@ export async function setupOptions(callback) {
     } else if (optionType === "select") {
       if (queryValues.length != 0) {
         for (const option of elem.options) {
-          option.selected = queryValues.includes(option.textContent);
+          option.selected = queryValues.includes(option.value);
         }
       }
 
