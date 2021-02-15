@@ -2471,6 +2471,7 @@ void main() {
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
         "cognitive_total": 0.0,
+        "blank_total": 0.0,
         "cyclomatic_total": 0.0,
         "halstead_N1_total": 0.0,
         "halstead_N2_total": 0.0,
@@ -2490,6 +2491,7 @@ void main() {
                     "cloc_total": 0.0,
                     "cognitive_total": 0.0,
                     "cyclomatic_total": 1.0,
+                    "blank_total": 0.0,
                     "halstead_N1_total": 6.0,
                     "halstead_N2_total": 4.0,
                     "halstead_n1_total": 5.0,
@@ -2631,6 +2633,7 @@ void main() {
         "cloc_total": 0.0,
         "cognitive_total": 0.0,
         "cyclomatic_total": 0.0,
+        "blank_total":0.0,
         "halstead_N1_total": 3.0,
         "halstead_N2_total": 3.0,
         "halstead_n1_total": 0.0,
@@ -2648,6 +2651,7 @@ void main() {
                 "metrics": {
                     "cloc_total": 0.0,
                     "cognitive_total": 0.0,
+                    "blank_total": 0.0,
                     "cyclomatic_total": 1.0,
                     "halstead_N1_total": 9.0,
                     "halstead_N2_total": 7.0,
