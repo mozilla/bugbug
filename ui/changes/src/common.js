@@ -443,9 +443,7 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   );
 
   // Enforce up to 2 months history, earlier patches are in the model's training set.
-  let twoMonthsAgo = Temporal.now
-    .plainDateISO()
-    .subtract(new Temporal.Duration(0, 2));
+  let twoMonthsAgo = Temporal.now.plainDateISO().subtract({ months: 2 });
   if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) > 0) {
     minDate = twoMonthsAgo;
   }
