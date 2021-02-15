@@ -636,7 +636,7 @@ def push_schedules(branch, rev):
     return jsonify({"ready": False}), 202
 
 
-@application.route("/config_specific_groups/<config>")
+@application.route("/config_specific_groups/<path:config>")
 @cross_origin()
 def config_specific_groups(config: str) -> Tuple[Response, int]:
     """
