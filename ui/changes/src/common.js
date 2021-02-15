@@ -446,7 +446,7 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   let twoMonthsAgo = Temporal.now
     .plainDateISO()
     .subtract(new Temporal.Duration(0, 2));
-  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) < 0) {
+  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) > 0) {
     minDate = twoMonthsAgo;
   }
 
