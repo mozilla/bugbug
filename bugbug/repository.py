@@ -140,6 +140,7 @@ METRIC_NAMES = [
     "nargs",
     "nexits",
     "cognitive",
+    "blank"
 ]
 
 
