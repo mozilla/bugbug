@@ -625,7 +625,7 @@ export async function setupOptions(callback) {
   await buildTypesSelect();
   await buildSeveritiesSelect();
 
-  const queryVars = new URL(location.href).search.substring(1).split("&");
+  const url = new URL(location.href);
 
   Object.keys(options).forEach(function (optionName) {
     let optionType = getOptionType(optionName);
@@ -634,12 +634,7 @@ export async function setupOptions(callback) {
       return;
     }
 
-    let queryValues = [];
-    for (const queryVar of queryVars) {
-      if (queryVar.startsWith(optionName + "=")) {
-        queryValues.push(queryVar.substring((optionName + "=").length).trim());
-      }
-    }
+    let queryValues = url.searchParams.getAll(optionName);
 
     if (optionType === "text") {
       if (queryValues.length != 0) {
