@@ -1,13 +1,5 @@
 import ApexCharts from "apexcharts";
-import {
-  landingsData,
-  Counter,
-  getFirefoxReleases,
-  setupOptions,
-  getOption,
-  getFilteredBugSummaries,
-  getComponentRegressionMap,
-} from "./common.js";
+import * as common from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
 
@@ -47,9 +39,9 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
     return;
   }
 
-  let dimension = getOption("changeGrouping")[0];
+  let dimension = common.getOption("changeGrouping")[0];
 
-  let componentCounter = new Counter();
+  let componentCounter = new common.Counter();
   for (let bugSummary of bugSummaries) {
     componentCounter[bugSummary[dimension]] += 1;
   }
@@ -69,14 +61,14 @@ async function renderAffectedComponentChangesChart(chartEl, bugSummaries) {
     return;
   }
 
-  let componentCounter = new Counter();
+  let componentCounter = new common.Counter();
   for (let bugSummary of bugSummaries) {
     componentCounter[bugSummary["component"]] += 1;
   }
 
-  let componentConnectionMap = await getComponentRegressionMap();
+  let componentConnectionMap = await common.getComponentRegressionMap();
 
-  let affectedComponentCounter = new Counter();
+  let affectedComponentCounter = new common.Counter();
   for (let [sourceComponent, count] of Object.entries(componentCounter)) {
     if (!componentConnectionMap.hasOwnProperty(sourceComponent)) {
       continue;
@@ -95,7 +87,7 @@ async function renderAffectedComponentChangesChart(chartEl, bugSummaries) {
 async function renderUI() {
   resultGraphs.textContent = "";
 
-  const bugSummaries = await getFilteredBugSummaries();
+  const bugSummaries = await common.getFilteredBugSummaries();
 
   let componentChangesChartEl = document.createElement("div");
   resultGraphs.append(componentChangesChartEl);
@@ -110,7 +102,7 @@ async function renderUI() {
 }
 
 (async function init() {
-  await setupOptions(renderUI);
+  await common.setupOptions(renderUI);
 
   renderUI();
 })();

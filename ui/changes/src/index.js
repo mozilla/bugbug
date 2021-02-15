@@ -3,21 +3,7 @@
 
 import localForage from "localforage";
 import { Temporal } from "proposal-temporal/lib/index.mjs";
-import ApexCharts from "apexcharts";
-import {
-  getPlainDate,
-  TESTING_TAGS,
-  featureMetabugs,
-  landingsData,
-  Counter,
-  getSummaryData,
-  renderChart,
-  summarizeCoverage,
-  setupOptions,
-  allBugTypes,
-  getOption,
-  getFilteredBugSummaries,
-} from "./common.js";
+import * as common from "./common.js";
 
 localForage.config({
   driver: localForage.INDEXEDDB,
@@ -40,7 +26,7 @@ async function buildMetabugsDropdown() {
     setOption("metaBugID", metabugsDropdown.value);
     renderUI();
   });
-  let bugs = await featureMetabugs;
+  let bugs = await common.featureMetabugs;
   metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
   for (let bug of bugs) {
     let option = document.createElement("option");
@@ -113,7 +99,7 @@ function addRow(bugSummary) {
       testing_tags_list_item.append(document.createTextNode("unknown"));
     } else {
       testing_tags_list_item.append(
-        document.createTextNode(TESTING_TAGS[commit.testing].label)
+        document.createTextNode(common.TESTING_TAGS[commit.testing].label)
       );
     }
     testing_tags_list.append(testing_tags_list_item);
@@ -121,7 +107,7 @@ function addRow(bugSummary) {
   testing_tags_column.append(testing_tags_list);
 
   let coverage_column = row.insertCell(3);
-  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
+  let [lines_added, lines_covered, lines_unknown] = common.summarizeCoverage(
     bugSummary
   );
   if (lines_added != 0) {
@@ -163,424 +149,6 @@ function addRow(bugSummary) {
   risk_column.append(risk_text);
 }
 
-function renderTestingChart(chartEl, bugSummaries) {
-  let testingCounts = new Counter();
-  bugSummaries.forEach((summary) => {
-    summary.commits.forEach((commit) => {
-      if (!commit.testing) {
-        testingCounts.unknown++;
-      } else {
-        testingCounts[commit.testing] = testingCounts[commit.testing] + 1;
-      }
-    });
-  });
-
-  let categories = [];
-  let colors = [];
-  let data = [];
-  for (let tag in testingCounts) {
-    categories.push(TESTING_TAGS[tag].label);
-    data.push(testingCounts[tag]);
-    colors.push(TESTING_TAGS[tag].color);
-  }
-
-  var options = {
-    series: [
-      {
-        name: "Tags",
-        data,
-      },
-    ],
-    chart: {
-      height: 150,
-      type: "bar",
-    },
-    plotOptions: {
-      bar: {
-        dataLabels: {
-          position: "top", // top, center, bottom
-        },
-      },
-    },
-
-    xaxis: {
-      categories,
-      // position: "bottom",
-      axisBorder: {
-        show: false,
-      },
-      axisTicks: {
-        show: false,
-      },
-    },
-    yaxis: {
-      axisBorder: {
-        show: false,
-      },
-      axisTicks: {
-        show: false,
-      },
-      labels: {
-        show: false,
-      },
-    },
-  };
-
-  var chart = new ApexCharts(chartEl, options);
-  chart.render();
-}
-
-async function renderRiskChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.risk_band !== null
-  );
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.date),
-        getPlainDate(minSummary.date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).date
-  );
-
-  // Enforce up to 2 months history, earlier patches are in the model's training set.
-  let twoMonthsAgo = Temporal.now
-    .plainDateISO()
-    .subtract(new Temporal.Duration(0, 2));
-  if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) < 0) {
-    minDate = twoMonthsAgo;
-  }
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, summary) => {
-      if (summary.risk_band == "l") {
-        counterObj.low += 1;
-      } else if (summary.risk_band == "a") {
-        counterObj.medium += 1;
-      } else {
-        counterObj.high += 1;
-      }
-    }
-  );
-
-  let categories = [];
-  let high = [];
-  let medium = [];
-  let low = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    low.push(summaryData[date].low);
-    medium.push(summaryData[date].medium);
-    high.push(summaryData[date].high);
-  }
-
-  renderChart(
-    chartEl,
-    [
-      {
-        name: "Higher",
-        data: high,
-      },
-      {
-        name: "Average",
-        data: medium,
-      },
-      {
-        name: "Lower",
-        data: low,
-      },
-    ],
-    categories,
-    "Evolution of lower/average/higher risk changes",
-    "# of patches"
-  );
-}
-
-async function renderRegressionsChart(chartEl, bugSummaries) {
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.creation_date),
-        getPlainDate(minSummary.creation_date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).creation_date
-  );
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, bug) => {
-      if (bug.regression) {
-        counterObj.regressions += 1;
-        if (bug.fixed) {
-          counterObj.fixed_regressions += 1;
-        }
-      }
-    },
-    null,
-    (summary) => summary.creation_date
-  );
-
-  let categories = [];
-  let regressions = [];
-  let fixed_regressions = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    regressions.push(summaryData[date].regressions);
-    fixed_regressions.push(summaryData[date].fixed_regressions);
-  }
-
-  renderChart(
-    chartEl,
-    [
-      {
-        name: "Regressions",
-        data: regressions,
-      },
-      {
-        name: "Fixed regressions",
-        data: fixed_regressions,
-      },
-    ],
-    categories,
-    "Number of regressions",
-    "# of regressions"
-  );
-}
-
-async function renderTypesChart(chartEl, bugSummaries) {
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.creation_date),
-        getPlainDate(minSummary.creation_date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).creation_date
-  );
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, bug) => {
-      for (const type of bug.types) {
-        counterObj[type] += 1;
-      }
-    },
-    null,
-    (summary) => summary.creation_date
-  );
-
-  let all_series = [];
-  for (let type of allBugTypes) {
-    if (type == "unknown") {
-      continue;
-    }
-
-    all_series.push({
-      name: type,
-      data: [],
-    });
-  }
-
-  let categories = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    for (let series of all_series) {
-      series["data"].push(summaryData[date][series["name"]]);
-    }
-  }
-
-  renderChart(
-    chartEl,
-    all_series,
-    categories,
-    "Number of bugs by type",
-    "# of bugs"
-  );
-}
-
-async function renderFixTimesChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.creation_date),
-        getPlainDate(minSummary.creation_date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).creation_date
-  );
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, bug) => {
-      counterObj.fix_time += getPlainDate(bug.creation_date).until(
-        getPlainDate(bug.date),
-        { largestUnit: "days" }
-      ).days;
-      counterObj.bugs += 1;
-    },
-    null,
-    (summary) => summary.creation_date
-  );
-
-  let categories = [];
-  let average_fix_times = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    average_fix_times.push(
-      Math.ceil(summaryData[date].fix_time / summaryData[date].bugs)
-    );
-  }
-
-  renderChart(
-    chartEl,
-    [
-      {
-        name: "Average fix time",
-        data: average_fix_times,
-      },
-    ],
-    categories,
-    "Average fix time",
-    "Time"
-  );
-}
-
-async function renderTimeToBugChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.time_to_bug !== null
-  );
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.creation_date),
-        getPlainDate(minSummary.creation_date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).creation_date
-  );
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, bug) => {
-      counterObj.time_to_bug += bug.time_to_bug;
-      counterObj.bugs += 1;
-    },
-    null,
-    (summary) => summary.creation_date
-  );
-
-  let categories = [];
-  let average_time_to_bug = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    average_time_to_bug.push(
-      Math.ceil(summaryData[date].time_to_bug / summaryData[date].bugs)
-    );
-  }
-
-  renderChart(
-    chartEl,
-    [
-      {
-        name: "Average time to bug (in days)",
-        data: average_time_to_bug,
-      },
-    ],
-    categories,
-    "Average time to bug (in days)",
-    "Time"
-  );
-}
-
-async function renderTimeToConfirmChart(chartEl, bugSummaries) {
-  bugSummaries = bugSummaries.filter(
-    (bugSummary) => bugSummary.time_to_confirm !== null
-  );
-
-  if (bugSummaries.length == 0) {
-    return;
-  }
-
-  let minDate = getPlainDate(
-    bugSummaries.reduce((minSummary, summary) =>
-      Temporal.PlainDate.compare(
-        getPlainDate(summary.creation_date),
-        getPlainDate(minSummary.creation_date)
-      ) < 0
-        ? summary
-        : minSummary
-    ).creation_date
-  );
-
-  let summaryData = await getSummaryData(
-    bugSummaries,
-    getOption("grouping"),
-    minDate,
-    (counterObj, bug) => {
-      counterObj.time_to_confirm += bug.time_to_confirm;
-      counterObj.bugs += 1;
-    },
-    null,
-    (summary) => summary.creation_date
-  );
-
-  let categories = [];
-  let average_time_to_confirm = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    average_time_to_confirm.push(
-      Math.ceil(summaryData[date].time_to_confirm / summaryData[date].bugs)
-    );
-  }
-
-  renderChart(
-    chartEl,
-    [
-      {
-        name: "Average time to confirm (in hours)",
-        data: average_time_to_confirm,
-      },
-    ],
-    categories,
-    "Average time to confirm (in hours)",
-    "Time"
-  );
-}
-
 async function renderTable(bugSummaries) {
   let table = document.getElementById("table");
   while (table.rows.length > 1) {
@@ -592,7 +160,7 @@ async function renderTable(bugSummaries) {
 }
 
 async function renderSummary(bugSummaries) {
-  let metaBugID = getOption("metaBugID");
+  let metaBugID = common.getOption("metaBugID");
 
   let changesets = [];
   if (bugSummaries.length) {
@@ -608,42 +176,42 @@ async function renderSummary(bugSummaries) {
   resultGraphs.textContent = "";
   let testingChartEl = document.createElement("div");
   resultGraphs.append(testingChartEl);
-  renderTestingChart(testingChartEl, bugSummaries);
+  common.renderTestingChart(testingChartEl, bugSummaries);
 
   let riskChartEl = document.createElement("div");
   resultGraphs.append(riskChartEl);
-  await renderRiskChart(riskChartEl, bugSummaries);
+  await common.renderRiskChart(riskChartEl, bugSummaries);
 
   let regressionsChartEl = document.createElement("div");
   resultGraphs.append(regressionsChartEl);
-  await renderRegressionsChart(regressionsChartEl, bugSummaries);
+  await common.renderRegressionsChart(regressionsChartEl, bugSummaries);
 
   let typesChartEl = document.createElement("div");
   resultGraphs.append(typesChartEl);
-  await renderTypesChart(typesChartEl, bugSummaries);
+  await common.renderTypesChart(typesChartEl, bugSummaries);
 
   let fixTimesChartEl = document.createElement("div");
   resultGraphs.append(fixTimesChartEl);
-  await renderFixTimesChart(fixTimesChartEl, bugSummaries);
+  await common.renderFixTimesChart(fixTimesChartEl, bugSummaries);
 
   let timeToBugChartEl = document.createElement("div");
   resultGraphs.append(timeToBugChartEl);
-  await renderTimeToBugChart(timeToBugChartEl, bugSummaries);
+  await common.renderTimeToBugChart(timeToBugChartEl, bugSummaries);
 
   let timeToConfirmChartEl = document.createElement("div");
   resultGraphs.append(timeToConfirmChartEl);
-  await renderTimeToConfirmChart(timeToConfirmChartEl, bugSummaries);
+  await common.renderTimeToConfirmChart(timeToConfirmChartEl, bugSummaries);
 }
 
 async function renderUI(rerenderSummary = true) {
-  const bugSummaries = await getFilteredBugSummaries();
+  const bugSummaries = await common.getFilteredBugSummaries();
 
   let sortFunction = null;
   if (sortBy[0] == "Date") {
     sortFunction = function (a, b) {
       return Temporal.PlainDate.compare(
-        getPlainDate(a.date ? a.date : a.creation_date),
-        getPlainDate(b.date ? b.date : b.creation_date)
+        common.getPlainDate(a.date ? a.date : a.creation_date),
+        common.getPlainDate(b.date ? b.date : b.creation_date)
       );
     };
   } else if (sortBy[0] == "Riskiness") {
@@ -665,12 +233,16 @@ async function renderUI(rerenderSummary = true) {
     };
   } else if (sortBy[0] == "Coverage") {
     sortFunction = function (a, b) {
-      let [lines_added_a, lines_covered_a, lines_unknown_a] = summarizeCoverage(
-        a
-      );
-      let [lines_added_b, lines_covered_b, lines_unknown_b] = summarizeCoverage(
-        b
-      );
+      let [
+        lines_added_a,
+        lines_covered_a,
+        lines_unknown_a,
+      ] = common.summarizeCoverage(a);
+      let [
+        lines_added_b,
+        lines_covered_b,
+        lines_unknown_b,
+      ] = common.summarizeCoverage(b);
 
       let uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
       let uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
@@ -725,7 +297,7 @@ function setTableHeaderHandlers() {
 
   setTableHeaderHandlers();
 
-  await setupOptions(renderUI);
+  await common.setupOptions(renderUI);
 
   let toggle = await localForage.getItem("detailsToggle");
   if (toggle) {
