@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import libmozdata
 import orjson
@@ -298,7 +298,7 @@ def clean_prediction_cache(job):
     redis_conn.delete(job.change_time_key)
 
 
-def get_result(job: JobInfo) -> Any:
+def get_result(job: JobInfo) -> Optional[Any]:
     LOGGER.debug(f"Checking for existing results at {job.result_key}")
     result = redis_conn.get(job.result_key)
 
@@ -638,7 +638,7 @@ def push_schedules(branch, rev):
 
 @application.route("/config_specific_groups/<config>")
 @cross_origin()
-def config_specific_groups(config):
+def config_specific_groups(config: str) -> Tuple[Response, int]:
     """
     ---
     get:
@@ -681,7 +681,7 @@ def config_specific_groups(config):
 
     job = JobInfo(get_config_specific_groups, config)
     data = get_result(job)
-    if data:
+    if data is not None:
         return compress_response(data, 200)
 
     if not is_pending(job):
