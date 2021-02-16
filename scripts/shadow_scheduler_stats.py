@@ -257,7 +257,7 @@ def plot_graphs(granularity) -> None:
         .resample("W")
         .mean(),
         "Percentage of regressions we caught",
-        "percentage_{granularity}_caught.svg",
+        f"percentage_{granularity}_caught.svg",
     )
 
 
