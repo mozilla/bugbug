@@ -293,7 +293,18 @@ export async function getTestingPolicySummaryData(grouping = "daily", filter) {
   );
 }
 
-export function renderChart(chartEl, series, dates, title, yaxis_text) {
+export function renderChart(
+  chartEl,
+  series,
+  dates,
+  title,
+  yaxis_text,
+  yaxis_options = {}
+) {
+  yaxis_options["title"] = {
+    text: yaxis_text,
+  };
+
   let options = {
     series: series,
     chart: {
@@ -337,11 +348,7 @@ export function renderChart(chartEl, series, dates, title, yaxis_text) {
         text: "Date",
       },
     },
-    yaxis: {
-      title: {
-        text: yaxis_text,
-      },
-    },
+    yaxis: yaxis_options,
     legend: {
       position: "top",
       horizontalAlign: "right",
@@ -768,6 +775,76 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     categories,
     "Average time to confirm (in hours)",
     "Time"
+  );
+}
+
+export async function renderPatchCoverageChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = getPlainDate(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(summary.date),
+        getPlainDate(minSummary.date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(bug);
+      if (lines_added == 0) {
+        return;
+      }
+
+      // For the purpose of the patch coverage chart, assume unknown lines are covered.
+      counterObj.lines_covered += lines_covered + lines_unknown;
+      counterObj.lines_added += lines_added;
+    },
+    null,
+    (summary) => summary.creation_date
+  );
+
+  let categories = [];
+  let average_patch_coverage = [];
+  for (let date in summaryData) {
+    if (summaryData[date].lines_added == 0) {
+      continue;
+    }
+
+    categories.push(date);
+    average_patch_coverage.push(
+      Math.ceil(
+        (100 * summaryData[date].lines_covered) / summaryData[date].lines_added
+      )
+    );
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "Average coverage for patches",
+        data: average_patch_coverage,
+      },
+    ],
+    categories,
+    "Average coverage for patches",
+    "Percentage",
+    {
+      tickAmount: 10,
+      min: 0,
+      max: 100,
+    }
   );
 }
 
