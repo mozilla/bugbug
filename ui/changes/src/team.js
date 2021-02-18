@@ -15,6 +15,14 @@ async function renderUI() {
   let regressionsChartEl = document.createElement("div");
   resultGraphs.append(regressionsChartEl);
   await common.renderRegressionsChart(regressionsChartEl, bugSummaries);
+
+  let typesChartEl = document.createElement("div");
+  resultGraphs.append(typesChartEl);
+  await common.renderTypesChart(typesChartEl, bugSummaries);
+
+  let fixTimesChartEl = document.createElement("div");
+  resultGraphs.append(fixTimesChartEl);
+  await common.renderFixTimesChart(fixTimesChartEl, bugSummaries);
 }
 
 (async function init() {
