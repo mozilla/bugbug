@@ -36,11 +36,18 @@ TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
 def bug_to_types(bug: bugzilla.BugDict) -> List[str]:
+    types = set()
+
+    if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
+        types.add("crash")
+
     return list(
-        set(
-            KEYWORD_DICT[keyword]
-            for keyword in bug["keywords"]
-            if keyword in KEYWORD_DICT
+        types.union(
+            set(
+                KEYWORD_DICT[keyword]
+                for keyword in bug["keywords"]
+                if keyword in KEYWORD_DICT
+            )
         )
     )
 
