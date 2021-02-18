@@ -833,13 +833,13 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
     chartEl,
     [
       {
-        name: "Average coverage for patches",
+        name: "Average patch coverage",
         data: average_patch_coverage,
       },
     ],
     categories,
-    "Average coverage for patches",
-    "Percentage",
+    "Average patch coverage",
+    "# of lines covered / # of lines added",
     {
       tickAmount: 10,
       min: 0,
