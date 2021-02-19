@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "npx snowpack dev",
+    "lint": "eslint .",
     "release": "npx snowpack build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +13,11 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "eslint": "^7.20.0",
+    "eslint-config-prettier": "^7.2.0",
+    "eslint-config-standard": "^16.0.2",
+    "eslint-plugin-mozilla": "^2.9.2",
+    "eslint-plugin-prettier": "^3.3.1",
     "prettier": "^2.2.1",
     "snowpack": "^3.0.11"
   },
