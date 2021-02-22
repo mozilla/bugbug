@@ -23,7 +23,7 @@ let bugDetails = document.querySelector("#bug-details");
 // TODO: port this to an option maybe
 async function buildMetabugsDropdown() {
   metabugsDropdown.addEventListener("change", () => {
-    setOption("metaBugID", metabugsDropdown.value);
+    common.setOption("metaBugID", metabugsDropdown.value);
     renderUI();
   });
   let bugs = await common.featureMetabugs;
