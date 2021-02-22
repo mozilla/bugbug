@@ -476,7 +476,7 @@ class LandingsRiskReportGenerator(object):
                 cur_time_to_bug = (
                     dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
                     - last_commit_date
-                ).days
+                ).total_seconds() / 86400
                 if time_to_bug is None or cur_time_to_bug < time_to_bug:
                     time_to_bug = cur_time_to_bug
 
@@ -498,7 +498,7 @@ class LandingsRiskReportGenerator(object):
                                         bug["creation_time"]
                                     ).replace(tzinfo=None)
                                 ).total_seconds()
-                                / 3600
+                                / 86400
                             )
                             break
 

@@ -768,12 +768,12 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     chartEl,
     [
       {
-        name: "Average time to confirm (in hours)",
+        name: "Average time to confirm (in days)",
         data: average_time_to_confirm,
       },
     ],
     categories,
-    "Average time to confirm (in hours)",
+    "Average time to confirm (in days)",
     "Time"
   );
 }
