@@ -1048,9 +1048,10 @@ async function populateVersions() {
     versionSelector.prepend(el);
   }
 
-  // For now, previous two releases by default:
+  // For now, previous three releases by default:
   versionSelector.firstChild.selected = true;
   versionSelector.firstChild.nextSibling.selected = true;
+  versionSelector.firstChild.nextSibling.nextSibling.selected = true;
 }
 
 export let allBugTypes;
