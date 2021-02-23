@@ -163,12 +163,47 @@ export let landingsData = (async function () {
   return returnedObject;
 })();
 
+function quantile(array, p) {
+  if (array.length === 0) {
+    return 0;
+  }
+
+  array.sort((a, b) => a - b);
+
+  if (p <= 0 || array.length < 2) {
+    return array[0];
+  }
+
+  if (p >= 1) {
+    return array[n - 1];
+  }
+
+  let i = (array.length - 1) * p;
+  let i0 = Math.floor(i);
+  let value0 = array[i0];
+  let value1 = array[i0 + 1];
+
+  return value0 + (value1 - value0) * (i - i0);
+}
+
+function median(array) {
+  return quantile(array, 0.5);
+}
+
 export class Counter {
-  constructor() {
+  constructor(initialValue = () => 0) {
     return new Proxy(
       {},
       {
-        get: (target, name) => (name in target ? target[name] : 0),
+        get: (target, name) => {
+          if (name in target) {
+            return target[name];
+          }
+
+          let val = initialValue();
+          target[name] = val;
+          return val;
+        },
       }
     );
   }
@@ -180,7 +215,8 @@ export async function getSummaryData(
   startDate,
   counter,
   filter,
-  dateGetter = (summary) => summary.date
+  dateGetter = (summary) => summary.date,
+  initialValue = () => 0
 ) {
   let dates = [...new Set(bugSummaries.map((summary) => dateGetter(summary)))];
   dates.sort((a, b) =>
@@ -193,7 +229,7 @@ export async function getSummaryData(
       continue;
     }
 
-    dailyData[date] = new Counter();
+    dailyData[date] = new Counter(initialValue);
   }
 
   for (let summary of bugSummaries) {
@@ -213,6 +249,14 @@ export async function getSummaryData(
     Object.values(dailyData).flatMap((data) => Object.keys(data))
   );
 
+  function _merge(val, cur) {
+    if (Array.isArray(val)) {
+      return val.concat(cur);
+    } else {
+      return val + cur;
+    }
+  }
+
   if (grouping == "weekly") {
     let weeklyData = {};
     for (let daily in dailyData) {
@@ -220,11 +264,14 @@ export async function getSummaryData(
       let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
 
       if (!weeklyData[weekStart]) {
-        weeklyData[weekStart] = new Counter();
+        weeklyData[weekStart] = new Counter(initialValue);
       }
 
       for (let label of labels) {
-        weeklyData[weekStart][label] += dailyData[daily][label];
+        weeklyData[weekStart][label] = _merge(
+          weeklyData[weekStart][label],
+          dailyData[daily][label]
+        );
       }
     }
 
@@ -236,11 +283,14 @@ export async function getSummaryData(
       let yearMonth = Temporal.PlainYearMonth.from(date);
 
       if (!monthlyData[yearMonth]) {
-        monthlyData[yearMonth] = new Counter();
+        monthlyData[yearMonth] = new Counter(initialValue);
       }
 
       for (let label of labels) {
-        monthlyData[yearMonth][label] += dailyData[daily][label];
+        monthlyData[yearMonth][label] = _merge(
+          monthlyData[yearMonth][label],
+          dailyData[daily][label]
+        );
       }
     }
     return monthlyData;
@@ -262,11 +312,14 @@ export async function getSummaryData(
       }
 
       if (!byReleaseData[version]) {
-        byReleaseData[version] = new Counter();
+        byReleaseData[version] = new Counter(initialValue);
       }
 
       for (let label of labels) {
-        byReleaseData[version][label] += dailyData[daily][label];
+        byReleaseData[version][label] = _merge(
+          byReleaseData[version][label],
+          dailyData[daily][label]
+        );
       }
     }
     return byReleaseData;
@@ -639,36 +692,43 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.fix_time += getPlainDate(bug.creation_date).until(
-        getPlainDate(bug.date),
-        { largestUnit: "days" }
-      ).days;
-      counterObj.bugs += 1;
+      counterObj.fix_times.push(
+        getPlainDate(bug.creation_date).until(getPlainDate(bug.date), {
+          largestUnit: "days",
+        }).days
+      );
     },
     null,
-    (summary) => summary.creation_date
+    (summary) => summary.creation_date,
+    () => []
   );
 
   let categories = [];
-  let average_fix_times = [];
+  let ninthdecile_fix_times = [];
+  let median_fix_times = [];
   for (let date in summaryData) {
     categories.push(date);
-    average_fix_times.push(
-      Math.ceil(summaryData[date].fix_time / summaryData[date].bugs)
+    ninthdecile_fix_times.push(
+      quantile(summaryData[date].fix_times, 0.9).toFixed(1)
     );
+    median_fix_times.push(median(summaryData[date].fix_times).toFixed(1));
   }
 
   renderChart(
     chartEl,
     [
       {
-        name: "Average fix time",
-        data: average_fix_times,
+        name: "90% time to fix",
+        data: ninthdecile_fix_times,
+      },
+      {
+        name: "Median time to fix",
+        data: median_fix_times,
       },
     ],
     categories,
-    "Average fix time",
-    "Time"
+    "Time to fix",
+    "Days"
   );
 }
 
@@ -697,33 +757,39 @@ export async function renderTimeToBugChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.time_to_bug += bug.time_to_bug;
-      counterObj.bugs += 1;
+      counterObj.times_to_bug.push(bug.time_to_bug);
     },
     null,
-    (summary) => summary.creation_date
+    (summary) => summary.creation_date,
+    () => []
   );
 
   let categories = [];
-  let average_time_to_bug = [];
+  let ninthdecile_time_to_bug = [];
+  let median_time_to_bug = [];
   for (let date in summaryData) {
     categories.push(date);
-    average_time_to_bug.push(
-      Math.ceil(summaryData[date].time_to_bug / summaryData[date].bugs)
+    ninthdecile_time_to_bug.push(
+      quantile(summaryData[date].times_to_bug, 0.9).toFixed(1)
     );
+    median_time_to_bug.push(median(summaryData[date].times_to_bug).toFixed(1));
   }
 
   renderChart(
     chartEl,
     [
       {
-        name: "Average time to bug (in days)",
-        data: average_time_to_bug,
+        name: "90% time to bug",
+        data: ninthdecile_time_to_bug,
+      },
+      {
+        name: "Median time to bug",
+        data: median_time_to_bug,
       },
     ],
     categories,
-    "Average time to bug (in days)",
-    "Time"
+    "Time to bug",
+    "Days"
   );
 }
 
@@ -752,19 +818,23 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.time_to_confirm += bug.time_to_confirm;
-      counterObj.bugs += 1;
+      counterObj.times_to_confirm.push(bug.time_to_confirm);
     },
     null,
-    (summary) => summary.creation_date
+    (summary) => summary.creation_date,
+    () => []
   );
 
   let categories = [];
-  let average_time_to_confirm = [];
+  let ninthdecile_time_to_confirm = [];
+  let median_time_to_confirm = [];
   for (let date in summaryData) {
     categories.push(date);
-    average_time_to_confirm.push(
-      Math.ceil(summaryData[date].time_to_confirm / summaryData[date].bugs)
+    ninthdecile_time_to_confirm.push(
+      quantile(summaryData[date].times_to_confirm, 0.9).toFixed(1)
+    );
+    median_time_to_confirm.push(
+      median(summaryData[date].times_to_confirm).toFixed(1)
     );
   }
 
@@ -772,13 +842,17 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     chartEl,
     [
       {
-        name: "Average time to confirm (in days)",
-        data: average_time_to_confirm,
+        name: "90% time to confirm",
+        data: ninthdecile_time_to_confirm,
+      },
+      {
+        name: "Median time to confirm",
+        data: median_time_to_confirm,
       },
     ],
     categories,
-    "Average time to confirm (in days)",
-    "Time"
+    "Time to confirm",
+    "Days"
   );
 }
 
