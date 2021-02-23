@@ -49,5 +49,5 @@ async function renderUI(rerenderSummary = true) {
 (async function init() {
   await common.setupOptions(renderUI);
 
-  renderUI();
+  await renderUI();
 })();

@@ -37,5 +37,5 @@ async function renderUI() {
 
   await common.setupOptions(renderUI);
 
-  renderUI();
+  await renderUI();
 })();

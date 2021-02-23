@@ -104,5 +104,5 @@ async function renderUI() {
 (async function init() {
   await common.setupOptions(renderUI);
 
-  renderUI();
+  await renderUI();
 })();
