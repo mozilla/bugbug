@@ -18,9 +18,6 @@ async function renderSummary(bugSummaries) {
   resultSummary.textContent = summaryText;
 
   resultGraphs.textContent = "";
-  let testingChartEl = document.createElement("div");
-  resultGraphs.append(testingChartEl);
-  common.renderTestingChart(testingChartEl, bugSummaries);
 
   let riskChartEl = document.createElement("div");
   resultGraphs.append(riskChartEl);
@@ -29,14 +26,6 @@ async function renderSummary(bugSummaries) {
   let regressionsChartEl = document.createElement("div");
   resultGraphs.append(regressionsChartEl);
   await common.renderRegressionsChart(regressionsChartEl, bugSummaries);
-
-  let typesChartEl = document.createElement("div");
-  resultGraphs.append(typesChartEl);
-  await common.renderTypesChart(typesChartEl, bugSummaries);
-
-  let fixTimesChartEl = document.createElement("div");
-  resultGraphs.append(fixTimesChartEl);
-  await common.renderFixTimesChart(fixTimesChartEl, bugSummaries);
 
   let timeToBugChartEl = document.createElement("div");
   resultGraphs.append(timeToBugChartEl);
