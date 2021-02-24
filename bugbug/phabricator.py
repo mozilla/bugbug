@@ -122,7 +122,7 @@ def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
     exclusion_start_dates = []
     exclusion_end_dates = []
 
-    for transaction in rev["transactions"]:
+    for transaction in sorted(rev["transactions"], key=lambda t: t["dateCreated"]):
         if transaction["type"] == "create":
             assert creation_date is None
             creation_date = datetime.utcfromtimestamp(transaction["dateCreated"])
@@ -136,6 +136,9 @@ def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
             )
 
         if transaction["type"] in ("request-review", "update", "reopen"):
+            if len(exclusion_start_dates) == 0:
+                continue
+
             exclusion_end_dates.append(
                 datetime.utcfromtimestamp(transaction["dateCreated"])
             )
