@@ -21,7 +21,7 @@ rs_parsepatch==0.3.3
 scikit-learn==0.24.1
 scipy==1.6.1
 shap[plots]==0.38.1
-tabulate==0.8.8
+tabulate==0.8.9
 taskcluster==41.0.2
 tenacity==6.3.1
 tqdm==4.57.0
