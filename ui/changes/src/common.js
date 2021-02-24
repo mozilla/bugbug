@@ -130,7 +130,15 @@ export let componentConnections = (async function () {
 
 export let featureMetabugs = (async function () {
   let json = await taskclusterLandingsArtifact;
-  return json.featureMetaBugs;
+  return json.featureMetaBugs.map((bug) => {
+    return {
+      id: bug.id,
+      summary: bug.summary
+        .replace(/\[meta\]/i, "")
+        .replace(/\[ux\]/i, "")
+        .trim(),
+    };
+  });
 })();
 
 export async function getFirefoxReleases() {
