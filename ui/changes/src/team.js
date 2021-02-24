@@ -27,6 +27,10 @@ async function renderUI() {
   let patchCoverageChartEl = document.createElement("div");
   resultGraphs.append(patchCoverageChartEl);
   await common.renderPatchCoverageChart(patchCoverageChartEl, bugSummaries);
+
+  let reviewTimeChartEl = document.createElement("div");
+  resultGraphs.append(reviewTimeChartEl);
+  await common.renderReviewTimeChartElChart(reviewTimeChartEl, bugSummaries);
 }
 
 (async function init() {

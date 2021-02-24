@@ -938,6 +938,69 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
   );
 }
 
+export async function renderReviewTimeChartElChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = getPlainDate(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).creation_date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      for (let commit of bug.commits) {
+        if (commit.first_review_time !== null) {
+          counterObj.review_times.push(commit.first_review_time);
+        }
+      }
+    },
+    null,
+    (summary) => summary.creation_date,
+    () => []
+  );
+
+  let categories = [];
+  let ninthdecile_review_times = [];
+  let median_review_times = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    ninthdecile_review_times.push(
+      quantile(summaryData[date].review_times, 0.9).toFixed(1)
+    );
+    median_review_times.push(median(summaryData[date].review_times).toFixed(1));
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "90% time to first review",
+        data: ninthdecile_review_times,
+      },
+      {
+        name: "Median time to first review",
+        data: median_review_times,
+      },
+    ],
+    categories,
+    "Time to first review",
+    "Days"
+  );
+}
+
 export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
   let data = Object.entries(counter)
     .filter(([name, count]) => count > minimumCount)
