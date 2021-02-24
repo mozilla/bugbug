@@ -944,8 +944,8 @@ export function summarizeCoverage(bugSummary) {
 export async function getComponentRegressionMap(threshold = 0.05) {
   let connections = await componentConnections;
 
-  // // Return an object with each component and the components that are most likely
-  // // to cause regressions to that component.
+  // Return an object with each component and the components that are most likely
+  // to cause regressions to that component.
   let connectionsMap = {};
   for (let c of connections) {
     for (let regression_component in c.most_common_regression_components) {
