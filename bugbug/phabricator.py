@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType, Optional
 
 from libmozdata.phabricator import PhabricatorAPI
@@ -112,3 +113,69 @@ def get_testing_project(rev: RevisionDict) -> Optional[str]:
         return None
 
     return testing_projects[-1]
+
+
+def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
+    creation_date = None
+    review_dates = []
+
+    exclusion_start_dates = []
+    exclusion_end_dates = []
+
+    for transaction in rev["transactions"]:
+        if transaction["type"] == "create":
+            assert creation_date is None
+            creation_date = datetime.utcfromtimestamp(transaction["dateCreated"])
+
+        if transaction["type"] in ("accept", "request-changes"):
+            review_dates.append(datetime.utcfromtimestamp(transaction["dateCreated"]))
+
+        if transaction["type"] in ("plan-changes", "close"):
+            exclusion_start_dates.append(
+                datetime.utcfromtimestamp(transaction["dateCreated"])
+            )
+
+        if transaction["type"] in ("request-review", "update", "reopen"):
+            exclusion_end_dates.append(
+                datetime.utcfromtimestamp(transaction["dateCreated"])
+            )
+
+    if creation_date is None:
+        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        return None
+
+    if len(review_dates) == 0:
+        return None
+
+    first_review_date = min(review_dates)
+
+    first_exclusion_start_date = min(exclusion_start_dates, default=None)
+    first_exclusion_end_date = min(exclusion_end_dates, default=None)
+
+    if (
+        first_exclusion_start_date is not None
+        and first_exclusion_end_date is not None
+        and first_exclusion_start_date > first_exclusion_end_date
+    ):
+        logger.warning("Revision D{} was in an inconsistent state.".format(rev["id"]))
+
+    if (
+        first_exclusion_start_date is None
+        or first_exclusion_start_date > first_review_date
+    ):
+        return first_review_date - creation_date
+    elif first_exclusion_start_date is not None and (
+        first_exclusion_end_date is None or first_exclusion_end_date > first_review_date
+    ):
+        logger.warning(
+            "Revision D{} was accepted while in 'planned changes' or 'closed' state.".format(
+                rev["id"]
+            )
+        )
+        return first_review_date - creation_date
+    else:
+        return (
+            first_review_date
+            - creation_date
+            - (first_exclusion_end_date - first_exclusion_start_date)
+        )
