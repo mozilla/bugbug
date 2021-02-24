@@ -970,66 +970,82 @@ let options = {
   metaBugID: {
     value: null,
     type: "text",
+    callback: null,
   },
   testingTags: {
     value: null,
     type: "select",
+    callback: null,
   },
   fixStartDate: {
     value: null,
     type: "text",
+    callback: null,
   },
   fixEndDate: {
     value: null,
     type: "text",
+    callback: null,
   },
   createStartDate: {
     value: null,
     type: "text",
+    callback: null,
   },
   createEndDate: {
     value: null,
     type: "text",
+    callback: null,
   },
   whiteBoard: {
     value: null,
     type: "text",
+    callback: null,
   },
   components: {
     value: null,
     type: "select",
+    callback: null,
   },
   teams: {
     value: null,
     type: "select",
+    callback: null,
   },
   grouping: {
     value: null,
     type: "radio",
+    callback: null,
   },
   releaseVersions: {
     value: null,
     type: "select",
+    callback: null,
   },
   includeUnfixed: {
     value: null,
     type: "checkbox",
+    callback: null,
   },
   types: {
     value: null,
     type: "select",
+    callback: null,
   },
   severities: {
     value: null,
     type: "select",
+    callback: null,
   },
   riskiness: {
     value: null,
     type: "select",
+    callback: null,
   },
   changeGrouping: {
     value: null,
     type: "select",
+    callback: null,
   },
 };
 
@@ -1042,7 +1058,10 @@ function getOptionType(name) {
 }
 
 export function setOption(name, value) {
-  return (options[name].value = value);
+  options[name].value = value;
+  if (options[name].callback) {
+    options[name].callback();
+  }
 }
 
 // TODO: port this to an option maybe
@@ -1066,17 +1085,23 @@ async function buildMetabugsDropdown() {
   }
 }
 
-async function buildComponentsSelect() {
+async function buildComponentsSelect(teams = null) {
   let componentSelect = document.getElementById("components");
   if (!componentSelect) {
     return;
   }
+
+  componentSelect.textContent = "";
 
   let data = await landingsData;
 
   let allComponents = new Set();
   for (let landings of Object.values(data)) {
     for (let landing of landings) {
+      if (teams && !teams.has(landing["team"])) {
+        continue;
+      }
+
       allComponents.add(landing["component"]);
     }
   }
@@ -1118,6 +1143,10 @@ async function buildTeamsSelect() {
     option.selected = true;
     teamsSelect.append(option);
   }
+
+  options["teams"].callback = function () {
+    buildComponentsSelect(new Set(getOption("teams")));
+  };
 }
 
 async function populateVersions() {
