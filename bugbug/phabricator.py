@@ -47,12 +47,17 @@ def set_api_key(url: str, api_key: str) -> None:
 def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
     assert PHABRICATOR_API is not None
 
-    out = PHABRICATOR_API.request(
-        "transaction.search",
-        objectIdentifier=rev_phid,
-    )
+    after = ""
+    data = []
 
-    return out["data"]
+    while after is not None:
+        out = PHABRICATOR_API.request(
+            "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
+        )
+        data += out["data"]
+        after = out["cursor"]["after"]
+
+    return data
 
 
 def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
