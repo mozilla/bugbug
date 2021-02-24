@@ -938,6 +938,34 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
   );
 }
 
+export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
+  let data = Object.entries(counter)
+    .filter(([name, count]) => count > minimumCount)
+    .map(([name, count]) => {
+      return { x: name, y: count };
+    });
+
+  let options = {
+    series: [
+      {
+        data: data,
+      },
+    ],
+    legend: {
+      show: false,
+    },
+    chart: {
+      type: "treemap",
+    },
+    title: {
+      text: title,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
+}
+
 export function summarizeCoverage(bugSummary) {
   let lines_added = 0;
   let lines_covered = 0;

@@ -1,35 +1,6 @@
-import ApexCharts from "apexcharts";
 import * as common from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
-
-async function renderTreemap(chartEl, title, counter) {
-  let data = Object.entries(counter)
-    .filter(([name, count]) => count > 5)
-    .map(([name, count]) => {
-      return { x: name, y: count };
-    });
-
-  let options = {
-    series: [
-      {
-        data: data,
-      },
-    ],
-    legend: {
-      show: false,
-    },
-    chart: {
-      type: "treemap",
-    },
-    title: {
-      text: title,
-    },
-  };
-
-  let chart = new ApexCharts(chartEl, options);
-  chart.render();
-}
 
 async function renderComponentChangesChart(chartEl, bugSummaries) {
   // Only show fixed bugs.
@@ -46,7 +17,7 @@ async function renderComponentChangesChart(chartEl, bugSummaries) {
     componentCounter[bugSummary[dimension]] += 1;
   }
 
-  renderTreemap(
+  common.renderTreemap(
     chartEl,
     `${dimension.charAt(0).toUpperCase()}${dimension.slice(1)} changes`,
     componentCounter
@@ -81,7 +52,11 @@ async function renderAffectedComponentChangesChart(chartEl, bugSummaries) {
     }
   }
 
-  renderTreemap(chartEl, "Most affected components", affectedComponentCounter);
+  common.renderTreemap(
+    chartEl,
+    "Most affected components",
+    affectedComponentCounter
+  );
 }
 
 async function renderUI() {

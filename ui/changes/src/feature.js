@@ -3,6 +3,29 @@ import * as common from "./common.js";
 let resultSummary = document.getElementById("result-summary");
 let resultGraphs = document.getElementById("result-graphs");
 
+async function renderFeatureChangesChart(chartEl, bugSummaries) {
+  // Only show fixed bugs.
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let metabugs = (await common.featureMetabugs).reduce((acc, val) => {
+    acc[val.id] = val.summary;
+    return acc;
+  }, {});
+
+  let featureCounter = new common.Counter();
+  for (let bugSummary of bugSummaries) {
+    for (let bugID of bugSummary["meta_ids"]) {
+      featureCounter[metabugs[bugID]] += 1;
+    }
+  }
+
+  common.renderTreemap(chartEl, `Feature metabug changes`, featureCounter, 0);
+}
+
 async function renderSummary(bugSummaries) {
   let metaBugID = common.getOption("metaBugID");
 
@@ -18,6 +41,10 @@ async function renderSummary(bugSummaries) {
   resultSummary.textContent = summaryText;
 
   resultGraphs.textContent = "";
+
+  let featureChangesChartEl = document.createElement("div");
+  resultGraphs.append(featureChangesChartEl);
+  await renderFeatureChangesChart(featureChangesChartEl, bugSummaries);
 
   let riskChartEl = document.createElement("div");
   resultGraphs.append(riskChartEl);
