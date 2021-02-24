@@ -14,12 +14,13 @@ from bugbug import db
 logger = logging.getLogger(__name__)
 
 RevisionDict = NewType("RevisionDict", dict)
+TransactionDict = NewType("TransactionDict", dict)
 
 REVISIONS_DB = "data/revisions.json"
 db.register(
     REVISIONS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
-    1,
+    2,
 )
 
 PHABRICATOR_API = None
@@ -42,6 +43,17 @@ def set_api_key(url: str, api_key: str) -> None:
     PHABRICATOR_API = PhabricatorAPI(api_key, url)
 
 
+def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
+    assert PHABRICATOR_API is not None
+
+    out = PHABRICATOR_API.request(
+        "transaction.search",
+        objectIdentifier=rev_phid,
+    )
+
+    return out["data"]
+
+
 def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
     assert PHABRICATOR_API is not None
 
@@ -53,7 +65,13 @@ def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
         attachments={"projects": True},
     )
 
-    return out["data"]
+    data = out["data"]
+
+    for revision in data:
+        assert "transactions" not in revision
+        revision["transactions"] = get_transactions(revision["phid"])
+
+    return data
 
 
 def download_revisions(rev_ids: Collection[int]) -> None:
