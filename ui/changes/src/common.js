@@ -1065,7 +1065,7 @@ export function setOption(name, value) {
 }
 
 // TODO: port this to an option maybe
-async function buildMetabugsDropdown() {
+async function buildMetabugsDropdown(callback) {
   let metabugsDropdown = document.getElementById("featureMetabugs");
   if (!metabugsDropdown) {
     return;
@@ -1073,7 +1073,7 @@ async function buildMetabugsDropdown() {
 
   metabugsDropdown.addEventListener("change", () => {
     setOption("metaBugID", metabugsDropdown.value);
-    renderUI();
+    callback();
   });
   let bugs = await featureMetabugs;
   metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
@@ -1283,7 +1283,7 @@ async function setTableToggleHandler(callback) {
 }
 
 export async function setupOptions(callback) {
-  buildMetabugsDropdown();
+  buildMetabugsDropdown(callback);
   await buildComponentsSelect();
   await buildTeamsSelect();
   await populateVersions();
