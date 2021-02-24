@@ -421,17 +421,24 @@ class LandingsRiskReportGenerator(object):
             for i, commit in enumerate(commit_list):
                 revision_id = repository.get_revision_id(commit)
                 if revision_id in revision_map:
-                    testing = phabricator.get_testing_project(revision_map[revision_id])
+                    revision = revision_map[revision_id]
 
+                    testing = phabricator.get_testing_project(revision)
                     if testing is None:
                         testing = "missing"
+
+                    first_review_time = phabricator.get_review_time(revision)
                 else:
                     testing = None
+                    first_review_time = None
 
                 commits_data.append(
                     {
                         "id": commit["node"],
                         "testing": testing,
+                        "first_review_time": first_review_time.total_seconds() / 86400
+                        if first_review_time
+                        else None,
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
                         "author": commit["author_email"],
