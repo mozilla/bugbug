@@ -569,6 +569,10 @@ export async function renderRiskChart(chartEl, bugSummaries) {
 }
 
 export async function renderRegressionsChart(chartEl, bugSummaries) {
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
   let minDate = getPlainDate(
     bugSummaries.reduce((minSummary, summary) =>
       Temporal.PlainDate.compare(
