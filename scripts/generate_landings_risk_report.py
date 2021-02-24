@@ -168,6 +168,8 @@ class LandingsRiskReportGenerator(object):
         if meta_bugs is not None:
             bugs += meta_bugs + self.get_blocking_of(meta_bugs)
 
+        bugs = list(set(bugs))
+
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(bugs)
 
