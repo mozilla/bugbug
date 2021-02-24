@@ -21,7 +21,7 @@ REVISIONS_DB = "data/revisions.json"
 db.register(
     REVISIONS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
-    2,
+    3,
 )
 
 PHABRICATOR_API = None
