@@ -375,14 +375,6 @@ export function renderChart(
     chart: {
       height: 350,
       type: "line",
-      dropShadow: {
-        enabled: true,
-        color: "#000",
-        top: 18,
-        left: 7,
-        blur: 10,
-        opacity: 0.2,
-      },
       toolbar: {
         show: false,
       },
