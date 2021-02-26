@@ -1139,24 +1139,26 @@ export async function renderDependencyHeatmap(
 
   const map = await getComponentRegressionMap();
 
-  const series = target_components.map((target_component) => {
-    let values = {};
-    values.name = target_component;
-    values.data = [];
+  const series = target_components
+    .filter((target_component) => target_component in map)
+    .map((target_component) => {
+      let values = {};
+      values.name = target_component;
+      values.data = [];
 
-    for (const source_component of source_components) {
-      const obj = {};
-      obj.x = source_component;
-      obj.y =
-        source_component in map[target_component]
-          ? Math.trunc(map[target_component][source_component] * 100)
-          : 0;
+      for (const source_component of source_components) {
+        const obj = {};
+        obj.x = source_component;
+        obj.y =
+          source_component in map[target_component]
+            ? Math.trunc(map[target_component][source_component] * 100)
+            : 0;
 
-      values.data.push(obj);
-    }
+        values.data.push(obj);
+      }
 
-    return values;
-  });
+      return values;
+    });
 
   const options = {
     series,
