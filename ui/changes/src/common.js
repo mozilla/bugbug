@@ -1139,11 +1139,11 @@ export async function renderDependencyHeatmap(
   target_components = null
 ) {
   if (!source_components) {
-    source_components = getOption("components");
+    source_components = allComponents;
   }
 
   if (!target_components) {
-    target_components = getOption("components");
+    target_components = allComponents;
   }
 
   const map = await getComponentRegressionMap();
@@ -1357,6 +1357,8 @@ async function buildMetabugsDropdown(callback) {
   }
 }
 
+export let allComponents;
+
 async function buildComponentsSelect(teams = null) {
   let componentSelect = document.getElementById("components");
   if (!componentSelect) {
@@ -1367,18 +1369,23 @@ async function buildComponentsSelect(teams = null) {
 
   let data = await landingsData;
 
-  let allComponents = new Set();
+  let allComponentsSet = new Set();
+  let componentsSet = new Set();
   for (let landings of Object.values(data)) {
     for (let landing of landings) {
+      allComponentsSet.add(landing["component"]);
+
       if (teams && !teams.has(landing["team"])) {
         continue;
       }
 
-      allComponents.add(landing["component"]);
+      componentsSet.add(landing["component"]);
     }
   }
 
-  let components = [...allComponents];
+  allComponents = [...allComponentsSet];
+
+  let components = [...componentsSet];
   components.sort();
 
   for (let component of components) {
