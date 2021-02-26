@@ -1,7 +1,5 @@
 import ApexCharts from "apexcharts";
 
-// JSON from https://bugzilla.mozilla.org/show_bug.cgi?id=1669363
-import teamComponentMapping from "./teams.json";
 import { getComponentRegressionMap } from "./common";
 
 async function generateData() {
@@ -20,7 +18,7 @@ async function generateData() {
   });
 }
 
-async function rerender(connections, teamComponentMapping) {
+async function rerender(connections) {
   var options = {
     series: [...(await generateData())],
     chart: {
@@ -55,16 +53,6 @@ async function rerender(connections, teamComponentMapping) {
   var chart = new ApexCharts(document.querySelector("#chart"), options);
   chart.render();
 
-  let teamContainer = document.createElement("div");
-  for (let team in teamComponentMapping) {
-    let details = document.createElement("details");
-    let summary = document.createElement("summary");
-    summary.textContent = team;
-    details.appendChild(summary);
-    teamContainer.append(details);
-  }
-  document.querySelector("#team-view").appendChild(teamContainer);
-
   document.querySelector("#component-source").textContent = JSON.stringify(
     connections,
     null,
@@ -75,5 +63,5 @@ async function rerender(connections, teamComponentMapping) {
 (async function () {
   let connectionsMap = await getComponentRegressionMap();
   console.log(connectionsMap);
-  await rerender(connectionsMap, teamComponentMapping);
+  await rerender(connectionsMap);
 })();
