@@ -31,6 +31,19 @@ async function renderUI() {
   let reviewTimeChartEl = document.createElement("div");
   resultGraphs.append(reviewTimeChartEl);
   await common.renderReviewTimeChartElChart(reviewTimeChartEl, bugSummaries);
+
+  const external_components = common.allComponents.filter(
+    (component) => !common.getOption("components").includes(component)
+  );
+
+  const dependencyHeatmapChartEl = document.createElement("div");
+  resultGraphs.append(dependencyHeatmapChartEl);
+  await common.renderDependencyHeatmap(
+    dependencyHeatmapChartEl,
+    "Dependencies from external components (columns) to selected components (rows)",
+    external_components,
+    common.getOption("components")
+  );
 }
 
 (async function init() {

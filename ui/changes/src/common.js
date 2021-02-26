@@ -1135,6 +1135,7 @@ export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
 
 export async function renderDependencyHeatmap(
   chartEl,
+  title,
   source_components = null,
   target_components = null
 ) {
@@ -1191,6 +1192,10 @@ export async function renderDependencyHeatmap(
     colors: ["#008FFB"],
     xaxis: {
       type: "category",
+    },
+    title: {
+      text: title,
+      align: "left",
     },
   };
 
