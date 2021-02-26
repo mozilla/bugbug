@@ -1334,10 +1334,10 @@ function getOptionType(name) {
   return options[name].type;
 }
 
-export function setOption(name, value) {
+export async function setOption(name, value) {
   options[name].value = value;
   if (options[name].callback) {
-    options[name].callback();
+    await options[name].callback();
   }
 }
 
@@ -1348,9 +1348,9 @@ async function buildMetabugsDropdown(callback) {
     return;
   }
 
-  metabugsDropdown.addEventListener("change", () => {
-    setOption("metaBugID", metabugsDropdown.value);
-    callback();
+  metabugsDropdown.addEventListener("change", async () => {
+    await setOption("metaBugID", metabugsDropdown.value);
+    await callback();
   });
   let bugs = await featureMetabugs;
   metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
@@ -1428,8 +1428,8 @@ async function buildTeamsSelect() {
     teamsSelect.append(option);
   }
 
-  options["teams"].callback = function () {
-    buildComponentsSelect(new Set(getOption("teams")));
+  options["teams"].callback = async function () {
+    await buildComponentsSelect(new Set(getOption("teams")));
   };
 }
 
@@ -1534,7 +1534,7 @@ function setTableHeaderHandlers(callback) {
 
   const elems = table.querySelectorAll("th");
   for (let elem of elems) {
-    elem.onclick = function () {
+    elem.onclick = async function () {
       if (sortBy[0] == elem.textContent) {
         if (sortBy[1] == "DESC") {
           sortBy[1] = "ASC";
@@ -1545,7 +1545,7 @@ function setTableHeaderHandlers(callback) {
         sortBy[0] = elem.textContent;
         sortBy[1] = "DESC";
       }
-      callback(false);
+      await callback(false);
     };
   }
 }
@@ -1562,12 +1562,12 @@ async function setTableToggleHandler(callback) {
   }
   bugDetails.addEventListener("toggle", async () => {
     await localForage.setItem("detailsToggle", bugDetails.open);
-    callback(false);
+    await callback(false);
   });
 }
 
 export async function setupOptions(callback) {
-  buildMetabugsDropdown(callback);
+  await buildMetabugsDropdown(callback);
   await buildTeamsSelect();
   await buildComponentsSelect();
   await populateVersions();
@@ -1578,11 +1578,11 @@ export async function setupOptions(callback) {
 
   const url = new URL(location.href);
 
-  Object.keys(options).forEach(function (optionName) {
+  for (const optionName in options) {
     let optionType = getOptionType(optionName);
     let elem = document.getElementById(optionName);
     if (!elem) {
-      return;
+      continue;
     }
 
     let queryValues = url.searchParams.getAll(optionName);
@@ -1592,32 +1592,32 @@ export async function setupOptions(callback) {
         elem.value = queryValues[0];
       }
 
-      setOption(optionName, elem.value);
+      await setOption(optionName, elem.value);
 
-      elem.addEventListener("change", function () {
-        setOption(optionName, elem.value);
+      elem.addEventListener("change", async function () {
+        await setOption(optionName, elem.value);
 
         let url = new URL(location.href);
         url.searchParams.set(optionName, elem.value);
         history.replaceState({}, document.title, url.href);
 
-        callback();
+        await callback();
       });
     } else if (optionType === "checkbox") {
       if (queryValues.length != 0) {
         elem.checked = queryValues[0] != "0" && queryValues[0] != "false";
       }
 
-      setOption(optionName, elem.checked);
+      await setOption(optionName, elem.checked);
 
-      elem.onchange = function () {
-        setOption(optionName, elem.checked);
+      elem.onchange = async function () {
+        await setOption(optionName, elem.checked);
 
         let url = new URL(location.href);
         url.searchParams.set(optionName, elem.checked ? "1" : "0");
         history.replaceState({}, document.title, url.href);
 
-        callback();
+        await callback();
       };
     } else if (optionType === "select") {
       if (queryValues.length != 0) {
@@ -1633,9 +1633,9 @@ export async function setupOptions(callback) {
         }
       }
 
-      setOption(optionName, value);
+      await setOption(optionName, value);
 
-      elem.onchange = function () {
+      elem.onchange = async function () {
         let url = new URL(location.href);
         url.searchParams.delete(optionName);
 
@@ -1647,11 +1647,11 @@ export async function setupOptions(callback) {
           }
         }
 
-        setOption(optionName, value);
+        await setOption(optionName, value);
 
         history.replaceState({}, document.title, url.href);
 
-        callback();
+        await callback();
       };
     } else if (optionType === "radio") {
       if (queryValues.length != 0) {
@@ -1666,11 +1666,11 @@ export async function setupOptions(callback) {
         `input[name=${optionName}]`
       )) {
         if (radio.checked) {
-          setOption(optionName, radio.value);
+          await setOption(optionName, radio.value);
         }
       }
 
-      elem.onchange = function () {
+      elem.onchange = async function () {
         let url = new URL(location.href);
         url.searchParams.delete(optionName);
 
@@ -1678,19 +1678,19 @@ export async function setupOptions(callback) {
           `input[name=${optionName}]`
         )) {
           if (radio.checked) {
-            setOption(optionName, radio.value);
+            await setOption(optionName, radio.value);
             url.searchParams.set(optionName, radio.value);
           }
         }
 
         history.replaceState({}, document.title, url.href);
 
-        callback();
+        await callback();
       };
     } else {
       throw new Error("Unexpected option type.");
     }
-  });
+  }
 }
 
 export async function getFilteredBugSummaries() {
