@@ -1337,7 +1337,13 @@ function getOptionType(name) {
 export async function setOption(name, value) {
   options[name].value = value;
   if (options[name].callback) {
-    await options[name].callback();
+    const dependentElementId = await options[name].callback();
+    if (dependentElementId) {
+      const dependentElement = document.getElementById(dependentElementId);
+      const event = new Event("change");
+      dependentElement.dispatchEvent(event);
+      return true;
+    }
   }
 }
 
@@ -1430,6 +1436,7 @@ async function buildTeamsSelect() {
 
   options["teams"].callback = async function () {
     await buildComponentsSelect(new Set(getOption("teams")));
+    return "components";
   };
 }
 
@@ -1595,13 +1602,13 @@ export async function setupOptions(callback) {
       await setOption(optionName, elem.value);
 
       elem.addEventListener("change", async function () {
-        await setOption(optionName, elem.value);
-
         let url = new URL(location.href);
         url.searchParams.set(optionName, elem.value);
         history.replaceState({}, document.title, url.href);
 
-        await callback();
+        if (!(await setOption(optionName, elem.value))) {
+          await callback();
+        }
       });
     } else if (optionType === "checkbox") {
       if (queryValues.length != 0) {
@@ -1611,13 +1618,13 @@ export async function setupOptions(callback) {
       await setOption(optionName, elem.checked);
 
       elem.onchange = async function () {
-        await setOption(optionName, elem.checked);
-
         let url = new URL(location.href);
         url.searchParams.set(optionName, elem.checked ? "1" : "0");
         history.replaceState({}, document.title, url.href);
 
-        await callback();
+        if (!(await setOption(optionName, elem.checked))) {
+          await callback();
+        }
       };
     } else if (optionType === "select") {
       if (queryValues.length != 0) {
@@ -1647,11 +1654,11 @@ export async function setupOptions(callback) {
           }
         }
 
-        await setOption(optionName, value);
-
         history.replaceState({}, document.title, url.href);
 
-        await callback();
+        if (!(await setOption(optionName, value))) {
+          await callback();
+        }
       };
     } else if (optionType === "radio") {
       if (queryValues.length != 0) {
@@ -1674,18 +1681,22 @@ export async function setupOptions(callback) {
         let url = new URL(location.href);
         url.searchParams.delete(optionName);
 
+        let waitDependent = false;
+
         for (const radio of document.querySelectorAll(
           `input[name=${optionName}]`
         )) {
           if (radio.checked) {
-            await setOption(optionName, radio.value);
+            waitDependent |= await setOption(optionName, radio.value);
             url.searchParams.set(optionName, radio.value);
           }
         }
 
         history.replaceState({}, document.title, url.href);
 
-        await callback();
+        if (!waitDependent) {
+          await callback();
+        }
       };
     } else {
       throw new Error("Unexpected option type.");
