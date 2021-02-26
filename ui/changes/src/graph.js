@@ -1,7 +1,20 @@
 import * as common from "./common";
 
 async function rerender(connections) {
-  common.renderDependencyHeatmap(document.querySelector("#chart"));
+  const target_components = Object.keys(
+    connections[Object.keys(connections)[0]]
+  );
+  const source_components = target_components.reduce(
+    (acc, target_component) =>
+      acc.concat(Object.keys(connections[target_component])),
+    []
+  );
+
+  common.renderDependencyHeatmap(
+    document.querySelector("#chart"),
+    source_components,
+    target_components
+  );
 
   document.querySelector("#component-source").textContent = JSON.stringify(
     connections,

@@ -1120,23 +1120,45 @@ export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
   chart.render();
 }
 
-export async function renderDependencyHeatmap(chartEl) {
+export async function renderDependencyHeatmap(
+  chartEl,
+  source_components = null,
+  target_components = null
+) {
+  if (!source_components) {
+    source_components = getOption("components");
+  }
+
+  if (!target_components) {
+    target_components = getOption("components");
+  }
+
   const map = await getComponentRegressionMap();
-  const series = Object.keys(map[Object.keys(map)[0]]).map((element) => {
+
+  source_components = new Set(source_components);
+
+  const series = target_components.map((target_component) => {
     let values = {};
+    values.name = target_component;
     values.data = [];
-    values.name = element;
-    for (const value in map[element]) {
-      let obj = {};
-      obj.x = value;
-      obj.y = Math.trunc(map[element][value] * 100);
+
+    for (const source_component in map[target_component]) {
+      if (!source_components.has(source_component)) {
+        continue;
+      }
+
+      const obj = {};
+      obj.x = source_component;
+      obj.y = Math.trunc(map[target_component][source_component] * 100);
+
       values.data.push(obj);
     }
+
     return values;
   });
 
   const options = {
-    series: [...series],
+    series,
     chart: {
       height: 700,
       width: 1200,
