@@ -1279,12 +1279,12 @@ let options = {
     type: "text",
     callback: null,
   },
-  components: {
+  teams: {
     value: null,
     type: "select",
     callback: null,
   },
-  teams: {
+  components: {
     value: null,
     type: "select",
     callback: null,
