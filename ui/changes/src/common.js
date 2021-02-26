@@ -253,9 +253,9 @@ export async function getSummaryData(
     counter(counterObj, summary);
   }
 
-  let labels = new Set(
-    Object.values(dailyData).flatMap((data) => Object.keys(data))
-  );
+  const labels = [
+    ...new Set(Object.values(dailyData).flatMap((data) => Object.keys(data))),
+  ];
 
   function _merge(val, cur) {
     if (Array.isArray(val)) {
