@@ -648,12 +648,21 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
   for (const date in summaryOpenData) {
     categories.push(date);
     regressions.push(summaryOpenData[date].regressions);
-    fixed_week_regressions.push(summaryFixData[date].fixed_week_regressions);
-    fixed_month_regressions.push(summaryFixData[date].fixed_month_regressions);
-    fixed_year_regressions.push(summaryFixData[date].fixed_year_regressions);
-    fixed_ancient_regressions.push(
-      summaryFixData[date].fixed_ancient_regressions
-    );
+    if (date in summaryFixData) {
+      fixed_week_regressions.push(summaryFixData[date].fixed_week_regressions);
+      fixed_month_regressions.push(
+        summaryFixData[date].fixed_month_regressions
+      );
+      fixed_year_regressions.push(summaryFixData[date].fixed_year_regressions);
+      fixed_ancient_regressions.push(
+        summaryFixData[date].fixed_ancient_regressions
+      );
+    } else {
+      fixed_week_regressions.push(0);
+      fixed_month_regressions.push(0);
+      fixed_year_regressions.push(0);
+      fixed_ancient_regressions.push(0);
+    }
   }
 
   const options = {
