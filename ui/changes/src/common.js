@@ -308,6 +308,10 @@ export async function getSummaryData(
     counter(counterObj, summary);
   }
 
+  if (grouping == "daily") {
+    return dailyData;
+  }
+
   const labels = [
     ...new Set(Object.values(dailyData).flatMap((data) => Object.keys(data))),
   ];
@@ -320,62 +324,33 @@ export async function getSummaryData(
     }
   }
 
+  let groupDate;
   if (grouping == "weekly") {
-    let weeklyData = {};
-    for (let daily in dailyData) {
-      let weekStart = dateToWeek(daily);
-
-      if (!weeklyData[weekStart]) {
-        weeklyData[weekStart] = new Counter(initialValue);
-      }
-
-      for (let label of labels) {
-        weeklyData[weekStart][label] = _merge(
-          weeklyData[weekStart][label],
-          dailyData[daily][label]
-        );
-      }
-    }
-
-    return weeklyData;
+    groupDate = dateToWeek;
   } else if (grouping == "monthly") {
-    let monthlyData = {};
-    for (let daily in dailyData) {
-      let yearMonth = dateToMonth(daily);
-
-      if (!monthlyData[yearMonth]) {
-        monthlyData[yearMonth] = new Counter(initialValue);
-      }
-
-      for (let label of labels) {
-        monthlyData[yearMonth][label] = _merge(
-          monthlyData[yearMonth][label],
-          dailyData[daily][label]
-        );
-      }
-    }
-    return monthlyData;
+    groupDate = dateToMonth;
   } else if (grouping == "by_release") {
-    const dateToVersionFunc = await dateToVersion;
-    let byReleaseData = {};
-    for (const daily in dailyData) {
-      let version = dateToVersionFunc(daily);
-
-      if (!byReleaseData[version]) {
-        byReleaseData[version] = new Counter(initialValue);
-      }
-
-      for (let label of labels) {
-        byReleaseData[version][label] = _merge(
-          byReleaseData[version][label],
-          dailyData[daily][label]
-        );
-      }
-    }
-    return byReleaseData;
+    groupDate = await dateToVersion;
+  } else {
+    throw new Error(`Unexpected grouping: ${grouping}`);
   }
 
-  return dailyData;
+  let groupedData = {};
+  for (const daily in dailyData) {
+    const group = groupDate(daily);
+
+    if (!groupedData[group]) {
+      groupedData[group] = new Counter(initialValue);
+    }
+
+    for (const label of labels) {
+      groupedData[group][label] = _merge(
+        groupedData[group][label],
+        dailyData[daily][label]
+      );
+    }
+  }
+  return groupedData;
 }
 
 export async function getTestingPolicySummaryData(grouping = "daily", filter) {
