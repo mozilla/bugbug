@@ -46,8 +46,8 @@ const EXPIRE_CACHE = (() => {
   };
 })();
 
-export let getPlainDate = (() => {
-  let cache = new Map();
+export const getPlainDate = (() => {
+  const cache = new Map();
 
   return (date) => {
     let plainDate = cache.get(date);
@@ -57,6 +57,61 @@ export let getPlainDate = (() => {
     }
 
     return plainDate;
+  };
+})();
+
+export const dateToWeek = (() => {
+  const cache = new Map();
+
+  return (dateString) => {
+    let weekStart = cache.get(dateString);
+    if (!weekStart) {
+      const date = getPlainDate(dateString);
+      weekStart = date.subtract({ days: date.dayOfWeek }).toString();
+      cache.set(dateString, weekStart);
+    }
+
+    return weekStart;
+  };
+})();
+
+export const dateToMonth = (() => {
+  const cache = new Map();
+
+  return (dateString) => {
+    let yearMonth = cache.get(dateString);
+    if (!yearMonth) {
+      const date = getPlainDate(dateString);
+      yearMonth = Temporal.PlainYearMonth.from(date);
+      cache.set(dateString, yearMonth);
+    }
+
+    return yearMonth;
+  };
+})();
+
+export const dateToVersion = (async () => {
+  const releases = Object.entries(
+    await getFirefoxReleases()
+  ).map(([cur_version, cur_date]) => [cur_version, getPlainDate(cur_date)]);
+  const cache = new Map();
+
+  return (dateString) => {
+    let version = cache.get(dateString);
+    if (!version) {
+      const date = getPlainDate(dateString);
+      for (const [cur_version, cur_date] of releases) {
+        if (Temporal.PlainDate.compare(date, cur_date) < 1) {
+          break;
+        }
+
+        version = cur_version;
+      }
+
+      cache.set(dateString, version);
+    }
+
+    return version;
   };
 })();
 
@@ -268,8 +323,7 @@ export async function getSummaryData(
   if (grouping == "weekly") {
     let weeklyData = {};
     for (let daily in dailyData) {
-      let date = getPlainDate(daily);
-      let weekStart = date.subtract({ days: date.dayOfWeek }).toString();
+      let weekStart = dateToWeek(daily);
 
       if (!weeklyData[weekStart]) {
         weeklyData[weekStart] = new Counter(initialValue);
@@ -287,8 +341,7 @@ export async function getSummaryData(
   } else if (grouping == "monthly") {
     let monthlyData = {};
     for (let daily in dailyData) {
-      let date = getPlainDate(daily);
-      let yearMonth = Temporal.PlainYearMonth.from(date);
+      let yearMonth = dateToMonth(daily);
 
       if (!monthlyData[yearMonth]) {
         monthlyData[yearMonth] = new Counter(initialValue);
@@ -303,21 +356,10 @@ export async function getSummaryData(
     }
     return monthlyData;
   } else if (grouping == "by_release") {
+    const dateToVersionFunc = await dateToVersion;
     let byReleaseData = {};
-    let releases = await getFirefoxReleases();
     for (const daily in dailyData) {
-      let version = null;
-      for (const [cur_version, cur_date] of Object.entries(releases)) {
-        if (
-          Temporal.PlainDate.compare(
-            getPlainDate(daily),
-            getPlainDate(cur_date)
-          ) < 1
-        ) {
-          break;
-        }
-        version = cur_version;
-      }
+      let version = dateToVersionFunc(daily);
 
       if (!byReleaseData[version]) {
         byReleaseData[version] = new Counter(initialValue);
