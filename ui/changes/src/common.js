@@ -576,47 +576,120 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
     ).creation_date
   );
 
-  let summaryData = await getSummaryData(
+  let summaryOpenData = await getSummaryData(
     bugSummaries,
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
       if (bug.regression) {
         counterObj.regressions += 1;
-        if (bug.fixed) {
-          counterObj.fixed_regressions += 1;
-        }
       }
     },
     null,
     (summary) => summary.creation_date
   );
 
+  let summaryFixData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      if (!bug.regression || !bug.fixed) {
+        return;
+      }
+
+      const days = getPlainDate(bug.creation_date).until(
+        getPlainDate(bug.date),
+        {
+          largestUnit: "days",
+        }
+      ).days;
+
+      if (days <= 7) {
+        counterObj.fixed_week_regressions += 1;
+      } else if (days <= 31) {
+        counterObj.fixed_month_regressions += 1;
+      } else if (days <= 365) {
+        counterObj.fixed_year_regressions += 1;
+      } else {
+        counterObj.fixed_ancient_regressions += 1;
+      }
+    },
+    null,
+    (summary) => summary.date
+  );
+
   let categories = [];
   let regressions = [];
-  let fixed_regressions = [];
-  for (let date in summaryData) {
+  let fixed_week_regressions = [];
+  let fixed_month_regressions = [];
+  let fixed_year_regressions = [];
+  let fixed_ancient_regressions = [];
+  for (const date in summaryOpenData) {
     categories.push(date);
-    regressions.push(summaryData[date].regressions);
-    fixed_regressions.push(summaryData[date].fixed_regressions);
+    regressions.push(summaryOpenData[date].regressions);
+    fixed_week_regressions.push(summaryFixData[date].fixed_week_regressions);
+    fixed_month_regressions.push(summaryFixData[date].fixed_month_regressions);
+    fixed_year_regressions.push(summaryFixData[date].fixed_year_regressions);
+    fixed_ancient_regressions.push(
+      summaryFixData[date].fixed_ancient_regressions
+    );
   }
 
-  renderChart(
-    chartEl,
-    [
+  const options = {
+    series: [
       {
-        name: "Regressions",
+        name: "New regressions",
         data: regressions,
       },
       {
-        name: "Fixed regressions",
-        data: fixed_regressions,
+        name: "Fixed < 1 week old regressions",
+        data: fixed_week_regressions,
+      },
+      {
+        name: "Fixed < 1 month old regressions",
+        data: fixed_month_regressions,
+      },
+      {
+        name: "Fixed < 1 year old regressions",
+        data: fixed_year_regressions,
+      },
+      {
+        name: "Fixed > 1 year old regressions",
+        data: fixed_ancient_regressions,
       },
     ],
-    categories,
-    "Number of regressions",
-    "# of regressions"
-  );
+    chart: {
+      type: "bar",
+      height: 350,
+      stacked: true,
+      toolbar: {
+        show: false,
+      },
+    },
+    plotOptions: {
+      bar: {
+        borderRadius: 8,
+        horizontal: false,
+      },
+    },
+    xaxis: {
+      categories: categories,
+      title: {
+        text: "Date",
+      },
+    },
+    legend: {
+      position: "right",
+      offsetY: 40,
+    },
+    fill: {
+      opacity: 1,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
 }
 
 export async function renderTypesChart(chartEl, bugSummaries) {
