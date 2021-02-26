@@ -416,9 +416,6 @@ export function renderChart(
         opacity: 0.5,
       },
     },
-    markers: {
-      size: 1,
-    },
     xaxis: {
       categories: dates,
       title: {
