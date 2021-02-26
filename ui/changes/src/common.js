@@ -1334,7 +1334,7 @@ function getOptionType(name) {
   return options[name].type;
 }
 
-export async function setOption(name, value) {
+async function setOption(name, value) {
   options[name].value = value;
   if (options[name].callback) {
     const dependentElementId = await options[name].callback();
