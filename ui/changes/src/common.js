@@ -378,6 +378,9 @@ export function renderChart(
       toolbar: {
         show: false,
       },
+      animations: {
+        enabled: false,
+      },
     },
     dataLabels: {
       enabled: true,
@@ -450,6 +453,9 @@ export function renderTestingChart(chartEl, bugSummaries) {
     chart: {
       height: 150,
       type: "bar",
+      animations: {
+        enabled: false,
+      },
     },
     plotOptions: {
       bar: {
@@ -665,6 +671,9 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
       stacked: true,
       toolbar: {
         show: false,
+      },
+      animations: {
+        enabled: false,
       },
     },
     plotOptions: {
@@ -1084,6 +1093,9 @@ export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
     },
     chart: {
       type: "treemap",
+      animations: {
+        enabled: false,
+      },
     },
     title: {
       text: title,

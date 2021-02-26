@@ -95,6 +95,9 @@ import { TESTING_TAGS, getTestingPolicySummaryData } from "./common.js";
         zoom: {
           enabled: true,
         },
+        animations: {
+          enabled: false,
+        },
       },
       plotOptions: {
         bar: {

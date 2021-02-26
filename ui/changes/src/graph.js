@@ -27,6 +27,9 @@ async function rerender(connections, teamComponentMapping) {
       height: 700,
       width: 1200,
       type: "heatmap",
+      animations: {
+        enabled: false,
+      },
     },
     stroke: {
       width: 1,
