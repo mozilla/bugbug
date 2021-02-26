@@ -1161,20 +1161,13 @@ export async function renderDependencyHeatmap(
     series,
     chart: {
       height: 700,
-      width: 1200,
       type: "heatmap",
       animations: {
         enabled: false,
       },
     },
-    plotOptions: {
-      heatmap: {
-        radius: 30,
-        enableShades: true,
-      },
-    },
     dataLabels: {
-      enabled: true,
+      enabled: false,
     },
     colors: ["#008FFB"],
     xaxis: {
