@@ -1540,8 +1540,8 @@ async function setTableToggleHandler(callback) {
 
 export async function setupOptions(callback) {
   buildMetabugsDropdown(callback);
-  await buildComponentsSelect();
   await buildTeamsSelect();
+  await buildComponentsSelect();
   await populateVersions();
   await buildTypesSelect();
   await buildSeveritiesSelect();
