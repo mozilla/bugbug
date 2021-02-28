@@ -365,7 +365,7 @@ class source_code_metrics_diff(object):
                 "nexits_total"
             ],
             "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
-            "Diff in blank": commit["blank_diff"]["blank_total"],
+            "Diff in blank": commit["metrics_diff"]["blank_total"],
         }
 
 
