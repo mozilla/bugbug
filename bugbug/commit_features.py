@@ -156,6 +156,7 @@ class source_code_file_metrics(object):
                 "nexits_avg"
             ],
             "Average file cognitive": commit["metrics"]["cognitive_avg"],
+            "Average blank": commit["metrics"]["blank_avg"],
             "Maximum file cyclomatic": commit["metrics"]["cyclomatic_max"],
             "Maximum file number of unique operands": commit["metrics"][
                 "halstead_n2_max"
@@ -174,6 +175,7 @@ class source_code_file_metrics(object):
                 "nexits_max"
             ],
             "Maximum file cognitive": commit["metrics"]["cognitive_max"],
+            "Maximum blank": commit["metrics"]["blank_max"],
             "Minimum file cyclomatic": commit["metrics"]["cyclomatic_min"],
             "Minimum file number of unique operands": commit["metrics"][
                 "halstead_n2_min"
@@ -192,6 +194,7 @@ class source_code_file_metrics(object):
                 "nexits_min"
             ],
             "Minimum file cognitive": commit["metrics"]["cognitive_min"],
+            "Minimum blank": commit["metrics"]["blank_min"],
             "Total file cyclomatic": commit["metrics"]["cyclomatic_total"],
             "Total file number of unique operands": commit["metrics"][
                 "halstead_n2_total"
@@ -210,6 +213,7 @@ class source_code_file_metrics(object):
                 "nexits_total"
             ],
             "Total file cognitive": commit["metrics"]["cognitive_total"],
+            "Total blank": commit["metrics"]["blank_total"],
         }
 
 
@@ -269,6 +273,7 @@ class source_code_function_metrics(object):
                 "nexits_avg"
             ],
             "Average function cognitive": merged_metrics["cognitive_avg"],
+            "Average function blank": merged_metrics["blank_avg"],
             "Maximum function cyclomatic": merged_metrics["cyclomatic_max"],
             "Maximum function number of unique operands": merged_metrics[
                 "halstead_n2_max"
@@ -289,6 +294,7 @@ class source_code_function_metrics(object):
                 "nexits_max"
             ],
             "Maximum function cognitive": merged_metrics["cognitive_max"],
+            "Maximum function blank": merged_metrics["blank_max"],
             "Minimum function cyclomatic": merged_metrics["cyclomatic_min"],
             "Minimum function number of unique operands": merged_metrics[
                 "halstead_n2_min"
@@ -309,6 +315,7 @@ class source_code_function_metrics(object):
                 "nexits_min"
             ],
             "Minimum function cognitive": merged_metrics["cognitive_min"],
+            "Minimum function blank": merged_metrics["blank_min"],
             "Total function cyclomatic": merged_metrics["cyclomatic_total"],
             "Total function number of unique operands": merged_metrics[
                 "halstead_n2_total"
@@ -329,6 +336,7 @@ class source_code_function_metrics(object):
                 "nexits_total"
             ],
             "Total function cognitive": merged_metrics["cognitive_total"],
+            "Total function blank": merged_metrics["blank_total"],
         }
 
 
@@ -357,6 +365,7 @@ class source_code_metrics_diff(object):
                 "nexits_total"
             ],
             "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
+            "Diff in blank": commit["blank_diff"]["blank_total"],
         }
 
 
