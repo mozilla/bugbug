@@ -140,7 +140,9 @@ METRIC_NAMES = [
     "nargs",
     "nexits",
     "cognitive",
-    "blank",
+    "mi_original",
+    "mi_sei",
+    "mi_visual_studio",
 ]
 
 
@@ -464,7 +466,13 @@ def get_summary_metrics(obj, metrics_space):
         obj["nargs_max"] = max(obj["nargs_max"], metrics["nargs"]["sum"])
         obj["nexits_max"] = max(obj["nexits_max"], metrics["nexits"]["sum"])
         obj["cognitive_max"] = max(obj["cognitive_max"], metrics["cognitive"]["sum"])
-        obj["blank_max"] = max(obj["blank_max"], metrics["blank"]["sum"])
+        obj["mi_original_max"] = max(
+            obj["mi_original_max"], metrics["mi"]["mi_original"]
+        )
+        obj["mi_sei_max"] = max(obj["mi_sei_max"], metrics["mi"]["mi_sei"])
+        obj["mi_visual_studio_max"] = max(
+            obj["mi_visual_studio_max"], metrics["mi"]["mi_visual_studio"]
+        )
 
         obj["cyclomatic_min"] = min(obj["cyclomatic_min"], metrics["cyclomatic"]["sum"])
         obj["halstead_n2_min"] = min(obj["halstead_n2_min"], metrics["halstead"]["n2"])
@@ -478,7 +486,13 @@ def get_summary_metrics(obj, metrics_space):
         obj["nargs_min"] = min(obj["nargs_min"], metrics["nargs"]["sum"])
         obj["nexits_min"] = min(obj["nexits_min"], metrics["nexits"]["sum"])
         obj["cognitive_min"] = min(obj["cognitive_min"], metrics["cognitive"]["sum"])
-        obj["blank_min"] = min(obj["blank_min"], metrics["blank"]["sum"])
+        obj["mi_original_min"] = min(
+            obj["mi_original_min"], metrics["mi"]["mi_original"]
+        )
+        obj["mi_sei_min"] = min(obj["mi_sei_min"], metrics["mi"]["mi_sei"])
+        obj["mi_visual_studio_min"] = min(
+            obj["mi_visual_studio_min"], metrics["mi"]["mi_visual_studio"]
+        )
 
     for space in metrics_space["spaces"]:
         get_summary_metrics(obj, space)
@@ -505,7 +519,9 @@ def get_space_metrics(
     obj["nargs_total"] += metrics["nargs"]["sum"]
     obj["nexits_total"] += metrics["nexits"]["sum"]
     obj["cognitive_total"] += metrics["cognitive"]["sum"]
-    obj["blank_total"] += metrics["blank"]["sum"]
+    obj["mi_original_total"] += metrics["mi"]["mi_original"]
+    obj["mi_sei_total"] += metrics["mi"]["mi_sei"]
+    obj["mi_visual_studio_total"] += metrics["mi"]["mi_visual_studio"]
 
     if calc_summaries:
         for space in metrics_space["spaces"]:
