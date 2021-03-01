@@ -748,12 +748,21 @@ export async function renderTypesChart(chartEl, bugSummaries) {
       for (const type of bug.types) {
         counterObj[type] += 1;
       }
+
+      if (bug.severity == "S1") {
+        counterObj.s1 += 1;
+      } else if (bug.severity == "S2") {
+        counterObj.s2 += 1;
+      }
     },
     null,
     (summary) => summary.creation_date
   );
 
-  let all_series = [];
+  let all_series = [
+    { name: "s1", data: [] },
+    { name: "s2", data: [] },
+  ];
   for (let type of allBugTypes) {
     if (type == "unknown") {
       continue;
@@ -777,7 +786,7 @@ export async function renderTypesChart(chartEl, bugSummaries) {
     chartEl,
     all_series,
     categories,
-    "Number of bugs by type",
+    "Number of bugs by severity and type",
     "# of bugs"
   );
 }
