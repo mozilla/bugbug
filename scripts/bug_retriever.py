@@ -112,7 +112,7 @@ class Retriever(object):
         new_bugs = bugzilla.download_bugs(all_ids)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
-        for i in range(3):
+        for i in range(7):
             regression_related_ids = list(
                 set(
                     sum(
