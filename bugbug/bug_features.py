@@ -592,6 +592,10 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         self.merge_data = merge_data
 
     def fit(self, x, y=None):
+        for feature in self.feature_extractors:
+            if hasattr(feature, "fit"):
+                feature.fit(x())
+
         return self
 
     def transform(self, bugs):
