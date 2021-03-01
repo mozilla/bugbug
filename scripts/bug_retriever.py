@@ -109,7 +109,7 @@ class Retriever(object):
             lambda bug: bug["id"] in changed_ids or bug["id"] not in all_ids_set
         )
 
-        bugzilla.download_bugs(all_ids)
+        new_bugs = bugzilla.download_bugs(all_ids)
 
         # Get regression_related_ids again (the set could have changed after downloading new bugs).
         for i in range(3):
@@ -118,7 +118,7 @@ class Retriever(object):
                     sum(
                         (
                             bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                            for bug in bugzilla.get_bugs()
+                            for bug in new_bugs
                         ),
                         [],
                     )
@@ -134,7 +134,7 @@ class Retriever(object):
             if set(regression_related_ids).issubset(all_ids):
                 break
 
-            bugzilla.download_bugs(regression_related_ids)
+            new_bugs = bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to twice.
         inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
