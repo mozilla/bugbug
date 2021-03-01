@@ -20,6 +20,7 @@ MODELS = {
     "defectenhancementtask": "bugbug.models.defect_enhancement_task.DefectEnhancementTaskModel",
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "duplicate": "bugbug.models.duplicate.DuplicateModel",
+    "fixtime": "bugbug.models.fixtime.FixTimeModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",
