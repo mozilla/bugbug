@@ -28,6 +28,7 @@ db.register(
 PRODUCTS = (
     "Add-on SDK",
     "Android Background Services",
+    "Cloud Services",
     "Core",
     "Core Graveyard",
     "DevTools",
