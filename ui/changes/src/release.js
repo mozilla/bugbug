@@ -37,7 +37,9 @@ async function renderAffectedComponentChangesChart(chartEl, bugSummaries) {
     componentCounter[bugSummary["component"]] += 1;
   }
 
-  let componentConnectionMap = await common.getComponentRegressionMap();
+  let componentConnectionMap = await common.getComponentDependencyMap(
+    "regressions"
+  );
 
   let affectedComponentCounter = new common.Counter();
   for (let [sourceComponent, count] of Object.entries(componentCounter)) {

@@ -2,9 +2,11 @@ import { Temporal } from "proposal-temporal/lib/index.mjs";
 import * as common from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
+const dependencySection = document.getElementById("dependency-section");
 
 async function renderUI() {
   resultGraphs.textContent = "";
+  dependencySection.textContent = "";
 
   const bugSummaries = await common.getFilteredBugSummaries();
 
@@ -37,7 +39,7 @@ async function renderUI() {
   );
 
   const dependencyHeatmapChartEl = document.createElement("div");
-  resultGraphs.append(dependencyHeatmapChartEl);
+  dependencySection.append(dependencyHeatmapChartEl);
   await common.renderDependencyHeatmap(
     dependencyHeatmapChartEl,
     "Dependencies from external components (columns) to selected components (rows)",
