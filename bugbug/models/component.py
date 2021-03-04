@@ -29,6 +29,10 @@ class ComponentModel(BugModel):
         "Firefox Build System",
     }
 
+    PRODUCT_COMPONENTS = {
+        "Cloud Services": {"Server: Firefox Accounts"},
+    }
+
     CONFLATED_COMPONENTS = [
         "Core::Audio/Video",
         "Core::DOM",
@@ -194,7 +198,12 @@ class ComponentModel(BugModel):
         return classes, set(classes.values())
 
     def is_meaningful(self, product, component):
-        return product in self.PRODUCTS and component not in ["General", "Untriaged"]
+        return (
+            product in self.PRODUCTS and component not in ["General", "Untriaged"]
+        ) or (
+            product in self.PRODUCT_COMPONENTS
+            and component in self.PRODUCT_COMPONENTS[product]
+        )
 
     def get_meaningful_product_components(self, full_comp_tuples, threshold_ratio=100):
         """From the given full_comp_tuples iterable of (product, component)

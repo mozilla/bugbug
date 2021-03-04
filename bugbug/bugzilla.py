@@ -28,6 +28,7 @@ db.register(
 PRODUCTS = (
     "Add-on SDK",
     "Android Background Services",
+    "Cloud Services",
     "Core",
     "Core Graveyard",
     "DevTools",
@@ -167,7 +168,7 @@ def get_ids_between(date_from, date_to, security=False):
     return get_ids(params)
 
 
-def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
+def download_bugs(bug_ids: Iterable[int], security: bool = False) -> List[BugDict]:
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs(include_invalid=True):
@@ -187,13 +188,15 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
         stop=tenacity.stop_after_attempt(7),
         wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
     )
-    def get_chunk(chunk):
+    def get_chunk(chunk: List[int]) -> List[BugDict]:
         new_bugs = get(chunk)
 
         if not security:
             new_bugs = [bug for bug in new_bugs.values() if len(bug["groups"]) == 0]
 
         return new_bugs
+
+    all_new_bugs = []
 
     with tqdm(total=len(new_bug_ids)) as progress_bar:
         for chunk in chunks:
@@ -202,6 +205,10 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> None:
             progress_bar.update(len(chunk))
 
             db.append(BUGS_DB, new_bugs)
+
+            all_new_bugs += new_bugs
+
+    return all_new_bugs
 
 
 def _find_linked(

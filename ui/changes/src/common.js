@@ -748,12 +748,21 @@ export async function renderTypesChart(chartEl, bugSummaries) {
       for (const type of bug.types) {
         counterObj[type] += 1;
       }
+
+      if (bug.severity == "S1") {
+        counterObj.s1 += 1;
+      } else if (bug.severity == "S2") {
+        counterObj.s2 += 1;
+      }
     },
     null,
     (summary) => summary.creation_date
   );
 
-  let all_series = [];
+  let all_series = [
+    { name: "s1", data: [] },
+    { name: "s2", data: [] },
+  ];
   for (let type of allBugTypes) {
     if (type == "unknown") {
       continue;
@@ -777,7 +786,7 @@ export async function renderTypesChart(chartEl, bugSummaries) {
     chartEl,
     all_series,
     categories,
-    "Number of bugs by type",
+    "Number of bugs by severity and type",
     "# of bugs"
   );
 }
@@ -1147,7 +1156,7 @@ export async function renderDependencyHeatmap(
     target_components = allComponents;
   }
 
-  const map = await getComponentRegressionMap();
+  const map = await getComponentDependencyMap(getOption("dependencyType"));
 
   target_components = target_components.filter(
     (target_component) => target_component in map
@@ -1218,25 +1227,37 @@ export function summarizeCoverage(bugSummary) {
   return [lines_added, lines_covered, lines_unknown];
 }
 
-export async function getComponentRegressionMap(threshold = 0.05) {
+export async function getComponentDependencyMap(type, threshold = 0.05) {
   let connections = await componentConnections;
 
+  let key;
+  if (type == "regressions") {
+    // most_common_regression_components represents: changes to files in component SOURCE, that are touched when fixing bugs in component SOURCE, cause regressions in component TARGET X% of the times.
+    key = "most_common_regression_components";
+  } else if (type == "test-failures") {
+    // most_common_test_failure_components represents: changes to fix bugs in component SOURCE cause test failures in component TARGET X% of the time.
+    key = "most_common_test_failure_components";
+  } else {
+    throw new Error(`Unexpected dependency map type: ${type}`);
+  }
+
   // Return an object with each component and the components that are most likely
-  // to cause regressions to that component.
+  // to cause regressions or test failures to that component.
   let connectionsMap = {};
-  for (let c of connections) {
-    for (let regression_component in c.most_common_regression_components) {
+  for (const c of connections) {
+    for (const target_component in c[key]) {
       // Ignore < N%
-      if (
-        c.most_common_regression_components[regression_component] < threshold
-      ) {
+      if (c[key][target_component] < threshold) {
         continue;
       }
-      if (!connectionsMap[regression_component]) {
-        connectionsMap[regression_component] = {};
+
+      if (!connectionsMap[target_component]) {
+        connectionsMap[target_component] = {};
       }
-      connectionsMap[regression_component][c.component] =
-        c.most_common_regression_components[regression_component];
+
+      const source_component = c.component;
+      connectionsMap[target_component][source_component] =
+        c[key][target_component];
     }
   }
 
@@ -1322,6 +1343,11 @@ let options = {
   changeGrouping: {
     value: null,
     type: "select",
+    callback: null,
+  },
+  dependencyType: {
+    value: null,
+    type: "radio",
     callback: null,
   },
 };

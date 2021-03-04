@@ -55,6 +55,10 @@ def parse_risk_band(risk_band: str) -> Tuple[str, float, float]:
     return (name, float(start), float(end))
 
 
+def is_fuzzblocker(bug: bugzilla.BugDict) -> bool:
+    return "fuzzblocker" in bug["whiteboard"].lower()
+
+
 class LandingsRiskReportGenerator(object):
     def __init__(self, repo_dir: str) -> None:
         self.risk_bands = sorted(
@@ -139,11 +143,16 @@ class LandingsRiskReportGenerator(object):
             [],
         )
 
-    def get_blocking_of(self, bug_ids: List[int]) -> List[int]:
+    def get_blocking_of(self, bug_ids: List[int], meta_only: bool = False) -> List[int]:
         bugzilla.download_bugs(bug_ids)
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
         return sum(
-            (bugzilla.find_blocking(bug_map, bug_map[bug_id]) for bug_id in bug_ids), []
+            (
+                bugzilla.find_blocking(bug_map, bug_map[bug_id])
+                for bug_id in bug_ids
+                if not meta_only or "meta" in bug_map[bug_id]["keywords"]
+            ),
+            [],
         )
 
     def get_meta_bugs(self, days: int) -> List[int]:
@@ -201,6 +210,17 @@ class LandingsRiskReportGenerator(object):
 
             if len(bug["regressions"]) > 0:
                 regressor_bug_ids.add(bug["id"])
+
+        # All bugs blocking the "fuzz" bug (316898) and its dependent meta bugs are fuzzing bugs.
+        fuzzing_bugs_list = self.get_blocking_of([316898], meta_only=True) + [
+            bug["id"]
+            for bug in bug_map.values()
+            if "bugmon" in bug["whiteboard"].lower() or "bugmon" in bug["keywords"]
+        ]
+        fuzzblocker_bugs = set(
+            bug["id"] for bug in bug_map.values() if is_fuzzblocker(bug)
+        )
+        fuzzing_bugs = set(fuzzing_bugs_list) | fuzzblocker_bugs
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = set(
@@ -556,6 +576,11 @@ class LandingsRiskReportGenerator(object):
                 )
                 if len(commit_data) > 0
                 else None,
+                "fuzz": "b"
+                if bug["id"] in fuzzblocker_bugs
+                else "y"
+                if bug["id"] in fuzzing_bugs
+                else "n",
             }
 
             get_prev_bugs_stats(bug_summary, commit_list)
