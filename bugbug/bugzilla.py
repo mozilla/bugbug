@@ -49,6 +49,7 @@ PRODUCTS = (
     "JSS",
     "NSPR",
     "NSS",
+    "Testing",
     "Toolkit",
     "Toolkit Graveyard",
     "WebExtensions",
