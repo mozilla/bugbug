@@ -34,6 +34,10 @@ async function renderUI() {
   resultGraphs.append(reviewTimeChartEl);
   await common.renderReviewTimeChartElChart(reviewTimeChartEl, bugSummaries);
 
+  let testStatsChartEl = document.createElement("div");
+  resultGraphs.append(testStatsChartEl);
+  await common.renderTestStatsChart(testStatsChartEl);
+
   const external_components = common.allComponents.filter(
     (component) => !common.getOption("components").includes(component)
   );

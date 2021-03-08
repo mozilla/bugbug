@@ -8,6 +8,8 @@ let LANDINGS_URL =
   "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/landings_by_date.json";
 let COMPONENT_CONNECTIONS_URL =
   "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/component_connections.json";
+let COMPONENT_TEST_STATS_URL =
+  "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/component_test_stats.json";
 
 function getCSSVariableValue(name) {
   return getComputedStyle(document.documentElement)
@@ -180,6 +182,25 @@ let taskclusterComponentConnectionsArtifact = (async function () {
 
 export let componentConnections = (async function () {
   let json = await taskclusterComponentConnectionsArtifact;
+  return json;
+})();
+
+let taskclusterComponentTestStatsArtifact = (async function () {
+  let json = await EXPIRE_CACHE.get("taskclusterComponentTestStatsArtifact");
+  if (!json) {
+    let response = await fetch(COMPONENT_TEST_STATS_URL);
+    json = await response.json();
+    // 30 minutes
+    EXPIRE_CACHE.set("taskclusterComponentTestStatsArtifact", json, 60 * 30);
+  } else {
+    console.log("taskclusterComponentTestStatsArtifact cache hit", json);
+  }
+
+  return json;
+})();
+
+let componentTestStats = (async function () {
+  let json = await taskclusterComponentTestStatsArtifact;
   return json;
 })();
 
@@ -1108,6 +1129,61 @@ export async function renderReviewTimeChartElChart(chartEl, bugSummaries) {
     categories,
     "Time to first review",
     "Days"
+  );
+}
+
+export async function renderTestStatsChart(chartEl) {
+  const componentsToDaysToStats = await componentTestStats;
+
+  const components = getOption("components");
+
+  const allTestStatsDays = [].concat.apply(
+    [],
+    Object.entries(componentsToDaysToStats)
+      .filter(([component, daysToStats]) => components.includes(component))
+      .map(([_, daysToStats]) => Object.entries(daysToStats))
+  );
+
+  const minDate = getPlainDate(
+    allTestStatsDays.reduce((minTestStatsDay, testStatsDay) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(testStatsDay[0]),
+        getPlainDate(minTestStatsDay[0])
+      ) < 0
+        ? testStatsDay
+        : minTestStatsDay
+    )[0]
+  );
+
+  const summaryData = await getSummaryData(
+    allTestStatsDays,
+    getOption("grouping"),
+    minDate,
+    (counterObj, testStatsDay) => {
+      counterObj.bugs += testStatsDay[1].bugs;
+    },
+    null,
+    (testStatsDay) => testStatsDay[0]
+  );
+
+  const categories = [];
+  const bugs = [];
+  for (const date in summaryData) {
+    categories.push(date);
+    bugs.push(summaryData[date].bugs);
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "Number of test failure bugs",
+        data: bugs,
+      },
+    ],
+    categories,
+    "Evolution of the number of test failure bugs",
+    "# of bugs"
   );
 }
 
