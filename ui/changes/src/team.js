@@ -32,7 +32,7 @@ async function renderUI() {
 
   let reviewTimeChartEl = document.createElement("div");
   resultGraphs.append(reviewTimeChartEl);
-  await common.renderReviewTimeChartElChart(reviewTimeChartEl, bugSummaries);
+  await common.renderReviewTimeChart(reviewTimeChartEl, bugSummaries);
 
   let testStatsChartEl = document.createElement("div");
   resultGraphs.append(testStatsChartEl);

@@ -1069,7 +1069,7 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
   );
 }
 
-export async function renderReviewTimeChartElChart(chartEl, bugSummaries) {
+export async function renderReviewTimeChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
 
   if (bugSummaries.length == 0) {
