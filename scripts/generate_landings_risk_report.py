@@ -173,9 +173,19 @@ class LandingsRiskReportGenerator(object):
 
         return [int(b) for b in r.text.splitlines()[1:]]
 
-    def go(self, bugs: List[int], meta_bugs: Optional[List[int]] = None) -> None:
+    def go(
+        self, bugs: List[int], days: int, meta_bugs: Optional[List[int]] = None
+    ) -> None:
         if meta_bugs is not None:
             bugs += meta_bugs + self.get_blocking_of(meta_bugs)
+
+        test_failure_bugs_by_day = collections.defaultdict(list)
+        for day in tqdm(range(days)):
+            date = datetime.utcnow() - timedelta(days=day)
+            for bug_id in test_scheduling.get_failure_bugs(date, date):
+                test_failure_bugs_by_day[date].append(bug_id)
+
+        bugs += sum(test_failure_bugs_by_day.values(), [])
 
         bugs = list(set(bugs))
 
@@ -667,6 +677,23 @@ class LandingsRiskReportGenerator(object):
 
         repository.close_component_mapping()
 
+        component_test_stats: Dict[
+            str, Dict[str, Dict[str, int]]
+        ] = collections.defaultdict(
+            lambda: collections.defaultdict(lambda: collections.defaultdict(int))
+        )
+        for date, bug_ids in test_failure_bugs_by_day.items():
+            for bug_id in bug_ids:
+                if bug_id not in bug_map:
+                    continue
+
+                component_test_stats[get_full_component(bug_map[bug_id])][
+                    date.strftime("%Y-%m-%d")
+                ]["bugs"] += 1
+
+        with open("component_test_stats.json", "w") as f:
+            json.dump(component_test_stats, f)
+
 
 def main() -> None:
     description = "Generate risk report of recent landings"
@@ -700,6 +727,7 @@ def main() -> None:
         "--days",
         type=int,
         help="How many days of commits to analyze.",
+        required=True,
     )
     args = parser.parse_args()
 
@@ -720,7 +748,7 @@ def main() -> None:
     else:
         assert False
 
-    landings_risk_report_generator.go(bugs, meta_bugs)
+    landings_risk_report_generator.go(bugs, args.days, meta_bugs)
 
 
 if __name__ == "__main__":

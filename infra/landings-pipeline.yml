@@ -29,6 +29,9 @@ tasks:
           public/component_connections.json:
             path: /component_connections.json
             type: file
+          public/component_test_stats.json:
+            path: /component_test_stats.json
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
       scopes:
