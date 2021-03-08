@@ -8,7 +8,7 @@ from typing import List
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
-from bugbug import bug_snapshot, bugzilla, db, labels, repository
+from bugbug import bug_snapshot, bugzilla, db, labels, repository, test_scheduling
 from bugbug.utils import get_secret, zstd_compress
 
 logger = getLogger(__name__)
@@ -98,8 +98,20 @@ class Retriever(object):
             f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
         )
 
+        # Get IDs of bugs linked to intermittent failures.
+        test_failure_bug_ids = test_scheduling.get_failure_bugs(
+            two_years_and_six_months_ago, datetime.utcnow()
+        )
+        if limit:
+            test_failure_bug_ids = test_failure_bug_ids[-limit:]
+        logger.info(f"{len(test_failure_bug_ids)} bugs about test failures.")
+
         all_ids = (
-            timespan_ids + labelled_bug_ids + commit_bug_ids + regression_related_ids
+            timespan_ids
+            + labelled_bug_ids
+            + commit_bug_ids
+            + regression_related_ids
+            + test_failure_bug_ids
         )
         all_ids_set = set(all_ids)
 

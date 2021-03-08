@@ -29,6 +29,7 @@ from typing import (
     cast,
 )
 
+import requests
 from tqdm import tqdm
 
 from bugbug import db, repository
@@ -812,3 +813,14 @@ def generate_data(
             obj["touched_together_directories"] = touched_together_directories
 
         yield obj
+
+
+def get_failure_bugs(since, until):
+    r = requests.get(
+        "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
+            since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
+        ),
+        headers={"Accept": "application/json", "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+    return [item["bug_id"] for item in r.json()]
