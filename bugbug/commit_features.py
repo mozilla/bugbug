@@ -156,6 +156,9 @@ class source_code_file_metrics(object):
                 "nexits_avg"
             ],
             "Average file cognitive": commit["metrics"]["cognitive_avg"],
+            "Average file mi_original": commit["metrics"]["mi_original_avg"],
+            "Average file mi_sei": commit["metrics"]["mi_sei_avg"],
+            "Average file mi_visual_studio": commit["metrics"]["mi_visual_studio_avg"],
             "Maximum file cyclomatic": commit["metrics"]["cyclomatic_max"],
             "Maximum file number of unique operands": commit["metrics"][
                 "halstead_n2_max"
@@ -174,6 +177,9 @@ class source_code_file_metrics(object):
                 "nexits_max"
             ],
             "Maximum file cognitive": commit["metrics"]["cognitive_max"],
+            "Maximum file mi_original": commit["metrics"]["mi_original_max"],
+            "Maximum file mi_sei": commit["metrics"]["mi_sei_max"],
+            "Maximum file mi_visual_studio": commit["metrics"]["mi_visual_studio_max"],
             "Minimum file cyclomatic": commit["metrics"]["cyclomatic_min"],
             "Minimum file number of unique operands": commit["metrics"][
                 "halstead_n2_min"
@@ -192,6 +198,9 @@ class source_code_file_metrics(object):
                 "nexits_min"
             ],
             "Minimum file cognitive": commit["metrics"]["cognitive_min"],
+            "Minimum file mi_original": commit["metrics"]["mi_original_min"],
+            "Minimum file mi_sei": commit["metrics"]["mi_sei_min"],
+            "Minimum file mi_visual_studio": commit["metrics"]["mi_visual_studio_min"],
             "Total file cyclomatic": commit["metrics"]["cyclomatic_total"],
             "Total file number of unique operands": commit["metrics"][
                 "halstead_n2_total"
@@ -210,6 +219,9 @@ class source_code_file_metrics(object):
                 "nexits_total"
             ],
             "Total file cognitive": commit["metrics"]["cognitive_total"],
+            "Total file mi_original": commit["metrics"]["mi_original_total"],
+            "Total file mi_sei": commit["metrics"]["mi_sei_total"],
+            "Total file mi_visual_studio": commit["metrics"]["mi_visual_studio_total"],
         }
 
 
@@ -269,6 +281,9 @@ class source_code_function_metrics(object):
                 "nexits_avg"
             ],
             "Average function cognitive": merged_metrics["cognitive_avg"],
+            "Average function mi_original": merged_metrics["mi_original_avg"],
+            "Average function mi_sei": merged_metrics["mi_sei_avg"],
+            "Average function mi_visual_studio": merged_metrics["mi_visual_studio_avg"],
             "Maximum function cyclomatic": merged_metrics["cyclomatic_max"],
             "Maximum function number of unique operands": merged_metrics[
                 "halstead_n2_max"
@@ -289,6 +304,9 @@ class source_code_function_metrics(object):
                 "nexits_max"
             ],
             "Maximum function cognitive": merged_metrics["cognitive_max"],
+            "Maximum function mi_original": merged_metrics["mi_original_max"],
+            "Maximum function mi_sei": merged_metrics["mi_sei_max"],
+            "Maximum function mi_visual_studio": merged_metrics["mi_visual_studio_max"],
             "Minimum function cyclomatic": merged_metrics["cyclomatic_min"],
             "Minimum function number of unique operands": merged_metrics[
                 "halstead_n2_min"
@@ -309,6 +327,9 @@ class source_code_function_metrics(object):
                 "nexits_min"
             ],
             "Minimum function cognitive": merged_metrics["cognitive_min"],
+            "Minimum function mi_original": merged_metrics["mi_original_min"],
+            "Minimum function mi_sei": merged_metrics["mi_sei_min"],
+            "Minimum function mi_visual_studio": merged_metrics["mi_visual_studio_min"],
             "Total function cyclomatic": merged_metrics["cyclomatic_total"],
             "Total function number of unique operands": merged_metrics[
                 "halstead_n2_total"
@@ -329,6 +350,9 @@ class source_code_function_metrics(object):
                 "nexits_total"
             ],
             "Total function cognitive": merged_metrics["cognitive_total"],
+            "Total function mi_original": merged_metrics["mi_original_total"],
+            "Total function mi_sei": merged_metrics["mi_sei_total"],
+            "Total function mi_visual_studio": merged_metrics["mi_visual_studio_total"],
         }
 
 
@@ -357,6 +381,11 @@ class source_code_metrics_diff(object):
                 "nexits_total"
             ],
             "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
+            "Diff in mi_original": commit["metrics_diff"]["mi_original_total"],
+            "Diff in mi_sei": commit["metrics_diff"]["mi_sei_total"],
+            "Diff in mi_visual_studio": commit["metrics_diff"][
+                "mi_visual_studio_total"
+            ],
         }
 
 
