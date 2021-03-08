@@ -1376,6 +1376,11 @@ let options = {
     type: "text",
     callback: null,
   },
+  products: {
+    value: null,
+    type: "select",
+    callback: null,
+  },
   teams: {
     value: null,
     type: "select",
@@ -1467,6 +1472,35 @@ async function buildMetabugsDropdown(callback) {
     option.setAttribute("value", bug.id);
     option.textContent = bug.summary;
     metabugsDropdown.append(option);
+  }
+}
+
+async function buildProductsSelect() {
+  const productsSelect = document.getElementById("products");
+  if (!productsSelect) {
+    return;
+  }
+
+  const data = await landingsData;
+
+  const allProducts = new Set();
+  for (const landings of Object.values(data)) {
+    for (const landing of landings) {
+      allProducts.add(
+        landing["component"].substr(0, landing["component"].indexOf("::"))
+      );
+    }
+  }
+
+  const products = [...allProducts];
+  products.sort();
+
+  for (const product of products) {
+    const option = document.createElement("option");
+    option.setAttribute("value", product);
+    option.textContent = product;
+    option.selected = true;
+    productsSelect.append(option);
   }
 }
 
@@ -1677,6 +1711,7 @@ async function setTableToggleHandler(callback) {
 
 export async function setupOptions(callback) {
   await buildMetabugsDropdown(callback);
+  await buildProductsSelect();
   await buildTeamsSelect();
   await buildComponentsSelect();
   await populateVersions();
@@ -1810,6 +1845,7 @@ export async function getFilteredBugSummaries() {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
   let testingTags = getOption("testingTags");
+  let products = getOption("products");
   let components = getOption("components");
   let teams = getOption("teams");
   let whiteBoard = getOption("whiteBoard");
@@ -1892,6 +1928,14 @@ export async function getFilteredBugSummaries() {
             (includeUnknownTestingTags && !commit.testing) ||
             testingTags.includes(commit.testing)
         )
+    );
+  }
+
+  if (products) {
+    bugSummaries = bugSummaries.filter((bugSummary) =>
+      products.some((product) =>
+        bugSummary["component"].startsWith(`${product}::`)
+      )
     );
   }
 
