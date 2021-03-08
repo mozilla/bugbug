@@ -4,7 +4,7 @@ imbalanced-learn==0.8.0
 libmozdata==0.1.70
 lmdb==1.1.1
 matplotlib==3.3.4
-mercurial==5.6.1
+mercurial==5.7
 microannotate==0.0.24
 mozci==1.12.6
 numpy==1.20.1
