@@ -32,6 +32,12 @@ tasks:
           public/component_test_stats.json:
             path: /component_test_stats.json
             type: file
+          public/test_info.json.zst:
+            path: /data/test_info.json.zst
+            type: file
+          public/test_info.json.version:
+            path: /data/test_info.json.version
+            type: file
         cache:
           bugbug-mercurial-repository: /cache
       scopes:

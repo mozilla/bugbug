@@ -12,6 +12,7 @@ import re
 import shelve
 import shutil
 import struct
+from datetime import datetime
 from typing import (
     Any,
     Callable,
@@ -824,3 +825,13 @@ def get_failure_bugs(since, until):
     )
     r.raise_for_status()
     return [item["bug_id"] for item in r.json()]
+
+
+def get_test_info(date: datetime) -> Dict[str, Any]:
+    r = requests.get(
+        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
+            date.strftime("%Y.%m.%d")
+        )
+    )
+    r.raise_for_status()
+    return r.json()

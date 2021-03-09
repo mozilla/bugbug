@@ -31,6 +31,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+TEST_INFOS_DB = "data/test_info.json"
+db.register(
+    TEST_INFOS_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/test_info.json.zst",
+    1,
+)
+
 PAST_REGRESSIONS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regressions_by_{dimension}.json.zst"
 PAST_FIXED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bugs_by_{dimension}.json.zst"
 PAST_REGRESSION_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regression_blocked_bugs_by_{dimension}.json.zst"
@@ -173,19 +180,68 @@ class LandingsRiskReportGenerator(object):
 
         return [int(b) for b in r.text.splitlines()[1:]]
 
+    def retrieve_test_info(self, days: int) -> Dict[str, Any]:
+        logger.info("Download previous test info...")
+        db.download(TEST_INFOS_DB)
+
+        dates = [
+            datetime.utcnow() - timedelta(days=day) for day in reversed(range(days))
+        ]
+
+        logger.info("Get previously gathered test info...")
+        test_infos = {
+            test_info["date"]: test_info for test_info in db.read(TEST_INFOS_DB)
+        }
+
+        prev_skips = None
+        for date in tqdm(dates):
+            date_str = date.strftime("%Y-%m-%d")
+
+            # Gather the latest three days again, as the data might have changed.
+            if date_str in test_infos and date < datetime.utcnow() - timedelta(days=3):
+                prev_skips = test_infos[date_str]["skips"]
+                continue
+
+            test_infos[date_str] = {
+                "date": date_str,
+                "bugs": test_scheduling.get_failure_bugs(date, date),
+                "skips": {},
+            }
+
+            try:
+                test_info = test_scheduling.get_test_info(date)
+
+                for component in test_info["tests"].keys():
+                    test_infos[date_str]["skips"][component] = sum(
+                        1 for test in test_info["tests"][component] if "skip-if" in test
+                    )
+            except requests.exceptions.HTTPError:
+                # If we couldn't find a test info artifact for the given date, assume the number of skip-ifs didn't change from the previous day.
+                assert prev_skips is not None
+                test_infos[date_str]["skips"] = prev_skips
+
+            prev_skips = test_infos[date_str]["skips"]
+
+        db.write(
+            TEST_INFOS_DB,
+            (
+                test_infos[date.strftime("%Y-%m-%d")]
+                for date in dates
+                if date.strftime("%Y-%m-%d") in test_infos
+            ),
+        )
+
+        return test_infos
+
     def go(
         self, bugs: List[int], days: int, meta_bugs: Optional[List[int]] = None
     ) -> None:
         if meta_bugs is not None:
             bugs += meta_bugs + self.get_blocking_of(meta_bugs)
 
-        test_failure_bugs_by_day = collections.defaultdict(list)
-        for day in tqdm(range(days)):
-            date = datetime.utcnow() - timedelta(days=day)
-            for bug_id in test_scheduling.get_failure_bugs(date, date):
-                test_failure_bugs_by_day[date].append(bug_id)
+        test_infos = self.retrieve_test_info(days)
 
-        bugs += sum(test_failure_bugs_by_day.values(), [])
+        bugs += sum((test_info["bugs"] for test_info in test_infos.values()), [])
 
         bugs = list(set(bugs))
 
@@ -682,14 +738,17 @@ class LandingsRiskReportGenerator(object):
         ] = collections.defaultdict(
             lambda: collections.defaultdict(lambda: collections.defaultdict(int))
         )
-        for date, bug_ids in test_failure_bugs_by_day.items():
-            for bug_id in bug_ids:
+        for date, test_info in test_infos.items():
+            for component, count in test_info["skips"].items():
+                component_test_stats[component][date]["skips"] = count
+
+            for bug_id in test_info["bugs"]:
                 if bug_id not in bug_map:
                     continue
 
-                component_test_stats[get_full_component(bug_map[bug_id])][
-                    date.strftime("%Y-%m-%d")
-                ]["bugs"] += 1
+                component_test_stats[get_full_component(bug_map[bug_id])][date][
+                    "bugs"
+                ] += 1
 
         with open("component_test_stats.json", "w") as f:
             json.dump(component_test_stats, f)
