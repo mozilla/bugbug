@@ -1568,7 +1568,25 @@ function getOptionType(name) {
   return options[name].type;
 }
 
-export async function setOption(name, value) {
+export async function setOption(name, value, updateURL = true) {
+  if (updateURL) {
+    const url = new URL(location.href);
+
+    url.searchParams.delete(name);
+
+    if (Array.isArray(value)) {
+      for (const elem of value) {
+        url.searchParams.append(name, elem);
+      }
+    } else if (typeof value === "boolean") {
+      url.searchParams.set(name, value ? "1" : "0");
+    } else {
+      url.searchParams.set(name, value);
+    }
+
+    history.replaceState({}, document.title, url.href);
+  }
+
   options[name].value = value;
   if (options[name].callback) {
     const dependentElementId = await options[name].callback();
@@ -1863,13 +1881,9 @@ export async function setupOptions(callback) {
         elem.value = queryValues[0];
       }
 
-      await setOption(optionName, elem.value);
+      await setOption(optionName, elem.value, false);
 
       elem.addEventListener("change", async function () {
-        let url = new URL(location.href);
-        url.searchParams.set(optionName, elem.value);
-        history.replaceState({}, document.title, url.href);
-
         if (!(await setOption(optionName, elem.value))) {
           await callback();
         }
@@ -1879,13 +1893,9 @@ export async function setupOptions(callback) {
         elem.checked = queryValues[0] != "0" && queryValues[0] != "false";
       }
 
-      await setOption(optionName, elem.checked);
+      await setOption(optionName, elem.checked, false);
 
       elem.onchange = async function () {
-        let url = new URL(location.href);
-        url.searchParams.set(optionName, elem.checked ? "1" : "0");
-        history.replaceState({}, document.title, url.href);
-
         if (!(await setOption(optionName, elem.checked))) {
           await callback();
         }
@@ -1904,21 +1914,15 @@ export async function setupOptions(callback) {
         }
       }
 
-      await setOption(optionName, value);
+      await setOption(optionName, value, false);
 
       elem.onchange = async function () {
-        let url = new URL(location.href);
-        url.searchParams.delete(optionName);
-
         let value = [];
         for (let option of elem.options) {
           if (option.selected) {
             value.push(option.value);
-            url.searchParams.append(optionName, option.value);
           }
         }
-
-        history.replaceState({}, document.title, url.href);
 
         if (!(await setOption(optionName, value))) {
           await callback();
@@ -1937,14 +1941,11 @@ export async function setupOptions(callback) {
         `input[name=${optionName}]`
       )) {
         if (radio.checked) {
-          await setOption(optionName, radio.value);
+          await setOption(optionName, radio.value, false);
         }
       }
 
       elem.onchange = async function () {
-        let url = new URL(location.href);
-        url.searchParams.delete(optionName);
-
         let waitDependent = false;
 
         for (const radio of document.querySelectorAll(
@@ -1952,11 +1953,8 @@ export async function setupOptions(callback) {
         )) {
           if (radio.checked) {
             waitDependent |= await setOption(optionName, radio.value);
-            url.searchParams.set(optionName, radio.value);
           }
         }
-
-        history.replaceState({}, document.title, url.href);
 
         if (!waitDependent) {
           await callback();
