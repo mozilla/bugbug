@@ -402,7 +402,8 @@ export function renderChart(
   dates,
   title,
   yaxis_text,
-  yaxis_options = {}
+  yaxis_options = {},
+  tooltip = {}
 ) {
   yaxis_options["title"] = {
     text: yaxis_text,
@@ -451,6 +452,7 @@ export function renderChart(
       offsetY: -25,
       offsetX: -5,
     },
+    tooltip: tooltip,
   };
 
   let chart = new ApexCharts(chartEl, options);
@@ -971,6 +973,7 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
   let categories = [];
   let ninthdecile_time_to_confirm = [];
   let median_time_to_confirm = [];
+  const bugs_number = [];
   for (let date in summaryData) {
     categories.push(date);
     ninthdecile_time_to_confirm.push(
@@ -979,6 +982,7 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     median_time_to_confirm.push(
       median(summaryData[date].times_to_confirm).toFixed(1)
     );
+    bugs_number.push(summaryData[date].times_to_confirm.length);
   }
 
   renderChart(
@@ -995,7 +999,42 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
     ],
     categories,
     "Time to confirm",
-    "Days"
+    "Days",
+    {},
+    {
+      custom: function ({ series, seriesIndex, dataPointIndex, w }) {
+        return (
+          `<div class="apexcharts-tooltip-title">${categories[dataPointIndex]}</div>` +
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 1; display: flex;">` +
+          `<span class="apexcharts-tooltip-marker" style="background-color: rgb(0, 143, 251);"></span>` +
+          `<div class="apexcharts-tooltip-text" style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">` +
+          `<div class="apexcharts-tooltip-y-group">` +
+          `<span class="apexcharts-tooltip-text-label">90% time to confirm: </span>` +
+          `<span class="apexcharts-tooltip-text-value">${ninthdecile_time_to_confirm[dataPointIndex]}</span>` +
+          `</div>` +
+          `</div>` +
+          `</div>` +
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 2; display: flex;">` +
+          `<span class="apexcharts-tooltip-marker" style="background-color: rgb(0, 227, 150);"></span>` +
+          `<div class="apexcharts-tooltip-text" style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">` +
+          `<div class="apexcharts-tooltip-y-group">` +
+          `<span class="apexcharts-tooltip-text-label">Median time to confirm: </span>` +
+          `<span class="apexcharts-tooltip-text-value">${median_time_to_confirm[dataPointIndex]}</span>` +
+          `</div>` +
+          `</div>` +
+          `</div>` +
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 2; display: flex;">` +
+          `<span class="apexcharts-tooltip-marker" style=""></span>` +
+          `<div class="apexcharts-tooltip-text" style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">` +
+          `<div class="apexcharts-tooltip-y-group">` +
+          `<span class="apexcharts-tooltip-text-label">Number of bugs: </span>` +
+          `<span class="apexcharts-tooltip-text-value">${bugs_number[dataPointIndex]}</span>` +
+          `</div>` +
+          `</div>` +
+          `</div>`
+        );
+      },
+    }
   );
 }
 
