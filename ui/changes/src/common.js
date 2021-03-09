@@ -1611,7 +1611,6 @@ async function buildMetabugsDropdown(callback) {
     await callback();
   });
   let bugs = await featureMetabugs;
-  metabugsDropdown.innerHTML = `<option value="" selected>Choose a feature metabug</option>`;
   for (let bug of bugs) {
     let option = document.createElement("option");
     option.setAttribute("value", bug.id);
