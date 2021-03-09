@@ -1599,7 +1599,6 @@ export async function setOption(name, value, updateURL = true) {
   }
 }
 
-// TODO: port this to an option maybe
 async function buildMetabugsDropdown(callback) {
   let metabugsDropdown = document.getElementById("featureMetabugs");
   if (!metabugsDropdown) {
@@ -1607,8 +1606,11 @@ async function buildMetabugsDropdown(callback) {
   }
 
   metabugsDropdown.addEventListener("change", async () => {
-    await setOption("metaBugID", metabugsDropdown.value);
-    await callback();
+    const value = metabugsDropdown.value;
+    const metaBugID = document.getElementById("metaBugID");
+    metaBugID.value = value;
+    const event = new Event("change");
+    metaBugID.dispatchEvent(event);
   });
   let bugs = await featureMetabugs;
   for (let bug of bugs) {

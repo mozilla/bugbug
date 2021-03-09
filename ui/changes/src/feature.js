@@ -34,9 +34,11 @@ async function renderFeatureChangesChart(chartEl, bugSummaries) {
   common.renderTreemap(chartEl, `Feature metabug changes`, featureCounter, 0, {
     dataPointSelection: function (event, chartContext, config) {
       const summary = Object.keys(featureCounter)[config.dataPointIndex];
-      common
-        .setOption("metaBugID", metabug_summary_to_id[summary])
-        .then(renderUI);
+
+      const metaBugID = document.getElementById("metaBugID");
+      metaBugID.value = metabug_summary_to_id[summary];
+      const syntheticEvent = new Event("change");
+      metaBugID.dispatchEvent(syntheticEvent);
     },
   });
 }
