@@ -23,7 +23,22 @@ async function renderFeatureChangesChart(chartEl, bugSummaries) {
     }
   }
 
-  common.renderTreemap(chartEl, `Feature metabug changes`, featureCounter, 0);
+  const metabug_summary_to_id = Object.entries(metabugs).reduce(
+    (acc, [id, summary]) => {
+      acc[summary] = id;
+      return acc;
+    },
+    {}
+  );
+
+  common.renderTreemap(chartEl, `Feature metabug changes`, featureCounter, 0, {
+    dataPointSelection: function (event, chartContext, config) {
+      const summary = Object.keys(featureCounter)[config.dataPointIndex];
+      common
+        .setOption("metaBugID", metabug_summary_to_id[summary])
+        .then(renderUI);
+    },
+  });
 }
 
 async function renderSummary(bugSummaries) {

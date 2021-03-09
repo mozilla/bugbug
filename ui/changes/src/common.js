@@ -1286,7 +1286,13 @@ export async function renderTestSkipStatsChart(chartEl) {
   );
 }
 
-export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
+export async function renderTreemap(
+  chartEl,
+  title,
+  counter,
+  minimumCount = 5,
+  events = {}
+) {
   let data = Object.entries(counter)
     .filter(([name, count]) => count > minimumCount)
     .map(([name, count]) => {
@@ -1307,6 +1313,7 @@ export async function renderTreemap(chartEl, title, counter, minimumCount = 5) {
       animations: {
         enabled: false,
       },
+      events: events,
     },
     title: {
       text: title,
@@ -1561,7 +1568,7 @@ function getOptionType(name) {
   return options[name].type;
 }
 
-async function setOption(name, value) {
+export async function setOption(name, value) {
   options[name].value = value;
   if (options[name].callback) {
     const dependentElementId = await options[name].callback();
