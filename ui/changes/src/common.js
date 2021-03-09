@@ -1132,17 +1132,19 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
   );
 }
 
-export async function renderTestStatsChart(chartEl) {
+export async function renderTestFailureStatsChart(chartEl) {
   const componentsToDaysToStats = await componentTestStats;
 
   const components = getOption("components");
 
-  const allTestStatsDays = [].concat.apply(
-    [],
-    Object.entries(componentsToDaysToStats)
-      .filter(([component, daysToStats]) => components.includes(component))
-      .map(([_, daysToStats]) => Object.entries(daysToStats))
-  );
+  const allTestStatsDays = [].concat
+    .apply(
+      [],
+      Object.entries(componentsToDaysToStats)
+        .filter(([component, daysToStats]) => components.includes(component))
+        .map(([_, daysToStats]) => Object.entries(daysToStats))
+    )
+    .filter((testStatsDay) => "bugs" in testStatsDay[1]);
 
   const minDate = getPlainDate(
     allTestStatsDays.reduce((minTestStatsDay, testStatsDay) =>
@@ -1184,6 +1186,64 @@ export async function renderTestStatsChart(chartEl) {
     categories,
     "Evolution of the number of test failure bugs",
     "# of bugs"
+  );
+}
+
+export async function renderTestSkipStatsChart(chartEl) {
+  const componentsToDaysToStats = await componentTestStats;
+
+  const components = getOption("components");
+
+  const allTestStatsDays = [].concat
+    .apply(
+      [],
+      Object.entries(componentsToDaysToStats)
+        .filter(([component, daysToStats]) => components.includes(component))
+        .map(([_, daysToStats]) => Object.entries(daysToStats))
+    )
+    .filter((testStatsDay) => "skips" in testStatsDay[1]);
+
+  const minDate = getPlainDate(
+    allTestStatsDays.reduce((minTestStatsDay, testStatsDay) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(testStatsDay[0]),
+        getPlainDate(minTestStatsDay[0])
+      ) < 0
+        ? testStatsDay
+        : minTestStatsDay
+    )[0]
+  );
+
+  const summaryData = await getSummaryData(
+    allTestStatsDays,
+    getOption("grouping"),
+    minDate,
+    (counterObj, testStatsDay) => {
+      counterObj.skips += testStatsDay[1].skips;
+      counterObj.days += 1;
+    },
+    null,
+    (testStatsDay) => testStatsDay[0]
+  );
+
+  const categories = [];
+  const skips = [];
+  for (const date in summaryData) {
+    categories.push(date);
+    skips.push(Math.ceil(summaryData[date].skips / summaryData[date].days));
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "Number of tests with skip-if conditions",
+        data: skips,
+      },
+    ],
+    categories,
+    "Evolution of the number of tests with skip-if conditions",
+    "# of tests"
   );
 }
 
