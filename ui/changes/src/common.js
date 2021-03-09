@@ -1023,7 +1023,7 @@ export async function renderTimeToConfirmChart(chartEl, bugSummaries) {
           `</div>` +
           `</div>` +
           `</div>` +
-          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 2; display: flex;">` +
+          `<div class="apexcharts-tooltip-series-group apexcharts-active" style="order: 3; display: flex;">` +
           `<span class="apexcharts-tooltip-marker" style=""></span>` +
           `<div class="apexcharts-tooltip-text" style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">` +
           `<div class="apexcharts-tooltip-y-group">` +
