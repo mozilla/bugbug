@@ -1331,7 +1331,8 @@ export async function renderDependencyHeatmap(
     target_components = allComponents;
   }
 
-  const map = await getComponentDependencyMap(getOption("dependencyType"));
+  const dependencyType = getOption("dependencyType");
+  const map = await getComponentDependencyMap(dependencyType);
 
   target_components = target_components.filter(
     (target_component) => target_component in map
@@ -1380,6 +1381,26 @@ export async function renderDependencyHeatmap(
     title: {
       text: title,
       align: "left",
+    },
+    tooltip: {
+      custom: function ({ series, seriesIndex, dataPointIndex, w }) {
+        const source = source_components[dataPointIndex];
+        const target = target_components[seriesIndex];
+        const perc = series[seriesIndex][dataPointIndex];
+
+        let text;
+        if (dependencyType == "regressions") {
+          text = `Regressions caused by changes to <b>${source}</b> files are filed in <b>${target}</b> ${perc}% of the times.`;
+        } else if (dependencyType == "test-failures") {
+          text = `Failures caused by changes fixing <b>${source}</b> bugs are in tests belonging to <b>${target}</b> ${perc}% of the times.`;
+        }
+
+        return (
+          `<div class="apexcharts-tooltip-text" style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">` +
+          `<span class="apexcharts-tooltip-text-label">${text}</span>` +
+          `</div>`
+        );
+      },
     },
   };
 
