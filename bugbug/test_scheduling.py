@@ -816,7 +816,7 @@ def generate_data(
         yield obj
 
 
-def get_failure_bugs(since, until):
+def get_failure_bugs(since: datetime, until: datetime) -> List[int]:
     r = requests.get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
