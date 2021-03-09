@@ -1223,7 +1223,7 @@ export async function renderTestFailureStatsChart(chartEl) {
       },
     ],
     categories,
-    "Evolution of the number of test failure bugs",
+    "Evolution of the number of test failure bugs (total in the time period)",
     "# of bugs"
   );
 }
@@ -1281,7 +1281,7 @@ export async function renderTestSkipStatsChart(chartEl) {
       },
     ],
     categories,
-    "Evolution of the number of tests with skip-if conditions",
+    "Evolution of the number of tests with skip-if conditions (average by day)",
     "# of tests"
   );
 }
