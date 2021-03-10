@@ -8,7 +8,6 @@ import collections
 import itertools
 import json
 import logging
-import math
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -584,17 +583,14 @@ class LandingsRiskReportGenerator(object):
                             and change["removed"] == "UNCONFIRMED"
                             and change["added"] in ("NEW", "ASSIGNED")
                         ):
-                            time_to_confirm = math.ceil(
-                                (
-                                    dateutil.parser.parse(history["when"]).replace(
-                                        tzinfo=None
-                                    )
-                                    - dateutil.parser.parse(
-                                        bug["creation_time"]
-                                    ).replace(tzinfo=None)
-                                ).total_seconds()
-                                / 86400
-                            )
+                            time_to_confirm = (
+                                dateutil.parser.parse(history["when"]).replace(
+                                    tzinfo=None
+                                )
+                                - dateutil.parser.parse(bug["creation_time"]).replace(
+                                    tzinfo=None
+                                )
+                            ).total_seconds() / 86400
                             break
 
                     if time_to_confirm is not None:
