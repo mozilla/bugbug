@@ -604,6 +604,8 @@ export async function renderRiskChart(chartEl, bugSummaries) {
 }
 
 export async function renderRegressionsChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
+
   if (bugSummaries.length == 0) {
     return;
   }
@@ -633,14 +635,10 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
   );
 
   let summaryFixData = await getSummaryData(
-    bugSummaries,
+    bugSummaries.filter((bug) => bug.fixed && !!bug.date),
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      if (!bug.regression || !bug.fixed) {
-        return;
-      }
-
       const days = getPlainDate(bug.creation_date).until(
         getPlainDate(bug.date),
         {
