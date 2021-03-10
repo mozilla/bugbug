@@ -2045,7 +2045,7 @@ export async function getFilteredBugSummaries() {
 
   if (testingTags) {
     const includeUnknownTestingTags = testingTags.includes("unknown");
-    const includeNotAvailableTestingTags = releaseVersions.includes("N/A");
+    const includeNotAvailableTestingTags = testingTags.includes("N/A");
     bugSummaries = bugSummaries.filter(
       (bugSummary) =>
         (includeNotAvailableTestingTags && bugSummary.commits.length == 0) ||
