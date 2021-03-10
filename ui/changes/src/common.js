@@ -309,7 +309,7 @@ export async function getSummaryData(
 
   let dailyData = {};
   for (let date of dates) {
-    if (Temporal.PlainDate.compare(getPlainDate(date), startDate) < 1) {
+    if (Temporal.PlainDate.compare(getPlainDate(date), startDate) == -1) {
       continue;
     }
 
