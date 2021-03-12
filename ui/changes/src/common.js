@@ -1251,13 +1251,18 @@ export async function renderTestSkipStatsChart(chartEl) {
     )[0]
   );
 
+  const days = new Set();
+
   const summaryData = await getSummaryData(
     allTestStatsDays,
     getOption("grouping"),
     minDate,
     (counterObj, testStatsDay) => {
       counterObj.skips += testStatsDay[1].skips;
-      counterObj.days += 1;
+      if (!days.has(testStatsDay[0])) {
+        counterObj.days += 1;
+        days.add(testStatsDay[0]);
+      }
     },
     null,
     (testStatsDay) => testStatsDay[0]
