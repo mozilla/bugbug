@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import matplotlib.pyplot as plt
 import mozci.push
@@ -137,6 +137,20 @@ def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
     plt.close()
 
 
+def get_regressions(granularity, likely_regressions, possible_regressions):
+    if granularity == "group":
+        return set(likely_regressions)
+    else:
+        return set(tuple(r) for r in likely_regressions)
+
+
+def get_scheduled(granularity, scheduler):
+    if granularity == "group":
+        return set(group for config, group in scheduler["scheduled"])
+    else:
+        return set(tuple(s) for s in scheduler["scheduled"])
+
+
 def plot_graphs(granularity: str) -> None:
     push_data_db = (
         test_scheduling.PUSH_DATA_GROUP_DB
@@ -162,12 +176,7 @@ def plot_graphs(granularity: str) -> None:
         }
 
         for scheduler in scheduler_stat["schedulers"]:
-            if granularity == "group":
-                scheduled = set(group for config, group in scheduler["scheduled"])
-            else:
-                scheduled = scheduler["scheduled"]
-
-            obj[scheduler["name"]] = len(scheduled)
+            obj[scheduler["name"]] = len(get_scheduled(granularity, scheduler))
 
         scheduled_data.append(obj)
 
@@ -181,10 +190,9 @@ def plot_graphs(granularity: str) -> None:
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
-        if granularity == "group":
-            regressions = set(likely_regressions)
-        else:
-            regressions = set(tuple(r) for r in likely_regressions)
+        regressions = get_regressions(
+            granularity, likely_regressions, possible_regressions
+        )
 
         obj = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
@@ -192,12 +200,9 @@ def plot_graphs(granularity: str) -> None:
         }
 
         for scheduler in scheduler_stat["schedulers"]:
-            if granularity == "group":
-                scheduled = set(group for config, group in scheduler["scheduled"])
-            else:
-                scheduled = set(tuple(s) for s in scheduler["scheduled"])
+            scheduled = get_scheduled(granularity, scheduler)
 
-            obj[scheduler["name"]] = len(regressions & set(scheduled))
+            obj[scheduler["name"]] = len(regressions & scheduled)
 
         caught_data.append(obj)
 
@@ -241,6 +246,68 @@ def plot_graphs(granularity: str) -> None:
     )
 
 
+def print_uncaught(
+    granularity: str, scheduler1: str, scheduler2: Optional[str] = None
+) -> None:
+    push_data_db = (
+        test_scheduling.PUSH_DATA_GROUP_DB
+        if granularity == "group"
+        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
+    )
+    assert db.download(push_data_db)
+
+    scheduler_stats = {
+        scheduler_stat["id"]: scheduler_stat
+        for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
+    }
+
+    for revisions, _, _, possible_regressions, likely_regressions in db.read(
+        push_data_db
+    ):
+        rev = revisions[0]
+        if rev not in scheduler_stats:
+            continue
+
+        scheduler_stat = scheduler_stats[rev]
+        if len(scheduler_stat["schedulers"]) == 0:
+            continue
+
+        regressions = get_regressions(
+            granularity, likely_regressions, possible_regressions
+        )
+
+        if len(regressions) == 0:
+            continue
+
+        scheduled_by_scheduler = {}
+        caught_by_scheduler = {}
+
+        for scheduler in scheduler_stat["schedulers"]:
+            scheduled = get_scheduled(granularity, scheduler)
+
+            scheduled_by_scheduler[scheduler["name"]] = scheduled
+            caught_by_scheduler[scheduler["name"]] = regressions & scheduled
+
+        if scheduler1 not in caught_by_scheduler:
+            continue
+
+        if len(caught_by_scheduler[scheduler1]) == 0:
+            if scheduler2 is not None and scheduler2 not in caught_by_scheduler:
+                print(
+                    f"{scheduler1} didn't catch any of the {len(regressions)} regressions on {rev}"
+                )
+            elif scheduler2 is not None and len(caught_by_scheduler[scheduler2]) == 0:
+                print(
+                    f"{scheduler1} and {scheduler2} didn't catch any of the {len(regressions)} regressions on {rev}"
+                )
+            else:
+                print(
+                    f"{scheduler1} didn't catch any of the {len(regressions)} regressions on {rev}, while {scheduler2} did"
+                )
+            print(f"Regressions: {regressions}")
+            print(f"Scheduled by {scheduler1}: {scheduled_by_scheduler[scheduler1]}")
+
+
 def main() -> None:
     description = "Analyze results of shadow schedulers"
     parser = argparse.ArgumentParser(description=description)
@@ -249,11 +316,21 @@ def main() -> None:
         type=int,
         help="How many months of pushes to analyze.",
     )
+    parser.add_argument(
+        "--scheduler1", type=str, help="Scheduler to analyze for uncaught regressions"
+    )
+    parser.add_argument(
+        "--scheduler2",
+        type=str,
+        help="Scheduler to compare to for uncaught regressions",
+    )
     args = parser.parse_args()
 
     go(args.months)
     plot_graphs("group")
     plot_graphs("config_group")
+    if args.scheduler1:
+        print_uncaught("group", args.scheduler1, args.scheduler2)
 
 
 if __name__ == "__main__":
