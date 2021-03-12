@@ -137,11 +137,27 @@ def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
     plt.close()
 
 
+GROUP_TRANSLATIONS = {
+    "testing/web-platform/tests": "",
+    "testing/web-platform/mozilla/tests": "/_mozilla",
+}
+
+
+def translate_group(group):
+    for prefix, value in GROUP_TRANSLATIONS.items():
+        if group.startswith(prefix):
+            return group.replace(prefix, value)
+
+    return group
+
+
 def get_regressions(granularity, likely_regressions, possible_regressions):
     if granularity == "group":
-        return set(likely_regressions)
+        return set(translate_group(group) for group in likely_regressions)
     else:
-        return set(tuple(r) for r in likely_regressions)
+        return set(
+            (config, translate_group(group)) for config, group in likely_regressions
+        )
 
 
 def get_scheduled(granularity, scheduler):
