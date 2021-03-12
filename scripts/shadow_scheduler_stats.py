@@ -144,6 +144,8 @@ GROUP_TRANSLATIONS = {
 
 
 def translate_group(group):
+    group = group.split(":")[0]
+
     for prefix, value in GROUP_TRANSLATIONS.items():
         if group.startswith(prefix):
             return group.replace(prefix, value)
