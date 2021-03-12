@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Set
+from typing import Any, Dict
 
 import matplotlib.pyplot as plt
 import mozci.push
@@ -18,7 +18,6 @@ from pandas import DataFrame
 from tqdm import tqdm
 
 from bugbug import db, test_scheduling, utils
-from bugbug.test_scheduling import ConfigGroup, Group
 
 logger = logging.getLogger(__name__)
 
@@ -27,40 +26,23 @@ SHADOW_SCHEDULER_STATS_DB = "data/shadow_scheduler_stats.json"
 db.register(
     SHADOW_SCHEDULER_STATS_DB,
     "https://s3-us-west-2.amazonaws.com/communitytc-bugbug/data/shadow_scheduler_stats.json.zst",
-    3,
+    4,
 )
 
 
 def analyze_shadow_schedulers(
-    group_regressions: Set[Group],
-    config_group_regressions: Set[ConfigGroup],
     push: mozci.push.Push,
-) -> dict:
+) -> Dict[str, Any]:
     schedulers = []
 
     for name, config_groups in push.generate_all_shadow_scheduler_config_groups():
         if isinstance(config_groups, mozci.errors.TaskNotFound):
             continue
 
-        groups = set(group for config, group in config_groups)
-
         schedulers.append(
             {
                 "name": name,
-                "num_group_scheduled": len(groups),
-                "num_group_regressions": len(group_regressions)
-                if group_regressions is not None
-                else None,
-                "num_group_caught": len(group_regressions & groups)
-                if group_regressions is not None
-                else None,
-                "num_config_group_scheduled": len(config_groups),
-                "num_config_group_regressions": len(config_group_regressions)
-                if config_group_regressions is not None
-                else None,
-                "num_config_group_caught": len(config_group_regressions & config_groups)
-                if config_group_regressions is not None
-                else None,
+                "scheduled": list(config_groups),
             }
         )
 
@@ -107,39 +89,14 @@ def go(months: int) -> None:
         utils.zstd_compress(SHADOW_SCHEDULER_STATS_DB)
         db.upload(SHADOW_SCHEDULER_STATS_DB)
 
-    assert db.download(test_scheduling.PUSH_DATA_GROUP_DB)
-    group_regressions = {}
-    for revisions, _, _, possible_regressions, likely_regressions in db.read(
-        test_scheduling.PUSH_DATA_GROUP_DB
-    ):
-        group_regressions[revisions[0]] = set(likely_regressions)
-
-    assert db.download(test_scheduling.PUSH_DATA_CONFIG_GROUP_DB)
-    config_group_regressions = {}
-    for (
-        revisions,
-        _,
-        _,
-        possible_regressions,
-        likely_regressions,
-    ) in db.read(test_scheduling.PUSH_DATA_CONFIG_GROUP_DB):
-        config_group_regressions[revisions[0]] = set(
-            tuple(r) for r in likely_regressions
-        )
-
     start_time = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_push = {
             executor.submit(
                 analyze_shadow_schedulers,
-                group_regressions[push.rev] if push.rev in group_regressions else None,
-                config_group_regressions[push.rev]
-                if push.rev in config_group_regressions
-                else None,
                 push,
             ): push
             for push in pushes_to_analyze
-            if push.rev in group_regressions or push.rev in config_group_regressions
         }
 
         try:
@@ -180,52 +137,75 @@ def plot_graph(df: DataFrame, title: str, file_path: str) -> None:
     plt.close()
 
 
-def plot_graphs(granularity) -> None:
-    scheduled = []
-    caught = []
+def plot_graphs(granularity: str) -> None:
+    push_data_db = (
+        test_scheduling.PUSH_DATA_GROUP_DB
+        if granularity == "group"
+        else test_scheduling.PUSH_DATA_CONFIG_GROUP_DB
+    )
+    assert db.download(push_data_db)
 
-    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
+    scheduler_stats = {
+        scheduler_stat["id"]: scheduler_stat
+        for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
+    }
+
+    scheduled_data = []
+    caught_data = []
+
+    for scheduler_stat in scheduler_stats.values():
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
-        obj = {
+        obj: Dict[str, Any] = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
         }
 
-        obj.update(
-            {
-                scheduler["name"]: scheduler[f"num_{granularity}_scheduled"]
-                for scheduler in scheduler_stat["schedulers"]
-            }
-        )
+        for scheduler in scheduler_stat["schedulers"]:
+            if granularity == "group":
+                scheduled = set(group for config, group in scheduler["scheduled"])
+            else:
+                scheduled = scheduler["scheduled"]
 
-        scheduled.append(obj)
+            obj[scheduler["name"]] = len(scheduled)
 
-    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
+        scheduled_data.append(obj)
+
+    for revisions, _, _, possible_regressions, likely_regressions in db.read(
+        push_data_db
+    ):
+        if revisions[0] not in scheduler_stats:
+            continue
+
+        scheduler_stat = scheduler_stats[revisions[0]]
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
+        if granularity == "group":
+            regressions = set(likely_regressions)
+        else:
+            regressions = set(tuple(r) for r in likely_regressions)
+
         obj = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
-            "regressions": scheduler_stat["schedulers"][0][
-                f"num_{granularity}_regressions"
-            ],
+            "regressions": len(regressions),
         }
 
-        obj.update(
-            {
-                scheduler["name"]: scheduler[f"num_{granularity}_caught"]
-                for scheduler in scheduler_stat["schedulers"]
-            }
-        )
+        for scheduler in scheduler_stat["schedulers"]:
+            if granularity == "group":
+                scheduled = set(group for config, group in scheduler["scheduled"])
+            else:
+                scheduled = set(tuple(s) for s in scheduler["scheduled"])
 
-        caught.append(obj)
+            obj[scheduler["name"]] = len(regressions & set(scheduled))
 
-    scheduled_df = DataFrame(scheduled)
+        caught_data.append(obj)
+
+    scheduled_df = DataFrame(scheduled_data)
     scheduled_df.index = scheduled_df["date"]
     del scheduled_df["date"]
 
-    caught_df = DataFrame(caught)
+    caught_df = DataFrame(caught_data)
     caught_df.index = caught_df["date"]
     del caught_df["date"]
 
