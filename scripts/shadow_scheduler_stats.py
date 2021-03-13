@@ -58,11 +58,12 @@ def go(months: int) -> None:
     db.download(SHADOW_SCHEDULER_STATS_DB)
 
     logger.info("Get previously gathered statistics...")
-    scheduler_stats = {
-        scheduler_stat["id"]: scheduler_stat
-        for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
+    known_scheduler_stats = {
+        scheduler_stat["id"] for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
     }
-    logger.info(f"Already gathered statistics for {len(scheduler_stats)} pushes...")
+    logger.info(
+        f"Already gathered statistics for {len(known_scheduler_stats)} pushes..."
+    )
 
     to_date = datetime.utcnow() - relativedelta(days=3)
     from_date = to_date - relativedelta(months=months)
@@ -72,54 +73,47 @@ def go(months: int) -> None:
         branch="autoland",
     )
 
-    pushes_to_analyze = [push for push in pushes if push.rev not in scheduler_stats]
-
-    logger.info(f"{len(pushes_to_analyze)} left to analyze")
+    pushes = [push for push in pushes if push.rev not in known_scheduler_stats]
+    logger.info(f"{len(pushes)} left to analyze")
 
     def compress_and_upload() -> None:
-        db.write(
-            SHADOW_SCHEDULER_STATS_DB,
-            (
-                scheduler_stats[push.rev]
-                for push in pushes
-                if push.rev in scheduler_stats
-            ),
-        )
-
         utils.zstd_compress(SHADOW_SCHEDULER_STATS_DB)
         db.upload(SHADOW_SCHEDULER_STATS_DB)
 
-    start_time = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_push = {
+        futures = tuple(
             executor.submit(
                 analyze_shadow_schedulers,
                 push,
-            ): push
-            for push in pushes_to_analyze
-        }
+            )
+            for push in pushes
+        )
+        del pushes
 
-        try:
-            for future in tqdm(
-                concurrent.futures.as_completed(future_to_push),
-                total=len(future_to_push),
-            ):
-                push = future_to_push[future]
+        def results():
+            start_time = time.monotonic()
 
-                try:
-                    scheduler_stats[push.rev] = future.result()
-                except Exception:
-                    traceback.print_exc()
+            try:
+                for future in tqdm(
+                    concurrent.futures.as_completed(futures),
+                    total=len(futures),
+                ):
+                    try:
+                        yield future.result()
+                    except Exception:
+                        traceback.print_exc()
 
-                # Upload every 10 minutes.
-                if time.monotonic() - start_time >= 600:
-                    compress_and_upload()
-                    start_time = time.monotonic()
-        except Exception:
-            for f in future_to_push.keys():
-                f.cancel()
+                    # Upload every 10 minutes.
+                    if time.monotonic() - start_time >= 600:
+                        compress_and_upload()
+                        start_time = time.monotonic()
+            except Exception:
+                for f in futures:
+                    f.cancel()
 
-            raise
+                raise
+
+        db.append(SHADOW_SCHEDULER_STATS_DB, results())
 
     compress_and_upload()
 
@@ -177,15 +171,18 @@ def plot_graphs(granularity: str) -> None:
     )
     assert db.download(push_data_db)
 
-    scheduler_stats = {
-        scheduler_stat["id"]: scheduler_stat
-        for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
-    }
+    regressions_by_rev = {}
+    for revisions, _, _, possible_regressions, likely_regressions in db.read(
+        push_data_db
+    ):
+        regressions_by_rev[revisions[0]] = get_regressions(
+            granularity, likely_regressions, possible_regressions
+        )
 
     scheduled_data = []
     caught_data = []
 
-    for scheduler_stat in scheduler_stats.values():
+    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
@@ -198,19 +195,7 @@ def plot_graphs(granularity: str) -> None:
 
         scheduled_data.append(obj)
 
-    for revisions, _, _, possible_regressions, likely_regressions in db.read(
-        push_data_db
-    ):
-        if revisions[0] not in scheduler_stats:
-            continue
-
-        scheduler_stat = scheduler_stats[revisions[0]]
-        if len(scheduler_stat["schedulers"]) == 0:
-            continue
-
-        regressions = get_regressions(
-            granularity, likely_regressions, possible_regressions
-        )
+        regressions = regressions_by_rev[scheduler_stat["id"]]
 
         obj = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
@@ -274,25 +259,21 @@ def print_uncaught(
     )
     assert db.download(push_data_db)
 
-    scheduler_stats = {
-        scheduler_stat["id"]: scheduler_stat
-        for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
-    }
-
+    regressions_by_rev = {}
     for revisions, _, _, possible_regressions, likely_regressions in db.read(
         push_data_db
     ):
-        rev = revisions[0]
-        if rev not in scheduler_stats:
-            continue
+        regressions_by_rev[revisions[0]] = get_regressions(
+            granularity, likely_regressions, possible_regressions
+        )
 
-        scheduler_stat = scheduler_stats[rev]
+    for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB):
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
-        regressions = get_regressions(
-            granularity, likely_regressions, possible_regressions
-        )
+        rev = scheduler_stat["id"]
+
+        regressions = regressions_by_rev[rev]
 
         if len(regressions) == 0:
             continue
