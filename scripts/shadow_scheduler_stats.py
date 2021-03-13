@@ -186,6 +186,9 @@ def plot_graphs(granularity: str) -> None:
         if len(scheduler_stat["schedulers"]) == 0:
             continue
 
+        if scheduler_stat["id"] not in regressions_by_rev:
+            continue
+
         obj: Dict[str, Any] = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
         }
@@ -272,6 +275,9 @@ def print_uncaught(
             continue
 
         rev = scheduler_stat["id"]
+
+        if rev not in regressions_by_rev:
+            continue
 
         regressions = regressions_by_rev[rev]
 
