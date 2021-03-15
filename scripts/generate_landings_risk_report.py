@@ -133,6 +133,7 @@ class LandingsRiskReportGenerator(object):
                 "DUPLICATE",
                 "INCOMPLETE",
                 "MOVED",
+                "WORKSFORME",
             ]
         )
 
