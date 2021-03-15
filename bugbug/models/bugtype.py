@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
@@ -14,6 +15,8 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
+
+logger = logging.getLogger(__name__)
 
 KEYWORD_DICT = {
     "sec-critical": "security",
@@ -143,6 +146,11 @@ class BugTypeModel(BugModel):
                 target[TYPE_LIST.index(type_)] = 1
 
             classes[int(bug_data["id"])] = target
+
+        for type_ in TYPE_LIST:
+            logger.info(
+                f"{sum(1 for target in classes.values() if target[TYPE_LIST.index(type_)] == 1)} {type_} bugs"
+            )
 
         return classes, TYPE_LIST
 
