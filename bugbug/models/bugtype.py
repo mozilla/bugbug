@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import xgboost
@@ -55,7 +55,9 @@ KEYWORD_DICT = {
 TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
-def bug_to_types(bug: bugzilla.BugDict) -> List[str]:
+def bug_to_types(
+    bug: bugzilla.BugDict, bug_map: Optional[Dict[int, bugzilla.BugDict]] = None
+) -> List[str]:
     types = set()
 
     if "[overhead" in bug["whiteboard"].lower():
@@ -66,6 +68,15 @@ def bug_to_types(bug: bugzilla.BugDict) -> List[str]:
 
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
+
+    if bug_map is not None:
+        for bug_id in bug["blocks"]:
+            if bug_id not in bug_map:
+                continue
+
+            alias = bug_map[bug_id]["alias"]
+            if alias and alias.startswith("memshrink"):
+                types.add("memory")
 
     return list(
         types.union(
@@ -146,9 +157,11 @@ class BugTypeModel(BugModel):
     def get_labels(self) -> Tuple[Dict[int, np.ndarray], List[str]]:
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
+        bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
+
+        for bug_data in bug_map.values():
             target = np.zeros(len(TYPE_LIST))
-            for type_ in bug_to_types(bug_data):
+            for type_ in bug_to_types(bug_data, bug_map):
                 target[TYPE_LIST.index(type_)] = 1
 
             classes[int(bug_data["id"])] = target
