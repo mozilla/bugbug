@@ -1268,6 +1268,10 @@ def download_commits(
 
 
 def update_commits() -> None:
+    if not os.path.exists("data/coverage_mapping.lmdb"):
+        logger.info("Downloading commit->coverage mapping...")
+        download_coverage_mapping()
+
     commits = list(
         get_commits(include_no_bug=True, include_backouts=True, include_ignored=True)
     )
