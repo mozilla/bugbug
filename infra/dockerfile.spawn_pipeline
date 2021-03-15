@@ -1,4 +1,4 @@
-FROM python:3.8.6-slim
+FROM python:3.9.2-slim
 
 # Setup dependencies in a cacheable step
 ADD spawn_pipeline_requirements.txt /code/
