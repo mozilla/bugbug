@@ -61,6 +61,9 @@ def bug_to_types(bug: bugzilla.BugDict) -> List[str]:
     if "[overhead" in bug["whiteboard"].lower():
         types.add("memory")
 
+    if "[power" in bug["whiteboard"].lower():
+        types.add("power")
+
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
 
