@@ -23,6 +23,7 @@ from bugbug.utils import (
     download_check_etag,
     download_model,
     get_secret,
+    zstd_compress,
     zstd_decompress,
 )
 
@@ -418,6 +419,7 @@ class LandingsRiskReportGenerator(object):
                 if date.strftime("%Y-%m-%d") in test_infos
             ),
         )
+        zstd_compress(TEST_INFOS_DB)
 
         return test_infos
 
