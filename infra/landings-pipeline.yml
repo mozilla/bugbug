@@ -20,7 +20,6 @@ tasks:
           - bugbug-generate-landings-risk-report
           - /cache/mozilla-central
           - --days=365
-          - --meta-bugs
 
         artifacts:
           public/landings_by_date.json:

@@ -10,7 +10,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Set, Tuple, cast
 
 import dateutil.parser
 import requests
@@ -56,6 +56,15 @@ def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
     return results[::-1]
 
 
+def _download_past_bugs(url: str) -> dict:
+    path = os.path.join("data", os.path.basename(url)[:-4])
+    download_check_etag(url, path=f"{path}.zst")
+    zstd_decompress(path)
+    assert os.path.exists(path)
+    with open(path, "r") as f:
+        return json.load(f)
+
+
 def parse_risk_band(risk_band: str) -> Tuple[str, float, float]:
     name, start, end = risk_band.split("-")
     return (name, float(start), float(end))
@@ -63,6 +72,21 @@ def parse_risk_band(risk_band: str) -> Tuple[str, float, float]:
 
 def is_fuzzblocker(bug: bugzilla.BugDict) -> bool:
     return "fuzzblocker" in bug["whiteboard"].lower()
+
+
+def get_full_component(bug):
+    return "{}::{}".format(bug["product"], bug["component"])
+
+
+def histogram(components: List[str]) -> Dict[str, float]:
+    counter = collections.Counter(components)
+    return {
+        component: count / len(components) for component, count in counter.most_common()
+    }
+
+
+def component_histogram(bugs: List[dict]) -> Dict[str, float]:
+    return histogram([bug["component"] for bug in bugs])
 
 
 class LandingsRiskReportGenerator(object):
@@ -111,6 +135,167 @@ class LandingsRiskReportGenerator(object):
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
 
+        self.path_to_component = repository.get_component_mapping()
+
+        self.past_regressions_by = {}
+        self.past_fixed_bugs_by = {}
+        self.past_regression_blocked_bugs_by = {}
+        self.past_fixed_bug_blocked_bugs_by = {}
+
+        for dimension in ["component", "directory", "file", "function"]:
+            self.past_regressions_by[dimension] = _download_past_bugs(
+                PAST_REGRESSIONS_BY_URL.format(dimension=dimension)
+            )
+            self.past_fixed_bugs_by[dimension] = _download_past_bugs(
+                PAST_FIXED_BUGS_BY_URL.format(dimension=dimension)
+            )
+            self.past_regression_blocked_bugs_by[dimension] = _download_past_bugs(
+                PAST_REGRESSION_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
+            )
+            self.past_fixed_bug_blocked_bugs_by[dimension] = _download_past_bugs(
+                PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
+            )
+
+    def get_prev_bugs(
+        self,
+        past_bugs_by: dict,
+        commit: repository.CommitDict,
+        component: str = None,
+    ) -> List[dict]:
+        paths = [
+            path
+            for path in commit["files"]
+            if component is None
+            or (
+                path.encode("utf-8") in self.path_to_component
+                and self.path_to_component[path.encode("utf-8")]
+                == component.encode("utf-8")
+            )
+        ]
+
+        past_bugs = []
+
+        for path, f_group in commit["functions"].items():
+            if path not in paths:
+                continue
+
+            if path not in past_bugs_by["function"]:
+                continue
+
+            found = False
+            for f in f_group:
+                if f["name"] not in past_bugs_by["function"][path]:
+                    continue
+
+                found = True
+                past_bugs += past_bugs_by["function"][path][f["name"]]
+
+            if found:
+                paths.remove(path)
+
+        for path in paths:
+            if path in past_bugs_by["file"]:
+                past_bugs += past_bugs_by["file"][path]
+                paths.remove(path)
+
+        for path, directories in zip(paths, repository.get_directories(paths)):
+            found = False
+            for directory in directories:
+                if directory in past_bugs_by["directory"]:
+                    found = True
+                    past_bugs += past_bugs_by["directory"][directory]
+
+            if found:
+                paths.remove(path)
+
+        components = [
+            self.path_to_component[path.encode("utf-8")].tobytes().decode("utf-8")
+            for path in paths
+            if path.encode("utf-8") in self.path_to_component
+        ]
+
+        for component in components:
+            if component in past_bugs_by["component"]:
+                past_bugs += past_bugs_by["component"][component]
+
+        return past_bugs
+
+    def get_prev_bugs_stats(
+        self,
+        commit_group: dict,
+        commit_list: List[repository.CommitDict],
+        component: str = None,
+    ) -> None:
+        # Find previous regressions occurred in the same files as those touched by these commits.
+        # And find previous bugs that were fixed by touching the same files as these commits.
+        # And find previous bugs that were blocked by regressions occurred in the same files as those touched by these commits.
+        # And find previous bugs that were blocked by bugs that were fixed by touching the same files as those touched by these commits.
+        prev_regressions: List[Dict[str, Any]] = sum(
+            (
+                self.get_prev_bugs(self.past_regressions_by, commit, component)
+                for commit in commit_list
+            ),
+            [],
+        )
+        prev_fixed_bugs: List[Dict[str, Any]] = sum(
+            (
+                self.get_prev_bugs(self.past_fixed_bugs_by, commit, component)
+                for commit in commit_list
+            ),
+            [],
+        )
+        prev_regression_blocked_bugs: List[Dict[str, Any]] = sum(
+            (
+                self.get_prev_bugs(
+                    self.past_regression_blocked_bugs_by, commit, component
+                )
+                for commit in commit_list
+            ),
+            [],
+        )
+        prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = sum(
+            (
+                self.get_prev_bugs(
+                    self.past_fixed_bug_blocked_bugs_by, commit, component
+                )
+                for commit in commit_list
+            ),
+            [],
+        )
+
+        prev_regressions = _deduplicate(prev_regressions)
+        prev_fixed_bugs = _deduplicate(prev_fixed_bugs)
+        prev_regression_blocked_bugs = _deduplicate(prev_regression_blocked_bugs)
+        prev_fixed_bug_blocked_bugs = _deduplicate(prev_fixed_bug_blocked_bugs)
+
+        regression_components = component_histogram(prev_regressions)
+        fixed_bugs_components = component_histogram(prev_fixed_bugs)
+        regression_blocked_bug_components = component_histogram(
+            prev_regression_blocked_bugs
+        )
+        fixed_bug_blocked_bug_components = component_histogram(
+            prev_fixed_bug_blocked_bugs
+        )
+
+        commit_group["most_common_regression_components"] = regression_components
+        # These are only used for component connections for the time being.
+        if component:
+            commit_group["prev_regressions"] = prev_regressions[-3:]
+            commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
+            commit_group["prev_regression_blocked_bugs"] = prev_regression_blocked_bugs[
+                -3:
+            ]
+            commit_group["prev_fixed_bug_blocked_bugs"] = prev_fixed_bug_blocked_bugs[
+                -3:
+            ]
+            commit_group["most_common_fixed_bugs_components"] = fixed_bugs_components
+            commit_group[
+                "most_common_regression_blocked_bug_components"
+            ] = regression_blocked_bug_components
+            commit_group[
+                "most_common_fixed_bug_blocked_bug_components"
+            ] = fixed_bug_blocked_bug_components
+
     def get_landed_and_filed_since(self, days: int) -> List[int]:
         since = datetime.utcnow() - timedelta(days=days)
 
@@ -154,17 +339,16 @@ class LandingsRiskReportGenerator(object):
             [],
         )
 
-    def get_blocking_of(self, bug_ids: List[int], meta_only: bool = False) -> List[int]:
+    def get_blocking_of(
+        self, bug_ids: List[int], meta_only: bool = False
+    ) -> Dict[int, List[int]]:
         bugzilla.download_bugs(bug_ids)
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
-        return sum(
-            (
-                bugzilla.find_blocking(bug_map, bug_map[bug_id])
-                for bug_id in bug_ids
-                if not meta_only or "meta" in bug_map[bug_id]["keywords"]
-            ),
-            [],
-        )
+        return {
+            bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
+            for bug_id in bug_ids
+            if not meta_only or "meta" in bug_map[bug_id]["keywords"]
+        }
 
     def get_meta_bugs(self, days: int) -> List[int]:
         params = {
@@ -237,23 +421,13 @@ class LandingsRiskReportGenerator(object):
 
         return test_infos
 
-    def go(
-        self, bugs: List[int], days: int, meta_bugs: Optional[List[int]] = None
+    def generate_landings_by_date(
+        self,
+        bug_map: Dict[int, bugzilla.BugDict],
+        regressor_bug_ids: Set[int],
+        bugs: List[int],
+        meta_bugs: Dict[int, List[int]],
     ) -> None:
-        if meta_bugs is not None:
-            bugs += meta_bugs + self.get_blocking_of(meta_bugs)
-
-        test_infos = self.retrieve_test_info(days)
-
-        bugs += sum((test_info["bugs"] for test_info in test_infos.values()), [])
-
-        bugs = list(set(bugs))
-
-        logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(bugs)
-
-        component_team_mapping = bugzilla.get_component_team_mapping()
-
         # A map from bug ID to the list of commits associated to the bug (in order of landing).
         bug_to_commits = collections.defaultdict(list)
 
@@ -262,39 +436,36 @@ class LandingsRiskReportGenerator(object):
             if not bug_id:
                 continue
 
-            bug_to_commits[bug_id].append(commit)
-
-        commits: List[repository.CommitDict] = sum(
-            (bug_to_commits[bug_id] for bug_id in bugs), []
-        )
-        commit_map = {commit["node"]: commit for commit in commits}
-
-        logger.info(f"{len(commits)} commits to analyze.")
-
-        logger.info(f"{len(bugs)} bugs to analyze.")
-
-        bug_map = {}
-        regressor_bug_ids = set()
-        for bug in bugzilla.get_bugs():
-            bug_map[bug["id"]] = bug
-
-            if len(bug["regressions"]) > 0:
-                regressor_bug_ids.add(bug["id"])
+            if bug_id in bug_map or bug_id in regressor_bug_ids:
+                bug_to_commits[bug_id].append(commit)
 
         # All bugs blocking the "fuzz" bug (316898) and its dependent meta bugs are fuzzing bugs.
-        fuzzing_bugs_list = self.get_blocking_of([316898], meta_only=True) + [
-            bug["id"]
-            for bug in bug_map.values()
-            if "bugmon" in bug["whiteboard"].lower() or "bugmon" in bug["keywords"]
-        ]
         fuzzblocker_bugs = set(
             bug["id"] for bug in bug_map.values() if is_fuzzblocker(bug)
         )
-        fuzzing_bugs = set(fuzzing_bugs_list) | fuzzblocker_bugs
+        fuzzing_bugs = (
+            set(
+                sum(self.get_blocking_of([316898], meta_only=True).values(), [])
+                + [
+                    bug["id"]
+                    for bug in bug_map.values()
+                    if "bugmon" in bug["whiteboard"].lower()
+                    or "bugmon" in bug["keywords"]
+                ]
+            )
+            | fuzzblocker_bugs
+        )
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
         revision_ids = set(
-            filter(None, (repository.get_revision_id(commit) for commit in commits))
+            filter(
+                None,
+                (
+                    repository.get_revision_id(commit)
+                    for bug_id in bugs
+                    for commit in bug_to_commits[bug_id]
+                ),
+            )
         )
 
         logger.info("Download revisions of interest...")
@@ -306,58 +477,10 @@ class LandingsRiskReportGenerator(object):
             if revision["id"] in revision_ids
         }
 
-        if meta_bugs is not None:
-            blocker_to_meta = collections.defaultdict(set)
-            for meta_bug in meta_bugs:
-                if meta_bug not in bug_map:
-                    continue
-
-                for blocker_bug_id in bugzilla.find_blocking(
-                    bug_map, bug_map[meta_bug]
-                ):
-                    blocker_to_meta[blocker_bug_id].add(meta_bug)
-
-        def _download_past_bugs(url: str) -> dict:
-            path = os.path.join("data", os.path.basename(url)[:-4])
-            download_check_etag(url, path=f"{path}.zst")
-            zstd_decompress(path)
-            assert os.path.exists(path)
-            with open(path, "r") as f:
-                return json.load(f)
-
-        past_regressions_by = {}
-        past_fixed_bugs_by = {}
-        past_regression_blocked_bugs_by = {}
-        past_fixed_bug_blocked_bugs_by = {}
-
-        for dimension in ["component", "directory", "file", "function"]:
-            past_regressions_by[dimension] = _download_past_bugs(
-                PAST_REGRESSIONS_BY_URL.format(dimension=dimension)
-            )
-            past_fixed_bugs_by[dimension] = _download_past_bugs(
-                PAST_FIXED_BUGS_BY_URL.format(dimension=dimension)
-            )
-            past_regression_blocked_bugs_by[dimension] = _download_past_bugs(
-                PAST_REGRESSION_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
-            )
-            past_fixed_bug_blocked_bugs_by[dimension] = _download_past_bugs(
-                PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL.format(dimension=dimension)
-            )
-
-        path_to_component = repository.get_component_mapping()
-
-        def get_full_component(bug):
-            return "{}::{}".format(bug["product"], bug["component"])
-
-        def histogram(components: List[str]) -> Dict[str, float]:
-            counter = collections.Counter(components)
-            return {
-                component: count / len(components)
-                for component, count in counter.most_common()
-            }
-
-        def component_histogram(bugs: List[dict]) -> Dict[str, float]:
-            return histogram([bug["component"] for bug in bugs])
+        blocker_to_meta = collections.defaultdict(set)
+        for meta_bug, blocker_bug_ids in meta_bugs.items():
+            for blocker_bug_id in blocker_bug_ids:
+                blocker_to_meta[blocker_bug_id].add(meta_bug)
 
         def find_risk_band(risk: float) -> str:
             for name, start, end in self.risk_bands:
@@ -365,140 +488,6 @@ class LandingsRiskReportGenerator(object):
                     return name
 
             assert False
-
-        def get_prev_bugs(
-            past_bugs_by: dict, commit: repository.CommitDict, component: str = None
-        ) -> List[dict]:
-            paths = [
-                path
-                for path in commit["files"]
-                if component is None
-                or (
-                    path.encode("utf-8") in path_to_component
-                    and path_to_component[path.encode("utf-8")]
-                    == component.encode("utf-8")
-                )
-            ]
-
-            past_bugs = []
-
-            for path, f_group in commit["functions"].items():
-                if path not in paths:
-                    continue
-
-                if path not in past_bugs_by["function"]:
-                    continue
-
-                found = False
-                for f in f_group:
-                    if f["name"] not in past_bugs_by["function"][path]:
-                        continue
-
-                    found = True
-                    past_bugs += past_bugs_by["function"][path][f["name"]]
-
-                if found:
-                    paths.remove(path)
-
-            for path in paths:
-                if path in past_bugs_by["file"]:
-                    past_bugs += past_bugs_by["file"][path]
-                    paths.remove(path)
-
-            for path, directories in zip(paths, repository.get_directories(paths)):
-                found = False
-                for directory in directories:
-                    if directory in past_bugs_by["directory"]:
-                        found = True
-                        past_bugs += past_bugs_by["directory"][directory]
-
-                if found:
-                    paths.remove(path)
-
-            components = [
-                path_to_component[path.encode("utf-8")].tobytes().decode("utf-8")
-                for path in paths
-                if path.encode("utf-8") in path_to_component
-            ]
-
-            for component in components:
-                if component in past_bugs_by["component"]:
-                    past_bugs += past_bugs_by["component"][component]
-
-            return past_bugs
-
-        def get_prev_bugs_stats(
-            commit_group: dict,
-            commit_list: List[repository.CommitDict],
-            component: str = None,
-        ) -> None:
-            # Find previous regressions occurred in the same files as those touched by these commits.
-            # And find previous bugs that were fixed by touching the same files as these commits.
-            # And find previous bugs that were blocked by regressions occurred in the same files as those touched by these commits.
-            # And find previous bugs that were blocked by bugs that were fixed by touching the same files as those touched by these commits.
-            prev_regressions: List[Dict[str, Any]] = sum(
-                (
-                    get_prev_bugs(past_regressions_by, commit, component)
-                    for commit in commit_list
-                ),
-                [],
-            )
-            prev_fixed_bugs: List[Dict[str, Any]] = sum(
-                (
-                    get_prev_bugs(past_fixed_bugs_by, commit, component)
-                    for commit in commit_list
-                ),
-                [],
-            )
-            prev_regression_blocked_bugs: List[Dict[str, Any]] = sum(
-                (
-                    get_prev_bugs(past_regression_blocked_bugs_by, commit, component)
-                    for commit in commit_list
-                ),
-                [],
-            )
-            prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = sum(
-                (
-                    get_prev_bugs(past_fixed_bug_blocked_bugs_by, commit, component)
-                    for commit in commit_list
-                ),
-                [],
-            )
-
-            prev_regressions = _deduplicate(prev_regressions)
-            prev_fixed_bugs = _deduplicate(prev_fixed_bugs)
-            prev_regression_blocked_bugs = _deduplicate(prev_regression_blocked_bugs)
-            prev_fixed_bug_blocked_bugs = _deduplicate(prev_fixed_bug_blocked_bugs)
-
-            regression_components = component_histogram(prev_regressions)
-            fixed_bugs_components = component_histogram(prev_fixed_bugs)
-            regression_blocked_bug_components = component_histogram(
-                prev_regression_blocked_bugs
-            )
-            fixed_bug_blocked_bug_components = component_histogram(
-                prev_fixed_bug_blocked_bugs
-            )
-
-            commit_group["most_common_regression_components"] = regression_components
-            # These are only used for component connections for the time being.
-            if component:
-                commit_group["prev_regressions"] = prev_regressions[-3:]
-                commit_group["prev_fixed_bugs"] = prev_fixed_bugs[-3:]
-                commit_group[
-                    "prev_regression_blocked_bugs"
-                ] = prev_regression_blocked_bugs[-3:]
-                commit_group[
-                    "prev_fixed_bug_blocked_bugs"
-                ] = prev_fixed_bug_blocked_bugs[-3:]
-                commit_group[
-                    "most_common_fixed_bugs_components"
-                ] = fixed_bugs_components
-                commit_group[
-                    "most_common_regression_blocked_bug_components"
-                ] = regression_blocked_bug_components
-                commit_group[
-                    "most_common_fixed_bug_blocked_bug_components"
-                ] = fixed_bug_blocked_bug_components
 
         def get_commit_data(commit_list: List[repository.CommitDict]) -> List[dict]:
             if len(commit_list) == 0:
@@ -542,6 +531,8 @@ class LandingsRiskReportGenerator(object):
                 )
 
             return commits_data
+
+        component_team_mapping = bugzilla.get_component_team_mapping()
 
         bug_summaries = []
         for bug_id in bugs:
@@ -650,7 +641,7 @@ class LandingsRiskReportGenerator(object):
                 else "n",
             }
 
-            get_prev_bugs_stats(bug_summary, commit_list)
+            self.get_prev_bugs_stats(bug_summary, commit_list)
 
             bug_summaries.append(bug_summary)
 
@@ -669,6 +660,17 @@ class LandingsRiskReportGenerator(object):
                 ]
 
             json.dump(output, f)
+
+    def generate_component_connections(
+        self, bug_map: Dict[int, bugzilla.BugDict], bugs: List[int]
+    ) -> None:
+        bugs_set = set(bugs)
+        commits = [
+            commit
+            for commit in repository.get_commits()
+            if commit["bug_id"] in bugs_set
+        ]
+        commit_map = {commit["node"]: commit for commit in commits}
 
         # Retrieve components of test failures that occurred when landing patches to fix bugs in specific components.
         component_failures = collections.defaultdict(list)
@@ -697,13 +699,13 @@ class LandingsRiskReportGenerator(object):
             groups = [
                 group
                 for group in list(set(possible_regressions + likely_regressions))
-                if group.encode("utf-8") in path_to_component
+                if group.encode("utf-8") in self.path_to_component
             ]
 
             for group in groups:
                 for component in components:
                     component_failures[component].append(
-                        path_to_component[group.encode("utf-8")]
+                        self.path_to_component[group.encode("utf-8")]
                         .tobytes()
                         .decode("utf-8")
                     )
@@ -726,7 +728,11 @@ class LandingsRiskReportGenerator(object):
                 if component in component_failures
                 else {},
             }
-            get_prev_bugs_stats(commit_group, list(commit_iter), component)
+            self.get_prev_bugs_stats(
+                commit_group,
+                list(commit_iter),
+                component,
+            )
             commit_groups.append(commit_group)
 
         with open("component_connections.json", "w") as f:
@@ -734,6 +740,9 @@ class LandingsRiskReportGenerator(object):
 
         repository.close_component_mapping()
 
+    def generate_component_test_stats(
+        self, bug_map: Dict[int, bugzilla.BugDict], test_infos: Dict[str, Any]
+    ) -> None:
         component_test_stats: Dict[
             str, Dict[str, Dict[str, int]]
         ] = collections.defaultdict(
@@ -754,35 +763,48 @@ class LandingsRiskReportGenerator(object):
         with open("component_test_stats.json", "w") as f:
             json.dump(component_test_stats, f)
 
+    def go(self, days: int) -> None:
+        bugs = self.get_landed_and_filed_since(days)
+
+        meta_bugs = self.get_blocking_of(self.get_meta_bugs(days))
+        bugs += meta_bugs.keys()
+        bugs += sum(meta_bugs.values(), [])
+
+        bugs = list(set(bugs))
+
+        test_infos = self.retrieve_test_info(days)
+        test_info_bugs: List[int] = sum(
+            (test_info["bugs"] for test_info in test_infos.values()), []
+        )
+
+        logger.info("Download bugs of interest...")
+        bugzilla.download_bugs(bugs + test_info_bugs)
+
+        logger.info(f"{len(bugs)} bugs to analyze.")
+
+        bugs_set = set(bugs + test_info_bugs)
+
+        bug_map = {}
+        regressor_bug_ids = set()
+        for bug in bugzilla.get_bugs():
+            # Only add to the map bugs we are interested in, and bugs that block other bugs (needed for the bug_to_types call).
+            if bug["id"] in bugs_set or len(bug["blocks"]) > 0:
+                bug_map[bug["id"]] = bug
+
+            if len(bug["regressions"]) > 0:
+                regressor_bug_ids.add(bug["id"])
+
+        self.generate_landings_by_date(bug_map, regressor_bug_ids, bugs, meta_bugs)
+
+        self.generate_component_connections(bug_map, bugs)
+
+        self.generate_component_test_stats(bug_map, test_infos)
+
 
 def main() -> None:
     description = "Generate risk report of recent landings"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("repo_dir", help="Path to a Gecko repository.")
-    parser.add_argument(
-        "--bugs",
-        type=int,
-        nargs="*",
-        help="Which bugs to analyze.",
-    )
-    parser.add_argument(
-        "--regressors-of",
-        type=int,
-        nargs="*",
-        help="List of bugs whose regressors have to be analyzed.",
-    )
-    parser.add_argument(
-        "--blocking-of",
-        type=int,
-        nargs="*",
-        help="List of bugs whose blockers have to be analyzed.",
-    )
-    parser.add_argument(
-        "--meta-bugs",
-        type=int,
-        nargs="*",
-        help="Analyze all bugs blocking meta bugs changed since a given number of days ago.",
-    )
     parser.add_argument(
         "--days",
         type=int,
@@ -792,23 +814,7 @@ def main() -> None:
     args = parser.parse_args()
 
     landings_risk_report_generator = LandingsRiskReportGenerator(args.repo_dir)
-
-    meta_bugs: Optional[List[int]] = None
-    if args.meta_bugs is not None:
-        meta_bugs = landings_risk_report_generator.get_meta_bugs(args.days)
-
-    if args.bugs is not None:
-        bugs = args.bugs
-    elif args.regressors_of is not None:
-        bugs = landings_risk_report_generator.get_regressors_of(args.regressors_of)
-    elif args.blocking_of is not None:
-        bugs = landings_risk_report_generator.get_blocking_of(args.blocking_of)
-    elif args.days is not None:
-        bugs = landings_risk_report_generator.get_landed_and_filed_since(args.days)
-    else:
-        assert False
-
-    landings_risk_report_generator.go(bugs, args.days, meta_bugs)
+    landings_risk_report_generator.go(args.days)
 
 
 if __name__ == "__main__":
