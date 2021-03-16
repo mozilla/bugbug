@@ -351,7 +351,7 @@ tasks:
       deadline: { $fromNow: "4 days" }
       expires: { $fromNow: "1 month" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - test-label-scheduling-history-push_data-retrieval
@@ -400,7 +400,7 @@ tasks:
       deadline: { $fromNow: "4 days" }
       expires: { $fromNow: "1 month" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - test-group-scheduling-history-push_data-retrieval
