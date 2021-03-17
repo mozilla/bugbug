@@ -143,6 +143,7 @@ METRIC_NAMES = [
     "mi_original",
     "mi_sei",
     "mi_visual_studio",
+    "blank",
 ]
 
 

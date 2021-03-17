@@ -2475,6 +2475,10 @@ void main() {
         "mi_visual_studio_max": 78.94722643886807,
         "mi_visual_studio_min": 78.94722643886807,
         "mi_visual_studio_total": 73.97332286868733,
+        "blank_avg": 0.0,
+        "blank_max": 0.0,
+        "blank_min": 9223372036854775807,
+        "blank_total": 0.0,
     }
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
@@ -2492,6 +2496,7 @@ void main() {
         "mi_original_total": 0.0,
         "mi_sei_total": 0.0,
         "mi_visual_studio_total": 0.0,
+        "blank_total": 0.0,
     }
     assert commit.functions == {
         "prova.cpp": [
@@ -2513,6 +2518,7 @@ void main() {
                     "mi_original_total": 134.9997572104644,
                     "mi_sei_total": 119.16444811614275,
                     "mi_visual_studio_total": 78.94722643886807,
+                    "blank_total": 0.0,
                 },
                 "name": "main",
                 "start": 3,
@@ -2648,6 +2654,10 @@ void main() {
         "mi_visual_studio_max": 74.65013689584615,
         "mi_visual_studio_min": 74.65013689584615,
         "mi_visual_studio_total": 70.67438557926586,
+        "blank_avg": 0.0,
+        "blank_max": 0.0,
+        "blank_min": 9223372036854775807,
+        "blank_total": 0.0,
     }
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
@@ -2665,6 +2675,7 @@ void main() {
         "mi_original_total": -5.641182764910724,
         "mi_sei_total": -8.138506399684957,
         "mi_visual_studio_total": -3.298937289421474,
+        "blank_total": 0.0,
     }
     assert commit.functions == {
         "prova.cpp": [
@@ -2686,6 +2697,7 @@ void main() {
                     "mi_original_total": 127.65173409189691,
                     "mi_sei_total": 108.56349160264799,
                     "mi_visual_studio_total": 74.65013689584615,
+                    "blank_total": 0.0,
                 },
                 "name": "main",
                 "start": 3,
