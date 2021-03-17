@@ -151,6 +151,7 @@ class source_code_file_metrics(object):
             "Average file number of instruction loc": commit["metrics"]["ploc_avg"],
             "Average file number of logical loc": commit["metrics"]["lloc_avg"],
             "Average file number of comment loc": commit["metrics"]["cloc_avg"],
+            "Average file blank": commit["metrics"]["blank_avg"],
             "Average file number of function arguments": commit["metrics"]["nargs_avg"],
             "Average file number of function exit points": commit["metrics"][
                 "nexits_avg"
@@ -159,7 +160,6 @@ class source_code_file_metrics(object):
             "Average file mi_original": commit["metrics"]["mi_original_avg"],
             "Average file mi_sei": commit["metrics"]["mi_sei_avg"],
             "Average file mi_visual_studio": commit["metrics"]["mi_visual_studio_avg"],
-            "Average file blank": commit["metrics"]["blank_avg"],
             "Maximum file cyclomatic": commit["metrics"]["cyclomatic_max"],
             "Maximum file number of unique operands": commit["metrics"][
                 "halstead_n2_max"
@@ -173,6 +173,7 @@ class source_code_file_metrics(object):
             "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
             "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
             "Maximum file number of comment loc": commit["metrics"]["cloc_max"],
+            "Maximum file blank": commit["metrics"]["blank_max"],
             "Maximum file number of function arguments": commit["metrics"]["nargs_max"],
             "Maximum file number of function exit points": commit["metrics"][
                 "nexits_max"
@@ -181,7 +182,6 @@ class source_code_file_metrics(object):
             "Maximum file mi_original": commit["metrics"]["mi_original_max"],
             "Maximum file mi_sei": commit["metrics"]["mi_sei_max"],
             "Maximum file mi_visual_studio": commit["metrics"]["mi_visual_studio_max"],
-            "Maximum file blank": commit["metrics"]["blank_max"],
             "Minimum file cyclomatic": commit["metrics"]["cyclomatic_min"],
             "Minimum file number of unique operands": commit["metrics"][
                 "halstead_n2_min"
@@ -195,6 +195,7 @@ class source_code_file_metrics(object):
             "Minimum file number of instruction loc": commit["metrics"]["ploc_min"],
             "Minimum file number of logical loc": commit["metrics"]["lloc_min"],
             "Minimum file number of comment loc": commit["metrics"]["cloc_min"],
+            "Minimum file blank": commit["metrics"]["blank_min"],
             "Minimum file number of function arguments": commit["metrics"]["nargs_min"],
             "Minimum file number of function exit points": commit["metrics"][
                 "nexits_min"
@@ -203,7 +204,6 @@ class source_code_file_metrics(object):
             "Minimum file mi_original": commit["metrics"]["mi_original_min"],
             "Minimum file mi_sei": commit["metrics"]["mi_sei_min"],
             "Minimum file mi_visual_studio": commit["metrics"]["mi_visual_studio_min"],
-            "Minimum file blank": commit["metrics"]["blank_min"],
             "Total file cyclomatic": commit["metrics"]["cyclomatic_total"],
             "Total file number of unique operands": commit["metrics"][
                 "halstead_n2_total"
@@ -217,6 +217,7 @@ class source_code_file_metrics(object):
             "Total file number of instruction loc": commit["metrics"]["ploc_total"],
             "Total file number of logical loc": commit["metrics"]["lloc_total"],
             "Total file number of comment loc": commit["metrics"]["cloc_total"],
+            "Total file blank": commit["metrics"]["blank_total"],
             "Total file number of function arguments": commit["metrics"]["nargs_total"],
             "Total file number of function exit points": commit["metrics"][
                 "nexits_total"
@@ -225,7 +226,6 @@ class source_code_file_metrics(object):
             "Total file mi_original": commit["metrics"]["mi_original_total"],
             "Total file mi_sei": commit["metrics"]["mi_sei_total"],
             "Total file mi_visual_studio": commit["metrics"]["mi_visual_studio_total"],
-            "Total file blank": commit["metrics"]["blank_total"],
         }
 
 
@@ -278,6 +278,7 @@ class source_code_function_metrics(object):
             "Average function number of instruction loc": merged_metrics["ploc_avg"],
             "Average function number of logical loc": merged_metrics["lloc_avg"],
             "Average function number of comment loc": merged_metrics["cloc_avg"],
+            "Average function blank": merged_metrics["blank_avg"],
             "Average function number of function arguments": merged_metrics[
                 "nargs_avg"
             ],
@@ -288,7 +289,6 @@ class source_code_function_metrics(object):
             "Average function mi_original": merged_metrics["mi_original_avg"],
             "Average function mi_sei": merged_metrics["mi_sei_avg"],
             "Average function mi_visual_studio": merged_metrics["mi_visual_studio_avg"],
-            "Average function blank": merged_metrics["blank_avg"],
             "Maximum function cyclomatic": merged_metrics["cyclomatic_max"],
             "Maximum function number of unique operands": merged_metrics[
                 "halstead_n2_max"
@@ -302,6 +302,7 @@ class source_code_function_metrics(object):
             "Maximum function number of instruction loc": merged_metrics["ploc_max"],
             "Maximum function number of logical loc": merged_metrics["lloc_max"],
             "Maximum function number of comment loc": merged_metrics["cloc_max"],
+            "Maximum function blank": merged_metrics["blank_max"],
             "Maximum function number of function arguments": merged_metrics[
                 "nargs_max"
             ],
@@ -312,7 +313,6 @@ class source_code_function_metrics(object):
             "Maximum function mi_original": merged_metrics["mi_original_max"],
             "Maximum function mi_sei": merged_metrics["mi_sei_max"],
             "Maximum function mi_visual_studio": merged_metrics["mi_visual_studio_max"],
-            "Maximum function blank": merged_metrics["blank_max"],
             "Minimum function cyclomatic": merged_metrics["cyclomatic_min"],
             "Minimum function number of unique operands": merged_metrics[
                 "halstead_n2_min"
@@ -326,6 +326,7 @@ class source_code_function_metrics(object):
             "Minimum function number of instruction loc": merged_metrics["ploc_min"],
             "Minimum function number of logical loc": merged_metrics["lloc_min"],
             "Minimum function number of comment loc": merged_metrics["cloc_min"],
+            "Minimum function blank": merged_metrics["blank_min"],
             "Minimum function number of function arguments": merged_metrics[
                 "nargs_min"
             ],
@@ -336,7 +337,6 @@ class source_code_function_metrics(object):
             "Minimum function mi_original": merged_metrics["mi_original_min"],
             "Minimum function mi_sei": merged_metrics["mi_sei_min"],
             "Minimum function mi_visual_studio": merged_metrics["mi_visual_studio_min"],
-            "Minimum function blank": merged_metrics["blank_min"],
             "Total function cyclomatic": merged_metrics["cyclomatic_total"],
             "Total function number of unique operands": merged_metrics[
                 "halstead_n2_total"
@@ -350,6 +350,7 @@ class source_code_function_metrics(object):
             "Total function number of instruction loc": merged_metrics["ploc_total"],
             "Total function number of logical loc": merged_metrics["lloc_total"],
             "Total function number of comment loc": merged_metrics["cloc_total"],
+            "Total function blank": merged_metrics["blank_total"],
             "Total function number of function arguments": merged_metrics[
                 "nargs_total"
             ],
@@ -360,7 +361,6 @@ class source_code_function_metrics(object):
             "Total function mi_original": merged_metrics["mi_original_total"],
             "Total function mi_sei": merged_metrics["mi_sei_total"],
             "Total function mi_visual_studio": merged_metrics["mi_visual_studio_total"],
-            "Total function blank": merged_metrics["blank_total"],
         }
 
 
@@ -382,6 +382,7 @@ class source_code_metrics_diff(object):
             "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
             "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
             "Diff in number of comment loc": commit["metrics_diff"]["cloc_total"],
+            "Diff in blank": commit["metrics_diff"]["blank_total"],
             "Diff in number of function arguments": commit["metrics_diff"][
                 "nargs_total"
             ],
@@ -394,7 +395,6 @@ class source_code_metrics_diff(object):
             "Diff in mi_visual_studio": commit["metrics_diff"][
                 "mi_visual_studio_total"
             ],
-            "Diff in blank": commit["metrics_diff"]["blank_total"],
         }
 
 

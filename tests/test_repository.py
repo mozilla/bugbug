@@ -2477,8 +2477,8 @@ void main() {
         "mi_visual_studio_total": 73.97332286868733,
         "blank_avg": 0.0,
         "blank_max": 0.0,
-        "blank_min": 9223372036854775807,
-        "blank_total": 0.0,
+        "blank_min": 0.0,
+        "blank_total": 1.0,
     }
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
@@ -2656,8 +2656,8 @@ void main() {
         "mi_visual_studio_total": 70.67438557926586,
         "blank_avg": 0.0,
         "blank_max": 0.0,
-        "blank_min": 9223372036854775807,
-        "blank_total": 0.0,
+        "blank_min": 0.0,
+        "blank_total": 1.0,
     }
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
