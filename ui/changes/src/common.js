@@ -720,6 +720,10 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
         enabled: false,
       },
     },
+    title: {
+      text: "Number of new/fixed regressions",
+      align: "left",
+    },
     plotOptions: {
       bar: {
         borderRadius: 8,
