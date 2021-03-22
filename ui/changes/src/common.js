@@ -1691,6 +1691,10 @@ async function buildComponentsSelect(teams = null) {
     option.selected = true;
     componentSelect.append(option);
   }
+  options["products"].callback = async function () { 
+    await buildProductsSelect(new Set(getOption("products"))); 
+    return "components"; 
+  }; 
 }
 
 async function buildTeamsSelect() {
