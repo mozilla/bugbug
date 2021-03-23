@@ -686,14 +686,22 @@ export async function renderRegressionsChart(
     (summary) => summary.date
   );
 
+  const openDates = Object.keys(summaryOpenData);
+  const fixDates = Object.keys(summaryFixData);
+  const dates = openDates.length >= fixDates.length ? openDates : fixDates;
+
   let categories = [];
   let regressions = [];
   let fixed_week_regressions = [];
   let fixed_month_regressions = [];
   let fixed_ancient_regressions = [];
-  for (const date in summaryOpenData) {
+  for (const date of dates) {
     categories.push(date);
-    regressions.push(summaryOpenData[date].regressions);
+    if (date in summaryOpenData) {
+      regressions.push(summaryOpenData[date].regressions);
+    } else {
+      regressions.push(0);
+    }
     if (date in summaryFixData) {
       fixed_week_regressions.push(summaryFixData[date].fixed_week_regressions);
       fixed_month_regressions.push(
@@ -734,10 +742,12 @@ export async function renderRegressionsChart(
     for (const date of Object.keys(summaryFixData).slice(1).reverse()) {
       regressions_total.unshift(
         regressions_total[0] -
-          (summaryOpenData[date].regressions -
-            (summaryFixData[date].fixed_ancient_regressions +
-              summaryFixData[date].fixed_month_regressions +
-              summaryFixData[date].fixed_week_regressions))
+          (date in summaryOpenData
+            ? summaryOpenData[date].regressions
+            : 0 -
+              (summaryFixData[date].fixed_ancient_regressions +
+                summaryFixData[date].fixed_month_regressions +
+                summaryFixData[date].fixed_week_regressions))
       );
     }
 
