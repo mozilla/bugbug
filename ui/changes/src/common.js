@@ -716,11 +716,6 @@ export async function renderRegressionsChart(
 
   const series = [
     {
-      name: "New regressions",
-      type: "column",
-      data: regressions,
-    },
-    {
       name: "Fixed < 1 week old regressions",
       type: "column",
       data: fixed_week_regressions,
@@ -795,7 +790,7 @@ export async function renderRegressionsChart(
     },
     yaxis: [
       {
-        seriesName: "New regressions",
+        seriesName: "Fixed < 1 week old regressions",
         axisTicks: {
           show: true,
         },
@@ -807,19 +802,15 @@ export async function renderRegressionsChart(
         },
       },
       {
-        seriesName: "New regressions",
+        seriesName: "Fixed < 1 week old regressions",
         show: false,
       },
       {
-        seriesName: "New regressions",
+        seriesName: "Fixed < 1 week old regressions",
         show: false,
       },
       {
-        seriesName: "New regressions",
-        show: false,
-      },
-      {
-        seriesName: "New regressions",
+        seriesName: "Fixed < 1 week old regressions",
         show: false,
       },
       {
