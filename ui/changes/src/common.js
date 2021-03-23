@@ -749,7 +749,35 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
   chart.render();
 }
 
-export async function renderTypesChart(chartEl, bugSummaries) {
+export async function getSeverityCount(severity, product_components) {
+  const products = product_components.map((product_component) =>
+    product_component.substr(0, product_component.indexOf("::"))
+  );
+  const components = product_components.map((product_component) =>
+    product_component.substr(product_component.indexOf("::") + 2)
+  );
+
+  const url = new URL(
+    `https://bugzilla.mozilla.org/rest/bug?bug_severity=${severity}&count_only=1`
+  );
+  for (const product of products) {
+    url.searchParams.append("product", product);
+  }
+  for (const component of components) {
+    url.searchParams.append("component", component);
+  }
+
+  const response = await fetch(url.href);
+  const result = await response.json();
+
+  return result["bug_count"];
+}
+
+export async function renderSeverityChart(
+  chartEl,
+  bugSummaries,
+  carryover = false
+) {
   if (bugSummaries.length == 0) {
     return;
   }
@@ -765,55 +793,105 @@ export async function renderTypesChart(chartEl, bugSummaries) {
     ).creation_date
   );
 
-  let summaryData = await getSummaryData(
+  const summaryOpenData = await getSummaryData(
     bugSummaries,
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      for (const type of bug.types) {
-        counterObj[type] += 1;
-      }
-
       if (bug.severity == "S1") {
-        counterObj.s1 += 1;
+        counterObj.S1 += 1;
       } else if (bug.severity == "S2") {
-        counterObj.s2 += 1;
+        counterObj.S2 += 1;
       }
     },
     null,
     (summary) => summary.creation_date
   );
 
-  let all_series = [
-    { name: "s1", data: [] },
-    { name: "s2", data: [] },
-  ];
-  for (let type of allBugTypes) {
-    if (type == "unknown") {
-      continue;
-    }
-
-    all_series.push({
-      name: type,
-      data: [],
-    });
-  }
-
-  let categories = [];
-  for (let date in summaryData) {
+  const categories = [];
+  const s1 = [];
+  const s2 = [];
+  for (const date in summaryOpenData) {
     categories.push(date);
-    for (let series of all_series) {
-      series["data"].push(summaryData[date][series["name"]]);
-    }
+    s1.push(summaryOpenData[date]["S1"]);
+    s2.push(summaryOpenData[date]["S2"]);
   }
 
-  renderChart(
-    chartEl,
-    all_series,
-    categories,
-    "Number of bugs by severity and type",
-    "# of bugs"
-  );
+  const series = [
+    { name: "New S1", type: "column", data: s1 },
+    { name: "New S2", type: "column", data: s2 },
+  ];
+
+  if (carryover) {
+    const summaryFixData = await getSummaryData(
+      bugSummaries.filter((bug) => bug.fixed && !!bug.date),
+      getOption("grouping"),
+      minDate,
+      (counterObj, bug) => {
+        if (bug.severity == "S1") {
+          counterObj.S1 += 1;
+        } else if (bug.severity == "S2") {
+          counterObj.S2 += 1;
+        }
+      },
+      null,
+      (summary) => summary.date
+    );
+
+    const finalS1 = await getSeverityCount("S1", getOption("components"));
+    const finalS2 = await getSeverityCount("S2", getOption("components"));
+
+    const s1_total = [finalS1];
+    const s2_total = [finalS2];
+    for (const date of Object.keys(summaryFixData).slice(1).reverse()) {
+      s1_total.unshift(
+        s1_total[0] - (summaryOpenData[date]["S1"] - summaryFixData[date]["S1"])
+      );
+      s2_total.unshift(
+        s2_total[0] - (summaryOpenData[date]["S2"] - summaryFixData[date]["S2"])
+      );
+    }
+
+    series.push({ name: "Total S1", type: "line", data: s1_total });
+    series.push({ name: "Total S2", type: "line", data: s2_total });
+  }
+
+  const options = {
+    series: series,
+    chart: {
+      type: "line",
+      height: 350,
+      stacked: false,
+      toolbar: {
+        show: false,
+      },
+      animations: {
+        enabled: false,
+      },
+    },
+    plotOptions: {
+      bar: {
+        borderRadius: 8,
+        horizontal: false,
+      },
+    },
+    xaxis: {
+      categories: categories,
+      title: {
+        text: "Date",
+      },
+    },
+    legend: {
+      position: "right",
+      offsetY: 40,
+    },
+    fill: {
+      opacity: 1,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
 }
 
 export async function renderFixTimesChart(chartEl, bugSummaries) {
