@@ -678,8 +678,6 @@ export async function renderRegressionsChart(
         counterObj.fixed_week_regressions += 1;
       } else if (days <= 31) {
         counterObj.fixed_month_regressions += 1;
-      } else if (days <= 365) {
-        counterObj.fixed_year_regressions += 1;
       } else {
         counterObj.fixed_ancient_regressions += 1;
       }
@@ -692,7 +690,6 @@ export async function renderRegressionsChart(
   let regressions = [];
   let fixed_week_regressions = [];
   let fixed_month_regressions = [];
-  let fixed_year_regressions = [];
   let fixed_ancient_regressions = [];
   for (const date in summaryOpenData) {
     categories.push(date);
@@ -702,14 +699,12 @@ export async function renderRegressionsChart(
       fixed_month_regressions.push(
         summaryFixData[date].fixed_month_regressions
       );
-      fixed_year_regressions.push(summaryFixData[date].fixed_year_regressions);
       fixed_ancient_regressions.push(
         summaryFixData[date].fixed_ancient_regressions
       );
     } else {
       fixed_week_regressions.push(0);
       fixed_month_regressions.push(0);
-      fixed_year_regressions.push(0);
       fixed_ancient_regressions.push(0);
     }
   }
@@ -726,12 +721,7 @@ export async function renderRegressionsChart(
       data: fixed_month_regressions,
     },
     {
-      name: "Fixed < 1 year old regressions",
-      type: "column",
-      data: fixed_year_regressions,
-    },
-    {
-      name: "Fixed > 1 year old regressions",
+      name: "Fixed > 1 month old regressions",
       type: "column",
       data: fixed_ancient_regressions,
     },
@@ -746,7 +736,6 @@ export async function renderRegressionsChart(
         regressions_total[0] -
           (summaryOpenData[date].regressions -
             (summaryFixData[date].fixed_ancient_regressions +
-              summaryFixData[date].fixed_year_regressions +
               summaryFixData[date].fixed_month_regressions +
               summaryFixData[date].fixed_week_regressions))
       );
@@ -800,10 +789,6 @@ export async function renderRegressionsChart(
         title: {
           text: "New # of bugs",
         },
-      },
-      {
-        seriesName: "Fixed < 1 week old regressions",
-        show: false,
       },
       {
         seriesName: "Fixed < 1 week old regressions",
