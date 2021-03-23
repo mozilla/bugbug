@@ -881,6 +881,41 @@ export async function renderSeverityChart(
         text: "Date",
       },
     },
+    yaxis: [
+      {
+        seriesName: "New S1",
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "New # of bugs",
+        },
+      },
+      {
+        seriesName: "New S1",
+        show: false,
+      },
+      {
+        seriesName: "Total S2",
+        opposite: true,
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "Total # of bugs",
+        },
+      },
+      {
+        seriesName: "Total S2",
+        show: false,
+      },
+    ],
     legend: {
       position: "right",
       offsetY: 40,
