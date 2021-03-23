@@ -16,7 +16,7 @@ async function renderUI() {
 
   let regressionsChartEl = document.createElement("div");
   resultGraphs.append(regressionsChartEl);
-  await common.renderRegressionsChart(regressionsChartEl, bugSummaries);
+  await common.renderRegressionsChart(regressionsChartEl, bugSummaries, true);
 
   let severityChartEl = document.createElement("div");
   resultGraphs.append(severityChartEl);

@@ -603,7 +603,35 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   );
 }
 
-export async function renderRegressionsChart(chartEl, bugSummaries) {
+async function getRegressionCount(product_components) {
+  const products = product_components.map((product_component) =>
+    product_component.substr(0, product_component.indexOf("::"))
+  );
+  const components = product_components.map((product_component) =>
+    product_component.substr(product_component.indexOf("::") + 2)
+  );
+
+  const url = new URL(
+    `https://bugzilla.mozilla.org/rest/bug?keywords=regression&keywords_type=allwords&resolution=---&count_only=1`
+  );
+  for (const product of products) {
+    url.searchParams.append("product", product);
+  }
+  for (const component of components) {
+    url.searchParams.append("component", component);
+  }
+
+  const response = await fetch(url.href);
+  const result = await response.json();
+
+  return result["bug_count"];
+}
+
+export async function renderRegressionsChart(
+  chartEl,
+  bugSummaries,
+  carryover = false
+) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
 
   if (bugSummaries.length == 0) {
@@ -686,31 +714,60 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
     }
   }
 
+  const series = [
+    {
+      name: "New regressions",
+      type: "column",
+      data: regressions,
+    },
+    {
+      name: "Fixed < 1 week old regressions",
+      type: "column",
+      data: fixed_week_regressions,
+    },
+    {
+      name: "Fixed < 1 month old regressions",
+      type: "column",
+      data: fixed_month_regressions,
+    },
+    {
+      name: "Fixed < 1 year old regressions",
+      type: "column",
+      data: fixed_year_regressions,
+    },
+    {
+      name: "Fixed > 1 year old regressions",
+      type: "column",
+      data: fixed_ancient_regressions,
+    },
+  ];
+
+  if (carryover) {
+    const finalRegressions = await getRegressionCount(getOption("components"));
+
+    const regressions_total = [finalRegressions];
+    for (const date of Object.keys(summaryFixData).slice(1).reverse()) {
+      regressions_total.unshift(
+        regressions_total[0] -
+          (summaryOpenData[date].regressions -
+            (summaryFixData[date].fixed_ancient_regressions +
+              summaryFixData[date].fixed_year_regressions +
+              summaryFixData[date].fixed_month_regressions +
+              summaryFixData[date].fixed_week_regressions))
+      );
+    }
+
+    series.push({
+      name: "Total regressions",
+      type: "line",
+      data: regressions_total,
+    });
+  }
+
   const options = {
-    series: [
-      {
-        name: "New regressions",
-        data: regressions,
-      },
-      {
-        name: "Fixed < 1 week old regressions",
-        data: fixed_week_regressions,
-      },
-      {
-        name: "Fixed < 1 month old regressions",
-        data: fixed_month_regressions,
-      },
-      {
-        name: "Fixed < 1 year old regressions",
-        data: fixed_year_regressions,
-      },
-      {
-        name: "Fixed > 1 year old regressions",
-        data: fixed_ancient_regressions,
-      },
-    ],
+    series: series,
     chart: {
-      type: "bar",
+      type: "line",
       height: 350,
       stacked: true,
       toolbar: {
@@ -736,6 +793,49 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
         text: "Date",
       },
     },
+    yaxis: [
+      {
+        seriesName: "New regressions",
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "New # of bugs",
+        },
+      },
+      {
+        seriesName: "New regressions",
+        show: false,
+      },
+      {
+        seriesName: "New regressions",
+        show: false,
+      },
+      {
+        seriesName: "New regressions",
+        show: false,
+      },
+      {
+        seriesName: "New regressions",
+        show: false,
+      },
+      {
+        seriesName: "Total regressions",
+        opposite: true,
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "Total # of bugs",
+        },
+      },
+    ],
     legend: {
       position: "right",
       offsetY: 40,
