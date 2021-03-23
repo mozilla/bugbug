@@ -858,7 +858,7 @@ export async function getSeverityCount(severity, product_components) {
   );
 
   const url = new URL(
-    `https://bugzilla.mozilla.org/rest/bug?bug_severity=${severity}&count_only=1`
+    `https://bugzilla.mozilla.org/rest/bug?bug_severity=${severity}&resolution=---&count_only=1`
   );
   for (const product of products) {
     url.searchParams.append("product", product);
@@ -866,7 +866,6 @@ export async function getSeverityCount(severity, product_components) {
   for (const component of components) {
     url.searchParams.append("component", component);
   }
-  url.searchParams.set("resolution", "---");
 
   const response = await fetch(url.href);
   const result = await response.json();
