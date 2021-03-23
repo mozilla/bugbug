@@ -869,6 +869,10 @@ export async function renderSeverityChart(
         enabled: false,
       },
     },
+    title: {
+      text: "Number of new and total bugs by severity",
+      align: "left",
+    },
     plotOptions: {
       bar: {
         borderRadius: 8,
