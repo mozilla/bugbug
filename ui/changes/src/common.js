@@ -739,15 +739,17 @@ export async function renderRegressionsChart(
     const finalRegressions = await getRegressionCount(getOption("components"));
 
     const regressions_total = [finalRegressions];
-    for (const date of Object.keys(summaryFixData).slice(1).reverse()) {
+    for (const date of dates.slice(1).reverse()) {
+      const new_regressions =
+        date in summaryOpenData ? summaryOpenData[date].regressions : 0;
+      const fixed_regressions =
+        date in summaryFixData
+          ? summaryFixData[date].fixed_ancient_regressions +
+            summaryFixData[date].fixed_month_regressions +
+            summaryFixData[date].fixed_week_regressions
+          : 0;
       regressions_total.unshift(
-        regressions_total[0] -
-          (date in summaryOpenData
-            ? summaryOpenData[date].regressions
-            : 0 -
-              (summaryFixData[date].fixed_ancient_regressions +
-                summaryFixData[date].fixed_month_regressions +
-                summaryFixData[date].fixed_week_regressions))
+        regressions_total[0] - (new_regressions - fixed_regressions)
       );
     }
 
