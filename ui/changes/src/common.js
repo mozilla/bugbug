@@ -766,6 +766,7 @@ export async function getSeverityCount(severity, product_components) {
   for (const component of components) {
     url.searchParams.append("component", component);
   }
+  url.searchParams.set("resolution", "---");
 
   const response = await fetch(url.href);
   const result = await response.json();
