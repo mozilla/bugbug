@@ -1093,6 +1093,72 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
   );
 }
 
+export async function renderTimeToAssignChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter(
+    (bugSummary) => bugSummary.time_to_assign !== null
+  );
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = getPlainDate(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).creation_date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      counterObj.times_to_assign.push(bug.time_to_assign);
+    },
+    null,
+    (summary) => summary.creation_date,
+    () => []
+  );
+
+  let categories = [];
+  let ninthdecile_time_to_assign = [];
+  let median_time_to_assign = [];
+  const bugs_number = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    ninthdecile_time_to_assign.push(
+      quantile(summaryData[date].times_to_assign, 0.9).toFixed(1)
+    );
+    median_time_to_assign.push(
+      median(summaryData[date].times_to_assign).toFixed(1)
+    );
+    bugs_number.push(summaryData[date].times_to_assign.length);
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "90% time to assign",
+        data: ninthdecile_time_to_assign,
+      },
+      {
+        name: "Median time to assign",
+        data: median_time_to_assign,
+      },
+    ],
+    categories,
+    "Time to assign",
+    "Days",
+    {}
+  );
+}
+
 export async function renderTimeToBugChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter(
     (bugSummary) => bugSummary.time_to_bug !== null

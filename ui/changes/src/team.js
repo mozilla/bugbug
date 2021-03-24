@@ -34,6 +34,10 @@ async function renderUI() {
   resultGraphs.append(reviewTimeChartEl);
   await common.renderReviewTimeChart(reviewTimeChartEl, bugSummaries);
 
+  let assignTimeChartEl = document.createElement("div");
+  resultGraphs.append(assignTimeChartEl);
+  await common.renderTimeToAssignChart(assignTimeChartEl, bugSummaries);
+
   let testFailureStatsChartEl = document.createElement("div");
   resultGraphs.append(testFailureStatsChartEl);
   await common.renderTestFailureStatsChart(testFailureStatsChartEl);
