@@ -854,6 +854,10 @@ export async function getSeverityCount(severity, product_components) {
   for (const component of components) {
     url.searchParams.append("component", component);
   }
+  if (getOption("regressionsOnly")) {
+    url.searchParams.set("keywords", "regression");
+    url.searchParams.set("keywords_type", "allwords");
+  }
 
   const response = await fetch(url.href);
   const result = await response.json();
@@ -1845,6 +1849,11 @@ let options = {
     type: "radio",
     callback: null,
   },
+  regressionsOnly: {
+    value: null,
+    type: "checkbox",
+    callback: null,
+  },
 };
 
 export function getOption(name) {
@@ -2402,6 +2411,10 @@ export async function getFilteredBugSummaries() {
         (includeNotAvailableRiskiness && bugSummary.risk_band === null) ||
         riskiness.includes(bugSummary.risk_band)
     );
+  }
+
+  if (getOption("regressionsOnly")) {
+    bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
   }
 
   let bugDetails = document.getElementById("bug-details");
