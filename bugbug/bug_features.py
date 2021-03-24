@@ -323,7 +323,7 @@ class has_attachment(single_bug_feature):
     name = "Attachment present"
 
     def __call__(self, bug, **kwargs):
-        return len(bug["attachments"])
+        return len(bug["attachments"]) > 0
 
 
 class has_image_attachment_at_bug_creation(single_bug_feature):
