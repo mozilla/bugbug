@@ -35,6 +35,11 @@ class SpamBugModel(BugModel):
             bug_features.num_words_title(),
             bug_features.num_words_comments(),
             bug_features.keywords(),
+            bug_features.priority(),
+            bug_features.version(),
+            bug_features.has_attachment(),
+            bug_features.platform(),
+            bug_features.op_sys(),
         ]
 
         cleanup_functions = [
