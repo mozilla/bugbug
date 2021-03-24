@@ -896,13 +896,37 @@ export async function renderSeverityChart(
     (summary) => summary.creation_date
   );
 
+  const summaryFixData = await getSummaryData(
+    bugSummaries.filter((bug) => bug.fixed && !!bug.date),
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      if (bug.severity == "S1") {
+        counterObj.S1 += 1;
+      } else if (bug.severity == "S2") {
+        counterObj.S2 += 1;
+      }
+    },
+    null,
+    (summary) => summary.date
+  );
+
+  const openDates = Object.keys(summaryOpenData);
+  const fixDates = Object.keys(summaryFixData);
+  const dates = openDates.length >= fixDates.length ? openDates : fixDates;
+
   const categories = [];
   const s1 = [];
   const s2 = [];
-  for (const date in summaryOpenData) {
+  for (const date of dates) {
     categories.push(date);
-    s1.push(summaryOpenData[date]["S1"]);
-    s2.push(summaryOpenData[date]["S2"]);
+    if (date in summaryOpenData) {
+      s1.push(summaryOpenData[date]["S1"]);
+      s2.push(summaryOpenData[date]["S2"]);
+    } else {
+      s1.push(0);
+      s2.push(0);
+    }
   }
 
   const series = [
@@ -911,33 +935,18 @@ export async function renderSeverityChart(
   ];
 
   if (carryover) {
-    const summaryFixData = await getSummaryData(
-      bugSummaries.filter((bug) => bug.fixed && !!bug.date),
-      getOption("grouping"),
-      minDate,
-      (counterObj, bug) => {
-        if (bug.severity == "S1") {
-          counterObj.S1 += 1;
-        } else if (bug.severity == "S2") {
-          counterObj.S2 += 1;
-        }
-      },
-      null,
-      (summary) => summary.date
-    );
-
     const finalS1 = await getSeverityCount("S1", getOption("components"));
     const finalS2 = await getSeverityCount("S2", getOption("components"));
 
     const s1_total = [finalS1];
     const s2_total = [finalS2];
-    for (const date of Object.keys(summaryFixData).slice(1).reverse()) {
-      s1_total.unshift(
-        s1_total[0] - (summaryOpenData[date]["S1"] - summaryFixData[date]["S1"])
-      );
-      s2_total.unshift(
-        s2_total[0] - (summaryOpenData[date]["S2"] - summaryFixData[date]["S2"])
-      );
+    for (const date of dates.slice(1).reverse()) {
+      const s1_new = date in summaryOpenData ? summaryOpenData[date]["S1"] : 0;
+      const s1_fixed = date in summaryFixData ? summaryFixData[date]["S1"] : 0;
+      s1_total.unshift(s1_total[0] - (s1_new - s1_fixed));
+      const s2_new = date in summaryOpenData ? summaryOpenData[date]["S2"] : 0;
+      const s2_fixed = date in summaryFixData ? summaryFixData[date]["S2"] : 0;
+      s2_total.unshift(s2_total[0] - (s2_new - s2_fixed));
     }
 
     series.push({ name: "Total S1", type: "line", data: s1_total });
