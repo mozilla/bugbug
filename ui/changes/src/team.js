@@ -14,6 +14,10 @@ async function renderUI() {
   resultGraphs.append(riskChartEl);
   await common.renderRiskChart(riskChartEl, bugSummaries);
 
+  const riskListEl = await common.renderRiskList(bugSummaries);
+  resultGraphs.append(riskListEl);
+  resultGraphs.append(document.createElement("br"));
+
   let regressionsChartEl = document.createElement("div");
   resultGraphs.append(regressionsChartEl);
   await common.renderRegressionsChart(regressionsChartEl, bugSummaries, true);

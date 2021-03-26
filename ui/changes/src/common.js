@@ -603,6 +603,50 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   );
 }
 
+export async function renderRiskList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Patches landed during the last week with highest risk";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Riskiness"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Riskiness"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "risk"], false);
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
 async function getRegressionCount(product_components) {
   const products = product_components.map((product_component) =>
     product_component.substr(0, product_component.indexOf("::"))
