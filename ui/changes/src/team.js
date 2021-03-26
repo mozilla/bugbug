@@ -26,6 +26,10 @@ async function renderUI() {
   resultGraphs.append(fixTimesChartEl);
   await common.renderFixTimesChart(fixTimesChartEl, bugSummaries);
 
+  const fixTimesListEl = await common.renderFixTimesList(bugSummaries);
+  resultGraphs.append(fixTimesListEl);
+  resultGraphs.append(document.createElement("br"));
+
   let patchCoverageChartEl = document.createElement("div");
   resultGraphs.append(patchCoverageChartEl);
   await common.renderPatchCoverageChart(patchCoverageChartEl, bugSummaries);

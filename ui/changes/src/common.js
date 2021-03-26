@@ -1034,6 +1034,12 @@ export async function renderSeverityChart(
   chart.render();
 }
 
+function getFixTime(bug) {
+  return getPlainDate(bug.creation_date).until(getPlainDate(bug.date), {
+    largestUnit: "days",
+  }).days;
+}
+
 export async function renderFixTimesChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
 
@@ -1057,11 +1063,7 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.fix_times.push(
-        getPlainDate(bug.creation_date).until(getPlainDate(bug.date), {
-          largestUnit: "days",
-        }).days
-      );
+      counterObj.fix_times.push(getFixTime(bug));
     },
     null,
     (summary) => summary.creation_date,
@@ -1095,6 +1097,51 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
     "Time to fix",
     "Days"
   );
+}
+
+export async function renderFixTimesList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent =
+    "Bugs with patches landed during the last week which took the longest to fix";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Fix Time"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Fix Time"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "fix-time"], false);
+  }
+
+  details.appendChild(table);
+  return details;
 }
 
 export async function renderTimeToAssignChart(chartEl, bugSummaries) {
@@ -2414,6 +2461,10 @@ function getCompareFunction(field) {
     return function (a, b) {
       return meanFirstReviewTime(a) - meanFirstReviewTime(b);
     };
+  } else if (field == "Fix Time") {
+    return function (a, b) {
+      return getFixTime(a) - getFixTime(b);
+    };
   }
 
   return null;
@@ -2728,6 +2779,9 @@ function addRow(
       reviewtime_column.textContent = `${Math.round(
         meanFirstReviewTime(bugSummary)
       )} days`;
+    } else if (column == "fix-time") {
+      const fixtime_column = row.insertCell();
+      fixtime_column.textContent = `${getFixTime(bugSummary)} days`;
     }
   }
 }
