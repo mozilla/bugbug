@@ -1399,7 +1399,7 @@ export async function renderPatchCoverageList(bugSummaries) {
 
   const summary = document.createElement("summary");
   const title = document.createElement("h3");
-  title.textContent = "Patches with lowest coverage";
+  title.textContent = "Patches landed during last week with lowest coverage";
   summary.appendChild(title);
   details.appendChild(summary);
 
@@ -1516,7 +1516,8 @@ export async function renderReviewTimeList(bugSummaries) {
 
   const summary = document.createElement("summary");
   const title = document.createElement("h3");
-  title.textContent = "Patches with longest first review time";
+  title.textContent =
+    "Patches landed during the last week with longest first review time";
   summary.appendChild(title);
   details.appendChild(summary);
 
