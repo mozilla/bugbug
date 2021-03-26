@@ -614,10 +614,10 @@ async function getRegressionCount(product_components) {
   const url = new URL(
     `https://bugzilla.mozilla.org/rest/bug?keywords=regression&keywords_type=allwords&resolution=---&count_only=1`
   );
-  for (const product of products) {
+  for (const product of new Set(products)) {
     url.searchParams.append("product", product);
   }
-  for (const component of components) {
+  for (const component of new Set(components)) {
     url.searchParams.append("component", component);
   }
 
@@ -848,10 +848,10 @@ export async function getSeverityCount(severity, product_components) {
   const url = new URL(
     `https://bugzilla.mozilla.org/rest/bug?bug_severity=${severity}&resolution=---&count_only=1`
   );
-  for (const product of products) {
+  for (const product of new Set(products)) {
     url.searchParams.append("product", product);
   }
-  for (const component of components) {
+  for (const component of new Set(components)) {
     url.searchParams.append("component", component);
   }
   if (getOption("regressionsOnly")) {
@@ -1392,6 +1392,50 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
       max: 100,
     }
   );
+}
+
+export async function renderPatchCoverageList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Patches with lowest coverage";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Coverage"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMinimumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Coverage"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "coverage"], false);
+  }
+
+  details.appendChild(table);
+  return details;
 }
 
 export async function renderReviewTimeChart(chartEl, bugSummaries) {
@@ -2263,6 +2307,75 @@ export async function setupOptions(callback) {
   }
 }
 
+function getCompareFunction(field) {
+  if (field == "Date") {
+    return function (a, b) {
+      return Temporal.PlainDate.compare(
+        getPlainDate(a.date ? a.date : a.creation_date),
+        getPlainDate(b.date ? b.date : b.creation_date)
+      );
+    };
+  } else if (field == "Riskiness") {
+    return function (a, b) {
+      if (a.risk_band == b.risk_band) {
+        return 0;
+      } else if (
+        a.risk_band == "h" ||
+        (a.risk_band == "a" && b.risk_band == "l")
+      ) {
+        return 1;
+      } else {
+        return -1;
+      }
+    };
+  } else if (field == "Bug") {
+    return function (a, b) {
+      return a.id - b.id;
+    };
+  } else if (field == "Coverage") {
+    return function (a, b) {
+      const [
+        lines_added_a,
+        lines_covered_a,
+        lines_unknown_a,
+      ] = summarizeCoverage(a);
+      const [
+        lines_added_b,
+        lines_covered_b,
+        lines_unknown_b,
+      ] = summarizeCoverage(b);
+
+      const uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
+      const uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
+
+      if (uncovered_a == uncovered_b) {
+        return lines_added_a - lines_added_b;
+      }
+
+      return uncovered_a - uncovered_b;
+    };
+  }
+
+  return null;
+}
+
+function sortBugSummaries(bugSummaries, field, order) {
+  const sortFunction = getCompareFunction(field);
+  if (sortFunction) {
+    if (order == "DESC") {
+      bugSummaries.sort((a, b) => -sortFunction(a, b));
+    } else {
+      bugSummaries.sort(sortFunction);
+    }
+  }
+}
+
+function getMinimumBugSummaries(bugSummaries, field, n = 10) {
+  // TODO: Avoid sorting!
+  sortBugSummaries(bugSummaries, field, "DESC");
+  return bugSummaries.slice(0, 10);
+}
+
 export async function getFilteredBugSummaries() {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
@@ -2419,62 +2532,7 @@ export async function getFilteredBugSummaries() {
 
   let bugDetails = document.getElementById("bug-details");
   if (bugDetails) {
-    let sortFunction = null;
-    if (sortBy[0] == "Date") {
-      sortFunction = function (a, b) {
-        return Temporal.PlainDate.compare(
-          getPlainDate(a.date ? a.date : a.creation_date),
-          getPlainDate(b.date ? b.date : b.creation_date)
-        );
-      };
-    } else if (sortBy[0] == "Riskiness") {
-      sortFunction = function (a, b) {
-        if (a.risk_band == b.risk_band) {
-          return 0;
-        } else if (
-          a.risk_band == "h" ||
-          (a.risk_band == "a" && b.risk_band == "l")
-        ) {
-          return 1;
-        } else {
-          return -1;
-        }
-      };
-    } else if (sortBy[0] == "Bug") {
-      sortFunction = function (a, b) {
-        return a.id - b.id;
-      };
-    } else if (sortBy[0] == "Coverage") {
-      sortFunction = function (a, b) {
-        let [
-          lines_added_a,
-          lines_covered_a,
-          lines_unknown_a,
-        ] = summarizeCoverage(a);
-        let [
-          lines_added_b,
-          lines_covered_b,
-          lines_unknown_b,
-        ] = summarizeCoverage(b);
-
-        let uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
-        let uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
-
-        if (uncovered_a == uncovered_b) {
-          return lines_added_a - lines_added_b;
-        }
-
-        return uncovered_a - uncovered_b;
-      };
-    }
-
-    if (sortFunction) {
-      if (sortBy[1] == "DESC") {
-        bugSummaries.sort((a, b) => -sortFunction(a, b));
-      } else {
-        bugSummaries.sort(sortFunction);
-      }
-    }
+    sortBugSummaries(bugSummaries, sortBy[0], sortBy[1]);
   }
 
   return bugSummaries;
@@ -2483,117 +2541,130 @@ export async function getFilteredBugSummaries() {
 // TODO: On click, show previous components affected by similar patches.
 // TODO: On click, show previous bugs caused by similar patches.
 
-function addRow(bugSummary) {
-  let table = document.getElementById("table");
+function addRow(
+  table,
+  bugSummary,
+  columns = ["bug", "date", "testing-tags", "coverage", "risk"],
+  showRegressionComponents = true
+) {
+  const row = table.insertRow(table.rows.length);
 
-  let row = table.insertRow(table.rows.length);
+  /*
+    <hr>
+    The patches have a high chance of causing regressions of type <b>crash</b> and <b>high severity</b>.
+    <br><br>
+    The patches could affect the <b>Search</b> and <b>Bookmarks</b> features.
+    <br><br>
+    Examples of previous bugs caused by similar patches:
+    <ul>
+      <li>Bug 1 - Can"t bookmark pages</li>
+      <li>Bug 7 - Search doesn"t work anymore <span style="background-color:gold;color:yellow;">STR</span></li>
+    </ul>
+  */
 
-  let bug_column = row.insertCell(0);
-  let bug_link = document.createElement("a");
-  bug_link.textContent = `Bug ${bugSummary["id"]}`;
-  bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
-  bug_link.target = "_blank";
-  bug_column.append(bug_link);
-  bug_column.append(document.createTextNode(` - ${bugSummary["summary"]}`));
+  for (const column of columns) {
+    if (column == "bug") {
+      const bug_column = row.insertCell();
+      const bug_link = document.createElement("a");
+      bug_link.textContent = `Bug ${bugSummary["id"]}`;
+      bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
+      bug_link.target = "_blank";
+      bug_column.append(bug_link);
+      bug_column.append(document.createTextNode(` - ${bugSummary["summary"]}`));
 
-  let components_percentages = Object.entries(
-    bugSummary["most_common_regression_components"]
-  );
-  if (components_percentages.length > 0) {
-    let component_container = document.createElement("div");
-    component_container.classList.add("desc-box");
-    bug_column.append(component_container);
-    components_percentages.sort(
-      ([component1, percentage1], [component2, percentage2]) =>
-        percentage2 - percentage1
-    );
-    component_container.append(
-      document.createTextNode("Most common regression components:")
-    );
-    let component_list = document.createElement("ul");
-    for (let [component, percentage] of components_percentages.slice(0, 3)) {
-      let component_list_item = document.createElement("li");
-      component_list_item.append(
-        document.createTextNode(
-          `${component} - ${Math.round(100 * percentage)}%`
-        )
+      if (showRegressionComponents) {
+        const components_percentages = Object.entries(
+          bugSummary["most_common_regression_components"]
+        );
+        if (components_percentages.length > 0) {
+          const component_container = document.createElement("div");
+          component_container.classList.add("desc-box");
+          bug_column.append(component_container);
+          components_percentages.sort(
+            ([component1, percentage1], [component2, percentage2]) =>
+              percentage2 - percentage1
+          );
+          component_container.append(
+            document.createTextNode("Most common regression components:")
+          );
+          const component_list = document.createElement("ul");
+          for (const [component, percentage] of components_percentages.slice(
+            0,
+            3
+          )) {
+            const component_list_item = document.createElement("li");
+            component_list_item.append(
+              document.createTextNode(
+                `${component} - ${Math.round(100 * percentage)}%`
+              )
+            );
+            component_list.append(component_list_item);
+          }
+          component_container.append(component_list);
+        }
+      }
+    } else if (column == "date") {
+      const date_column = row.insertCell();
+      date_column.textContent = bugSummary.date;
+    } else if (column == "testing-tags") {
+      const testing_tags_column = row.insertCell();
+      testing_tags_column.classList.add("testing-tags");
+      const testing_tags_list = document.createElement("ul");
+      for (const commit of bugSummary.commits) {
+        const testing_tags_list_item = document.createElement("li");
+        if (!commit.testing) {
+          testing_tags_list_item.append(document.createTextNode("unknown"));
+        } else {
+          testing_tags_list_item.append(
+            document.createTextNode(TESTING_TAGS[commit.testing].label)
+          );
+        }
+        testing_tags_list.append(testing_tags_list_item);
+      }
+      testing_tags_column.append(testing_tags_list);
+    } else if (column == "coverage") {
+      const coverage_column = row.insertCell();
+      const [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
+        bugSummary
       );
-      component_list.append(component_list_item);
+      if (lines_added != 0) {
+        if (lines_unknown != 0) {
+          coverage_column.textContent = `${lines_covered}-${
+            lines_covered + lines_unknown
+          } of ${lines_added}`;
+        } else {
+          coverage_column.textContent = `${lines_covered} of ${lines_added}`;
+        }
+      } else {
+        coverage_column.textContent = "";
+      }
+    } else if (column == "risk") {
+      const risk_column = row.insertCell();
+
+      const risk_text = document.createElement("span");
+      risk_text.textContent = `${bugSummary.risk_band} risk`;
+      if (bugSummary.risk_band == "l") {
+        // Lower than average risk.
+        risk_text.style.color = LOW_RISK_COLOR;
+        risk_text.textContent = "Lower";
+      } else if (bugSummary.risk_band == "a") {
+        // Average risk.
+        risk_text.style.color = MEDIUM_RISK_COLOR;
+        risk_text.textContent = "Average";
+      } else if (bugSummary.risk_band == "h") {
+        // Higher than average risk.
+        risk_text.style.color = HIGH_RISK_COLOR;
+        risk_text.textContent = "Higher";
+      } else if (bugSummary.risk_band == null) {
+        // No risk available (there are no commits associated to the bug).
+        risk_text.textContent = "N/A";
+      } else {
+        throw new Exception("Unknown risk band");
+      }
+
+      risk_column.append(risk_text);
     }
-    component_container.append(component_list);
   }
-
-  /*<hr>
-          The patches have a high chance of causing regressions of type <b>crash</b> and <b>high severity</b>.
-          <br><br>
-          The patches could affect the <b>Search</b> and <b>Bookmarks</b> features.
-          <br><br>
-          Examples of previous bugs caused by similar patches:
-          <ul>
-            <li>Bug 1 - Can"t bookmark pages</li>
-            <li>Bug 7 - Search doesn"t work anymore <span style="background-color:gold;color:yellow;">STR</span></li>
-          </ul>*/
-
-  let date_column = row.insertCell(1);
-  date_column.textContent = bugSummary.date;
-
-  let testing_tags_column = row.insertCell(2);
-  testing_tags_column.classList.add("testing-tags");
-  let testing_tags_list = document.createElement("ul");
-  for (let commit of bugSummary.commits) {
-    let testing_tags_list_item = document.createElement("li");
-    if (!commit.testing) {
-      testing_tags_list_item.append(document.createTextNode("unknown"));
-    } else {
-      testing_tags_list_item.append(
-        document.createTextNode(TESTING_TAGS[commit.testing].label)
-      );
-    }
-    testing_tags_list.append(testing_tags_list_item);
-  }
-  testing_tags_column.append(testing_tags_list);
-
-  let coverage_column = row.insertCell(3);
-  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
-    bugSummary
-  );
-  if (lines_added != 0) {
-    if (lines_unknown != 0) {
-      coverage_column.textContent = `${lines_covered}-${
-        lines_covered + lines_unknown
-      } of ${lines_added}`;
-    } else {
-      coverage_column.textContent = `${lines_covered} of ${lines_added}`;
-    }
-  } else {
-    coverage_column.textContent = "";
-  }
-
-  let risk_list = document.createElement("ul");
-  let risk_column = row.insertCell(4);
-
-  let risk_text = document.createElement("span");
-  risk_text.textContent = `${bugSummary.risk_band} risk`;
-  if (bugSummary.risk_band == "l") {
-    // Lower than average risk.
-    risk_text.style.color = LOW_RISK_COLOR;
-    risk_text.textContent = "Lower";
-  } else if (bugSummary.risk_band == "a") {
-    // Average risk.
-    risk_text.style.color = MEDIUM_RISK_COLOR;
-    risk_text.textContent = "Average";
-  } else if (bugSummary.risk_band == "h") {
-    // Higher than average risk.
-    risk_text.style.color = HIGH_RISK_COLOR;
-    risk_text.textContent = "Higher";
-  } else if (bugSummary.risk_band == null) {
-    // No risk available (there are no commits associated to the bug).
-    risk_text.textContent = "N/A";
-  } else {
-    throw new Exception("Unknown risk band");
-  }
-
-  risk_column.append(risk_text);
 }
 
 export async function renderTable(bugSummaries) {
@@ -2607,6 +2678,6 @@ export async function renderTable(bugSummaries) {
     table.deleteRow(table.rows.length - 1);
   }
   for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
-    addRow(bugSummary);
+    addRow(table, bugSummary);
   }
 }

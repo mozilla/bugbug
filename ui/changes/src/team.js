@@ -30,6 +30,12 @@ async function renderUI() {
   resultGraphs.append(patchCoverageChartEl);
   await common.renderPatchCoverageChart(patchCoverageChartEl, bugSummaries);
 
+  const patchCoverageListEl = await common.renderPatchCoverageList(
+    bugSummaries
+  );
+  resultGraphs.append(patchCoverageListEl);
+  resultGraphs.append(document.createElement("br"));
+
   let reviewTimeChartEl = document.createElement("div");
   resultGraphs.append(reviewTimeChartEl);
   await common.renderReviewTimeChart(reviewTimeChartEl, bugSummaries);
