@@ -40,6 +40,10 @@ async function renderUI() {
   resultGraphs.append(reviewTimeChartEl);
   await common.renderReviewTimeChart(reviewTimeChartEl, bugSummaries);
 
+  const reviewTimeListEl = await common.renderReviewTimeList(bugSummaries);
+  resultGraphs.append(reviewTimeListEl);
+  resultGraphs.append(document.createElement("br"));
+
   let assignTimeChartEl = document.createElement("div");
   resultGraphs.append(assignTimeChartEl);
   await common.renderTimeToAssignChart(assignTimeChartEl, bugSummaries);

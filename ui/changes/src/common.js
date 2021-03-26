@@ -1420,7 +1420,7 @@ export async function renderPatchCoverageList(bugSummaries) {
 
   const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
 
-  const minimumBugSummaries = getMinimumBugSummaries(
+  const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
       (bugSummary) =>
         bugSummary.date !== null &&
@@ -1499,6 +1499,61 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
     "Time to first review",
     "Days"
   );
+}
+
+function meanFirstReviewTime(bug) {
+  const commits = bug.commits.filter(
+    (commit) => commit.first_review_time !== null
+  );
+  return commits.length > 0
+    ? commits.reduce((sum, commit) => sum + commit.first_review_time, 0) /
+        commits.length
+    : null;
+}
+
+export async function renderReviewTimeList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Patches with longest first review time";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Review Time"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0 &&
+        meanFirstReviewTime(bugSummary) !== null
+    ),
+    "Review Time"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "review-time"], false);
+  }
+
+  details.appendChild(table);
+  return details;
 }
 
 export async function renderTestFailureStatsChart(chartEl) {
@@ -2354,6 +2409,10 @@ function getCompareFunction(field) {
 
       return uncovered_a - uncovered_b;
     };
+  } else if (field == "Review Time") {
+    return function (a, b) {
+      return meanFirstReviewTime(a) - meanFirstReviewTime(b);
+    };
   }
 
   return null;
@@ -2370,7 +2429,7 @@ function sortBugSummaries(bugSummaries, field, order) {
   }
 }
 
-function getMinimumBugSummaries(bugSummaries, field, n = 10) {
+function getMaximumBugSummaries(bugSummaries, field, n = 10) {
   // TODO: Avoid sorting!
   sortBugSummaries(bugSummaries, field, "DESC");
   return bugSummaries.slice(0, 10);
@@ -2663,6 +2722,11 @@ function addRow(
       }
 
       risk_column.append(risk_text);
+    } else if (column == "review-time") {
+      const reviewtime_column = row.insertCell();
+      reviewtime_column.textContent = `${Math.round(
+        meanFirstReviewTime(bugSummary)
+      )} days`;
     }
   }
 }
