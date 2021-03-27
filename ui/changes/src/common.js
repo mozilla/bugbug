@@ -2464,16 +2464,7 @@ function getCompareFunction(field) {
     };
   } else if (field == "Riskiness") {
     return function (a, b) {
-      if (a.risk_band == b.risk_band) {
-        return 0;
-      } else if (
-        a.risk_band == "h" ||
-        (a.risk_band == "a" && b.risk_band == "l")
-      ) {
-        return 1;
-      } else {
-        return -1;
-      }
+      return a.risk - b.risk;
     };
   } else if (field == "Bug") {
     return function (a, b) {

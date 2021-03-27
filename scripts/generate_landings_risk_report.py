@@ -613,6 +613,11 @@ class LandingsRiskReportGenerator(object):
                 if time_to_assign is not None:
                     break
 
+            max_risk = (
+                max(commit["risk"] for commit in commit_data)
+                if len(commit_data)
+                else None
+            )
             bug_summary = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
@@ -651,11 +656,8 @@ class LandingsRiskReportGenerator(object):
                 else None,
                 "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
-                "risk_band": find_risk_band(
-                    max(commit["risk"] for commit in commit_data)
-                )
-                if len(commit_data) > 0
-                else None,
+                "risk": max_risk,
+                "risk_band": find_risk_band(max_risk) if max_risk is not None else None,
                 "fuzz": "b"
                 if bug["id"] in fuzzblocker_bugs
                 else "y"
