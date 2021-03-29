@@ -1673,12 +1673,18 @@ export async function renderTestFailureStatsChart(chartEl) {
     )[0]
   );
 
+  const days = new Set();
+
   const summaryData = await getSummaryData(
     allTestStatsDays,
     getOption("grouping"),
     minDate,
     (counterObj, testStatsDay) => {
       counterObj.bugs += testStatsDay[1].bugs;
+      if (!days.has(testStatsDay[0])) {
+        counterObj.days += 1;
+        days.add(testStatsDay[0]);
+      }
     },
     null,
     (testStatsDay) => testStatsDay[0]
@@ -1688,7 +1694,7 @@ export async function renderTestFailureStatsChart(chartEl) {
   const bugs = [];
   for (const date in summaryData) {
     categories.push(date);
-    bugs.push(summaryData[date].bugs);
+    bugs.push(Math.ceil(summaryData[date].bugs / summaryData[date].days));
   }
 
   renderChart(
@@ -1700,7 +1706,7 @@ export async function renderTestFailureStatsChart(chartEl) {
       },
     ],
     categories,
-    "Evolution of the number of test failure bugs (total in the time period)",
+    "Evolution of the number of active test failure bugs (average in the time period)",
     "# of bugs"
   );
 }
