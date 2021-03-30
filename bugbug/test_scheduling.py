@@ -816,7 +816,7 @@ def generate_data(
         yield obj
 
 
-def get_failure_bugs(since: datetime, until: datetime) -> List[int]:
+def get_failure_bugs(since: datetime, until: datetime) -> List[Dict[str, int]]:
     r = requests.get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
@@ -824,7 +824,7 @@ def get_failure_bugs(since: datetime, until: datetime) -> List[int]:
         headers={"Accept": "application/json", "User-Agent": "bugbug"},
     )
     r.raise_for_status()
-    return [item["bug_id"] for item in r.json()]
+    return r.json()
 
 
 def get_test_info(date: datetime) -> Dict[str, Any]:

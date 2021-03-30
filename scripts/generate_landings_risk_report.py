@@ -35,7 +35,7 @@ TEST_INFOS_DB = "data/test_info.json"
 db.register(
     TEST_INFOS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.landings_risk_report.latest/artifacts/public/test_info.json.zst",
-    1,
+    2,
 )
 
 PAST_REGRESSIONS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_regressions_by_{dimension}.json.zst"
@@ -393,7 +393,10 @@ class LandingsRiskReportGenerator(object):
 
             test_infos[date_str] = {
                 "date": date_str,
-                "bugs": test_scheduling.get_failure_bugs(date, date),
+                "bugs": [
+                    {"id": item["bug_id"], "count": item["bug_count"]}
+                    for item in test_scheduling.get_failure_bugs(date, date)
+                ],
                 "skips": {},
             }
 
@@ -768,21 +771,22 @@ class LandingsRiskReportGenerator(object):
         self, bug_map: Dict[int, bugzilla.BugDict], test_infos: Dict[str, Any]
     ) -> None:
         component_test_stats: Dict[
-            str, Dict[str, Dict[str, int]]
+            str, Dict[str, Dict[str, List[Dict[str, int]]]]
         ] = collections.defaultdict(
-            lambda: collections.defaultdict(lambda: collections.defaultdict(int))
+            lambda: collections.defaultdict(lambda: collections.defaultdict(list))
         )
         for date, test_info in test_infos.items():
             for component, count in test_info["skips"].items():
                 component_test_stats[component][date]["skips"] = count
 
-            for bug_id in test_info["bugs"]:
+            for bug in test_info["bugs"]:
+                bug_id = bug["id"]
                 if bug_id not in bug_map:
                     continue
 
                 component_test_stats[get_full_component(bug_map[bug_id])][date][
                     "bugs"
-                ] += 1
+                ].append(bug)
 
         with open("component_test_stats.json", "w") as f:
             json.dump(component_test_stats, f)
@@ -797,9 +801,9 @@ class LandingsRiskReportGenerator(object):
         bugs = list(set(bugs))
 
         test_infos = self.retrieve_test_info(days)
-        test_info_bugs: List[int] = sum(
-            (test_info["bugs"] for test_info in test_infos.values()), []
-        )
+        test_info_bugs: List[int] = [
+            bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
+        ]
 
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(bugs + test_info_bugs)
