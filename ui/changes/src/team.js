@@ -60,6 +60,10 @@ async function renderUI() {
   resultGraphs.append(testFailureStatsChartEl);
   await common.renderTestFailureStatsChart(testFailureStatsChartEl);
 
+  const testFailureListEl = await common.renderTestFailureList();
+  resultGraphs.append(testFailureListEl);
+  resultGraphs.append(document.createElement("br"));
+
   let testSkipStatsChartEl = document.createElement("div");
   resultGraphs.append(testSkipStatsChartEl);
   await common.renderTestSkipStatsChart(testSkipStatsChartEl);

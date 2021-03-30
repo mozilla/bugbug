@@ -1714,6 +1714,74 @@ export async function renderTestFailureStatsChart(chartEl) {
   );
 }
 
+export async function renderTestFailureList() {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Bugs with highest number of failures from the last week";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Failure Count"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const componentsToDaysToStats = await componentTestStats;
+
+  const components = getOption("components");
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const allTestStatsDays = [].concat
+    .apply(
+      [],
+      Object.entries(componentsToDaysToStats)
+        .filter(([component, _]) => components.includes(component))
+        .map(([_, daysToStats]) => Object.entries(daysToStats))
+    )
+    .filter(
+      (testStatsDay) =>
+        "bugs" in testStatsDay[1] &&
+        Temporal.PlainDate.compare(getPlainDate(testStatsDay[0]), oneWeekAgo) >
+          0
+    );
+
+  const bugCounts = new Counter(() => 0);
+  for (const testStatsDay of allTestStatsDays) {
+    for (const bug of testStatsDay[1].bugs) {
+      bugCounts[bug.id] += bug.count;
+    }
+  }
+
+  const maximumBugCounts = Object.entries(bugCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  for (const bugCount of maximumBugCounts) {
+    addRow(
+      table,
+      { id: bugCount[0], failures: bugCount[1] },
+      ["bug", "failure-count"],
+      false
+    );
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
 export async function renderTestSkipStatsChart(chartEl) {
   const componentsToDaysToStats = await componentTestStats;
 
@@ -2725,7 +2793,11 @@ function addRow(
       bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
       bug_link.target = "_blank";
       bug_column.append(bug_link);
-      bug_column.append(document.createTextNode(` - ${bugSummary["summary"]}`));
+      if ("summary" in bugSummary) {
+        bug_column.append(
+          document.createTextNode(` - ${bugSummary["summary"]}`)
+        );
+      }
 
       if (showRegressionComponents) {
         const components_percentages = Object.entries(
@@ -2826,6 +2898,9 @@ function addRow(
     } else if (column == "fix-time") {
       const fixtime_column = row.insertCell();
       fixtime_column.textContent = `${getFixTime(bugSummary)} days`;
+    } else if (column == "failure-count") {
+      const failurecount_column = row.insertCell();
+      failurecount_column.textContent = `${bugSummary["failures"]} failures`;
     }
   }
 }
