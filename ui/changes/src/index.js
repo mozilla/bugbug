@@ -30,9 +30,9 @@ async function renderSummary(bugSummaries) {
   resultGraphs.append(regressionsChartEl);
   await common.renderRegressionsChart(regressionsChartEl, bugSummaries);
 
-  let typesChartEl = document.createElement("div");
-  resultGraphs.append(typesChartEl);
-  await common.renderTypesChart(typesChartEl, bugSummaries);
+  let severityChartEl = document.createElement("div");
+  resultGraphs.append(severityChartEl);
+  await common.renderSeverityChart(severityChartEl, bugSummaries);
 
   let fixTimesChartEl = document.createElement("div");
   resultGraphs.append(fixTimesChartEl);

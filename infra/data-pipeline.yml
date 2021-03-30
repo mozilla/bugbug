@@ -229,6 +229,46 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: issues-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 month" }
+      provisionerId: proj-bugbug
+      workerType: batch
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-data-github
+          - --owner=webcompat
+          - --repo=web-bugs
+          - --retrieve-events
+
+        artifacts:
+          public/github_issues.json.zst:
+            path: /data/github_issues.json.zst
+            type: file
+          public/github_issues.json.version:
+            path: /data/github_issues.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.data_github_issues.${version}
+        - index.project.bugbug.data_github_issues.latest
+      metadata:
+        name: bugbug webcompat issues retrieval
+        description: bugbug webcompat issues retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: test-label-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }

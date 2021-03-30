@@ -9,7 +9,7 @@ import shutil
 import pytest
 import zstandard
 
-from bugbug import bugzilla, repository
+from bugbug import bugzilla, github, repository
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -18,7 +18,11 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 def mock_data(tmp_path):
     os.mkdir(tmp_path / "data")
 
-    DBs = [os.path.basename(bugzilla.BUGS_DB), os.path.basename(repository.COMMITS_DB)]
+    DBs = [
+        os.path.basename(bugzilla.BUGS_DB),
+        os.path.basename(repository.COMMITS_DB),
+        os.path.basename(github.GITHUB_ISSUES_DB),
+    ]
 
     for f in DBs:
         shutil.copyfile(os.path.join(FIXTURES_DIR, f), tmp_path / "data" / f)

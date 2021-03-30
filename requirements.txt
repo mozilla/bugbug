@@ -1,13 +1,13 @@
 amqp==5.0.5
-boto3==1.17.27
+boto3==1.17.39
 imbalanced-learn==0.8.0
 libmozdata==0.1.70
 lmdb==1.1.1
-matplotlib==3.3.4
+matplotlib==3.4.0
 mercurial==5.7.1
 microannotate==0.0.24
 mozci==1.12.6
-numpy==1.20.1
+numpy==1.20.2
 orjson==3.5.1
 ortools==8.2.8710
 pandas==1.2.3
@@ -16,10 +16,11 @@ pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.8.1
 python-hglib==2.6.2
+ratelimit==2.2.1
 requests==2.25.1
 rs_parsepatch==0.3.3
 scikit-learn==0.24.1
-scipy==1.6.1
+scipy==1.6.2
 shap[plots]==0.39.0
 tabulate==0.8.9
 taskcluster==42.1.1

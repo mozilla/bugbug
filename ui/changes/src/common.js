@@ -603,7 +603,79 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   );
 }
 
-export async function renderRegressionsChart(chartEl, bugSummaries) {
+export async function renderRiskList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Patches landed during the last week with highest risk";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Riskiness"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Riskiness"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "risk"], false);
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
+async function getRegressionCount(product_components) {
+  const products = product_components.map((product_component) =>
+    product_component.substr(0, product_component.indexOf("::"))
+  );
+  const components = product_components.map((product_component) =>
+    product_component.substr(product_component.indexOf("::") + 2)
+  );
+
+  const url = new URL(
+    `https://bugzilla.mozilla.org/rest/bug?keywords=regression&keywords_type=allwords&resolution=---&count_only=1`
+  );
+  for (const product of new Set(products)) {
+    url.searchParams.append("product", product);
+  }
+  for (const component of new Set(components)) {
+    url.searchParams.append("component", component);
+  }
+
+  const response = await fetch(url.href);
+  const result = await response.json();
+
+  return result["bug_count"];
+}
+
+export async function renderRegressionsChart(
+  chartEl,
+  bugSummaries,
+  carryover = false
+) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
 
   if (bugSummaries.length == 0) {
@@ -650,8 +722,6 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
         counterObj.fixed_week_regressions += 1;
       } else if (days <= 31) {
         counterObj.fixed_month_regressions += 1;
-      } else if (days <= 365) {
-        counterObj.fixed_year_regressions += 1;
       } else {
         counterObj.fixed_ancient_regressions += 1;
       }
@@ -660,57 +730,84 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
     (summary) => summary.date
   );
 
+  const openDates = Object.keys(summaryOpenData);
+  const fixDates = Object.keys(summaryFixData);
+  const dates = openDates.length >= fixDates.length ? openDates : fixDates;
+
   let categories = [];
   let regressions = [];
   let fixed_week_regressions = [];
   let fixed_month_regressions = [];
-  let fixed_year_regressions = [];
   let fixed_ancient_regressions = [];
-  for (const date in summaryOpenData) {
+  for (const date of dates) {
     categories.push(date);
-    regressions.push(summaryOpenData[date].regressions);
+    if (date in summaryOpenData) {
+      regressions.push(summaryOpenData[date].regressions);
+    } else {
+      regressions.push(0);
+    }
     if (date in summaryFixData) {
       fixed_week_regressions.push(summaryFixData[date].fixed_week_regressions);
       fixed_month_regressions.push(
         summaryFixData[date].fixed_month_regressions
       );
-      fixed_year_regressions.push(summaryFixData[date].fixed_year_regressions);
       fixed_ancient_regressions.push(
         summaryFixData[date].fixed_ancient_regressions
       );
     } else {
       fixed_week_regressions.push(0);
       fixed_month_regressions.push(0);
-      fixed_year_regressions.push(0);
       fixed_ancient_regressions.push(0);
     }
   }
 
+  const series = [
+    {
+      name: "Fixed < 1 week old regressions",
+      type: "column",
+      data: fixed_week_regressions,
+    },
+    {
+      name: "Fixed < 1 month old regressions",
+      type: "column",
+      data: fixed_month_regressions,
+    },
+    {
+      name: "Fixed > 1 month old regressions",
+      type: "column",
+      data: fixed_ancient_regressions,
+    },
+  ];
+
+  if (carryover) {
+    const finalRegressions = await getRegressionCount(getOption("components"));
+
+    const regressions_total = [finalRegressions];
+    for (const date of dates.slice(1).reverse()) {
+      const new_regressions =
+        date in summaryOpenData ? summaryOpenData[date].regressions : 0;
+      const fixed_regressions =
+        date in summaryFixData
+          ? summaryFixData[date].fixed_ancient_regressions +
+            summaryFixData[date].fixed_month_regressions +
+            summaryFixData[date].fixed_week_regressions
+          : 0;
+      regressions_total.unshift(
+        regressions_total[0] - (new_regressions - fixed_regressions)
+      );
+    }
+
+    series.push({
+      name: "Total regressions",
+      type: "line",
+      data: regressions_total,
+    });
+  }
+
   const options = {
-    series: [
-      {
-        name: "New regressions",
-        data: regressions,
-      },
-      {
-        name: "Fixed < 1 week old regressions",
-        data: fixed_week_regressions,
-      },
-      {
-        name: "Fixed < 1 month old regressions",
-        data: fixed_month_regressions,
-      },
-      {
-        name: "Fixed < 1 year old regressions",
-        data: fixed_year_regressions,
-      },
-      {
-        name: "Fixed > 1 year old regressions",
-        data: fixed_ancient_regressions,
-      },
-    ],
+    series: series,
     chart: {
-      type: "bar",
+      type: "line",
       height: 350,
       stacked: true,
       toolbar: {
@@ -719,6 +816,10 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
       animations: {
         enabled: false,
       },
+    },
+    title: {
+      text: "Number of new/fixed regressions",
+      align: "left",
     },
     plotOptions: {
       bar: {
@@ -732,6 +833,41 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
         text: "Date",
       },
     },
+    yaxis: [
+      {
+        seriesName: "Fixed < 1 week old regressions",
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "New # of bugs",
+        },
+      },
+      {
+        seriesName: "Fixed < 1 week old regressions",
+        show: false,
+      },
+      {
+        seriesName: "Fixed < 1 week old regressions",
+        show: false,
+      },
+      {
+        seriesName: "Total regressions",
+        opposite: true,
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "Total # of bugs",
+        },
+      },
+    ],
     legend: {
       position: "right",
       offsetY: 40,
@@ -745,7 +881,39 @@ export async function renderRegressionsChart(chartEl, bugSummaries) {
   chart.render();
 }
 
-export async function renderTypesChart(chartEl, bugSummaries) {
+export async function getSeverityCount(severity, product_components) {
+  const products = product_components.map((product_component) =>
+    product_component.substr(0, product_component.indexOf("::"))
+  );
+  const components = product_components.map((product_component) =>
+    product_component.substr(product_component.indexOf("::") + 2)
+  );
+
+  const url = new URL(
+    `https://bugzilla.mozilla.org/rest/bug?bug_severity=${severity}&resolution=---&count_only=1`
+  );
+  for (const product of new Set(products)) {
+    url.searchParams.append("product", product);
+  }
+  for (const component of new Set(components)) {
+    url.searchParams.append("component", component);
+  }
+  if (getOption("regressionsOnly")) {
+    url.searchParams.set("keywords", "regression");
+    url.searchParams.set("keywords_type", "allwords");
+  }
+
+  const response = await fetch(url.href);
+  const result = await response.json();
+
+  return result["bug_count"];
+}
+
+export async function renderSeverityChart(
+  chartEl,
+  bugSummaries,
+  carryover = false
+) {
   if (bugSummaries.length == 0) {
     return;
   }
@@ -761,55 +929,159 @@ export async function renderTypesChart(chartEl, bugSummaries) {
     ).creation_date
   );
 
-  let summaryData = await getSummaryData(
+  const summaryOpenData = await getSummaryData(
     bugSummaries,
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      for (const type of bug.types) {
-        counterObj[type] += 1;
-      }
-
       if (bug.severity == "S1") {
-        counterObj.s1 += 1;
+        counterObj.S1 += 1;
       } else if (bug.severity == "S2") {
-        counterObj.s2 += 1;
+        counterObj.S2 += 1;
       }
     },
     null,
     (summary) => summary.creation_date
   );
 
-  let all_series = [
-    { name: "s1", data: [] },
-    { name: "s2", data: [] },
-  ];
-  for (let type of allBugTypes) {
-    if (type == "unknown") {
-      continue;
-    }
-
-    all_series.push({
-      name: type,
-      data: [],
-    });
-  }
-
-  let categories = [];
-  for (let date in summaryData) {
-    categories.push(date);
-    for (let series of all_series) {
-      series["data"].push(summaryData[date][series["name"]]);
-    }
-  }
-
-  renderChart(
-    chartEl,
-    all_series,
-    categories,
-    "Number of bugs by severity and type",
-    "# of bugs"
+  const summaryFixData = await getSummaryData(
+    bugSummaries.filter((bug) => bug.fixed && !!bug.date),
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      if (bug.severity == "S1") {
+        counterObj.S1 += 1;
+      } else if (bug.severity == "S2") {
+        counterObj.S2 += 1;
+      }
+    },
+    null,
+    (summary) => summary.date
   );
+
+  const openDates = Object.keys(summaryOpenData);
+  const fixDates = Object.keys(summaryFixData);
+  const dates = openDates.length >= fixDates.length ? openDates : fixDates;
+
+  const categories = [];
+  const s1 = [];
+  const s2 = [];
+  for (const date of dates) {
+    categories.push(date);
+    if (date in summaryOpenData) {
+      s1.push(summaryOpenData[date]["S1"]);
+      s2.push(summaryOpenData[date]["S2"]);
+    } else {
+      s1.push(0);
+      s2.push(0);
+    }
+  }
+
+  const series = [
+    { name: "New S1", type: "column", data: s1 },
+    { name: "New S2", type: "column", data: s2 },
+  ];
+
+  if (carryover) {
+    const finalS1 = await getSeverityCount("S1", getOption("components"));
+    const finalS2 = await getSeverityCount("S2", getOption("components"));
+
+    const s1_total = [finalS1];
+    const s2_total = [finalS2];
+    for (const date of dates.slice(1).reverse()) {
+      const s1_new = date in summaryOpenData ? summaryOpenData[date]["S1"] : 0;
+      const s1_fixed = date in summaryFixData ? summaryFixData[date]["S1"] : 0;
+      s1_total.unshift(s1_total[0] - (s1_new - s1_fixed));
+      const s2_new = date in summaryOpenData ? summaryOpenData[date]["S2"] : 0;
+      const s2_fixed = date in summaryFixData ? summaryFixData[date]["S2"] : 0;
+      s2_total.unshift(s2_total[0] - (s2_new - s2_fixed));
+    }
+
+    series.push({ name: "Total S1", type: "line", data: s1_total });
+    series.push({ name: "Total S2", type: "line", data: s2_total });
+  }
+
+  const options = {
+    series: series,
+    chart: {
+      type: "line",
+      height: 350,
+      stacked: false,
+      toolbar: {
+        show: false,
+      },
+      animations: {
+        enabled: false,
+      },
+    },
+    title: {
+      text: "Number of new and total bugs by severity",
+      align: "left",
+    },
+    plotOptions: {
+      bar: {
+        borderRadius: 8,
+        horizontal: false,
+      },
+    },
+    xaxis: {
+      categories: categories,
+      title: {
+        text: "Date",
+      },
+    },
+    yaxis: [
+      {
+        seriesName: "New S1",
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "New # of bugs",
+        },
+      },
+      {
+        seriesName: "New S1",
+        show: false,
+      },
+      {
+        seriesName: "Total S2",
+        opposite: true,
+        axisTicks: {
+          show: true,
+        },
+        axisBorder: {
+          show: true,
+        },
+        title: {
+          text: "Total # of bugs",
+        },
+      },
+      {
+        seriesName: "Total S2",
+        show: false,
+      },
+    ],
+    legend: {
+      position: "right",
+      offsetY: 40,
+    },
+    fill: {
+      opacity: 1,
+    },
+  };
+
+  let chart = new ApexCharts(chartEl, options);
+  chart.render();
+}
+
+function getFixTime(bug) {
+  return getPlainDate(bug.creation_date).until(getPlainDate(bug.date), {
+    largestUnit: "days",
+  }).days;
 }
 
 export async function renderFixTimesChart(chartEl, bugSummaries) {
@@ -835,11 +1107,7 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      counterObj.fix_times.push(
-        getPlainDate(bug.creation_date).until(getPlainDate(bug.date), {
-          largestUnit: "days",
-        }).days
-      );
+      counterObj.fix_times.push(getFixTime(bug));
     },
     null,
     (summary) => summary.creation_date,
@@ -872,6 +1140,117 @@ export async function renderFixTimesChart(chartEl, bugSummaries) {
     categories,
     "Time to fix",
     "Days"
+  );
+}
+
+export async function renderFixTimesList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent =
+    "Bugs with patches landed during the last week which took the longest to fix";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Fix Time"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Fix Time"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "fix-time"], false);
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
+export async function renderTimeToAssignChart(chartEl, bugSummaries) {
+  bugSummaries = bugSummaries.filter(
+    (bugSummary) => bugSummary.time_to_assign !== null
+  );
+
+  if (bugSummaries.length == 0) {
+    return;
+  }
+
+  let minDate = getPlainDate(
+    bugSummaries.reduce((minSummary, summary) =>
+      Temporal.PlainDate.compare(
+        getPlainDate(summary.creation_date),
+        getPlainDate(minSummary.creation_date)
+      ) < 0
+        ? summary
+        : minSummary
+    ).creation_date
+  );
+
+  let summaryData = await getSummaryData(
+    bugSummaries,
+    getOption("grouping"),
+    minDate,
+    (counterObj, bug) => {
+      counterObj.times_to_assign.push(bug.time_to_assign);
+    },
+    null,
+    (summary) => summary.creation_date,
+    () => []
+  );
+
+  let categories = [];
+  let ninthdecile_time_to_assign = [];
+  let median_time_to_assign = [];
+  const bugs_number = [];
+  for (let date in summaryData) {
+    categories.push(date);
+    ninthdecile_time_to_assign.push(
+      quantile(summaryData[date].times_to_assign, 0.9).toFixed(1)
+    );
+    median_time_to_assign.push(
+      median(summaryData[date].times_to_assign).toFixed(1)
+    );
+    bugs_number.push(summaryData[date].times_to_assign.length);
+  }
+
+  renderChart(
+    chartEl,
+    [
+      {
+        name: "90% time to assign",
+        data: ninthdecile_time_to_assign,
+      },
+      {
+        name: "Median time to assign",
+        data: median_time_to_assign,
+      },
+    ],
+    categories,
+    "Time to assign",
+    "Days",
+    {}
   );
 }
 
@@ -1106,6 +1485,50 @@ export async function renderPatchCoverageChart(chartEl, bugSummaries) {
   );
 }
 
+export async function renderPatchCoverageList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent = "Patches landed during last week with lowest coverage";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Coverage"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0
+    ),
+    "Coverage"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "coverage"], false);
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
 export async function renderReviewTimeChart(chartEl, bugSummaries) {
   bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.date !== null);
 
@@ -1169,6 +1592,62 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
   );
 }
 
+function meanFirstReviewTime(bug) {
+  const commits = bug.commits.filter(
+    (commit) => commit.first_review_time !== null
+  );
+  return commits.length > 0
+    ? commits.reduce((sum, commit) => sum + commit.first_review_time, 0) /
+        commits.length
+    : null;
+}
+
+export async function renderReviewTimeList(bugSummaries) {
+  const details = document.createElement("details");
+
+  const summary = document.createElement("summary");
+  const title = document.createElement("h3");
+  title.textContent =
+    "Patches landed during the last week with longest first review time";
+  summary.appendChild(title);
+  details.appendChild(summary);
+
+  const table = document.createElement("table");
+  table.classList.add("table", "table-bordered", "table-hover");
+  const thead = document.createElement("thead");
+  const tr = document.createElement("tr");
+  for (const column of ["Bug", "Date", "Review Time"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = column;
+    tr.appendChild(th);
+  }
+  thead.appendChild(tr);
+  const tbody = document.createElement("tbody");
+  table.appendChild(thead);
+  table.appendChild(tbody);
+
+  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+
+  const minimumBugSummaries = getMaximumBugSummaries(
+    bugSummaries.filter(
+      (bugSummary) =>
+        bugSummary.date !== null &&
+        Temporal.PlainDate.compare(getPlainDate(bugSummary.date), oneWeekAgo) >
+          0 &&
+        meanFirstReviewTime(bugSummary) !== null
+    ),
+    "Review Time"
+  );
+
+  for (const bugSummary of minimumBugSummaries) {
+    addRow(table, bugSummary, ["bug", "date", "review-time"], false);
+  }
+
+  details.appendChild(table);
+  return details;
+}
+
 export async function renderTestFailureStatsChart(chartEl) {
   const componentsToDaysToStats = await componentTestStats;
 
@@ -1194,12 +1673,18 @@ export async function renderTestFailureStatsChart(chartEl) {
     )[0]
   );
 
+  const days = new Set();
+
   const summaryData = await getSummaryData(
     allTestStatsDays,
     getOption("grouping"),
     minDate,
     (counterObj, testStatsDay) => {
       counterObj.bugs += testStatsDay[1].bugs;
+      if (!days.has(testStatsDay[0])) {
+        counterObj.days += 1;
+        days.add(testStatsDay[0]);
+      }
     },
     null,
     (testStatsDay) => testStatsDay[0]
@@ -1209,7 +1694,7 @@ export async function renderTestFailureStatsChart(chartEl) {
   const bugs = [];
   for (const date in summaryData) {
     categories.push(date);
-    bugs.push(summaryData[date].bugs);
+    bugs.push(Math.ceil(summaryData[date].bugs / summaryData[date].days));
   }
 
   renderChart(
@@ -1221,7 +1706,7 @@ export async function renderTestFailureStatsChart(chartEl) {
       },
     ],
     categories,
-    "Evolution of the number of test failure bugs (total in the time period)",
+    "Evolution of the number of active test failure bugs (average in the time period)",
     "# of bugs"
   );
 }
@@ -1559,6 +2044,11 @@ let options = {
   dependencyType: {
     value: null,
     type: "radio",
+    callback: null,
+  },
+  regressionsOnly: {
+    value: null,
+    type: "checkbox",
     callback: null,
   },
 };
@@ -1970,6 +2460,74 @@ export async function setupOptions(callback) {
   }
 }
 
+function getCompareFunction(field) {
+  if (field == "Date") {
+    return function (a, b) {
+      return Temporal.PlainDate.compare(
+        getPlainDate(a.date ? a.date : a.creation_date),
+        getPlainDate(b.date ? b.date : b.creation_date)
+      );
+    };
+  } else if (field == "Riskiness") {
+    return function (a, b) {
+      return a.risk - b.risk;
+    };
+  } else if (field == "Bug") {
+    return function (a, b) {
+      return a.id - b.id;
+    };
+  } else if (field == "Coverage") {
+    return function (a, b) {
+      const [
+        lines_added_a,
+        lines_covered_a,
+        lines_unknown_a,
+      ] = summarizeCoverage(a);
+      const [
+        lines_added_b,
+        lines_covered_b,
+        lines_unknown_b,
+      ] = summarizeCoverage(b);
+
+      const uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
+      const uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
+
+      if (uncovered_a == uncovered_b) {
+        return lines_added_a - lines_added_b;
+      }
+
+      return uncovered_a - uncovered_b;
+    };
+  } else if (field == "Review Time") {
+    return function (a, b) {
+      return meanFirstReviewTime(a) - meanFirstReviewTime(b);
+    };
+  } else if (field == "Fix Time") {
+    return function (a, b) {
+      return getFixTime(a) - getFixTime(b);
+    };
+  }
+
+  return null;
+}
+
+function sortBugSummaries(bugSummaries, field, order) {
+  const sortFunction = getCompareFunction(field);
+  if (sortFunction) {
+    if (order == "DESC") {
+      bugSummaries.sort((a, b) => -sortFunction(a, b));
+    } else {
+      bugSummaries.sort(sortFunction);
+    }
+  }
+}
+
+function getMaximumBugSummaries(bugSummaries, field, n = 10) {
+  // TODO: Avoid sorting!
+  sortBugSummaries(bugSummaries, field, "DESC");
+  return bugSummaries.slice(0, 10);
+}
+
 export async function getFilteredBugSummaries() {
   let data = await landingsData;
   let metaBugID = getOption("metaBugID");
@@ -2120,64 +2678,13 @@ export async function getFilteredBugSummaries() {
     );
   }
 
+  if (getOption("regressionsOnly")) {
+    bugSummaries = bugSummaries.filter((bugSummary) => bugSummary.regression);
+  }
+
   let bugDetails = document.getElementById("bug-details");
   if (bugDetails) {
-    let sortFunction = null;
-    if (sortBy[0] == "Date") {
-      sortFunction = function (a, b) {
-        return Temporal.PlainDate.compare(
-          getPlainDate(a.date ? a.date : a.creation_date),
-          getPlainDate(b.date ? b.date : b.creation_date)
-        );
-      };
-    } else if (sortBy[0] == "Riskiness") {
-      sortFunction = function (a, b) {
-        if (a.risk_band == b.risk_band) {
-          return 0;
-        } else if (
-          a.risk_band == "h" ||
-          (a.risk_band == "a" && b.risk_band == "l")
-        ) {
-          return 1;
-        } else {
-          return -1;
-        }
-      };
-    } else if (sortBy[0] == "Bug") {
-      sortFunction = function (a, b) {
-        return a.id - b.id;
-      };
-    } else if (sortBy[0] == "Coverage") {
-      sortFunction = function (a, b) {
-        let [
-          lines_added_a,
-          lines_covered_a,
-          lines_unknown_a,
-        ] = summarizeCoverage(a);
-        let [
-          lines_added_b,
-          lines_covered_b,
-          lines_unknown_b,
-        ] = summarizeCoverage(b);
-
-        let uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
-        let uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
-
-        if (uncovered_a == uncovered_b) {
-          return lines_added_a - lines_added_b;
-        }
-
-        return uncovered_a - uncovered_b;
-      };
-    }
-
-    if (sortFunction) {
-      if (sortBy[1] == "DESC") {
-        bugSummaries.sort((a, b) => -sortFunction(a, b));
-      } else {
-        bugSummaries.sort(sortFunction);
-      }
-    }
+    sortBugSummaries(bugSummaries, sortBy[0], sortBy[1]);
   }
 
   return bugSummaries;
@@ -2186,117 +2693,138 @@ export async function getFilteredBugSummaries() {
 // TODO: On click, show previous components affected by similar patches.
 // TODO: On click, show previous bugs caused by similar patches.
 
-function addRow(bugSummary) {
-  let table = document.getElementById("table");
+function addRow(
+  table,
+  bugSummary,
+  columns = ["bug", "date", "testing-tags", "coverage", "risk"],
+  showRegressionComponents = true
+) {
+  const row = table.insertRow(table.rows.length);
 
-  let row = table.insertRow(table.rows.length);
+  /*
+    <hr>
+    The patches have a high chance of causing regressions of type <b>crash</b> and <b>high severity</b>.
+    <br><br>
+    The patches could affect the <b>Search</b> and <b>Bookmarks</b> features.
+    <br><br>
+    Examples of previous bugs caused by similar patches:
+    <ul>
+      <li>Bug 1 - Can"t bookmark pages</li>
+      <li>Bug 7 - Search doesn"t work anymore <span style="background-color:gold;color:yellow;">STR</span></li>
+    </ul>
+  */
 
-  let bug_column = row.insertCell(0);
-  let bug_link = document.createElement("a");
-  bug_link.textContent = `Bug ${bugSummary["id"]}`;
-  bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
-  bug_link.target = "_blank";
-  bug_column.append(bug_link);
-  bug_column.append(document.createTextNode(` - ${bugSummary["summary"]}`));
+  for (const column of columns) {
+    if (column == "bug") {
+      const bug_column = row.insertCell();
+      const bug_link = document.createElement("a");
+      bug_link.textContent = `Bug ${bugSummary["id"]}`;
+      bug_link.href = `https://bugzilla.mozilla.org/show_bug.cgi?id=${bugSummary["id"]}`;
+      bug_link.target = "_blank";
+      bug_column.append(bug_link);
+      bug_column.append(document.createTextNode(` - ${bugSummary["summary"]}`));
 
-  let components_percentages = Object.entries(
-    bugSummary["most_common_regression_components"]
-  );
-  if (components_percentages.length > 0) {
-    let component_container = document.createElement("div");
-    component_container.classList.add("desc-box");
-    bug_column.append(component_container);
-    components_percentages.sort(
-      ([component1, percentage1], [component2, percentage2]) =>
-        percentage2 - percentage1
-    );
-    component_container.append(
-      document.createTextNode("Most common regression components:")
-    );
-    let component_list = document.createElement("ul");
-    for (let [component, percentage] of components_percentages.slice(0, 3)) {
-      let component_list_item = document.createElement("li");
-      component_list_item.append(
-        document.createTextNode(
-          `${component} - ${Math.round(100 * percentage)}%`
-        )
+      if (showRegressionComponents) {
+        const components_percentages = Object.entries(
+          bugSummary["most_common_regression_components"]
+        );
+        if (components_percentages.length > 0) {
+          const component_container = document.createElement("div");
+          component_container.classList.add("desc-box");
+          bug_column.append(component_container);
+          components_percentages.sort(
+            ([component1, percentage1], [component2, percentage2]) =>
+              percentage2 - percentage1
+          );
+          component_container.append(
+            document.createTextNode("Most common regression components:")
+          );
+          const component_list = document.createElement("ul");
+          for (const [component, percentage] of components_percentages.slice(
+            0,
+            3
+          )) {
+            const component_list_item = document.createElement("li");
+            component_list_item.append(
+              document.createTextNode(
+                `${component} - ${Math.round(100 * percentage)}%`
+              )
+            );
+            component_list.append(component_list_item);
+          }
+          component_container.append(component_list);
+        }
+      }
+    } else if (column == "date") {
+      const date_column = row.insertCell();
+      date_column.textContent = bugSummary.date;
+    } else if (column == "testing-tags") {
+      const testing_tags_column = row.insertCell();
+      testing_tags_column.classList.add("testing-tags");
+      const testing_tags_list = document.createElement("ul");
+      for (const commit of bugSummary.commits) {
+        const testing_tags_list_item = document.createElement("li");
+        if (!commit.testing) {
+          testing_tags_list_item.append(document.createTextNode("unknown"));
+        } else {
+          testing_tags_list_item.append(
+            document.createTextNode(TESTING_TAGS[commit.testing].label)
+          );
+        }
+        testing_tags_list.append(testing_tags_list_item);
+      }
+      testing_tags_column.append(testing_tags_list);
+    } else if (column == "coverage") {
+      const coverage_column = row.insertCell();
+      const [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
+        bugSummary
       );
-      component_list.append(component_list_item);
+      if (lines_added != 0) {
+        if (lines_unknown != 0) {
+          coverage_column.textContent = `${lines_covered}-${
+            lines_covered + lines_unknown
+          } of ${lines_added}`;
+        } else {
+          coverage_column.textContent = `${lines_covered} of ${lines_added}`;
+        }
+      } else {
+        coverage_column.textContent = "";
+      }
+    } else if (column == "risk") {
+      const risk_column = row.insertCell();
+
+      const risk_text = document.createElement("span");
+      risk_text.textContent = `${bugSummary.risk_band} risk`;
+      if (bugSummary.risk_band == "l") {
+        // Lower than average risk.
+        risk_text.style.color = LOW_RISK_COLOR;
+        risk_text.textContent = "Lower";
+      } else if (bugSummary.risk_band == "a") {
+        // Average risk.
+        risk_text.style.color = MEDIUM_RISK_COLOR;
+        risk_text.textContent = "Average";
+      } else if (bugSummary.risk_band == "h") {
+        // Higher than average risk.
+        risk_text.style.color = HIGH_RISK_COLOR;
+        risk_text.textContent = "Higher";
+      } else if (bugSummary.risk_band == null) {
+        // No risk available (there are no commits associated to the bug).
+        risk_text.textContent = "N/A";
+      } else {
+        throw new Exception("Unknown risk band");
+      }
+
+      risk_column.append(risk_text);
+    } else if (column == "review-time") {
+      const reviewtime_column = row.insertCell();
+      reviewtime_column.textContent = `${Math.round(
+        meanFirstReviewTime(bugSummary)
+      )} days`;
+    } else if (column == "fix-time") {
+      const fixtime_column = row.insertCell();
+      fixtime_column.textContent = `${getFixTime(bugSummary)} days`;
     }
-    component_container.append(component_list);
   }
-
-  /*<hr>
-          The patches have a high chance of causing regressions of type <b>crash</b> and <b>high severity</b>.
-          <br><br>
-          The patches could affect the <b>Search</b> and <b>Bookmarks</b> features.
-          <br><br>
-          Examples of previous bugs caused by similar patches:
-          <ul>
-            <li>Bug 1 - Can"t bookmark pages</li>
-            <li>Bug 7 - Search doesn"t work anymore <span style="background-color:gold;color:yellow;">STR</span></li>
-          </ul>*/
-
-  let date_column = row.insertCell(1);
-  date_column.textContent = bugSummary.date;
-
-  let testing_tags_column = row.insertCell(2);
-  testing_tags_column.classList.add("testing-tags");
-  let testing_tags_list = document.createElement("ul");
-  for (let commit of bugSummary.commits) {
-    let testing_tags_list_item = document.createElement("li");
-    if (!commit.testing) {
-      testing_tags_list_item.append(document.createTextNode("unknown"));
-    } else {
-      testing_tags_list_item.append(
-        document.createTextNode(TESTING_TAGS[commit.testing].label)
-      );
-    }
-    testing_tags_list.append(testing_tags_list_item);
-  }
-  testing_tags_column.append(testing_tags_list);
-
-  let coverage_column = row.insertCell(3);
-  let [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
-    bugSummary
-  );
-  if (lines_added != 0) {
-    if (lines_unknown != 0) {
-      coverage_column.textContent = `${lines_covered}-${
-        lines_covered + lines_unknown
-      } of ${lines_added}`;
-    } else {
-      coverage_column.textContent = `${lines_covered} of ${lines_added}`;
-    }
-  } else {
-    coverage_column.textContent = "";
-  }
-
-  let risk_list = document.createElement("ul");
-  let risk_column = row.insertCell(4);
-
-  let risk_text = document.createElement("span");
-  risk_text.textContent = `${bugSummary.risk_band} risk`;
-  if (bugSummary.risk_band == "l") {
-    // Lower than average risk.
-    risk_text.style.color = LOW_RISK_COLOR;
-    risk_text.textContent = "Lower";
-  } else if (bugSummary.risk_band == "a") {
-    // Average risk.
-    risk_text.style.color = MEDIUM_RISK_COLOR;
-    risk_text.textContent = "Average";
-  } else if (bugSummary.risk_band == "h") {
-    // Higher than average risk.
-    risk_text.style.color = HIGH_RISK_COLOR;
-    risk_text.textContent = "Higher";
-  } else if (bugSummary.risk_band == null) {
-    // No risk available (there are no commits associated to the bug).
-    risk_text.textContent = "N/A";
-  } else {
-    throw new Exception("Unknown risk band");
-  }
-
-  risk_column.append(risk_text);
 }
 
 export async function renderTable(bugSummaries) {
@@ -2310,6 +2838,6 @@ export async function renderTable(bugSummaries) {
     table.deleteRow(table.rows.length - 1);
   }
   for (let bugSummary of bugSummaries.filter((summary) => summary.date)) {
-    addRow(bugSummary);
+    addRow(table, bugSummary);
   }
 }

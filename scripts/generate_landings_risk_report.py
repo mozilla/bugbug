@@ -594,6 +594,30 @@ class LandingsRiskReportGenerator(object):
                     if time_to_confirm is not None:
                         break
 
+            time_to_assign = None
+            for history in bug["history"]:
+                for change in history["changes"]:
+                    if (
+                        change["field_name"] == "status"
+                        and change["removed"] in ("UNCONFIRMED", "NEW")
+                        and change["added"] == "ASSIGNED"
+                    ):
+                        time_to_assign = (
+                            dateutil.parser.parse(history["when"]).replace(tzinfo=None)
+                            - dateutil.parser.parse(bug["creation_time"]).replace(
+                                tzinfo=None
+                            )
+                        ).total_seconds() / 86400
+                        break
+
+                if time_to_assign is not None:
+                    break
+
+            max_risk = (
+                max(commit["risk"] for commit in commit_data)
+                if len(commit_data)
+                else None
+            )
             bug_summary = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
@@ -608,6 +632,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "time_to_bug": time_to_bug,
                 "time_to_confirm": time_to_confirm,
+                "time_to_assign": time_to_assign,
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"
@@ -631,11 +656,8 @@ class LandingsRiskReportGenerator(object):
                 else None,
                 "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
-                "risk_band": find_risk_band(
-                    max(commit["risk"] for commit in commit_data)
-                )
-                if len(commit_data) > 0
-                else None,
+                "risk": max_risk,
+                "risk_band": find_risk_band(max_risk) if max_risk is not None else None,
                 "fuzz": "b"
                 if bug["id"] in fuzzblocker_bugs
                 else "y"
