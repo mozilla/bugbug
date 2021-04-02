@@ -574,9 +574,21 @@ class TestSelectModel(Model):
                 )
                 <= config_vars[config] * len(groups)
             )
+
         # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+        # The cost is calculated as a sum of the following:
+        # - a fixed cost to use a config (since selecting a config has overhead, it is
+        #   wasteful to select a config only to run a single group);
+        # - a cost for each selected group.
+        # This way, for example, if we have a group that must run on a costly config and a
+        # group that can run either on the costly one or on a cheaper one, they'd both run
+        # on the costly one (since we have to pay its setup cost anyway).
         solver.Minimize(
-            sum(config_costs[c] * config_vars[c] for c in config_vars.keys())
+            sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
+            + sum(
+                config_costs[config] * config_group_vars[(config, group)]
+                for config, group in config_group_vars.keys()
+            )
         )
 
         configs_by_group: Dict[str, List[str]] = {}
