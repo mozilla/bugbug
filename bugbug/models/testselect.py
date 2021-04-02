@@ -513,6 +513,7 @@ class TestSelectModel(Model):
             "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
         )
 
+        config_vars = {config: solver.BoolVar(config) for config in all_configs}
         config_group_vars = {
             (config, group): solver.BoolVar(f"{group}@{config}")
             for group in groups
@@ -564,12 +565,18 @@ class TestSelectModel(Model):
                 )
             )
 
+        for config in all_configs:
+            solver.Add(
+                sum(
+                    config_group_var
+                    for (c, g), config_group_var in config_group_vars.items()
+                    if config == c
+                )
+                <= config_vars[config] * len(groups)
+            )
         # Choose the best set of tasks that satisfy the constraints with the lowest cost.
         solver.Minimize(
-            sum(
-                config_costs[config] * config_group_vars[(config, group)]
-                for config, group in config_group_vars.keys()
-            )
+            sum(config_costs[c] * config_vars[c] for c in config_vars.keys())
         )
 
         configs_by_group: Dict[str, List[str]] = {}
