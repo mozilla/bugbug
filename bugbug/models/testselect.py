@@ -498,7 +498,10 @@ class TestSelectModel(Model):
             return set(tasks)
 
     def select_configs(
-        self, groups: Collection[str], min_redundancy_confidence: float
+        self,
+        groups: Collection[str],
+        min_redundancy_confidence: float,
+        max_configurations: int = 3,
     ) -> Dict[str, List[str]]:
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
@@ -535,14 +538,31 @@ class TestSelectModel(Model):
 
                 seen |= equivalence_set
 
-            for equivalence_set in equivalence_sets[group]:
+            set_variables = [
+                solver.BoolVar(f"{group}_{j}")
+                for j in range(len(equivalence_sets[group]))
+            ]
+
+            for j, equivalence_set in enumerate(equivalence_sets[group]):
+                set_variable = set_variables[j]
+
                 sum_constraint = sum(
                     config_group_vars[(config, group)] for config in equivalence_set
                 )
                 if mutually_exclusive:
-                    solver.Add(sum_constraint == 1)
+                    solver.Add(sum_constraint == set_variable)
                 else:
-                    solver.Add(sum_constraint >= 1)
+                    solver.Add(sum_constraint >= set_variable)
+
+            # Cap to max_configurations equivalence sets.
+            solver.Add(
+                sum(set_variables)
+                >= (
+                    max_configurations
+                    if len(set_variables) >= max_configurations
+                    else len(set_variables)
+                )
+            )
 
         # Choose the best set of tasks that satisfy the constraints with the lowest cost.
         solver.Minimize(
