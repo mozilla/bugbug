@@ -303,7 +303,7 @@ def get_result(job: JobInfo) -> Optional[Any]:
     result = redis_conn.get(job.result_key)
 
     if result:
-        LOGGER.debug(f"Found {result}")
+        LOGGER.debug(f"Found {result!r}")
         try:
             result = dctx.decompress(result)
         except zstandard.ZstdError:
@@ -312,6 +312,7 @@ def get_result(job: JobInfo) -> Optional[Any]:
             # since 47114f4f47db6b73214cf946377be8da945d34b5.
             pass
 
+        assert result is not None  # mypy thinks it could be None
         return orjson.loads(result)
 
     return None
