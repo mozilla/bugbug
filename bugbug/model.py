@@ -23,7 +23,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from tabulate import tabulate
 
-from bugbug import bugzilla, db, repository
+from bugbug import bugzilla, db, github, repository
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
@@ -757,3 +757,17 @@ class BugCoupleModel(Model):
 
         for (bug_id1, bug_id2), label in classes.items():
             yield (bugs[bug_id1], bugs[bug_id2]), label
+
+
+class IssueModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.training_dbs = [github.GITHUB_ISSUES_DB]
+
+    def items_gen(self, classes):
+        for issue in github.get_issues():
+            issue_number = issue["number"]
+            if issue_number not in classes:
+                continue
+
+            yield issue, classes[issue_number]
