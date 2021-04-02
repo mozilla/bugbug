@@ -15,7 +15,7 @@ logger = getLogger(__name__)
 
 
 class Retriever(object):
-    def retrieve_bugs(self, limit=None) -> None:
+    def retrieve_bugs(self, limit: int = None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
         db.download(bugzilla.BUGS_DB)
