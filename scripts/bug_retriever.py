@@ -99,9 +99,12 @@ class Retriever(object):
         )
 
         # Get IDs of bugs linked to intermittent failures.
-        test_failure_bug_ids = test_scheduling.get_failure_bugs(
-            two_years_and_six_months_ago, datetime.utcnow()
-        )
+        test_failure_bug_ids = [
+            item["bug_id"]
+            for item in test_scheduling.get_failure_bugs(
+                two_years_and_six_months_ago, datetime.utcnow()
+            )
+        ]
         if limit:
             test_failure_bug_ids = test_failure_bug_ids[-limit:]
         logger.info(f"{len(test_failure_bug_ids)} bugs about test failures.")
