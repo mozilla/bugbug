@@ -16,11 +16,11 @@ TEST_EVENTS_URL = "https://api.github.com/repos/webcompat/web-bugs/issues/1/even
 HEADERS = {"link": "<https://api.github.com/test&page=2>; rel='next'"}
 
 
-def test_get_start_page():
+def test_get_start_page() -> None:
     assert github.get_start_page() == 2
 
 
-def test_fetch_issues():
+def test_fetch_issues() -> None:
     expected = [{"issue_id": "1", "events_url": TEST_EVENTS_URL}]
     expected_headers = {
         "next": {"url": "https://api.github.com/test&page=2", "rel": "next"}
@@ -34,8 +34,10 @@ def test_fetch_issues():
     assert response == (expected, expected_headers)
 
 
-def test_fetch_issues_with_events():
-    expected = [{"issue_id": "1", "events_url": TEST_EVENTS_URL}]
+def test_fetch_issues_with_events() -> None:
+    expected = [
+        {"issue_id": "1", "events_url": TEST_EVENTS_URL, "labels": [{"name": "test"}]}
+    ]
     expected_events = [{"event_id": "1"}]
     expected_headers = {
         "next": {"url": "https://api.github.com/test&page=2", "rel": "next"}
@@ -46,15 +48,15 @@ def test_fetch_issues_with_events():
     # Mock events request
     responses.add(responses.GET, TEST_EVENTS_URL, json=expected_events, status=200)
 
-    # Assert that response with events has expected format
-    response_with_events = github.fetch_issues(TEST_URL, True)
     expected_with_events = expected
     expected_with_events[0]["events"] = expected_events
 
+    # Assert that response with events has expected format
+    response_with_events = github.fetch_issues(TEST_URL, True)
     assert response_with_events == (expected_with_events, expected_headers)
 
 
-def test_fetch_issues_empty_header():
+def test_fetch_issues_empty_header() -> None:
     expected = [{"issue_id": "1", "events_url": TEST_EVENTS_URL}]
 
     # Mock main request with no headers
@@ -64,7 +66,7 @@ def test_fetch_issues_empty_header():
     assert response_no_headers == (expected, {})
 
 
-def test_download_issues():
+def test_download_issues() -> None:
     expected = [{"issue_id": "1", "events_url": TEST_EVENTS_URL}]
     next_url_headers = {"link": "<https://api.github.com/test&page=3>; rel='next'"}
 
@@ -82,3 +84,58 @@ def test_download_issues():
     )
 
     github.download_issues("webcompat", "web-bugs", "all")
+
+
+def test_download_issues_updated_since_timestamp() -> None:
+    first_page = [
+        {"id": 30515129, "issue_id": "1"},
+        {"id": 30536238, "issue_id": "2"},
+        {"id": 35098369, "issue_id": "555"},
+    ]
+
+    second_page = [
+        {"id": 305151291, "issue_id": "11"},
+        {"id": 305362382, "issue_id": "21"},
+        {"id": 350983693, "issue_id": "5551"},
+    ]
+
+    third_page = [
+        {"id": 3051512912, "issue_id": "114"},
+        {"id": 3053623823, "issue_id": "215"},
+        {"id": 3509836934, "issue_id": "55516"},
+    ]
+    next_url_headers = {"link": "<https://api.github.com/test&page=3>; rel='next'"}
+
+    # Make sure required requests are made as long as next link is present in the header
+    since = (
+        TEST_URL
+        + "?state=all&since=2021-04-03T20%3A14%3A04%2B00%3A00&per_page=100&page=1"
+    )
+
+    # Make sure required requests are made as long as next link is present in the header
+    responses.add(
+        responses.GET,
+        since,
+        json=first_page,
+        status=200,
+        headers=HEADERS,
+        match_querystring=True,
+    )
+    responses.add(
+        responses.GET,
+        "https://api.github.com/test&page=2",
+        json=second_page,
+        status=200,
+        headers=next_url_headers,
+    )
+    responses.add(
+        responses.GET, "https://api.github.com/test&page=3", json=third_page, status=200
+    )
+
+    result = first_page + second_page + third_page
+
+    data = github.fetch_issues_updated_since_timestamp(
+        "webcompat", "web-bugs", "all", "2021-04-03T20:14:04+00:00"
+    )
+
+    assert data == result

@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Iterator, NewType, Tuple
+from typing import Callable, Iterator, List, NewType, Tuple
 
 import requests
 from ratelimit import limits, sleep_and_retry
@@ -32,6 +32,10 @@ def get_issues() -> Iterator[IssueDict]:
     yield from db.read(GITHUB_ISSUES_DB)
 
 
+def delete_issues(match: Callable[[IssueDict], bool]) -> None:
+    db.delete(GITHUB_ISSUES_DB, match)
+
+
 @sleep_and_retry
 @limits(calls=1200, period=RATE_LIMIT_PERIOD)
 def api_limit():
@@ -43,7 +47,7 @@ def get_token() -> str:
     return get_secret("GITHUB_TOKEN")
 
 
-def fetch_events(events_url: str) -> str:
+def fetch_events(events_url: str) -> list:
     api_limit()
     logger.info(f"Fetching {events_url}")
     headers = {"Authorization": "token {}".format(get_token())}
@@ -55,7 +59,7 @@ def fetch_events(events_url: str) -> str:
 
 def fetch_issues(
     url: str, retrieve_events: bool, params: dict = None
-) -> Tuple[str, dict]:
+) -> Tuple[List[IssueDict], dict]:
     api_limit()
     headers = {"Authorization": "token {}".format(get_token())}
     response = requests.get(url, params=params, headers=headers)
@@ -79,9 +83,34 @@ def get_start_page() -> int:
     return int(count / PER_PAGE) + 1
 
 
+def fetch_issues_updated_since_timestamp(
+    owner: str, repo: str, state: str, since: str, retrieve_events: bool = False
+) -> List[IssueDict]:
+    # Fetches changed and new issues since a specified timestamp
+    url = "https://api.github.com/repos/{}/{}/issues".format(owner, repo)
+
+    params = {"state": state, "since": since, "per_page": PER_PAGE, "page": 1}
+
+    data, response_links = fetch_issues(
+        url=url, retrieve_events=retrieve_events, params=params
+    )
+
+    # Fetch next page
+    while "next" in response_links.keys():
+        next_page_data, response_links = fetch_issues(
+            response_links["next"]["url"], retrieve_events
+        )
+        data += next_page_data
+
+    logger.info("Done fetching updates")
+
+    return data
+
+
 def download_issues(
     owner: str, repo: str, state: str, retrieve_events: bool = False
 ) -> None:
+    # Fetches all issues sorted by date of creation in ascending order
     url = "https://api.github.com/repos/{}/{}/issues".format(owner, repo)
     start_page = get_start_page()
 
@@ -105,4 +134,4 @@ def download_issues(
         )
         db.append(GITHUB_ISSUES_DB, next_page_data)
 
-    logger.info("Done fetching")
+    logger.info("Done downloading")
