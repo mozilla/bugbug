@@ -1,5 +1,5 @@
 elasticsearch==7.12.0
-gensim==4.0.0
+gensim==4.0.1
 nltk==3.5
 pyemd==0.5.1
 spacy==3.0.5
