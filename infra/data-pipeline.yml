@@ -283,7 +283,7 @@ tasks:
           - retrieve
           - label
           - --reretrieve=0
-          - --training-months=7
+          - --training-months=8
 
         artifacts:
           public/push_data_label.json.zst:
@@ -322,7 +322,7 @@ tasks:
           - retrieve
           - group
           - --reretrieve=0
-          - --training-months=7
+          - --training-months=8
 
         artifacts:
           public/push_data_group.json.zst:
@@ -361,7 +361,7 @@ tasks:
           - retrieve
           - config_group
           - --reretrieve=0
-          - --training-months=4
+          - --training-months=7
 
         artifacts:
           public/push_data_config_group.json.zst:
@@ -404,7 +404,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - label
-          - --training-months=7
+          - --training-months=8
 
         artifacts:
           public/test_label_scheduling_history.pickle.zst:
@@ -453,7 +453,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - group
-          - --training-months=7
+          - --training-months=8
 
         artifacts:
           public/test_group_scheduling_history.pickle.zst:
@@ -501,7 +501,7 @@ tasks:
           - bugbug-data-test-scheduling-history
           - generate
           - config_group
-          - --training-months=4
+          - --training-months=7
 
         artifacts:
           public/test_config_group_scheduling_history.pickle.version:
