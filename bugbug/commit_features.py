@@ -151,6 +151,7 @@ class source_code_file_metrics(object):
             "Average file number of instruction loc": commit["metrics"]["ploc_avg"],
             "Average file number of logical loc": commit["metrics"]["lloc_avg"],
             "Average file number of comment loc": commit["metrics"]["cloc_avg"],
+            "Average file blank": commit["metrics"]["blank_avg"],
             "Average file number of function arguments": commit["metrics"]["nargs_avg"],
             "Average file number of function exit points": commit["metrics"][
                 "nexits_avg"
@@ -172,6 +173,7 @@ class source_code_file_metrics(object):
             "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
             "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
             "Maximum file number of comment loc": commit["metrics"]["cloc_max"],
+            "Maximum file blank": commit["metrics"]["blank_max"],
             "Maximum file number of function arguments": commit["metrics"]["nargs_max"],
             "Maximum file number of function exit points": commit["metrics"][
                 "nexits_max"
@@ -193,6 +195,7 @@ class source_code_file_metrics(object):
             "Minimum file number of instruction loc": commit["metrics"]["ploc_min"],
             "Minimum file number of logical loc": commit["metrics"]["lloc_min"],
             "Minimum file number of comment loc": commit["metrics"]["cloc_min"],
+            "Minimum file blank": commit["metrics"]["blank_min"],
             "Minimum file number of function arguments": commit["metrics"]["nargs_min"],
             "Minimum file number of function exit points": commit["metrics"][
                 "nexits_min"
@@ -214,6 +217,7 @@ class source_code_file_metrics(object):
             "Total file number of instruction loc": commit["metrics"]["ploc_total"],
             "Total file number of logical loc": commit["metrics"]["lloc_total"],
             "Total file number of comment loc": commit["metrics"]["cloc_total"],
+            "Total file blank": commit["metrics"]["blank_total"],
             "Total file number of function arguments": commit["metrics"]["nargs_total"],
             "Total file number of function exit points": commit["metrics"][
                 "nexits_total"
@@ -274,6 +278,7 @@ class source_code_function_metrics(object):
             "Average function number of instruction loc": merged_metrics["ploc_avg"],
             "Average function number of logical loc": merged_metrics["lloc_avg"],
             "Average function number of comment loc": merged_metrics["cloc_avg"],
+            "Average function blank": merged_metrics["blank_avg"],
             "Average function number of function arguments": merged_metrics[
                 "nargs_avg"
             ],
@@ -297,6 +302,7 @@ class source_code_function_metrics(object):
             "Maximum function number of instruction loc": merged_metrics["ploc_max"],
             "Maximum function number of logical loc": merged_metrics["lloc_max"],
             "Maximum function number of comment loc": merged_metrics["cloc_max"],
+            "Maximum function blank": merged_metrics["blank_max"],
             "Maximum function number of function arguments": merged_metrics[
                 "nargs_max"
             ],
@@ -320,6 +326,7 @@ class source_code_function_metrics(object):
             "Minimum function number of instruction loc": merged_metrics["ploc_min"],
             "Minimum function number of logical loc": merged_metrics["lloc_min"],
             "Minimum function number of comment loc": merged_metrics["cloc_min"],
+            "Minimum function blank": merged_metrics["blank_min"],
             "Minimum function number of function arguments": merged_metrics[
                 "nargs_min"
             ],
@@ -343,6 +350,7 @@ class source_code_function_metrics(object):
             "Total function number of instruction loc": merged_metrics["ploc_total"],
             "Total function number of logical loc": merged_metrics["lloc_total"],
             "Total function number of comment loc": merged_metrics["cloc_total"],
+            "Total function blank": merged_metrics["blank_total"],
             "Total function number of function arguments": merged_metrics[
                 "nargs_total"
             ],
@@ -374,6 +382,7 @@ class source_code_metrics_diff(object):
             "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
             "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
             "Diff in number of comment loc": commit["metrics_diff"]["cloc_total"],
+            "Diff in blank": commit["metrics_diff"]["blank_total"],
             "Diff in number of function arguments": commit["metrics_diff"][
                 "nargs_total"
             ],
