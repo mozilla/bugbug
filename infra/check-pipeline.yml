@@ -27,7 +27,7 @@ tasks:
     deadline: { $fromNow: "12 hours" }
     expires: { $fromNow: "1 week" }
     provisionerId: proj-bugbug
-    workerType: batch
+    workerType: compute-large
     payload:
       maxRunTime: 43200
       image: mozilla/bugbug-base:${version}
