@@ -519,6 +519,16 @@ class cc_number(single_bug_feature):
         return len(bug["cc"])
 
 
+class is_uplifted(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return any(
+            change["added"].startswith("approval-mozilla")
+            and change["added"].endswith("+")
+            for history in bug["history"]
+            for change in history["changes"]
+        )
+
+
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return [
