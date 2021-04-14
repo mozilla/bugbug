@@ -514,6 +514,11 @@ class time_to_assign(single_bug_feature):
         return get_time_to_assign(bug)
 
 
+class cc_number(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return len(bug["cc"])
+
+
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return [
