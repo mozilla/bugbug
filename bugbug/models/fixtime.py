@@ -6,7 +6,6 @@
 import logging
 import statistics
 
-import dateutil.parser
 import xgboost
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -79,20 +78,11 @@ class FixTimeModel(BugModel):
         bug_fix_times = []
 
         for bug in bugzilla.get_bugs():
-            if bug["resolution"] != "FIXED":
+            fix_time = bug_features.get_time_to_fix(bug)
+            if fix_time is None:
                 continue
 
-            if bug["cf_last_resolved"] is None:
-                continue
-
-            bug_id = bug["id"]
-
-            fix_time = (
-                dateutil.parser.parse(bug["cf_last_resolved"]).replace(tzinfo=None)
-                - dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
-            ).total_seconds() / 86400
-
-            bug_fix_times.append((bug_id, fix_time))
+            bug_fix_times.append((bug["id"], fix_time))
 
         def _quantiles(n):
             return statistics.quantiles(

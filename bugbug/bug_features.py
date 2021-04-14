@@ -8,6 +8,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+import dateutil.parser
 import pandas as pd
 from dateutil import parser
 from libmozdata import versions
@@ -472,6 +473,24 @@ class had_severity_enhancement(single_bug_feature):
                     return True
 
         return False
+
+
+def get_time_to_fix(bug):
+    if bug["resolution"] != "FIXED":
+        return None
+
+    if bug["cf_last_resolved"] is None:
+        return None
+
+    return (
+        dateutil.parser.parse(bug["cf_last_resolved"]).replace(tzinfo=None)
+        - dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+    ).total_seconds() / 86400
+
+
+class time_to_fix(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return get_time_to_fix(bug)
 
 
 class couple_common_whiteboard_keywords(couple_bug_feature):
