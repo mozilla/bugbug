@@ -16,7 +16,7 @@ import dateutil.parser
 import requests
 from tqdm import tqdm
 
-from bugbug import bugzilla, db, phabricator, repository, test_scheduling
+from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
 from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
@@ -597,25 +597,6 @@ class LandingsRiskReportGenerator(object):
                     if time_to_confirm is not None:
                         break
 
-            time_to_assign = None
-            for history in bug["history"]:
-                for change in history["changes"]:
-                    if (
-                        change["field_name"] == "status"
-                        and change["removed"] in ("UNCONFIRMED", "NEW")
-                        and change["added"] == "ASSIGNED"
-                    ):
-                        time_to_assign = (
-                            dateutil.parser.parse(history["when"]).replace(tzinfo=None)
-                            - dateutil.parser.parse(bug["creation_time"]).replace(
-                                tzinfo=None
-                            )
-                        ).total_seconds() / 86400
-                        break
-
-                if time_to_assign is not None:
-                    break
-
             max_risk = (
                 max(commit["risk"] for commit in commit_data)
                 if len(commit_data)
@@ -635,7 +616,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "time_to_bug": time_to_bug,
                 "time_to_confirm": time_to_confirm,
-                "time_to_assign": time_to_assign,
+                "time_to_assign": bug_features.get_time_to_assign(bug),
                 "whiteboard": bug["whiteboard"],
                 "assignee": bug["assigned_to"]
                 if bug["assigned_to"] != "nobody@mozilla.org"

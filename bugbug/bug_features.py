@@ -493,6 +493,27 @@ class time_to_fix(single_bug_feature):
         return get_time_to_fix(bug)
 
 
+def get_time_to_assign(bug):
+    for history in bug["history"]:
+        for change in history["changes"]:
+            if (
+                change["field_name"] == "status"
+                and change["removed"] in ("UNCONFIRMED", "NEW")
+                and change["added"] == "ASSIGNED"
+            ):
+                return (
+                    dateutil.parser.parse(history["when"]).replace(tzinfo=None)
+                    - dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+                ).total_seconds() / 86400
+
+    return None
+
+
+class time_to_assign(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return get_time_to_assign(bug)
+
+
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return [
