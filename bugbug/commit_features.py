@@ -853,8 +853,6 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
                 data[sys.intern(feature_extractor_name)] = res
 
-            # TODO: Try simply using all possible fields instead of extracting features manually.
-
             result = {"data": data}
             if "desc" in commit:
                 for cleanup_function in self.cleanup_functions:

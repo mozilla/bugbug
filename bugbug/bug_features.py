@@ -722,8 +722,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             else:
                 reporter_experience_map[bug["creator"]] += 1
 
-                # TODO: Try simply using all possible fields instead of extracting features manually.
-
                 summary = bug["summary"]
                 comments = [c["text"] for c in bug["comments"]]
                 for cleanup_function in self.cleanup_functions:

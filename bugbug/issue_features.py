@@ -66,8 +66,6 @@ class IssueExtractor(BaseEstimator, TransformerMixin):
 
                 data[feature_extractor_name] = res
 
-            # TODO: Try simply using all possible fields instead of extracting features manually.
-
             title = issue["title"]
             body = issue["body"]
             for cleanup_function in self.cleanup_functions:
