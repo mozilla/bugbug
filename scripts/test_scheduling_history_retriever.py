@@ -244,12 +244,7 @@ class Retriever(object):
                     continue
 
                 # Skip wptsync commits, since they are not like normal pushes made by developers.
-                if any(
-                    "wptsync" in commit["author_email"]
-                    or "wpt-pr:" in commit["desc"]
-                    or "wpt-type:" in commit["desc"]
-                    for commit in commits
-                ):
+                if any(repository.is_wptsync(commit) for commit in commits):
                     continue
 
                 merged_commits = commit_features.merge_commits(commits)

@@ -273,7 +273,7 @@ def get_directories(files):
 
 
 def is_wptsync(commit: dict) -> bool:
-    return commit["author_email"] == "wptsync@mozilla.com" or any(
+    return "wptsync" in commit["author_email"] or any(
         s in commit["desc"] for s in ("wpt-pr:", "wpt-head:", "wpt-type:")
     )
 

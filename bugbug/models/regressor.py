@@ -128,7 +128,7 @@ class RegressorModel(CommitModel):
             if commit_data["backedoutby"]:
                 continue
 
-            if commit_data["author_email"] == "wptsync@mozilla.com":
+            if repository.is_wptsync(commit_data):
                 continue
 
             push_date = dateutil.parser.parse(commit_data["pushdate"])
@@ -176,7 +176,7 @@ class RegressorModel(CommitModel):
             if commit_data["backedoutby"]:
                 continue
 
-            if commit_data["author_email"] == "wptsync@mozilla.com":
+            if repository.is_wptsync(commit_data):
                 continue
 
             push_date = dateutil.parser.parse(commit_data["pushdate"])
