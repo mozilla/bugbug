@@ -298,3 +298,10 @@ class RegressorModel(CommitModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def overwrite_classes(self, commits, classes, probabilities):
+        for i, commit in enumerate(commits):
+            if repository.is_wptsync(commit):
+                classes[i] = 0 if not probabilities else [1.0, 0.0]
+
+        return classes
