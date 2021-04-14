@@ -123,7 +123,7 @@ class FixTimeModel(BugModel):
                 f"{sum(1 for label in classes.values() if label == i)} bugs are in the {i}th quantile"
             )
 
-        return classes, list(range(len(quantiles)))
+        return classes, list(range(len(quantiles) + 1))
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
