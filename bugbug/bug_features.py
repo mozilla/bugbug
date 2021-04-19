@@ -534,6 +534,11 @@ class resolution(single_bug_feature):
         return bug["resolution"]
 
 
+class status(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return bug["status"]
+
+
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return [
