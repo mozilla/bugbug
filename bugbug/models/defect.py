@@ -210,11 +210,16 @@ class DefectModel(BugModel):
 
             # And we can use the type as a label for bugs whose type has been modified.
             # For 'defects', we can't use them as labels unless resulting from a change, because bugs are filed by default as 'defect' and so they could be mistakes.
-            if not can_use_type or bug["type"] == "defect":
+            def _has_type_changed(bug):
                 for history in bug["history"]:
                     for change in history["changes"]:
                         if change["field_name"] == "type":
-                            can_use_type = can_use_defect_type = True
+                            return True
+
+                return False
+
+            if not can_use_type or bug["type"] == "defect":
+                can_use_type = can_use_defect_type = _has_type_changed(bug)
 
             if can_use_type:
                 if bug["type"] == "enhancement":
