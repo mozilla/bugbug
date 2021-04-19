@@ -2,7 +2,7 @@ amqp==5.0.6
 boto3==1.17.53
 imbalanced-learn==0.8.0
 libmozdata==0.1.70
-lmdb==1.1.1
+lmdb==1.2.0
 matplotlib==3.4.1
 mercurial==5.7.1
 microannotate==0.0.24
