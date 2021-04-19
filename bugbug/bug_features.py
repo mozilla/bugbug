@@ -529,6 +529,11 @@ class is_uplifted(single_bug_feature):
         )
 
 
+class resolution(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return bug["resolution"]
+
+
 class couple_common_whiteboard_keywords(couple_bug_feature):
     def __call__(self, bugs, **kwargs):
         return [
