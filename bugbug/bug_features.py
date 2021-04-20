@@ -18,7 +18,7 @@ from bugbug import bug_snapshot, repository
 
 
 def field(bug, field):
-    if field in bug and bug[field] != "---":
+    if field in bug and bug[field] not in ("--", "---"):
         return bug[field]
 
     return None
