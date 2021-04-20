@@ -329,3 +329,21 @@ def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
             mapping[product["name"]][component["name"]] = component["team_name"]
 
     return mapping
+
+
+def get_groups_users(group_names: List[str]) -> List[str]:
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/group",
+        params={
+            "names": group_names,
+            "membership": "1",
+        },
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+
+    return [
+        member["email"]
+        for group in r.json()["groups"]
+        for member in group["membership"]
+    ]
