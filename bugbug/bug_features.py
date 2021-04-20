@@ -725,11 +725,8 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
                 if isinstance(res, (list, set)):
                     for item in res:
-                        data[sys.intern(f"{item} in {feature_extractor_name}")] = "True"
+                        data[sys.intern(f"{item} in {feature_extractor_name}")] = True
                     continue
-
-                if isinstance(res, bool):
-                    res = str(res)
 
                 data[feature_extractor_name] = res
 

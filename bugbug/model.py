@@ -192,13 +192,7 @@ class Model:
                 feature_name = f"Comments contain '{feature_name}'"
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
-            elif type_ == "data":
-                if " in " in feature_name and feature_name.endswith("=True"):
-                    feature_name = feature_name[: -len("=True")]
-            elif type_ == "couple_data":
-                if " in " in feature_name and feature_name.endswith("=True"):
-                    feature_name = feature_name[: -len("=True")]
-            else:
+            elif type_ not in ("data", "couple_data"):
                 raise Exception(f"Unexpected feature type for: {full_feature_name}")
 
             cleaned_feature_names.append(feature_name)
