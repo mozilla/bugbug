@@ -233,6 +233,16 @@ class version(single_bug_feature):
             return "Has Value"
 
 
+class target_milestone(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        if bug["target_milestone"] == "Future":
+            return "Future"
+        elif bug["target_milestone"] == "---":
+            return None
+        else:
+            return "Has Value"
+
+
 class has_cve_in_alias(single_bug_feature):
     name = "CVE in alias"
 
