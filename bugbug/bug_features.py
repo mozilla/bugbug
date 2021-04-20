@@ -218,7 +218,7 @@ class blocked_bugs_number(single_bug_feature):
 
 class priority(single_bug_feature):
     def __call__(self, bug, **kwargs):
-        return bug["priority"]
+        return field(bug, "priority")
 
 
 class version(single_bug_feature):
