@@ -37,6 +37,7 @@ class SpamBugModel(BugModel):
             bug_features.keywords(),
             bug_features.priority(),
             bug_features.version(),
+            bug_features.target_milestone(),
             bug_features.has_attachment(),
             bug_features.platform(),
             bug_features.op_sys(),
