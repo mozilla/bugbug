@@ -223,7 +223,14 @@ class priority(single_bug_feature):
 
 class version(single_bug_feature):
     def __call__(self, bug, **kwargs):
-        return bug["version"] if bug["version"] != "unspecified" else None
+        if bug["version"] in ("Default", "Trunk", "trunk"):
+            return "Trunk"
+        elif bug["version"] in ("other", "Other Branch"):
+            return "other"
+        elif bug["version"] == "unspecified":
+            return None
+        else:
+            return "Has Value"
 
 
 class has_cve_in_alias(single_bug_feature):
