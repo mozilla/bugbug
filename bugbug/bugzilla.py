@@ -26,8 +26,6 @@ db.register(
 )
 
 PRODUCTS = (
-    "Add-on SDK",
-    "Android Background Services",
     "Cloud Services",
     "Core",
     "Core Graveyard",
@@ -38,13 +36,9 @@ PRODUCTS = (
     "Firefox",
     "Firefox Graveyard",
     "Firefox Build System",
-    "Firefox for Android",
-    "Firefox for Android Graveyard",
     # 'Firefox for iOS',
-    "Firefox Health Report",
     # 'Focus',
     "GeckoView",
-    # 'Hello (Loop)',
     "Invalid Bugs",
     "JSS",
     "NSPR",
