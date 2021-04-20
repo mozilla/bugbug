@@ -43,6 +43,7 @@ PRODUCTS = (
     "JSS",
     "NSPR",
     "NSS",
+    "Remote Protocol",
     "Testing",
     "Toolkit",
     "Toolkit Graveyard",
