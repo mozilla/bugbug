@@ -86,10 +86,6 @@ class Retriever(object):
                         cached = None
                         reretrieve -= 1
 
-                    # Regenerate results which don't contain the fix revision.
-                    elif len(value) != 5:
-                        cached = None
-
                 if cached:
                     num_cached += 1
                     value, mozci_version = cached
