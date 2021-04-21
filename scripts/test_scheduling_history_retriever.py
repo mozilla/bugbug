@@ -102,7 +102,7 @@ class Retriever(object):
 
                     try:
                         if granularity == "label":
-                            runnables = push.task_labels
+                            runnables = push.label_summaries.keys()
                         elif granularity == "group":
                             runnables = push.group_summaries.keys()
                         elif granularity == "config_group":
