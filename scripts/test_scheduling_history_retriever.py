@@ -7,7 +7,6 @@ import argparse
 import concurrent.futures
 import math
 import os
-import threading
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -46,12 +45,6 @@ class Retriever(object):
         from_date = datetime.utcnow() - relativedelta(months=from_months)
         to_date = datetime.utcnow() - relativedelta(days=3)
 
-        pushes = mozci.push.make_push_objects(
-            from_date=from_date.strftime("%Y-%m-%d"),
-            to_date=to_date.strftime("%Y-%m-%d"),
-            branch="autoland",
-        )
-
         if granularity == "label":
             push_data_db = test_scheduling.PUSH_DATA_LABEL_DB
         elif granularity == "group":
@@ -63,17 +56,15 @@ class Retriever(object):
             return f"push_data.{granularity}.{push.rev}"
 
         def generate(
+            pushes: List[mozci.push.Push],
             futures: List[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
             nonlocal reretrieve
             num_cached = 0
             num_pushes = len(pushes)
 
-            for _ in tqdm(range(num_pushes)):
-                push = pushes.pop(0)
-                cached = futures.pop(0).result()
-
-                semaphore.release()
+            for push, future in tqdm(zip(pushes, futures)):
+                cached = future.result()
 
                 # Regenerating a large amount of data when we update the mozci regression detection
                 # algorithm is currently pretty slow, so we only regenerate a subset of pushes whenever we
@@ -127,27 +118,37 @@ class Retriever(object):
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
-        semaphore = threading.BoundedSemaphore(256)
-
         def retrieve_from_cache(push):
-            semaphore.acquire()
             return mozci.config.cache.get(cache_key(push))
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(retrieve_from_cache, push) for push in pushes]
+            # Run in batches of 14 days to avoid running out of memory (given that mozci pushes
+            # consume a lot of memory, and they all have references to each other through "parent"
+            # and "child" links so they are basically never released while we run this).
+            while to_date > from_date:
+                next_to_date = to_date - relativedelta(days=14)
+                if next_to_date < from_date:
+                    next_to_date = from_date
 
-            try:
-                db.write(push_data_db, generate(futures))
-            except Exception:
-                for f in futures:
-                    f.cancel()
+                pushes = mozci.push.make_push_objects(
+                    from_date=next_to_date.strftime("%Y-%m-%d"),
+                    to_date=to_date.strftime("%Y-%m-%d"),
+                    branch="autoland",
+                )
 
-                    try:
-                        semaphore.release()
-                    except ValueError:
-                        continue
+                futures = [
+                    executor.submit(retrieve_from_cache, push) for push in pushes
+                ]
 
-                raise
+                try:
+                    db.append(push_data_db, generate(pushes, futures))
+                except Exception:
+                    for f in futures:
+                        f.cancel()
+
+                    raise
+
+                to_date = next_to_date
 
         zstd_compress(push_data_db)
 
