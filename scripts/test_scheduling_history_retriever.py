@@ -63,7 +63,7 @@ class Retriever(object):
             num_cached = 0
             num_pushes = len(pushes)
 
-            for push, future in tqdm(zip(pushes, futures)):
+            for push, future in tqdm(zip(pushes, futures), total=len(pushes)):
                 cached = future.result()
 
                 # Regenerating a large amount of data when we update the mozci regression detection
