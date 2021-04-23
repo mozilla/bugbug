@@ -125,14 +125,14 @@ class Retriever(object):
             # Run in batches of 14 days to avoid running out of memory (given that mozci pushes
             # consume a lot of memory, and they all have references to each other through "parent"
             # and "child" links so they are basically never released while we run this).
-            while to_date > from_date:
-                next_to_date = to_date - relativedelta(days=14)
-                if next_to_date < from_date:
-                    next_to_date = from_date
+            while from_date < to_date:
+                next_from_date = from_date + relativedelta(days=14)
+                if next_from_date > to_date:
+                    next_from_date = to_date
 
                 pushes = mozci.push.make_push_objects(
-                    from_date=next_to_date.strftime("%Y-%m-%d"),
-                    to_date=to_date.strftime("%Y-%m-%d"),
+                    from_date=from_date.strftime("%Y-%m-%d"),
+                    to_date=next_from_date.strftime("%Y-%m-%d"),
                     branch="autoland",
                 )
 
@@ -148,7 +148,7 @@ class Retriever(object):
 
                     raise
 
-                to_date = next_to_date
+                from_date = next_from_date
 
         zstd_compress(push_data_db)
 
