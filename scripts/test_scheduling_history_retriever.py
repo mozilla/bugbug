@@ -122,11 +122,11 @@ class Retriever(object):
             return mozci.config.cache.get(cache_key(push))
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Run in batches of 14 days to avoid running out of memory (given that mozci pushes
+            # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
             # consume a lot of memory, and they all have references to each other through "parent"
             # and "child" links so they are basically never released while we run this).
             while from_date < to_date:
-                next_from_date = from_date + relativedelta(days=14)
+                next_from_date = from_date + relativedelta(days=7)
                 if next_from_date > to_date:
                     next_from_date = to_date
 
