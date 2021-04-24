@@ -56,6 +56,7 @@ class Retriever(object):
             return f"push_data.{granularity}.{push.rev}"
 
         def generate(
+            progress_bar: tqdm,
             pushes: List[mozci.push.Push],
             futures: List[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
@@ -63,7 +64,7 @@ class Retriever(object):
             num_cached = 0
             num_pushes = len(pushes)
 
-            for push, future in tqdm(zip(pushes, futures), total=len(pushes)):
+            for push, future in zip(pushes, futures):
                 cached = future.result()
 
                 # Regenerating a large amount of data when we update the mozci regression detection
@@ -116,39 +117,50 @@ class Retriever(object):
                     except Exception:
                         traceback.print_exc()
 
+                progress_bar.update(1)
+
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
 
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
 
+        total_pushes = len(
+            mozci.push.make_push_objects(
+                from_date=from_date.strftime("%Y-%m-%d"),
+                to_date=to_date.strftime("%Y-%m-%d"),
+                branch="autoland",
+            )
+        )
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
-            # consume a lot of memory, and they all have references to each other through "parent"
-            # and "child" links so they are basically never released while we run this).
-            while from_date < to_date:
-                next_from_date = from_date + relativedelta(days=7)
-                if next_from_date > to_date:
-                    next_from_date = to_date
+            with tqdm(total=total_pushes) as progress_bar:
+                # Run in batches of 7 days to avoid running out of memory (given that mozci pushes
+                # consume a lot of memory, and they all have references to each other through "parent"
+                # and "child" links so they are basically never released while we run this).
+                while from_date < to_date:
+                    next_from_date = from_date + relativedelta(days=7)
+                    if next_from_date > to_date:
+                        next_from_date = to_date
 
-                pushes = mozci.push.make_push_objects(
-                    from_date=from_date.strftime("%Y-%m-%d"),
-                    to_date=next_from_date.strftime("%Y-%m-%d"),
-                    branch="autoland",
-                )
+                    pushes = mozci.push.make_push_objects(
+                        from_date=from_date.strftime("%Y-%m-%d"),
+                        to_date=next_from_date.strftime("%Y-%m-%d"),
+                        branch="autoland",
+                    )
 
-                futures = [
-                    executor.submit(retrieve_from_cache, push) for push in pushes
-                ]
+                    futures = [
+                        executor.submit(retrieve_from_cache, push) for push in pushes
+                    ]
 
-                try:
-                    db.append(push_data_db, generate(pushes, futures))
-                except Exception:
-                    for f in futures:
-                        f.cancel()
+                    try:
+                        db.append(push_data_db, generate(progress_bar, pushes, futures))
+                    except Exception:
+                        for f in futures:
+                            f.cancel()
 
-                    raise
+                        raise
 
-                from_date = next_from_date
+                    from_date = next_from_date
 
         zstd_compress(push_data_db)
 
