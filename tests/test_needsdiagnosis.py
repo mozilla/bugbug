@@ -9,7 +9,7 @@ from bugbug.models.needsdiagnosis import NeedsDiagnosisModel
 def test_get_needsdiagnosis_labels():
     model = NeedsDiagnosisModel()
     classes, _ = model.get_labels()
-    assert classes[71052]
-    assert classes[71011]
-    assert not classes[71012]
-    assert not classes[70962]
+    assert not classes[71052]
+    assert not classes[71011]
+    assert classes[71012]
+    assert classes[70962]
