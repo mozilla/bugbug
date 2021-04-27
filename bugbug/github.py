@@ -66,6 +66,10 @@ def fetch_issues(
     response.raise_for_status()
     data = response.json()
 
+    # If only one issue is requested, add it to a list
+    if isinstance(data, dict):
+        data = [data]
+
     logger.info(f"Fetching {url}")
 
     if retrieve_events:
@@ -135,3 +139,16 @@ def download_issues(
         db.append(GITHUB_ISSUES_DB, next_page_data)
 
     logger.info("Done downloading")
+
+
+def fetch_issue_by_number(
+    owner: str, repo: str, issue_number: int, retrieve_events: bool = False
+) -> IssueDict:
+    # Fetches an issue by id
+    url = "https://api.github.com/repos/{}/{}/issues/{}".format(
+        owner, repo, issue_number
+    )
+
+    data = fetch_issues(url=url, retrieve_events=retrieve_events)
+
+    return data[0][0]

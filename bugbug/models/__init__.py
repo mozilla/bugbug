@@ -22,6 +22,7 @@ MODELS = {
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
+    "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",

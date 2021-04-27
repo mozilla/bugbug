@@ -14,6 +14,7 @@ github.get_token = mock.Mock(return_value="mocked_token")
 TEST_URL = "https://api.github.com/repos/webcompat/web-bugs/issues"
 TEST_EVENTS_URL = "https://api.github.com/repos/webcompat/web-bugs/issues/1/events"
 HEADERS = {"link": "<https://api.github.com/test&page=2>; rel='next'"}
+TEST_URL_SINGLE = "https://api.github.com/repos/webcompat/web-bugs/issues/71011"
 
 
 def test_get_start_page() -> None:
@@ -139,3 +140,21 @@ def test_download_issues_updated_since_timestamp() -> None:
     )
 
     assert data == result
+
+
+def test_fetch_issue_by_number() -> None:
+    expected = [
+        {"issue_id": "1", "events_url": TEST_EVENTS_URL, "labels": [{"name": "test"}]}
+    ]
+    expected_events = [{"event_id": "1"}]
+
+    # Mock issue request and events request
+    responses.add(responses.GET, TEST_URL_SINGLE, json=expected, status=200)
+    responses.add(responses.GET, TEST_EVENTS_URL, json=expected_events, status=200)
+
+    expected_with_events = expected
+    expected_with_events[0]["events"] = expected_events
+
+    data = github.fetch_issue_by_number("webcompat", "web-bugs", 71011, True)
+
+    assert data == expected_with_events[0]

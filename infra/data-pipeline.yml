@@ -1210,6 +1210,48 @@ tasks:
     #        owner: release-mgmt-analysis@mozilla.com
     #        source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-needsdiagnosis
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - issues-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - needsdiagnosis
+
+        artifacts:
+          public/needsdiagnosismodel.zst:
+            expires: { $fromNow: "1 month" }
+            path: /needsdiagnosismodel.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+          public/feature_importance.png:
+            expires: { $fromNow: "1 year" }
+            path: /feature_importance.png
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_needsdiagnosis.${version}
+        - index.project.bugbug.train_needsdiagnosis.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_needsdiagnosis.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_needsdiagnosis.latest
+      metadata:
+        name: bugbug train needsdiagnosis model
+        description: bugbug train needsdiagnosis model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: check_metrics
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1225,6 +1267,7 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-test-failure
+        - train-needsdiagnosis
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
