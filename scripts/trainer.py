@@ -12,12 +12,6 @@ from bugbug.models import MODELS, get_model_class
 from bugbug.utils import CustomJsonEncoder, zstd_compress
 
 MODELS_WITH_TYPE = ("component",)
-HISTORICAL_SUPPORTED_TASKS = (
-    "defect",
-    "bugtype",
-    "defectenhancementtask",
-    "regression",
-)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -38,16 +32,13 @@ class Trainer(object):
             model_name = args.model
 
         model_class = get_model_class(model_name)
-        if args.model in HISTORICAL_SUPPORTED_TASKS:
-            model_obj = model_class(args.lemmatization, args.historical)
-        elif args.model == "regressor":
-            model_obj = model_class(args.lemmatization, args.interpretable)
-        elif args.model == "duplicate":
-            model_obj = model_class(
-                args.training_set_size, args.lemmatization, args.cleanup_urls
-            )
-        else:
-            model_obj = model_class(args.lemmatization)
+        parameter_names = set(inspect.signature(model_class.__init__).parameters)
+        parameters = {
+            key: value for key, value in vars(args).items() if key in parameter_names
+        }
+        if args.model == "duplicate":
+            parameters["training_size"] = args.training_set_size
+        model_obj = model_class(**parameters)
 
         if args.download_db:
             for required_db in model_obj.training_dbs:
@@ -116,13 +107,6 @@ def parse_args(args):
         help="The size of the training set for the duplicate model",
     )
     parser.add_argument(
-        "--disable-url-cleanup",
-        help="Don't cleanup urls when training the duplicate model",
-        dest="cleanup_urls",
-        default=True,
-        action="store_false",
-    )
-    parser.add_argument(
         "--classifier",
         help="Type of the classifier. Only used for component classification.",
         choices=["default", "nn"],
@@ -154,6 +138,7 @@ def parse_args(args):
                 if parameter.default is False
                 else f"--no-{parameter.name}",
                 action="store_true" if parameter.default is False else "store_false",
+                dest=parameter.name,
             )
 
     return main_parser.parse_args(args)
