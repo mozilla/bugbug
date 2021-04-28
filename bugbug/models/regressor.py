@@ -141,8 +141,13 @@ class RegressorModel(CommitModel):
             if node in regressors or commit_data["bug_id"] in regressor_bugs:
                 classes[node] = 1
             else:
-                # The labels we have are only from two years and six months ago (see the regressor finder script).
-                if push_date < datetime.utcnow() - relativedelta(years=2, months=6):
+                # The labels we have are only from two years ago (see https://groups.google.com/g/mozilla.dev.platform/c/SjjW6_O-FqM/m/G-CrIVT2BAAJ).
+                # While we can go further back with the regressor finder script, it isn't remotely
+                # as precise as the "Regressed By" data.
+                # In the future, we might want to re-evaluate this limit (e.g. extend ), but we
+                # have to be careful (using too old patches might cause worse results as patch
+                # characteristics evolve over time).
+                if push_date < datetime.utcnow() - relativedelta(years=2):
                     continue
 
                 # We remove the last 6 months, as there could be regressions which haven't been filed yet.
