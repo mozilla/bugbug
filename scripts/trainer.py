@@ -36,8 +36,6 @@ class Trainer(object):
         parameters = {
             key: value for key, value in vars(args).items() if key in parameter_names
         }
-        if args.model == "duplicate":
-            parameters["training_size"] = args.training_set_size
         model_obj = model_class(**parameters)
 
         if args.download_db:
@@ -100,13 +98,6 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
-        "--training-set-size",
-        nargs="?",
-        default=14000,
-        type=int,
-        help="The size of the training set for the duplicate model",
-    )
-    parser.add_argument(
         "--classifier",
         help="Type of the classifier. Only used for component classification.",
         choices=["default", "nn"],
@@ -133,13 +124,28 @@ def parse_args(args):
             if parameter.name == "lemmatization":
                 continue
 
-            subparser.add_argument(
-                f"--{parameter.name}"
-                if parameter.default is False
-                else f"--no-{parameter.name}",
-                action="store_true" if parameter.default is False else "store_false",
-                dest=parameter.name,
-            )
+            parameter_type = parameter.annotation
+            if parameter_type == inspect._empty:
+                parameter_type = type(parameter.default)
+            assert parameter_type is not None
+
+            if parameter_type == bool:
+                subparser.add_argument(
+                    f"--{parameter.name}"
+                    if parameter.default is False
+                    else f"--no-{parameter.name}",
+                    action="store_true"
+                    if parameter.default is False
+                    else "store_false",
+                    dest=parameter.name,
+                )
+            else:
+                subparser.add_argument(
+                    f"--{parameter.name}",
+                    default=parameter.default,
+                    dest=parameter.name,
+                    type=int,
+                )
 
     return main_parser.parse_args(args)
 
