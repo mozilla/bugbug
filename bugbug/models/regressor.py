@@ -47,8 +47,8 @@ class RegressorModel(CommitModel):
         self,
         lemmatization: bool = False,
         interpretable: bool = False,
-        use_finder: bool = True,
-        exclude_finder: bool = False,
+        use_finder: bool = False,
+        exclude_finder: bool = True,
     ) -> None:
         CommitModel.__init__(self, lemmatization)
 
