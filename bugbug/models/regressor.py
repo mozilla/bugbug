@@ -39,7 +39,7 @@ db.register(
     3,
 )
 
-EVALUATION_MONTHS = 2
+EVALUATION_MONTHS = 3
 
 
 class RegressorModel(CommitModel):
