@@ -48,6 +48,7 @@ class RegressorModel(CommitModel):
         lemmatization: bool = False,
         interpretable: bool = False,
         use_finder: bool = True,
+        exclude_finder: bool = False,
     ) -> None:
         CommitModel.__init__(self, lemmatization)
 
@@ -57,6 +58,10 @@ class RegressorModel(CommitModel):
         self.sampler = RandomUnderSampler(random_state=0)
 
         self.use_finder = use_finder
+        self.exclude_finder = exclude_finder
+        assert (
+            use_finder ^ exclude_finder
+        ), "Using both use_finder and exclude_finder option does not make a lot of sense"
 
         feature_extractors = [
             commit_features.source_code_file_size(),
@@ -119,7 +124,7 @@ class RegressorModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        if self.use_finder:
+        if self.use_finder or self.exclude_finder:
             regressors = set(
                 r["bug_introducing_rev"]
                 for r in db.read(BUG_INTRODUCING_COMMITS_DB)
@@ -148,7 +153,7 @@ class RegressorModel(CommitModel):
                 self.use_finder and node in regressors
             ):
                 classes[node] = 1
-            else:
+            elif not self.exclude_finder or node not in regressors:
                 # The labels we have are only from two years ago (see https://groups.google.com/g/mozilla.dev.platform/c/SjjW6_O-FqM/m/G-CrIVT2BAAJ).
                 # While we can go further back with the regressor finder script, it isn't remotely
                 # as precise as the "Regressed By" data.
