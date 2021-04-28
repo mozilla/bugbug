@@ -11,13 +11,8 @@ from bugbug import db
 from bugbug.models import MODELS, get_model_class
 from bugbug.utils import CustomJsonEncoder, zstd_compress
 
-MODELS_WITH_TYPE = ("component",)
-HISTORICAL_SUPPORTED_TASKS = (
-    "defect",
-    "bugtype",
-    "defectenhancementtask",
-    "regression",
-)
+MODELS_WITH_TYPE = ("component", "bugtype")
+HISTORICAL_SUPPORTED_TASKS = ("defect", "defectenhancementtask", "regression")
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)

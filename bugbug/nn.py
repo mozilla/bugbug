@@ -2,7 +2,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-
+import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 
 from bugbug.utils import numpy_to_dict
@@ -40,7 +40,8 @@ class KerasClassifier(BaseEstimator, ClassifierMixin):
     def fit(self, X, y):
         X_dict = numpy_to_dict(X)
 
-        y = to_categorical(y)
+        if not isinstance(y[0], np.ndarray):
+            y = to_categorical(y)
 
         self.model = self.model_creator(X_dict, y)
 
