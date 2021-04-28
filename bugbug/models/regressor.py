@@ -49,10 +49,13 @@ class RegressorModel(CommitModel):
         interpretable: bool = False,
         use_finder: bool = False,
         exclude_finder: bool = True,
+        finder_regressions_only: bool = False,
     ) -> None:
         CommitModel.__init__(self, lemmatization)
 
         self.training_dbs += [BUG_INTRODUCING_COMMITS_DB, bugzilla.BUGS_DB]
+        if finder_regressions_only:
+            self.training_dbs.append(BUG_FIXING_COMMITS_DB)
 
         self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
@@ -62,6 +65,7 @@ class RegressorModel(CommitModel):
         assert (
             use_finder ^ exclude_finder
         ), "Using both use_finder and exclude_finder option does not make a lot of sense"
+        self.finder_regressions_only = finder_regressions_only
 
         feature_extractors = [
             commit_features.source_code_file_size(),
@@ -125,10 +129,21 @@ class RegressorModel(CommitModel):
         classes = {}
 
         if self.use_finder or self.exclude_finder:
+            if self.finder_regressions_only:
+                regression_fixes = set(
+                    bug_fixing_commit["rev"]
+                    for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
+                    if bug_fixing_commit["type"] == "r"
+                )
+
             regressors = set(
                 r["bug_introducing_rev"]
                 for r in db.read(BUG_INTRODUCING_COMMITS_DB)
                 if r["bug_introducing_rev"]
+                and (
+                    not self.finder_regressions_only
+                    or r["bug_fixing_rev"] in regression_fixes
+                )
             )
 
         regressor_bugs = set(
