@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import inspect
 import json
 import os
 import sys
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import db
-from bugbug.models import get_model_class
+from bugbug.models import MODELS, get_model_class
 from bugbug.utils import CustomJsonEncoder, zstd_compress
 
 MODELS_WITH_TYPE = ("component",)
@@ -82,9 +83,9 @@ class Trainer(object):
 
 def parse_args(args):
     description = "Train the models"
-    parser = argparse.ArgumentParser(description=description)
+    main_parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument("model", help="Which model to train.")
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         "--limit",
         type=int,
@@ -127,18 +128,35 @@ def parse_args(args):
         choices=["default", "nn"],
         default="default",
     )
-    parser.add_argument(
-        "--historical",
-        help="""Analyze historical bugs. Only used for defect, bugtype,
-                defectenhancementtask and regression tasks.""",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--interpretable",
-        help="""Only use human-interpretable features. Only used for regressor task.""",
-        action="store_true",
-    )
-    return parser.parse_args(args)
+
+    subparsers = main_parser.add_subparsers(title="model", dest="model")
+
+    for model_name in MODELS:
+        subparser = subparsers.add_parser(
+            model_name, parents=[parser], help=f"Train {model_name} model"
+        )
+
+        try:
+            model_class_init = get_model_class(model_name).__init__
+        except ImportError:
+            continue
+
+        for parameter in inspect.signature(model_class_init).parameters.values():
+            if parameter.name == "self":
+                continue
+
+            # Skip parameters handled by the base class (TODO: add them to the common argparser and skip them automatically without hardcoding by inspecting the base class)
+            if parameter.name == "lemmatization":
+                continue
+
+            subparser.add_argument(
+                f"--{parameter.name}"
+                if parameter.default is False
+                else f"--no-{parameter.name}",
+                action="store_true" if parameter.default is False else "store_false",
+            )
+
+    return main_parser.parse_args(args)
 
 
 def main():
