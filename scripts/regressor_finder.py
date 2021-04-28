@@ -37,7 +37,7 @@ logger = getLogger(__name__)
 thread_local = threading.local()
 
 MAX_MODIFICATION_NUMBER = 50
-RELATIVE_START_DATE = relativedelta(years=2, months=6)
+RELATIVE_START_DATE = relativedelta(years=2)
 # Only needed because mercurial<->git mapping could be behind.
 RELATIVE_END_DATE = relativedelta(days=7)
 
