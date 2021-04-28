@@ -212,7 +212,7 @@ class RegressorModel(CommitModel):
 
         print(f"Average risk is {average_regression_rate}")
 
-        MIN_SAMPLE = 300
+        MIN_SAMPLE = 200
 
         # Step 2. Define risk band 1 (half than average risk).
         max_band1_prob = 1.0
