@@ -44,7 +44,10 @@ EVALUATION_MONTHS = 3
 
 class RegressorModel(CommitModel):
     def __init__(
-        self, lemmatization: bool = False, interpretable: bool = False
+        self,
+        lemmatization: bool = False,
+        interpretable: bool = False,
+        use_finder: bool = True,
     ) -> None:
         CommitModel.__init__(self, lemmatization)
 
@@ -52,6 +55,8 @@ class RegressorModel(CommitModel):
 
         self.store_dataset = True
         self.sampler = RandomUnderSampler(random_state=0)
+
+        self.use_finder = use_finder
 
         feature_extractors = [
             commit_features.source_code_file_size(),
@@ -114,11 +119,12 @@ class RegressorModel(CommitModel):
     def get_labels(self):
         classes = {}
 
-        regressors = set(
-            r["bug_introducing_rev"]
-            for r in db.read(BUG_INTRODUCING_COMMITS_DB)
-            if r["bug_introducing_rev"]
-        )
+        if self.use_finder:
+            regressors = set(
+                r["bug_introducing_rev"]
+                for r in db.read(BUG_INTRODUCING_COMMITS_DB)
+                if r["bug_introducing_rev"]
+            )
 
         regressor_bugs = set(
             sum((bug["regressed_by"] for bug in bugzilla.get_bugs()), [])
@@ -138,7 +144,9 @@ class RegressorModel(CommitModel):
                 continue
 
             node = commit_data["node"]
-            if node in regressors or commit_data["bug_id"] in regressor_bugs:
+            if commit_data["bug_id"] in regressor_bugs or (
+                self.use_finder and node in regressors
+            ):
                 classes[node] = 1
             else:
                 # The labels we have are only from two years ago (see https://groups.google.com/g/mozilla.dev.platform/c/SjjW6_O-FqM/m/G-CrIVT2BAAJ).
