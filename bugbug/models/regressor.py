@@ -150,8 +150,12 @@ class RegressorModel(CommitModel):
                 if push_date < datetime.utcnow() - relativedelta(years=2):
                     continue
 
-                # We remove the last 6 months, as there could be regressions which haven't been filed yet.
-                if push_date > datetime.utcnow() - relativedelta(months=6):
+                # We remove the last 3 months, as there could be regressions which haven't been
+                # filed yet. While it is true that some regressions might not be found for a long
+                # time, more than 3 months seems overly conservative.
+                # There will be some patches we currently add to the clean set and will later move
+                # to the regressor set, but they are a very small subset.
+                if push_date > datetime.utcnow() - relativedelta(months=3):
                     continue
 
                 classes[node] = 0
