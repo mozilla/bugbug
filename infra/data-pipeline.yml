@@ -892,7 +892,6 @@ tasks:
         command:
           - bugbug-train
           - regressor
-          - --interpretable
 
         artifacts:
           public/regressormodel.zst:
