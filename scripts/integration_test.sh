@@ -30,10 +30,10 @@ ls -lh data
 
 
 # Then train a bug model
-bugbug-train --limit 500 --no-download defectenhancementtask
+bugbug-train defectenhancementtask --limit 500 --no-download
 
 # Then train a commit model
-bugbug-train --limit 30000 --no-download backout
+bugbug-train backout --limit 30000 --no-download
 
 # Then spin the http service up
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
