@@ -519,6 +519,7 @@ class LandingsRiskReportGenerator(object):
                 commits_data.append(
                     {
                         "id": commit["node"],
+                        "rev_id": revision_id,
                         "testing": testing,
                         "first_review_time": first_review_time.total_seconds() / 86400
                         if first_review_time
