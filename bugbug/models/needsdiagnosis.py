@@ -19,6 +19,8 @@ class NeedsDiagnosisModel(IssueModel):
     def __init__(self, lemmatization=False):
         IssueModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
         feature_extractors = []
 
         cleanup_functions = [
