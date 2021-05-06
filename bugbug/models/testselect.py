@@ -285,7 +285,7 @@ class TestSelectModel(Model):
             (("android-hw", "debug"), 17),
             (("tsan", "opt"), 18),
             (("tsan", "debug"), 19),
-            (("test-linux1804-64-shippable/opt-*-e10s",), 1),
+            (("test-linux1804-64/opt-*-e10s",), 1),
         ]
 
         for substrings, cost in reversed(costs):
