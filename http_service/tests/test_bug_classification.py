@@ -61,6 +61,47 @@ def test_model_predict_id(client, jobs, add_result, responses):
     assert retrieve_compressed_reponse(rv) == result
 
 
+def test_model_predict_id_github(client, jobs, add_result, responses):
+    issue_id = "12345"
+    result = {
+        "prob": [0.11845558881759644, 0.8815444111824036],
+        "index": 1,
+        "class": 1,
+        "extra_data": {},
+    }
+
+    responses.add(
+        responses.GET,
+        f"https://api.github.com/repos/webcompat/web-bugs/issues/{issue_id}",
+        status=200,
+        json={"number": issue_id, "updated_at": time.time()},
+    )
+
+    def do_request():
+        return client.get(
+            "/needsdiagnosis/predict/github/webcompat/web-bugs/12345",
+            headers={API_TOKEN: "test"},
+        )
+
+    rv = do_request()
+    assert rv.status_code == 202
+    assert retrieve_compressed_reponse(rv) == {"ready": False}
+
+    # request still not ready
+    rv = do_request()
+    assert rv.status_code == 202
+    assert retrieve_compressed_reponse(rv) == {"ready": False}
+    assert len(jobs) == 1
+
+    # now it's ready
+    keys = next(iter(jobs.values()))
+    add_result(keys[0], result)
+
+    rv = do_request()
+    assert rv.status_code == 200
+    assert retrieve_compressed_reponse(rv) == result
+
+
 def test_model_predict_batch(client, jobs, add_result, add_change_time, responses):
     bug_ids = [123, 456]
     result = {

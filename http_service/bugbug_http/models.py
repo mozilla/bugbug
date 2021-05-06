@@ -15,7 +15,7 @@ import zstandard
 from libmozdata.bugzilla import Bugzilla
 from redis import Redis
 
-from bugbug import bugzilla, repository, test_scheduling
+from bugbug import bugzilla, github, repository, test_scheduling
 from bugbug.model import Model
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
@@ -26,6 +26,7 @@ LOGGER = logging.getLogger()
 MODELS_NAMES = [
     "defectenhancementtask",
     "component",
+    "needsdiagnosis",
     "regression",
     "stepstoreproduce",
     "spambug",
@@ -106,6 +107,64 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
 
         # Save the bug last change
         setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())
+
+    return "OK"
+
+
+def classify_issue(
+    model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
+) -> str:
+    from bugbug_http.app import JobInfo
+
+    issue_ids_set = set(map(int, issue_nums))
+
+    issues = {
+        issue_num: github.fetch_issue_by_number(owner, repo, issue_num, True)
+        for issue_num in issue_nums
+    }
+
+    missing_issues = issue_ids_set.difference(issues.keys())
+
+    for issue_id in missing_issues:
+        job = JobInfo(classify_issue, model_name, owner, repo, issue_id)
+
+        # TODO: Find a better error format
+        setkey(job.result_key, orjson.dumps({"available": False}))
+
+    if not issues:
+        return "NOK"
+
+    model = MODEL_CACHE.get(model_name)
+
+    if not model:
+        LOGGER.info("Missing model %r, aborting" % model_name)
+        return "NOK"
+
+    model_extra_data = model.get_extra_data()
+
+    # TODO: Classify could choke on a single bug which could make the whole
+    # job to fail. What should we do here?
+    probs = model.classify(list(issues.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.le.inverse_transform(indexes)
+
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
+
+    for i, issue_id in enumerate(issues.keys()):
+        data = {
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "class": suggestions_list[i],
+            "extra_data": model_extra_data,
+        }
+
+        job = JobInfo(classify_issue, model_name, owner, repo, issue_id)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
+
+        # Save the bug last change
+        setkey(job.change_time_key, issues[issue_id]["updated_at"].encode())
 
     return "OK"
 
