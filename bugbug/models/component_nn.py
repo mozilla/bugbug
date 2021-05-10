@@ -326,7 +326,7 @@ class ComponentNNModel(ComponentModel):
                             (
                                 "bug_reporter",
                                 make_pipeline(
-                                    DictExtractor("bug_reporter"),
+                                    DictExtractor("Bug reporter"),
                                     MissingOrdinalEncoder(),
                                 ),
                                 "data",

@@ -22,6 +22,7 @@ except ImportError:
 class KerasTextToSequences(BaseEstimator, TransformerMixin):
     def __init__(self, maxlen, vocab_size):
         self.maxlen = maxlen
+        self.vocab_size = vocab_size
         self.tokenizer = Tokenizer(num_words=vocab_size)
 
     def fit(self, x, y=None):
