@@ -30,6 +30,7 @@ services:
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - BUGBUG_GITHUB_TOKEN
       - PORT=8000
     ports:
       - target: 8000
@@ -44,6 +45,7 @@ services:
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - BUGBUG_GITHUB_TOKEN
 
   bugbug-spawn-pipeline:
     build:

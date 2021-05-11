@@ -32,6 +32,7 @@ from bugbug import get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
     classify_bug,
+    classify_issue,
     get_config_specific_groups,
     schedule_tests,
 )
@@ -80,6 +81,8 @@ q = Queue(
 VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
+GITHUB_TOKEN = os.environ.get("BUGBUG_GITHUB_TOKEN")
+
 BUGZILLA_API_URL = (
     libmozdata.config.get("Bugzilla", "URL", "https://bugzilla.mozilla.org")
     + "/rest/bug"
@@ -212,6 +215,27 @@ def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None
     )
 
 
+def schedule_issue_classification(
+    model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
+) -> None:
+    """Schedule the classification of a issue_id list"""
+    job_id = get_job_id()
+
+    # Set the mapping before queuing to avoid some race conditions
+    job_id_mapping = {}
+    for issue_num in issue_nums:
+        key = JobInfo(classify_issue, model_name, owner, repo, issue_num).mapping_key
+        job_id_mapping[key] = job_id
+
+    redis_conn.mset(job_id_mapping)
+
+    schedule_job(
+        JobInfo(classify_issue, model_name, owner, repo, issue_nums),
+        job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
+    )
+
+
 def is_pending(job):
     # Check if there is a job
     job_id = redis_conn.get(job.mapping_key)
@@ -273,6 +297,23 @@ def get_bugs_last_change_time(bug_ids):
             bugs[bug["id"]] = bug["last_change_time"]
 
     return bugs
+
+
+def get_github_issues_update_time(
+    owner: str, repo: str, issue_nums: Sequence[int]
+) -> dict:
+    header = {"Authorization": "token {}".format(GITHUB_TOKEN)}
+    repo_url = f"https://api.github.com/repos/{owner}/{repo}/issues/"
+
+    issues = {}
+    for issue_num in issue_nums:
+        issue_url = repo_url + str(issue_num)
+        response = utils.get_session("github").get(issue_url, headers=header)
+        response.raise_for_status()
+        raw_issue = response.json()
+        issues[raw_issue["number"]] = raw_issue["updated_at"]
+
+    return issues
 
 
 def is_prediction_invalidated(job, change_time):
@@ -401,6 +442,84 @@ def model_prediction(model_name, bug_id):
     if not data:
         if not is_pending(job):
             schedule_bug_classification(model_name, [bug_id])
+        status_code = 202
+        data = {"ready": False}
+
+    return compress_response(data, status_code)
+
+
+@application.route(
+    "/<model_name>/predict/github/<string:owner>/<string:repo>/<int:issue_num>"
+)
+@cross_origin()
+def model_prediction_github(model_name, owner, repo, issue_num):
+    """
+    ---
+    get:
+      description: Classify a single issue using given model, answer either 200 if the issue is processed or 202 if the issue is being processed
+      summary: Classify a single issue
+      parameters:
+      - name: model_name
+        in: path
+        schema: ModelName
+      - name: owner
+        in: path
+        schema:
+          type: str
+          example: webcompat
+      - name: repo
+        in: path
+        schema:
+          type: str
+          example: web-bugs
+      - name: issue_number
+        in: path
+        schema:
+          type: integer
+          example: 123456
+      responses:
+        200:
+          description: A single issue prediction
+          content:
+            application/json:
+              schema: BugPrediction
+        202:
+          description: A temporary answer for the issue being processed
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
+
+    # Get the latest change date from github for the issue
+    update_time = get_github_issues_update_time(owner, repo, [issue_num])
+
+    job = JobInfo(classify_issue, model_name, owner, repo, issue_num)
+    issue_change_time = update_time.get(issue_num)
+    if issue_change_time and is_prediction_invalidated(job, update_time[issue_num]):
+        clean_prediction_cache(job)
+
+    status_code = 200
+    data = get_result(job)
+
+    if not data:
+        if not is_pending(job):
+            schedule_issue_classification(model_name, owner, repo, [issue_num])
         status_code = 202
         data = {"ready": False}
 

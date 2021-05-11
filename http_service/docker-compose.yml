@@ -6,6 +6,7 @@ services:
     image: mozilla/bugbug-http-service
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - BUGBUG_GITHUB_TOKEN
       - REDIS_URL=redis://redis:6379/0
       - PORT=8000
       - PULSE_USER
@@ -26,6 +27,7 @@ services:
     image: mozilla/bugbug-http-service-bg-worker
     environment:
       - BUGBUG_BUGZILLA_TOKEN
+      - BUGBUG_GITHUB_TOKEN
       - REDIS_URL=redis://redis:6379/0
       - BUGBUG_ALLOW_MISSING_MODELS
       - BUGBUG_REPO_DIR
