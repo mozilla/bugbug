@@ -283,18 +283,24 @@ def get_bugs_last_change_time(bug_ids):
     }
     header = {"X-Bugzilla-API-Key": BUGZILLA_TOKEN, "User-Agent": "bugbug"}
 
-    bugs = {}
-    for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
-        query["id"] = bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
-        response = utils.get_session("bugzilla").get(
-            BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
-        )
-        response.raise_for_status()
+    old_CHUNK_SIZE = Bugzilla.BUGZILLA_CHUNK_SIZE
+    try:
+        Bugzilla.BUGZILLA_CHUNK_SIZE = 1000
 
-        raw_bugs = response.json()
+        bugs = {}
+        for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
+            query["id"] = bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
+            response = utils.get_session("bugzilla").get(
+                BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
+            )
+            response.raise_for_status()
 
-        for bug in raw_bugs["bugs"]:
-            bugs[bug["id"]] = bug["last_change_time"]
+            raw_bugs = response.json()
+
+            for bug in raw_bugs["bugs"]:
+                bugs[bug["id"]] = bug["last_change_time"]
+    finally:
+        Bugzilla.BUGZILLA_CHUNK_SIZE = old_CHUNK_SIZE
 
     return bugs
 
