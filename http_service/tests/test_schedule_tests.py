@@ -95,11 +95,9 @@ def test_simple_schedule(
         ]
 
     # Assert the test selection result is stored in Redis.
-    result = orjson.loads(
-        zstandard.ZstdDecompressor().decompress(
-            models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
-        )
-    )
+    value = models.redis.get(f"bugbug:job_result:schedule_tests:mozilla-central_{rev}")
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
     assert len(result) == 6
     assert result["tasks"] == labels_to_choose
     assert result["groups"] == groups_to_choose

@@ -19,11 +19,9 @@ def test_get_config_specific_groups(
     assert models.get_config_specific_groups("test-linux1804-64/opt-*") == "OK"
 
     # Assert the test selection result is stored in Redis.
-    result = orjson.loads(
-        zstandard.ZstdDecompressor().decompress(
-            models.redis.get(
-                "bugbug:job_result:get_config_specific_groups:test-linux1804-64/opt-*"
-            )
-        )
+    value = models.redis.get(
+        "bugbug:job_result:get_config_specific_groups:test-linux1804-64/opt-*"
     )
+    assert value is not None
+    result = orjson.loads(zstandard.ZstdDecompressor().decompress(value))
     assert result == [{"name": "test-group1"}]
