@@ -93,9 +93,9 @@ export const dateToMonth = (() => {
 })();
 
 export const dateToVersion = (async () => {
-  const releases = Object.entries(
-    await getFirefoxReleases()
-  ).map(([cur_version, cur_date]) => [cur_version, getPlainDate(cur_date)]);
+  const releases = Object.entries(await getFirefoxReleases()).map(
+    ([cur_version, cur_date]) => [cur_version, getPlainDate(cur_date)]
+  );
   const cache = new Map();
 
   return (dateString) => {
@@ -2549,16 +2549,10 @@ function getCompareFunction(field) {
     };
   } else if (field == "Coverage") {
     return function (a, b) {
-      const [
-        lines_added_a,
-        lines_covered_a,
-        lines_unknown_a,
-      ] = summarizeCoverage(a);
-      const [
-        lines_added_b,
-        lines_covered_b,
-        lines_unknown_b,
-      ] = summarizeCoverage(b);
+      const [lines_added_a, lines_covered_a, lines_unknown_a] =
+        summarizeCoverage(a);
+      const [lines_added_b, lines_covered_b, lines_unknown_b] =
+        summarizeCoverage(b);
 
       const uncovered_a = lines_added_a - (lines_covered_a + lines_unknown_a);
       const uncovered_b = lines_added_b - (lines_covered_b + lines_unknown_b);
@@ -2851,9 +2845,8 @@ function addRow(
       testing_tags_column.append(testing_tags_list);
     } else if (column == "coverage") {
       const coverage_column = row.insertCell();
-      const [lines_added, lines_covered, lines_unknown] = summarizeCoverage(
-        bugSummary
-      );
+      const [lines_added, lines_covered, lines_unknown] =
+        summarizeCoverage(bugSummary);
       if (lines_added != 0) {
         if (lines_unknown != 0) {
           coverage_column.textContent = `${lines_covered}-${
