@@ -112,7 +112,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
     responses.add(
         responses.GET,
-        "https://bugzilla.mozilla.org/rest/bug?include_fields=last_change_time&include_fields=id&id=123&id=456",
+        "https://bugzilla.mozilla.org/rest/bug?id=123,456&include_fields=id&include_fields=last_change_time",
         status=200,
         json={
             "bugs": [
