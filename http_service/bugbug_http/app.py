@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Optional, Sequence, Tuple
 
-import libmozdata
 import orjson
 import zstandard
 from apispec import APISpec
@@ -28,7 +27,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job
 from sentry_sdk.integrations.flask import FlaskIntegration
 
-from bugbug import get_bugbug_version, utils
+from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
     classify_bug,
@@ -82,11 +81,6 @@ VALIDATOR = Validator()
 
 BUGZILLA_TOKEN = os.environ.get("BUGBUG_BUGZILLA_TOKEN")
 GITHUB_TOKEN = os.environ.get("BUGBUG_GITHUB_TOKEN")
-
-BUGZILLA_API_URL = (
-    libmozdata.config.get("Bugzilla", "URL", "https://bugzilla.mozilla.org")
-    + "/rest/bug"
-)
 
 dctx = zstandard.ZstdDecompressor()
 
@@ -278,27 +272,22 @@ def is_pending(job):
 
 
 def get_bugs_last_change_time(bug_ids):
-    query = {
-        "include_fields": ["last_change_time", "id"],
-    }
-    header = {"X-Bugzilla-API-Key": BUGZILLA_TOKEN, "User-Agent": "bugbug"}
+    bugzilla.set_token(BUGZILLA_TOKEN)
 
     old_CHUNK_SIZE = Bugzilla.BUGZILLA_CHUNK_SIZE
     try:
-        Bugzilla.BUGZILLA_CHUNK_SIZE = 1000
+        Bugzilla.BUGZILLA_CHUNK_SIZE = 700
 
         bugs = {}
-        for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
-            query["id"] = bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]
-            response = utils.get_session("bugzilla").get(
-                BUGZILLA_API_URL, params=query, headers=header, verify=True, timeout=30
-            )
-            response.raise_for_status()
 
-            raw_bugs = response.json()
+        def bughandler(bug):
+            bugs[bug["id"]] = bug["last_change_time"]
 
-            for bug in raw_bugs["bugs"]:
-                bugs[bug["id"]] = bug["last_change_time"]
+        Bugzilla(
+            bugids=bug_ids,
+            bughandler=bughandler,
+            include_fields=["id", "last_change_time"],
+        ).get_data().wait()
     finally:
         Bugzilla.BUGZILLA_CHUNK_SIZE = old_CHUNK_SIZE
 
