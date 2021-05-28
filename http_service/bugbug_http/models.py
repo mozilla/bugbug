@@ -12,7 +12,6 @@ from typing import Sequence, Tuple
 import orjson
 import requests
 import zstandard
-from libmozdata.bugzilla import Bugzilla
 from redis import Redis
 
 from bugbug import bugzilla, github, repository, test_scheduling
@@ -61,9 +60,7 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
     bug_ids_set = set(map(int, bug_ids))
     bugzilla.set_token(bugzilla_token)
 
-    bugs = {}
-    for i in range(0, len(bug_ids), Bugzilla.BUGZILLA_CHUNK_SIZE):
-        bugs.update(bugzilla.get(bug_ids[i : (i + Bugzilla.BUGZILLA_CHUNK_SIZE)]))
+    bugs = bugzilla.get(bug_ids)
 
     missing_bugs = bug_ids_set.difference(bugs.keys())
 
