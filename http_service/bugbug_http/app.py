@@ -685,10 +685,8 @@ def batch_prediction(model_name):
             status_code = 202
             data[str(bug_id)] = {"ready": False}
 
-    if missing_bugs:
-        # TODO: We should probably schedule chunks of bugs to avoid jobs that
-        # are running for too long
-        schedule_bug_classification(model_name, missing_bugs)
+    for i in range(0, len(missing_bugs), 100):
+        schedule_bug_classification(model_name, missing_bugs[i : (i + 100)])
 
     return compress_response({"bugs": data}, status_code)
 
