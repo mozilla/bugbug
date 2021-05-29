@@ -147,6 +147,24 @@ class source_code_file_metrics(object):
                 "halstead_n1_avg"
             ],
             "Average file number of operators": commit["metrics"]["halstead_N1_avg"],
+            "Average file length": commit["metrics"]["halstead_length_avg"],
+            "Average calculated estimated file length": commit["metrics"][
+                "halstead_calculated_estimated_length_avg"
+            ],
+            "Average file purity ratio": commit["metrics"]["halstead_purity_ratio_avg"],
+            "Average file vocabulary": commit["metrics"]["halstead_vocabulary_avg"],
+            "Average file volume": commit["metrics"]["halstead_volume_avg"],
+            "Average file estimated difficulty": commit["metrics"][
+                "halstead_difficulty_avg"
+            ],
+            "Average file estimated level of difficulty": commit["metrics"][
+                "halstead_level_avg"
+            ],
+            "Average file estimated effort": commit["metrics"]["halstead_effort_avg"],
+            "Average file estimated time": commit["metrics"]["halstead_time_avg"],
+            "Average file estimated number of delivered bugs": commit["metrics"][
+                "halstead_bugs_avg"
+            ],
             "Average file number of source loc": commit["metrics"]["sloc_avg"],
             "Average file number of instruction loc": commit["metrics"]["ploc_avg"],
             "Average file number of logical loc": commit["metrics"]["lloc_avg"],
@@ -169,6 +187,24 @@ class source_code_file_metrics(object):
                 "halstead_n1_max"
             ],
             "Maximum file number of operators": commit["metrics"]["halstead_N1_max"],
+            "Maximum file length": commit["metrics"]["halstead_length_max"],
+            "Maximum calculated estimated file length": commit["metrics"][
+                "halstead_calculated_estimated_length_max"
+            ],
+            "Maximum file purity ratio": commit["metrics"]["halstead_purity_ratio_max"],
+            "Maximum file vocabulary": commit["metrics"]["halstead_vocabulary_max"],
+            "Maximum file volume": commit["metrics"]["halstead_volume_max"],
+            "Maximum file estimated difficulty": commit["metrics"][
+                "halstead_difficulty_max"
+            ],
+            "Maximum file estimated level of difficulty": commit["metrics"][
+                "halstead_level_max"
+            ],
+            "Maximum file estimated effort": commit["metrics"]["halstead_effort_max"],
+            "Maximum file estimated time": commit["metrics"]["halstead_time_max"],
+            "Maximum file estimated number of delivered bugs": commit["metrics"][
+                "halstead_bugs_max"
+            ],
             "Maximum file number of source loc": commit["metrics"]["sloc_max"],
             "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
             "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
@@ -191,6 +227,24 @@ class source_code_file_metrics(object):
                 "halstead_n1_min"
             ],
             "Minimum file number of operators": commit["metrics"]["halstead_N1_min"],
+            "Minimum file length": commit["metrics"]["halstead_length_min"],
+            "Minimum calculated estimated file length": commit["metrics"][
+                "halstead_calculated_estimated_length_min"
+            ],
+            "Minimum file purity ratio": commit["metrics"]["halstead_purity_ratio_min"],
+            "Minimum file vocabulary": commit["metrics"]["halstead_vocabulary_min"],
+            "Minimum file volume": commit["metrics"]["halstead_volume_min"],
+            "Minimum file estimated difficulty": commit["metrics"][
+                "halstead_difficulty_min"
+            ],
+            "Minimum file estimated level of difficulty": commit["metrics"][
+                "halstead_level_min"
+            ],
+            "Minimum file estimated effort": commit["metrics"]["halstead_effort_min"],
+            "Minimum file estimated time": commit["metrics"]["halstead_time_min"],
+            "Minimum file estimated number of delivered bugs": commit["metrics"][
+                "halstead_bugs_min"
+            ],
             "Minimum file number of source loc": commit["metrics"]["sloc_min"],
             "Minimum file number of instruction loc": commit["metrics"]["ploc_min"],
             "Minimum file number of logical loc": commit["metrics"]["lloc_min"],
@@ -213,6 +267,24 @@ class source_code_file_metrics(object):
                 "halstead_n1_total"
             ],
             "Total file number of operators": commit["metrics"]["halstead_N1_total"],
+            "Total file length": commit["metrics"]["halstead_length_total"],
+            "Total calculated estimated file length": commit["metrics"][
+                "halstead_calculated_estimated_length_total"
+            ],
+            "Total file purity ratio": commit["metrics"]["halstead_purity_ratio_total"],
+            "Total file vocabulary": commit["metrics"]["halstead_vocabulary_total"],
+            "Total file volume": commit["metrics"]["halstead_volume_total"],
+            "Total file estimated difficulty": commit["metrics"][
+                "halstead_difficulty_total"
+            ],
+            "Total file estimated level of difficulty": commit["metrics"][
+                "halstead_level_total"
+            ],
+            "Total file estimated effort": commit["metrics"]["halstead_effort_total"],
+            "Total file estimated time": commit["metrics"]["halstead_time_total"],
+            "Total file estimated number of delivered bugs": commit["metrics"][
+                "halstead_bugs_total"
+            ],
             "Total file number of source loc": commit["metrics"]["sloc_total"],
             "Total file number of instruction loc": commit["metrics"]["ploc_total"],
             "Total file number of logical loc": commit["metrics"]["lloc_total"],
@@ -274,6 +346,26 @@ class source_code_function_metrics(object):
                 "halstead_n1_avg"
             ],
             "Average function number of operators": merged_metrics["halstead_N1_avg"],
+            "Average function length": merged_metrics["halstead_length_avg"],
+            "Average calculated estimated function length": merged_metrics[
+                "halstead_calculated_estimated_length_avg"
+            ],
+            "Average function purity ratio": merged_metrics[
+                "halstead_purity_ratio_avg"
+            ],
+            "Average function vocabulary": merged_metrics["halstead_vocabulary_avg"],
+            "Average function volume": merged_metrics["halstead_volume_avg"],
+            "Average function estimated difficulty": merged_metrics[
+                "halstead_difficulty_avg"
+            ],
+            "Average function estimated level of difficulty": merged_metrics[
+                "halstead_level_avg"
+            ],
+            "Average function estimated effort": merged_metrics["halstead_effort_avg"],
+            "Average function estimated time": merged_metrics["halstead_time_avg"],
+            "Average function estimated number of delivered bugs": merged_metrics[
+                "halstead_bugs_avg"
+            ],
             "Average function number of source loc": merged_metrics["sloc_avg"],
             "Average function number of instruction loc": merged_metrics["ploc_avg"],
             "Average function number of logical loc": merged_metrics["lloc_avg"],
@@ -298,6 +390,26 @@ class source_code_function_metrics(object):
                 "halstead_n1_max"
             ],
             "Maximum function number of operators": merged_metrics["halstead_N1_max"],
+            "Maximum function length": merged_metrics["halstead_length_max"],
+            "Maximum calculated estimated function length": merged_metrics[
+                "halstead_calculated_estimated_length_max"
+            ],
+            "Maximum function purity ratio": merged_metrics[
+                "halstead_purity_ratio_max"
+            ],
+            "Maximum function vocabulary": merged_metrics["halstead_vocabulary_max"],
+            "Maximum function volume": merged_metrics["halstead_volume_max"],
+            "Maximum function estimated difficulty": merged_metrics[
+                "halstead_difficulty_max"
+            ],
+            "Maximum function estimated level of difficulty": merged_metrics[
+                "halstead_level_max"
+            ],
+            "Maximum function estimated effort": merged_metrics["halstead_effort_max"],
+            "Maximum function estimated time": merged_metrics["halstead_time_max"],
+            "Maximum function estimated number of delivered bugs": merged_metrics[
+                "halstead_bugs_max"
+            ],
             "Maximum function number of source loc": merged_metrics["sloc_max"],
             "Maximum function number of instruction loc": merged_metrics["ploc_max"],
             "Maximum function number of logical loc": merged_metrics["lloc_max"],
@@ -322,6 +434,26 @@ class source_code_function_metrics(object):
                 "halstead_n1_min"
             ],
             "Minimum function number of operators": merged_metrics["halstead_N1_min"],
+            "Minimum function length": merged_metrics["halstead_length_min"],
+            "Minimum calculated estimated function length": merged_metrics[
+                "halstead_calculated_estimated_length_min"
+            ],
+            "Minimum function purity ratio": merged_metrics[
+                "halstead_purity_ratio_min"
+            ],
+            "Minimum function vocabulary": merged_metrics["halstead_vocabulary_min"],
+            "Minimum function volume": merged_metrics["halstead_volume_min"],
+            "Minimum function estimated difficulty": merged_metrics[
+                "halstead_difficulty_min"
+            ],
+            "Minimum function estimated level of difficulty": merged_metrics[
+                "halstead_level_min"
+            ],
+            "Minimum function estimated effort": merged_metrics["halstead_effort_min"],
+            "Minimum function estimated time": merged_metrics["halstead_time_min"],
+            "Minimum function estimated number of delivered bugs": merged_metrics[
+                "halstead_bugs_min"
+            ],
             "Minimum function number of source loc": merged_metrics["sloc_min"],
             "Minimum function number of instruction loc": merged_metrics["ploc_min"],
             "Minimum function number of logical loc": merged_metrics["lloc_min"],
@@ -346,6 +478,26 @@ class source_code_function_metrics(object):
                 "halstead_n1_total"
             ],
             "Total function number of operators": merged_metrics["halstead_N1_total"],
+            "Total function length": merged_metrics["halstead_length_total"],
+            "Total calculated estimated function length": merged_metrics[
+                "halstead_calculated_estimated_length_total"
+            ],
+            "Total function purity ratio": merged_metrics[
+                "halstead_purity_ratio_total"
+            ],
+            "Total function vocabulary": merged_metrics["halstead_vocabulary_total"],
+            "Total function volume": merged_metrics["halstead_volume_total"],
+            "Total function estimated difficulty": merged_metrics[
+                "halstead_difficulty_total"
+            ],
+            "Total function estimated level of difficulty": merged_metrics[
+                "halstead_level_total"
+            ],
+            "Total function estimated effort": merged_metrics["halstead_effort_total"],
+            "Total function estimated time": merged_metrics["halstead_time_total"],
+            "Total function estimated number of delivered bugs": merged_metrics[
+                "halstead_bugs_total"
+            ],
             "Total function number of source loc": merged_metrics["sloc_total"],
             "Total function number of instruction loc": merged_metrics["ploc_total"],
             "Total function number of logical loc": merged_metrics["lloc_total"],
@@ -378,6 +530,26 @@ class source_code_metrics_diff(object):
                 "halstead_n1_total"
             ],
             "Diff in number of operators": commit["metrics_diff"]["halstead_N1_total"],
+            "Diff in length": commit["metrics_diff"]["halstead_length_total"],
+            "Diff in calculated estimated length": commit["metrics_diff"][
+                "halstead_calculated_estimated_length_total"
+            ],
+            "Diff in purity ratio": commit["metrics_diff"][
+                "halstead_purity_ratio_total"
+            ],
+            "Diff in vocabulary": commit["metrics_diff"]["halstead_vocabulary_total"],
+            "Diff in volume": commit["metrics_diff"]["halstead_volume_total"],
+            "Diff in estimated difficulty": commit["metrics_diff"][
+                "halstead_difficulty_total"
+            ],
+            "Diff in estimated level of difficulty": commit["metrics_diff"][
+                "halstead_level_total"
+            ],
+            "Diff in estimated effort": commit["metrics_diff"]["halstead_effort_total"],
+            "Diff in estimated time": commit["metrics_diff"]["halstead_time_total"],
+            "Diff in estimated number of delivered bugs": commit["metrics_diff"][
+                "halstead_bugs_total"
+            ],
             "Diff in number of source loc": commit["metrics_diff"]["sloc_total"],
             "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
             "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
