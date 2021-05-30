@@ -134,7 +134,7 @@ METRIC_NAMES = [
     "halstead_N2",
     "halstead_n2",
     "halstead_length",
-    "halstead_calculated_estimated_length",
+    "halstead_estimated_program_length",
     "halstead_purity_ratio",
     "halstead_vocabulary",
     "halstead_volume",
@@ -473,9 +473,9 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_length_max"] = max(
             obj["halstead_length_max"], metrics["halstead"]["length"]
         )
-        obj["halstead_calculated_estimated_length_max"] = max(
-            obj["halstead_calculated_estimated_length_max"],
-            metrics["halstead"]["calculated_estimated_length"],
+        obj["halstead_estimated_program_length_max"] = max(
+            obj["halstead_estimated_program_length_max"],
+            metrics["halstead"]["estimated_program_length"],
         )
         obj["halstead_purity_ratio_max"] = max(
             obj["halstead_purity_ratio_max"], metrics["halstead"]["purity_ratio"]
@@ -530,9 +530,9 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_length_min"] = min(
             obj["halstead_length_min"], metrics["halstead"]["length"]
         )
-        obj["halstead_calculated_estimated_length_min"] = min(
-            obj["halstead_calculated_estimated_length_min"],
-            metrics["halstead"]["calculated_estimated_length"],
+        obj["halstead_estimated_program_length_min"] = min(
+            obj["halstead_estimated_program_length_min"],
+            metrics["halstead"]["estimated_program_length"],
         )
         obj["halstead_purity_ratio_min"] = min(
             obj["halstead_purity_ratio_min"], metrics["halstead"]["purity_ratio"]
@@ -597,8 +597,8 @@ def get_space_metrics(
     obj["halstead_n1_total"] += metrics["halstead"]["n1"]
     obj["halstead_N1_total"] += metrics["halstead"]["N1"]
     obj["halstead_length_total"] += metrics["halstead"]["length"]
-    obj["halstead_calculated_estimated_length_total"] += metrics["halstead"][
-        "calculated_estimated_length"
+    obj["halstead_estimated_program_length_total"] += metrics["halstead"][
+        "estimated_program_length"
     ]
     obj["halstead_purity_ratio_total"] += metrics["halstead"]["purity_ratio"]
     obj["halstead_vocabulary_total"] += metrics["halstead"]["vocabulary"]

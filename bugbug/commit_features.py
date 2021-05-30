@@ -149,7 +149,7 @@ class source_code_file_metrics(object):
             "Average file number of operators": commit["metrics"]["halstead_N1_avg"],
             "Average file length": commit["metrics"]["halstead_length_avg"],
             "Average calculated estimated file length": commit["metrics"][
-                "halstead_calculated_estimated_length_avg"
+                "halstead_estimated_program_length_avg"
             ],
             "Average file purity ratio": commit["metrics"]["halstead_purity_ratio_avg"],
             "Average file vocabulary": commit["metrics"]["halstead_vocabulary_avg"],
@@ -189,7 +189,7 @@ class source_code_file_metrics(object):
             "Maximum file number of operators": commit["metrics"]["halstead_N1_max"],
             "Maximum file length": commit["metrics"]["halstead_length_max"],
             "Maximum calculated estimated file length": commit["metrics"][
-                "halstead_calculated_estimated_length_max"
+                "halstead_estimated_program_length_max"
             ],
             "Maximum file purity ratio": commit["metrics"]["halstead_purity_ratio_max"],
             "Maximum file vocabulary": commit["metrics"]["halstead_vocabulary_max"],
@@ -229,7 +229,7 @@ class source_code_file_metrics(object):
             "Minimum file number of operators": commit["metrics"]["halstead_N1_min"],
             "Minimum file length": commit["metrics"]["halstead_length_min"],
             "Minimum calculated estimated file length": commit["metrics"][
-                "halstead_calculated_estimated_length_min"
+                "halstead_estimated_program_length_min"
             ],
             "Minimum file purity ratio": commit["metrics"]["halstead_purity_ratio_min"],
             "Minimum file vocabulary": commit["metrics"]["halstead_vocabulary_min"],
@@ -269,7 +269,7 @@ class source_code_file_metrics(object):
             "Total file number of operators": commit["metrics"]["halstead_N1_total"],
             "Total file length": commit["metrics"]["halstead_length_total"],
             "Total calculated estimated file length": commit["metrics"][
-                "halstead_calculated_estimated_length_total"
+                "halstead_estimated_program_length_total"
             ],
             "Total file purity ratio": commit["metrics"]["halstead_purity_ratio_total"],
             "Total file vocabulary": commit["metrics"]["halstead_vocabulary_total"],
@@ -348,7 +348,7 @@ class source_code_function_metrics(object):
             "Average function number of operators": merged_metrics["halstead_N1_avg"],
             "Average function length": merged_metrics["halstead_length_avg"],
             "Average calculated estimated function length": merged_metrics[
-                "halstead_calculated_estimated_length_avg"
+                "halstead_estimated_program_length_avg"
             ],
             "Average function purity ratio": merged_metrics[
                 "halstead_purity_ratio_avg"
@@ -392,7 +392,7 @@ class source_code_function_metrics(object):
             "Maximum function number of operators": merged_metrics["halstead_N1_max"],
             "Maximum function length": merged_metrics["halstead_length_max"],
             "Maximum calculated estimated function length": merged_metrics[
-                "halstead_calculated_estimated_length_max"
+                "halstead_estimated_program_length_max"
             ],
             "Maximum function purity ratio": merged_metrics[
                 "halstead_purity_ratio_max"
@@ -436,7 +436,7 @@ class source_code_function_metrics(object):
             "Minimum function number of operators": merged_metrics["halstead_N1_min"],
             "Minimum function length": merged_metrics["halstead_length_min"],
             "Minimum calculated estimated function length": merged_metrics[
-                "halstead_calculated_estimated_length_min"
+                "halstead_estimated_program_length_min"
             ],
             "Minimum function purity ratio": merged_metrics[
                 "halstead_purity_ratio_min"
@@ -480,7 +480,7 @@ class source_code_function_metrics(object):
             "Total function number of operators": merged_metrics["halstead_N1_total"],
             "Total function length": merged_metrics["halstead_length_total"],
             "Total calculated estimated function length": merged_metrics[
-                "halstead_calculated_estimated_length_total"
+                "halstead_estimated_program_length_total"
             ],
             "Total function purity ratio": merged_metrics[
                 "halstead_purity_ratio_total"
@@ -532,7 +532,7 @@ class source_code_metrics_diff(object):
             "Diff in number of operators": commit["metrics_diff"]["halstead_N1_total"],
             "Diff in length": commit["metrics_diff"]["halstead_length_total"],
             "Diff in calculated estimated length": commit["metrics_diff"][
-                "halstead_calculated_estimated_length_total"
+                "halstead_estimated_program_length_total"
             ],
             "Diff in purity ratio": commit["metrics_diff"][
                 "halstead_purity_ratio_total"
