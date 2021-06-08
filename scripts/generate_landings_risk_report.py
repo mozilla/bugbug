@@ -307,27 +307,11 @@ class LandingsRiskReportGenerator(object):
         ]
 
         logger.info(f"Retrieving bug IDs since {days} days ago")
-        timespan_ids = bugzilla.get_ids_between(since, datetime.utcnow())
-        bugzilla.download_bugs(timespan_ids)
-
-        bug_ids = set(commit["bug_id"] for commit in commits)
-        bug_ids.update(
-            bug["id"]
-            for bug in bugzilla.get_bugs()
-            if dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None) >= since
-            and bug["resolution"]
-            not in [
-                "INVALID",
-                "WONTFIX",
-                "INACTIVE",
-                "DUPLICATE",
-                "INCOMPLETE",
-                "MOVED",
-                "WORKSFORME",
-            ]
+        timespan_ids = bugzilla.get_ids_between(
+            since, datetime.utcnow(), resolution=["---", "FIXED"]
         )
 
-        return list(bug_ids)
+        return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
 
     def get_regressors_of(self, bug_ids: List[int]) -> List[int]:
         bugzilla.download_bugs(bug_ids)

@@ -146,7 +146,7 @@ def get(ids_or_query):
     return new_bugs
 
 
-def get_ids_between(date_from, date_to, security=False):
+def get_ids_between(date_from, date_to, security=False, resolution=None):
     params = {
         "f1": "creation_ts",
         "o1": "greaterthan",
@@ -160,6 +160,9 @@ def get_ids_between(date_from, date_to, security=False):
     if not security:
         params["f3"] = "bug_group"
         params["o3"] = "isempty"
+
+    if resolution is not None:
+        params["resolution"] = resolution
 
     return get_ids(params)
 
