@@ -13,6 +13,7 @@ def rollback(issue, when=None):
             if (
                 event["event"] == "renamed"
                 and event["rename"]["from"] != "In the moderation queue."
+                and event["rename"]["from"] != "Issue closed."
             ):
                 issue["title"] = event["rename"]["from"]
 
