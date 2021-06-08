@@ -352,22 +352,16 @@ class LandingsRiskReportGenerator(object):
         }
 
     def get_meta_bugs(self, days: int) -> List[int]:
-        params = {
-            "columnlist": "bug_id",
-            "order": "bug_id",
-            "keywords": "feature-testing-meta",
-            "keywords_type": "allwords",
-            "resolution": "---",
-            "f1": "anything",
-            "o1": "changedafter",
-            "v1": "-90d",
-            "ctype": "csv",
-        }
-
-        r = requests.get("https://bugzilla.mozilla.org/buglist.cgi", params=params)
-        r.raise_for_status()
-
-        return [int(b) for b in r.text.splitlines()[1:]]
+        return bugzilla.get_ids(
+            {
+                "keywords": "feature-testing-meta",
+                "keywords_type": "allwords",
+                "resolution": "---",
+                "f1": "anything",
+                "o1": "changedafter",
+                "v1": "-90d",
+            }
+        )
 
     def retrieve_test_info(self, days: int) -> Dict[str, Any]:
         logger.info("Download previous test info...")
