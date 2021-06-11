@@ -2027,6 +2027,11 @@ export async function getComponentDependencyMap(type, threshold = 0.05) {
 }
 
 let options = {
+  bugID: {
+    value: null,
+    type: "text",
+    callback: null,
+  },
   metaBugID: {
     value: null,
     type: "text",
