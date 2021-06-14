@@ -44,6 +44,9 @@ PAST_REGRESSION_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com
 PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.past_bugs_by_unit.latest/artifacts/public/past_fixed_bug_blocked_bugs_by_{dimension}.json.zst"
 
 
+FUZZING_METABUG_ID = 316898
+
+
 def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
     seen = set()
     results = []
@@ -420,13 +423,16 @@ class LandingsRiskReportGenerator(object):
             if bug_id in bug_map or bug_id in regressor_bug_ids:
                 bug_to_commits[bug_id].append(commit)
 
-        # All bugs blocking the "fuzz" bug (316898) and its dependent meta bugs are fuzzing bugs.
+        # All bugs blocking the "fuzz" bug and its dependent meta bugs are fuzzing bugs.
         fuzzblocker_bugs = set(
             bug["id"] for bug in bug_map.values() if is_fuzzblocker(bug)
         )
         fuzzing_bugs = (
             set(
-                sum(self.get_blocking_of([316898], meta_only=True).values(), [])
+                sum(
+                    self.get_blocking_of([FUZZING_METABUG_ID], meta_only=True).values(),
+                    [],
+                )
                 + [
                     bug["id"]
                     for bug in bug_map.values()
@@ -771,7 +777,7 @@ class LandingsRiskReportGenerator(object):
         ]
 
         logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(bugs + test_info_bugs)
+        bugzilla.download_bugs(bugs + test_info_bugs + [FUZZING_METABUG_ID])
 
         logger.info(f"{len(bugs)} bugs to analyze.")
 
