@@ -47,9 +47,7 @@ class Retriever(object):
             years=2, months=6
         )
         logger.info(f"Retrieving bug IDs since {two_years_and_six_months_ago}")
-        timespan_ids = bugzilla.get_ids_between(
-            two_years_and_six_months_ago, datetime.utcnow()
-        )
+        timespan_ids = bugzilla.get_ids_between(two_years_and_six_months_ago)
         if limit:
             timespan_ids = timespan_ids[-limit:]
         logger.info(f"Retrieved {len(timespan_ids)} IDs.")

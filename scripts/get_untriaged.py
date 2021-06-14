@@ -17,12 +17,9 @@ sys.path.append("../")
 def fetch_untriaged(args):
     from bugbug import bugzilla
 
-    today = date.today()
-    three_months_ago = today - timedelta(days=args.days_back)
-
     # Set bugzilla token and download bugs
     bugzilla.set_token(args.token)
-    bug_ids = bugzilla.get_ids_between(three_months_ago, today)
+    bug_ids = bugzilla.get_ids_between(date.today() - timedelta(days=args.days_back))
     bugs = bugzilla.get(bug_ids)
 
     # Get untriaged bugs

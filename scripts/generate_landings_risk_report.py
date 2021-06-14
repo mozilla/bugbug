@@ -307,9 +307,7 @@ class LandingsRiskReportGenerator(object):
         ]
 
         logger.info(f"Retrieving bug IDs since {days} days ago")
-        timespan_ids = bugzilla.get_ids_between(
-            since, datetime.utcnow(), resolution=["---", "FIXED"]
-        )
+        timespan_ids = bugzilla.get_ids_between(since, resolution=["---", "FIXED"])
 
         return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
 
