@@ -328,7 +328,6 @@ class LandingsRiskReportGenerator(object):
     def get_blocking_of(
         self, bug_ids: List[int], meta_only: bool = False
     ) -> Dict[int, List[int]]:
-        bugzilla.download_bugs(bug_ids)
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
         return {
             bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
@@ -758,9 +757,7 @@ class LandingsRiskReportGenerator(object):
     def go(self, days: int) -> None:
         bugs = self.get_landed_and_filed_since(days)
 
-        meta_bugs = self.get_blocking_of(self.get_meta_bugs(days))
-        bugs += meta_bugs.keys()
-        bugs += sum(meta_bugs.values(), [])
+        meta_bugs = self.get_meta_bugs(days)
 
         last_modified = db.last_modified(bugzilla.BUGS_DB)
         logger.info(f"Deleting bugs modified since the last run on {last_modified}")
@@ -777,11 +774,11 @@ class LandingsRiskReportGenerator(object):
         ]
 
         logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(bugs + test_info_bugs + [FUZZING_METABUG_ID])
+        bugzilla.download_bugs(bugs + test_info_bugs + [FUZZING_METABUG_ID] + meta_bugs)
 
         logger.info(f"{len(bugs)} bugs to analyze.")
 
-        bugs_set = set(bugs + test_info_bugs)
+        bugs_set = set(bugs + test_info_bugs + meta_bugs)
 
         bug_map = {}
         regressor_bug_ids = set()
@@ -793,7 +790,9 @@ class LandingsRiskReportGenerator(object):
             if len(bug["regressions"]) > 0:
                 regressor_bug_ids.add(bug["id"])
 
-        self.generate_landings_by_date(bug_map, regressor_bug_ids, bugs, meta_bugs)
+        self.generate_landings_by_date(
+            bug_map, regressor_bug_ids, bugs, self.get_blocking_of(meta_bugs)
+        )
 
         self.generate_component_connections(bug_map, bugs)
 
