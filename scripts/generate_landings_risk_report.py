@@ -303,11 +303,22 @@ class LandingsRiskReportGenerator(object):
     def get_landed_and_filed_since(self, days: int) -> List[int]:
         since = datetime.utcnow() - timedelta(days=days)
 
-        commits = [
-            commit
-            for commit in repository.get_commits()
-            if dateutil.parser.parse(commit["pushdate"]) >= since and commit["bug_id"]
-        ]
+        commits = []
+        last_commit_by_bug: Dict[int, datetime] = {}
+        for commit in repository.get_commits():
+            if not commit["bug_id"]:
+                continue
+
+            push_date = dateutil.parser.parse(commit["pushdate"])
+
+            if push_date >= since and (
+                commit["bug_id"] not in last_commit_by_bug
+                or push_date - last_commit_by_bug[commit["bug_id"]] < timedelta(days=91)
+                or not all(repository.is_test(p) for p in commit["files"])
+            ):
+                commits.append(commit)
+
+            last_commit_by_bug[commit["bug_id"]] = push_date
 
         logger.info(f"Retrieving bug IDs since {days} days ago")
         timespan_ids = bugzilla.get_ids_between(since, resolution=["---", "FIXED"])
