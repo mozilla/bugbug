@@ -52,10 +52,8 @@ PRODUCTS = (
 
 ATTACHMENT_INCLUDE_FIELDS = [
     "id",
-    "is_obsolete",
     "flags",
     "is_patch",
-    "creator",
     "content_type",
     "creation_time",
     "file_name",
