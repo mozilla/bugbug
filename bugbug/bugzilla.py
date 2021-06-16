@@ -58,6 +58,7 @@ ATTACHMENT_INCLUDE_FIELDS = [
     "creator",
     "content_type",
     "creation_time",
+    "file_name",
 ]
 
 COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "author", "creation_time"]
