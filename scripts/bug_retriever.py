@@ -25,22 +25,24 @@ class Retriever(object):
         logger.info(
             f"Retrieving IDs of bugs modified since the last run on {last_modified}"
         )
-        changed_ids = bugzilla.get_ids(
-            {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
+        changed_ids = set(
+            bugzilla.get_ids(
+                {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
+            )
         )
         logger.info(f"Retrieved {len(changed_ids)} IDs.")
 
         all_components = bugzilla.get_product_component_count(9999)
 
-        deleted_component_ids = [
+        deleted_component_ids = set(
             bug["id"]
             for bug in bugzilla.get_bugs()
             if "{}::{}".format(bug["product"], bug["component"]) not in all_components
-        ]
+        )
         logger.info(
             f"{len(deleted_component_ids)} bugs belonging to deleted components"
         )
-        changed_ids += deleted_component_ids
+        changed_ids |= deleted_component_ids
 
         # Get IDs of bugs between (two years and six months ago) and now.
         two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
