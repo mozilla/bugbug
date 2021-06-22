@@ -68,7 +68,7 @@ def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
         constraints={
             "ids": rev_ids,
         },
-        attachments={"projects": True},
+        attachments={"projects": True, "reviewers": True},
     )
 
     data = out["data"]
