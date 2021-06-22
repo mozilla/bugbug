@@ -95,6 +95,8 @@ def download_revisions(rev_ids: Collection[int]) -> None:
         new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
     )
 
+    print(f"{len(new_rev_ids_list)} revisions left to download")
+
     with tqdm(total=len(new_rev_ids)) as progress_bar:
         for rev_ids_group in rev_ids_groups:
             revisions = get(rev_ids_group)
