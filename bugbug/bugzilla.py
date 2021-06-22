@@ -63,6 +63,8 @@ COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "creation_time"]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
+PHAB_REVISION_PATTERN = re.compile(r"phabricator-D([0-9]+)-url.txt")
+
 
 def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     yield from (
@@ -351,3 +353,19 @@ def get_groups_users(group_names: List[str]) -> List[str]:
         for group in r.json()["groups"]
         for member in group["membership"]
     ]
+
+
+def get_revision_ids(bug: BugDict) -> List[int]:
+    revision_ids = []
+
+    for attachment in bug["attachments"]:
+        if attachment["content_type"] != "text/x-phabricator-request":
+            continue
+
+        match = PHAB_REVISION_PATTERN.search(attachment["file_name"])
+        if match is None:
+            continue
+
+        revision_ids.append(int(match.group(1)))
+
+    return revision_ids
