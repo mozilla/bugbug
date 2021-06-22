@@ -8,7 +8,7 @@ from typing import Optional
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
-from bugbug import db, phabricator, repository
+from bugbug import bugzilla, db, phabricator, repository
 from bugbug.utils import get_secret, zstd_compress
 
 logger = getLogger(__name__)
@@ -25,8 +25,11 @@ class Retriever(object):
         # Get the commits DB, as we need it to get the revision IDs linked to recent commits.
         assert db.download(repository.COMMITS_DB)
 
+        # Get the bugs DB, as we need it to get the revision IDs linked to bugs.
+        assert db.download(bugzilla.BUGS_DB)
+
         # Get IDs of revisions linked to commits since a year ago.
-        start_date = datetime.now() - relativedelta(years=1)
+        start_date = datetime.utcnow() - relativedelta(years=1)
         revision_ids = list(
             (
                 filter(
@@ -41,6 +44,16 @@ class Retriever(object):
         )
         if limit is not None:
             revision_ids = revision_ids[-limit:]
+
+        # Get IDs of revisions linked to bugs since a year ago.
+        for bug in bugzilla.get_bugs():
+            if (
+                dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+                < start_date
+            ):
+                continue
+
+            revision_ids += bugzilla.get_revision_ids(bug)
 
         phabricator.download_revisions(revision_ids)
 
