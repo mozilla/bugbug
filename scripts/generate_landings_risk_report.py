@@ -644,7 +644,7 @@ class LandingsRiskReportGenerator(object):
                     bug["component"]
                 ),
                 "summary": bug["summary"],
-                "fixed": bug["resolution"] == "FIXED",
+                "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
                 "types": bug_to_types(bug, bug_map),
                 "severity": bug["severity"],
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
