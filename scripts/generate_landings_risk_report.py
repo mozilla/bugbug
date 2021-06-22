@@ -454,7 +454,7 @@ class LandingsRiskReportGenerator(object):
         )
 
         logger.info("Retrieve Phabricator revisions linked to commits...")
-        revision_ids = set(
+        revision_ids = list(
             filter(
                 None,
                 (
@@ -465,14 +465,30 @@ class LandingsRiskReportGenerator(object):
             )
         )
 
+        logger.info("Retrieve Phabricator revisions linked to bugs...")
+        for bug_id in bugs:
+            if bug_id not in bug_map:
+                continue
+
+            revision_ids += bugzilla.get_revision_ids(bug_map[bug_id])
+
         logger.info("Download revisions of interest...")
         phabricator.download_revisions(revision_ids)
 
-        revision_map = {
-            revision["id"]: revision
-            for revision in phabricator.get_revisions()
-            if revision["id"] in revision_ids
-        }
+        revision_map = {}
+        bug_to_revisions_map = collections.defaultdict(list)
+        revision_ids_set = set(revision_ids)
+        for revision in phabricator.get_revisions():
+            if revision["id"] in revision_ids_set:
+                revision_map[revision["id"]] = revision
+
+            if (
+                revision["fields"]["bugzilla.bug-id"]
+                and int(revision["fields"]["bugzilla.bug-id"]) in bug_map
+            ):
+                bug_to_revisions_map[int(revision["fields"]["bugzilla.bug-id"])].append(
+                    revision
+                )
 
         blocker_to_meta = collections.defaultdict(set)
         for meta_bug, blocker_bug_ids in meta_bugs.items():
@@ -502,20 +518,14 @@ class LandingsRiskReportGenerator(object):
                     testing = phabricator.get_testing_project(revision)
                     if testing is None:
                         testing = "missing"
-
-                    first_review_time = phabricator.get_review_time(revision)
                 else:
                     testing = None
-                    first_review_time = None
 
                 commits_data.append(
                     {
                         "id": commit["node"],
                         "rev_id": revision_id,
                         "testing": testing,
-                        "first_review_time": first_review_time.total_seconds() / 86400
-                        if first_review_time
-                        else None,
                         "risk": float(probs[i][1]),
                         "backedout": bool(commit["backedoutby"]),
                         "author": commit["author_email"],
@@ -595,6 +605,20 @@ class LandingsRiskReportGenerator(object):
                 if len(commit_data)
                 else None
             )
+
+            revisions = []
+            for revision in bug_to_revisions_map[bug["id"]]:
+                first_review_time = phabricator.get_review_time(revision)
+                revisions.append(
+                    {
+                        "id": revision["id"],
+                        "status": revision["fields"]["status"]["value"],
+                        "first_review_time": first_review_time.total_seconds() / 86400
+                        if first_review_time is not None
+                        else None,
+                    }
+                )
+
             bug_summary = {
                 "id": bug_id,
                 "regressor": bug_id in regressor_bug_ids,
@@ -640,6 +664,7 @@ class LandingsRiskReportGenerator(object):
                 else "y"
                 if bug["id"] in fuzzing_bugs
                 else "n",
+                "revisions": revisions,
             }
 
             self.get_prev_bugs_stats(bug_summary, commit_list)

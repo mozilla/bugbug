@@ -1552,9 +1552,9 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
     getOption("grouping"),
     minDate,
     (counterObj, bug) => {
-      for (let commit of bug.commits) {
-        if (commit.first_review_time !== null) {
-          counterObj.review_times.push(commit.first_review_time);
+      for (const revision of bug.revisions) {
+        if (revision.first_review_time !== null) {
+          counterObj.review_times.push(revision.first_review_time);
         }
       }
     },
@@ -1593,12 +1593,12 @@ export async function renderReviewTimeChart(chartEl, bugSummaries) {
 }
 
 function meanFirstReviewTime(bug) {
-  const commits = bug.commits.filter(
-    (commit) => commit.first_review_time !== null
+  const revisions = bug.revisions.filter(
+    (revision) => revision.first_review_time !== null
   );
-  return commits.length > 0
-    ? commits.reduce((sum, commit) => sum + commit.first_review_time, 0) /
-        commits.length
+  return revisions.length > 0
+    ? revisions.reduce((sum, revision) => sum + revision.first_review_time, 0) /
+        revisions.length
     : null;
 }
 
