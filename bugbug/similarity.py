@@ -38,6 +38,7 @@ try:
     from gensim.corpora import Dictionary
     from gensim.matutils import sparse2full
     from gensim.models import TfidfModel, Word2Vec, WordEmbeddingSimilarityIndex
+    from gensim.models.doc2vec import Doc2Vec, TaggedDocument
     from gensim.models.ldamodel import LdaModel
     from gensim.similarities import SoftCosineSimilarity, SparseTermSimilarityMatrix
     from gensim.summarization.bm25 import BM25
@@ -368,6 +369,7 @@ class Word2VecSimilarityBase(BaseSimilarity):
         cleanup_urls=True,
         nltk_tokenizer=False,
         confidence_threshold=0.8,
+        model="word2vec",
     ):
         super().__init__(
             cleanup_urls=cleanup_urls,
@@ -386,8 +388,20 @@ class Word2VecSimilarityBase(BaseSimilarity):
         self.corpus = [self.corpus[idx] for idx in indexes]
         self.bug_ids = [self.bug_ids[idx] for idx in indexes]
 
-        self.w2vmodel = Word2Vec(self.corpus, size=100, min_count=5)
-        self.w2vmodel.init_sims(replace=True)
+        if model == "word2vec":
+            self.w2vmodel = Word2Vec(self.corpus, size=100, min_count=5)
+            self.w2vmodel.init_sims(replace=True)
+        elif model == "doc2vec":
+            taggedCorpus = [
+                TaggedDocument(doc, [str(bug_id)])
+                for doc, bug_id in zip(self.corpus, self.bug_ids)
+            ]
+            self.d2vmodel = Doc2Vec(
+                taggedCorpus, vector_size=100, window=5, min_count=5, epochs=20, dm=1
+            )
+            self.d2vmodel.init_sims(replace=True)
+        else:
+            raise ValueError('model must be "word2vec" or "doc2vec"')
 
 
 class Word2VecWmdSimilarity(Word2VecSimilarityBase):
@@ -679,6 +693,37 @@ class Word2VecSoftCosSimilarity(Word2VecSimilarityBase):
         raise NotImplementedError
 
 
+class Doc2VecCosSimilarity(Word2VecSimilarityBase):
+    def __init__(
+        self,
+        cut_off=0.5,
+        cleanup_urls=True,
+        nltk_tokenizer=False,
+        confidence_threshold=0.8,
+    ):
+        super().__init__(
+            cut_off=cut_off,
+            cleanup_urls=cleanup_urls,
+            nltk_tokenizer=nltk_tokenizer,
+            confidence_threshold=confidence_threshold,
+            model="doc2vec",
+        )
+
+    def search_similar_bugs(self, query):
+        doc = self.text_preprocess(self.get_text(query))
+        docVec = self.d2vmodel.infer_vector(doc)
+        similarities = self.d2vmodel.docvecs.most_similar([docVec], topn=10)
+
+        return [
+            int(bug_id)
+            for bug_id, score in similarities
+            if int(bug_id) != query["id"] and score >= self.cut_off
+        ]
+
+    def get_distance(self, query1, query2):
+        raise NotImplementedError
+
+
 class BM25Similarity(BaseSimilarity):
     def __init__(
         self, cleanup_urls=True, nltk_tokenizer=False, confidence_threshold=0.8
@@ -829,6 +874,7 @@ model_name_to_class = {
     "word2vec_wmdrelax": Word2VecWmdRelaxSimilarity,
     "word2vec_wmd": Word2VecWmdSimilarity,
     "word2vec_softcos": Word2VecSoftCosSimilarity,
+    "doc2vec_cos": Doc2VecCosSimilarity,
     "bm25": BM25Similarity,
     "lda": LDASimilarity,
     "elasticsearch": ElasticSearchSimilarity,
