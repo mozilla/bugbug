@@ -293,3 +293,37 @@ def test_extract_db_bad_format(tmp_path):
 
     with pytest.raises(AssertionError):
         utils.extract_file(path)
+
+
+def test_extract_metadata() -> None:
+    body = """
+        <!-- @private_url: https://github.com/webcompat/web-bugs-private/issues/12345 -->\n
+        """
+
+    expected = {
+        "private_url": "https://github.com/webcompat/web-bugs-private/issues/12345"
+    }
+    result = utils.extract_metadata(body)
+    assert result == expected
+
+    result = utils.extract_metadata("test")
+    assert result == {}
+
+
+def test_extract_private_url() -> None:
+    body = """
+    <p>Thanks for the report. We have closed this issue\n
+    automatically as we suspect it is invalid. If we made
+    a mistake, please\nfile a new issue and try to provide
+    more context.</p>\n
+    <!-- @private_url: https://github.com/webcompat/web-bugs-private/issues/12345 -->\n
+    """
+    expected = ("webcompat", "web-bugs-private", "12345")
+    result = utils.extract_private(body)
+    assert result == expected
+
+
+def test_extract_private_url_empty() -> None:
+    body = """<p>Test content</p> """
+    result = utils.extract_private(body)
+    assert result is None

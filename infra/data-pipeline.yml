@@ -245,6 +245,7 @@ tasks:
           - --owner=webcompat
           - --repo=web-bugs
           - --retrieve-events
+          - --retrieve-private
 
         artifacts:
           public/github_issues.json.zst:

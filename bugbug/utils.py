@@ -8,9 +8,11 @@ import errno
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import tarfile
+import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
@@ -468,3 +470,29 @@ def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
 
 def get_physical_cpu_count() -> int:
     return psutil.cpu_count(logical=False)
+
+
+def extract_metadata(body: str) -> dict:
+    """Extract metadata as dict from github issue body.
+
+    Extract all metadata items and return a dictionary
+    Example metadata format: <!-- @public_url: *** -->
+    """
+    match_list = re.findall(r"<!--\s@(\w+):\s(.+)\s-->", body)
+    return dict(match_list)
+
+
+def extract_private(issue_body: str) -> Optional[tuple]:
+    """Extract private issue information from public issue body
+
+    Parse public issue body and extract private issue number and
+    its owner/repository (webcompat repository usecase)
+    """
+    private_url = extract_metadata(issue_body).get("private_url", "").strip()
+    private_issue_path = urllib.parse.urlparse(private_url).path
+
+    if private_issue_path:
+        owner, repo, _, number = tuple(private_issue_path.split("/")[1:])
+        return owner, repo, number
+
+    return None
