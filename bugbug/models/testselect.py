@@ -657,6 +657,15 @@ class TestSelectModel(Model):
                     possible_regressions + likely_regressions
                 )
 
+            missing_config_group_failures = sum(
+                1
+                for push in test_pushes.values()
+                if "config_group_failures" not in push
+            )
+            print(
+                f"{missing_config_group_failures} pushes without config_group failures"
+            )
+
         print(
             f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
         )
@@ -739,19 +748,21 @@ class TestSelectModel(Model):
                         for group, configs in group_configs.items()
                         for config in configs
                     )
-                    caught_config_groups = selected_config_groups & set(
-                        push["config_group_failures"]
-                    )
-                    push["caught_one_config_group"] = (
-                        len(caught_config_groups) > 0
-                        if len(push["config_group_failures"]) != 0
-                        else None
-                    )
-                    push["caught_percentage_config_group"] = (
-                        len(caught_config_groups) / len(push["config_group_failures"])
-                        if len(push["config_group_failures"]) != 0
-                        else None
-                    )
+                    if "config_group_failures" in push:
+                        caught_config_groups = selected_config_groups & set(
+                            push["config_group_failures"]
+                        )
+                        push["caught_one_config_group"] = (
+                            len(caught_config_groups) > 0
+                            if len(push["config_group_failures"]) != 0
+                            else None
+                        )
+                        push["caught_percentage_config_group"] = (
+                            len(caught_config_groups)
+                            / len(push["config_group_failures"])
+                            if len(push["config_group_failures"]) != 0
+                            else None
+                        )
 
                 caught = selected & set(push["failures"])
 
@@ -816,18 +827,28 @@ class TestSelectModel(Model):
                 )
                 message += f" On average, we selected {average_configs} configs (a median of {median_configs} configs)."
 
+                num_failing_pushes_with_config_group = sum(
+                    1
+                    for result in test_pushes.values()
+                    if "caught_one_config_group" in result
+                    and result["caught_one_config_group"] is not None
+                )
                 num_caught_one_config_group = sum(
                     1
                     for result in test_pushes.values()
-                    if result["caught_one_config_group"]
+                    if "caught_one_config_group" in result
+                    and result["caught_one_config_group"]
                 )
                 percentage_caught_one_config_group = (
-                    100 * num_caught_one_config_group / num_failing_pushes
+                    100
+                    * num_caught_one_config_group
+                    / num_failing_pushes_with_config_group
                 )
                 average_caught_percentage_config_group = 100 * statistics.mean(
                     result["caught_percentage_config_group"]
                     for result in test_pushes.values()
-                    if result["caught_percentage_config_group"] is not None
+                    if "caught_percentage_config_group" in result
+                    and result["caught_percentage_config_group"] is not None
                 )
 
                 message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
