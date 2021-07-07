@@ -11,7 +11,7 @@ ENV PATH="${PATH}:/git-cinnabar"
 # patch is required by the commit classifier script.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o APT::Immediate-Configure=false -t testing git && \
-    apt-get install -y --no-install-recommends curl patch libcurl4 && \
+    apt-get install -y --no-install-recommends xz-utils curl patch libcurl4 && \
     hg clone -r 7670def52e83c90c946963c4974e177f54acae0e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
@@ -22,7 +22,7 @@ RUN apt-get update && \
     git cinnabar download && \
     rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv && \
-    apt-get purge -y curl && \
+    apt-get purge -y xz-utils curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
 
