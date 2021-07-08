@@ -397,9 +397,15 @@ class Word2VecSimilarityBase(BaseSimilarity):
                 for doc, bug_id in zip(self.corpus, self.bug_ids)
             ]
             self.d2vmodel = Doc2Vec(
-                taggedCorpus, vector_size=100, window=5, min_count=5, epochs=20, dm=1
+                taggedCorpus,
+                vector_size=150,
+                window=5,
+                min_count=5,
+                epochs=20,
+                dm=0,
+                alpha=0.03,
+                negative=6,
             )
-            self.d2vmodel.init_sims(replace=True)
         else:
             raise ValueError('model must be "word2vec" or "doc2vec"')
 
