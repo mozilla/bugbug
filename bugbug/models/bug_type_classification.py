@@ -41,7 +41,7 @@ class BugTypeClassificationModel(BugModel):
         # These are all the  categories in our taxonomy
         # both the general and
         # the sub-categories
-        self.label_names = [
+        label_names = [
             "API issue",
             "Network Usage issue",
             "Database-related issue",
@@ -52,7 +52,7 @@ class BugTypeClassificationModel(BugModel):
             "Development issue",
         ]
 
-        label_names_sub_classes = [
+        self.label_names_sub_classes = [
             "Add-on or plug-in incompatibility",
             "Permission-Deprecation issue",
             "Web incompatibility",
@@ -73,22 +73,22 @@ class BugTypeClassificationModel(BugModel):
 
         # Add the sub-classes to the classification list
         if not self.all_labels:
-            self.label_names = self.label_names + label_names_sub_classes
+            label_names = label_names + self.label_names_sub_classes
 
         # Check if the element is based over the single class
         if self.single_class is not None:
             assert (
                 self.single_class is not None
-            ), f"unexpected class\n\tUse the args --single_class with one of the following {self.label_names}"
+            ), f"unexpected class\n\tUse the args --single_class with one of the following {label_names}"
             assert (
-                self.single_class in self.label_names
-            ), f"unexpected class {self.single_class}\n\tUse the args --single_class with one of the following {self.label_names}"
-            self.label_names = [self.single_class, "Other"]
+                self.single_class in label_names
+            ), f"unexpected class {self.single_class}\n\tUse the args --single_class with one of the following {label_names}"
+            label_names = [self.single_class, "Other"]
             self.sampler = RandomUnderSampler(random_state=0)
 
-        self.target_size = len(self.label_names)
+        self.target_size = len(label_names)
         if self.single_class is None:
-            self.list_labels = self.label_names
+            self.list_labels = label_names
         else:
             self.list_labels = [0, 1]
 
@@ -96,6 +96,7 @@ class BugTypeClassificationModel(BugModel):
         # Define the data set file name
         #
         self.name_file_list_labels = "bug_types"
+        self.name_file_list_additional_labels = "bug_types_autonatic_for_binary"
 
         self.calculate_importance = True
         """
@@ -111,7 +112,7 @@ class BugTypeClassificationModel(BugModel):
             bug_features.severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords(set(self.label_names)),
+            bug_features.keywords(set(self.list_labels)),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
             bug_features.has_url(),
@@ -179,6 +180,7 @@ class BugTypeClassificationModel(BugModel):
                         dual=True,
                         multi_class="ovr",
                         class_weight="balanced",
+                        max_iter=10000,
                     )
                 else:
                     self.classifier = LinearSVC()
@@ -310,11 +312,17 @@ class BugTypeClassificationModel(BugModel):
                 else:
                     # consider only the first three fields in the bug_labels vector
                     # the ones related to the subcategory labels classification
-                    for keyword in bug_labels[:3]:
+                    # for keyword in bug_labels[:3]:
+                    for position_element, keyword in enumerate(bug_labels):
                         if keyword != "":
                             assert (
                                 keyword in self.list_labels
                             ), f"unexpected category {keyword}"
+
+                            if position_element < 3:
+                                if keyword not in self.label_names_sub_classes:
+                                    continue
+
                             target[self.list_labels.index(keyword)] = 1
                             if keyword in categories.keys():
                                 categories[keyword] = categories[keyword] + 1
@@ -343,10 +351,37 @@ class BugTypeClassificationModel(BugModel):
                         elif keyword != "" and keyword != self.single_class:
                             categories["Other"] = categories["Other"] + 1
 
+        # Execute only in the single class analysis
+        # Add automaticcaly bugs that doesn't already inside
+        if self.single_class is not None:
+            for bug_id, *bug_labels in labels.get_labels(
+                self.name_file_list_additional_labels
+            ):
+                if bug_id not in classes:
+                    classes[int(bug_id)] = 0
+                    if self.all_labels:
+                        for keyword in bug_labels:
+                            if keyword != "" and keyword == self.single_class:
+                                classes[int(bug_id)] = 1
+                                categories[self.single_class] = (
+                                    categories[self.single_class] + 1
+                                )
+                            elif keyword != "" and keyword != self.single_class:
+                                categories["Other"] = categories["Other"] + 1
+                    else:
+                        for keyword in bug_labels[:3]:
+                            if keyword != "" and keyword == self.single_class:
+                                classes[int(bug_id)] = 1
+                                categories[self.single_class] = (
+                                    categories[self.single_class] + 1
+                                )
+                            elif keyword != "" and keyword != self.single_class:
+                                categories["Other"] = categories["Other"] + 1
+
         # Some logging so we have an idea of the number of examples for each class
         if requestCategories is None:
             if self.single_class is None:
-                for lbl in self.label_names:
+                for lbl in self.list_labels:
                     print(str(categories[lbl]) + " " + lbl)
             else:
                 print(str(categories[self.single_class]) + " " + self.single_class)
@@ -357,6 +392,15 @@ class BugTypeClassificationModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    def get_name_labels_sorted(self):
+        sorted_labels = self.list_labels
+        sorted_labels.sort()
+        return sorted_labels
+
+    def get_position_label_sorted(self, label):
+        assert label in self.list_labels, f"unexpected category {label}"
+        return self.get_name_labels_sorted().index(label)
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
