@@ -126,8 +126,8 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/utils.py` contains misc utility functions;
 - `bugbug/nlp` contains utility functions for NLP;
 - `bugbug/labels.py` contains utility functions for handling labels;
-- `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
-- `bugbug/github.py` contains functions to retrieve issues from GitHub for a specified owner/repository;
+- `bugbug/bug_snapshot.py` contains a module to play back the history of a bug;
+- `bugbug/github.py` contains functions to retrieve issues from GitHub for a specified owner/repository.
 
 ## Using bugbug for non-Mozilla projects
 
