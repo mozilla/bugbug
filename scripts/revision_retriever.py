@@ -50,7 +50,7 @@ class Retriever(object):
         # Get IDs of revisions linked to bugs since a year ago.
         for bug in bugzilla.get_bugs():
             if (
-                dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
+                dateutil.parser.parse(bug["last_change_time"]).replace(tzinfo=None)
                 < start_date
             ):
                 continue
