@@ -93,6 +93,20 @@ def component_histogram(bugs: List[dict]) -> Dict[str, float]:
     return histogram([bug["component"] for bug in bugs])
 
 
+# TODO: Remove once the mapping is updated in Bugzilla.
+def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
+    component_team_mapping = bugzilla.get_component_team_mapping()
+
+    component_team_mapping_override = json.loads(
+        get_secret("COMPONENT_TEAM_MAPPING_OVERRIDE")
+    )
+    for product, components_teams in component_team_mapping_override.items():
+        for component, team in components_teams.items():
+            component_team_mapping[product][component] = team
+
+    return component_team_mapping
+
+
 class LandingsRiskReportGenerator(object):
     def __init__(self, repo_dir: str) -> None:
         self.risk_bands = sorted(
@@ -541,7 +555,7 @@ class LandingsRiskReportGenerator(object):
 
             return commits_data
 
-        component_team_mapping = bugzilla.get_component_team_mapping()
+        component_team_mapping = get_component_team_mapping()
 
         bug_summaries = []
         for bug_id in bugs:
