@@ -198,6 +198,7 @@ tasks:
       workerType: batch
       dependencies:
         - commit-retrieval
+        - bugs-retrieval
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
