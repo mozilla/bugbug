@@ -60,18 +60,30 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
     return data
 
 
-def get(rev_ids: Collection[int]) -> Collection[RevisionDict]:
+def get(
+    rev_ids: Optional[Collection[int]] = None, modified_start: Optional[datetime] = None
+) -> Collection[RevisionDict]:
     assert PHABRICATOR_API is not None
 
-    out = PHABRICATOR_API.request(
-        "differential.revision.search",
-        constraints={
-            "ids": rev_ids,
-        },
-        attachments={"projects": True, "reviewers": True},
-    )
+    assert (rev_ids is not None) ^ (modified_start is not None)
+    constraints: dict = {}
+    if rev_ids is not None:
+        constraints["ids"] = rev_ids
+    elif modified_start is not None:
+        constraints["modifiedStart"] = int(modified_start.timestamp())
 
-    data = out["data"]
+    after = ""
+    data = []
+
+    while after is not None:
+        out = PHABRICATOR_API.request(
+            "differential.revision.search",
+            constraints=constraints,
+            attachments={"projects": True, "reviewers": True},
+            after=after,
+        )
+        data += out["data"]
+        after = out["cursor"]["after"]
 
     for revision in data:
         assert "transactions" not in revision
@@ -99,11 +111,26 @@ def download_revisions(rev_ids: Collection[int]) -> None:
 
     with tqdm(total=len(new_rev_ids)) as progress_bar:
         for rev_ids_group in rev_ids_groups:
-            revisions = get(rev_ids_group)
+            revisions = get(rev_ids=rev_ids_group)
 
             progress_bar.update(len(rev_ids_group))
 
             db.append(REVISIONS_DB, revisions)
+
+
+def download_modified_revisions():
+    try:
+        last_modified = db.last_modified(REVISIONS_DB)
+    except Exception as e:
+        if str(e) == "Last-Modified is not available":
+            return
+
+    modified_revisions = get(modified_start=last_modified)
+    modified_revision_ids = set(rev["id"] for rev in modified_revisions)
+
+    db.delete(REVISIONS_DB, lambda revision: revision["id"] in modified_revision_ids)
+
+    db.append(REVISIONS_DB, modified_revisions)
 
 
 def get_testing_project(rev: RevisionDict) -> Optional[str]:

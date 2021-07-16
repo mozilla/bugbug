@@ -28,6 +28,8 @@ class Retriever(object):
         # Get the bugs DB, as we need it to get the revision IDs linked to bugs.
         assert db.download(bugzilla.BUGS_DB)
 
+        phabricator.download_modified_revisions()
+
         # Get IDs of revisions linked to commits since a year ago.
         start_date = datetime.utcnow() - relativedelta(years=1)
         revision_ids = list(

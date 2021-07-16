@@ -473,6 +473,7 @@ class LandingsRiskReportGenerator(object):
             revision_ids += bugzilla.get_revision_ids(bug_map[bug_id])
 
         logger.info("Download revisions of interest...")
+        phabricator.download_modified_revisions()
         phabricator.download_revisions(revision_ids)
 
         revision_map = {}
