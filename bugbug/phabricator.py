@@ -149,7 +149,9 @@ def get_testing_project(rev: RevisionDict) -> Optional[str]:
     return testing_projects[-1]
 
 
-def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
+def get_review_dates(
+    rev: RevisionDict,
+) -> tuple[Optional[datetime], list[datetime], list[datetime], list[datetime]]:
     creation_date = None
     review_dates = []
 
@@ -176,6 +178,17 @@ def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
             exclusion_end_dates.append(
                 datetime.utcfromtimestamp(transaction["dateCreated"])
             )
+
+    return creation_date, review_dates, exclusion_start_dates, exclusion_end_dates
+
+
+def get_first_review_time(rev: RevisionDict) -> Optional[timedelta]:
+    (
+        creation_date,
+        review_dates,
+        exclusion_start_dates,
+        exclusion_end_dates,
+    ) = get_review_dates(rev)
 
     if creation_date is None:
         logger.warning("Revision D{} has no creation date.".format(rev["id"]))
@@ -216,3 +229,32 @@ def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
             - creation_date
             - (first_exclusion_end_date - first_exclusion_start_date)
         )
+
+
+def get_pending_review_time(rev: RevisionDict) -> Optional[timedelta]:
+    if rev["fields"]["status"]["value"] != "needs-review":
+        return None
+
+    creation_date, _, exclusion_start_dates, exclusion_end_dates = get_review_dates(rev)
+
+    if creation_date is None:
+        logger.warning("Revision D{} has no creation date.".format(rev["id"]))
+        return None
+
+    last_exclusion_start_date = max(exclusion_start_dates, default=None)
+    last_exclusion_end_date = max(exclusion_end_dates, default=None)
+
+    if last_exclusion_start_date is not None and (
+        last_exclusion_end_date is None
+        or last_exclusion_start_date > last_exclusion_end_date
+    ):
+        logger.warning(
+            "Revision D{} was in an inconsistent state (needs review, but is in an exception timespan).".format(
+                rev["id"]
+            )
+        )
+
+    if last_exclusion_end_date is not None:
+        return datetime.utcnow() - last_exclusion_end_date
+    else:
+        return datetime.utcnow() - creation_date

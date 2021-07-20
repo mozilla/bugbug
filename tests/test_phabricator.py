@@ -9,11 +9,11 @@ from typing import List
 from bugbug import phabricator
 
 
-def test_get_review_time() -> None:
+def test_get_first_review_time() -> None:
     # No transactions.
     transactions: List[phabricator.TransactionDict] = []
     assert (
-        phabricator.get_review_time(
+        phabricator.get_first_review_time(
             phabricator.RevisionDict({"id": 1, "transactions": transactions})
         )
         is None
@@ -34,7 +34,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=9)
 
@@ -53,7 +53,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=9)
 
@@ -78,7 +78,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=9)
 
@@ -103,7 +103,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=13)
 
@@ -134,7 +134,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=12)
 
@@ -165,7 +165,7 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=10)
 
@@ -202,6 +202,6 @@ def test_get_review_time() -> None:
             }
         ),
     ]
-    assert phabricator.get_review_time(
+    assert phabricator.get_first_review_time(
         phabricator.RevisionDict({"id": 1, "transactions": transactions})
     ) == timedelta(days=11)

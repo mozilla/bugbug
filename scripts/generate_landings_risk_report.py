@@ -8,12 +8,18 @@ import collections
 import itertools
 import json
 import logging
+import math
 import os
+import re
+import statistics
+import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Set, Tuple, cast
 
 import dateutil.parser
 import requests
+import taskcluster
+from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
@@ -23,6 +29,7 @@ from bugbug.utils import (
     download_check_etag,
     download_model,
     get_secret,
+    get_taskcluster_options,
     zstd_compress,
     zstd_decompress,
 )
@@ -623,13 +630,17 @@ class LandingsRiskReportGenerator(object):
 
             revisions = []
             for revision in bug_to_revisions_map[bug["id"]]:
-                first_review_time = phabricator.get_review_time(revision)
+                first_review_time = phabricator.get_first_review_time(revision)
+                pending_review_time = phabricator.get_pending_review_time(revision)
                 revisions.append(
                     {
                         "id": revision["id"],
-                        "status": revision["fields"]["status"]["value"],
                         "first_review_time": first_review_time.total_seconds() / 86400
                         if first_review_time is not None
+                        else None,
+                        "pending_review_time": pending_review_time.total_seconds()
+                        / 86400
+                        if pending_review_time is not None
                         else None,
                     }
                 )
@@ -850,6 +861,548 @@ class LandingsRiskReportGenerator(object):
         self.generate_component_test_stats(bug_map, test_infos)
 
 
+def notification(days: int) -> None:
+    with open("landings_by_date.json", "r") as f:
+        data = json.load(f)
+        bug_summaries: list[dict] = sum(data["summaries"].values(), [])
+        feature_meta_bugs = {
+            meta_bug["id"]: meta_bug["summary"] for meta_bug in data["featureMetaBugs"]
+        }
+
+    bug_summary_ids = {bug_summary["id"] for bug_summary in bug_summaries}
+
+    bug_map = {}
+    for b in bugzilla.get_bugs():
+        if b["id"] in bug_summary_ids:
+            bug_map[b["id"]] = b
+
+    with open("component_test_stats.json", "r") as f:
+        component_test_stats = json.load(f)
+
+    all_teams = set(bug["team"] for bug in bug_summaries if bug["team"] is not None)
+    all_teams.remove("Other")
+    all_teams.remove("Mozilla")
+
+    tracking_flag_re = re.compile("cf_tracking_firefox([0-9]+)")
+
+    def get_tracking_info(bug):
+        versions = []
+        for flag, value in bug.items():
+            if value not in ("+", "blocking"):
+                continue
+
+            match = tracking_flag_re.search(flag)
+            if match is None:
+                continue
+
+            versions.append(match.group(1))
+
+        return versions
+
+    r = requests.get("https://product-details.mozilla.org/1.0/firefox_versions.json")
+    nightly_ver = int(r.json()["FIREFOX_NIGHTLY"].split(".")[0])
+    beta_ver = nightly_ver - 1
+    release_ver = beta_ver - 1
+
+    team_data: dict[str, Any] = {}
+    for team in all_teams:
+        cur_team_data = team_data[team] = {}
+        cur_team_data["month_changes"] = 0
+        cur_team_data["high_risk_changes"] = 0
+        cur_team_data["medium_risk_changes"] = 0
+        cur_team_data["low_risk_changes"] = 0
+        cur_team_data["prev_high_risk_changes"] = 0
+        cur_team_data["new_regressions"] = 0
+        cur_team_data["fixed_new_regressions"] = 0
+        cur_team_data["unassigned_new_regressions"] = 0
+        cur_team_data["new_crash_regressions"] = 0
+        cur_team_data["week_old_fixed_regressions"] = 0
+        cur_team_data["month_old_fixed_regressions"] = 0
+        cur_team_data["more_than_month_old_fixed_regressions"] = 0
+        cur_team_data["unfixed_regressions"] = []
+        cur_team_data["fix_times"] = []
+        cur_team_data["prev_fix_times"] = []
+        cur_team_data["patch_coverage_covered"] = 0
+        cur_team_data["patch_coverage_added"] = 0
+        cur_team_data["coverage_patches"] = []
+        cur_team_data["open_review_times"] = []
+        cur_team_data["review_times"] = []
+        cur_team_data["prev_review_times"] = []
+        cur_team_data["intermittent_failures"] = collections.defaultdict(int)
+
+        cur_team_data["carryover_regressions"] = 0
+        cur_team_data["affecting_carryover_regressions"] = []
+
+    carrytest = set()
+    for bug in bug_summaries:
+        if bug["team"] in ("Other", "Mozilla"):
+            continue
+
+        cur_team_data = team_data[bug["team"]]
+
+        creation_date = dateutil.parser.parse(bug["creation_date"])
+        fix_date = (
+            dateutil.parser.parse(bug["date"]) if bug["date"] is not None else None
+        )
+
+        if not bug["fixed"]:
+            for revision in bug["revisions"]:
+                if revision["pending_review_time"] is None:
+                    continue
+
+                cur_team_data["open_review_times"].append(
+                    (revision["pending_review_time"], revision["id"])
+                )
+
+        if fix_date is not None and fix_date > datetime.utcnow() - relativedelta(
+            months=1
+        ):
+            cur_team_data["month_changes"] += 1
+
+            if fix_date > datetime.utcnow() - relativedelta(weeks=1):
+                cur_team_data["fix_times"].append(
+                    (fix_date - creation_date).total_seconds() / 86400
+                )
+
+                if bug["risk_band"] == "h":
+                    cur_team_data["high_risk_changes"] += 1
+                elif bug["risk_band"] == "m":
+                    cur_team_data["medium_risk_changes"] += 1
+                elif bug["risk_band"] == "l":
+                    cur_team_data["low_risk_changes"] += 1
+
+                if bug["regression"]:
+                    if creation_date > datetime.utcnow() - relativedelta(weeks=1):
+                        cur_team_data["week_old_fixed_regressions"] += 1
+                    elif creation_date > datetime.utcnow() - relativedelta(months=1):
+                        cur_team_data["month_old_fixed_regressions"] += 1
+                    else:
+                        cur_team_data["more_than_month_old_fixed_regressions"] += 1
+
+                cur_team_data["review_times"] += [
+                    revision["first_review_time"]
+                    for revision in bug["revisions"]
+                    if revision["first_review_time"] is not None
+                ]
+
+                for commit in bug["commits"]:
+                    lines_added = 0
+                    lines_covered = 0
+                    if commit["coverage"] and commit["coverage"][0] is not None:
+                        lines_added += commit["coverage"][0]
+                        # Consider unknown as covered.
+                        lines_covered += commit["coverage"][1] + commit["coverage"][2]
+
+                    cur_team_data["patch_coverage_added"] += lines_added
+                    cur_team_data["patch_coverage_covered"] += lines_covered
+
+                    if lines_added != 0:
+                        cur_team_data["coverage_patches"].append(
+                            (lines_covered / lines_added, commit["id"])
+                        )
+
+            elif fix_date > datetime.utcnow() - relativedelta(weeks=2):
+                cur_team_data["prev_fix_times"].append(
+                    (fix_date - creation_date).total_seconds() / 86400
+                )
+
+                if bug["risk_band"] == "h":
+                    cur_team_data["prev_high_risk_changes"] += 1
+
+                cur_team_data["prev_review_times"] += [
+                    revision["first_review_time"]
+                    for revision in bug["revisions"]
+                    if revision["first_review_time"] is not None
+                ]
+
+        if bug["regression"] and creation_date > datetime.utcnow() - relativedelta(
+            weeks=2
+        ):
+            cur_team_data["new_regressions"] += 1
+            if bug["team"] == "Compiler and Development Tools":
+                print("New regression: {}".format(bug["id"]))
+            if "crash" in bug["types"]:
+                cur_team_data["new_crash_regressions"] += 1
+
+            if bug["fixed"]:
+                cur_team_data["fixed_new_regressions"] += 1
+            elif bug["assignee"] is None:
+                cur_team_data["unassigned_new_regressions"] += 1
+
+        if creation_date > datetime.utcnow() - relativedelta(weeks=2):
+            if bug["regression"] and not bug["fixed"]:
+                if bug["team"] == "Compiler and Development Tools":
+                    print("Unfixed regression: {}".format(bug["id"]))
+                cur_team_data["unfixed_regressions"].append(bug)
+
+        if creation_date > datetime.utcnow() - relativedelta(days=days):
+            if bug["regression"] and not bug["fixed"]:
+                cur_team_data["carryover_regressions"] += 1
+
+                if bug["team"] == "DOM":
+                    carrytest.add(bug["id"])
+
+                full_bug = bug_map[bug["id"]]
+                if (
+                    "stalled" not in full_bug["keywords"]
+                    and "intermittent-failure" not in full_bug["keywords"]
+                ):
+                    for version in [nightly_ver, beta_ver, release_ver]:
+                        if (
+                            f"cf_status_firefox{version}" in full_bug
+                            and full_bug[f"cf_status_firefox{version}"] == "affected"
+                            and full_bug[f"cf_tracking_firefox{version}"] != "-"
+                            and f"cf_status_firefox{version - 1}" in full_bug
+                            and full_bug[f"cf_status_firefox{version - 1}"]
+                            not in ("unaffected", "?", "---")
+                        ):
+                            cur_team_data["affecting_carryover_regressions"].append(bug)
+                            break
+
+    component_team_mapping = get_component_team_mapping()
+    for product_component, day_to_data in component_test_stats.items():
+        product, component = product_component.split("::")
+        team = component_team_mapping.get(product, {}).get(component)
+        if team is None or team in ("Other", "Mozilla"):
+            continue
+        cur_team_data = team_data[team]
+
+        for day, data in day_to_data.items():
+            if "bugs" not in data:
+                continue
+
+            if dateutil.parser.parse(day) < datetime.utcnow() - relativedelta(weeks=1):
+                continue
+
+            for bug in data["bugs"]:
+                cur_team_data["intermittent_failures"][bug["id"]] += bug["count"]
+
+    total_carryover_regressions = sum(
+        cur_team_data["carryover_regressions"] for cur_team_data in team_data.values()
+    )
+
+    print("New regressions")
+    print(
+        {
+            cur_team: cur_team_data["new_regressions"]
+            for cur_team, cur_team_data in team_data.items()
+        }
+    )
+    print("Month changes:")
+    print(
+        {
+            cur_team: cur_team_data["month_changes"]
+            for cur_team, cur_team_data in team_data.items()
+        }
+    )
+    print("Rates:")
+    print(
+        {
+            cur_team: cur_team_data["new_regressions"] / cur_team_data["month_changes"]
+            if cur_team_data["month_changes"] != 0
+            else 0.0
+            for cur_team, cur_team_data in team_data.items()
+        }
+    )
+
+    average_patch_coverage = round(
+        100
+        * sum(
+            cur_team_data["patch_coverage_covered"]
+            for cur_team_data in team_data.values()
+        )
+        / sum(
+            cur_team_data["patch_coverage_added"]
+            for cur_team_data in team_data.values()
+        ),
+        1,
+    )
+    average_median_fix_time = statistics.mean(
+        statistics.median(cur_team_data["fix_times"])
+        for cur_team_data in team_data.values()
+        if len(cur_team_data["fix_times"]) > 0
+    )
+
+    all_intermittent_failures: dict[int, int] = collections.defaultdict(int)
+    for cur_team_data in team_data.values():
+        for bug_id, count in cur_team_data["intermittent_failures"].items():
+            all_intermittent_failures[bug_id] += count
+
+    sorted_intermittent_failures = sorted(
+        all_intermittent_failures.items(), key=lambda x: -x[1]
+    )
+    intermittent_failure_positions = {
+        bug_id: i + 1 for i, (bug_id, count) in enumerate(sorted_intermittent_failures)
+    }
+
+    def regression_to_text(bug):
+        full_bug = bug_map[bug["id"]]
+
+        unfixed_regressions_components = []
+
+        tracked = get_tracking_info(full_bug)
+        if len(tracked) > 0:
+            unfixed_regressions_components.append(
+                "Tracked for versions {}".format(", ".join(tracked))
+            )
+
+        if len(bug["meta_ids"]) > 0:
+            features = ", ".join(
+                f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
+            )
+            unfixed_regressions_components.append(f"Blocked features: {features}")
+
+        if full_bug["status"] == "ASSIGNED":
+            unfixed_regressions_components.append("Assigned")
+        else:
+            unfixed_regressions_components.append("Unassigned")
+
+        hours = math.ceil(
+            (
+                datetime.utcnow()
+                - dateutil.parser.parse(full_bug["last_change_time"]).replace(
+                    tzinfo=None
+                )
+            ).total_seconds()
+            / 3600
+        )
+        if hours > 24:
+            unfixed_regressions_components.append(
+                f"Last activity {math.ceil(hours / 24)} days ago"
+            )
+        else:
+            unfixed_regressions_components.append(f"Last activity {hours} hours ago")
+
+        return "- https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}".format(
+            bug["id"], ", ".join(unfixed_regressions_components)
+        )
+
+    notify = taskcluster.Notify(get_taskcluster_options())
+
+    team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
+    for team, cur_team_data in team_data.items():
+        if team not in team_to_receivers:
+            continue
+
+        month_changes = cur_team_data["month_changes"]
+        high_risk_changes = cur_team_data["high_risk_changes"]
+        predicted_regressions = round(
+            0.33 * cur_team_data["high_risk_changes"]
+            + 0.16 * cur_team_data["medium_risk_changes"]
+            + 0.06 * cur_team_data["low_risk_changes"],
+            1,
+        )
+        prev_high_risk_changes = cur_team_data["prev_high_risk_changes"]
+        new_regressions = cur_team_data["new_regressions"]
+        fixed_new_regressions = cur_team_data["fixed_new_regressions"]
+        unassigned_new_regressions = cur_team_data["unassigned_new_regressions"]
+        new_crash_regressions = cur_team_data["new_crash_regressions"]
+        carryover_regressions = cur_team_data["carryover_regressions"]
+        prev_carryover_regressions = (
+            cur_team_data["carryover_regressions"]
+            - cur_team_data["new_regressions"]
+            + cur_team_data["week_old_fixed_regressions"]
+            + cur_team_data["month_old_fixed_regressions"]
+            + cur_team_data["more_than_month_old_fixed_regressions"]
+        )
+
+        # Calculate median regression rate for similarly sized teams (teams that land at least
+        # a fifth of the changes of the current team and less than five times the changes of the
+        # current team).
+        median_regression_rate = statistics.median(
+            ctd["new_regressions"] / ctd["month_changes"]
+            for ctd in team_data.values()
+            if ctd["month_changes"] > cur_team_data["month_changes"] / 5
+            and ctd["month_changes"] < cur_team_data["month_changes"] * 5
+        )
+
+        unfixed_regressions = "\n".join(
+            regression_to_text(reg)
+            for reg in sorted(
+                cur_team_data["unfixed_regressions"],
+                key=lambda bug: bug_map[bug["id"]]["last_change_time"],
+            )
+        )
+        affecting_carryover_regressions = "\n".join(
+            regression_to_text(reg)
+            for reg in sorted(
+                cur_team_data["affecting_carryover_regressions"],
+                key=lambda bug: bug_map[bug["id"]]["last_change_time"],
+            )
+        )
+
+        if len(cur_team_data["fix_times"]) > 1:
+            fix_time_deciles = statistics.quantiles(
+                cur_team_data["fix_times"], n=10, method="inclusive"
+            )
+            median_fix_time = round(fix_time_deciles[4], 1)
+            ninth_decile_fix_time = round(fix_time_deciles[8], 1)
+        elif len(cur_team_data["fix_times"]) > 0:
+            median_fix_time = round(cur_team_data["fix_times"][0], 1)
+            ninth_decile_fix_time = round(cur_team_data["fix_times"][0], 1)
+        else:
+            median_fix_time = None
+            ninth_decile_fix_time = None
+
+        if len(cur_team_data["prev_fix_times"]) > 0:
+            prev_median_fix_time = round(
+                statistics.median(cur_team_data["prev_fix_times"]), 1
+            )
+        else:
+            prev_median_fix_time = None
+
+        if median_fix_time is not None and prev_median_fix_time is not None:
+            verb = (
+                "improving"
+                if median_fix_time < prev_median_fix_time
+                else "worsening"
+                if prev_median_fix_time < median_fix_time
+                else "staying constant"
+            )
+            fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
+        else:
+            fix_time_diff = ""
+
+        top_intermittent_failures = "\n".join(
+            f"- https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id} - {count} failures (this is {intermittent_failure_positions[bug_id]} overall)"
+            for bug_id, count in sorted(
+                cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
+            )[:7]
+        )
+
+        patch_coverage = round(
+            100
+            * cur_team_data["patch_coverage_covered"]
+            / cur_team_data["patch_coverage_added"]
+            if cur_team_data["patch_coverage_added"] != 0
+            else 100,
+            1,
+        )
+        low_coverage_patches = "\n".join(
+            f"- https://phabricator.services.mozilla.com/D{rev_id} - {pc}%"
+            for pc, rev_id in sorted(
+                cur_team_data["coverage_patches"], key=lambda x: x[0]
+            )[:7]
+        )
+
+        if len(cur_team_data["review_times"]) > 1:
+            review_time_deciles = statistics.quantiles(
+                cur_team_data["review_times"],
+                n=10,
+                method="inclusive",
+            )
+            median_first_review_time = round(review_time_deciles[4], 1)
+            ninth_decile_first_review_time = round(review_time_deciles[8], 1)
+        elif len(cur_team_data["review_times"]) > 0:
+            median_first_review_time = round(cur_team_data["review_times"], 1)
+            ninth_decile_first_review_time = round(cur_team_data["review_times"], 1)
+        else:
+            median_first_review_time = None
+            ninth_decile_first_review_time = None
+
+        if len(cur_team_data["prev_review_times"]) > 0:
+            prev_median_first_review_time = round(
+                statistics.median(cur_team_data["prev_review_times"]), 1
+            )
+        else:
+            prev_median_first_review_time = None
+
+        if (
+            median_first_review_time is not None
+            and prev_median_first_review_time is not None
+        ):
+            verb = (
+                "improving"
+                if median_first_review_time < prev_median_first_review_time
+                else "worsening"
+                if prev_median_first_review_time < median_first_review_time
+                else "staying constant"
+            )
+            review_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_first_review_time} days)."
+        else:
+            review_time_diff = ""
+
+        slow_review_patches = "\n".join(
+            f"- https://phabricator.services.mozilla.com/D{rev_id} - {round(review_time, 1)} days"
+            for review_time, rev_id in sorted(
+                cur_team_data["open_review_times"], key=lambda x: -x[0]
+            )[:7]
+        )
+
+        report_url_querystring = urllib.parse.urlencode({"teams": team})
+
+        notification = f"""<b>NEW REGRESSIONS</b>
+
+{new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
+
+The regression rate (regressions from the past two weeks / changes from this month) is {round(new_regressions / month_changes, 2)} ({"higher than" if new_regressions / month_changes > median_regression_rate else "lower than" if median_regression_rate > new_regressions / month_changes else "equal to"} the median of {round(median_regression_rate, 2)} across other teams).
+This week your team committed {high_risk_changes} high risk changes, {"more than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
+Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
+
+Unfixed regressions from the past two weeks:
+{unfixed_regressions}
+
+The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"higher than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
+90% of bugs were fixed within {ninth_decile_fix_time} days.
+<br />
+<b>CARRYOVER REGRESSIONS</b>
+
+There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"increasing" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
+
+        if len(affecting_carryover_regressions) > 0:
+            notification += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
+{affecting_carryover_regressions}"""
+
+        notification += f"""
+
+<br />
+<b>INTERMITTENT FAILURES</b>
+<br />
+<br />
+
+Top intermittent failures from the past week:
+{top_intermittent_failures}
+
+<br />
+<b>TEST COVERAGE</b>
+<br />
+<br />
+
+Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "lower"} than the average across other teams, {average_patch_coverage}%).
+"""
+
+        if len(low_coverage_patches) > 0:
+            notification += f"""<br />List of lowest coverage patches:
+{low_coverage_patches}"""
+
+        notification += f"""
+
+<br />
+<b>REVIEW</b>
+<br />
+<br />
+
+The median time to first review patches for last week's fixed bugs was {median_first_review_time} days. 90% of patches were first reviewed within {ninth_decile_first_review_time} days. {review_time_diff}
+
+List of revisions that are still waiting for a review:
+{slow_review_patches}
+
+
+Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
+"""
+
+        receivers = team_to_receivers[team]
+        for receiver in receivers:
+            notify.email(
+                {
+                    "address": receiver,
+                    "subject": f"Quality report for '{team}'",
+                    "content": notification,
+                    "template": "fullscreen",
+                }
+            )
+
+
 def main() -> None:
     description = "Generate risk report of recent landings"
     parser = argparse.ArgumentParser(description=description)
@@ -864,6 +1417,8 @@ def main() -> None:
 
     landings_risk_report_generator = LandingsRiskReportGenerator(args.repo_dir)
     landings_risk_report_generator.go(args.days)
+    if datetime.today().isoweekday() == 3:
+        notification(args.days)
 
 
 if __name__ == "__main__":
