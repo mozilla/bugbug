@@ -1389,6 +1389,8 @@ List of revisions that are still waiting for a review:
 
 
 Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
+
+Report bugs or enhancement requests on https://github.com/mozilla/bugbug or to mcastelluccio@mozilla.com.
 """
 
         receivers = team_to_receivers[team]
