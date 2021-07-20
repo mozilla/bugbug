@@ -182,9 +182,9 @@ def get_review_time(rev: RevisionDict) -> Optional[timedelta]:
         return None
 
     if len(review_dates) == 0:
-        first_review_date = datetime.utcnow()
-    else:
-        first_review_date = min(review_dates)
+        return None
+
+    first_review_date = min(review_dates)
 
     first_exclusion_start_date = min(exclusion_start_dates, default=None)
     first_exclusion_end_date = min(exclusion_end_dates, default=None)
