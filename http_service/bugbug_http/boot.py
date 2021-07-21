@@ -180,23 +180,25 @@ def boot_worker() -> None:
                     REPO_DIR, revs=revs, use_single_process=True
                 )
                 logger.info("Commits DB updated.")
+
+                logger.info("Updating touched together DB...")
+                if len(commits) > 0:
+                    # Update the touched together DB.
+                    update_touched_together_gen = (
+                        test_scheduling.update_touched_together()
+                    )
+                    next(update_touched_together_gen)
+
+                    update_touched_together_gen.send(commits[-1]["node"])
+
+                    try:
+                        update_touched_together_gen.send(None)
+                    except StopIteration:
+                        pass
+                logger.info("Touched together DB updated.")
             except Exception as e:
                 # It's not ideal, but better not to crash the service!
                 logger.error(f"Exception while updating commits DB: {e}")
-
-            logger.info("Updating touched together DB...")
-            if len(commits) > 0:
-                # Update the touched together DB.
-                update_touched_together_gen = test_scheduling.update_touched_together()
-                next(update_touched_together_gen)
-
-                update_touched_together_gen.send(commits[-1]["node"])
-
-                try:
-                    update_touched_together_gen.send(None)
-                except StopIteration:
-                    pass
-            logger.info("Touched together DB updated.")
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()
