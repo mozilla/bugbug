@@ -175,10 +175,14 @@ def boot_worker() -> None:
                             raise
 
             logger.info("Updating commits DB...")
-            commits = repository.download_commits(
-                REPO_DIR, revs=revs, use_single_process=True
-            )
-            logger.info("Commits DB updated.")
+            try:
+                commits = repository.download_commits(
+                    REPO_DIR, revs=revs, use_single_process=True
+                )
+                logger.info("Commits DB updated.")
+            except Exception as e:
+                # It's not ideal, but better not to crash the service!
+                logger.error(f"Exception while updating commits DB: {e}")
 
             logger.info("Updating touched together DB...")
             if len(commits) > 0:
