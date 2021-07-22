@@ -6,7 +6,7 @@ flask-apispec==0.11.0
 flask-cors==3.0.10
 gunicorn==20.1.0
 kombu==5.1.0
-marshmallow==3.12.2
+marshmallow==3.13.0
 requests==2.26.0
 rq==1.9.0
 rq-dashboard==0.6.1
