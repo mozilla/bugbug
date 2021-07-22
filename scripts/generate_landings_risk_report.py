@@ -1419,7 +1419,7 @@ def main() -> None:
 
     landings_risk_report_generator = LandingsRiskReportGenerator(args.repo_dir)
     landings_risk_report_generator.go(args.days)
-    if datetime.today().isoweekday() == 3:
+    if datetime.today().isoweekday() == get_secret("NOTIFICATION_DAY"):
         notification(args.days)
 
 
