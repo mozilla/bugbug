@@ -6,6 +6,7 @@
 import logging
 import subprocess
 import time
+from typing import Optional
 
 import requests
 
@@ -19,9 +20,9 @@ HEADERS = {"Content-type": "application/octet-stream"}
 
 
 class RustCodeAnalysisServer:
-    def __init__(self):
+    def __init__(self, thread_num: Optional[int] = None):
         for _ in range(START_RETRIES):
-            self.start_process()
+            self.start_process(thread_num)
 
             for _ in range(START_RETRIES):
                 if self.ping():
@@ -40,13 +41,14 @@ class RustCodeAnalysisServer:
     def base_url(self):
         return f"http://127.0.0.1:{self.port}"
 
-    def start_process(self):
+    def start_process(self, thread_num: Optional[int] = None):
         self.port = utils.get_free_tcp_port()
 
         try:
-            self.proc = subprocess.Popen(
-                ["rust-code-analysis-web", "--port", str(self.port)]
-            )
+            cmd = ["rust-code-analysis-web", "--port", str(self.port)]
+            if thread_num is not None:
+                cmd += ["-j", str(thread_num)]
+            self.proc = subprocess.Popen(cmd)
         except FileNotFoundError:
             raise Exception("rust-code-analysis is required for code analysis")
 

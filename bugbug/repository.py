@@ -1232,9 +1232,10 @@ def download_commits(
         logger.info(f"Mining {commits_num} patches...")
 
         global code_analysis_server
-        code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
         if not use_single_process:
+            code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
             with concurrent.futures.ProcessPoolExecutor(
                 initializer=_init_process, initargs=(repo_dir,)
             ) as executor:
@@ -1242,6 +1243,8 @@ def download_commits(
                 commits_iter = tqdm(commits_iter, total=commits_num)
                 commits = tuple(commits_iter)
         else:
+            code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer(1)
+
             get_component_mapping()
 
             commits = tuple(transform(hg, repo_dir, c) for c in commits)
