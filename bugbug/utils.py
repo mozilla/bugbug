@@ -496,3 +496,18 @@ def extract_private(issue_body: str) -> Optional[tuple]:
         return owner, repo, number
 
     return None
+
+
+def escape_markdown(text: str) -> str:
+    return (
+        text.replace("*", "\\*")
+        .replace("`", "\\`")
+        .replace("_", "\\_")
+        .replace("~", "\\~")
+        .replace(">", "\\>")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("|", "\\|")
+    )

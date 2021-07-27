@@ -28,6 +28,7 @@ from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
     download_model,
+    escape_markdown,
     get_secret,
     get_taskcluster_options,
     zstd_compress,
@@ -1168,6 +1169,36 @@ def notification(days: int) -> None:
             blocked_features,
         )
 
+    def get_top_crashes(team: str, channel: str) -> str:
+        r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
+        response = r.json()
+
+        top_crashes = ""
+
+        for signature, data in response["signatures"].items():
+            bugs = [
+                "[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})".format(
+                    bug["id"], bug["id"]
+                )
+                for bug in data["bugs"]
+                if bug["resolution"] == ""
+                and team
+                == component_team_mapping.get(bug["product"], {}).get(bug["component"])
+            ]
+
+            if len(bugs) == 0:
+                continue
+
+            top_crashes += "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) ({} overall)|{}|{}|\n".format(
+                escape_markdown(signature),
+                urllib.parse.urlencode({"signature": signature}),
+                data["tc_rank"],
+                ", ".join(bugs),
+                data["crash_count"],
+            )
+
+        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes}"
+
     notify = taskcluster.Notify(get_taskcluster_options())
 
     team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
@@ -1356,6 +1387,21 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 {affecting_carryover_regressions}"""
 
         notification += f"""
+
+<br />
+<b>CRASHES</b>
+<br />
+<br />
+
+
+Top recent Nightly crashes:
+
+{get_top_crashes(team, "nightly")}
+
+<br />
+Top recent Release crashes:
+
+{get_top_crashes(team, "release")}
 
 <br />
 <b>INTERMITTENT FAILURES</b>
