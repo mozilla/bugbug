@@ -52,9 +52,14 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
     data = []
 
     while after is not None:
-        out = PHABRICATOR_API.request(
-            "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
-        )
+        out = tenacity.retry(
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=64),
+            stop=tenacity.stop_after_attempt(5),
+        )(
+            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
+                "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
+            )
+        )()
         data += out["data"]
         after = out["cursor"]["after"]
 
