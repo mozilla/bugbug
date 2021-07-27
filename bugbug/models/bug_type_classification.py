@@ -32,6 +32,7 @@ class BugTypeClassificationModel(BugModel):
         clf_params=True,
         compact_statistics=False,
         cv=5,
+        balanced=False,
     ):
         BugModel.__init__(self, lemmatization)
 
@@ -84,7 +85,8 @@ class BugTypeClassificationModel(BugModel):
                 self.single_class in label_names
             ), f"unexpected class {self.single_class}\n\tUse the args --single_class with one of the following {label_names}"
             label_names = [self.single_class, "Other"]
-            self.sampler = RandomUnderSampler(random_state=0)
+            if balanced:
+                self.sampler = RandomUnderSampler(random_state=0)
 
         self.target_size = len(label_names)
         if self.single_class is None:
@@ -96,7 +98,7 @@ class BugTypeClassificationModel(BugModel):
         # Define the data set file name
         #
         self.name_file_list_labels = "bug_types"
-        self.name_file_list_additional_labels = "bug_types_autonatic_for_binary"
+        self.name_file_list_additional_labels = "bug_types"
 
         self.calculate_importance = True
         """

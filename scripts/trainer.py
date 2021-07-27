@@ -56,6 +56,7 @@ class Trainer(object):
                 clf_params=args.clf_params,
                 compact_statistics=args.compact_statistics,
                 cv=args.cv,
+                balanced=args.balance_data,
             )
         else:
             model_obj = model_class(args.lemmatization)
@@ -207,6 +208,11 @@ def parse_args(args):
         default=5,
         type=int,
         help="The size of the cross-validation slitting strategy. Only used for Bug Type Classification.",
+    )
+    parser.add_argument(
+        "--balance_data",
+        help="""Only use with unbalanced data and with the single_class parameter enabled. Use this args to perform a balance over the data set. Only used for Bug Type Classification""",
+        action="store_true",
     )
     '''
     parser.add_argument(
