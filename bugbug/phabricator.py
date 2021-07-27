@@ -96,6 +96,9 @@ def get(
         if progress_bar is not None:
             progress_bar.update(100)
 
+    if progress_bar is not None:
+        progress_bar.close()
+
     for revision in data:
         assert "transactions" not in revision
         revision["transactions"] = get_transactions(revision["phid"])
