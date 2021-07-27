@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType, Optional
 
+import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
@@ -78,12 +79,17 @@ def get(
     data = []
 
     while after is not None:
-        out = PHABRICATOR_API.request(
-            "differential.revision.search",
-            constraints=constraints,
-            attachments={"projects": True, "reviewers": True},
-            after=after,
-        )
+        out = tenacity.retry(
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=64),
+            stop=tenacity.stop_after_attempt(5),
+        )(
+            lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
+                "differential.revision.search",
+                constraints=constraints,
+                attachments={"projects": True, "reviewers": True},
+                after=after,
+            )
+        )()
         data += out["data"]
         after = out["cursor"]["after"]
 
