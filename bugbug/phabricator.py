@@ -69,8 +69,10 @@ def get(
     constraints: dict = {}
     if rev_ids is not None:
         constraints["ids"] = rev_ids
+        progress_bar = None
     elif modified_start is not None:
         constraints["modifiedStart"] = int(modified_start.timestamp())
+        progress_bar = tqdm()
 
     after = ""
     data = []
@@ -84,6 +86,9 @@ def get(
         )
         data += out["data"]
         after = out["cursor"]["after"]
+
+        if progress_bar is not None:
+            progress_bar.update(100)
 
     for revision in data:
         assert "transactions" not in revision
