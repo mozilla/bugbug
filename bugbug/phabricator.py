@@ -98,10 +98,16 @@ def get(
 
     if progress_bar is not None:
         progress_bar.close()
+        data_iter = tqdm(data)
+    else:
+        data_iter = data
 
-    for revision in data:
+    for revision in data_iter:
         assert "transactions" not in revision
         revision["transactions"] = get_transactions(revision["phid"])
+
+    if progress_bar is not None:
+        data_iter.close()
 
     return data
 
