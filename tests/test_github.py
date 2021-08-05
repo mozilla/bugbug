@@ -7,9 +7,10 @@ from unittest import mock
 
 import responses
 
-from bugbug import github
+from bugbug.github import Github
 
-github.get_token = mock.Mock(return_value="mocked_token")
+github = Github(owner="webcompat", repo="web-bugs")
+github.get_token = mock.Mock(return_value="mocked_token")  # type: ignore
 
 TEST_URL = "https://api.github.com/repos/webcompat/web-bugs/issues"
 TEST_EVENTS_URL = "https://api.github.com/repos/webcompat/web-bugs/issues/1/events"
@@ -84,10 +85,35 @@ def test_download_issues() -> None:
         responses.GET, "https://api.github.com/test&page=3", json=expected, status=200
     )
 
-    github.download_issues("webcompat", "web-bugs", "all")
+    github.download_issues()
+
+
+def test_download_issues_with_events() -> None:
+    github.retrieve_events = True
+    expected = [{"issue_id": "1", "events_url": TEST_EVENTS_URL}]
+    expected_events = [{"event_id": "1"}]
+    next_url_headers = {"link": "<https://api.github.com/test&page=3>; rel='next'"}
+
+    # Make sure required requests are made as long as next link is present in the header
+    responses.add(responses.GET, TEST_URL, json=expected, status=200, headers=HEADERS)
+    responses.add(
+        responses.GET,
+        "https://api.github.com/test&page=2",
+        json=expected,
+        status=200,
+        headers=next_url_headers,
+    )
+    responses.add(
+        responses.GET, "https://api.github.com/test&page=3", json=expected, status=200
+    )
+    # Mock events request
+    responses.add(responses.GET, TEST_EVENTS_URL, json=expected_events, status=200)
+
+    github.download_issues()
 
 
 def test_download_issues_updated_since_timestamp() -> None:
+    github.retrieve_events = False
     first_page = [
         {"id": 30515129, "issue_id": "1"},
         {"id": 30536238, "issue_id": "2"},
@@ -135,14 +161,13 @@ def test_download_issues_updated_since_timestamp() -> None:
 
     result = first_page + second_page + third_page
 
-    data = github.fetch_issues_updated_since_timestamp(
-        "webcompat", "web-bugs", "all", "2021-04-03T20:14:04+00:00"
-    )
+    data = github.fetch_issues_updated_since_timestamp("2021-04-03T20:14:04+00:00")
 
     assert data == result
 
 
 def test_fetch_issue_by_number() -> None:
+    github.retrieve_events = False
     expected = [
         {"issue_id": "1", "events_url": TEST_EVENTS_URL, "labels": [{"name": "test"}]}
     ]

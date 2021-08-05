@@ -7,7 +7,8 @@ from logging import INFO, basicConfig, getLogger
 import numpy as np
 import requests
 
-from bugbug import db, github
+from bugbug import db
+from bugbug.github import Github
 from bugbug.models import get_model_class
 from bugbug.utils import download_model
 
@@ -34,13 +35,17 @@ def classify_issues(
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
+    github = Github(
+        owner=owner, repo=repo, state="all", retrieve_events=retrieve_events
+    )
+
     if issue_number:
         issues = iter(
             [github.fetch_issue_by_number(owner, repo, issue_number, retrieve_events)]
         )
         assert issues, f"An issue with a number of {issue_number} was not found"
     else:
-        assert db.download(github.GITHUB_ISSUES_DB)
+        assert db.download(github.db_path)
         issues = github.get_issues()
 
     for issue in issues:

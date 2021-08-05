@@ -14,7 +14,8 @@ import requests
 import zstandard
 from redis import Redis
 
-from bugbug import bugzilla, github, repository, test_scheduling
+from bugbug import bugzilla, repository, test_scheduling
+from bugbug.github import Github
 from bugbug.model import Model
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
@@ -112,6 +113,8 @@ def classify_issue(
     model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
 ) -> str:
     from bugbug_http.app import JobInfo
+
+    github = Github(owner=owner, repo=repo)
 
     issue_ids_set = set(map(int, issue_nums))
 
