@@ -1294,8 +1294,8 @@ def notification(days: int) -> None:
             median_first_review_time = round(review_time_deciles[4], 1)
             ninth_decile_first_review_time = round(review_time_deciles[8], 1)
         elif len(cur_team_data["review_times"]) > 0:
-            median_first_review_time = round(cur_team_data["review_times"], 1)
-            ninth_decile_first_review_time = round(cur_team_data["review_times"], 1)
+            median_first_review_time = round(cur_team_data["review_times"][0], 1)
+            ninth_decile_first_review_time = round(cur_team_data["review_times"][0], 1)
         else:
             median_first_review_time = None
             ninth_decile_first_review_time = None
