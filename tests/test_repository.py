@@ -388,6 +388,13 @@ def test_hg_log(fake_hg_repo):
     assert commits[0].node == revision7
     assert commits[0].reviewers == []
 
+    add_file(hg, local, "file5", "1\n2\n3\n4\n5\n6\n7\n")
+    revision8 = commit(hg, "Bug 123456 - Prova. r=testonly,realreviewer")
+    commits = repository.hg_log(hg, [revision8])
+    assert len(commits) == 1, "hg log should return one commit"
+    assert commits[0].node == revision8
+    assert commits[0].reviewers == ["realreviewer"]
+
 
 def test_download_coverage_mapping() -> None:
     cctx = zstandard.ZstdCompressor()

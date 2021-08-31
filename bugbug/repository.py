@@ -785,8 +785,14 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
         bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
         reviewers = (
-            list(set(sys.intern(r) for r in rev[7].decode("utf-8").split(" ")))
-            if rev[7] not in (b"", b"testonly", b"gaia-bump", b"me")
+            list(
+                set(
+                    sys.intern(r)
+                    for r in rev[7].decode("utf-8").split(" ")
+                    if r not in ("", "testonly", "gaia-bump", "me")
+                )
+            )
+            if rev[7] != b""
             else []
         )
 
