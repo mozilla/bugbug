@@ -789,7 +789,30 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
                 set(
                     sys.intern(r)
                     for r in rev[7].decode("utf-8").split(" ")
-                    if r not in ("", "testonly", "gaia-bump", "me")
+                    if r
+                    not in (
+                        "",
+                        "testonly",
+                        "gaia-bump",
+                        "me",
+                        "fix",
+                        "wpt-fix",
+                        "testing",
+                        "bustage",
+                        "test-only",
+                        "blocking",
+                        "blocking-fennec",
+                        "blocking1.9",
+                        "backout",
+                        "trivial",
+                        "DONTBUILD",
+                        "blocking-final",
+                        "blocking-firefox3",
+                        "test",
+                        "bustage-fix",
+                        "release",
+                        "tests",
+                    )
                 )
             )
             if rev[7] != b""
