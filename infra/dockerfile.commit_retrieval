@@ -12,7 +12,7 @@ ENV PATH="${PATH}:/git-cinnabar"
 RUN apt-get update && \
     apt-get install -y --no-install-recommends -o APT::Immediate-Configure=false -t testing git && \
     apt-get install -y --no-install-recommends xz-utils curl patch libcurl4 && \
-    hg clone -r 4523021a3e277207b80764a11b6aa250f937e440 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    hg clone -r 0c7c25460260483bcac5f0f8367453d8ec05b5c2 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
     cd /git-cinnabar && git -c advice.detachedHead=false checkout eb823ffbe9e23cf4c0048a0682d87c0f319e92c9 && cd .. && \
