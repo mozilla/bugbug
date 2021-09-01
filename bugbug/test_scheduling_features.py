@@ -153,7 +153,7 @@ def get_manifest(runnable):
 
 def commonprefix(path1, path2):
     for i, c in enumerate(path1):
-        if c != path2[i]:
+        if i + 1 > len(path2) or c != path2[i]:
             return path1[:i]
     return path1
 

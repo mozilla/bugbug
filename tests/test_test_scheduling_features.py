@@ -44,3 +44,10 @@ def test_path_distance():
         )
         == 5
     )
+    assert (
+        pd(
+            {"name": "testing/web-platform/tests/content-security-policy/worker-src"},
+            {"files": ["test"]},
+        )
+        == 4
+    )
