@@ -60,6 +60,9 @@ class NeedsDiagnosisModel(IssueModel):
         classes = {}
 
         for issue in github.get_issues():
+            # Skip issues with empty title or body
+            if issue["title"] is None or issue["body"] is None:
+                continue
             # Skip issues that are not moderated yet as they don't have a meaningful title or body
             if issue["title"] == "In the moderation queue.":
                 continue
