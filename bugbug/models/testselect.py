@@ -267,6 +267,7 @@ class TestSelectModel(Model):
         costs = [
             (("build", "opt"), 1),
             (("build", "debug"), 2),
+            (("build", "plain"), 3),
             (("linux1804-64", "opt"), 2),
             (("linux1804-64", "debug"), 3),
             (("windows10", "opt"), 4),
