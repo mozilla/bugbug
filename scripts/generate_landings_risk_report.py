@@ -998,7 +998,7 @@ def notification(days: int) -> None:
 
                     if lines_added != 0:
                         cur_team_data["coverage_patches"].append(
-                            (lines_covered / lines_added, commit["id"])
+                            (lines_covered / lines_added, commit["rev_id"])
                         )
 
             elif fix_date > datetime.utcnow() - relativedelta(weeks=2):
