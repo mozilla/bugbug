@@ -1300,7 +1300,7 @@ def notification(days: int) -> None:
             verb = (
                 "improving"
                 if median_first_review_time < prev_median_first_review_time
-                else "worsening"
+                else "**worsening**"
                 if prev_median_first_review_time < median_first_review_time
                 else "staying constant"
             )
@@ -1321,8 +1321,8 @@ def notification(days: int) -> None:
 
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
-The regression rate (regressions from the past two weeks / changes from this month) is {round(new_regressions / month_changes, 2)} ({"higher than" if new_regressions / month_changes > median_regression_rate else "lower than" if median_regression_rate > new_regressions / month_changes else "equal to"} the median of {round(median_regression_rate, 2)} across other teams).
-This week your team committed {high_risk_changes} high risk changes, {"more than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
+The regression rate (regressions from the past two weeks / changes from this month) is {round(new_regressions / month_changes, 2)} ({"**higher** than" if new_regressions / month_changes > median_regression_rate else "lower than" if median_regression_rate > new_regressions / month_changes else "equal to"} the median of {round(median_regression_rate, 2)} across other teams).
+This week your team committed {high_risk_changes} high risk changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
 Unfixed regressions from the past two weeks:
@@ -1332,7 +1332,7 @@ Unfixed regressions from the past two weeks:
 {unfixed_regressions}
 
 <br />
-The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"higher than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
+The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days.
 
 <br />
@@ -1341,7 +1341,7 @@ The median time to fix for regressions fixed in the past week was {median_fix_ti
 <br />
 <br />
 
-There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"increasing" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
+There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
         if len(affecting_carryover_regressions) > 0:
             notification += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
@@ -1365,7 +1365,7 @@ Top intermittent failures from the past week:
 <br />
 <br />
 
-Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "lower"} than the average across other teams, {average_patch_coverage}%).
+Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%).
 """
 
         if len(low_coverage_patches) > 0:
