@@ -1322,7 +1322,7 @@ def notification(days: int) -> None:
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
 The regression rate (regressions from the past two weeks / changes from this month) is {round(new_regressions / month_changes, 2)} ({"**higher** than" if new_regressions / month_changes > median_regression_rate else "lower than" if median_regression_rate > new_regressions / month_changes else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams).
-This week your team committed {high_risk_changes} high risk changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
+This week your team committed {high_risk_changes} high risk* changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
 Unfixed regressions from the past two weeks:
@@ -1388,6 +1388,8 @@ List of oldest seven revisions that are still waiting for a review:
 Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
 
 Report bugs or enhancement requests on https://github.com/mozilla/bugbug or to mcastelluccio@mozilla.com.
+
+*: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 """
 
         receivers = team_to_receivers[team]
