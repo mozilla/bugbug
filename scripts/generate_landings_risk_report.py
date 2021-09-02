@@ -1138,24 +1138,13 @@ def notification(days: int) -> None:
     def regression_to_text(bug):
         full_bug = bug_map[bug["id"]]
 
-        unfixed_regressions_components = []
+        tracked_versions = ",".join(get_tracking_info(full_bug))
 
-        tracked = get_tracking_info(full_bug)
-        if len(tracked) > 0:
-            unfixed_regressions_components.append(
-                "Tracked for versions {}".format(", ".join(tracked))
-            )
+        blocked_features = ", ".join(
+            f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
+        )
 
-        if len(bug["meta_ids"]) > 0:
-            features = ", ".join(
-                f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
-            )
-            unfixed_regressions_components.append(f"Blocked features: {features}")
-
-        if full_bug["status"] == "ASSIGNED":
-            unfixed_regressions_components.append("Assigned")
-        else:
-            unfixed_regressions_components.append("Unassigned")
+        assignment = "Assigned" if full_bug["status"] == "ASSIGNED" else "Unassigned"
 
         hours = math.ceil(
             (
@@ -1166,15 +1155,12 @@ def notification(days: int) -> None:
             ).total_seconds()
             / 3600
         )
-        if hours > 24:
-            unfixed_regressions_components.append(
-                f"Last activity {math.ceil(hours / 24)} days ago"
-            )
-        else:
-            unfixed_regressions_components.append(f"Last activity {hours} hours ago")
+        last_activity = (
+            f"{math.ceil(hours / 24)} days ago" if hours > 24 else f"{hours} hours ago"
+        )
 
-        return "- https://bugzilla.mozilla.org/show_bug.cgi?id={} - {}".format(
-            bug["id"], ", ".join(unfixed_regressions_components)
+        return "|https://bugzilla.mozilla.org/show_bug.cgi?id={}|{}|{}|{}|{}|".format(
+            bug["id"], last_activity, assignment, tracked_versions, blocked_features
         )
 
     notify = taskcluster.Notify(get_taskcluster_options())
@@ -1340,17 +1326,28 @@ This week your team committed {high_risk_changes} high risk changes, {"more than
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
 Unfixed regressions from the past two weeks:
+
+|Bug|Last Activity|Assignment|Tracked versions|Blocked features|
+|---|---|---|---|---|
 {unfixed_regressions}
 
+<br />
 The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"higher than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days.
+
+<br />
 <br />
 <b>CARRYOVER REGRESSIONS</b>
+<br />
+<br />
 
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"increasing" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
         if len(affecting_carryover_regressions) > 0:
             notification += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
+
+|Bug|Last Activity|Assignment|Tracked versions|Blocked features|
+|---|---|---|---|---|
 {affecting_carryover_regressions}"""
 
         notification += f"""
