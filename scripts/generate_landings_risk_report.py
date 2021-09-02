@@ -1381,7 +1381,7 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 
 The median time to first review patches for last week's fixed bugs was {median_first_review_time} days. 90% of patches were first reviewed within {ninth_decile_first_review_time} days. {review_time_diff}
 
-List of revisions that are still waiting for a review:
+List of oldest seven revisions that are still waiting for a review:
 {slow_review_patches}
 
 
