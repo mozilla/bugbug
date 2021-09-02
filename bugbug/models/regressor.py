@@ -237,10 +237,10 @@ class RegressorModel(CommitModel):
             results.append((max(probs[:, 1]), bug_id in bug_regressors))
 
         # Let's define the risk bands relatively to average risk.
-        # On average, around 1 out of 10 (8%) patches cause regressions.
-        # Risk band 1 - around 1 out of 20 (4%) patches within this risk band cause regressions.
-        # Risk band 2 - around 1 out of 10 (8%) patches within this risk band cause regressions.
-        # Risk bank 3 - around 1 out of 5  (16%) patches within this risk band cause regressions.
+        # On average, around 1 out of 8 (13%) patches cause regressions.
+        # Risk band 1 - around 1 out of 15 (7%) patches within this risk band cause regressions.
+        # Risk band 2 - around 1 out of 7 (15%) patches within this risk band cause regressions.
+        # Risk bank 3 - around 1 out of 3 (35%) patches within this risk band cause regressions.
 
         # Step 1. Calculate % of patches which cause regressions.
         total_landings = len(results)
