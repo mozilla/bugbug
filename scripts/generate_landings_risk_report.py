@@ -1159,8 +1159,13 @@ def notification(days: int) -> None:
             f"{math.ceil(hours / 24)} days ago" if hours > 24 else f"{hours} hours ago"
         )
 
-        return "|https://bugzilla.mozilla.org/show_bug.cgi?id={}|{}|{}|{}|{}|".format(
-            bug["id"], last_activity, assignment, tracked_versions, blocked_features
+        return "|[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|{}|".format(
+            bug["id"],
+            bug["id"],
+            last_activity,
+            assignment,
+            tracked_versions,
+            blocked_features,
         )
 
     notify = taskcluster.Notify(get_taskcluster_options())
@@ -1250,7 +1255,7 @@ def notification(days: int) -> None:
             fix_time_diff = ""
 
         top_intermittent_failures = "\n".join(
-            f"- https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id} - {count} failures (this is {intermittent_failure_positions[bug_id]} overall)"
+            f"- [Bug {bug_id}](https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}) - {count} failures (this is {intermittent_failure_positions[bug_id]} overall)"
             for bug_id, count in sorted(
                 cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
             )[:7]
@@ -1265,7 +1270,7 @@ def notification(days: int) -> None:
             1,
         )
         low_coverage_patches = "\n".join(
-            f"- https://phabricator.services.mozilla.com/D{rev_id} - {pc}%"
+            f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {pc}%"
             for pc, rev_id in sorted(
                 cur_team_data["coverage_patches"], key=lambda x: x[0]
             )[:7]
@@ -1309,7 +1314,7 @@ def notification(days: int) -> None:
             review_time_diff = ""
 
         slow_review_patches = "\n".join(
-            f"- https://phabricator.services.mozilla.com/D{rev_id} - {round(review_time, 1)} days"
+            f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {round(review_time, 1)} days"
             for review_time, rev_id in sorted(
                 cur_team_data["open_review_times"], key=lambda x: -x[0]
             )[:7]
