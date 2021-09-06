@@ -1136,6 +1136,12 @@ def notification(days: int) -> None:
         bug_id: i + 1 for i, (bug_id, count) in enumerate(sorted_intermittent_failures)
     }
 
+    average_median_first_review_time = statistics.mean(
+        statistics.median(cur_team_data["review_times"])
+        for cur_team_data in team_data.values()
+        if len(cur_team_data["review_times"]) > 0
+    )
+
     def regression_to_text(bug):
         full_bug = bug_map[bug["id"]]
 
@@ -1430,7 +1436,8 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 <br />
 <br />
 
-The median time to first review patches for last week's fixed bugs was {median_first_review_time} days. 90% of patches were first reviewed within {ninth_decile_first_review_time} days. {review_time_diff}
+The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}
+90% of patches were first reviewed within {ninth_decile_first_review_time} days.
 
 List of oldest seven revisions that are still waiting for a review:
 {slow_review_patches}
