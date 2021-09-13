@@ -812,6 +812,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
                         "bustage-fix",
                         "release",
                         "tests",
+                        "lint-fix",
                     )
                 )
             )
