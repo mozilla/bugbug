@@ -1371,7 +1371,7 @@ def notification(days: int) -> None:
 
         report_url_querystring = urllib.parse.urlencode({"teams": team})
 
-        notification = f"""<b>NEW REGRESSIONS</b>
+        new_regressions_section = f"""<b>NEW REGRESSIONS</b>
 
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
@@ -1387,27 +1387,22 @@ Unfixed regressions from the past two weeks:
 
 <br />
 The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
-90% of bugs were fixed within {ninth_decile_fix_time} days.
+90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
-<br />
-<br />
-<b>CARRYOVER REGRESSIONS</b>
+        carryover_regressions_section = f"""<b>CARRYOVER REGRESSIONS</b>
 <br />
 <br />
 
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
         if len(affecting_carryover_regressions) > 0:
-            notification += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
+            carryover_regressions_section += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
 
 |Bug|Last Activity|Assignment|Tracked versions|Blocked features|
 |---|---|---|---|---|
 {affecting_carryover_regressions}"""
 
-        notification += f"""
-
-<br />
-<b>CRASHES</b>
+        crashes_section = f"""<b>CRASHES</b>
 <br />
 <br />
 
@@ -1419,32 +1414,26 @@ Top recent Nightly crashes:
 <br />
 Top recent Release crashes:
 
-{get_top_crashes(team, "release")}
+{get_top_crashes(team, "release")}"""
 
-<br />
-<b>INTERMITTENT FAILURES</b>
+        intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
 <br />
 <br />
 
 Top intermittent failures from the past week:
-{top_intermittent_failures}
+{top_intermittent_failures}"""
 
-<br />
-<b>TEST COVERAGE</b>
+        test_coverage_section = f"""<b>TEST COVERAGE</b>
 <br />
 <br />
 
-Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%).
-"""
+Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%)."""
 
         if len(low_coverage_patches) > 0:
-            notification += f"""<br />List of lowest coverage patches:
+            test_coverage_section += f"""<br />List of lowest coverage patches:
 {low_coverage_patches}"""
 
-        notification += f"""
-
-<br />
-<b>REVIEW</b>
+        review_section = f"""<b>REVIEW</b>
 <br />
 <br />
 
@@ -1452,8 +1441,25 @@ The median time to first review patches for last week's fixed bugs was {median_f
 90% of patches were first reviewed within {ninth_decile_first_review_time} days.
 
 List of oldest seven revisions that are still waiting for a review:
-{slow_review_patches}
+{slow_review_patches}"""
 
+        notification = f"""{new_regressions_section}
+
+<br />
+<br />
+{carryover_regressions_section}
+
+<br />
+{crashes_section}
+
+<br />
+{intermittent_failures_section}
+
+<br />
+{test_coverage_section}
+
+<br />
+{review_section}
 
 Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
 
