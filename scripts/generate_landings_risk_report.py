@@ -772,6 +772,9 @@ class LandingsRiskReportGenerator(object):
         # Filter out commits for which we have no bugs.
         commits = [commit for commit in commits if commit["bug_id"] in bug_map]
 
+        # Filter out backed-out commits.
+        commits = [commit for commit in commits if commit["backedoutby"]]
+
         # Sort commits by bug component, so we can use itertools.groupby to group them by bug component.
         commits.sort(key=lambda x: get_full_component(bug_map[x["bug_id"]]))
 
