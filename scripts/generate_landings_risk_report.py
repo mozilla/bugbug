@@ -987,6 +987,9 @@ def notification(days: int) -> None:
                 ]
 
                 for commit in bug["commits"]:
+                    if commit["backedout"]:
+                        continue
+
                     lines_added = 0
                     lines_covered = 0
                     if commit["coverage"] and commit["coverage"][0] is not None:
