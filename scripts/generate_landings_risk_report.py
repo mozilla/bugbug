@@ -1325,7 +1325,7 @@ def notification(days: int) -> None:
             f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {round(100 * pc, 1)}%"
             for pc, rev_id in sorted(
                 cur_team_data["coverage_patches"], key=lambda x: x[0]
-            )[:7]
+            )
         )
 
         if len(cur_team_data["review_times"]) > 1:
@@ -1369,7 +1369,7 @@ def notification(days: int) -> None:
             f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {round(review_time, 1)} days"
             for review_time, rev_id in sorted(
                 cur_team_data["open_review_times"], key=lambda x: -x[0]
-            )[:7]
+            )
         )
 
         report_url_querystring = urllib.parse.urlencode({"teams": team})
@@ -1451,7 +1451,7 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}
 90% of patches were first reviewed within {ninth_decile_first_review_time} days.
 
-List of oldest seven revisions that are still waiting for a review:
+List of revisions that are still waiting for a review:
 {slow_review_patches}"""
 
         notification = f"""{new_regressions_section}
