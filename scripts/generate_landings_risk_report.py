@@ -623,9 +623,12 @@ class LandingsRiskReportGenerator(object):
                     if time_to_confirm is not None:
                         break
 
+            sticked_commits = [
+                commit for commit in commit_data if not commit["backedout"]
+            ]
             max_risk = (
-                max(commit["risk"] for commit in commit_data)
-                if len(commit_data)
+                max(commit["risk"] for commit in sticked_commits)
+                if len(sticked_commits)
                 else None
             )
 
