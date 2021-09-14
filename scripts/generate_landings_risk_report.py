@@ -14,7 +14,7 @@ import re
 import statistics
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Set, Tuple, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 import dateutil.parser
 import requests
@@ -1187,7 +1187,7 @@ def notification(days: int) -> None:
             blocked_features,
         )
 
-    def get_top_crashes(team: str, channel: str) -> str:
+    def get_top_crashes(team: str, channel: str) -> Optional[str]:
         r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
         response = r.json()
 
@@ -1214,6 +1214,9 @@ def notification(days: int) -> None:
                 ", ".join(bugs),
                 data["crash_count"],
             )
+
+        if len(top_crashes) == 0:
+            return None
 
         return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes}"
 
@@ -1402,19 +1405,27 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 |---|---|---|---|---|
 {affecting_carryover_regressions}"""
 
-        crashes_section = f"""<b>CRASHES</b>
+        crashes_section = """<b>CRASHES</b>
 <br />
 <br />
 
+"""
 
-Top recent Nightly crashes:
+        top_nightly_crashes = get_top_crashes(team, "nightly")
+        if top_nightly_crashes is not None:
+            crashes_section += f"""Top recent Nightly crashes:
 
-{get_top_crashes(team, "nightly")}
+{top_nightly_crashes}"""
+        else:
+            crashes_section += "No crashes in the top 200 for Nightly."
 
-<br />
-Top recent Release crashes:
+        top_release_crashes = get_top_crashes(team, "release")
+        if top_release_crashes is not None:
+            crashes_section += f"""<br />Top recent Release crashes:
 
-{get_top_crashes(team, "release")}"""
+{top_release_crashes}"""
+        else:
+            crashes_section += "\nNo crashes in the top 200 for Release."
 
         intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
 <br />
