@@ -1326,6 +1326,7 @@ def notification(days: int) -> None:
             for pc, rev_id in sorted(
                 cur_team_data["coverage_patches"], key=lambda x: x[0]
             )
+            if pc != 1.0
         )
 
         if len(cur_team_data["review_times"]) > 1:
