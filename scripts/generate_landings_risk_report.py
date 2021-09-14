@@ -697,7 +697,10 @@ class LandingsRiskReportGenerator(object):
                 "revisions": revisions,
             }
 
-            self.get_prev_bugs_stats(bug_summary, commit_list)
+            self.get_prev_bugs_stats(
+                bug_summary,
+                [commit for commit in commit_list if not commit["backedoutby"]],
+            )
 
             bug_summaries.append(bug_summary)
 
