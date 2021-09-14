@@ -91,6 +91,9 @@ class PastBugsCollector(object):
             if commit["bug_id"] not in bug_map:
                 continue
 
+            if commit["backedoutby"]:
+                continue
+
             bug = bug_map[commit["bug_id"]]
 
             if len(bug["regressions"]) > 0:
