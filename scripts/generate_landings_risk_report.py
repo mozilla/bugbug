@@ -1195,7 +1195,7 @@ def notification(days: int) -> None:
             if len(bugs) == 0:
                 continue
 
-            top_crashes += "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) ({} overall)|{}|{}|\n".format(
+            top_crashes += "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) (#{} globally)|{}|{}|\n".format(
                 escape_markdown(signature),
                 urllib.parse.urlencode({"signature": signature}),
                 data["tc_rank"],
@@ -1292,7 +1292,7 @@ def notification(days: int) -> None:
             fix_time_diff = ""
 
         top_intermittent_failures = "\n".join(
-            f"- [Bug {bug_id}](https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}) - {count} failures (this is {intermittent_failure_positions[bug_id]} overall)"
+            f"- [Bug {bug_id}](https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}) - {count} failures (#{intermittent_failure_positions[bug_id]} globally)"
             for bug_id, count in sorted(
                 cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
             )[:7]
