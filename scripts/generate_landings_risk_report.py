@@ -673,6 +673,7 @@ class LandingsRiskReportGenerator(object):
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
                 "types": bug_to_types(bug, bug_map),
+                "priority": bug["priority"],
                 "severity": bug["severity"],
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
                     "%Y-%m-%d"
@@ -1175,13 +1176,58 @@ def notification(days: int) -> None:
             f"{math.ceil(hours / 24)} days ago" if hours > 24 else f"{hours} hours ago"
         )
 
-        return "|[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|{}|".format(
+        notes = []
+
+        pending_needinfos = []
+
+        for flag in full_bug["flags"]:
+            if flag["name"] == "needinfo" and flag["status"] == "?":
+                pending_needinfos.append(
+                    (
+                        datetime.now(timezone.utc)
+                        - dateutil.parser.parse(flag["creation_date"])
+                    ).total_seconds()
+                    / 86400
+                )
+
+        if len(pending_needinfos) > 0:
+            days = math.ceil(max(pending_needinfos))
+            days_str = str(days) if days < 3 else f"**{days}**"
+            notes.append(
+                f"{len(pending_needinfos)} needinfo pending for {days_str} days"
+            )
+
+        if bug["priority"] == "--":
+            days = math.ceil(
+                (
+                    datetime.utcnow() - dateutil.parser.parse(bug["creation_date"])
+                ).total_seconds()
+                / 86400
+            )
+            days_str = str(days) if days < 3 else f"**{days}**"
+            notes.append(f"No priority set for {days_str} days")
+        if bug["severity"] == "--":
+            days = math.ceil(
+                (
+                    datetime.utcnow() - dateutil.parser.parse(bug["creation_date"])
+                ).total_seconds()
+                / 86400
+            )
+            days_str = str(days) if days < 3 else f"**{days}**"
+            notes.append(f"No severity set for {days_str} days")
+
+        if tracked_versions:
+            notes.append(f"Tracked for {tracked_versions}")
+
+        if blocked_features:
+            notes.append(f"Blocking {blocked_features}")
+
+        return "|[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|".format(
             bug["id"],
             bug["id"],
             last_activity,
             assignment,
-            tracked_versions,
-            blocked_features,
+            ", ".join(notes),
         )
 
     def get_top_crashes(team: str, channel: str) -> Optional[str]:
@@ -1383,8 +1429,8 @@ Based on historical information, your past week changes are likely to cause {pre
 
 Unfixed regressions from the past two weeks:
 
-|Bug|Last Activity|Assignment|Tracked versions|Blocked features|
-|---|---|---|---|---|
+|Bug|Last Activity|Assignment|Notes|
+|---|---|---|---|
 {unfixed_regressions}
 
 <br />
@@ -1400,8 +1446,8 @@ There are {carryover_regressions} carryover regressions in your team out of a to
         if len(affecting_carryover_regressions) > 0:
             carryover_regressions_section += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
 
-|Bug|Last Activity|Assignment|Tracked versions|Blocked features|
-|---|---|---|---|---|
+|Bug|Last Activity|Assignment|Notes|
+|---|---|---|---|
 {affecting_carryover_regressions}"""
 
         crashes_section = """<b>CRASHES</b>
