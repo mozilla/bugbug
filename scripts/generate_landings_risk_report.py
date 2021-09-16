@@ -1163,7 +1163,9 @@ def notification(days: int) -> None:
             f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
         )
 
-        assignment = "Assigned" if full_bug["status"] == "ASSIGNED" else "Unassigned"
+        assignment = (
+            "Assigned" if full_bug["status"] == "ASSIGNED" else "**Unassigned**"
+        )
 
         hours = math.ceil(
             (
