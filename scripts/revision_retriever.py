@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from logging import getLogger
 from typing import Optional
 
@@ -31,7 +31,7 @@ class Retriever(object):
         phabricator.download_modified_revisions()
 
         # Get IDs of revisions linked to commits since a year ago.
-        start_date = datetime.utcnow() - relativedelta(years=1)
+        start_date = datetime.now(timezone.utc) - relativedelta(years=1)
         revision_ids = list(
             (
                 filter(
@@ -39,7 +39,10 @@ class Retriever(object):
                     (
                         repository.get_revision_id(commit)
                         for commit in repository.get_commits()
-                        if dateutil.parser.parse(commit["pushdate"]) >= start_date
+                        if dateutil.parser.parse(commit["pushdate"]).replace(
+                            tzinfo=timezone.utc
+                        )
+                        >= start_date
                     ),
                 )
             )
@@ -49,10 +52,7 @@ class Retriever(object):
 
         # Get IDs of revisions linked to bugs since a year ago.
         for bug in bugzilla.get_bugs():
-            if (
-                dateutil.parser.parse(bug["last_change_time"]).replace(tzinfo=None)
-                < start_date
-            ):
+            if dateutil.parser.parse(bug["last_change_time"]) < start_date:
                 continue
 
             revision_ids += bugzilla.get_revision_ids(bug)

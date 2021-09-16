@@ -13,7 +13,7 @@ import os
 import re
 import statistics
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 import dateutil.parser
@@ -580,12 +580,14 @@ class LandingsRiskReportGenerator(object):
                 # Get the date of the last commit in the regressor bug that landed before the regression bug.
                 last_commit_date = max(
                     (
-                        dateutil.parser.parse(commit["pushdate"])
-                        for commit in bug_to_commits.get(regressor_bug_id, [])
-                        if dateutil.parser.parse(commit["pushdate"])
-                        < dateutil.parser.parse(bug["creation_time"]).replace(
-                            tzinfo=None
+                        dateutil.parser.parse(commit["pushdate"]).replace(
+                            tzinfo=timezone.utc
                         )
+                        for commit in bug_to_commits.get(regressor_bug_id, [])
+                        if dateutil.parser.parse(commit["pushdate"]).replace(
+                            tzinfo=timezone.utc
+                        )
+                        < dateutil.parser.parse(bug["creation_time"])
                     ),
                     default=None,
                 )
@@ -595,8 +597,7 @@ class LandingsRiskReportGenerator(object):
 
                 # Get the minimum "time to bug" (from the fix time of the closest regressor to the regression bug).
                 cur_time_to_bug = (
-                    dateutil.parser.parse(bug["creation_time"]).replace(tzinfo=None)
-                    - last_commit_date
+                    dateutil.parser.parse(bug["creation_time"]) - last_commit_date
                 ).total_seconds() / 86400
                 if time_to_bug is None or cur_time_to_bug < time_to_bug:
                     time_to_bug = cur_time_to_bug
@@ -611,12 +612,8 @@ class LandingsRiskReportGenerator(object):
                             and change["added"] in ("NEW", "ASSIGNED")
                         ):
                             time_to_confirm = (
-                                dateutil.parser.parse(history["when"]).replace(
-                                    tzinfo=None
-                                )
-                                - dateutil.parser.parse(bug["creation_time"]).replace(
-                                    tzinfo=None
-                                )
+                                dateutil.parser.parse(history["when"])
+                                - dateutil.parser.parse(bug["creation_time"])
                             ).total_seconds() / 86400
                             break
 
@@ -1169,10 +1166,8 @@ def notification(days: int) -> None:
 
         hours = math.ceil(
             (
-                datetime.utcnow()
-                - dateutil.parser.parse(full_bug["last_change_time"]).replace(
-                    tzinfo=None
-                )
+                datetime.now(timezone.utc)
+                - dateutil.parser.parse(full_bug["last_change_time"])
             ).total_seconds()
             / 3600
         )

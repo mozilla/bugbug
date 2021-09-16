@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 
 import dateutil.parser
 import xgboost
@@ -136,9 +136,9 @@ class ComponentModel(BugModel):
     def get_labels(self):
         product_components = {}
         for bug_data in bugzilla.get_bugs():
-            if dateutil.parser.parse(bug_data["creation_time"]).replace(
-                tzinfo=None
-            ) < datetime.utcnow() - relativedelta(years=2):
+            if dateutil.parser.parse(bug_data["creation_time"]) < datetime.now(
+                timezone.utc
+            ) - relativedelta(years=2):
                 continue
 
             product_components[bug_data["id"]] = (
