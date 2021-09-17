@@ -1557,23 +1557,18 @@ The median time to first review patches for last week's fixed bugs was {median_f
 List of revisions that have been waiting for a review for longer than 3 days:
 {slow_review_patches}"""
 
-        notification = f"""{new_regressions_section}
+        sections = [
+            new_regressions_section,
+            carryover_regressions_section,
+            crashes_section,
+            intermittent_failures_section,
+            test_coverage_section,
+            review_section,
+        ]
 
-<br />
-<br />
-{carryover_regressions_section}
-
-<br />
-{crashes_section}
-
-<br />
-{intermittent_failures_section}
-
-<br />
-{test_coverage_section}
-
-<br />
-{review_section}
+        notification = (
+            "\n\n<br />\n<br />\n".join(sections)
+            + f"""
 
 Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
 
@@ -1581,6 +1576,7 @@ Report bugs or enhancement requests on https://github.com/mozilla/bugbug or to m
 
 *: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 """
+        )
 
         receivers = team_to_receivers[team]
         for receiver in receivers:
