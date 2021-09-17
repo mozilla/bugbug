@@ -115,6 +115,21 @@ def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     return component_team_mapping
 
 
+def get_crash_signatures(channel: str) -> dict:
+    r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
+    response = r.json()
+    return response["signatures"]
+
+
+def get_crash_bugs(signatures: dict) -> List[int]:
+    return [
+        bug["id"]
+        for data in signatures.values()
+        for bug in data["bugs"]
+        if bug["resolution"] == ""
+    ]
+
+
 class LandingsRiskReportGenerator(object):
     def __init__(self, repo_dir: str) -> None:
         self.risk_bands = sorted(
@@ -843,8 +858,14 @@ class LandingsRiskReportGenerator(object):
             bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
         ]
 
+        crash_bugs = get_crash_bugs(get_crash_signatures("release")) + get_crash_bugs(
+            get_crash_signatures("nightly")
+        )
+
         logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(bugs + test_info_bugs + [FUZZING_METABUG_ID] + meta_bugs)
+        bugzilla.download_bugs(
+            bugs + test_info_bugs + [FUZZING_METABUG_ID] + meta_bugs + crash_bugs
+        )
 
         logger.info(f"{len(bugs)} bugs to analyze.")
 
@@ -879,9 +900,19 @@ def notification(days: int) -> None:
 
     bug_summary_ids = {bug_summary["id"] for bug_summary in bug_summaries}
 
+    crash_signatures = {
+        "release": get_crash_signatures("release"),
+        "nightly": get_crash_signatures("nightly"),
+    }
+
+    all_crash_bugs = set(
+        get_crash_bugs(crash_signatures["release"])
+        + get_crash_bugs(crash_signatures["nightly"])
+    )
+
     bug_map = {}
     for b in bugzilla.get_bugs():
-        if b["id"] in bug_summary_ids:
+        if b["id"] in bug_summary_ids or b["id"] in all_crash_bugs:
             bug_map[b["id"]] = b
 
     with open("component_test_stats.json", "r") as f:
@@ -1179,8 +1210,10 @@ def notification(days: int) -> None:
 
         tracked_versions = " and ".join(sorted(get_tracking_info(full_bug)))
 
-        blocked_features = ", ".join(
-            f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
+        blocked_features = (
+            ", ".join(f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"])
+            if "meta_ids" in bug
+            else ""
         )
 
         assignment = (
@@ -1221,19 +1254,21 @@ def notification(days: int) -> None:
             days_str = f"{days} days" if days < 3 else f"**{days} days**"
             notes.append(f"{len(pending_needinfos)} needinfo pending for {days_str}")
 
-        if bug["priority"] == "--":
+        if full_bug["priority"] == "--":
             days = math.ceil(
                 (
-                    datetime.utcnow() - dateutil.parser.parse(bug["creation_date"])
+                    datetime.now(timezone.utc)
+                    - dateutil.parser.parse(full_bug["creation_time"])
                 ).total_seconds()
                 / 86400
             )
             days_str = f"{days} days" if days < 3 else f"**{days} days**"
             notes.append(f"No priority set for {days_str}")
-        if bug["severity"] == "--":
+        if full_bug["severity"] == "--":
             days = math.ceil(
                 (
-                    datetime.utcnow() - dateutil.parser.parse(bug["creation_date"])
+                    datetime.now(timezone.utc)
+                    - dateutil.parser.parse(full_bug["creation_time"])
                 ).total_seconds()
                 / 86400
             )
@@ -1255,16 +1290,11 @@ def notification(days: int) -> None:
         )
 
     def get_top_crashes(team: str, channel: str) -> Optional[str]:
-        r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
-        response = r.json()
-
         top_crashes = []
 
-        for signature, data in response["signatures"].items():
+        for signature, data in crash_signatures[channel].items():
             bugs = [
-                "[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})".format(
-                    bug["id"], bug["id"]
-                )
+                bug
                 for bug in data["bugs"]
                 if bug["resolution"] == ""
                 and team
@@ -1275,14 +1305,14 @@ def notification(days: int) -> None:
                 continue
 
             top_crashes.append(
-                "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) ({}#{} globally{})|{}|{}|".format(
+                "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) ({}#{} globally{})|{}{}".format(
                     escape_markdown(signature),
                     urllib.parse.urlencode({"signature": signature}),
                     "**" if data["tc_rank"] <= 50 else "",
                     data["tc_rank"],
                     "**" if data["tc_rank"] <= 50 else "",
-                    ", ".join(bugs),
                     data["crash_count"],
+                    regression_to_text(bugs[0]),
                 )
             )
 
@@ -1291,7 +1321,7 @@ def notification(days: int) -> None:
 
         top_crashes_text = "\n".join(top_crashes[:10])
 
-        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes_text}"
+        return f"|Signature|# of crashes|Bug|Last Activity|Assignment|Notes|\n|---|---|---|---|---|---|\n{top_crashes_text}"
 
     notify = taskcluster.Notify(get_taskcluster_options())
 
