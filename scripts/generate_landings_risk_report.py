@@ -1177,7 +1177,7 @@ def notification(days: int) -> None:
     def regression_to_text(bug):
         full_bug = bug_map[bug["id"]]
 
-        tracked_versions = ",".join(get_tracking_info(full_bug))
+        tracked_versions = " and ".join(sorted(get_tracking_info(full_bug)))
 
         blocked_features = ", ".join(
             f"'{feature_meta_bugs[meta_id]}'" for meta_id in bug["meta_ids"]
