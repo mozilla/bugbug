@@ -937,6 +937,8 @@ def notification(days: int) -> None:
         cur_team_data["review_times"] = []
         cur_team_data["prev_review_times"] = []
         cur_team_data["intermittent_failures"] = collections.defaultdict(int)
+        cur_team_data["skipped_tests"] = 0
+        cur_team_data["prev_skipped_tests"] = 0
 
         cur_team_data["carryover_regressions"] = 0
         cur_team_data["affecting_carryover_regressions"] = []
@@ -1088,6 +1090,22 @@ def notification(days: int) -> None:
             for bug in data["bugs"]:
                 cur_team_data["intermittent_failures"][bug["id"]] += bug["count"]
 
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%d")
+        skips = 0
+        prev_skips = 0
+        for day, data in day_to_data.items():
+            if "skips" not in data:
+                continue
+
+            if day == today:
+                skips = data["skips"]
+            elif day == two_weeks_ago:
+                prev_skips = data["skips"]
+
+        cur_team_data["skipped_tests"] += skips
+        cur_team_data["prev_skipped_tests"] += prev_skips
+
     total_carryover_regressions = sum(
         cur_team_data["carryover_regressions"] for cur_team_data in team_data.values()
     )
@@ -1145,6 +1163,10 @@ def notification(days: int) -> None:
     intermittent_failure_positions = {
         bug_id: i + 1 for i, (bug_id, count) in enumerate(sorted_intermittent_failures)
     }
+
+    median_skipped_tests = statistics.mean(
+        cur_team_data["skipped_tests"] for cur_team_data in team_data.values()
+    )
 
     average_median_first_review_time = statistics.mean(
         statistics.median(cur_team_data["review_times"])
@@ -1356,6 +1378,9 @@ def notification(days: int) -> None:
             )[:7]
         )
 
+        skipped_tests = cur_team_data["skipped_tests"]
+        prev_skipped_tests = cur_team_data["prev_skipped_tests"]
+
         patch_coverage = round(
             100
             * cur_team_data["patch_coverage_covered"]
@@ -1477,7 +1502,10 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 <br />
 
 Top intermittent failures from the past week:
-{top_intermittent_failures}"""
+{top_intermittent_failures}
+
+There are {skipped_tests} tests skipped in some configurations ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)}).
+They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
 
         test_coverage_section = f"""<b>TEST COVERAGE</b>
 <br />
