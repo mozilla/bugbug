@@ -1218,10 +1218,8 @@ def notification(days: int) -> None:
 
         if len(pending_needinfos) > 0:
             days = math.ceil(max(pending_needinfos))
-            days_str = str(days) if days < 3 else f"**{days}**"
-            notes.append(
-                f"{len(pending_needinfos)} needinfo pending for {days_str} days"
-            )
+            days_str = f"{days} days" if days < 3 else f"**{days} days**"
+            notes.append(f"{len(pending_needinfos)} needinfo pending for {days_str}")
 
         if bug["priority"] == "--":
             days = math.ceil(
@@ -1230,8 +1228,8 @@ def notification(days: int) -> None:
                 ).total_seconds()
                 / 86400
             )
-            days_str = str(days) if days < 3 else f"**{days}**"
-            notes.append(f"No priority set for {days_str} days")
+            days_str = f"{days} days" if days < 3 else f"**{days} days**"
+            notes.append(f"No priority set for {days_str}")
         if bug["severity"] == "--":
             days = math.ceil(
                 (
@@ -1239,8 +1237,8 @@ def notification(days: int) -> None:
                 ).total_seconds()
                 / 86400
             )
-            days_str = str(days) if days < 3 else f"**{days}**"
-            notes.append(f"No severity set for {days_str} days")
+            days_str = f"{days} days" if days < 3 else f"**{days} days**"
+            notes.append(f"No severity set for {days_str}")
 
         if tracked_versions:
             notes.append(f"Tracked for {tracked_versions}")
