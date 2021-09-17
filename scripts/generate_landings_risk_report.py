@@ -1256,7 +1256,7 @@ def notification(days: int) -> None:
         r = requests.get(f"https://mozilla.github.io/stab-crashes/{channel}.json")
         response = r.json()
 
-        top_crashes = ""
+        top_crashes = []
 
         for signature, data in response["signatures"].items():
             bugs = [
@@ -1272,18 +1272,22 @@ def notification(days: int) -> None:
             if len(bugs) == 0:
                 continue
 
-            top_crashes += "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) (#{} globally)|{}|{}|\n".format(
-                escape_markdown(signature),
-                urllib.parse.urlencode({"signature": signature}),
-                data["tc_rank"],
-                ", ".join(bugs),
-                data["crash_count"],
+            top_crashes.append(
+                "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) (#{} globally)|{}|{}|".format(
+                    escape_markdown(signature),
+                    urllib.parse.urlencode({"signature": signature}),
+                    data["tc_rank"],
+                    ", ".join(bugs),
+                    data["crash_count"],
+                )
             )
 
         if len(top_crashes) == 0:
             return None
 
-        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes[:10]}"
+        top_crashes_text = "\n".join(top_crashes[:10])
+
+        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes_text}"
 
     notify = taskcluster.Notify(get_taskcluster_options())
 
@@ -1491,7 +1495,8 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 
         top_release_crashes = get_top_crashes(team, "release")
         if top_release_crashes is not None:
-            crashes_section += f"""<br />Top recent Release crashes:
+            crashes_section += f"""
+<br />Top recent Release crashes:
 
 {top_release_crashes}"""
         else:
