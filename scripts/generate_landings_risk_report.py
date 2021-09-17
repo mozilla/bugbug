@@ -1275,10 +1275,12 @@ def notification(days: int) -> None:
                 continue
 
             top_crashes.append(
-                "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) (#{} globally)|{}|{}|".format(
+                "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&signature={}) ({}#{} globally{})|{}|{}|".format(
                     escape_markdown(signature),
                     urllib.parse.urlencode({"signature": signature}),
+                    "**" if data["tc_rank"] <= 50 else "",
                     data["tc_rank"],
+                    "**" if data["tc_rank"] <= 50 else "",
                     ", ".join(bugs),
                     data["crash_count"],
                 )
