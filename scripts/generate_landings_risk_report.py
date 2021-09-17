@@ -1283,7 +1283,7 @@ def notification(days: int) -> None:
         if len(top_crashes) == 0:
             return None
 
-        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes}"
+        return f"|Signature|Bugs|# of crashes|\n|---|---|---|\n{top_crashes[:10]}"
 
     notify = taskcluster.Notify(get_taskcluster_options())
 
