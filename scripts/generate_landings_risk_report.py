@@ -1405,7 +1405,13 @@ def notification(days: int) -> None:
             1,
         )
         low_coverage_patches = "\n".join(
-            f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {round(100 * pc, 1)}%"
+            "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{}%{}".format(
+                rev_id,
+                rev_id,
+                "**" if pc < 0.8 else "",
+                round(100 * pc, 1),
+                "**" if pc < 0.8 else "",
+            )
             for pc, rev_id in sorted(
                 cur_team_data["coverage_patches"], key=lambda x: x[0]
             )
