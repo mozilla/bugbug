@@ -910,13 +910,34 @@ def notification(days: int) -> None:
         + get_crash_bugs(crash_signatures["nightly"])
     )
 
-    bug_map = {}
-    for b in bugzilla.get_bugs():
-        if b["id"] in bug_summary_ids or b["id"] in all_crash_bugs:
-            bug_map[b["id"]] = b
-
     with open("component_test_stats.json", "r") as f:
         component_test_stats = json.load(f)
+
+    all_intermittent_failure_bugs: Set[int] = set()
+    component_team_mapping = get_component_team_mapping()
+    for product_component, day_to_data in component_test_stats.items():
+        product, component = product_component.split("::")
+        cur_team = component_team_mapping.get(product, {}).get(component)
+        if cur_team is None or cur_team in ("Other", "Mozilla"):
+            continue
+
+        for day, data in day_to_data.items():
+            if "bugs" not in data:
+                continue
+
+            if dateutil.parser.parse(day) < datetime.utcnow() - relativedelta(weeks=1):
+                continue
+
+            all_intermittent_failure_bugs.update(bug["id"] for bug in data["bugs"])
+
+    bug_map = {}
+    for b in bugzilla.get_bugs():
+        if (
+            b["id"] in bug_summary_ids
+            or b["id"] in all_crash_bugs
+            or b["id"] in all_intermittent_failure_bugs
+        ):
+            bug_map[b["id"]] = b
 
     all_teams = set(bug["team"] for bug in bug_summaries if bug["team"] is not None)
     all_teams.remove("Other")
@@ -1103,7 +1124,6 @@ def notification(days: int) -> None:
                             cur_team_data["affecting_carryover_regressions"].append(bug)
                             break
 
-    component_team_mapping = get_component_team_mapping()
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
         team = component_team_mapping.get(product, {}).get(component)
@@ -1410,13 +1430,12 @@ def notification(days: int) -> None:
             fix_time_diff = ""
 
         top_intermittent_failures = "\n".join(
-            "- [Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={}) - {} failures ({}#{} globally{})".format(
-                bug_id,
-                bug_id,
+            "{} failures ({}#{} globally{}){}".format(
                 count,
                 "**" if intermittent_failure_positions[bug_id] <= 21 else "",
                 intermittent_failure_positions[bug_id],
                 "**" if intermittent_failure_positions[bug_id] <= 21 else "",
+                regression_to_text(bug_map[bug_id]),
             )
             for bug_id, count in sorted(
                 cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
@@ -1562,7 +1581,12 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 <br />
 
 Top intermittent failures from the past week:
+
+|# of failures|Bug|Last Activity|Assignment|Notes|
+|---|---|---|---|---|
 {top_intermittent_failures}
+
+<br />
 
 There are {skipped_tests} tests skipped in some configurations ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)}).
 They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
