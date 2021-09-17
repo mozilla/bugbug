@@ -1456,7 +1456,13 @@ def notification(days: int) -> None:
             review_time_diff = ""
 
         slow_review_patches = "\n".join(
-            f"- [D{rev_id}](https://phabricator.services.mozilla.com/D{rev_id}) - {round(review_time, 1)} days"
+            "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{} days{}".format(
+                rev_id,
+                rev_id,
+                "**" if review_time >= 14 else "",
+                round(review_time, 1),
+                "**" if review_time >= 14 else "",
+            )
             for review_time, rev_id in sorted(
                 cur_team_data["open_review_times"], key=lambda x: -x[0]
             )
