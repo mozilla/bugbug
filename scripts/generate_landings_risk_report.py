@@ -1371,7 +1371,7 @@ def notification(days: int) -> None:
             verb = (
                 "improving"
                 if median_fix_time < prev_median_fix_time
-                else "worsening"
+                else "**worsening**"
                 if prev_median_fix_time < median_fix_time
                 else "staying constant"
             )
@@ -1486,7 +1486,9 @@ Unfixed regressions from the past two weeks:
 {unfixed_regressions}
 
 <br />
-The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams). {fix_time_diff}
+The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams).
+
+{fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
         carryover_regressions_section = f"""<b>CARRYOVER REGRESSIONS</b>
