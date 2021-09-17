@@ -1195,7 +1195,11 @@ def notification(days: int) -> None:
             / 3600
         )
         last_activity = (
-            f"{math.ceil(hours / 24)} days ago" if hours > 24 else f"{hours} hours ago"
+            f"**{math.ceil(hours / 24)} days ago**"
+            if hours >= 120
+            else f"{math.ceil(hours / 24)} days ago"
+            if hours >= 24
+            else f"{hours} hours ago"
         )
 
         notes = []
