@@ -1380,7 +1380,14 @@ def notification(days: int) -> None:
             fix_time_diff = ""
 
         top_intermittent_failures = "\n".join(
-            f"- [Bug {bug_id}](https://bugzilla.mozilla.org/show_bug.cgi?id={bug_id}) - {count} failures (#{intermittent_failure_positions[bug_id]} globally)"
+            "- [Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={}) - {} failures ({}#{} globally{})".format(
+                bug_id,
+                bug_id,
+                count,
+                "**" if intermittent_failure_positions[bug_id] <= 21 else "",
+                intermittent_failure_positions[bug_id],
+                "**" if intermittent_failure_positions[bug_id] <= 21 else "",
+            )
             for bug_id, count in sorted(
                 cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
             )[:7]
