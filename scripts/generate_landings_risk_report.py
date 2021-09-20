@@ -862,9 +862,21 @@ class LandingsRiskReportGenerator(object):
             get_crash_signatures("nightly")
         )
 
+        s1_bugs = bugzilla.get_ids(
+            {
+                "severity": "S1",
+                "resolution": "---",
+            }
+        )
+
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(
-            bugs + test_info_bugs + [FUZZING_METABUG_ID] + meta_bugs + crash_bugs
+            bugs
+            + test_info_bugs
+            + [FUZZING_METABUG_ID]
+            + meta_bugs
+            + crash_bugs
+            + s1_bugs
         )
 
         logger.info(f"{len(bugs)} bugs to analyze.")
@@ -930,14 +942,20 @@ def notification(days: int) -> None:
 
             all_intermittent_failure_bugs.update(bug["id"] for bug in data["bugs"])
 
+    all_s1_bugs = []
+
     bug_map = {}
     for b in bugzilla.get_bugs():
         if (
             b["id"] in bug_summary_ids
             or b["id"] in all_crash_bugs
             or b["id"] in all_intermittent_failure_bugs
+            or b["severity"] == "S1"
         ):
             bug_map[b["id"]] = b
+
+        if b["severity"] == "S1":
+            all_s1_bugs.append(b)
 
     all_teams = set(bug["team"] for bug in bug_summaries if bug["team"] is not None)
     all_teams.remove("Other")
@@ -994,6 +1012,7 @@ def notification(days: int) -> None:
 
         cur_team_data["carryover_regressions"] = 0
         cur_team_data["affecting_carryover_regressions"] = []
+        cur_team_data["s1_bugs"] = []
 
     carrytest = set()
     for bug in bug_summaries:
@@ -1123,6 +1142,16 @@ def notification(days: int) -> None:
                         ):
                             cur_team_data["affecting_carryover_regressions"].append(bug)
                             break
+
+    for bug in all_s1_bugs:
+        if bug["status"] in ("VERIFIED", "RESOLVED"):
+            continue
+
+        team = component_team_mapping.get(bug["product"], {}).get(bug["component"])
+        if team is None or team in ("Other", "Mozilla"):
+            continue
+
+        team_data[team]["s1_bugs"].append(bug)
 
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
@@ -1257,6 +1286,9 @@ def notification(days: int) -> None:
 
         notes = []
 
+        if full_bug["severity"] == "S1":
+            notes.append("**Severity S1**")
+
         pending_needinfos = []
 
         for flag in full_bug["flags"]:
@@ -1389,10 +1421,14 @@ def notification(days: int) -> None:
                 key=lambda bug: bug_map[bug["id"]]["last_change_time"],
             )
         )
-        affecting_carryover_regressions = "\n".join(
+        affecting_carryover_regressions = cur_team_data[
+            "affecting_carryover_regressions"
+        ]
+        s1_bugs = cur_team_data["s1_bugs"]
+        affecting_carryover_regressions_and_s1_text = "\n".join(
             regression_to_text(reg)
             for reg in sorted(
-                cur_team_data["affecting_carryover_regressions"],
+                affecting_carryover_regressions + s1_bugs,
                 key=lambda bug: bug_map[bug["id"]]["last_change_time"],
             )
         )
@@ -1540,18 +1576,30 @@ The median time to fix for regressions fixed in the past week was {median_fix_ti
 {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
-        carryover_regressions_section = f"""<b>CARRYOVER REGRESSIONS</b>
+        if len(s1_bugs) > 0:
+            carryover_regressions_section = "<b>CARRYOVER REGRESSIONS AND S1 BUGS</b>"
+        else:
+            carryover_regressions_section = "<b>CARRYOVER REGRESSIONS</b>"
+
+        carryover_regressions_section += f"""
 <br />
 <br />
 
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
-        if len(affecting_carryover_regressions) > 0:
-            carryover_regressions_section += f"""<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:
+        if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
+            carryover_regressions_section += "<br /><br />S1 bugs and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+        elif len(affecting_carryover_regressions) > 0:
+            carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+        elif len(s1_bugs) > 0:
+            carryover_regressions_section += "<br /><br />S1 bugs:"
+
+        if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
+            carryover_regressions_section += f"""
 
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
-{affecting_carryover_regressions}"""
+{affecting_carryover_regressions_and_s1_text}"""
 
         crashes_section = """<b>CRASHES</b>
 <br />
