@@ -371,3 +371,17 @@ def get_revision_ids(bug: BugDict) -> List[int]:
         revision_ids.append(int(match.group(1)))
 
     return revision_ids
+
+
+def get_last_activity_excluding_bots(bug: BugDict) -> str:
+    email_parts = [
+        "@bots.tld",
+        "@mozilla.tld",
+        "nobody@mozilla.org",
+    ]
+
+    for history in bug["history"][::-1]:
+        if not any(email_part in history["who"] for email_part in email_parts):
+            return history["when"]
+
+    return bug["creation_time"]

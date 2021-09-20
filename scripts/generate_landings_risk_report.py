@@ -1278,7 +1278,9 @@ def notification(days: int) -> None:
         hours = math.ceil(
             (
                 datetime.now(timezone.utc)
-                - dateutil.parser.parse(full_bug["last_change_time"])
+                - dateutil.parser.parse(
+                    bugzilla.get_last_activity_excluding_bots(full_bug)
+                )
             ).total_seconds()
             / 3600
         )
@@ -1424,7 +1426,9 @@ def notification(days: int) -> None:
             regression_to_text(reg)
             for reg in sorted(
                 cur_team_data["unfixed_regressions"],
-                key=lambda bug: bug_map[bug["id"]]["last_change_time"],
+                key=lambda bug: bugzilla.get_last_activity_excluding_bots(
+                    bug_map[bug["id"]]
+                ),
             )
         )
         affecting_carryover_regressions = cur_team_data[
@@ -1435,7 +1439,9 @@ def notification(days: int) -> None:
             regression_to_text(reg)
             for reg in sorted(
                 affecting_carryover_regressions + s1_bugs,
-                key=lambda bug: bug_map[bug["id"]]["last_change_time"],
+                key=lambda bug: bugzilla.get_last_activity_excluding_bots(
+                    bug_map[bug["id"]]
+                ),
             )
         )
 
