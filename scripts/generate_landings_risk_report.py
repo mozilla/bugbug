@@ -1254,6 +1254,12 @@ def notification(days: int) -> None:
         if len(cur_team_data["review_times"]) > 0
     )
 
+    revisions_without_reviewer = set(
+        revision["id"]
+        for revision in phabricator.get_revisions()
+        if len(revision["attachments"]["reviewers"]["reviewers"]) == 0
+    )
+
     def regression_to_text(bug):
         full_bug = bug_map[bug["id"]]
 
@@ -1551,7 +1557,7 @@ def notification(days: int) -> None:
             for review_time, rev_id in sorted(
                 cur_team_data["open_review_times"], key=lambda x: -x[0]
             )
-            if review_time >= 3
+            if review_time >= 3 and rev_id not in revisions_without_reviewer
         )
 
         report_url_querystring = urllib.parse.urlencode({"teams": team})
