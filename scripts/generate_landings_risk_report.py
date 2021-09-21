@@ -1148,10 +1148,8 @@ def notification(days: int) -> None:
             continue
 
         team = component_team_mapping.get(bug["product"], {}).get(bug["component"])
-        if team is None or team in ("Other", "Mozilla"):
-            continue
-
-        team_data[team]["s1_bugs"].append(bug)
+        if team in team_data:
+            team_data[team]["s1_bugs"].append(bug)
 
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
