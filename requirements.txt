@@ -1,7 +1,7 @@
 amqp==5.0.6
-boto3==1.18.40
+boto3==1.18.54
 imbalanced-learn==0.8.0
-libmozdata==0.1.72
+libmozdata==0.1.73
 lmdb==1.2.1
 matplotlib==3.4.3
 mercurial==5.9.1
@@ -19,12 +19,12 @@ python-hglib==2.6.2
 ratelimit==2.2.1
 requests==2.26.0
 rs_parsepatch==0.3.6
-scikit-learn==0.24.2
+scikit-learn==1.0
 scipy==1.7.1
 shap[plots]==0.39.0
 tabulate==0.8.9
 taskcluster==44.2.2
 tenacity==8.0.1
-tqdm==4.62.2
+tqdm==4.62.3
 xgboost==1.4.2
 zstandard==0.15.2
