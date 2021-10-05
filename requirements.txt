@@ -19,7 +19,7 @@ python-hglib==2.6.2
 ratelimit==2.2.1
 requests==2.26.0
 rs_parsepatch==0.3.6
-scikit-learn==0.24.2
+scikit-learn==1.0
 scipy==1.7.1
 shap[plots]==0.39.0
 tabulate==0.8.9
