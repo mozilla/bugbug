@@ -249,11 +249,11 @@ tasks:
           - --retrieve-private
 
         artifacts:
-          public/github_issues.json.zst:
-            path: /data/github_issues.json.zst
+          public/github_webcompat_web-bugs_issues.json.zst:
+            path: /data/github_webcompat_web-bugs_issues.json.zst
             type: file
-          public/github_issues.json.version:
-            path: /data/github_issues.json.version
+          public/github_webcompat_web-bugs_issues.json.version:
+            path: /data/github_webcompat_web-bugs_issues.json.version
             type: file
 
         features:
@@ -263,8 +263,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.bugbug.data_github_issues.${version}
-        - index.project.bugbug.data_github_issues.latest
+        - index.project.bugbug.data_github_webcompat_web-bugs_issues.${version}
+        - index.project.bugbug.data_github_webcompat_web-bugs_issues.latest
       metadata:
         name: bugbug webcompat issues retrieval
         description: bugbug webcompat issues retrieval

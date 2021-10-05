@@ -9,7 +9,7 @@ import shutil
 import pytest
 import zstandard
 
-from bugbug import bugzilla, github, repository
+from bugbug import bugzilla, repository
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -21,7 +21,7 @@ def mock_data(tmp_path):
     DBs = [
         os.path.basename(bugzilla.BUGS_DB),
         os.path.basename(repository.COMMITS_DB),
-        os.path.basename(github.GITHUB_ISSUES_DB),
+        os.path.basename("data/github_webcompat_web-bugs_issues.json"),
     ]
 
     for f in DBs:

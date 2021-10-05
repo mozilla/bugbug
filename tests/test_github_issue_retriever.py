@@ -7,11 +7,11 @@ from unittest import mock
 
 import responses
 
-from bugbug import github
 from bugbug.github import IssueDict
-from scripts import github_issue_retriever
+from scripts.github_issue_retriever import Retriever
 
-github.get_token = mock.Mock(return_value="mocked_token")
+github_issue_retriever = Retriever("webcompat", "web-bugs", "all", False, True)
+github_issue_retriever.github.get_token = mock.Mock(return_value="mocked_token")  # type: ignore
 
 PUBLIC_BODY = """
 <p>Thanks for the report. We have closed this issue\n
