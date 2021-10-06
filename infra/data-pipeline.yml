@@ -1303,6 +1303,7 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-needsdiagnosis
       payload:
         capabilities:
           privileged: true
