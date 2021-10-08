@@ -6,11 +6,10 @@
 import logging
 from typing import Callable, Iterator, List, NewType, Tuple
 
-import requests
 from ratelimit import limits, sleep_and_retry
 
 from bugbug import db
-from bugbug.utils import get_secret
+from bugbug.utils import get_secret, get_session
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,7 @@ class Github:
         self.api_limit()
         logger.info(f"Fetching {events_url}")
         headers = {"Authorization": "token {}".format(self.get_token())}
-        response = requests.get(events_url, headers=headers)
+        response = get_session("github").get(events_url, headers=headers)
         response.raise_for_status()
         events_raw = response.json()
         return events_raw
@@ -71,7 +70,7 @@ class Github:
     ) -> Tuple[List[IssueDict], dict]:
         self.api_limit()
         headers = {"Authorization": "token {}".format(self.get_token())}
-        response = requests.get(url, params=params, headers=headers)
+        response = get_session("github").get(url, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()
 
