@@ -1416,8 +1416,8 @@ def notification(days: int) -> None:
         median_regression_rate = statistics.median(
             ctd["new_regressions"] / ctd["month_changes"]
             for ctd in team_data.values()
-            if ctd["month_changes"] > cur_team_data["month_changes"] / 5
-            and ctd["month_changes"] < cur_team_data["month_changes"] * 5
+            if ctd["month_changes"] > max(1, cur_team_data["month_changes"]) / 5
+            and ctd["month_changes"] < max(1, cur_team_data["month_changes"]) * 5
         )
 
         unfixed_regressions = "\n".join(
@@ -1463,17 +1463,20 @@ def notification(days: int) -> None:
         else:
             prev_median_fix_time = None
 
-        if median_fix_time is not None and prev_median_fix_time is not None:
-            verb = (
-                "improving"
-                if median_fix_time < prev_median_fix_time
-                else "**worsening**"
-                if prev_median_fix_time < median_fix_time
-                else "staying constant"
-            )
-            fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
-        else:
-            fix_time_diff = ""
+        if median_fix_time is not None:
+            median_fix_time_text = f"""The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams)."""
+
+            if prev_median_fix_time is not None:
+                verb = (
+                    "improving"
+                    if median_fix_time < prev_median_fix_time
+                    else "**worsening**"
+                    if prev_median_fix_time < median_fix_time
+                    else "staying constant"
+                )
+                fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
+            else:
+                fix_time_diff = ""
 
         top_intermittent_failures = "\n".join(
             "{} failures ({}#{} globally{}){}".format(
@@ -1535,20 +1538,24 @@ def notification(days: int) -> None:
         else:
             prev_median_first_review_time = None
 
-        if (
-            median_first_review_time is not None
-            and prev_median_first_review_time is not None
-        ):
-            verb = (
-                "improving"
-                if median_first_review_time < prev_median_first_review_time
-                else "**worsening**"
-                if prev_median_first_review_time < median_first_review_time
-                else "staying constant"
-            )
-            review_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_first_review_time} days)."
+        if median_first_review_time is not None:
+            if prev_median_first_review_time is not None:
+                verb = (
+                    "improving"
+                    if median_first_review_time < prev_median_first_review_time
+                    else "**worsening**"
+                    if prev_median_first_review_time < median_first_review_time
+                    else "staying constant"
+                )
+                review_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_first_review_time} days)."
+            else:
+                review_time_diff = ""
+
+            median_first_review_time_text = f"""The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}"""
+            if ninth_decile_first_review_time is not None:
+                median_first_review_time_text += f"\n90% of patches were first reviewed within {ninth_decile_first_review_time} days."
         else:
-            review_time_diff = ""
+            median_first_review_time_text = ""
 
         slow_review_patches = "\n".join(
             "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{} days{}".format(
@@ -1566,11 +1573,13 @@ def notification(days: int) -> None:
 
         report_url_querystring = urllib.parse.urlencode({"teams": team})
 
+        regression_rate = new_regressions / month_changes if month_changes > 0 else 0
+
         new_regressions_section = f"""<b>NEW REGRESSIONS</b>
 
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
-The regression rate (regressions from the past two weeks / changes from this month) is {round(new_regressions / month_changes, 2)} ({"**higher** than" if new_regressions / month_changes > median_regression_rate else "lower than" if median_regression_rate > new_regressions / month_changes else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams).
+The regression rate (regressions from the past two weeks / changes from this month) is {round(regression_rate, 2)} ({"**higher** than" if regression_rate > median_regression_rate else "lower than" if median_regression_rate > regression_rate else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams).
 This week your team committed {high_risk_changes} high risk* changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
@@ -1581,7 +1590,7 @@ Unfixed regressions from the past two weeks:
 {unfixed_regressions}
 
 <br />
-The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams).
+{median_fix_time_text}
 
 {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
@@ -1663,8 +1672,7 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 <br />
 <br />
 
-The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}
-90% of patches were first reviewed within {ninth_decile_first_review_time} days.
+{median_first_review_time_text}
 
 List of revisions that have been waiting for a review for longer than 3 days:
 {slow_review_patches}"""
