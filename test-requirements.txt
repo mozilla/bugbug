@@ -1,5 +1,5 @@
 coverage==6.0
-hypothesis==6.23.1
+hypothesis==6.23.2
 jsonschema==4.0.1
 pre-commit==2.15.0
 pytest==6.2.5
