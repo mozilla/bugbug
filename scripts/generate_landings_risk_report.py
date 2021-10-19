@@ -54,6 +54,15 @@ PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/
 
 FUZZING_METABUG_ID = 316898
 
+MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS = {
+    "--": 5,
+    "S1": 8,
+    "S2": 5,
+    "S3": 2,
+    "S4": 1,
+}
+MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
+
 
 def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
     seen = set()
@@ -1014,6 +1023,20 @@ def notification(days: int) -> None:
         cur_team_data["affecting_carryover_regressions"] = []
         cur_team_data["s1_bugs"] = []
 
+        # Maintenance effectiveness
+        cur_team_data["maintenance_effectiveness"] = {
+            "opened_defects": {
+                "last_week": 0,
+                "last_month": 0,
+                "last_year": 0,
+            },
+            "closed_defects": {
+                "last_week": 0,
+                "last_month": 0,
+                "last_year": 0,
+            },
+        }
+
     carrytest = set()
     for bug in bug_summaries:
         if bug["team"] in ("Other", "Mozilla"):
@@ -1025,6 +1048,39 @@ def notification(days: int) -> None:
         fix_date = (
             dateutil.parser.parse(bug["date"]) if bug["date"] is not None else None
         )
+
+        # Maintenance effectiveness
+        if bug_map[bug["id"]]["type"] == "defect":
+            severity_weight = MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.get(
+                bug["severity"], MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT
+            )
+
+            if creation_date > datetime.utcnow() - relativedelta(weeks=1):
+                cur_team_data["maintenance_effectiveness"]["opened_defects"][
+                    "last_week"
+                ] += severity_weight
+            if creation_date > datetime.utcnow() - relativedelta(months=1):
+                cur_team_data["maintenance_effectiveness"]["opened_defects"][
+                    "last_month"
+                ] += severity_weight
+            if creation_date > datetime.utcnow() - relativedelta(years=1):
+                cur_team_data["maintenance_effectiveness"]["opened_defects"][
+                    "last_year"
+                ] += severity_weight
+
+            if bug["fixed"] and fix_date is not None:
+                if fix_date > datetime.utcnow() - relativedelta(weeks=1):
+                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
+                        "last_week"
+                    ] += severity_weight
+                if fix_date > datetime.utcnow() - relativedelta(months=1):
+                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
+                        "last_month"
+                    ] += severity_weight
+                if fix_date > datetime.utcnow() - relativedelta(years=1):
+                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
+                        "last_year"
+                    ] += severity_weight
 
         if not bug["fixed"]:
             for revision in bug["revisions"]:
@@ -1677,6 +1733,32 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 List of revisions that have been waiting for a review for longer than 3 days:
 {slow_review_patches}"""
 
+        def calculate_maintenance_effectiveness(period):
+            return round(
+                (
+                    1
+                    + cur_team_data["maintenance_effectiveness"]["closed_defects"][
+                        period
+                    ]
+                )
+                / (
+                    1
+                    + cur_team_data["maintenance_effectiveness"]["opened_defects"][
+                        period
+                    ]
+                ),
+                2,
+            )
+
+        maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
+<br />
+<br />
+
+Last week: {calculate_maintenance_effectiveness("last_week")}
+Last month: {calculate_maintenance_effectiveness("last_month")}
+Last year: {calculate_maintenance_effectiveness("last_year")}
+"""
+
         sections = [
             new_regressions_section,
             carryover_regressions_section,
@@ -1685,6 +1767,9 @@ List of revisions that have been waiting for a review for longer than 3 days:
             test_coverage_section,
             review_section,
         ]
+
+        if team == "DOM LWS":
+            sections.append(maintenance_effectiveness_section)
 
         notification = (
             "\n\n<br />\n<br />\n".join(sections)
