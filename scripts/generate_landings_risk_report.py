@@ -1663,18 +1663,24 @@ Unfixed regressions from the past two weeks:
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
         if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
-            carryover_regressions_section += "<br /><br />S1 bugs and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+            carryover_regressions_section += "<br /><br />S1 bugs* and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
         elif len(affecting_carryover_regressions) > 0:
             carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
         elif len(s1_bugs) > 0:
-            carryover_regressions_section += "<br /><br />S1 bugs:"
+            carryover_regressions_section += "<br /><br />S1 bugs*:"
 
         if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
             carryover_regressions_section += f"""
 
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
-{affecting_carryover_regressions_and_s1_text}"""
+{affecting_carryover_regressions_and_s1_text}
+
+<br />
+
+*: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
+
+"""
 
         crashes_section = """<b>CRASHES</b>
 <br />
