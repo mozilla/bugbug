@@ -66,6 +66,12 @@ def bug_to_types(
     if "[power" in bug["whiteboard"].lower():
         types.add("power")
 
+    if any(
+        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("fxperf", "snappy")
+    ):
+        types.add("perf")
+
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
 
