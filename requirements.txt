@@ -20,7 +20,7 @@ ratelimit==2.2.1
 requests==2.26.0
 rs_parsepatch==0.3.6
 scikit-learn==1.0.1
-scipy==1.7.1
+scipy==1.7.2
 shap[plots]==0.40.0
 tabulate==0.8.9
 taskcluster==44.2.2
