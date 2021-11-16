@@ -15,7 +15,7 @@ RUN apt-get update && \
     hg clone -r fe9cd0cbf4860e92c911ddc9f9bdf75866a11105 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
-    cd /git-cinnabar && git -c advice.detachedHead=false checkout eb823ffbe9e23cf4c0048a0682d87c0f319e92c9 && cd .. && \
+    cd /git-cinnabar && git -c advice.detachedHead=false checkout 4e7b080d6ee979c8c27733015ab4e3bed87b2ba6 && cd .. && \
     git config --global cinnabar.experiments python3 && \
     git config --global cinnabar.check no-version-check && \
     git config --global fetch.prune true && \
