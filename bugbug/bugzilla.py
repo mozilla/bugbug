@@ -335,7 +335,11 @@ def get_product_component_count(months: int = 12) -> Dict[str, int]:
 
 def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/product?type=accessible&include_fields=name&include_fields=components.name&include_fields=components.team_name",
+        "https://bugzilla.mozilla.org/rest/product",
+        params={
+            "type": "accessible",
+            "include_fields": ["name", "components.name", "components.team_name"],
+        },
         headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
     )
     r.raise_for_status()
