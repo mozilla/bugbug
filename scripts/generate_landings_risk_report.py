@@ -54,15 +54,6 @@ PAST_FIXED_BUG_BLOCKED_BUGS_BY_URL = "https://community-tc.services.mozilla.com/
 
 FUZZING_METABUG_ID = 316898
 
-MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS = {
-    "--": 5,
-    "S1": 8,
-    "S2": 5,
-    "S3": 2,
-    "S4": 1,
-}
-MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
-
 
 def _deduplicate(bug_summaries: List[dict]) -> List[dict]:
     seen = set()
@@ -1051,8 +1042,9 @@ def notification(days: int) -> None:
 
         # Maintenance effectiveness
         if bug_map[bug["id"]]["type"] == "defect":
-            severity_weight = MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.get(
-                bug["severity"], MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT
+            severity_weight = bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.get(
+                bug["severity"],
+                bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT,
             )
 
             if creation_date > datetime.utcnow() - relativedelta(weeks=1):

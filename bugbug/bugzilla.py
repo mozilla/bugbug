@@ -67,6 +67,15 @@ PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
 PHAB_REVISION_PATTERN = re.compile(r"phabricator-D([0-9]+)-url.txt")
 
+MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS = {
+    "--": 5,
+    "S1": 8,
+    "S2": 5,
+    "S3": 2,
+    "S4": 1,
+}
+MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
+
 
 def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     yield from (
