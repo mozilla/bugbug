@@ -31,10 +31,14 @@ def calculate_mainentance_effectiveness_metric(team, components, from_date, to_d
             params["component"] = components
 
         for query_type in ("opened", "closed"):
-            if query_type == "opened":
-                params["resolution"] = ["---", "FIXED"]
-            else:
-                params["resolution"] = "FIXED"
+            if query_type == "closed":
+                params.update(
+                    {
+                        "f1": "resolution",
+                        "o1": "notequals",
+                        "v1": "---",
+                    }
+                )
 
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
