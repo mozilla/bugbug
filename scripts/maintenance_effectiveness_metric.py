@@ -8,7 +8,7 @@ import argparse
 from bugbug import bugzilla, utils
 
 
-def calculate_mainentance_effectiveness_metric(team, from_date, to_date):
+def calculate_mainentance_effectiveness_metric(team, components, from_date, to_date):
     data: dict[str, dict[str, int]] = {
         "opened": {},
         "closed": {},
@@ -26,6 +26,9 @@ def calculate_mainentance_effectiveness_metric(team, from_date, to_date):
 
         if severity != "--":
             params["bug_severity"] = severity
+
+        if components is not None:
+            params["component"] = components
 
         for query_type in ("opened", "closed"):
             if query_type == "opened":
@@ -76,11 +79,17 @@ if __name__ == "__main__":
         help="End date of the period (YYYY-MM-DD)",
         type=str,
     )
+    parser.add_argument(
+        "--components",
+        help="Bugzilla components",
+        type=str,
+        nargs="*",
+    )
 
     args = parser.parse_args()
 
     print(
         calculate_mainentance_effectiveness_metric(
-            args.team, args.start_date, args.end_date
+            args.team, args.components, args.start_date, args.end_date
         )
     )
