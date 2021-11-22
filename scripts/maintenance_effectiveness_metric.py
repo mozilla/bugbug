@@ -19,7 +19,6 @@ def calculate_mainentance_effectiveness_metric(team, components, from_date, to_d
             "count_only": 1,
             "type": "defect",
             "team_name": team,
-            "chfield": "[Bug creation]",
             "chfieldfrom": from_date,
             "chfieldto": to_date,
         }
@@ -31,9 +30,12 @@ def calculate_mainentance_effectiveness_metric(team, components, from_date, to_d
             params["component"] = components
 
         for query_type in ("opened", "closed"):
-            if query_type == "closed":
+            if query_type == "opened":
+                params["chfield"] = "[Bug creation]"
+            elif query_type == "closed":
                 params.update(
                     {
+                        "chfield": "cf_last_resolved",
                         "f1": "resolution",
                         "o1": "notequals",
                         "v1": "---",
