@@ -1,5 +1,5 @@
 import ApexCharts from "apexcharts";
-import { Temporal } from "proposal-temporal/lib/index.mjs";
+import { Temporal } from "@js-temporal/polyfill/lib/index.mjs";
 import localForage from "localforage";
 
 // let METABUGS_URL =
@@ -550,7 +550,7 @@ export async function renderRiskChart(chartEl, bugSummaries) {
   );
 
   // Enforce up to 2 months history, earlier patches are in the model's training set.
-  let twoMonthsAgo = Temporal.now.plainDateISO().subtract({ months: 2 });
+  let twoMonthsAgo = Temporal.Now.plainDateISO().subtract({ months: 2 });
   if (Temporal.PlainDate.compare(twoMonthsAgo, minDate) > 0) {
     minDate = twoMonthsAgo;
   }
@@ -627,7 +627,7 @@ export async function renderRiskList(bugSummaries) {
   table.appendChild(thead);
   table.appendChild(tbody);
 
-  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+  const oneWeekAgo = Temporal.Now.plainDateISO().subtract({ weeks: 1 });
 
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
@@ -1168,7 +1168,7 @@ export async function renderFixTimesList(bugSummaries) {
   table.appendChild(thead);
   table.appendChild(tbody);
 
-  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+  const oneWeekAgo = Temporal.Now.plainDateISO().subtract({ weeks: 1 });
 
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
@@ -1509,7 +1509,7 @@ export async function renderPatchCoverageList(bugSummaries) {
   table.appendChild(thead);
   table.appendChild(tbody);
 
-  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+  const oneWeekAgo = Temporal.Now.plainDateISO().subtract({ weeks: 1 });
 
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
@@ -1627,7 +1627,7 @@ export async function renderReviewTimeList(bugSummaries) {
   table.appendChild(thead);
   table.appendChild(tbody);
 
-  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+  const oneWeekAgo = Temporal.Now.plainDateISO().subtract({ weeks: 1 });
 
   const minimumBugSummaries = getMaximumBugSummaries(
     bugSummaries.filter(
@@ -1742,7 +1742,7 @@ export async function renderTestFailureList() {
 
   const components = getOption("components");
 
-  const oneWeekAgo = Temporal.now.plainDateISO().subtract({ weeks: 1 });
+  const oneWeekAgo = Temporal.Now.plainDateISO().subtract({ weeks: 1 });
 
   const allTestStatsDays = [].concat
     .apply(
