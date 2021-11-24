@@ -12,6 +12,7 @@ import math
 import os
 import re
 import statistics
+import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, cast
@@ -1431,199 +1432,206 @@ def notification(days: int) -> None:
 
     notify = taskcluster.Notify(get_taskcluster_options())
 
+    failure = False
+
     team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
     for team, cur_team_data in team_data.items():
         if team not in team_to_receivers:
             continue
 
-        month_changes = cur_team_data["month_changes"]
-        high_risk_changes = cur_team_data["high_risk_changes"]
-        predicted_regressions = round(
-            0.33 * cur_team_data["high_risk_changes"]
-            + 0.16 * cur_team_data["medium_risk_changes"]
-            + 0.06 * cur_team_data["low_risk_changes"],
-            1,
-        )
-        prev_high_risk_changes = cur_team_data["prev_high_risk_changes"]
-        new_regressions = cur_team_data["new_regressions"]
-        fixed_new_regressions = cur_team_data["fixed_new_regressions"]
-        unassigned_new_regressions = cur_team_data["unassigned_new_regressions"]
-        new_crash_regressions = cur_team_data["new_crash_regressions"]
-        carryover_regressions = cur_team_data["carryover_regressions"]
-        prev_carryover_regressions = (
-            cur_team_data["carryover_regressions"]
-            - cur_team_data["new_regressions"]
-            + cur_team_data["week_old_fixed_regressions"]
-            + cur_team_data["month_old_fixed_regressions"]
-            + cur_team_data["more_than_month_old_fixed_regressions"]
-        )
-
-        # Calculate median regression rate for similarly sized teams (teams that land at least
-        # a fifth of the changes of the current team and less than five times the changes of the
-        # current team).
-        median_regression_rate = statistics.median(
-            ctd["new_regressions"] / ctd["month_changes"]
-            for ctd in team_data.values()
-            if ctd["month_changes"] > max(1, cur_team_data["month_changes"]) / 5
-            and ctd["month_changes"] < max(1, cur_team_data["month_changes"]) * 5
-        )
-
-        unfixed_regressions = "\n".join(
-            regression_to_text(reg)
-            for reg in sorted(
-                cur_team_data["unfixed_regressions"],
-                key=lambda bug: bugzilla.get_last_activity_excluding_bots(
-                    bug_map[bug["id"]]
-                ),
+        try:
+            month_changes = cur_team_data["month_changes"]
+            high_risk_changes = cur_team_data["high_risk_changes"]
+            predicted_regressions = round(
+                0.33 * cur_team_data["high_risk_changes"]
+                + 0.16 * cur_team_data["medium_risk_changes"]
+                + 0.06 * cur_team_data["low_risk_changes"],
+                1,
             )
-        )
-        affecting_carryover_regressions = cur_team_data[
-            "affecting_carryover_regressions"
-        ]
-        s1_bugs = cur_team_data["s1_bugs"]
-        affecting_carryover_regressions_and_s1_text = "\n".join(
-            regression_to_text(reg)
-            for reg in sorted(
-                affecting_carryover_regressions + s1_bugs,
-                key=lambda bug: bugzilla.get_last_activity_excluding_bots(
-                    bug_map[bug["id"]]
-                ),
+            prev_high_risk_changes = cur_team_data["prev_high_risk_changes"]
+            new_regressions = cur_team_data["new_regressions"]
+            fixed_new_regressions = cur_team_data["fixed_new_regressions"]
+            unassigned_new_regressions = cur_team_data["unassigned_new_regressions"]
+            new_crash_regressions = cur_team_data["new_crash_regressions"]
+            carryover_regressions = cur_team_data["carryover_regressions"]
+            prev_carryover_regressions = (
+                cur_team_data["carryover_regressions"]
+                - cur_team_data["new_regressions"]
+                + cur_team_data["week_old_fixed_regressions"]
+                + cur_team_data["month_old_fixed_regressions"]
+                + cur_team_data["more_than_month_old_fixed_regressions"]
             )
-        )
 
-        if len(cur_team_data["fix_times"]) > 1:
-            fix_time_deciles = statistics.quantiles(
-                cur_team_data["fix_times"], n=10, method="inclusive"
+            # Calculate median regression rate for similarly sized teams (teams that land at least
+            # a fifth of the changes of the current team and less than five times the changes of the
+            # current team).
+            median_regression_rate = statistics.median(
+                ctd["new_regressions"] / ctd["month_changes"]
+                for ctd in team_data.values()
+                if ctd["month_changes"] > max(1, cur_team_data["month_changes"]) / 5
+                and ctd["month_changes"] < max(1, cur_team_data["month_changes"]) * 5
             )
-            median_fix_time = round(fix_time_deciles[4], 1)
-            ninth_decile_fix_time = round(fix_time_deciles[8], 1)
-        elif len(cur_team_data["fix_times"]) > 0:
-            median_fix_time = round(cur_team_data["fix_times"][0], 1)
-            ninth_decile_fix_time = round(cur_team_data["fix_times"][0], 1)
-        else:
-            median_fix_time = None
-            ninth_decile_fix_time = None
 
-        if len(cur_team_data["prev_fix_times"]) > 0:
-            prev_median_fix_time = round(
-                statistics.median(cur_team_data["prev_fix_times"]), 1
-            )
-        else:
-            prev_median_fix_time = None
-
-        if median_fix_time is not None:
-            median_fix_time_text = f"""The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams)."""
-
-            if prev_median_fix_time is not None:
-                verb = (
-                    "improving"
-                    if median_fix_time < prev_median_fix_time
-                    else "**worsening**"
-                    if prev_median_fix_time < median_fix_time
-                    else "staying constant"
+            unfixed_regressions = "\n".join(
+                regression_to_text(reg)
+                for reg in sorted(
+                    cur_team_data["unfixed_regressions"],
+                    key=lambda bug: bugzilla.get_last_activity_excluding_bots(
+                        bug_map[bug["id"]]
+                    ),
                 )
-                fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
-            else:
-                fix_time_diff = ""
-
-        top_intermittent_failures = "\n".join(
-            "{} failures ({}#{} globally{}){}".format(
-                count,
-                "**" if intermittent_failure_positions[bug_id] <= 21 else "",
-                intermittent_failure_positions[bug_id],
-                "**" if intermittent_failure_positions[bug_id] <= 21 else "",
-                regression_to_text(bug_map[bug_id]),
             )
-            for bug_id, count in sorted(
-                cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
-            )[:7]
-        )
-
-        skipped_tests = cur_team_data["skipped_tests"]
-        prev_skipped_tests = cur_team_data["prev_skipped_tests"]
-
-        patch_coverage = round(
-            100
-            * cur_team_data["patch_coverage_covered"]
-            / cur_team_data["patch_coverage_added"]
-            if cur_team_data["patch_coverage_added"] != 0
-            else 100,
-            1,
-        )
-        low_coverage_patches = "\n".join(
-            "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{}%{}".format(
-                rev_id,
-                rev_id,
-                "**" if pc < 0.8 else "",
-                round(100 * pc, 1),
-                "**" if pc < 0.8 else "",
-            )
-            for pc, rev_id in sorted(
-                cur_team_data["coverage_patches"], key=lambda x: x[0]
-            )
-            if pc != 1.0
-        )
-
-        if len(cur_team_data["review_times"]) > 1:
-            review_time_deciles = statistics.quantiles(
-                cur_team_data["review_times"],
-                n=10,
-                method="inclusive",
-            )
-            median_first_review_time = round(review_time_deciles[4], 1)
-            ninth_decile_first_review_time = round(review_time_deciles[8], 1)
-        elif len(cur_team_data["review_times"]) > 0:
-            median_first_review_time = round(cur_team_data["review_times"][0], 1)
-            ninth_decile_first_review_time = round(cur_team_data["review_times"][0], 1)
-        else:
-            median_first_review_time = None
-            ninth_decile_first_review_time = None
-
-        if len(cur_team_data["prev_review_times"]) > 0:
-            prev_median_first_review_time = round(
-                statistics.median(cur_team_data["prev_review_times"]), 1
-            )
-        else:
-            prev_median_first_review_time = None
-
-        if median_first_review_time is not None:
-            if prev_median_first_review_time is not None:
-                verb = (
-                    "improving"
-                    if median_first_review_time < prev_median_first_review_time
-                    else "**worsening**"
-                    if prev_median_first_review_time < median_first_review_time
-                    else "staying constant"
+            affecting_carryover_regressions = cur_team_data[
+                "affecting_carryover_regressions"
+            ]
+            s1_bugs = cur_team_data["s1_bugs"]
+            affecting_carryover_regressions_and_s1_text = "\n".join(
+                regression_to_text(reg)
+                for reg in sorted(
+                    affecting_carryover_regressions + s1_bugs,
+                    key=lambda bug: bugzilla.get_last_activity_excluding_bots(
+                        bug_map[bug["id"]]
+                    ),
                 )
-                review_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_first_review_time} days)."
+            )
+
+            if len(cur_team_data["fix_times"]) > 1:
+                fix_time_deciles = statistics.quantiles(
+                    cur_team_data["fix_times"], n=10, method="inclusive"
+                )
+                median_fix_time = round(fix_time_deciles[4], 1)
+                ninth_decile_fix_time = round(fix_time_deciles[8], 1)
+            elif len(cur_team_data["fix_times"]) > 0:
+                median_fix_time = round(cur_team_data["fix_times"][0], 1)
+                ninth_decile_fix_time = round(cur_team_data["fix_times"][0], 1)
             else:
-                review_time_diff = ""
+                median_fix_time = None
+                ninth_decile_fix_time = None
 
-            median_first_review_time_text = f"""The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}"""
-            if ninth_decile_first_review_time is not None:
-                median_first_review_time_text += f"\n90% of patches were first reviewed within {ninth_decile_first_review_time} days."
-        else:
-            median_first_review_time_text = ""
+            if len(cur_team_data["prev_fix_times"]) > 0:
+                prev_median_fix_time = round(
+                    statistics.median(cur_team_data["prev_fix_times"]), 1
+                )
+            else:
+                prev_median_fix_time = None
 
-        slow_review_patches = "\n".join(
-            "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{} days{}".format(
-                rev_id,
-                rev_id,
-                "**" if review_time >= 14 else "",
-                round(review_time, 1),
-                "**" if review_time >= 14 else "",
+            if median_fix_time is not None:
+                median_fix_time_text = f"""The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams)."""
+
+                if prev_median_fix_time is not None:
+                    verb = (
+                        "improving"
+                        if median_fix_time < prev_median_fix_time
+                        else "**worsening**"
+                        if prev_median_fix_time < median_fix_time
+                        else "staying constant"
+                    )
+                    fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
+                else:
+                    fix_time_diff = ""
+
+            top_intermittent_failures = "\n".join(
+                "{} failures ({}#{} globally{}){}".format(
+                    count,
+                    "**" if intermittent_failure_positions[bug_id] <= 21 else "",
+                    intermittent_failure_positions[bug_id],
+                    "**" if intermittent_failure_positions[bug_id] <= 21 else "",
+                    regression_to_text(bug_map[bug_id]),
+                )
+                for bug_id, count in sorted(
+                    cur_team_data["intermittent_failures"].items(), key=lambda x: -x[1]
+                )[:7]
             )
-            for review_time, rev_id in sorted(
-                cur_team_data["open_review_times"], key=lambda x: -x[0]
+
+            skipped_tests = cur_team_data["skipped_tests"]
+            prev_skipped_tests = cur_team_data["prev_skipped_tests"]
+
+            patch_coverage = round(
+                100
+                * cur_team_data["patch_coverage_covered"]
+                / cur_team_data["patch_coverage_added"]
+                if cur_team_data["patch_coverage_added"] != 0
+                else 100,
+                1,
             )
-            if review_time >= 3 and rev_id not in revisions_without_reviewer
-        )
+            low_coverage_patches = "\n".join(
+                "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{}%{}".format(
+                    rev_id,
+                    rev_id,
+                    "**" if pc < 0.8 else "",
+                    round(100 * pc, 1),
+                    "**" if pc < 0.8 else "",
+                )
+                for pc, rev_id in sorted(
+                    cur_team_data["coverage_patches"], key=lambda x: x[0]
+                )
+                if pc != 1.0
+            )
 
-        report_url_querystring = urllib.parse.urlencode({"teams": team})
+            if len(cur_team_data["review_times"]) > 1:
+                review_time_deciles = statistics.quantiles(
+                    cur_team_data["review_times"],
+                    n=10,
+                    method="inclusive",
+                )
+                median_first_review_time = round(review_time_deciles[4], 1)
+                ninth_decile_first_review_time = round(review_time_deciles[8], 1)
+            elif len(cur_team_data["review_times"]) > 0:
+                median_first_review_time = round(cur_team_data["review_times"][0], 1)
+                ninth_decile_first_review_time = round(
+                    cur_team_data["review_times"][0], 1
+                )
+            else:
+                median_first_review_time = None
+                ninth_decile_first_review_time = None
 
-        regression_rate = new_regressions / month_changes if month_changes > 0 else 0
+            if len(cur_team_data["prev_review_times"]) > 0:
+                prev_median_first_review_time = round(
+                    statistics.median(cur_team_data["prev_review_times"]), 1
+                )
+            else:
+                prev_median_first_review_time = None
 
-        new_regressions_section = f"""<b>NEW REGRESSIONS</b>
+            if median_first_review_time is not None:
+                if prev_median_first_review_time is not None:
+                    verb = (
+                        "improving"
+                        if median_first_review_time < prev_median_first_review_time
+                        else "**worsening**"
+                        if prev_median_first_review_time < median_first_review_time
+                        else "staying constant"
+                    )
+                    review_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_first_review_time} days)."
+                else:
+                    review_time_diff = ""
+
+                median_first_review_time_text = f"""The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}"""
+                if ninth_decile_first_review_time is not None:
+                    median_first_review_time_text += f"\n90% of patches were first reviewed within {ninth_decile_first_review_time} days."
+            else:
+                median_first_review_time_text = ""
+
+            slow_review_patches = "\n".join(
+                "- [D{}](https://phabricator.services.mozilla.com/D{}) - {}{} days{}".format(
+                    rev_id,
+                    rev_id,
+                    "**" if review_time >= 14 else "",
+                    round(review_time, 1),
+                    "**" if review_time >= 14 else "",
+                )
+                for review_time, rev_id in sorted(
+                    cur_team_data["open_review_times"], key=lambda x: -x[0]
+                )
+                if review_time >= 3 and rev_id not in revisions_without_reviewer
+            )
+
+            report_url_querystring = urllib.parse.urlencode({"teams": team})
+
+            regression_rate = (
+                new_regressions / month_changes if month_changes > 0 else 0
+            )
+
+            new_regressions_section = f"""<b>NEW REGRESSIONS</b>
 
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
@@ -1643,26 +1651,28 @@ Unfixed regressions from the past two weeks:
 {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
-        if len(s1_bugs) > 0:
-            carryover_regressions_section = "<b>CARRYOVER REGRESSIONS AND S1 BUGS</b>"
-        else:
-            carryover_regressions_section = "<b>CARRYOVER REGRESSIONS</b>"
+            if len(s1_bugs) > 0:
+                carryover_regressions_section = (
+                    "<b>CARRYOVER REGRESSIONS AND S1 BUGS</b>"
+                )
+            else:
+                carryover_regressions_section = "<b>CARRYOVER REGRESSIONS</b>"
 
-        carryover_regressions_section += f"""
+            carryover_regressions_section += f"""
 <br />
 <br />
 
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
-        if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
-            carryover_regressions_section += "<br /><br />S1 bugs* and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
-        elif len(affecting_carryover_regressions) > 0:
-            carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
-        elif len(s1_bugs) > 0:
-            carryover_regressions_section += "<br /><br />S1 bugs*:"
+            if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
+                carryover_regressions_section += "<br /><br />S1 bugs* and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+            elif len(affecting_carryover_regressions) > 0:
+                carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+            elif len(s1_bugs) > 0:
+                carryover_regressions_section += "<br /><br />S1 bugs*:"
 
-        if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
-            carryover_regressions_section += f"""
+            if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
+                carryover_regressions_section += f"""
 
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
@@ -1674,30 +1684,30 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 
 """
 
-        crashes_section = """<b>CRASHES</b>
+            crashes_section = """<b>CRASHES</b>
 <br />
 <br />
 
 """
 
-        top_nightly_crashes = get_top_crashes(team, "nightly")
-        if top_nightly_crashes is not None:
-            crashes_section += f"""Top recent Nightly crashes:
+            top_nightly_crashes = get_top_crashes(team, "nightly")
+            if top_nightly_crashes is not None:
+                crashes_section += f"""Top recent Nightly crashes:
 
 {top_nightly_crashes}"""
-        else:
-            crashes_section += "No crashes in the top 200 for Nightly."
+            else:
+                crashes_section += "No crashes in the top 200 for Nightly."
 
-        top_release_crashes = get_top_crashes(team, "release")
-        if top_release_crashes is not None:
-            crashes_section += f"""
+            top_release_crashes = get_top_crashes(team, "release")
+            if top_release_crashes is not None:
+                crashes_section += f"""
 <br />Top recent Release crashes:
 
 {top_release_crashes}"""
-        else:
-            crashes_section += "\nNo crashes in the top 200 for Release."
+            else:
+                crashes_section += "\nNo crashes in the top 200 for Release."
 
-        intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
+            intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
 <br />
 <br />
 
@@ -1712,17 +1722,17 @@ Top intermittent failures from the past week:
 There are {skipped_tests} tests skipped in some configurations ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)}).
 They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
 
-        test_coverage_section = f"""<b>TEST COVERAGE</b>
+            test_coverage_section = f"""<b>TEST COVERAGE</b>
 <br />
 <br />
 
 Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%)."""
 
-        if len(low_coverage_patches) > 0:
-            test_coverage_section += f"""<br />List of lowest coverage patches:
+            if len(low_coverage_patches) > 0:
+                test_coverage_section += f"""<br />List of lowest coverage patches:
 {low_coverage_patches}"""
 
-        review_section = f"""<b>REVIEW</b>
+            review_section = f"""<b>REVIEW</b>
 <br />
 <br />
 
@@ -1731,24 +1741,24 @@ Total coverage for patches landing this past week was {patch_coverage}% ({"highe
 List of revisions that have been waiting for a review for longer than 3 days:
 {slow_review_patches}"""
 
-        def calculate_maintenance_effectiveness(period):
-            return round(
-                (
-                    1
-                    + cur_team_data["maintenance_effectiveness"]["closed_defects"][
-                        period
-                    ]
+            def calculate_maintenance_effectiveness(period):
+                return round(
+                    (
+                        1
+                        + cur_team_data["maintenance_effectiveness"]["closed_defects"][
+                            period
+                        ]
+                    )
+                    / (
+                        1
+                        + cur_team_data["maintenance_effectiveness"]["opened_defects"][
+                            period
+                        ]
+                    ),
+                    2,
                 )
-                / (
-                    1
-                    + cur_team_data["maintenance_effectiveness"]["opened_defects"][
-                        period
-                    ]
-                ),
-                2,
-            )
 
-        maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
+            maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
 <br />
 <br />
 
@@ -1757,21 +1767,21 @@ Last month: {calculate_maintenance_effectiveness("last_month")}
 Last year: {calculate_maintenance_effectiveness("last_year")}
 """
 
-        sections = [
-            new_regressions_section,
-            carryover_regressions_section,
-            crashes_section,
-            intermittent_failures_section,
-            test_coverage_section,
-            review_section,
-        ]
+            sections = [
+                new_regressions_section,
+                carryover_regressions_section,
+                crashes_section,
+                intermittent_failures_section,
+                test_coverage_section,
+                review_section,
+            ]
 
-        if team == "DOM LWS":
-            sections.append(maintenance_effectiveness_section)
+            if team == "DOM LWS":
+                sections.append(maintenance_effectiveness_section)
 
-        notification = (
-            "\n\n<br />\n<br />\n".join(sections)
-            + f"""
+            notification = (
+                "\n\n<br />\n<br />\n".join(sections)
+                + f"""
 
 Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
 
@@ -1779,18 +1789,24 @@ Report bugs or enhancement requests on https://github.com/mozilla/bugbug or to m
 
 *: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 """
-        )
-
-        receivers = team_to_receivers[team]
-        for receiver in receivers:
-            notify.email(
-                {
-                    "address": receiver,
-                    "subject": f"Quality report for '{team}'",
-                    "content": notification,
-                    "template": "fullscreen",
-                }
             )
+
+            receivers = team_to_receivers[team]
+            for receiver in receivers:
+                notify.email(
+                    {
+                        "address": receiver,
+                        "subject": f"Quality report for '{team}'",
+                        "content": notification,
+                        "template": "fullscreen",
+                    }
+                )
+        except Exception:
+            traceback.print_exc()
+            failure = True
+
+    if failure:
+        assert False, "There was at least one failure"
 
 
 def main() -> None:
