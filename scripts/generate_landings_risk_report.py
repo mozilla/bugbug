@@ -859,8 +859,16 @@ class LandingsRiskReportGenerator(object):
             bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
         ]
 
-        crash_bugs = get_crash_bugs(get_crash_signatures("release")) + get_crash_bugs(
-            get_crash_signatures("nightly")
+        crash_signatures = {
+            "release": get_crash_signatures("release"),
+            "nightly": get_crash_signatures("nightly"),
+        }
+
+        with open("crash_signatures.json", "w") as f:
+            json.dump(crash_signatures, f)
+
+        crash_bugs = get_crash_bugs(crash_signatures["release"]) + get_crash_bugs(
+            crash_signatures["nightly"]
         )
 
         s1_bugs = bugzilla.get_ids(
@@ -913,10 +921,8 @@ def notification(days: int) -> None:
 
     bug_summary_ids = {bug_summary["id"] for bug_summary in bug_summaries}
 
-    crash_signatures = {
-        "release": get_crash_signatures("release"),
-        "nightly": get_crash_signatures("nightly"),
-    }
+    with open("crash_signatures.json", "r") as f:
+        crash_signatures = json.load(f)
 
     all_crash_bugs = set(
         get_crash_bugs(crash_signatures["release"])
