@@ -18,8 +18,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 import dateutil.parser
+import markdown2
 import requests
-import taskcluster
+import sendgrid
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
@@ -31,7 +32,6 @@ from bugbug.utils import (
     download_model,
     escape_markdown,
     get_secret,
-    get_taskcluster_options,
     zstd_compress,
     zstd_decompress,
 )
@@ -1436,10 +1436,11 @@ def notification(days: int) -> None:
 
         return f"|Signature|# of crashes|Bug|Last Activity|Assignment|Notes|\n|---|---|---|---|---|---|\n{top_crashes_text}"
 
-    notify = taskcluster.Notify(get_taskcluster_options())
-
     failure = False
 
+    send_grid_client = sendgrid.SendGridAPIClient(
+        api_key=get_secret("SENDGRID_API_KEY")
+    )
     team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
     for team, cur_team_data in team_data.items():
         if team not in team_to_receivers:
@@ -1666,7 +1667,6 @@ Unfixed regressions from the past two weeks:
 
             carryover_regressions_section += f"""
 <br />
-<br />
 
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
@@ -1684,14 +1684,11 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 |---|---|---|---|
 {affecting_carryover_regressions_and_s1_text}
 
-<br />
-
 *: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
 
 """
 
             crashes_section = """<b>CRASHES</b>
-<br />
 <br />
 
 """
@@ -1715,7 +1712,6 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 
             intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
 <br />
-<br />
 
 Top intermittent failures from the past week:
 
@@ -1723,28 +1719,26 @@ Top intermittent failures from the past week:
 |---|---|---|---|---|
 {top_intermittent_failures}
 
-<br />
-
 There are {skipped_tests} tests skipped in some configurations ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)}).
 They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
 
             test_coverage_section = f"""<b>TEST COVERAGE</b>
-<br />
 <br />
 
 Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%)."""
 
             if len(low_coverage_patches) > 0:
                 test_coverage_section += f"""<br />List of lowest coverage patches:
+
 {low_coverage_patches}"""
 
             review_section = f"""<b>REVIEW</b>
-<br />
 <br />
 
 {median_first_review_time_text}
 
 List of revisions that have been waiting for a review for longer than 3 days:
+
 {slow_review_patches}"""
 
             def calculate_maintenance_effectiveness(period):
@@ -1765,7 +1759,6 @@ List of revisions that have been waiting for a review for longer than 3 days:
                 )
 
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
-<br />
 <br />
 
 Last week: {calculate_maintenance_effectiveness("last_week")}
@@ -1789,24 +1782,35 @@ Last year: {calculate_maintenance_effectiveness("last_year")}
                 "\n\n<br />\n<br />\n".join(sections)
                 + f"""
 
-Find the full report with fancy charts at https://changes.moz.tools/team.html?{report_url_querystring}.
+Find the full report with fancy charts at [https://changes.moz.tools/team.html?{report_url_querystring}](https://changes.moz.tools/team.html?{report_url_querystring}).
 
-Report bugs or enhancement requests on https://github.com/mozilla/bugbug or to mcastelluccio@mozilla.com.
+Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https://github.com/mozilla/bugbug) or to [mcastelluccio@mozilla.com](mailto:mcastelluccio@mozilla.com).
 
 *: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 """
             )
 
             receivers = team_to_receivers[team]
-            for receiver in receivers:
-                notify.email(
+            data = {
+                "personalizations": [
                     {
-                        "address": receiver,
+                        "to": [{"email": receivers[0]}],
                         "subject": f"Quality report for '{team}'",
-                        "content": notification,
-                        "template": "fullscreen",
                     }
-                )
+                ],
+                "from": {"email": "mcastelluccio@mozilla.com"},
+                "content": [
+                    {
+                        "type": "text/html",
+                        "value": markdown2.markdown(notification, extras=["tables"]),
+                    }
+                ],
+            }
+            if len(receivers) > 1:
+                data["personalizations"][0]["cc"] = [
+                    {"email": receiver} for receiver in receivers[1:]
+                ]
+            send_grid_client.client.mail.send.post(request_body=data)
         except Exception:
             traceback.print_exc()
             failure = True
