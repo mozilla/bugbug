@@ -1655,8 +1655,10 @@ table {
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
 The regression rate (regressions from the past two weeks / changes from this month) is {round(regression_rate, 2)} ({"**higher** than" if regression_rate > median_regression_rate else "lower than" if median_regression_rate > regression_rate else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams).
-This week your team committed {high_risk_changes} high risk* changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
+This week your team committed {high_risk_changes} high risk[^risk] changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
+
+[^risk]: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 
 Unfixed regressions from the past two weeks:
 
@@ -1683,11 +1685,11 @@ Unfixed regressions from the past two weeks:
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
 
             if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
-                carryover_regressions_section += "<br /><br />S1 bugs* and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
+                carryover_regressions_section += "<br /><br />S1 bugs[^severity] and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
             elif len(affecting_carryover_regressions) > 0:
                 carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
             elif len(s1_bugs) > 0:
-                carryover_regressions_section += "<br /><br />S1 bugs*:"
+                carryover_regressions_section += "<br /><br />S1 bugs[^severity]:"
 
             if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
                 carryover_regressions_section += f"""
@@ -1696,7 +1698,7 @@ There are {carryover_regressions} carryover regressions in your team out of a to
 |---|---|---|---|
 {affecting_carryover_regressions_and_s1_text}
 
-*: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
+[^severity]: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
 
 """
 
@@ -1797,8 +1799,6 @@ Last year: {calculate_maintenance_effectiveness("last_year")}
 Find the full report with fancy charts at [https://changes.moz.tools/team.html?{report_url_querystring}](https://changes.moz.tools/team.html?{report_url_querystring}).
 
 Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https://github.com/mozilla/bugbug) or to [mcastelluccio@mozilla.com](mailto:mcastelluccio@mozilla.com).
-
-*: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
 """
             )
 
@@ -1815,7 +1815,9 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
                     {
                         "type": "text/html",
                         "value": style
-                        + markdown2.markdown(notification, extras=["tables"]),
+                        + markdown2.markdown(
+                            notification, extras=["tables", "footnotes"]
+                        ),
                     }
                 ],
             }
