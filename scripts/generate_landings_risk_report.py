@@ -1441,6 +1441,18 @@ def notification(days: int) -> None:
     send_grid_client = sendgrid.SendGridAPIClient(
         api_key=get_secret("SENDGRID_API_KEY")
     )
+
+    style = """<style>
+table, td, th {
+  border: 1px solid black;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+</style>"""
+
     team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
     for team, cur_team_data in team_data.items():
         if team not in team_to_receivers:
@@ -1802,7 +1814,8 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
                 "content": [
                     {
                         "type": "text/html",
-                        "value": markdown2.markdown(notification, extras=["tables"]),
+                        "value": style
+                        + markdown2.markdown(notification, extras=["tables"]),
                     }
                 ],
             }
