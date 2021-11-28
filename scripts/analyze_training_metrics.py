@@ -30,7 +30,6 @@ ABSOLUTE_THRESHOLD = 0.1
 
 REPORT_METRICS = ["accuracy", "precision", "recall"]
 
-
 def plot_graph(
     model_name: str,
     metric_name: str,
