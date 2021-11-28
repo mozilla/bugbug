@@ -10,7 +10,8 @@ import pickle
 import re
 from collections import defaultdict
 from datetime import datetime
-from typing import Callable, Dict, Tuple
+from typing import Callable, Tuple
+from __future__ import annotations
 
 import hglib
 import numpy as np
@@ -366,7 +367,7 @@ def mock_get_config_specific_groups(
 @pytest.fixture
 def mock_schedule_tests_classify(
     monkeypatch: MonkeyPatch,
-) -> Callable[[Dict[str, float], Dict[str, float]], None]:
+) -> Callable[[dict[str, float], dict[str, float]], None]:
     with open("known_tasks", "w") as f:
         f.write("prova")
 

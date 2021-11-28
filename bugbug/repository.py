@@ -21,7 +21,6 @@ from datetime import datetime
 from functools import lru_cache
 from typing import (
     Collection,
-    Dict,
     Iterable,
     Iterator,
     List,
@@ -31,6 +30,7 @@ from typing import (
     Tuple,
     Union,
 )
+from __future__ import annotations
 
 import hglib
 import lmdb
@@ -195,7 +195,7 @@ class Commit:
         self.other_deleted = 0
         self.test_deleted = 0
         self.types: Set[str] = set()
-        self.functions: Dict[str, List[dict]] = {}
+        self.functions: dict[str, List[dict]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
         self.average_source_code_file_size = 0.0

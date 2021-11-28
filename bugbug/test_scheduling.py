@@ -17,7 +17,6 @@ from typing import (
     Any,
     Callable,
     Deque,
-    Dict,
     Generator,
     Iterable,
     Iterator,
@@ -29,6 +28,7 @@ from typing import (
     Union,
     cast,
 )
+from __future__ import annotations
 
 import requests
 from tqdm import tqdm
@@ -393,7 +393,7 @@ def generate_failing_together_probabilities(
                 count_single_failures[(task1, task2)] += 1
 
     all_available_configs: Set[str] = set()
-    available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
+    available_configs_by_group: dict[Group, Set[str]] = collections.defaultdict(set)
 
     for (
         revisions,
@@ -816,7 +816,7 @@ def generate_data(
         yield obj
 
 
-def get_failure_bugs(since: datetime, until: datetime) -> List[Dict[str, int]]:
+def get_failure_bugs(since: datetime, until: datetime) -> List[dict[str, int]]:
     r = requests.get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
@@ -827,7 +827,7 @@ def get_failure_bugs(since: datetime, until: datetime) -> List[Dict[str, int]]:
     return r.json()
 
 
-def get_test_info(date: datetime) -> Dict[str, Any]:
+def get_test_info(date: datetime) -> dict[str, Any]:
     r = requests.get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")

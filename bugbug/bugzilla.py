@@ -7,7 +7,9 @@ import collections
 import csv
 import re
 from datetime import datetime
-from typing import Dict, Iterable, Iterator, List, NewType, Optional
+from typing import Iterable, Iterator, List, NewType, Optional
+from __future__ import annotations
+
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -225,7 +227,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> List[BugDic
 
 
 def _find_linked(
-    bug_map: Dict[int, BugDict], bug: BugDict, link_type: str
+    bug_map: dict[int, BugDict], bug: BugDict, link_type: str
 ) -> List[int]:
     return sum(
         (
@@ -237,11 +239,11 @@ def _find_linked(
     )
 
 
-def find_blocked_by(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
+def find_blocked_by(bug_map: dict[int, BugDict], bug: BugDict) -> List[int]:
     return _find_linked(bug_map, bug, "blocks")
 
 
-def find_blocking(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
+def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> List[int]:
     return _find_linked(bug_map, bug, "depends_on")
 
 
@@ -286,7 +288,7 @@ def count_bugs(bug_query_params):
     return count
 
 
-def get_product_component_count(months: int = 12) -> Dict[str, int]:
+def get_product_component_count(months: int = 12) -> dict[str, int]:
     """Returns a dictionary where keys are full components (in the form of
     `{product}::{component}`) and the value of the number of bugs for the
     given full components. Full component with 0 bugs are returned.
@@ -333,7 +335,7 @@ def get_product_component_count(months: int = 12) -> Dict[str, int]:
     return bugs_number
 
 
-def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
+def get_component_team_mapping() -> dict[str, dict[str, str]]:
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/product",
         params={
@@ -344,7 +346,7 @@ def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     )
     r.raise_for_status()
 
-    mapping: Dict[str, Dict[str, str]] = collections.defaultdict(dict)
+    mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
     for product in r.json()["products"]:
         for component in product["components"]:
             mapping[product["name"]][component["name"]] = component["team_name"]

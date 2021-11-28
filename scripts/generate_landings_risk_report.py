@@ -15,7 +15,8 @@ import statistics
 import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, List, Optional, Set, Tuple, cast
+from __future__ import annotations
 
 import dateutil.parser
 import markdown2
@@ -91,19 +92,19 @@ def get_full_component(bug):
     return "{}::{}".format(bug["product"], bug["component"])
 
 
-def histogram(components: List[str]) -> Dict[str, float]:
+def histogram(components: List[str]) -> dict[str, float]:
     counter = collections.Counter(components)
     return {
         component: count / len(components) for component, count in counter.most_common()
     }
 
 
-def component_histogram(bugs: List[dict]) -> Dict[str, float]:
+def component_histogram(bugs: List[dict]) -> dict[str, float]:
     return histogram([bug["component"] for bug in bugs])
 
 
 # TODO: Remove once the mapping is updated in Bugzilla.
-def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
+def get_component_team_mapping() -> dict[str, dict[str, str]]:
     component_team_mapping = bugzilla.get_component_team_mapping()
 
     component_team_mapping_override = json.loads(
@@ -272,21 +273,21 @@ class LandingsRiskReportGenerator(object):
         # And find previous bugs that were fixed by touching the same files as these commits.
         # And find previous bugs that were blocked by regressions occurred in the same files as those touched by these commits.
         # And find previous bugs that were blocked by bugs that were fixed by touching the same files as those touched by these commits.
-        prev_regressions: List[Dict[str, Any]] = sum(
+        prev_regressions: List[dict[str, Any]] = sum(
             (
                 self.get_prev_bugs(self.past_regressions_by, commit, component)
                 for commit in commit_list
             ),
             [],
         )
-        prev_fixed_bugs: List[Dict[str, Any]] = sum(
+        prev_fixed_bugs: List[dict[str, Any]] = sum(
             (
                 self.get_prev_bugs(self.past_fixed_bugs_by, commit, component)
                 for commit in commit_list
             ),
             [],
         )
-        prev_regression_blocked_bugs: List[Dict[str, Any]] = sum(
+        prev_regression_blocked_bugs: List[dict[str, Any]] = sum(
             (
                 self.get_prev_bugs(
                     self.past_regression_blocked_bugs_by, commit, component
@@ -295,7 +296,7 @@ class LandingsRiskReportGenerator(object):
             ),
             [],
         )
-        prev_fixed_bug_blocked_bugs: List[Dict[str, Any]] = sum(
+        prev_fixed_bug_blocked_bugs: List[dict[str, Any]] = sum(
             (
                 self.get_prev_bugs(
                     self.past_fixed_bug_blocked_bugs_by, commit, component
@@ -342,7 +343,7 @@ class LandingsRiskReportGenerator(object):
         since = datetime.utcnow() - timedelta(days=days)
 
         commits = []
-        last_commit_by_bug: Dict[int, datetime] = {}
+        last_commit_by_bug: dict[int, datetime] = {}
         for commit in repository.get_commits():
             if not commit["bug_id"]:
                 continue
@@ -376,7 +377,7 @@ class LandingsRiskReportGenerator(object):
 
     def get_blocking_of(
         self, bug_ids: List[int], meta_only: bool = False
-    ) -> Dict[int, List[int]]:
+    ) -> dict[int, List[int]]:
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
         return {
             bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
@@ -396,7 +397,7 @@ class LandingsRiskReportGenerator(object):
             }
         )
 
-    def retrieve_test_info(self, days: int) -> Dict[str, Any]:
+    def retrieve_test_info(self, days: int) -> dict[str, Any]:
         logger.info("Download previous test info...")
         db.download(TEST_INFOS_DB)
 
@@ -455,10 +456,10 @@ class LandingsRiskReportGenerator(object):
 
     def generate_landings_by_date(
         self,
-        bug_map: Dict[int, bugzilla.BugDict],
+        bug_map: dict[int, bugzilla.BugDict],
         regressor_bug_ids: Set[int],
         bugs: List[int],
-        meta_bugs: Dict[int, List[int]],
+        meta_bugs: dict[int, List[int]],
     ) -> None:
         # A map from bug ID to the list of commits associated to the bug (in order of landing).
         bug_to_commits = collections.defaultdict(list)
@@ -735,7 +736,7 @@ class LandingsRiskReportGenerator(object):
             json.dump(output, f)
 
     def generate_component_connections(
-        self, bug_map: Dict[int, bugzilla.BugDict], bugs: List[int]
+        self, bug_map: dict[int, bugzilla.BugDict], bugs: List[int]
     ) -> None:
         bugs_set = set(bugs)
         commits = [
@@ -817,10 +818,10 @@ class LandingsRiskReportGenerator(object):
         repository.close_component_mapping()
 
     def generate_component_test_stats(
-        self, bug_map: Dict[int, bugzilla.BugDict], test_infos: Dict[str, Any]
+        self, bug_map: dict[int, bugzilla.BugDict], test_infos: dict[str, Any]
     ) -> None:
-        component_test_stats: Dict[
-            str, Dict[str, Dict[str, List[Dict[str, int]]]]
+        component_test_stats: dict[
+            str, dict[str, dict[str, List[dict[str, int]]]]
         ] = collections.defaultdict(
             lambda: collections.defaultdict(lambda: collections.defaultdict(list))
         )

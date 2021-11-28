@@ -6,7 +6,8 @@
 import itertools
 import math
 import pickle
-from typing import Dict, Iterator, Tuple
+from typing import Iterator, Tuple
+from __future__ import annotations
 
 import hypothesis
 import hypothesis.strategies as st
@@ -601,7 +602,7 @@ def test_all(g: Graph) -> None:
     test_scheduling.remove_failing_together_db("label")
 
     # TODO: Also add some couples that are *not* failing together.
-    ft: Dict[str, Dict[str, Tuple[float, float]]] = {}
+    ft: dict[str, dict[str, Tuple[float, float]]] = {}
 
     for edge in g.es:
         task1 = tasks[edge.tuple[0]]

@@ -10,7 +10,8 @@ import os
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List
+from typing import Any, Generator, List
+from __future__ import annotations
 
 import dateutil.parser
 import mozci.errors
@@ -207,7 +208,7 @@ class Retriever(object):
                 granularity, push_data_iter(), push_data_count
             )
 
-        def generate_all_data() -> Generator[Dict[str, Any], None, None]:
+        def generate_all_data() -> Generator[dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity, False)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0
