@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from __future__ import annotations
 import argparse
 import concurrent.futures
 import logging
@@ -10,7 +11,6 @@ import time
 import traceback
 from datetime import datetime
 from typing import Any, Optional
-from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import mozci.push

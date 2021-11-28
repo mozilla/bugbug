@@ -5,6 +5,7 @@
 """ Given a directory containing training metrics, generate SVF graphs and check that the metrics are not getting worse than before.
 """
 
+from __future__ import annotations
 import argparse
 import json
 import logging
@@ -13,7 +14,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Tuple
-from __future__ import annotations
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt

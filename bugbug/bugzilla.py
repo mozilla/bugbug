@@ -3,12 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from __future__ import annotations
 import collections
 import csv
 import re
 from datetime import datetime
 from typing import Iterable, Iterator, List, NewType, Optional
-from __future__ import annotations
 
 
 import tenacity

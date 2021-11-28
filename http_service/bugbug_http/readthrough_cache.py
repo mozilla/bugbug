@@ -4,13 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+from __future__ import annotations
 import datetime
 import logging
 import threading
 import time
 from datetime import timedelta
 from typing import Callable, Generic, TypeVar
-from __future__ import annotations
 
 LOGGER = logging.getLogger()
 

@@ -3,8 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Any, List, Tuple
 from __future__ import annotations
+from typing import Any, List, Tuple
 
 from bugbug.models.defect import DefectModel
 
