@@ -17,6 +17,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
+import bs4
 import dateutil.parser
 import markdown2
 import requests
@@ -1803,29 +1804,27 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
             )
 
             receivers = team_to_receivers[team]
-            data = {
-                "personalizations": [
-                    {
-                        "to": [{"email": receivers[0]}],
-                        "subject": f"Quality report for '{team}'",
-                    }
-                ],
-                "from": {"email": "mcastelluccio@mozilla.com"},
-                "content": [
-                    {
-                        "type": "text/html",
-                        "value": style
-                        + markdown2.markdown(
-                            notification, extras=["tables", "footnotes"]
-                        ),
-                    }
-                ],
-            }
-            if len(receivers) > 1:
-                data["personalizations"][0]["cc"] = [
-                    {"email": receiver} for receiver in receivers[1:]
-                ]
-            send_grid_client.client.mail.send.post(request_body=data)
+
+            logger.info(f"Sending email to {team}")
+            from_email = sendgrid.helpers.mail.From("mcastelluccio@mozilla.com")
+            to_emails = [sendgrid.helpers.mail.To(receivers[0])] + [
+                sendgrid.helpers.mail.Cc(receiver) for receiver in receivers[1:]
+            ]
+            subject = sendgrid.helpers.mail.Subject(f"Quality report for '{team}'")
+            html_text = markdown2.markdown(notification, extras=["tables", "footnotes"])
+            html_content = sendgrid.helpers.mail.HtmlContent(style + html_text)
+
+            soup = bs4.BeautifulSoup(html_text)
+            plain_text = soup.get_text()
+            plain_text_content = sendgrid.helpers.mail.Content("text/plain", plain_text)
+
+            message = sendgrid.helpers.mail.Mail(
+                from_email, to_emails, subject, plain_text_content, html_content
+            )
+            response = send_grid_client.send(message=message)
+            logger.info(f"Status code: {response.status_code}")
+            logger.info(f"Headers: {response.headers}")
+            logger.info(f"Body: {response.body}")
         except Exception:
             traceback.print_exc()
             failure = True
