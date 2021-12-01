@@ -53,7 +53,7 @@
           </label>
           <hr />
           <label>
-            Fixed in Version<br />
+            Fixed in Version <br />
             <select
               name="releaseVersions"
               id="releaseVersions"
@@ -61,14 +61,25 @@
             ></select>
           </label>
           <label>
+            <button
+              id="select_all_releaseVersions"
+              name="select_all_releaseVersions"
+            >
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+          <label>
             <input
               type="checkbox"
               id="includeUnfixed"
               name="includeUnfixed"
             />Include unfixed bugs<br /> </label
           ><br />
-          <label
-            >Testing Tags<br />
+
+          <label>
+            Testing Tags <br />
             <select name="testingTags" id="testingTags" multiple>
               <option value="testing-approved" selected>
                 testing-approved
@@ -88,26 +99,66 @@
               <option value="missing" selected>missing</option>
               <option value="unknown" selected>unknown</option>
               <option value="N/A" selected>N/A</option>
-            </select> </label
-          ><br />
-          <label
-            >Teams
-            <select name="teams" id="teams" multiple></select> </label
-          ><br />
-          <label
-            >Components
-            <select name="components" id="components" multiple></select> </label
-          ><br />
-          <label
-            >Bug Types
-            <select name="types" id="types" multiple></select> </label
-          ><br />
+            </select>
+          </label>
+          <label>
+            <button id="select_all_testingTags" name="select_all_testingTags">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
+          <label>
+            Teams
+            <select name="teams" id="teams" multiple></select>
+          </label>
+          <label>
+            <button id="select_all_teams" name="select_all_teams">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
+          <label>
+            Components
+            <select name="components" id="components" multiple></select>
+          </label>
+          <label>
+            <button id="select_all_components" name="select_all_components">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
+          <label>
+            Bug Types
+            <select name="types" id="types" multiple></select>
+          </label>
+          <label>
+            <button id="select_all_types" name="select_all_types">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
           <label
             >Severity
-            <select name="severities" id="severities" multiple></select> </label
-          ><br />
-          <label
-            >Riskiness
+            <select name="severities" id="severities" multiple></select>
+          </label>
+          <label>
+            <button id="select_all_severities" name="select_all_severities">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
+          <label>
+            Riskiness
             <select name="riskiness" id="riskiness" multiple>
               <option value="h" selected>higher</option>
               <option value="a" selected>average</option>
@@ -115,6 +166,14 @@
               <option value="N/A" selected>N/A</option>
             </select>
           </label>
+          <label>
+            <button id="select_all_riskiness" name="select_all_riskiness">
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+
           <hr />
           <label
             >White Board
@@ -171,7 +230,6 @@
         </details>
       </main>
     </div>
-
     <script src="index.js" type="module"></script>
   </body>
 </html>
