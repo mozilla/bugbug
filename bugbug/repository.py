@@ -19,18 +19,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import (
-    Collection,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    NewType,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Collection, Iterable, Iterator, NewType, Optional, Set, Union
 
 import hglib
 import lmdb
@@ -172,10 +161,10 @@ class Commit:
         desc: str,
         pushdate: datetime,
         bug_id: Optional[int],
-        backsout: List[str],
+        backsout: list[str],
         backedoutby: str,
         author_email: str,
-        reviewers: List[str],
+        reviewers: list[str],
         ignored: bool = False,
     ) -> None:
         self.node = node
@@ -195,7 +184,7 @@ class Commit:
         self.other_deleted = 0
         self.test_deleted = 0
         self.types: Set[str] = set()
-        self.functions: Dict[str, List[dict]] = {}
+        self.functions: dict[str, list[dict]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
         self.average_source_code_file_size = 0.0
@@ -395,7 +384,7 @@ def get_functions_from_metrics(metrics_space):
 
 def get_touched_functions(
     metrics_space: dict, deleted_lines: Iterable[int], added_lines: Iterable[int]
-) -> List[dict]:
+) -> list[dict]:
     touched_functions_indexes = set()
 
     functions = get_functions_from_metrics(metrics_space)
@@ -547,8 +536,8 @@ def get_space_metrics(
 def set_commit_metrics(
     commit: Commit,
     path: str,
-    deleted_lines: List[int],
-    added_lines: List[int],
+    deleted_lines: list[int],
+    added_lines: list[int],
     before_metrics: dict,
     after_metrics: dict,
 ) -> None:
@@ -757,7 +746,7 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
+def hg_log(hg: hglib.client, revs: list[bytes]) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -843,7 +832,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
     return tuple(commits)
 
 
-def _hg_log(revs: List[bytes]) -> Tuple[Commit, ...]:
+def _hg_log(revs: list[bytes]) -> tuple[Commit, ...]:
     return hg_log(thread_local.hg, revs)
 
 
@@ -930,7 +919,7 @@ def calculate_experiences(
         return f"{exp_type}${commit_type}${item}"
 
     def get_experience(
-        exp_type: str, commit_type: str, item: str, day: int, default: Union[int, Tuple]
+        exp_type: str, commit_type: str, item: str, day: int, default: Union[int, tuple]
     ) -> utils.ExpQueue:
         key = get_key(exp_type, commit_type, item)
         try:
@@ -1187,7 +1176,7 @@ def close_component_mapping():
     path_to_component = None
 
 
-def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
+def hg_log_multi(repo_dir: str, revs: list[bytes]) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -1220,13 +1209,13 @@ def get_first_pushdate(repo_dir):
 def download_commits(
     repo_dir: str,
     rev_start: str = None,
-    revs: List[bytes] = None,
+    revs: list[bytes] = None,
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Tuple[CommitDict, ...]:
+) -> tuple[CommitDict, ...]:
     assert revs is not None or rev_start is not None
 
     with hglib.open(repo_dir) as hg:

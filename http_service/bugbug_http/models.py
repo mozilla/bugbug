@@ -7,7 +7,7 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import orjson
 import requests
@@ -170,7 +170,7 @@ def classify_issue(
 
 
 @lru_cache(maxsize=None)
-def get_known_tasks() -> Tuple[str, ...]:
+def get_known_tasks() -> tuple[str, ...]:
     with open("known_tasks", "r") as f:
         return tuple(line.strip() for line in f)
 

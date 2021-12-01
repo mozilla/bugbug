@@ -9,7 +9,7 @@ import logging
 import threading
 import time
 from datetime import timedelta
-from typing import Callable, Dict, Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 LOGGER = logging.getLogger()
 
@@ -26,8 +26,8 @@ class ReadthroughTTLCache(Generic[Key, Value]):
     def __init__(self, ttl: timedelta, load_item_function: Callable[[Key], Value]):
         self.ttl = ttl
         self.load_item_function = load_item_function
-        self.items_last_accessed: Dict[Key, datetime.datetime] = {}
-        self.items_storage: Dict[Key, Value] = {}
+        self.items_last_accessed: dict[Key, datetime.datetime] = {}
+        self.items_storage: dict[Key, Value] = {}
 
     def __contains__(self, key):
         return key in self.items_storage

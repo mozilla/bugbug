@@ -9,7 +9,6 @@ import os
 import subprocess
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import List
 
 import taskcluster
 
@@ -27,7 +26,7 @@ CURRENT_DIR = Path(__file__).resolve().parent
 def download_metric(model_name: str, metric_directory: str):
     download_script_path = "bugbug-retrieve-training-metrics"
 
-    cli_args: List[str] = [
+    cli_args: list[str] = [
         download_script_path,
         model_name,
         "2019",
@@ -43,7 +42,7 @@ def download_metric(model_name: str, metric_directory: str):
 def check_metrics(metric_directory: str, output_directory: str):
     analyze_script_path = "bugbug-analyze-training-metrics"
 
-    cli_args: List[str] = [analyze_script_path, metric_directory, output_directory]
+    cli_args: list[str] = [analyze_script_path, metric_directory, output_directory]
 
     LOGGER.info("Checking metrics")
 
@@ -65,7 +64,7 @@ def get_model_name(queue, task_id: str):
     LOGGER.warning(f"No matching route found for task id {task_id}")
 
 
-def get_model_names(task_id: str) -> List[str]:
+def get_model_names(task_id: str) -> list[str]:
     options = get_taskcluster_options()
     queue = taskcluster.Queue(options)
     task = queue.task(task_id)

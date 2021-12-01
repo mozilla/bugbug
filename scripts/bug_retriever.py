@@ -3,7 +3,6 @@
 import argparse
 from datetime import datetime
 from logging import getLogger
-from typing import List
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
@@ -81,7 +80,7 @@ class Retriever(object):
 
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
-        regression_related_ids: List[int] = list(
+        regression_related_ids: list[int] = list(
             set(
                 sum(
                     (

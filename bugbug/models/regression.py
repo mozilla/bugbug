@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from bugbug.models.defect import DefectModel
 
@@ -13,7 +13,7 @@ class RegressionModel(DefectModel):
         DefectModel.__init__(self, lemmatization, historical)
         self.calculate_importance = False
 
-    def get_labels(self) -> Tuple[Dict[int, Any], List[int]]:
+    def get_labels(self) -> tuple[dict[int, Any], list[int]]:
         classes = self.get_bugbug_labels("regression")
 
         print(

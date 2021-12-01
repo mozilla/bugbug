@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, Optional
 
 import numpy as np
 import xgboost
@@ -56,8 +56,8 @@ TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
 def bug_to_types(
-    bug: bugzilla.BugDict, bug_map: Optional[Dict[int, bugzilla.BugDict]] = None
-) -> List[str]:
+    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
+) -> list[str]:
     types = set()
 
     if "[overhead" in bug["whiteboard"].lower():
@@ -160,7 +160,7 @@ class BugTypeModel(BugModel):
             xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
-    def get_labels(self) -> Tuple[Dict[int, np.ndarray], List[str]]:
+    def get_labels(self) -> tuple[dict[int, np.ndarray], list[str]]:
         classes = {}
 
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
@@ -185,7 +185,7 @@ class BugTypeModel(BugModel):
     def overwrite_classes(
         self,
         bugs: Iterable[bugzilla.BugDict],
-        classes: Dict[int, np.ndarray],
+        classes: dict[int, np.ndarray],
         probabilities: bool,
     ):
         for i, bug in enumerate(bugs):

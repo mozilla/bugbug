@@ -5,7 +5,7 @@
 
 import pickle
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import matplotlib
 import numpy as np
@@ -148,9 +148,9 @@ class Model:
         self.entire_dataset_training = False
 
         # DBs required for training.
-        self.training_dbs: List[str] = []
+        self.training_dbs: list[str] = []
         # DBs and DB support files required at runtime.
-        self.eval_dbs: Dict[str, Tuple[str, ...]] = {}
+        self.eval_dbs: dict[str, tuple[str, ...]] = {}
 
     def download_eval_dbs(
         self, extract: bool = True, ensure_exist: bool = True
@@ -334,7 +334,7 @@ class Model:
         """Subclasses can implement their own additional evaluation."""
         pass
 
-    def get_labels(self) -> Tuple[Dict[Any, Any], List[Any]]:
+    def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
         pass
 
