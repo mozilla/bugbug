@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import datetime
-from typing import List
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -168,7 +167,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -286,7 +285,7 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -416,7 +415,7 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -530,7 +529,7 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)

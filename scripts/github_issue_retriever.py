@@ -5,7 +5,6 @@
 
 import argparse
 from logging import getLogger
-from typing import List, Tuple
 
 from bugbug import db
 from bugbug.github import Github, IssueDict
@@ -33,8 +32,8 @@ class Retriever(object):
         )
 
     def replace_with_private(
-        self, original_data: List[IssueDict]
-    ) -> Tuple[List[IssueDict], set]:
+        self, original_data: list[IssueDict]
+    ) -> tuple[list[IssueDict], set]:
         """Replace title and body of automatically closed public issues.
 
         Replace them with title and body of a corresponding private issue

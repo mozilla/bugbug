@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Callable, Iterator, List, NewType, Tuple
+from typing import Callable, Iterator, NewType
 
 from ratelimit import limits, sleep_and_retry
 
@@ -67,7 +67,7 @@ class Github:
 
     def fetch_issues(
         self, url: str, retrieve_events: bool, params: dict = None
-    ) -> Tuple[List[IssueDict], dict]:
+    ) -> tuple[list[IssueDict], dict]:
         self.api_limit()
         headers = {"Authorization": "token {}".format(self.get_token())}
         response = get_session("github").get(url, params=params, headers=headers)
@@ -93,7 +93,7 @@ class Github:
         count = sum(1 for _ in issues)
         return int(count / PER_PAGE) + 1
 
-    def fetch_issues_updated_since_timestamp(self, since: str) -> List[IssueDict]:
+    def fetch_issues_updated_since_timestamp(self, since: str) -> list[IssueDict]:
         # Fetches changed and new issues since a specified timestamp
         url = "https://api.github.com/repos/{}/{}/issues".format(self.owner, self.repo)
 

@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence
 
 import orjson
 import zstandard
@@ -751,7 +751,7 @@ def push_schedules(branch, rev):
 
 @application.route("/config_specific_groups/<path:config>")
 @cross_origin()
-def config_specific_groups(config: str) -> Tuple[Response, int]:
+def config_specific_groups(config: str) -> tuple[Response, int]:
     """
     ---
     get:

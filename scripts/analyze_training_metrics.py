@@ -12,7 +12,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -78,7 +78,7 @@ def plot_graph(
     plt.close(figure)
 
 
-def parse_metric_file(metric_file_path: Path) -> Tuple[datetime, str, Dict[str, Any]]:
+def parse_metric_file(metric_file_path: Path) -> tuple[datetime, str, dict[str, Any]]:
     # Load the metric
     with open(metric_file_path, "r") as metric_file:
         metric = json.load(metric_file)
@@ -113,7 +113,7 @@ def analyze_metrics(
 ):
     root = Path(metrics_directory)
 
-    metrics: Dict[str, Dict[str, Dict[datetime, float]]] = defaultdict(
+    metrics: dict[str, dict[str, dict[datetime, float]]] = defaultdict(
         lambda: defaultdict(dict)
     )
 

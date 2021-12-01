@@ -4,14 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import timedelta
-from typing import List
 
 from bugbug import phabricator
 
 
 def test_get_first_review_time() -> None:
     # No transactions.
-    transactions: List[phabricator.TransactionDict] = []
+    transactions: list[phabricator.TransactionDict] = []
     assert (
         phabricator.get_first_review_time(
             phabricator.RevisionDict({"id": 1, "transactions": transactions})

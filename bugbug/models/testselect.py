@@ -10,18 +10,7 @@ import math
 import pickle
 import statistics
 from functools import reduce
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-)
+from typing import Any, Callable, Collection, Iterable, Optional, Sequence, Set
 
 import numpy as np
 import xgboost
@@ -46,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def get_commit_map(
     revs: Optional[Set[test_scheduling.Revision]] = None,
-) -> Dict[test_scheduling.Revision, repository.CommitDict]:
+) -> dict[test_scheduling.Revision, repository.CommitDict]:
     commit_map = {}
 
     for commit in repository.get_commits():
@@ -131,7 +120,7 @@ class TestSelectModel(Model):
 
     def get_pushes(
         self, apply_filters: bool = False
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         pushes = []
         for revs, test_datas in test_scheduling.get_test_scheduling_history(
             self.granularity
@@ -233,7 +222,7 @@ class TestSelectModel(Model):
         commits: Sequence[repository.CommitDict],
         confidence: float = 0.5,
         push_num: Optional[int] = None,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
         past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
@@ -299,14 +288,14 @@ class TestSelectModel(Model):
         self,
         tasks: Iterable[str],
         min_redundancy_confidence: float,
-        load_failing_together: Callable[[str], Dict[str, Tuple[float, float]]],
+        load_failing_together: Callable[[str], dict[str, tuple[float, float]]],
         assume_redundant: bool,
-    ) -> List[Set[str]]:
+    ) -> list[Set[str]]:
         # Generate 'equivalence sets', containing all tasks that are redundant with
         # each other.
-        groups: List[Set[str]] = []
-        task_to_groups: Dict[str, Set[int]] = collections.defaultdict(set)
-        incompatible_groups: Dict[str, Set[int]] = collections.defaultdict(set)
+        groups: list[Set[str]] = []
+        task_to_groups: dict[str, Set[int]] = collections.defaultdict(set)
+        incompatible_groups: dict[str, Set[int]] = collections.defaultdict(set)
 
         def create_group(task: str) -> None:
             if task in task_to_groups:
@@ -406,7 +395,7 @@ class TestSelectModel(Model):
 
                 def load_failing_together(
                     config: str,
-                ) -> Dict[str, Tuple[float, float]]:
+                ) -> dict[str, tuple[float, float]]:
                     return failing_together_stats[config]
 
                 configs = (
@@ -451,7 +440,7 @@ class TestSelectModel(Model):
             self.granularity, True
         )
 
-        def load_failing_together(task: str) -> Dict[str, Tuple[float, float]]:
+        def load_failing_together(task: str) -> dict[str, tuple[float, float]]:
             key = test_scheduling.failing_together_key(task)
             return pickle.loads(failing_together[key])
 
@@ -503,7 +492,7 @@ class TestSelectModel(Model):
         groups: Collection[str],
         min_redundancy_confidence: float,
         max_configurations: int = 3,
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
 
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
@@ -592,7 +581,7 @@ class TestSelectModel(Model):
             )
         )
 
-        configs_by_group: Dict[str, List[str]] = {}
+        configs_by_group: dict[str, list[str]] = {}
         for group in groups:
             configs_by_group[group] = []
 
@@ -707,7 +696,7 @@ class TestSelectModel(Model):
             cap: Optional[int],
             minimum: Optional[int],
         ) -> None:
-            futures: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
+            futures: dict[concurrent.futures.Future, dict[str, Any]] = {}
             for push in test_pushes.values():
                 futures[
                     executor.submit(

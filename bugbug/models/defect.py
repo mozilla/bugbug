@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
@@ -85,10 +85,10 @@ class DefectModel(BugModel):
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
 
-    def get_bugbug_labels(self, kind="bug") -> Dict[int, Any]:
+    def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]
 
-        classes: Dict[int, Any] = {}
+        classes: dict[int, Any] = {}
 
         for bug_id, category in labels.get_labels("bug_nobug"):
             assert category in ["True", "False"], f"unexpected category {category}"
@@ -245,7 +245,7 @@ class DefectModel(BugModel):
         # Remove labels which belong to bugs for which we have no data.
         return {bug_id: label for bug_id, label in classes.items() if bug_id in bug_ids}
 
-    def get_labels(self) -> Tuple[Dict[int, Any], List[Any]]:
+    def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("bug")
 
         print("{} bugs".format(sum(1 for label in classes.values() if label == 1)))

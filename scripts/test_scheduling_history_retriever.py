@@ -10,7 +10,7 @@ import os
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List
+from typing import Any, Generator
 
 import dateutil.parser
 import mozci.errors
@@ -57,8 +57,8 @@ class Retriever(object):
 
         def generate(
             progress_bar: tqdm,
-            pushes: List[mozci.push.Push],
-            futures: List[concurrent.futures.Future],
+            pushes: list[mozci.push.Push],
+            futures: list[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
             nonlocal reretrieve
             num_cached = 0
@@ -207,7 +207,7 @@ class Retriever(object):
                 granularity, push_data_iter(), push_data_count
             )
 
-        def generate_all_data() -> Generator[Dict[str, Any], None, None]:
+        def generate_all_data() -> Generator[dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity, False)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0

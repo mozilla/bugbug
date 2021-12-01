@@ -7,7 +7,7 @@ import collections
 import csv
 import re
 from datetime import datetime
-from typing import Dict, Iterable, Iterator, List, NewType, Optional
+from typing import Iterable, Iterator, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -181,7 +181,7 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
     return get_ids(params)
 
 
-def download_bugs(bug_ids: Iterable[int], security: bool = False) -> List[BugDict]:
+def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDict]:
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
     for bug in get_bugs(include_invalid=True):
@@ -201,7 +201,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> List[BugDic
         stop=tenacity.stop_after_attempt(7),
         wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
     )
-    def get_chunk(chunk: List[int]) -> List[BugDict]:
+    def get_chunk(chunk: list[int]) -> list[BugDict]:
         new_bugs = get(chunk)
 
         if not security:
@@ -225,8 +225,8 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> List[BugDic
 
 
 def _find_linked(
-    bug_map: Dict[int, BugDict], bug: BugDict, link_type: str
-) -> List[int]:
+    bug_map: dict[int, BugDict], bug: BugDict, link_type: str
+) -> list[int]:
     return sum(
         (
             _find_linked(bug_map, bug_map[b], link_type)
@@ -237,11 +237,11 @@ def _find_linked(
     )
 
 
-def find_blocked_by(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
+def find_blocked_by(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
     return _find_linked(bug_map, bug, "blocks")
 
 
-def find_blocking(bug_map: Dict[int, BugDict], bug: BugDict) -> List[int]:
+def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
     return _find_linked(bug_map, bug, "depends_on")
 
 
@@ -286,7 +286,7 @@ def count_bugs(bug_query_params):
     return count
 
 
-def get_product_component_count(months: int = 12) -> Dict[str, int]:
+def get_product_component_count(months: int = 12) -> dict[str, int]:
     """Returns a dictionary where keys are full components (in the form of
     `{product}::{component}`) and the value of the number of bugs for the
     given full components. Full component with 0 bugs are returned.
@@ -333,7 +333,7 @@ def get_product_component_count(months: int = 12) -> Dict[str, int]:
     return bugs_number
 
 
-def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
+def get_component_team_mapping() -> dict[str, dict[str, str]]:
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/product",
         params={
@@ -344,7 +344,7 @@ def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     )
     r.raise_for_status()
 
-    mapping: Dict[str, Dict[str, str]] = collections.defaultdict(dict)
+    mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
     for product in r.json()["products"]:
         for component in product["components"]:
             mapping[product["name"]][component["name"]] = component["team_name"]
@@ -352,7 +352,7 @@ def get_component_team_mapping() -> Dict[str, Dict[str, str]]:
     return mapping
 
 
-def get_groups_users(group_names: List[str]) -> List[str]:
+def get_groups_users(group_names: list[str]) -> list[str]:
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/group",
         params={
@@ -370,7 +370,7 @@ def get_groups_users(group_names: List[str]) -> List[str]:
     ]
 
 
-def get_revision_ids(bug: BugDict) -> List[int]:
+def get_revision_ids(bug: BugDict) -> list[int]:
     revision_ids = []
 
     for attachment in bug["attachments"]:

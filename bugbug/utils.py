@@ -17,7 +17,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Iterator, List, Optional
+from typing import Any, Iterator, Optional
 
 import boto3
 import dateutil.parser
@@ -437,7 +437,7 @@ def get_session(name: str) -> requests.Session:
     return session
 
 
-def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
     """Load descriptions of patches in the stack for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)

@@ -17,11 +17,9 @@ from typing import (
     Any,
     Callable,
     Deque,
-    Dict,
     Generator,
     Iterable,
     Iterator,
-    List,
     NewType,
     Optional,
     Set,
@@ -41,10 +39,10 @@ logger = logging.getLogger(__name__)
 Revision = NewType("Revision", str)
 Task = NewType("Task", str)
 Group = NewType("Group", str)
-ConfigGroup = NewType("ConfigGroup", Tuple[str, Group])
+ConfigGroup = NewType("ConfigGroup", tuple[str, Group])
 Runnable = Union[Task, Group, ConfigGroup]
-PushResult = Tuple[
-    Tuple[Revision],
+PushResult = tuple[
+    tuple[Revision],
     Revision,
     Tuple[Runnable, ...],
     Tuple[Runnable, ...],
@@ -121,10 +119,10 @@ JOBS_TO_IGNORE = (
 
 
 def filter_runnables(
-    runnables: Tuple[Runnable, ...], all_runnables: Set[Runnable], granularity: str
-) -> Tuple[Any, ...]:
+    runnables: tuple[Runnable, ...], all_runnables: Set[Runnable], granularity: str
+) -> tuple[Any, ...]:
     if granularity == "label":
-        tasks = cast(List[Task], runnables)
+        tasks = cast(list[Task], runnables)
         return tuple(
             task
             for task in tasks
@@ -167,16 +165,16 @@ def rename_task(task: str) -> str:
 
 # Handle "meaningless" labeling changes ("meaningless" as they shouldn't really affect test scheduling).
 def rename_runnables(
-    granularity: str, runnables: Tuple[Runnable, ...]
-) -> Tuple[Runnable, ...]:
+    granularity: str, runnables: tuple[Runnable, ...]
+) -> tuple[Runnable, ...]:
     if granularity == "label":
-        tasks = cast(List[Task], runnables)
+        tasks = cast(list[Task], runnables)
         return tuple(Task(rename_task(task)) for task in tasks)
     elif granularity == "group":
-        groups = cast(List[Group], runnables)
+        groups = cast(list[Group], runnables)
         return tuple(Group(group.split(":")[0]) for group in groups)
     elif granularity == "config_group":
-        config_groups = cast(List[ConfigGroup], runnables)
+        config_groups = cast(list[ConfigGroup], runnables)
         return tuple(
             ConfigGroup(
                 (
@@ -192,7 +190,7 @@ def rename_runnables(
 
 def get_push_data(
     granularity: str,
-) -> Tuple[Callable[[], Iterator[PushResult]], int, Tuple[Runnable, ...]]:
+) -> tuple[Callable[[], Iterator[PushResult]], int, tuple[Runnable, ...]]:
     if granularity == "label":
         push_data_db = PUSH_DATA_LABEL_DB
     elif granularity == "group":
@@ -393,7 +391,7 @@ def generate_failing_together_probabilities(
                 count_single_failures[(task1, task2)] += 1
 
     all_available_configs: Set[str] = set()
-    available_configs_by_group: Dict[Group, Set[str]] = collections.defaultdict(set)
+    available_configs_by_group: dict[Group, Set[str]] = collections.defaultdict(set)
 
     for (
         revisions,
@@ -816,7 +814,7 @@ def generate_data(
         yield obj
 
 
-def get_failure_bugs(since: datetime, until: datetime) -> List[Dict[str, int]]:
+def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
     r = requests.get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
@@ -827,7 +825,7 @@ def get_failure_bugs(since: datetime, until: datetime) -> List[Dict[str, int]]:
     return r.json()
 
 
-def get_test_info(date: datetime) -> Dict[str, Any]:
+def get_test_info(date: datetime) -> dict[str, Any]:
     r = requests.get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")
