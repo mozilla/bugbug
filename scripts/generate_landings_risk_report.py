@@ -1806,7 +1806,7 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
             receivers = team_to_receivers[team]
 
             logger.info(f"Sending email to {team}")
-            from_email = sendgrid.helpers.mail.From("mcastelluccio@mozilla.com")
+            from_email = sendgrid.helpers.mail.From(get_secret("NOTIFICATION_SENDER"))
             to_emails = [sendgrid.helpers.mail.To(receivers[0])] + [
                 sendgrid.helpers.mail.Cc(receiver) for receiver in receivers[1:]
             ]
