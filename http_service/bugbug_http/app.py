@@ -190,9 +190,7 @@ def schedule_job(
     )
 
 
-def prepare_queue_job(
-    job: JobInfo, job_id: Optional[str] = None
-) -> Queue:
+def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
     """Prepare queue data for for enqueueing multiple jobs"""
     job_id = job_id or get_job_id()
 
@@ -201,7 +199,6 @@ def prepare_queue_job(
         job.func,
         *job.args,
         job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
