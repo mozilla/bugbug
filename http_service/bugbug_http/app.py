@@ -189,8 +189,9 @@ def schedule_job(
         failure_ttl=FAILURE_TTL,
     )
 
+
 def prepare_queue_job(
-    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+    job: JobInfo, job_id: Optional[str] = None
 ) -> Queue:
     """Prepare queue data for for enqueueing multiple jobs"""
     job_id = job_id or get_job_id()
@@ -200,14 +201,16 @@ def prepare_queue_job(
         job.func,
         *job.args,
         job_id=job_id,
-        timeout=timeout,
+        timeout=BUGZILLA_JOB_TIMEOUT,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
 
+
 def schedule_multiple_job(jobList: list[Queue] = None) -> None:
     """Enqueue multiple jobs in bulk"""
     jobs = q.enqueue_many(jobList)
+
 
 def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]) -> Queue:
     """Prepare the classification of a bug_id list"""
@@ -224,7 +227,6 @@ def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]) ->
     return prepare_queue_job(
         JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
         job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
     )
 
 
