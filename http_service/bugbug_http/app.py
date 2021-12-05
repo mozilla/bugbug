@@ -205,9 +205,7 @@ def prepare_queue_job(
         failure_ttl=FAILURE_TTL,
     )
 
-def schedule_multiple_job(
-    jobList: list[Queue] = None
-) -> None:
+def schedule_multiple_job(jobList: list[Queue] = None) -> None:
     """Enqueue multiple jobs in bulk"""
     jobs = q.enqueue_many(jobList)
 
@@ -224,9 +222,9 @@ def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]) ->
     redis_conn.mset(job_id_mapping)
 
     return prepare_queue_job(
-      JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-      job_id=job_id,
-      timeout=BUGZILLA_JOB_TIMEOUT,
+        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+        job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
     )
 
 
@@ -727,7 +725,9 @@ def batch_prediction(model_name):
 
     jobList = []
     for i in range(0, len(missing_bugs), 100):
-        jobList.append(prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)]))
+        jobList.append(
+            prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)])
+        )
     schedule_multiple_job(jobList=jobList)    
 
     return compress_response({"bugs": data}, status_code)
