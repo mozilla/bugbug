@@ -98,6 +98,11 @@ def patch_resources(monkeypatch, jobs):
         ):
             pass
 
+        def enqueue_many(
+            self, job_datas, pipeline=None
+        ):
+            pass
+
     class JobMock:
         """Mock class to mimic rq.job.Job."""
 
