@@ -189,6 +189,46 @@ def schedule_job(
         failure_ttl=FAILURE_TTL,
     )
 
+def prepare_queue_job(
+    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+) -> Queue:
+    """Prepare queue data for for enqueueing multiple jobs"""
+    job_id = job_id or get_job_id()
+
+    redis_conn.mset({job.mapping_key: job_id})
+    return Queue.prepare_data(
+        job.func,
+        *job.args,
+        job_id=job_id,
+        job_timeout=timeout,
+        ttl=QUEUE_TIMEOUT,
+        failure_ttl=FAILURE_TTL,
+    )
+
+def schedule_multiple_job(
+    jobList: list[Queue] = None
+) -> None:
+    """Enqueue multiple jobs in bulk"""
+    jobs = q.enqueue_many(jobList)
+
+def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]) -> Queue:
+    """Prepare the classification of a bug_id list"""
+    job_id = get_job_id()
+
+    # Set the mapping before queuing to avoid some race conditions
+    job_id_mapping = {}
+    for bug_id in bug_ids:
+        key = JobInfo(classify_bug, model_name, bug_id).mapping_key
+        job_id_mapping[key] = job_id
+
+    redis_conn.mset(job_id_mapping)
+
+    return prepare_queue_job(
+      JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+      job_id=job_id,
+      timeout=BUGZILLA_JOB_TIMEOUT,
+    )
+
 
 def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None:
     """Schedule the classification of a bug_id list"""
@@ -685,8 +725,10 @@ def batch_prediction(model_name):
             status_code = 202
             data[str(bug_id)] = {"ready": False}
 
+    jobList = []
     for i in range(0, len(missing_bugs), 100):
-        schedule_bug_classification(model_name, missing_bugs[i : (i + 100)])
+        jobList.append(prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)]))
+    schedule_multiple_job(jobList=jobList)    
 
     return compress_response({"bugs": data}, status_code)
 
