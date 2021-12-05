@@ -200,7 +200,7 @@ def prepare_queue_job(
         job.func,
         *job.args,
         job_id=job_id,
-        job_timeout=timeout,
+        timeout=timeout,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
@@ -723,12 +723,12 @@ def batch_prediction(model_name):
             status_code = 202
             data[str(bug_id)] = {"ready": False}
 
-    jobList = []
+    queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
-        jobList.append(
+        queueJobList.append(
             prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)])
         )
-    schedule_multiple_job(jobList=jobList)    
+    schedule_multiple_job(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
 
