@@ -209,25 +209,7 @@ def schedule_multiple_job(jobList: list[Queue] = None) -> None:
     jobs = q.enqueue_many(jobList)
 
 
-def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]) -> Queue:
-    """Prepare the classification of a bug_id list"""
-    job_id = get_job_id()
-
-    # Set the mapping before queuing to avoid some race conditions
-    job_id_mapping = {}
-    for bug_id in bug_ids:
-        key = JobInfo(classify_bug, model_name, bug_id).mapping_key
-        job_id_mapping[key] = job_id
-
-    redis_conn.mset(job_id_mapping)
-
-    return prepare_queue_job(
-        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-        job_id=job_id,
-    )
-
-
-def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None:
+def schedule_bug_classification(model_name: str, bug_ids: Sequence[int], multi_ind: bool = False):
     """Schedule the classification of a bug_id list"""
     job_id = get_job_id()
 
@@ -239,11 +221,17 @@ def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None
 
     redis_conn.mset(job_id_mapping)
 
-    schedule_job(
-        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
-    )
+    if multi_ind:
+        return prepare_queue_job(
+            JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+            job_id=job_id,
+        )
+    else:
+        schedule_job(
+            JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+            job_id=job_id,
+            timeout=BUGZILLA_JOB_TIMEOUT,
+        )
 
 
 def schedule_issue_classification(
@@ -725,7 +713,7 @@ def batch_prediction(model_name):
     queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
         queueJobList.append(
-            prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)])
+            schedule_bug_classification(model_name, missing_bugs[i : (i + 100)], multi_ind=True)
         )
     schedule_multiple_job(queueJobList)
 
