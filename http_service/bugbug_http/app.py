@@ -174,40 +174,44 @@ def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
-def schedule_job(
-    job: JobInfo, 
-    job_id: Optional[str] = None, 
-    timeout: Optional[int] = None, 
-    prepare_queue_ind: bool = False
-):
+def schedule_initialize(job: JobInfo, job_id: Optional[str] = None):
     job_id = job_id or get_job_id()
-
     redis_conn.mset({job.mapping_key: job_id})
 
-    if not prepare_queue_ind:
-        q.enqueue(
-            job.func,
-            *job.args,
-            job_id=job_id,
-            job_timeout=timeout,
-            ttl=QUEUE_TIMEOUT,
-            failure_ttl=FAILURE_TTL,
-        )
-    else:
-        return Queue.prepare_data(
-            job.func,
-            args=job.args,
-            job_id=job_id,
-            timeout=timeout,
-            ttl=QUEUE_TIMEOUT,
-            failure_ttl=FAILURE_TTL,
-        )
 
-
-def schedule_bug_classification(
-    model_name: str, bug_ids: Sequence[int], multi_ind: bool = False
+def schedule_job(
+    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
 ):
-    """Schedule the classification of a bug_id list"""
+    schedule_initialize(job, job_id)
+
+    q.enqueue(
+        job.func,
+        *job.args,
+        job_id=job_id,
+        job_timeout=timeout,
+        ttl=QUEUE_TIMEOUT,
+        failure_ttl=FAILURE_TTL,
+    )
+
+
+def prepare_queue_job(
+    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+):
+    schedule_initialize(job, job_id)
+    return Queue.prepare_data(
+        job.func,
+        args=job.args,
+        job_id=job_id,
+        timeout=timeout,
+        ttl=QUEUE_TIMEOUT,
+        failure_ttl=FAILURE_TTL,
+    )
+
+
+def create_bug_classification_jobs(
+    model_name: str, bug_ids: Sequence[int]
+):
+    """Create job_id and redis connection"""
     job_id = get_job_id()
 
     # Set the mapping before queuing to avoid some race conditions
@@ -218,19 +222,33 @@ def schedule_bug_classification(
 
     redis_conn.mset(job_id_mapping)
 
-    if multi_ind:
-        return schedule_job(
-            JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-            job_id=job_id,
-            timeout=BUGZILLA_JOB_TIMEOUT,
-            prepare_queue_ind=True
-        )
-    else:
-        schedule_job(
-            JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-            job_id=job_id,
-            timeout=BUGZILLA_JOB_TIMEOUT,
-        )
+    return job_id
+
+
+def schedule_bug_classification(
+    model_name: str, bug_ids: Sequence[int]
+):
+    """Schedule the classification of a bug_id list"""
+    job_id = create_bug_classification_jobs(model_name, bug_ids)
+
+    schedule_job(
+        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+        job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
+    )
+
+
+def prepare_multi_bug_classification(
+    model_name: str, bug_ids: Sequence[int]
+):
+    """Prepare the classification of a bug_id list"""
+    job_id = create_bug_classification_jobs(model_name, bug_ids)
+
+    return prepare_queue_job(
+        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+        job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
+    )
 
 
 def schedule_issue_classification(
@@ -712,8 +730,8 @@ def batch_prediction(model_name):
     queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
         queueJobList.append(
-            schedule_bug_classification(
-                model_name, missing_bugs[i : (i + 100)], multi_ind=True
+            prepare_multi_bug_classification(
+                model_name, missing_bugs[i : (i + 100)]
             )
         )
     q.enqueue_many(queueJobList)
