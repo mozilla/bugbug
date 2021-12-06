@@ -197,8 +197,9 @@ def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
     redis_conn.mset({job.mapping_key: job_id})
     return Queue.prepare_data(
         job.func,
-        *job.args,
+        args=job.args,
         job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
