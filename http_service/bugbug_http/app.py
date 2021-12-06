@@ -175,39 +175,33 @@ def get_job_id() -> str:
 
 
 def schedule_job(
-    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
-) -> None:
+    job: JobInfo, 
+    job_id: Optional[str] = None, 
+    timeout: Optional[int] = None, 
+    prepare_queue_ind: bool = False
+):
     job_id = job_id or get_job_id()
 
     redis_conn.mset({job.mapping_key: job_id})
-    q.enqueue(
-        job.func,
-        *job.args,
-        job_id=job_id,
-        job_timeout=timeout,
-        ttl=QUEUE_TIMEOUT,
-        failure_ttl=FAILURE_TTL,
-    )
 
-
-def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
-    """Prepare queue data for for enqueueing multiple jobs"""
-    job_id = job_id or get_job_id()
-
-    redis_conn.mset({job.mapping_key: job_id})
-    return Queue.prepare_data(
-        job.func,
-        args=job.args,
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
-        ttl=QUEUE_TIMEOUT,
-        failure_ttl=FAILURE_TTL,
-    )
-
-
-def schedule_multiple_job(jobList: list[Queue] = None) -> None:
-    """Enqueue multiple jobs in bulk"""
-    q.enqueue_many(jobList)
+    if not prepare_queue_ind:
+        q.enqueue(
+            job.func,
+            *job.args,
+            job_id=job_id,
+            job_timeout=timeout,
+            ttl=QUEUE_TIMEOUT,
+            failure_ttl=FAILURE_TTL,
+        )
+    else:
+        return Queue.prepare_data(
+            job.func,
+            args=job.args,
+            job_id=job_id,
+            timeout=timeout,
+            ttl=QUEUE_TIMEOUT,
+            failure_ttl=FAILURE_TTL,
+        )
 
 
 def schedule_bug_classification(
@@ -225,9 +219,11 @@ def schedule_bug_classification(
     redis_conn.mset(job_id_mapping)
 
     if multi_ind:
-        return prepare_queue_job(
+        return schedule_job(
             JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
             job_id=job_id,
+            timeout=BUGZILLA_JOB_TIMEOUT,
+            prepare_queue_ind=True
         )
     else:
         schedule_job(
@@ -720,7 +716,7 @@ def batch_prediction(model_name):
                 model_name, missing_bugs[i : (i + 100)], multi_ind=True
             )
         )
-    schedule_multiple_job(queueJobList)
+    q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
 
