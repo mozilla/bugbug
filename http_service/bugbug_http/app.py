@@ -207,7 +207,7 @@ def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
 
 def schedule_multiple_job(jobList: list[Queue] = None) -> None:
     """Enqueue multiple jobs in bulk"""
-    jobs = q.enqueue_many(jobList)
+    q.enqueue_many(jobList)
 
 
 def schedule_bug_classification(
