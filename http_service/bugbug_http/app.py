@@ -199,6 +199,7 @@ def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
         job.func,
         *job.args,
         job_id=job_id,
+        timeout=BUGZILLA_JOB_TIMEOUT,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
@@ -209,7 +210,9 @@ def schedule_multiple_job(jobList: list[Queue] = None) -> None:
     jobs = q.enqueue_many(jobList)
 
 
-def schedule_bug_classification(model_name: str, bug_ids: Sequence[int], multi_ind: bool = False):
+def schedule_bug_classification(
+    model_name: str, bug_ids: Sequence[int], multi_ind: bool = False
+):
     """Schedule the classification of a bug_id list"""
     job_id = get_job_id()
 
@@ -713,7 +716,9 @@ def batch_prediction(model_name):
     queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
         queueJobList.append(
-            schedule_bug_classification(model_name, missing_bugs[i : (i + 100)], multi_ind=True)
+            schedule_bug_classification(
+                model_name, missing_bugs[i : (i + 100)], multi_ind=True
+            )
         )
     schedule_multiple_job(queueJobList)
 
