@@ -174,15 +174,16 @@ def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
-def schedule_initialize(job: JobInfo, job_id: Optional[str] = None):
+def schedule_init(job: JobInfo, job_id: Optional[str] = None):
     job_id = job_id or get_job_id()
     redis_conn.mset({job.mapping_key: job_id})
+    return job_id
 
 
 def schedule_job(
     job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
-):
-    schedule_initialize(job, job_id)
+) -> None:
+    job_id = schedule_init(job, job_id)
 
     q.enqueue(
         job.func,
@@ -196,8 +197,8 @@ def schedule_job(
 
 def prepare_queue_job(
     job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
-):
-    schedule_initialize(job, job_id)
+) -> Queue:
+    job_id = schedule_init(job, job_id)
     return Queue.prepare_data(
         job.func,
         args=job.args,
@@ -208,9 +209,7 @@ def prepare_queue_job(
     )
 
 
-def create_bug_classification_jobs(
-    model_name: str, bug_ids: Sequence[int]
-):
+def create_bug_classification_jobs(model_name: str, bug_ids: Sequence[int]):
     """Create job_id and redis connection"""
     job_id = get_job_id()
 
@@ -225,9 +224,7 @@ def create_bug_classification_jobs(
     return job_id
 
 
-def schedule_bug_classification(
-    model_name: str, bug_ids: Sequence[int]
-):
+def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]):
     """Schedule the classification of a bug_id list"""
     job_id = create_bug_classification_jobs(model_name, bug_ids)
 
@@ -238,9 +235,7 @@ def schedule_bug_classification(
     )
 
 
-def prepare_multi_bug_classification(
-    model_name: str, bug_ids: Sequence[int]
-):
+def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]):
     """Prepare the classification of a bug_id list"""
     job_id = create_bug_classification_jobs(model_name, bug_ids)
 
