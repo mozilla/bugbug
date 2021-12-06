@@ -725,9 +725,7 @@ def batch_prediction(model_name):
     queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
         queueJobList.append(
-            prepare_multi_bug_classification(
-                model_name, missing_bugs[i : (i + 100)]
-            )
+            prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)])
         )
     q.enqueue_many(queueJobList)
 
