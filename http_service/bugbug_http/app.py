@@ -199,7 +199,6 @@ def prepare_queue_job(job: JobInfo, job_id: Optional[str] = None) -> Queue:
         job.func,
         *job.args,
         job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
         ttl=QUEUE_TIMEOUT,
         failure_ttl=FAILURE_TTL,
     )
