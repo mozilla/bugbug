@@ -399,7 +399,7 @@ def test_download_support_file_missing(tmp_path, caplog):
     assert expected_message in caplog.text
 
 
-def test_is_old_schema(tmp_path):
+def test_is_different_schema(tmp_path):
     url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
@@ -413,19 +413,13 @@ def test_is_old_schema(tmp_path):
     responses.add(responses.GET, url_version, status=200, body="1")
     responses.add(responses.GET, url_version, status=200, body="42")
 
-    # When the remote version file doesn't exist, we consider the db as being old.
-    assert db.is_old_schema(db_path)
+    # When the remote version file doesn't exist, we consider the db as being new.
+    assert db.is_different_schema(db_path)
 
-    # When the remote version file doesn't exist, we consider the db as being old.
-    assert db.is_old_schema(db_path)
-
-    # When the remote version file exists and returns the same version as the current db, we consider the remote db as not being old.
-    assert not db.is_old_schema(db_path)
-
-    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.
-    assert not db.is_old_schema(db_path)
+    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.(different version)
+    assert not db.is_different_schema(db_path)
 
     db.register(db_path, url_zst, 43, support_files=[])
 
-    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.
-    assert db.is_old_schema(db_path)
+    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.(different version)
+    assert db.is_different_schema(db_path)
