@@ -413,13 +413,19 @@ def test_is_different_schema(tmp_path):
     responses.add(responses.GET, url_version, status=200, body="1")
     responses.add(responses.GET, url_version, status=200, body="42")
 
-    # When the remote version file doesn't exist, we consider the db as being new.
+    # When the remote version file doesn't exist (due to 404 status), we consider the current db version as being different.
     assert db.is_different_schema(db_path)
 
-    # When the remote version file exists and returns a newer version than the current db, we consider the remote db as not being old.(different version)
+    # When the remote version file doesn't exist (due to 424 status), we consider the current db version as being different.
+    assert db.is_different_schema(db_path)
+
+    # When the remote version file exists and returns the same version as the current db, we consider that the current db version is not different from remote db version.
     assert not db.is_different_schema(db_path)
+
+    # When the remote version file exists and returns a newer version than the current db, we consider that the current db version is different from remote db version.
+    assert db.is_different_schema(db_path)
 
     db.register(db_path, url_zst, 43, support_files=[])
 
-    # When the remote version file exists and returns an older version than the current db, we consider the remote db as being old.(different version)
+    # When the remote version file exists and returns an older version than the current db, we consider that the current db version is different from remote db version.
     assert db.is_different_schema(db_path)
