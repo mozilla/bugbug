@@ -535,6 +535,7 @@ def model_prediction_github(model_name, owner, repo, issue_num):
     if not data:
         if not is_pending(job):
             schedule_issue_classification(model_name, owner, repo, [issue_num])
+        
         status_code = 202
         data = {"ready": False}
 
