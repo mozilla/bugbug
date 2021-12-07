@@ -174,7 +174,7 @@ def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
-def schedule_init(job: JobInfo, job_id: Optional[str] = None):
+def init_job(job: JobInfo, job_id: Optional[str] = None) -> str:
     job_id = job_id or get_job_id()
     redis_conn.mset({job.mapping_key: job_id})
     return job_id
@@ -183,7 +183,7 @@ def schedule_init(job: JobInfo, job_id: Optional[str] = None):
 def schedule_job(
     job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
 ) -> None:
-    job_id = schedule_init(job, job_id)
+    job_id = init_job(job, job_id)
 
     q.enqueue(
         job.func,
@@ -198,7 +198,7 @@ def schedule_job(
 def prepare_queue_job(
     job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
 ) -> Queue:
-    job_id = schedule_init(job, job_id)
+    job_id = init_job(job, job_id)
     return Queue.prepare_data(
         job.func,
         args=job.args,
@@ -209,7 +209,9 @@ def prepare_queue_job(
     )
 
 
-def create_bug_classification_jobs(model_name: str, bug_ids: Sequence[int]):
+def create_bug_classification_jobs(
+    model_name: str, bug_ids: Sequence[int]
+) -> tuple[JobInfo, str, int]:
     """Create job_id and redis connection"""
     job_id = get_job_id()
 
@@ -221,7 +223,7 @@ def create_bug_classification_jobs(model_name: str, bug_ids: Sequence[int]):
 
     redis_conn.mset(job_id_mapping)
 
-    return job_id
+    return JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN), job_id, BUGZILLA_JOB_TIMEOUT
 
 
 def schedule_issue_classification(
@@ -451,11 +453,8 @@ def model_prediction(model_name, bug_id):
 
     if not data:
         if not is_pending(job):
-            job_id = create_bug_classification_jobs(model_name, [bug_id])
             schedule_job(
-                JobInfo(classify_bug, model_name, [bug_id], BUGZILLA_TOKEN),
-                job_id=job_id,
-                timeout=BUGZILLA_JOB_TIMEOUT,
+                create_bug_classification_jobs(model_name, [bug_id])
             )
         status_code = 202
         data = {"ready": False}
@@ -535,7 +534,6 @@ def model_prediction_github(model_name, owner, repo, issue_num):
     if not data:
         if not is_pending(job):
             schedule_issue_classification(model_name, owner, repo, [issue_num])
-        
         status_code = 202
         data = {"ready": False}
 
@@ -710,12 +708,9 @@ def batch_prediction(model_name):
 
     for i in range(0, len(missing_bugs), 100):
         bug_ids = missing_bugs[i : (i + 100)]
-        job_id = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(
             prepare_queue_job(
-                JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-                job_id=job_id,
-                timeout=BUGZILLA_JOB_TIMEOUT,
+                create_bug_classification_jobs(model_name, bug_ids)
             )
         )
     
