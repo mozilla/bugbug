@@ -457,7 +457,9 @@ def model_prediction(model_name, bug_id):
 
     if not data:
         if not is_pending(job):
-            job_info, job_id, timeout = create_bug_classification_jobs(model_name, [bug_id])
+            job_info, job_id, timeout = create_bug_classification_jobs(
+                model_name, [bug_id]
+            )
             schedule_job(job_info, job_id=job_id, timeout=timeout)
         status_code = 202
         data = {"ready": False}
@@ -712,9 +714,7 @@ def batch_prediction(model_name):
     for i in range(0, len(missing_bugs), 100):
         bug_ids = missing_bugs[i : (i + 100)]
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
-        queueJobList.append(
-            prepare_queue_job(job_info, job_id=job_id, timeout=timeout)
-        )
+        queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
     
     q.enqueue_many(queueJobList)
 
