@@ -1038,7 +1038,7 @@ def notification(days: int) -> None:
 
     carrytest = set()
     for bug in bug_summaries:
-        if bug["team"] in ("Other", "Mozilla"):
+        if bug["team"] in (None, "Other", "Mozilla"):
             continue
 
         cur_team_data = team_data[bug["team"]]
