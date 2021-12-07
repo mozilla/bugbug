@@ -245,9 +245,9 @@ def schedule_issue_classification(
     redis_conn.mset(job_id_mapping)
 
     schedule_job(
-        JobInfo(classify_issue, model_name, owner, repo, issue_nums),
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
+        JobInfo(classify_issue, model_name, owner, repo, issue_nums), 
+        job_id=job_id, 
+        timeout=BUGZILLA_JOB_TIMEOUT
     )
 
 
