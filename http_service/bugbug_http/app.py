@@ -226,7 +226,7 @@ def create_bug_classification_jobs(
     return (
         JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN), 
         job_id, 
-        BUGZILLA_JOB_TIMEOUT
+        BUGZILLA_JOB_TIMEOUT, 
     )
 
 
@@ -247,7 +247,7 @@ def schedule_issue_classification(
     schedule_job(
         JobInfo(classify_issue, model_name, owner, repo, issue_nums), 
         job_id=job_id, 
-        timeout=BUGZILLA_JOB_TIMEOUT
+        timeout=BUGZILLA_JOB_TIMEOUT, 
     )
 
 
@@ -715,7 +715,7 @@ def batch_prediction(model_name):
         bug_ids = missing_bugs[i : (i + 100)]
         job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
-    
+        
     q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
