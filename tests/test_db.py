@@ -121,6 +121,40 @@ def test_exists_db(tmp_path):
     assert db.exists(db_path)
 
 
+
+def test_last_modified(tmp_path, mock_zst):
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
+    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
+
+    db_path = tmp_path / "prova.json"
+    db.register(db_path, mock_zst, 42)
+
+    responses.add(responses.GET, url_version, status=200, body="42")
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=200,
+        headers={
+            "ETag": "123",
+            "Accept-Encoding": "zstd",
+        },
+    )
+
+    # when current db and remote db versions are same, Last-Modified header is not present at the remote db.
+    # then last_modified function should raise Exception.
+    exception__raised = False
+    try:
+        db.last_modified(db_path)
+    except Exception as e:
+        if e.args[0] == "Last-Modified is not available" :
+            exception__raised = True
+    assert exception__raised
+
+
+
+
+
 def test_download(tmp_path, mock_zst):
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
@@ -184,7 +218,7 @@ def test_download_missing(tmp_path, mock_zst):
         db.last_modified(db_path)
 
 
-def test_download_old_schema(tmp_path, mock_zst):
+def test_download_different_schema(tmp_path, mock_zst):
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
 
@@ -212,7 +246,7 @@ def test_download_old_schema(tmp_path, mock_zst):
 
     assert not db.download(db_path)
 
-    assert db.last_modified(db_path) == datetime(2019, 4, 16)
+    assert not db.last_modified(db_path) == datetime(2019, 4, 16)
 
     assert not os.path.exists(db_path)
     assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))

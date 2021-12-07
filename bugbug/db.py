@@ -119,6 +119,7 @@ def upload(path):
 
 
 def last_modified(path):
+
     if is_different_schema(path):
         raise LastModifiedNotAvailable()
 
