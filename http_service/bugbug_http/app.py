@@ -224,28 +224,6 @@ def create_bug_classification_jobs(model_name: str, bug_ids: Sequence[int]):
     return job_id
 
 
-def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]):
-    """Schedule the classification of a bug_id list"""
-    job_id = create_bug_classification_jobs(model_name, bug_ids)
-
-    schedule_job(
-        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
-    )
-
-
-def prepare_multi_bug_classification(model_name: str, bug_ids: Sequence[int]):
-    """Prepare the classification of a bug_id list"""
-    job_id = create_bug_classification_jobs(model_name, bug_ids)
-
-    return prepare_queue_job(
-        JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
-    )
-
-
 def schedule_issue_classification(
     model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
 ) -> None:
@@ -473,7 +451,12 @@ def model_prediction(model_name, bug_id):
 
     if not data:
         if not is_pending(job):
-            schedule_bug_classification(model_name, [bug_id])
+            job_id = create_bug_classification_jobs(model_name, [bug_id])
+            schedule_job(
+                JobInfo(classify_bug, model_name, [bug_id], BUGZILLA_TOKEN),
+                job_id=job_id,
+                timeout=BUGZILLA_JOB_TIMEOUT,
+            )
         status_code = 202
         data = {"ready": False}
 
@@ -724,8 +707,14 @@ def batch_prediction(model_name):
 
     queueJobList: Queue = []
     for i in range(0, len(missing_bugs), 100):
+        bug_ids = missing_bugs[i : (i + 100)]
+        job_id = create_bug_classification_jobs(model_name, bug_ids)
         queueJobList.append(
-            prepare_multi_bug_classification(model_name, missing_bugs[i : (i + 100)])
+            prepare_queue_job(
+                JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
+                job_id=job_id,
+                timeout=BUGZILLA_JOB_TIMEOUT,
+            )
         )
     q.enqueue_many(queueJobList)
 
