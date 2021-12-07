@@ -706,6 +706,7 @@ def batch_prediction(model_name):
             data[str(bug_id)] = {"ready": False}
 
     queueJobList: Queue = []
+
     for i in range(0, len(missing_bugs), 100):
         bug_ids = missing_bugs[i : (i + 100)]
         job_id = create_bug_classification_jobs(model_name, bug_ids)
@@ -716,6 +717,7 @@ def batch_prediction(model_name):
                 timeout=BUGZILLA_JOB_TIMEOUT,
             )
         )
+    
     q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
