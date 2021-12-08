@@ -234,7 +234,8 @@ def test_download_different_schema(tmp_path, mock_zst):
 
     assert not db.download(db_path)
 
-    assert not db.last_modified(db_path) == datetime(2019, 4, 16)
+    with pytest.raises(Exception, match="Last-Modified is not available"):
+        db.last_modified(db_path)
 
     assert not os.path.exists(db_path)
     assert not os.path.exists(db_path.with_suffix(db_path.suffix + ".zst"))
