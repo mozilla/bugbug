@@ -20,7 +20,12 @@ class Retriever(object):
         db.download(bugzilla.BUGS_DB)
 
         # Get IDs of bugs changed since last run.
-        last_modified = db.last_modified(bugzilla.BUGS_DB)
+        try:
+            last_modified = db.last_modified(bugzilla.BUGS_DB)
+        except Exception as e:
+            if str(e) == "Last-Modified is not available":
+                return
+
         logger.info(
             f"Retrieving IDs of bugs modified since the last run on {last_modified}"
         )
