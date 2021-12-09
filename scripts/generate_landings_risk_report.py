@@ -846,10 +846,7 @@ class LandingsRiskReportGenerator(object):
 
         meta_bugs = self.get_meta_bugs(days)
 
-        try:
-            last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except Exception:
-            raise
+        last_modified = db.last_modified(bugzilla.BUGS_DB)
 
         logger.info(f"Deleting bugs modified since the last run on {last_modified}")
         changed_ids = bugzilla.get_ids(
