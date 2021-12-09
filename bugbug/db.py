@@ -16,6 +16,7 @@ import requests
 import zstandard
 
 from bugbug import utils
+from bugbug.models.exception import CustomException
 
 DATABASES = {}
 
@@ -119,7 +120,7 @@ def last_modified(path):
     last_modified = utils.get_last_modified(url)
 
     if last_modified is None:
-        raise Exception("Last-Modified is not available")
+        raise CustomException("Last-Modified is not available")
 
     return last_modified
 
