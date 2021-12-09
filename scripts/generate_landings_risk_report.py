@@ -848,9 +848,8 @@ class LandingsRiskReportGenerator(object):
 
         try:
             last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except Exception as e:
-            if str(e) == "Last-Modified is not available":
-                return
+        except Exception:
+            raise
 
         logger.info(f"Deleting bugs modified since the last run on {last_modified}")
         changed_ids = bugzilla.get_ids(
