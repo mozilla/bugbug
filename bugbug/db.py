@@ -16,7 +16,6 @@ import requests
 import zstandard
 
 from bugbug import utils
-from bugbug.models.exception import CustomException
 
 DATABASES = {}
 
@@ -120,7 +119,7 @@ def last_modified(path):
     last_modified = utils.get_last_modified(url)
 
     if last_modified is None:
-        raise CustomException("Last-Modified is not available")
+        raise LastModifiedNotAvailable("Last-Modified is not available")
 
     return last_modified
 
@@ -151,6 +150,14 @@ class PickleStore(Store):
                 yield pickle.load(self.fh)
         except EOFError:
             pass
+
+
+class LastModifiedNotAvailable(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
 
 
 COMPRESSION_FORMATS = ["gz", "zstd"]
