@@ -27,7 +27,7 @@ class Retriever(object):
             if str(e) == "Last-Modified is not available":
                 pass
 
-        if last_modified:
+        if last_modified is not None:
             logger.info(
                 f"Retrieving IDs of bugs modified since the last run on {last_modified}"
             )
@@ -40,6 +40,8 @@ class Retriever(object):
                     }
                 )
             )
+        else:
+            changed_ids = set()
 
         logger.info(f"Retrieved {len(changed_ids)} IDs.")
 
@@ -48,8 +50,7 @@ class Retriever(object):
         deleted_component_ids = set(
             bug["id"]
             for bug in bugzilla.get_bugs()
-            if "{}::{}".format(bug["product"], bug["component"])
-            not in all_components
+            if "{}::{}".format(bug["product"], bug["component"]) not in all_components
         )
         logger.info(
             f"{len(deleted_component_ids)} bugs belonging to deleted components"
