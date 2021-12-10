@@ -22,6 +22,10 @@ DATABASES = {}
 logger = logging.getLogger(__name__)
 
 
+class LastModifiedNotAvailable(Exception):
+    pass
+
+
 def register(path, url, version, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
@@ -150,10 +154,6 @@ class PickleStore(Store):
                 yield pickle.load(self.fh)
         except EOFError:
             pass
-
-
-class LastModifiedNotAvailable(Exception):
-    pass
 
 
 COMPRESSION_FORMATS = ["gz", "zstd"]
