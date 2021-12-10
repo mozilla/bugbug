@@ -148,7 +148,6 @@ def download_modified_revisions():
     try:
         last_modified = db.last_modified(REVISIONS_DB)
     except LastModifiedNotAvailable as e:
-        logger.error("Exception:", e)
         return
 
     modified_revisions = get(modified_start=last_modified)

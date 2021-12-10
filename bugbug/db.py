@@ -119,7 +119,7 @@ def last_modified(path):
     last_modified = utils.get_last_modified(url)
 
     if last_modified is None:
-        raise LastModifiedNotAvailable("Last-Modified is not available")
+        raise LastModifiedNotAvailable()
 
     return last_modified
 
@@ -153,11 +153,7 @@ class PickleStore(Store):
 
 
 class LastModifiedNotAvailable(Exception):
-    def __init__(self, message):
-        self.message = message
-
-    def __str__(self):
-        return self.message
+    pass
 
 
 COMPRESSION_FORMATS = ["gz", "zstd"]
