@@ -147,7 +147,7 @@ def download_revisions(rev_ids: Collection[int]) -> None:
 def download_modified_revisions():
     try:
         last_modified = db.last_modified(REVISIONS_DB)
-    except LastModifiedNotAvailable as e:
+    except LastModifiedNotAvailable:
         return
 
     modified_revisions = get(modified_start=last_modified)
