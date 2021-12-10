@@ -17,18 +17,31 @@ class Retriever(object):
     def retrieve_bugs(self, limit: int = None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
+        last_modified = None
         db.download(bugzilla.BUGS_DB)
 
         # Get IDs of bugs changed since last run.
-        last_modified = db.last_modified(bugzilla.BUGS_DB)
-        logger.info(
-            f"Retrieving IDs of bugs modified since the last run on {last_modified}"
-        )
-        changed_ids = set(
-            bugzilla.get_ids(
-                {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
+        try:
+            last_modified = db.last_modified(bugzilla.BUGS_DB)
+        except db.LastModifiedNotAvailable:
+            pass
+
+        if last_modified is not None:
+            logger.info(
+                f"Retrieving IDs of bugs modified since the last run on {last_modified}"
             )
-        )
+            changed_ids = set(
+                bugzilla.get_ids(
+                    {
+                        "f1": "delta_ts",
+                        "o1": "greaterthaneq",
+                        "v1": last_modified.date(),
+                    }
+                )
+            )
+        else:
+            changed_ids = set()
+
         logger.info(f"Retrieved {len(changed_ids)} IDs.")
 
         all_components = bugzilla.get_product_component_count(9999)
