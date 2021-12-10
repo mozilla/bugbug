@@ -12,6 +12,7 @@ import requests
 import responses
 
 from bugbug import db
+from bugbug.db import LastModifiedNotAvailable
 
 
 @pytest.fixture
@@ -179,7 +180,7 @@ def test_download_missing(tmp_path, mock_zst):
     assert not db.download(db_path)
     assert not os.path.exists(db_path)
 
-    with pytest.raises(Exception, match="Last-Modified is not available"):
+    with pytest.raises(LastModifiedNotAvailable):
         db.last_modified(db_path)
 
 
