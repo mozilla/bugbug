@@ -22,6 +22,10 @@ DATABASES = {}
 logger = logging.getLogger(__name__)
 
 
+class LastModifiedNotAvailable(Exception):
+    pass
+
+
 def register(path, url, version, support_files=[]):
     DATABASES[path] = {"url": url, "version": version, "support_files": support_files}
 
@@ -119,7 +123,7 @@ def last_modified(path):
     last_modified = utils.get_last_modified(url)
 
     if last_modified is None:
-        raise Exception("Last-Modified is not available")
+        raise LastModifiedNotAvailable()
 
     return last_modified
 

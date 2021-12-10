@@ -12,6 +12,7 @@ from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
 from bugbug import db
+from bugbug.db import LastModifiedNotAvailable
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +147,8 @@ def download_revisions(rev_ids: Collection[int]) -> None:
 def download_modified_revisions():
     try:
         last_modified = db.last_modified(REVISIONS_DB)
-    except Exception as e:
-        if str(e) == "Last-Modified is not available":
-            return
+    except LastModifiedNotAvailable:
+        return
 
     modified_revisions = get(modified_start=last_modified)
     modified_revision_ids = set(rev["id"] for rev in modified_revisions)
