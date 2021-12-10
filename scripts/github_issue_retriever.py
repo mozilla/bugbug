@@ -66,9 +66,8 @@ class Retriever(object):
 
         try:
             last_modified = db.last_modified(self.github.db_path)
-        except Exception as e:
-            if str(e) == "Last-Modified is not available":
-                pass
+        except db.LastModifiedNotAvailable:
+            pass
 
         if last_modified:
             logger.info(

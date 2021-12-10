@@ -23,9 +23,8 @@ class Retriever(object):
         # Get IDs of bugs changed since last run.
         try:
             last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except Exception as e:
-            if str(e) == "Last-Modified is not available":
-                pass
+        except db.LastModifiedNotAvailable:
+            pass
 
         if last_modified is not None:
             logger.info(
