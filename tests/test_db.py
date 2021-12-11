@@ -121,28 +121,6 @@ def test_exists_db(tmp_path):
     assert db.exists(db_path)
 
 
-def test_last_modified(tmp_path):
-    url_zst = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
-    url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
-
-    db_path = tmp_path / "prova.json"
-    db.register(db_path, url_zst, 42)
-
-    responses.add(responses.GET, url_version, status=200, body="42")
-
-    responses.add(
-        responses.HEAD,
-        url_zst,
-        status=200,
-        headers={},
-    )
-
-    # when current db and remote db versions are same, Last-Modified header is not present at the remote db.
-    # then last_modified function should raise Exception.
-    with pytest.raises(Exception, match="Last-Modified is not available"):
-        db.last_modified(db_path)
-
-
 def test_download(tmp_path, mock_zst):
     url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.zst"
     url_version = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_commits.latest/artifacts/public/prova.json.version"
