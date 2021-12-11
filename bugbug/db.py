@@ -45,24 +45,7 @@ def exists(path):
     return os.path.exists(path)
 
 
-def is_old_schema(path):
-    url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
-    r = requests.get(url)
-
-    if not r.ok:
-        logger.info(f"Version file is not yet available to download for {path}")
-        return True
-
-    prev_version = int(r.text)
-
-    return DATABASES[path]["version"] > prev_version
-
-
-# used almost same code as is_old_schema function with small change at return statement.
-# added function docstring.
-def is_db_version_changed(path):
-    """This function checks if db version chnaged ? return 1 if version is changed and 0 if not changed"""
-
+def is_different_schema(path):
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     r = requests.get(url)
 
@@ -77,7 +60,7 @@ def is_db_version_changed(path):
 
 def download_support_file(path, file_name, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
-    if is_old_schema(path):
+    if is_different_schema(path):
         return False
 
     try:
@@ -102,7 +85,7 @@ def download_support_file(path, file_name, extract=True):
 # Download and extract databases.
 def download(path, support_files_too=False, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
-    if is_old_schema(path):
+    if is_different_schema(path):
         return False
 
     zst_path = f"{path}.zst"
@@ -136,27 +119,12 @@ def upload(path):
 
 
 def last_modified(path):
-
-    # if database version changed then download the database again
-    if is_db_version_changed(path):
-        print("\nDatabase version changed")
-        download_status = download(path)
-
-        if download_status:
-            print(
-                f"\nDownload_status = {download_status}\n"
-                + "Database download is successful."
-            )
-        else:
-            return (
-                f"\nDownload_status = {download_status}\n" + "Database download failed."
-            )
+    if is_different_schema(path):
+        raise LastModifiedNotAvailable()
 
     url = DATABASES[path]["url"]
     last_modified = utils.get_last_modified(url)
-
-    if last_modified is None:
-        raise LastModifiedNotAvailable()
+    # if no Last-Modified header then that needs to be handled. (in another PR)
 
     return last_modified
 
