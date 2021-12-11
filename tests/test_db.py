@@ -212,7 +212,7 @@ def test_download_different_schema(tmp_path, mock_zst):
 
     assert not db.download(db_path)
 
-    with pytest.raises(Exception, match="Last-Modified is not available"):
+    with pytest.raises(db.LastModifiedNotAvailable):
         db.last_modified(db_path)
 
     assert not os.path.exists(db_path)
