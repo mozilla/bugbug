@@ -119,13 +119,14 @@ def upload(path):
 
 
 def last_modified(path):
-
     if is_different_schema(path):
         raise LastModifiedNotAvailable()
 
     url = DATABASES[path]["url"]
     last_modified = utils.get_last_modified(url)
-    # if no Last-Modified header then that needs to be handled. (in another PR)
+
+    if last_modified is None:
+        raise LastModifiedNotAvailable()
 
     return last_modified
 
