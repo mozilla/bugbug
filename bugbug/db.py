@@ -45,7 +45,7 @@ def exists(path):
     return os.path.exists(path)
 
 
-def is_old_schema(path):
+def is_different_schema(path):
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
     r = requests.get(url)
 
@@ -55,12 +55,12 @@ def is_old_schema(path):
 
     prev_version = int(r.text)
 
-    return DATABASES[path]["version"] > prev_version
+    return DATABASES[path]["version"] != prev_version
 
 
 def download_support_file(path, file_name, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
-    if is_old_schema(path):
+    if is_different_schema(path):
         return False
 
     try:
@@ -85,7 +85,7 @@ def download_support_file(path, file_name, extract=True):
 # Download and extract databases.
 def download(path, support_files_too=False, extract=True):
     # If a DB with the current schema is not available yet, we can't download.
-    if is_old_schema(path):
+    if is_different_schema(path):
         return False
 
     zst_path = f"{path}.zst"
@@ -119,6 +119,9 @@ def upload(path):
 
 
 def last_modified(path):
+    if is_different_schema(path):
+        raise LastModifiedNotAvailable()
+
     url = DATABASES[path]["url"]
     last_modified = utils.get_last_modified(url)
 
