@@ -1,5 +1,5 @@
 import ApexCharts from "apexcharts";
-import { Temporal } from "@js-temporal/polyfill/lib/index.mjs";
+import { Temporal } from "@js-temporal/polyfill";
 import localForage from "localforage";
 
 // let METABUGS_URL =

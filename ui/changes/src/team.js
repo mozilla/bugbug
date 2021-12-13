@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill/lib/index.mjs";
+import { Temporal } from "@js-temporal/polyfill";
 import * as common from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
