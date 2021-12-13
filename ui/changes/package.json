@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.2.0",
-    "apexcharts": "^3.31.0",
+    "apexcharts": "^3.32.0",
     "localforage": "^1.10.0"
   }
 }
