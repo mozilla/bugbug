@@ -2,6 +2,64 @@ import ApexCharts from "apexcharts";
 import { Temporal } from "@js-temporal/polyfill";
 import localForage from "localforage";
 
+// for Select All button
+
+var end_of_ids = [
+  "releaseVersions_index_html",
+  "releaseVersions_feature_html",
+  "releaseVersions_release_html",
+  "types_index_html",
+  "types_feature_html",
+  "testingTags_index_html",
+  "testingTags_feature_html",
+  "teams_index_html",
+  "teams_team_html",
+  "components_index_html",
+  "components_feature_html",
+  "components_team_html",
+  "severities_index_html",
+  "severities_feature_html",
+  "riskiness_index_html",
+  "riskiness_feature_html",
+  "products_feature_html",
+];
+
+// k is to store if all options are selected or not
+var k = {};
+for (var i = 0; i < end_of_ids.length; i++) {
+  k["select_all_" + end_of_ids[i]] = false;
+}
+
+var button_prefix = ["", "Undo "];
+
+function selectAll(select_all_el_id, select_el_id) {
+  var select_el = document.getElementById(select_el_id);
+  var select_all_el = document.getElementById(select_all_el_id);
+  for (var p = 0; p < select_el.options.length; p++) {
+    if (!k[select_all_el_id]) {
+      select_el.options[p].selected = true;
+    } else {
+      select_el.options[p].selected = false;
+    }
+  }
+  k[select_all_el_id] = !k[select_all_el_id];
+  select_all_el.textContent =
+    button_prefix[Number(k[select_all_el_id])] + "Select All";
+}
+
+for (var i = 0; i < end_of_ids.length; i++)
+  (function (i) {
+    var end_of_id = end_of_ids[i];
+    var select_all_el_id = "select_all_" + end_of_id;
+    var select_all_el = document.getElementById(select_all_el_id);
+    if (select_all_el != null) {
+      var select_el_id = end_of_id.slice(0, end_of_id.search("_"));
+      select_all_el.onclick = function () {
+        selectAll(select_all_el_id, select_el_id);
+      };
+    }
+  })(i);
+
 // let METABUGS_URL =
 //   "https://bugzilla.mozilla.org/rest/bug?include_fields=id,summary,status&keywords=feature-testing-meta%2C%20&keywords_type=allwords";
 let LANDINGS_URL =
