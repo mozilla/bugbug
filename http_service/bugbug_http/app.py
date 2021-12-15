@@ -778,6 +778,71 @@ def push_schedules(branch, rev):
     return jsonify({"ready": False}), 202
 
 
+@application.route("/push/<path:branch>/<rev>/patch", methods = ['POST'])
+@cross_origin()
+def push_patches(branch, rev):
+    """
+    ---
+    post:
+      description: Determine which tests and tasks a push should schedule.
+      summary: Get which tests and tasks to schedule.
+      parameters:
+      - name: branch
+        in: path
+        schema:
+          BranchName
+      - name: rev
+        in: path
+        schema:
+          type: str
+          example: 76383a875678
+      requestBody:
+        description: The details of patch to be executed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                patch:
+                  type: object
+      responses:
+        200:
+          description: A dict of tests and tasks to schedule.
+          content:
+            application/json:
+              schema: Schedules
+        202:
+          description: Request is still being processed.
+          content:
+            application/json:
+              schema: NotAvailableYet
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    # Support the string 'autoland' for convenience.
+    if branch == "autoland":
+        branch = "integration/autoland"
+
+    patch_body = request.data
+
+    LOGGER.info(f"Rev value: {rev}")
+    LOGGER.info("Patch data: %r", patch_body)
+
+    return jsonify({"ready": False}), 202
+
+
 @application.route("/config_specific_groups/<path:config>")
 @cross_origin()
 def config_specific_groups(config: str) -> tuple[Response, int]:
