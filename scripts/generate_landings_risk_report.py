@@ -1326,7 +1326,9 @@ def notification(days: int) -> None:
         )
 
         assignment = (
-            "Assigned" if full_bug["status"] == "ASSIGNED" else "**Unassigned**"
+            "Assigned"
+            if full_bug["assigned_to"] != "nobody@mozilla.org"
+            else "**Unassigned**"
         )
 
         hours = math.ceil(
