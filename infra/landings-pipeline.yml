@@ -98,7 +98,7 @@ tasks:
         features:
           taskclusterProxy: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.3.1
+        image: mozilla/taskboot:0.3.4
         env:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
