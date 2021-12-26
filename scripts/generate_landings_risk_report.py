@@ -564,6 +564,7 @@ class LandingsRiskReportGenerator(object):
                 commits_data.append(
                     {
                         "id": commit["node"],
+                        "date": commit["pushdate"],
                         "rev_id": revision_id,
                         "testing": testing,
                         "risk": float(probs[i][1]),
@@ -1126,6 +1127,12 @@ def notification(days: int) -> None:
                     if commit["backedout"]:
                         continue
 
+                    # We don't care about old commits associated to newly fixed bugs (e.g. a tentative fix from a year ago).
+                    if dateutil.parser.parse(
+                        commit["date"]
+                    ) < datetime.utcnow() - relativedelta(weeks=1):
+                        continue
+
                     lines_added = 0
                     lines_covered = 0
                     if commit["coverage"] and commit["coverage"][0] is not None:
@@ -1326,7 +1333,9 @@ def notification(days: int) -> None:
         )
 
         assignment = (
-            "Assigned" if full_bug["status"] == "ASSIGNED" else "**Unassigned**"
+            "Assigned"
+            if full_bug["assigned_to"] != "nobody@mozilla.org"
+            else "**Unassigned**"
         )
 
         hours = math.ceil(

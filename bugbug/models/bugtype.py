@@ -68,7 +68,7 @@ def bug_to_types(
 
     if any(
         f"[{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in ("fxperf", "snappy")
+        for whiteboard_text in ("fxperf", "snappy", "pdfjs-c-performance")
     ):
         types.add("perf")
 
