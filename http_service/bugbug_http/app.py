@@ -30,11 +30,11 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
+    apply_patch,
     classify_bug,
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
-    apply_patch
 )
 from bugbug_http.sentry import setup_sentry
 
