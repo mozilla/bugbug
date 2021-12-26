@@ -36,6 +36,7 @@ from bugbug_http.models import (
     schedule_tests,
 )
 from bugbug_http.sentry import setup_sentry
+from http_service.bugbug_http.models import apply_patch
 
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
@@ -778,7 +779,7 @@ def push_schedules(branch, rev):
     return jsonify({"ready": False}), 202
 
 
-@application.route("/push/<path:branch>/<rev>/patch", methods = ['POST'])
+@application.route("/push/<path:branch>/<rev>/patch", methods=['POST'])
 @cross_origin()
 def push_patches(branch, rev):
     """
@@ -839,6 +840,14 @@ def push_patches(branch, rev):
 
     LOGGER.info(f"Rev value: {rev}")
     LOGGER.info("Patch data: %r", patch_body)
+
+    job = JobInfo(apply_patch, branch, rev, patch_body)
+    data = get_result(job)
+    if data:
+        return compress_response(data, 200)
+
+    if not is_pending(job):
+        schedule_job(job)
 
     return jsonify({"ready": False}), 202
 

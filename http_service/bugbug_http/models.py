@@ -239,6 +239,13 @@ def schedule_tests(branch: str, rev: str) -> str:
     return "OK"
 
 
+def apply_patch(branch: str, rev: str, patch_body: str) -> str:
+    #TODO: Apply patch
+    LOGGER.info(patch_body)
+
+    return schedule_tests(branch, rev)
+
+
 def get_config_specific_groups(config: str) -> str:
     from bugbug_http.app import JobInfo
 
