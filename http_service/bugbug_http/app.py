@@ -779,7 +779,7 @@ def push_schedules(branch, rev):
     return jsonify({"ready": False}), 202
 
 
-@application.route("/push/<path:branch>/<rev>/patch", methods=['POST'])
+@application.route("/push/<path:branch>/<rev>/patch", methods=["POST"])
 @cross_origin()
 def push_patches(branch, rev):
     """

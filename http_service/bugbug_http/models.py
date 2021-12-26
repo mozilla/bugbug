@@ -240,7 +240,7 @@ def schedule_tests(branch: str, rev: str) -> str:
 
 
 def apply_patch(branch: str, rev: str, patch_body: str) -> str:
-    #TODO: Apply patch
+    # TODO: Apply patch
     LOGGER.info(patch_body)
 
     return schedule_tests(branch, rev)
