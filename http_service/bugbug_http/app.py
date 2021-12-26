@@ -34,9 +34,9 @@ from bugbug_http.models import (
     classify_issue,
     get_config_specific_groups,
     schedule_tests,
+    apply_patch
 )
 from bugbug_http.sentry import setup_sentry
-from http_service.bugbug_http.models import apply_patch
 
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
