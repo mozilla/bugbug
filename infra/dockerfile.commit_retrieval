@@ -1,17 +1,12 @@
 FROM mozilla/bugbug-base:latest
 
-# Activate testing for git
-COPY infra/testing.pinning /etc/apt/preferences.d/00testing
-RUN echo 'deb http://deb.debian.org/debian testing main non-free contrib' > /etc/apt/sources.list.d/testing.list
-
 ENV PATH="${PATH}:/git-cinnabar"
 
 # git is required by the annotate pipeline.
 # libcurl4 is required by git-cinnabar.
 # patch is required by the commit classifier script.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends -o APT::Immediate-Configure=false -t testing git && \
-    apt-get install -y --no-install-recommends xz-utils curl patch libcurl4 && \
+    apt-get install -y --no-install-recommends git xz-utils curl patch libcurl4 && \
     hg clone -r 534f9ee2ff2b9c12df802fb14f0fed7c16dd5b6c https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \

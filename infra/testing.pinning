@@ -1,7 +1,0 @@
-Package: *
-Pin: release a=buster
-Pin-Priority: 700
-
-Package: *
-Pin: release a=testing
-Pin-Priority: 650
