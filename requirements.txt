@@ -8,7 +8,7 @@ markdown2==2.4.2
 matplotlib==3.5.1
 mercurial==5.9.3
 microannotate==0.0.24
-mozci==2.0.3
+mozci==2.1.0
 numpy==1.22.1
 orjson==3.6.6
 ortools==9.2.9972
