@@ -232,10 +232,10 @@ def download_model(model_name: str) -> str:
 
 
 def zstd_compress(path: str) -> None:
-    cctx = zstandard.ZstdCompressor(threads=-1)
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
+    if not os.path.exists(path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
+    subprocess.run(["zstd", path], check=True)
 
 
 def zstd_decompress(path: str) -> None:
