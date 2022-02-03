@@ -63,6 +63,7 @@ class Retriever(object):
             nonlocal reretrieve
             num_cached = 0
             num_pushes = len(pushes)
+            num_errors = 0
 
             for push, future in zip(pushes, futures):
                 cached = future.result()
@@ -82,7 +83,10 @@ class Retriever(object):
                     num_cached += 1
                     value, mozci_version = cached
                     assert len(value) == 5
-                    yield value
+                    if value != "ERROR":
+                        yield value
+                    else:
+                        num_errors += 1
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
 
@@ -115,11 +119,18 @@ class Retriever(object):
                             f"Tasks for push {push.rev} can't be found on ActiveData"
                         )
                     except Exception:
+                        num_errors += 1
                         traceback.print_exc()
+                        mozci.config.cache.put(
+                            key,
+                            ("ERROR", MOZCI_VERSION),
+                            mozci.config["cache"]["retention"],
+                        )
 
                 progress_bar.update(1)
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
+            logger.info(f"There were errors in {num_errors} pushes")
 
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
