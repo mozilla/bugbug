@@ -6,6 +6,8 @@
 import argparse
 from logging import getLogger
 
+import requests
+
 from bugbug import db
 from bugbug.github import Github, IssueDict
 from bugbug.utils import extract_private, zstd_compress
@@ -48,14 +50,22 @@ class Retriever(object):
                     continue
 
                 owner, repo, issue_number = extracted
-                private_issue = self.github.fetch_issue_by_number(
-                    owner, repo, issue_number
-                )
-                if private_issue:
-                    item["title"] = private_issue["title"]
-                    item["body"] = private_issue["body"]
-                    updated_ids.add(item["id"])
-                    updated_issues.append(item)
+                try:
+                    private_issue = self.github.fetch_issue_by_number(
+                        owner, repo, issue_number
+                    )
+
+                    if private_issue:
+                        item["title"] = private_issue["title"]
+                        item["body"] = private_issue["body"]
+                        updated_ids.add(item["id"])
+                        updated_issues.append(item)
+
+                except requests.HTTPError as e:
+                    if e.response.status_code == 410:
+                        logger.info(e)
+                    else:
+                        raise
 
         return updated_issues, updated_ids
 
