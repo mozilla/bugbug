@@ -272,6 +272,36 @@ def test_get_last_modified_missing():
     assert utils.get_last_modified(url) is None
 
 
+def test_zstd_compress_decompress(tmp_path):
+    path = tmp_path / "prova"
+    compressed_path = path.with_suffix(".zst")
+
+    with open(path, "w") as f:
+        json.dump({"Hello": "World"}, f)
+
+    utils.zstd_compress(path)
+
+    assert os.path.exists(compressed_path)
+    os.remove(path)
+
+    utils.zstd_decompress(path)
+
+    with open(path, "r") as f:
+        file_decomp = json.load(f)
+
+    assert file_decomp == {"Hello": "World"}
+
+
+def test_zstd_compress_not_existing(tmp_path, mock_zst):
+    path = tmp_path / "prova"
+    compressed_path = path.with_suffix(".zst")
+
+    with pytest.raises(FileNotFoundError):
+        utils.zstd_compress(path)
+
+    assert not os.path.exists(compressed_path)
+
+
 def test_extract_db_zst(tmp_path, mock_zst):
     path = tmp_path / "prova.zst"
 
