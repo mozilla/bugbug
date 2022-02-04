@@ -57,6 +57,11 @@ More information on the Mozilla Hacks blog:
 
 ## Setup and Prerequisites
 
+Clone the repository using git:
+
+    $ git clone https://github.com/mozilla/bugbug.git
+    $ cd bugbug
+
 Install the Python dependencies:
 
 ```
