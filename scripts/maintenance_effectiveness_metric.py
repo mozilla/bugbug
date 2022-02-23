@@ -51,6 +51,9 @@ def calculate_mainentance_effectiveness_metric(team, components, from_date, to_d
 
             data[query_type][severity] = r.json()["bug_count"]
 
+    print("Before applying weights:")
+    print(data)
+
     for query_type in ("opened", "closed"):
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
@@ -65,6 +68,7 @@ def calculate_mainentance_effectiveness_metric(team, components, from_date, to_d
         ) in bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.items():
             data[query_type][severity] *= weight
 
+    print("After applying weights:")
     print(data)
 
     return round(
