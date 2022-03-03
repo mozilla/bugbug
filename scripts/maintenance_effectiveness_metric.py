@@ -5,76 +5,9 @@
 
 import argparse
 
-from bugbug import bugzilla, utils
+import dateutil.parser
 
-
-def calculate_mainentance_effectiveness_metric(team, components, from_date, to_date):
-    data: dict[str, dict[str, int]] = {
-        "opened": {},
-        "closed": {},
-    }
-
-    for severity in bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
-        params = {
-            "count_only": 1,
-            "type": "defect",
-            "team_name": team,
-            "chfieldfrom": from_date,
-            "chfieldto": to_date,
-        }
-
-        if severity != "--":
-            params["bug_severity"] = severity
-
-        if components is not None:
-            params["component"] = components
-
-        for query_type in ("opened", "closed"):
-            if query_type == "opened":
-                params["chfield"] = "[Bug creation]"
-            elif query_type == "closed":
-                params.update(
-                    {
-                        "chfield": "cf_last_resolved",
-                        "f1": "resolution",
-                        "o1": "notequals",
-                        "v1": "---",
-                    }
-                )
-
-            r = utils.get_session("bugzilla").get(
-                "https://bugzilla.mozilla.org/rest/bug",
-                params=params,
-                headers={"User-Agent": "bugbug"},
-            )
-            r.raise_for_status()
-
-            data[query_type][severity] = r.json()["bug_count"]
-
-    print("Before applying weights:")
-    print(data)
-
-    for query_type in ("opened", "closed"):
-        data[query_type]["--"] = data[query_type]["--"] - sum(
-            data[query_type][s]
-            for s in bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
-            if s != "--"
-        )
-
-        # Apply weights.
-        for (
-            severity,
-            weight,
-        ) in bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.items():
-            data[query_type][severity] *= weight
-
-    print("After applying weights:")
-    print(data)
-
-    return round(
-        (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values())), 2
-    )
-
+from bugbug import bugzilla
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -99,7 +32,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print(
-        calculate_mainentance_effectiveness_metric(
-            args.team, args.components, args.start_date, args.end_date
+        round(
+            bugzilla.calculate_maintenance_effectiveness_metric(
+                args.team,
+                dateutil.parser.parse(args.start_date),
+                dateutil.parser.parse(args.end_date),
+                args.components,
+            ),
+            2,
         )
     )

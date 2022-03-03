@@ -398,3 +398,74 @@ def get_last_activity_excluding_bots(bug: BugDict) -> str:
             return history["when"]
 
     return bug["creation_time"]
+
+
+def calculate_maintenance_effectiveness_metric(
+    team,
+    from_date,
+    to_date,
+    components=None,
+):
+    data: dict[str, dict[str, int]] = {
+        "opened": {},
+        "closed": {},
+    }
+
+    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
+        params = {
+            "count_only": 1,
+            "type": "defect",
+            "team_name": team,
+            "chfieldfrom": from_date.strftime("%Y-%m-%d"),
+            "chfieldto": to_date.strftime("%Y-%m-%d"),
+        }
+
+        if severity != "--":
+            params["bug_severity"] = severity
+
+        if components is not None:
+            params["component"] = components
+
+        for query_type in ("opened", "closed"):
+            if query_type == "opened":
+                params["chfield"] = "[Bug creation]"
+            elif query_type == "closed":
+                params.update(
+                    {
+                        "chfield": "cf_last_resolved",
+                        "f1": "resolution",
+                        "o1": "notequals",
+                        "v1": "---",
+                    }
+                )
+
+            r = utils.get_session("bugzilla").get(
+                "https://bugzilla.mozilla.org/rest/bug",
+                params=params,
+                headers={"User-Agent": "bugbug"},
+            )
+            r.raise_for_status()
+
+            data[query_type][severity] = r.json()["bug_count"]
+
+    print("Before applying weights:")
+    print(data)
+
+    for query_type in ("opened", "closed"):
+        data[query_type]["--"] = data[query_type]["--"] - sum(
+            data[query_type][s]
+            for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
+            if s != "--"
+        )
+
+        # Apply weights.
+        for (
+            severity,
+            weight,
+        ) in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.items():
+            data[query_type][severity] *= weight
+
+    print("After applying weights:")
+    print(data)
+
+    return (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values()))
