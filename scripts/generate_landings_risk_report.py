@@ -1023,20 +1023,6 @@ def notification(days: int) -> None:
         cur_team_data["affecting_carryover_regressions"] = []
         cur_team_data["s1_bugs"] = []
 
-        # Maintenance effectiveness
-        cur_team_data["maintenance_effectiveness"] = {
-            "opened_defects": {
-                "last_week": 0,
-                "last_month": 0,
-                "last_year": 0,
-            },
-            "closed_defects": {
-                "last_week": 0,
-                "last_month": 0,
-                "last_year": 0,
-            },
-        }
-
     carrytest = set()
     for bug in bug_summaries:
         if bug["team"] in (None, "Other", "Mozilla"):
@@ -1048,40 +1034,6 @@ def notification(days: int) -> None:
         fix_date = (
             dateutil.parser.parse(bug["date"]) if bug["date"] is not None else None
         )
-
-        # Maintenance effectiveness
-        if bug_map[bug["id"]]["type"] == "defect":
-            severity_weight = bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.get(
-                bug["severity"],
-                bugzilla.MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT,
-            )
-
-            if creation_date > datetime.utcnow() - relativedelta(weeks=1):
-                cur_team_data["maintenance_effectiveness"]["opened_defects"][
-                    "last_week"
-                ] += severity_weight
-            if creation_date > datetime.utcnow() - relativedelta(months=1):
-                cur_team_data["maintenance_effectiveness"]["opened_defects"][
-                    "last_month"
-                ] += severity_weight
-            if creation_date > datetime.utcnow() - relativedelta(years=1):
-                cur_team_data["maintenance_effectiveness"]["opened_defects"][
-                    "last_year"
-                ] += severity_weight
-
-            if bug["fixed"] and fix_date is not None:
-                if fix_date > datetime.utcnow() - relativedelta(weeks=1):
-                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
-                        "last_week"
-                    ] += severity_weight
-                if fix_date > datetime.utcnow() - relativedelta(months=1):
-                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
-                        "last_month"
-                    ] += severity_weight
-                if fix_date > datetime.utcnow() - relativedelta(years=1):
-                    cur_team_data["maintenance_effectiveness"]["closed_defects"][
-                        "last_year"
-                    ] += severity_weight
 
         if not bug["fixed"]:
             for revision in bug["revisions"]:
@@ -1766,18 +1718,10 @@ List of revisions that have been waiting for a review for longer than 3 days:
 {slow_review_patches}"""
 
             def calculate_maintenance_effectiveness(period):
+                start_date = datetime.utcnow() - period
                 return round(
-                    (
-                        1
-                        + cur_team_data["maintenance_effectiveness"]["closed_defects"][
-                            period
-                        ]
-                    )
-                    / (
-                        1
-                        + cur_team_data["maintenance_effectiveness"]["opened_defects"][
-                            period
-                        ]
+                    bugzilla.calculate_maintenance_effectiveness_metric(
+                        team, start_date, datetime.utcnow()
                     ),
                     2,
                 )
@@ -1785,9 +1729,9 @@ List of revisions that have been waiting for a review for longer than 3 days:
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
 <br />
 
-Last week: {calculate_maintenance_effectiveness("last_week")}
-Last month: {calculate_maintenance_effectiveness("last_month")}
-Last year: {calculate_maintenance_effectiveness("last_year")}
+Last week: {calculate_maintenance_effectiveness(relativedelta(weeks=1))}
+Last month: {calculate_maintenance_effectiveness(relativedelta(months=1))}
+Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
 """
 
             sections = [
