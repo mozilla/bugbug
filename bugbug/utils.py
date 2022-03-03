@@ -235,7 +235,7 @@ def zstd_compress(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstd", path], check=True)
+    subprocess.run(["zstd", "-f", path], check=True)
 
 
 def zstd_decompress(path: str) -> None:
