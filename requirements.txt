@@ -1,4 +1,4 @@
-amqp==5.0.9
+amqp==5.1.0
 beautifulsoup4==4.10.0
 boto3==1.21.11
 imbalanced-learn==0.9.0
