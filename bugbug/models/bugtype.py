@@ -56,6 +56,9 @@ def bug_to_types(
     ):
         types.add("perf")
 
+    if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
+        types.add("perf")
+
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
 
