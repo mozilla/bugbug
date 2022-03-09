@@ -400,7 +400,7 @@ def get_last_activity_excluding_bots(bug: BugDict) -> str:
     return bug["creation_time"]
 
 
-def calculate_maintenance_effectiveness_metric(
+def calculate_maintenance_effectiveness_indicator(
     team,
     from_date,
     to_date,

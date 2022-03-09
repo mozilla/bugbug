@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     print(
         round(
-            bugzilla.calculate_maintenance_effectiveness_metric(
+            bugzilla.calculate_maintenance_effectiveness_indicator(
                 args.team,
                 dateutil.parser.parse(args.start_date),
                 dateutil.parser.parse(args.end_date),

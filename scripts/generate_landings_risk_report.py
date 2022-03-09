@@ -1720,7 +1720,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
             def calculate_maintenance_effectiveness(period):
                 start_date = datetime.utcnow() - period
                 return round(
-                    bugzilla.calculate_maintenance_effectiveness_metric(
+                    bugzilla.calculate_maintenance_effectiveness_indicator(
                         team, start_date, datetime.utcnow()
                     ),
                     2,
