@@ -873,9 +873,9 @@ class LandingsRiskReportGenerator(object):
             crash_signatures["nightly"]
         )
 
-        s1_bugs = bugzilla.get_ids(
+        s1_s2_bugs = bugzilla.get_ids(
             {
-                "severity": "S1",
+                "severity": ["S1", "S2"],
                 "resolution": "---",
             }
         )
@@ -887,7 +887,7 @@ class LandingsRiskReportGenerator(object):
             + [FUZZING_METABUG_ID]
             + meta_bugs
             + crash_bugs
-            + s1_bugs
+            + s1_s2_bugs
         )
 
         logger.info(f"{len(bugs)} bugs to analyze.")
@@ -951,7 +951,7 @@ def notification(days: int) -> None:
 
             all_intermittent_failure_bugs.update(bug["id"] for bug in data["bugs"])
 
-    all_s1_bugs = []
+    all_s1_s2_bugs = []
 
     bug_map = {}
     for b in bugzilla.get_bugs():
@@ -960,11 +960,14 @@ def notification(days: int) -> None:
             or b["id"] in all_crash_bugs
             or b["id"] in all_intermittent_failure_bugs
             or b["severity"] == "S1"
+            or ("regression" in b["keywords"] and b["severity"] == "S2")
         ):
             bug_map[b["id"]] = b
 
-        if b["severity"] == "S1":
-            all_s1_bugs.append(b)
+        if b["severity"] == "S1" or (
+            "regression" in b["keywords"] and b["severity"] == "S2"
+        ):
+            all_s1_s2_bugs.append(b)
 
     all_teams = set(bug["team"] for bug in bug_summaries if bug["team"] is not None)
     all_teams.remove("Other")
@@ -1022,6 +1025,7 @@ def notification(days: int) -> None:
         cur_team_data["carryover_regressions"] = 0
         cur_team_data["affecting_carryover_regressions"] = []
         cur_team_data["s1_bugs"] = []
+        cur_team_data["s2_bugs"] = []
 
     carrytest = set()
     for bug in bug_summaries:
@@ -1158,13 +1162,16 @@ def notification(days: int) -> None:
                             cur_team_data["affecting_carryover_regressions"].append(bug)
                             break
 
-    for bug in all_s1_bugs:
+    for bug in all_s1_s2_bugs:
         if bug["status"] in ("VERIFIED", "RESOLVED"):
             continue
 
         team = component_team_mapping.get(bug["product"], {}).get(bug["component"])
         if team in team_data:
-            team_data[team]["s1_bugs"].append(bug)
+            if bug["severity"] == "S1":
+                team_data[team]["s1_bugs"].append(bug)
+            elif bug["severity"] == "S2":
+                team_data[team]["s2_bugs"].append(bug)
 
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
@@ -1309,8 +1316,8 @@ def notification(days: int) -> None:
 
         notes = []
 
-        if full_bug["severity"] == "S1":
-            notes.append("**Severity S1**")
+        if full_bug["severity"] in ("S1", "S2"):
+            notes.append("**Severity {}**".format(full_bug["severity"]))
 
         pending_needinfos = []
 
@@ -1466,10 +1473,11 @@ table {
                 "affecting_carryover_regressions"
             ]
             s1_bugs = cur_team_data["s1_bugs"]
-            affecting_carryover_regressions_and_s1_text = "\n".join(
+            s2_bugs = cur_team_data["s2_bugs"]
+            affecting_carryover_regressions_and_s1_s2_text = "\n".join(
                 regression_to_text(reg)
                 for reg in sorted(
-                    affecting_carryover_regressions + s1_bugs,
+                    affecting_carryover_regressions + s1_bugs + s2_bugs,
                     key=lambda bug: bugzilla.get_last_activity_excluding_bots(
                         bug_map[bug["id"]]
                     ),
@@ -1634,35 +1642,51 @@ Unfixed regressions from the past two weeks:
 {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
+            carryover_regressions_section_title_texts = []
             if len(s1_bugs) > 0:
-                carryover_regressions_section = (
-                    "<b>CARRYOVER REGRESSIONS AND S1 BUGS</b>"
-                )
-            else:
-                carryover_regressions_section = "<b>CARRYOVER REGRESSIONS</b>"
+                carryover_regressions_section_title_texts.append("S1 BUGS")
+            if len(s2_bugs) > 0:
+                carryover_regressions_section_title_texts.append("S2 REGRESSIONS")
 
-            carryover_regressions_section += f"""
+            carryover_regressions_section_title_texts.append("CARRYOVER REGRESSIONS")
+
+            carryover_regressions_section = (
+                "<b>"
+                + " AND ".join(carryover_regressions_section_title_texts)
+                + f"""</b>
 <br />
 
-There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week."""
+There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week.<br /><br />"""
+            )
 
-            if len(s1_bugs) > 0 and len(affecting_carryover_regressions) > 0:
-                carryover_regressions_section += "<br /><br />S1 bugs[^severity] and carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
-            elif len(affecting_carryover_regressions) > 0:
-                carryover_regressions_section += "<br /><br />Carryover regressions which are still tracked as affecting Release, Beta or Nightly:"
-            elif len(s1_bugs) > 0:
-                carryover_regressions_section += "<br /><br />S1 bugs[^severity]:"
+            carryover_regressions_section_list_texts = []
+            if len(s1_bugs) > 0:
+                carryover_regressions_section_list_texts.append("S1 bugs[^severity]")
+            if len(s2_bugs) > 0:
+                carryover_regressions_section_list_texts.append("S2 regressions")
+            if len(affecting_carryover_regressions) > 0:
+                carryover_text = "carryover regressions which are still tracked as affecting Release, Beta or Nightly"
+                if len(carryover_regressions_section_list_texts) == 0:
+                    carryover_text = carryover_text.capitalize()
+                carryover_regressions_section_list_texts.append(carryover_text)
 
-            if len(s1_bugs) > 0 or len(affecting_carryover_regressions) > 0:
-                carryover_regressions_section += f"""
+            if (
+                len(s1_bugs) > 0
+                or len(s2_bugs)
+                or len(affecting_carryover_regressions) > 0
+            ):
+                carryover_regressions_section += (
+                    " and ".join(carryover_regressions_section_list_texts)
+                    + f""":
 
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
-{affecting_carryover_regressions_and_s1_text}
+{affecting_carryover_regressions_and_s1_s2_text}
 
 [^severity]: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
 
 """
+                )
 
             crashes_section = """<b>CRASHES</b>
 <br />
