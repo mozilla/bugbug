@@ -19,33 +19,10 @@ from bugbug.model import BugModel
 logger = logging.getLogger(__name__)
 
 KEYWORD_DICT = {
-    "sec-critical": "security",
-    "sec-high": "security",
-    "sec-moderate": "security",
-    "sec-low": "security",
-    "sec-other": "security",
-    "sec-audit": "security",
-    "sec-vector": "security",
-    "sec-want": "security",
-    "csectype-bounds": "security",
-    "csectype-disclosure": "security",
-    "csectype-dos": "security",
-    "csectype-framepoisoning": "security",
-    "csectype-intoverflow": "security",
-    "csectype-jit": "security",
-    "csectype-nullptr": "security",
-    "csectype-oom": "security",
-    "csectype-other": "security",
-    "csectype-priv-escalation": "security",
-    "csectype-race": "security",
-    "csectype-sop": "security",
-    "csectype-spoof": "security",
-    "csectype-uaf": "security",
-    "csectype-undefined": "security",
-    "csectype-uninitialized": "security",
-    "csectype-wildptr": "security",
-    "memory-footprint": "memory",
-    "memory-leak": "memory",
+    "sec-": "security",
+    "csectype-": "security",
+    "memory-": "memory",
+    "memory-": "memory",
     "crash": "crash",
     "crashreportid": "crash",
     "perf": "performance",
@@ -91,15 +68,11 @@ def bug_to_types(
             if alias and alias.startswith("memshrink"):
                 types.add("memory")
 
-    return list(
-        types.union(
-            set(
-                KEYWORD_DICT[keyword]
-                for keyword in bug["keywords"]
-                if keyword in KEYWORD_DICT
-            )
-        )
-    )
+    for keyword_start, type in KEYWORD_DICT.items():
+        if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
+            types.add(type)
+
+    return list(types)
 
 
 class BugTypeModel(BugModel):
