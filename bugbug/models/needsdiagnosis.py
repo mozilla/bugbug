@@ -71,9 +71,9 @@ class NeedsDiagnosisModel(IssueModel):
                 continue
 
             for event in issue["events"]:
-                if (
-                    event["event"] == "milestoned"
-                    and event["milestone"]["title"] == "needsdiagnosis"
+                if event["event"] == "milestoned" and (
+                    event["milestone"]["title"] == "needsdiagnosis"
+                    or event["milestone"]["title"] == "moved"
                 ):
                     classes[issue["number"]] = 0
 
