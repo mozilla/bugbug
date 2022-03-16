@@ -199,7 +199,8 @@ class ComponentModel(BugModel):
 
     def is_meaningful(self, product, component):
         return (
-            product in self.PRODUCTS and component not in ["General", "Untriaged"]
+            product in self.PRODUCTS
+            and component not in ["General", "Untriaged", "Foxfooding"]
         ) or (
             product in self.PRODUCT_COMPONENTS
             and component in self.PRODUCT_COMPONENTS[product]
