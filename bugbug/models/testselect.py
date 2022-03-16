@@ -372,8 +372,8 @@ class TestSelectModel(Model):
         try:
             with open(
                 f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb"
-            ) as f:
-                return pickle.load(f)
+            ) as fr:
+                return pickle.load(fr)
         except FileNotFoundError:
             past_failures_data = test_scheduling.get_past_failures(
                 self.granularity, True
@@ -410,8 +410,8 @@ class TestSelectModel(Model):
 
             with open(
                 f"equivalence_sets_{min_redundancy_confidence}.pickle", "wb"
-            ) as f:
-                pickle.dump(equivalence_sets, f)
+            ) as fw:
+                pickle.dump(equivalence_sets, fw)
 
             return equivalence_sets
 
