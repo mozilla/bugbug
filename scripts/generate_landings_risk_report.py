@@ -1767,7 +1767,10 @@ Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
                 review_section,
             ]
 
-            if team == "DOM LWS":
+            maintenance_effectiveness_teams = set(
+                json.loads(get_secret("MAINTENANCE_EFFECTIVENESS_TEAMS"))
+            )
+            if team in maintenance_effectiveness_teams:
                 sections.append(maintenance_effectiveness_section)
 
             notification = (
