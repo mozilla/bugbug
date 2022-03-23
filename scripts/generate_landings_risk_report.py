@@ -364,17 +364,6 @@ class LandingsRiskReportGenerator(object):
 
         return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
 
-    def get_regressors_of(self, bug_ids: list[int]) -> list[int]:
-        bugzilla.download_bugs(bug_ids)
-        return sum(
-            (
-                bug["regressed_by"]
-                for bug in bugzilla.get_bugs()
-                if bug["id"] in bug_ids
-            ),
-            [],
-        )
-
     def get_blocking_of(
         self, bug_ids: list[int], meta_only: bool = False
     ) -> dict[int, list[int]]:
