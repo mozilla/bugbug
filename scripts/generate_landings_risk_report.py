@@ -851,7 +851,6 @@ class LandingsRiskReportGenerator(object):
         changed_ids = bugzilla.get_ids(
             {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
         )
-        bugzilla.delete_bugs(lambda bug: bug["id"] in changed_ids)
 
         bugs = list(set(bugs))
 
@@ -879,8 +878,7 @@ class LandingsRiskReportGenerator(object):
             }
         )
 
-        logger.info("Download bugs of interest...")
-        bugzilla.download_bugs(
+        all_ids = (
             bugs
             + test_info_bugs
             + [FUZZING_METABUG_ID]
@@ -888,6 +886,14 @@ class LandingsRiskReportGenerator(object):
             + crash_bugs
             + s1_s2_bugs
         )
+        all_ids_set = set(all_ids)
+
+        bugzilla.delete_bugs(
+            lambda bug: bug["id"] in changed_ids or bug["id"] not in all_ids_set
+        )
+
+        logger.info("Download bugs of interest...")
+        bugzilla.download_bugs(all_ids)
 
         logger.info(f"{len(bugs)} bugs to analyze.")
 
