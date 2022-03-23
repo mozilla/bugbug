@@ -457,7 +457,6 @@ class LandingsRiskReportGenerator(object):
     def generate_landings_by_date(
         self,
         bug_map: dict[int, bugzilla.BugDict],
-        regressor_bug_ids: Set[int],
         bugs: list[int],
         meta_bugs: dict[int, list[int]],
     ) -> None:
@@ -469,7 +468,7 @@ class LandingsRiskReportGenerator(object):
             if not bug_id:
                 continue
 
-            if bug_id in bug_map or bug_id in regressor_bug_ids:
+            if bug_id in bug_map:
                 bug_to_commits[bug_id].append(commit)
 
         # All bugs blocking the "fuzz" bug and its dependent meta bugs are fuzzing bugs.
@@ -666,7 +665,7 @@ class LandingsRiskReportGenerator(object):
 
             bug_summary = {
                 "id": bug_id,
-                "regressor": bug_id in regressor_bug_ids,
+                "regressor": len(bug["regressions"]) > 0,
                 "regression": len(bug["regressed_by"]) > 0
                 or any(
                     keyword in bug["keywords"]
@@ -895,18 +894,16 @@ class LandingsRiskReportGenerator(object):
         bugs_set = set(bugs + test_info_bugs + meta_bugs)
 
         bug_map = {}
-        regressor_bug_ids = set()
         for bug in bugzilla.get_bugs():
-            # Only add to the map bugs we are interested in, and bugs that block other bugs (needed for the bug_to_types call).
-            if bug["id"] in bugs_set or len(bug["blocks"]) > 0:
+            # Only add to the map bugs we are interested in, bugs that block other bugs (needed for the bug_to_types call) and bugs that caused regressions.
+            if (
+                bug["id"] in bugs_set
+                or len(bug["blocks"]) > 0
+                or len(bug["regressions"]) > 0
+            ):
                 bug_map[bug["id"]] = bug
 
-            if len(bug["regressions"]) > 0:
-                regressor_bug_ids.add(bug["id"])
-
-        self.generate_landings_by_date(
-            bug_map, regressor_bug_ids, bugs, self.get_blocking_of(meta_bugs)
-        )
+        self.generate_landings_by_date(bug_map, bugs, self.get_blocking_of(meta_bugs))
 
         self.generate_component_connections(bug_map, bugs)
 
