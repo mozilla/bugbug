@@ -37,7 +37,10 @@ def bug_to_types(
 ) -> list[str]:
     types = set()
 
-    if "[overhead" in bug["whiteboard"].lower():
+    if any(
+        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("overhead", "memshrink")
+    ):
         types.add("memory")
 
     if "[power" in bug["whiteboard"].lower():
