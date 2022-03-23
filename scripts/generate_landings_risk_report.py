@@ -895,10 +895,10 @@ class LandingsRiskReportGenerator(object):
 
         bug_map = {}
         for bug in bugzilla.get_bugs():
-            # Only add to the map bugs we are interested in, bugs that block other bugs (needed for the bug_to_types call) and bugs that caused regressions.
+            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
             if (
                 bug["id"] in bugs_set
-                or len(bug["blocks"]) > 0
+                or len(bug["depends_on"]) > 0
                 or len(bug["regressions"]) > 0
             ):
                 bug_map[bug["id"]] = bug
