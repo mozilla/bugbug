@@ -22,7 +22,6 @@ KEYWORD_DICT = {
     "sec-": "security",
     "csectype-": "security",
     "memory-": "memory",
-    "memory-": "memory",
     "crash": "crash",
     "crashreportid": "crash",
     "perf": "performance",
