@@ -1466,10 +1466,21 @@ table {
             ]
             s1_bugs = cur_team_data["s1_bugs"]
             s2_bugs = cur_team_data["s2_bugs"]
+            affecting_carryover_regressions_and_s1_s2 = affecting_carryover_regressions
+            affecting_carryover_regressions_and_s1_s2_ids = set(
+                bug["id"] for bug in affecting_carryover_regressions
+            )
+            for bug in s1_bugs + s2_bugs:
+                if bug["id"] in affecting_carryover_regressions_and_s1_s2_ids:
+                    continue
+
+                affecting_carryover_regressions_and_s1_s2.append(bug)
+                affecting_carryover_regressions_and_s1_s2_ids.add(bug["id"])
+
             affecting_carryover_regressions_and_s1_s2_text = "\n".join(
                 regression_to_text(reg)
                 for reg in sorted(
-                    affecting_carryover_regressions + s1_bugs + s2_bugs,
+                    affecting_carryover_regressions_and_s1_s2,
                     key=lambda bug: bugzilla.get_last_activity_excluding_bots(
                         bug_map[bug["id"]]
                     ),
