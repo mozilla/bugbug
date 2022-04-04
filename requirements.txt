@@ -1,6 +1,6 @@
 amqp==5.1.0
 beautifulsoup4==4.10.0
-boto3==1.21.27
+boto3==1.21.32
 click<8.1.0  # TODO: Remove once https://github.com/explosion/spaCy/pull/10573 is released
 imbalanced-learn==0.9.0
 libmozdata==0.1.76
