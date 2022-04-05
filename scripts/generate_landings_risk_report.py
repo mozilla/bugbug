@@ -19,6 +19,7 @@ from typing import Any, Optional, Set, cast
 
 import bs4
 import dateutil.parser
+import libmozdata
 import markdown2
 import requests
 import sendgrid
@@ -981,10 +982,10 @@ def notification(days: int) -> None:
 
         return versions
 
-    r = requests.get("https://product-details.mozilla.org/1.0/firefox_versions.json")
-    nightly_ver = int(r.json()["FIREFOX_NIGHTLY"].split(".")[0])
-    beta_ver = nightly_ver - 1
-    release_ver = beta_ver - 1
+    versions = libmozdata.versions.get(base=True)
+    nightly_ver = versions["nightly"]
+    beta_ver = versions["beta"]
+    release_ver = versions["release"]
 
     team_data: dict[str, Any] = {}
     for team in all_teams:
