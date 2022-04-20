@@ -12,6 +12,7 @@ import math
 import os
 import re
 import statistics
+import textwrap
 import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -1356,12 +1357,20 @@ def notification(days: int) -> None:
         if blocked_features:
             notes.append(f"Blocking {blocked_features}")
 
-        return "|[Bug {}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|".format(
-            bug["id"],
-            bug["id"],
-            last_activity,
-            assignment,
-            ", ".join(notes),
+        return (
+            "|[{}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|".format(
+                textwrap.shorten(
+                    "Bug {} - {}".format(
+                        bug["id"], escape_markdown(full_bug["summary"])
+                    ),
+                    width=98,
+                    placeholder="…",
+                ),
+                bug["id"],
+                last_activity,
+                assignment,
+                ", ".join(notes),
+            )
         )
 
     def get_top_crashes(team: str, channel: str) -> Optional[str]:
