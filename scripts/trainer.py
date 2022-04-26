@@ -104,7 +104,7 @@ def parse_args(args):
         default="default",
     )
 
-    subparsers = main_parser.add_subparsers(title="model", dest="model")
+    subparsers = main_parser.add_subparsers(title="model", dest="model", required=True)
 
     for model_name in MODELS:
         subparser = subparsers.add_parser(
