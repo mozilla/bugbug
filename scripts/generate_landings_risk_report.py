@@ -1148,7 +1148,10 @@ def notification(days: int) -> None:
                         if (
                             f"cf_status_firefox{version}" in full_bug
                             and full_bug[f"cf_status_firefox{version}"] == "affected"
-                            and full_bug[f"cf_tracking_firefox{version}"] != "-"
+                            and (
+                                f"cf_tracking_firefox{version}" not in full_bug
+                                or full_bug[f"cf_tracking_firefox{version}"] != "-"
+                            )
                             and f"cf_status_firefox{version - 1}" in full_bug
                             and full_bug[f"cf_status_firefox{version - 1}"]
                             not in ("unaffected", "?", "---")
