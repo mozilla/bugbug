@@ -346,7 +346,6 @@ class Model:
         # Calculate labels.
         y = np.array(y)
         self.le.fit(y)
-        y = self.le.transform(y)
 
         if limit:
             X = X[:limit]
@@ -372,7 +371,9 @@ class Model:
             if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
-            scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
+            scores = cross_validate(
+                pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+            )
 
             print("Cross Validation scores:")
             for scoring in scorings:
@@ -395,7 +396,7 @@ class Model:
 
         print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
-        self.clf.fit(X_train, y_train)
+        self.clf.fit(X_train, self.le.transform(y_train))
 
         print("Model trained")
 
@@ -441,6 +442,7 @@ class Model:
 
         print("Training Set scores:")
         y_pred = self.clf.predict(X_train)
+        y_pred = self.le.inverse_transform(y_pred)
         if not is_multilabel:
             print(
                 classification_report_imbalanced(
@@ -451,6 +453,7 @@ class Model:
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
+        y_pred = self.le.inverse_transform(y_pred)
 
         if is_multilabel:
             assert isinstance(
@@ -556,7 +559,7 @@ class Model:
 
             print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
-            self.clf.fit(X_train, y_train)
+            self.clf.fit(X_train, self.le.transform(y_train))
 
         with open(self.__class__.__name__.lower(), "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
