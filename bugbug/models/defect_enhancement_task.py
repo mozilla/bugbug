@@ -53,7 +53,7 @@ class DefectEnhancementTaskModel(DefectModel):
         return classes
 
     def get_extra_data(self):
-        labels = self.clf._le.inverse_transform([0, 1, 2])
+        labels = self.le.inverse_transform([0, 1, 2])
         labels_map = {str(label): index for label, index in zip(labels, [0, 1, 2])}
 
         return {"labels_map": labels_map}
