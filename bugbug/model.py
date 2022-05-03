@@ -21,6 +21,7 @@ from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
 
 from bugbug import bugzilla, db, repository
@@ -152,6 +153,8 @@ class Model:
         # DBs and DB support files required at runtime.
         self.eval_dbs: dict[str, tuple[str, ...]] = {}
 
+        self.le = LabelEncoder()
+
     def download_eval_dbs(
         self, extract: bool = True, ensure_exist: bool = True
     ) -> None:
@@ -164,14 +167,6 @@ class Model:
                         db.download_support_file(eval_db, eval_file, extract=extract)
                         or not ensure_exist
                     )
-
-    @property
-    def le(self):
-        """Classifier agnostic getter for the label encoder property"""
-        try:
-            return self.clf._le
-        except AttributeError:
-            return self.clf.le_
 
     def get_feature_names(self):
         return []
@@ -350,6 +345,8 @@ class Model:
 
         # Calculate labels.
         y = np.array(y)
+        self.le.fit(y)
+        y = self.le.transform(y)
 
         if limit:
             X = X[:limit]
