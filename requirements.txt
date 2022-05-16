@@ -21,7 +21,7 @@ python-hglib==2.6.2
 ratelimit==2.2.1
 requests==2.27.1
 rs_parsepatch==0.3.6
-scikit-learn==1.0.2
+scikit-learn==1.1.0
 scipy==1.8.0
 sendgrid==6.9.7
 shap[plots]==0.40.0
