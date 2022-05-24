@@ -7,7 +7,7 @@ ENV PATH="${PATH}:/git-cinnabar"
 # patch is required by the commit classifier script.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git xz-utils curl patch libcurl4 && \
-    hg clone -r 8e9ca10df897e018ca448bb8a3d131323cf18cd0 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    hg clone -r adc8bddf688ba0517542c64f912666df2ba1f2f0 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
     cd /git-cinnabar && git -c advice.detachedHead=false checkout fab94c86f96a24f45180816d83db5184939648d3 && cd .. && \
