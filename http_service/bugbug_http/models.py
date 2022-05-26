@@ -246,8 +246,7 @@ def get_config_specific_groups(config: str) -> str:
     job = JobInfo(get_config_specific_groups, config)
     LOGGER.info(f"Processing {job}...")
 
-    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
-    equivalence_sets = testgroupselect_model._get_equivalence_sets(0.9)
+    equivalence_sets = testselect._get_equivalence_sets(0.9)
 
     past_failures_data = test_scheduling.get_past_failures("group", True)
     all_runnables = past_failures_data["all_runnables"]
