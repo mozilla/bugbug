@@ -48,6 +48,338 @@ def get_commit_map(
     return commit_map
 
 
+def _get_cost(config: str) -> int:
+    costs = [
+        (("build", "opt"), 1),
+        (("build", "debug"), 2),
+        (("build", "plain"), 3),
+        (("linux1804-64", "opt"), 2),
+        (("linux1804-64", "debug"), 3),
+        (("windows10", "opt"), 4),
+        (("windows10", "debug"), 5),
+        (("android-em", "opt"), 6),
+        (("android-em", "debug"), 7),
+        (("windows7", "opt"), 8),
+        (("windows7", "debug"), 9),
+        (("mac", "opt"), 10),
+        (("mac", "debug"), 11),
+        (("asan", "opt"), 12),
+        (("asan", "debug"), 13),
+        (("linux1804-32", "opt"), 14),
+        (("linux1804-32", "debug"), 15),
+        (("android-hw", "opt"), 16),
+        (("android-hw", "debug"), 17),
+        (("tsan", "opt"), 18),
+        (("tsan", "debug"), 19),
+        (("test-linux1804-64/opt-*-e10s",), 1),
+    ]
+
+    for substrings, cost in reversed(costs):
+        if all(s in config for s in substrings):
+            return cost
+
+    raise Exception(f"Couldn't find cost for {config}")
+
+
+def _generate_equivalence_sets(
+    tasks: Iterable[str],
+    min_redundancy_confidence: float,
+    load_failing_together: Callable[[str], dict[str, tuple[float, float]]],
+    assume_redundant: bool,
+) -> list[Set[str]]:
+    # Generate 'equivalence sets', containing all tasks that are redundant with
+    # each other.
+    groups: list[Set[str]] = []
+    task_to_groups: dict[str, Set[int]] = collections.defaultdict(set)
+    incompatible_groups: dict[str, Set[int]] = collections.defaultdict(set)
+
+    def create_group(task: str) -> None:
+        if task in task_to_groups:
+            return
+
+        groups.append({task})
+        task_to_groups[task] = {len(groups) - 1}
+
+    # Add task1 to all equivalence groups where task2 is present, and likewise for task2.
+    # Skip groups which contain tasks that are not redundant with task1.
+    def add_to_groups(task1: str, task2: str) -> None:
+        found = False
+
+        if task1 in task_to_groups:
+            for i in task_to_groups[task1]:
+                if task2 in incompatible_groups and i in incompatible_groups[task2]:
+                    continue
+
+                groups[i].add(task2)
+                task_to_groups[task2].add(i)
+                found = True
+
+        if task2 in task_to_groups:
+            for i in task_to_groups[task2]:
+                if task1 in incompatible_groups and i in incompatible_groups[task1]:
+                    continue
+
+                groups[i].add(task1)
+                task_to_groups[task1].add(i)
+                found = True
+
+        # No suitable equivalence group was found for the tasks, create a new one.
+        if found:
+            return
+
+        group = {task1, task2}
+        groups.append(group)
+        task_to_groups[task1].add(len(groups) - 1)
+        task_to_groups[task2].add(len(groups) - 1)
+
+    def mark_incompatible(task1: str, task2: str) -> None:
+        if task1 in task_to_groups:
+            incompatible_groups[task2].update(task_to_groups[task1])
+
+        if task2 in task_to_groups:
+            incompatible_groups[task1].update(task_to_groups[task2])
+
+    sorted_tasks = sorted(tasks)
+    for i, task1 in enumerate(sorted_tasks):
+        create_group(task1)
+
+        try:
+            failing_together_stats = load_failing_together(task1)
+        except KeyError:
+            failing_together_stats = {}
+
+        for task2 in sorted_tasks[i + 1 :]:
+            try:
+                support, confidence = failing_together_stats[task2]
+            except KeyError:
+                if not assume_redundant:
+                    confidence = 0.0
+                else:
+                    confidence = 1.0
+
+            if confidence >= min_redundancy_confidence:
+                add_to_groups(task1, task2)
+            else:
+                mark_incompatible(task1, task2)
+
+    return groups
+
+
+def _get_equivalence_sets(min_redundancy_confidence: float):
+    try:
+        with open(f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb") as fr:
+            return pickle.load(fr)
+    except FileNotFoundError:
+        past_failures_data = test_scheduling.get_past_failures("group", True)
+        all_runnables = past_failures_data["all_runnables"]
+
+        equivalence_sets = {}
+        failing_together = test_scheduling.get_failing_together_db("config_group", True)
+        all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+        configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
+        for group in all_runnables:
+            key = test_scheduling.failing_together_key(group)
+            try:
+                failing_together_stats = pickle.loads(failing_together[key])
+            except KeyError:
+                failing_together_stats = {}
+
+            def load_failing_together(
+                config: str,
+            ) -> dict[str, tuple[float, float]]:
+                return failing_together_stats[config]
+
+            configs = (
+                configs_by_group[group] if group in configs_by_group else all_configs
+            )
+
+            equivalence_sets[group] = _generate_equivalence_sets(
+                configs, min_redundancy_confidence, load_failing_together, True
+            )
+
+        with open(f"equivalence_sets_{min_redundancy_confidence}.pickle", "wb") as fw:
+            pickle.dump(equivalence_sets, fw)
+
+        return equivalence_sets
+
+
+def _solve_optimization(solver: pywraplp.Solver) -> bool:
+    # The MIP solver is usually fast (milliseconds). If we hit a weird problem,
+    # accept a suboptimal solution after 10 seconds.
+    solver.SetTimeLimit(10000)
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.INFEASIBLE:
+        logger.warning("Optimization problem is infeasible")
+        return False
+    elif status == pywraplp.Solver.NOT_SOLVED:
+        logger.warning("Optimization problem could not be solved in time")
+        return False
+
+    return True
+
+
+def reduce_configs(
+    tasks: Collection[str],
+    min_redundancy_confidence: float,
+    assume_redundant: bool = False,
+) -> Set[str]:
+    failing_together = test_scheduling.get_failing_together_db("label", True)
+
+    def load_failing_together(task: str) -> dict[str, tuple[float, float]]:
+        key = test_scheduling.failing_together_key(task)
+        return pickle.loads(failing_together[key])
+
+    solver = pywraplp.Solver(
+        "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
+    )
+
+    task_vars = {task: solver.BoolVar(task) for task in tasks}
+
+    equivalence_sets = _generate_equivalence_sets(
+        tasks, min_redundancy_confidence, load_failing_together, assume_redundant
+    )
+
+    # Create constraints to ensure at least one task from each set of equivalent
+    # sets is selected.
+
+    mutually_exclusive = True
+    seen = set()
+    for equivalence_set in equivalence_sets:
+        if any(config in seen for config in equivalence_set):
+            mutually_exclusive = False
+            break
+
+        seen |= equivalence_set
+
+    for equivalence_set in equivalence_sets:
+        sum_constraint = sum(task_vars[task] for task in equivalence_set)
+        if mutually_exclusive:
+            solver.Add(sum_constraint == 1)
+        else:
+            solver.Add(sum_constraint >= 1)
+
+    # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+    solver.Minimize(sum(_get_cost(task) * task_vars[task] for task in task_vars.keys()))
+
+    if _solve_optimization(solver):
+        return {
+            task
+            for task, task_var in task_vars.items()
+            if task_var.solution_value() == 1
+        }
+    else:
+        return set(tasks)
+
+
+def select_configs(
+    groups: Collection[str],
+    min_redundancy_confidence: float,
+    max_configurations: int = 3,
+) -> dict[str, list[str]]:
+    failing_together = test_scheduling.get_failing_together_db("config_group", True)
+
+    all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
+    all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
+    config_costs = {config: _get_cost(config) for config in all_configs}
+
+    solver = pywraplp.Solver(
+        "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
+    )
+
+    config_vars = {config: solver.BoolVar(config) for config in all_configs}
+    config_group_vars = {
+        (config, group): solver.BoolVar(f"{group}@{config}")
+        for group in groups
+        for config in (
+            all_configs_by_group[group]
+            if group in all_configs_by_group
+            else all_configs
+        )
+    }
+
+    equivalence_sets = _get_equivalence_sets(min_redundancy_confidence)
+
+    for group in groups:
+        # Create constraints to ensure at least one task from each set of equivalent
+        # groups is selected.
+
+        mutually_exclusive = True
+        seen = set()
+        for equivalence_set in equivalence_sets[group]:
+            if any(config in seen for config in equivalence_set):
+                mutually_exclusive = False
+                break
+
+            seen |= equivalence_set
+
+        set_variables = [
+            solver.BoolVar(f"{group}_{j}") for j in range(len(equivalence_sets[group]))
+        ]
+
+        for j, equivalence_set in enumerate(equivalence_sets[group]):
+            set_variable = set_variables[j]
+
+            sum_constraint = sum(
+                config_group_vars[(config, group)] for config in equivalence_set
+            )
+            if mutually_exclusive:
+                solver.Add(sum_constraint == set_variable)
+            else:
+                solver.Add(sum_constraint >= set_variable)
+
+        # Cap to max_configurations equivalence sets.
+        solver.Add(
+            sum(set_variables)
+            >= (
+                max_configurations
+                if len(set_variables) >= max_configurations
+                else len(set_variables)
+            )
+        )
+
+    for config in all_configs:
+        solver.Add(
+            sum(
+                config_group_var
+                for (c, g), config_group_var in config_group_vars.items()
+                if config == c
+            )
+            <= config_vars[config] * len(groups)
+        )
+
+    # Choose the best set of tasks that satisfy the constraints with the lowest cost.
+    # The cost is calculated as a sum of the following:
+    # - a fixed cost to use a config (since selecting a config has overhead, it is
+    #   wasteful to select a config only to run a single group);
+    # - a cost for each selected group.
+    # This way, for example, if we have a group that must run on a costly config and a
+    # group that can run either on the costly one or on a cheaper one, they'd both run
+    # on the costly one (since we have to pay its setup cost anyway).
+    solver.Minimize(
+        sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
+        + sum(
+            config_costs[config] * config_group_vars[(config, group)]
+            for config, group in config_group_vars.keys()
+        )
+    )
+
+    configs_by_group: dict[str, list[str]] = {}
+    for group in groups:
+        configs_by_group[group] = []
+
+    if _solve_optimization(solver):
+        for (config, group), config_group_var in config_group_vars.items():
+            if config_group_var.solution_value() == 1:
+                configs_by_group[group].append(config)
+    else:
+        least_cost_config = min(config_costs, key=lambda c: config_costs[c])
+        for group in groups:
+            configs_by_group[group].append(least_cost_config)
+
+    return configs_by_group
+
+
 class TestSelectModel(Model):
     def __init__(self, lemmatization=False, granularity="label", failures_skip=None):
         Model.__init__(self, lemmatization)
@@ -83,6 +415,7 @@ class TestSelectModel(Model):
             )
 
         self.cross_validation_enabled = False
+        self.calculate_importance = False
 
         self.entire_dataset_training = True
 
@@ -252,350 +585,6 @@ class TestSelectModel(Model):
             for i in selected_indexes
         }
 
-    def _get_cost(self, config: str) -> int:
-        costs = [
-            (("build", "opt"), 1),
-            (("build", "debug"), 2),
-            (("build", "plain"), 3),
-            (("linux1804-64", "opt"), 2),
-            (("linux1804-64", "debug"), 3),
-            (("windows10", "opt"), 4),
-            (("windows10", "debug"), 5),
-            (("android-em", "opt"), 6),
-            (("android-em", "debug"), 7),
-            (("windows7", "opt"), 8),
-            (("windows7", "debug"), 9),
-            (("mac", "opt"), 10),
-            (("mac", "debug"), 11),
-            (("asan", "opt"), 12),
-            (("asan", "debug"), 13),
-            (("linux1804-32", "opt"), 14),
-            (("linux1804-32", "debug"), 15),
-            (("android-hw", "opt"), 16),
-            (("android-hw", "debug"), 17),
-            (("tsan", "opt"), 18),
-            (("tsan", "debug"), 19),
-            (("test-linux1804-64/opt-*-e10s",), 1),
-        ]
-
-        for substrings, cost in reversed(costs):
-            if all(s in config for s in substrings):
-                return cost
-
-        raise Exception(f"Couldn't find cost for {config}")
-
-    def _generate_equivalence_sets(
-        self,
-        tasks: Iterable[str],
-        min_redundancy_confidence: float,
-        load_failing_together: Callable[[str], dict[str, tuple[float, float]]],
-        assume_redundant: bool,
-    ) -> list[Set[str]]:
-        # Generate 'equivalence sets', containing all tasks that are redundant with
-        # each other.
-        groups: list[Set[str]] = []
-        task_to_groups: dict[str, Set[int]] = collections.defaultdict(set)
-        incompatible_groups: dict[str, Set[int]] = collections.defaultdict(set)
-
-        def create_group(task: str) -> None:
-            if task in task_to_groups:
-                return
-
-            groups.append({task})
-            task_to_groups[task] = {len(groups) - 1}
-
-        # Add task1 to all equivalence groups where task2 is present, and likewise for task2.
-        # Skip groups which contain tasks that are not redundant with task1.
-        def add_to_groups(task1: str, task2: str) -> None:
-            found = False
-
-            if task1 in task_to_groups:
-                for i in task_to_groups[task1]:
-                    if task2 in incompatible_groups and i in incompatible_groups[task2]:
-                        continue
-
-                    groups[i].add(task2)
-                    task_to_groups[task2].add(i)
-                    found = True
-
-            if task2 in task_to_groups:
-                for i in task_to_groups[task2]:
-                    if task1 in incompatible_groups and i in incompatible_groups[task1]:
-                        continue
-
-                    groups[i].add(task1)
-                    task_to_groups[task1].add(i)
-                    found = True
-
-            # No suitable equivalence group was found for the tasks, create a new one.
-            if found:
-                return
-
-            group = {task1, task2}
-            groups.append(group)
-            task_to_groups[task1].add(len(groups) - 1)
-            task_to_groups[task2].add(len(groups) - 1)
-
-        def mark_incompatible(task1: str, task2: str) -> None:
-            if task1 in task_to_groups:
-                incompatible_groups[task2].update(task_to_groups[task1])
-
-            if task2 in task_to_groups:
-                incompatible_groups[task1].update(task_to_groups[task2])
-
-        sorted_tasks = sorted(tasks)
-        for i, task1 in enumerate(sorted_tasks):
-            create_group(task1)
-
-            try:
-                failing_together_stats = load_failing_together(task1)
-            except KeyError:
-                failing_together_stats = {}
-
-            for task2 in sorted_tasks[i + 1 :]:
-                try:
-                    support, confidence = failing_together_stats[task2]
-                except KeyError:
-                    if not assume_redundant:
-                        confidence = 0.0
-                    else:
-                        confidence = 1.0
-
-                if confidence >= min_redundancy_confidence:
-                    add_to_groups(task1, task2)
-                else:
-                    mark_incompatible(task1, task2)
-
-        return groups
-
-    def _get_equivalence_sets(self, min_redundancy_confidence: float):
-        try:
-            with open(
-                f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb"
-            ) as fr:
-                return pickle.load(fr)
-        except FileNotFoundError:
-            past_failures_data = test_scheduling.get_past_failures(
-                self.granularity, True
-            )
-            all_runnables = past_failures_data["all_runnables"]
-
-            equivalence_sets = {}
-            failing_together = test_scheduling.get_failing_together_db(
-                "config_group", True
-            )
-            all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
-            configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
-            for group in all_runnables:
-                key = test_scheduling.failing_together_key(group)
-                try:
-                    failing_together_stats = pickle.loads(failing_together[key])
-                except KeyError:
-                    failing_together_stats = {}
-
-                def load_failing_together(
-                    config: str,
-                ) -> dict[str, tuple[float, float]]:
-                    return failing_together_stats[config]
-
-                configs = (
-                    configs_by_group[group]
-                    if group in configs_by_group
-                    else all_configs
-                )
-
-                equivalence_sets[group] = self._generate_equivalence_sets(
-                    configs, min_redundancy_confidence, load_failing_together, True
-                )
-
-            with open(
-                f"equivalence_sets_{min_redundancy_confidence}.pickle", "wb"
-            ) as fw:
-                pickle.dump(equivalence_sets, fw)
-
-            return equivalence_sets
-
-    def _solve_optimization(self, solver: pywraplp.Solver) -> bool:
-        # The MIP solver is usually fast (milliseconds). If we hit a weird problem,
-        # accept a suboptimal solution after 10 seconds.
-        solver.SetTimeLimit(10000)
-        status = solver.Solve()
-
-        if status == pywraplp.Solver.INFEASIBLE:
-            logger.warning("Optimization problem is infeasible")
-            return False
-        elif status == pywraplp.Solver.NOT_SOLVED:
-            logger.warning("Optimization problem could not be solved in time")
-            return False
-
-        return True
-
-    def reduce(
-        self,
-        tasks: Collection[str],
-        min_redundancy_confidence: float,
-        assume_redundant: bool = False,
-    ) -> Set[str]:
-        failing_together = test_scheduling.get_failing_together_db(
-            self.granularity, True
-        )
-
-        def load_failing_together(task: str) -> dict[str, tuple[float, float]]:
-            key = test_scheduling.failing_together_key(task)
-            return pickle.loads(failing_together[key])
-
-        solver = pywraplp.Solver(
-            "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
-        )
-
-        task_vars = {task: solver.BoolVar(task) for task in tasks}
-
-        equivalence_sets = self._generate_equivalence_sets(
-            tasks, min_redundancy_confidence, load_failing_together, assume_redundant
-        )
-
-        # Create constraints to ensure at least one task from each set of equivalent
-        # sets is selected.
-
-        mutually_exclusive = True
-        seen = set()
-        for equivalence_set in equivalence_sets:
-            if any(config in seen for config in equivalence_set):
-                mutually_exclusive = False
-                break
-
-            seen |= equivalence_set
-
-        for equivalence_set in equivalence_sets:
-            sum_constraint = sum(task_vars[task] for task in equivalence_set)
-            if mutually_exclusive:
-                solver.Add(sum_constraint == 1)
-            else:
-                solver.Add(sum_constraint >= 1)
-
-        # Choose the best set of tasks that satisfy the constraints with the lowest cost.
-        solver.Minimize(
-            sum(self._get_cost(task) * task_vars[task] for task in task_vars.keys())
-        )
-
-        if self._solve_optimization(solver):
-            return {
-                task
-                for task, task_var in task_vars.items()
-                if task_var.solution_value() == 1
-            }
-        else:
-            return set(tasks)
-
-    def select_configs(
-        self,
-        groups: Collection[str],
-        min_redundancy_confidence: float,
-        max_configurations: int = 3,
-    ) -> dict[str, list[str]]:
-        failing_together = test_scheduling.get_failing_together_db("config_group", True)
-
-        all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
-        all_configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
-        config_costs = {config: self._get_cost(config) for config in all_configs}
-
-        solver = pywraplp.Solver(
-            "select_configs", pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING
-        )
-
-        config_vars = {config: solver.BoolVar(config) for config in all_configs}
-        config_group_vars = {
-            (config, group): solver.BoolVar(f"{group}@{config}")
-            for group in groups
-            for config in (
-                all_configs_by_group[group]
-                if group in all_configs_by_group
-                else all_configs
-            )
-        }
-
-        equivalence_sets = self._get_equivalence_sets(min_redundancy_confidence)
-
-        for group in groups:
-            # Create constraints to ensure at least one task from each set of equivalent
-            # groups is selected.
-
-            mutually_exclusive = True
-            seen = set()
-            for equivalence_set in equivalence_sets[group]:
-                if any(config in seen for config in equivalence_set):
-                    mutually_exclusive = False
-                    break
-
-                seen |= equivalence_set
-
-            set_variables = [
-                solver.BoolVar(f"{group}_{j}")
-                for j in range(len(equivalence_sets[group]))
-            ]
-
-            for j, equivalence_set in enumerate(equivalence_sets[group]):
-                set_variable = set_variables[j]
-
-                sum_constraint = sum(
-                    config_group_vars[(config, group)] for config in equivalence_set
-                )
-                if mutually_exclusive:
-                    solver.Add(sum_constraint == set_variable)
-                else:
-                    solver.Add(sum_constraint >= set_variable)
-
-            # Cap to max_configurations equivalence sets.
-            solver.Add(
-                sum(set_variables)
-                >= (
-                    max_configurations
-                    if len(set_variables) >= max_configurations
-                    else len(set_variables)
-                )
-            )
-
-        for config in all_configs:
-            solver.Add(
-                sum(
-                    config_group_var
-                    for (c, g), config_group_var in config_group_vars.items()
-                    if config == c
-                )
-                <= config_vars[config] * len(groups)
-            )
-
-        # Choose the best set of tasks that satisfy the constraints with the lowest cost.
-        # The cost is calculated as a sum of the following:
-        # - a fixed cost to use a config (since selecting a config has overhead, it is
-        #   wasteful to select a config only to run a single group);
-        # - a cost for each selected group.
-        # This way, for example, if we have a group that must run on a costly config and a
-        # group that can run either on the costly one or on a cheaper one, they'd both run
-        # on the costly one (since we have to pay its setup cost anyway).
-        solver.Minimize(
-            sum(10 * config_costs[c] * config_vars[c] for c in config_vars.keys())
-            + sum(
-                config_costs[config] * config_group_vars[(config, group)]
-                for config, group in config_group_vars.keys()
-            )
-        )
-
-        configs_by_group: dict[str, list[str]] = {}
-        for group in groups:
-            configs_by_group[group] = []
-
-        if self._solve_optimization(solver):
-            for (config, group), config_group_var in config_group_vars.items():
-                if config_group_var.solution_value() == 1:
-                    configs_by_group[group].append(config)
-        else:
-            least_cost_config = min(config_costs, key=lambda c: config_costs[c])
-            for group in groups:
-                configs_by_group[group].append(least_cost_config)
-
-        return configs_by_group
-
     def evaluation(self) -> None:
         # Get a test set of pushes on which to test the model.
         pushes, train_push_len = self.get_pushes(False)
@@ -701,7 +690,7 @@ class TestSelectModel(Model):
                 futures[
                     executor.submit(
                         eval_apply_transforms,
-                        self,
+                        self.granularity,
                         push,
                         confidence_threshold,
                         reduction,
@@ -859,7 +848,7 @@ class TestSelectModel(Model):
                 # Pre-generate equivalence sets, so when we run the config selection in multiple processes
                 # we don't risk concurrent writes to the equivalence sets file.
                 if reduction is not None and self.granularity == "group":
-                    self._get_equivalence_sets(reduction)
+                    _get_equivalence_sets(reduction)
 
                 for confidence_threshold in [0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
@@ -883,7 +872,9 @@ class TestConfigGroupSelectModel(TestSelectModel):
         TestSelectModel.__init__(self, lemmatization, "config_group")
 
 
-def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, minimum):
+def eval_apply_transforms(
+    granularity, push, confidence_threshold, reduction, cap, minimum
+):
     group_configs = None
 
     selected = set(
@@ -893,10 +884,10 @@ def eval_apply_transforms(model, push, confidence_threshold, reduction, cap, min
     )
 
     if reduction is not None:
-        if model.granularity == "label":
-            selected = model.reduce(selected, reduction)
-        elif model.granularity == "group":
-            group_configs = model.select_configs(selected, reduction)
+        if granularity == "label":
+            selected = reduce_configs(selected, reduction)
+        elif granularity == "group":
+            group_configs = select_configs(selected, reduction)
 
     if minimum is not None and len(selected) < minimum:
         remaining = [
