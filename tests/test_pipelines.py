@@ -42,6 +42,8 @@ def payload_schema():
     ),
 )
 def test_jsone_validates(pipeline_file, task_schema, payload_schema):
+    responses.add_passthru("https://community-tc.services.mozilla.com/")
+
     with open(pipeline_file, "r") as f:
         yaml_content = yaml.safe_load(f.read())
 
