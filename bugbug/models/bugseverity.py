@@ -9,7 +9,6 @@ import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 from tabulate import tabulate
 
@@ -99,9 +98,7 @@ class BugSeverityModel(BugModel):
             ]
         )
 
-        self.clf = OneVsRestClassifier(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        )
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         classes = {}
