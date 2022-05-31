@@ -74,7 +74,9 @@ class BugSeverityModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors, cleanup_functions, rollback=True
+                    ),
                 ),
                 (
                     "union",
