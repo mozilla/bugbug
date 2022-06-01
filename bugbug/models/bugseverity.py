@@ -89,11 +89,6 @@ class BugSeverityModel(BugModel):
                                 self.text_vectorizer(min_df=0.001),
                                 "first_comment",
                             ),
-                            (
-                                "comments",
-                                self.text_vectorizer(min_df=0.001),
-                                "comments",
-                            ),
                         ]
                     ),
                 ),
