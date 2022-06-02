@@ -14,7 +14,7 @@ import pytest
 from igraph import Graph
 
 from bugbug import test_scheduling
-from bugbug.models.testselect import TestGroupSelectModel, TestLabelSelectModel
+from bugbug.models import testselect
 from bugbug.utils import LMDBDict
 
 
@@ -49,35 +49,40 @@ def test_reduce1(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    assert model.reduce({"test-linux1804-64/debug"}, 1.0) == {"test-linux1804-64/debug"}
-    assert model.reduce({"test-linux1804-64/debug", "test-windows10/debug"}, 1.0) == {
+    assert testselect.reduce_configs({"test-linux1804-64/debug"}, 1.0) == {
         "test-linux1804-64/debug"
     }
-    assert model.reduce({"test-linux1804-64/debug", "test-windows10/opt"}, 1.0) == {
-        "test-linux1804-64/debug"
-    }
-    assert model.reduce({"test-linux1804-64/opt", "test-windows10/opt"}, 1.0) == {
+    assert testselect.reduce_configs(
+        {"test-linux1804-64/debug", "test-windows10/debug"}, 1.0
+    ) == {"test-linux1804-64/debug"}
+    assert testselect.reduce_configs(
+        {"test-linux1804-64/debug", "test-windows10/opt"}, 1.0
+    ) == {"test-linux1804-64/debug"}
+    assert testselect.reduce_configs(
+        {"test-linux1804-64/opt", "test-windows10/opt"}, 1.0
+    ) == {
         "test-linux1804-64/opt",
         "test-windows10/opt",
     }
-    assert model.reduce({"test-linux1804-64/opt", "test-windows10/opt"}, 0.9) == {
-        "test-linux1804-64/opt"
-    }
-    assert model.reduce({"test-linux1804-64/opt", "test-linux1804-64/debug"}, 1.0) == {
-        "test-linux1804-64/opt"
-    }
-    assert model.reduce(
+    assert testselect.reduce_configs(
+        {"test-linux1804-64/opt", "test-windows10/opt"}, 0.9
+    ) == {"test-linux1804-64/opt"}
+    assert testselect.reduce_configs(
+        {"test-linux1804-64/opt", "test-linux1804-64/debug"}, 1.0
+    ) == {"test-linux1804-64/opt"}
+    assert testselect.reduce_configs(
         {"test-linux1804-64-asan/debug", "test-linux1804-64/debug"}, 1.0
     ) == {"test-linux1804-64/debug"}
 
     # Test case where the second task is not present in the failing together stats of the first.
-    assert model.reduce(
+    assert testselect.reduce_configs(
         {"test-linux1804-64-asan/debug", "test-windows10/opt"}, 1.0
     ) == {"test-linux1804-64-asan/debug", "test-windows10/opt"}
 
     # Test case where a task is not present at all in the failing together DB.
-    assert model.reduce({"test-linux1804-64-qr/debug", "test-windows10/opt"}, 1.0) == {
+    assert testselect.reduce_configs(
+        {"test-linux1804-64-qr/debug", "test-windows10/opt"}, 1.0
+    ) == {
         "test-linux1804-64-qr/debug",
         "test-windows10/opt",
     }
@@ -99,8 +104,7 @@ def test_reduce2(failing_together: LMDBDict) -> None:
     )
     test_scheduling.close_failing_together_db("label")
 
-    model = TestLabelSelectModel()
-    assert model.reduce(
+    assert testselect.reduce_configs(
         {"windows10/opt-a", "windows10/opt-b", "windows10/opt-c", "windows10/opt-d"},
         1.0,
     ) == {
@@ -128,8 +132,7 @@ def test_reduce3(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {"windows10/opt-a", "windows10/opt-b", "windows10/opt-c", "windows10/opt-d"},
         1.0,
     )
@@ -173,8 +176,7 @@ def test_reduce4(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-a",
             "windows10/opt-b",
@@ -201,8 +203,7 @@ def test_reduce5(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {"linux1804-64/opt-a", "windows10/opt-c", "windows10/opt-d"}, 1.0
     )
     assert result == {
@@ -222,8 +223,7 @@ def test_reduce6(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-a",
             "windows10/opt-b",
@@ -268,8 +268,7 @@ def test_reduce7(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-1",
             "windows10/opt-3",
@@ -303,8 +302,7 @@ def test_reduce8(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-0",
             "windows10/opt-1",
@@ -347,8 +345,7 @@ def test_reduce9(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-0",
             "windows10/opt-1",
@@ -380,8 +377,7 @@ def test_reduce10(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-0",
             "windows10/opt-1",
@@ -421,8 +417,7 @@ def test_reduce11(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-1",
             "windows10/opt-2",
@@ -470,8 +465,7 @@ def test_reduce12(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-0",
             "windows10/opt-1",
@@ -510,8 +504,7 @@ def test_reduce13(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-2",
             "windows10/opt-3",
@@ -544,8 +537,7 @@ def test_reduce14(failing_together: LMDBDict) -> None:
         }
     )
 
-    model = TestLabelSelectModel()
-    result = model.reduce(
+    result = testselect.reduce_configs(
         {
             "windows10/opt-1",
             "windows10/opt-2",
@@ -617,8 +609,7 @@ def test_all(g: Graph) -> None:
 
     test_scheduling.close_failing_together_db("label")
 
-    model = TestLabelSelectModel()
-    result = model.reduce(tasks, 1.0)
+    result = testselect.reduce_configs(tasks, 1.0)
     hypothesis.note(f"Result: {sorted(result)}")
     assert len(result) == len(g.components())
 
@@ -724,8 +715,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     )
     test_scheduling.close_failing_together_db("config_group")
 
-    model = TestGroupSelectModel()
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group1",
         },
@@ -734,7 +724,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert len(result) == 1
     assert set(result["group1"]) == {"linux1804-64-asan/debug", "linux1804-64/opt"}
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group2",
         },
@@ -743,7 +733,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert len(result) == 1
     assert set(result["group2"]) == {"linux1804-64/debug", "linux1804-64/opt"}
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group3",
         },
@@ -752,7 +742,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert len(result) == 1
     assert set(result["group3"]) == {"windows10/debug", "linux1804-64/opt"}
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group1",
             "group2",
@@ -766,7 +756,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
         "linux1804-64/debug",
     }
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group1",
             "group3",
@@ -777,7 +767,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert set(result["group1"]) == {"windows10/debug", "linux1804-64-asan/debug"}
     assert set(result["group3"]) == {"windows10/debug", "linux1804-64-asan/debug"}
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group2",
             "group3",
@@ -788,7 +778,7 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
     assert set(result["group2"]) == {"linux1804-64/opt", "linux1804-64/debug"}
     assert set(result["group3"]) == {"linux1804-64/opt", "windows10/debug"}
 
-    result = model.select_configs(
+    result = testselect.select_configs(
         {
             "group1",
             "group2",

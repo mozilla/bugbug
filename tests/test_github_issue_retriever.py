@@ -172,5 +172,5 @@ def test_public_issues_with_random_error() -> None:
         status=500,
     )
 
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(requests.adapters.MaxRetryError):
         github_issue_retriever.replace_with_private(data)

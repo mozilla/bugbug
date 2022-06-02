@@ -44,7 +44,7 @@ class MicroannotateGenerator(object):
             VERSION,
         )
 
-        is_old_version = db.is_old_schema(db_path)
+        is_different_version = db.is_different_schema(db_path)
 
         with ThreadPoolExecutorResult(max_workers=2) as executor:
             cloner = executor.submit(repository.clone, self.repo_dir)
@@ -52,7 +52,7 @@ class MicroannotateGenerator(object):
                 lambda future: logger.info("mozilla-central cloned")
             )
 
-            if not is_old_version:
+            if not is_different_version:
                 git_cloner = executor.submit(self.clone_git_repo)
                 git_cloner.add_done_callback(
                     lambda future: logger.info("git repo cloned")
@@ -65,7 +65,7 @@ class MicroannotateGenerator(object):
         )
 
         push_args = ["git", "push", self.repo_url, "master"]
-        if is_old_version:
+        if is_different_version:
             push_args.append("--force")
 
         done = False

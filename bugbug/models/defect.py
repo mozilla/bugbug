@@ -164,6 +164,12 @@ class DefectModel(BugModel):
 
             bug_ids.add(bug_id)
 
+            # Ignore meta bugs, their types are not consistently set.
+            if "meta" in bug["keywords"]:
+                if bug_id in classes:
+                    del classes[bug_id]
+                continue
+
             if bug_id in classes:
                 continue
 
