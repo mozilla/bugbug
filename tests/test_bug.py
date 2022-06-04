@@ -13,6 +13,7 @@ def test_get_bug_labels():
     assert classes[1087488]
     assert not classes[1101825]
     # labels from regression_bug_nobug.csv
+    assert not classes[1586096]  # nobug
     assert classes[518272]  # regression
     assert classes[528988]  # bug_unknown_regression
     assert classes[1037762]  # bug_no_regression
