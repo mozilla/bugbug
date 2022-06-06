@@ -15,6 +15,18 @@ from tabulate import tabulate
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
 
+OPT_MSG_MISSING = (
+    "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
+)
+
+try:
+    import nltk
+    from nltk.tokenize import word_tokenize
+except ImportError:
+    raise ImportError(OPT_MSG_MISSING)
+
+nltk.download("punkt")
+
 logger = logging.getLogger(__name__)
 
 SEVERITY_MAP = {
@@ -31,15 +43,23 @@ SEVERITY_MAP = {
     "enhancement": 4,
 }
 
+# Keywords should be in lower case.
+SEVERITY_KEYWORDS = set(map(lambda x: x.lower(), SEVERITY_MAP.keys())) | {
+    "severity",
+}
+
 SEVERITY_LIST = sorted(set(SEVERITY_MAP.values()))
 
 
 class BugSeverityModel(BugModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=False, drop_severity_keywords=True):
         BugModel.__init__(self, lemmatization)
 
         self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
+        self.preprocessor = (
+            self.drop_severity_keywords if drop_severity_keywords else None
+        )
 
         feature_extractors = [
             bug_features.has_str(),
@@ -83,10 +103,18 @@ class BugSeverityModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            (
+                                "title",
+                                self.text_vectorizer(
+                                    min_df=0.001, preprocessor=self.preprocessor
+                                ),
+                                "title",
+                            ),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(
+                                    min_df=0.001, preprocessor=self.preprocessor
+                                ),
                                 "first_comment",
                             ),
                         ]
@@ -123,3 +151,13 @@ class BugSeverityModel(BugModel):
 
     def get_feature_names(self):
         return self.extraction_pipeline.named_steps["union"].get_feature_names()
+
+    @staticmethod
+    def drop_severity_keywords(text):
+        return " ".join(
+            [
+                word
+                for word in word_tokenize(text.lower())
+                if word not in SEVERITY_KEYWORDS
+            ]
+        )
