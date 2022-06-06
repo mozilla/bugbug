@@ -1,4 +1,4 @@
-coverage==6.4
+coverage==6.4.1
 hypothesis==6.46.9
 jsonschema==4.5.1
 pre-commit==2.19.0
