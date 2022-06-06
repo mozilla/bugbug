@@ -10,5 +10,5 @@ from bugbug.models.regression import RegressionModel
 def test_get_regression_labels():
     model = RegressionModel()
     classes, _ = model.get_labels()
-    assert classes[447581] == 0
+    assert classes[1348788] == 0
     assert classes[518272] == 1
