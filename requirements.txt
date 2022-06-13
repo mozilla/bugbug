@@ -26,7 +26,7 @@ scipy==1.8.1
 sendgrid==6.9.7
 shap[plots]==0.40.0
 tabulate==0.8.9
-taskcluster==44.15.5
+taskcluster==44.16.1
 tenacity==8.0.1
 tqdm==4.64.0
 xgboost==1.6.1
