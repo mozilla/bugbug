@@ -25,7 +25,7 @@ scikit-learn==1.1.1
 scipy==1.8.1
 sendgrid==6.9.7
 shap[plots]==0.41.0
-tabulate==0.8.9
+tabulate==0.8.10
 taskcluster==44.16.4
 tenacity==8.0.1
 tqdm==4.64.0
