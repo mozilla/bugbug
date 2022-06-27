@@ -24,7 +24,7 @@ rs_parsepatch==0.3.6
 scikit-learn==1.1.1
 scipy==1.8.1
 sendgrid==6.9.7
-shap[plots]==0.40.0
+shap[plots]==0.41.0
 tabulate==0.8.9
 taskcluster==44.15.5
 tenacity==8.0.1
