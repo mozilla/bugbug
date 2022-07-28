@@ -680,7 +680,12 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
-                "types": bug_to_types(bug, bug_map),
+                "types": bug_to_types(bug, bug_map)
+                + (
+                    ["intermittent"]
+                    if "intermittent-failure" in bug["keywords"]
+                    else []
+                ),
                 "priority": bug["priority"],
                 "severity": bug["severity"],
                 "creation_date": dateutil.parser.parse(bug["creation_time"]).strftime(
