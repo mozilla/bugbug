@@ -938,6 +938,10 @@ export async function renderSeverityChart(
         counterObj.S1 += 1;
       } else if (bug.severity == "S2") {
         counterObj.S2 += 1;
+      } else if (bug.severity == "S3") {
+        counterObj.S3 += 1;
+      } else if (bug.severity == "S4") {
+        counterObj.S4 += 1;
       }
     },
     null,
@@ -953,6 +957,10 @@ export async function renderSeverityChart(
         counterObj.S1 += 1;
       } else if (bug.severity == "S2") {
         counterObj.S2 += 1;
+      } else if (bug.severity == "S3") {
+        counterObj.S3 += 1;
+      } else if (bug.severity == "S4") {
+        counterObj.S4 += 1;
       }
     },
     null,
@@ -966,28 +974,40 @@ export async function renderSeverityChart(
   const categories = [];
   const s1 = [];
   const s2 = [];
+  const s3 = [];
+  const s4 = [];
   for (const date of dates) {
     categories.push(date);
     if (date in summaryOpenData) {
       s1.push(summaryOpenData[date]["S1"]);
       s2.push(summaryOpenData[date]["S2"]);
+      s3.push(summaryOpenData[date]["S3"]);
+      s4.push(summaryOpenData[date]["S4"]);
     } else {
       s1.push(0);
       s2.push(0);
+      s3.push(0);
+      s4.push(0);
     }
   }
 
   const series = [
     { name: "New S1", type: "column", data: s1 },
     { name: "New S2", type: "column", data: s2 },
+    { name: "New S3", type: "column", data: s3 },
+    { name: "New S4", type: "column", data: s4 },
   ];
 
   if (carryover) {
     const finalS1 = await getSeverityCount("S1", getOption("components"));
     const finalS2 = await getSeverityCount("S2", getOption("components"));
+    const finalS3 = await getSeverityCount("S3", getOption("components"));
+    const finalS4 = await getSeverityCount("S4", getOption("components"));
 
     const s1_total = [finalS1];
     const s2_total = [finalS2];
+    const s3_total = [finalS3];
+    const s4_total = [finalS4];
     for (const date of dates.slice(1).reverse()) {
       const s1_new = date in summaryOpenData ? summaryOpenData[date]["S1"] : 0;
       const s1_fixed = date in summaryFixData ? summaryFixData[date]["S1"] : 0;
@@ -995,14 +1015,32 @@ export async function renderSeverityChart(
       const s2_new = date in summaryOpenData ? summaryOpenData[date]["S2"] : 0;
       const s2_fixed = date in summaryFixData ? summaryFixData[date]["S2"] : 0;
       s2_total.unshift(s2_total[0] - (s2_new - s2_fixed));
+      const s3_new = date in summaryOpenData ? summaryOpenData[date]["S3"] : 0;
+      const s3_fixed = date in summaryFixData ? summaryFixData[date]["S3"] : 0;
+      s3_total.unshift(s3_total[0] - (s2_new - s3_fixed));
+      const s4_new = date in summaryOpenData ? summaryOpenData[date]["S4"] : 0;
+      const s4_fixed = date in summaryFixData ? summaryFixData[date]["S4"] : 0;
+      s4_total.unshift(s2_total[0] - (s4_new - s4_fixed));
     }
 
     series.push({ name: "Total S1", type: "line", data: s1_total });
     series.push({ name: "Total S2", type: "line", data: s2_total });
+    series.push({ name: "Total S3", type: "line", data: s3_total });
+    series.push({ name: "Total S4", type: "line", data: s4_total });
   }
 
   const options = {
     series: series,
+    colors: [
+      "#ff4560",
+      "#feb019",
+      "#00bffb",
+      "#00e396",
+      "#ff4560",
+      "#feb019",
+      "#00bffb",
+      "#00e396",
+    ],
     chart: {
       type: "line",
       height: 350,
@@ -1033,35 +1071,34 @@ export async function renderSeverityChart(
     yaxis: [
       {
         seriesName: "New S1",
-        axisTicks: {
-          show: true,
-        },
-        axisBorder: {
-          show: true,
-        },
-        title: {
-          text: "New # of bugs",
-        },
+        show: false,
       },
       {
-        seriesName: "New S1",
+        seriesName: "New S2",
+        show: false,
+      },
+      {
+        seriesName: "New S3",
+        show: false,
+      },
+      {
+        seriesName: "New S4",
+        show: false,
+      },
+      {
+        seriesName: "Total S1",
         show: false,
       },
       {
         seriesName: "Total S2",
-        opposite: true,
-        axisTicks: {
-          show: true,
-        },
-        axisBorder: {
-          show: true,
-        },
-        title: {
-          text: "Total # of bugs",
-        },
+        show: false,
       },
       {
-        seriesName: "Total S2",
+        seriesName: "Total S3",
+        show: false,
+      },
+      {
+        seriesName: "Total S4",
         show: false,
       },
     ],
