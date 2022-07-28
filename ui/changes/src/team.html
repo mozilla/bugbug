@@ -31,12 +31,32 @@
           ><br />
           <label
             >Teams
-            <select name="teams" id="teams" multiple></select> </label
-          ><br />
+            <select name="teams" id="teams" multiple></select>
+          </label>
+          <label>
+            <button
+              id="select_all_teams_team_html"
+              name="select_all_teams_team_html"
+            >
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
           <label
             >Components
-            <select name="components" id="components" multiple></select> </label
-          ><br />
+            <select name="components" id="components" multiple></select>
+          </label>
+          <label>
+            <button
+              id="select_all_components_team_html"
+              name="select_all_components_team_html"
+            >
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
           <label>
             <input
               type="checkbox"
@@ -44,12 +64,31 @@
               name="regressionsOnly"
             />Restrict to regressions<br /> </label
           ><br />
+
           <select
             name="types"
             id="types"
             multiple
             style="display: none"
           ></select>
+
+          <!--
+// Depends on the above select tag style attribute.
+// This button is commented for this time.
+// If uncommented this, uncomment the respective js as well.
+// I dont know why the above select tag display is set to none.
+
+          <label>
+            <button
+              id="select_all_types_team_html"
+              name="select_all_types_team_html"
+            >
+              Select All
+            </button>
+            <br />
+          </label>
+          <br />
+-->
         </div>
       </aside>
       <main>
