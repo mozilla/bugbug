@@ -22,7 +22,7 @@ ratelimit==2.2.1
 requests==2.28.1
 rs_parsepatch==0.3.6
 scikit-learn==1.1.1
-scipy==1.8.1
+scipy==1.9.0
 sendgrid==6.9.7
 shap[plots]==0.41.0
 tabulate==0.8.10
