@@ -1,6 +1,6 @@
 amqp==5.1.1
 beautifulsoup4==4.11.1
-boto3==1.24.39
+boto3==1.24.51
 imbalanced-learn==0.9.1
 libmozdata==0.1.79
 lmdb==1.3.0
