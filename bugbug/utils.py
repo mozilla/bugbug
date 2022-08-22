@@ -300,7 +300,7 @@ class CustomJsonEncoder(json.JSONEncoder):
         except (ValueError, IndexError, AttributeError, TypeError):
             pass
 
-        return super().default(self, obj)
+        return super().default(obj)
 
 
 class ExpQueue:
