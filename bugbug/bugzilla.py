@@ -448,9 +448,7 @@ def calculate_maintenance_effectiveness_indicator(
 
             data[query_type][severity] = r.json()["bug_count"]
 
-    print("Before applying weights:")
-    print(data)
-
+    # Calculate number of bugs without severity set.
     for query_type in ("opened", "closed"):
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
@@ -458,6 +456,10 @@ def calculate_maintenance_effectiveness_indicator(
             if s != "--"
         )
 
+    print("Before applying weights:")
+    print(data)
+
+    for query_type in ("opened", "closed"):
         # Apply weights.
         for (
             severity,
