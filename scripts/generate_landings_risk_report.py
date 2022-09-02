@@ -5,6 +5,7 @@
 
 import argparse
 import collections
+import copy
 import itertools
 import json
 import logging
@@ -1384,13 +1385,18 @@ def notification(days: int) -> None:
     def get_top_crashes(team: str, channel: str) -> Optional[str]:
         top_crashes = []
 
+        if team in super_teams:
+            teams = set(super_teams[team])
+        else:
+            teams = {team}
+
         for signature, data in crash_signatures[channel].items():
             bugs = [
                 bug
                 for bug in data["bugs"]
                 if bug["resolution"] == ""
-                and team
-                == component_team_mapping.get(bug["product"], {}).get(bug["component"])
+                and component_team_mapping.get(bug["product"], {}).get(bug["component"])
+                in teams
             ]
 
             if len(bugs) == 0:
@@ -1431,6 +1437,20 @@ table {
   border-collapse: collapse;
 }
 </style>"""
+
+    super_teams = json.loads(get_secret("SUPER_TEAMS"))
+    for super_team, teams in super_teams.items():
+        assert super_team not in team_data
+        team_data[super_team] = {}
+        for team in teams:
+            for key, value in team_data[team].items():
+                if key not in team_data[super_team]:
+                    team_data[super_team][key] = copy.deepcopy(value)
+                else:
+                    if isinstance(value, dict):
+                        team_data[super_team][key].update(value)
+                    else:
+                        team_data[super_team][key] += value
 
     team_to_receivers = json.loads(get_secret("NOTIFICATION_TEAMS"))
     for team, cur_team_data in team_data.items():
@@ -1526,7 +1546,10 @@ table {
                 prev_median_fix_time = None
 
             if median_fix_time is not None:
-                median_fix_time_text = f"""The median time to fix for regressions fixed in the past week was {median_fix_time} days ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams)."""
+                median_fix_time_text = f"The median time to fix for regressions fixed in the past week was {median_fix_time} days"
+                if team not in super_teams:
+                    median_fix_time_text += f""" ({"**higher** than" if median_fix_time > average_median_fix_time else "lower than" if average_median_fix_time > median_fix_time else "equal to"} the average of {round(average_median_fix_time, 1)} across other teams)"""
+                median_fix_time_text += "."
 
                 if prev_median_fix_time is not None:
                     verb = (
@@ -1615,7 +1638,10 @@ table {
                 else:
                     review_time_diff = ""
 
-                median_first_review_time_text = f"""The median time to first review patches for last week's fixed bugs was {median_first_review_time} days ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams). {review_time_diff}"""
+                median_first_review_time_text = f"The median time to first review patches for last week's fixed bugs was {median_first_review_time} days"
+                if team not in super_teams:
+                    median_first_review_time_text += f""" ({"**higher** than" if median_first_review_time > average_median_first_review_time else "lower than" if average_median_first_review_time > median_first_review_time else "equal to"} the average of {round(average_median_first_review_time, 1)} across other teams)"""
+                median_first_review_time_text += f". {review_time_diff}"
                 if ninth_decile_first_review_time is not None:
                     median_first_review_time_text += f"\n90% of patches were first reviewed within {ninth_decile_first_review_time} days."
             else:
@@ -1645,7 +1671,10 @@ table {
 
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
 
-The regression rate (regressions from the past two weeks / changes from this month) is {round(regression_rate, 2)} ({"**higher** than" if regression_rate > median_regression_rate else "lower than" if median_regression_rate > regression_rate else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams).
+The regression rate (regressions from the past two weeks / changes from this month) is {round(regression_rate, 2)}"""
+            if team not in super_teams:
+                new_regressions_section += f""" ({"**higher** than" if regression_rate > median_regression_rate else "lower than" if median_regression_rate > regression_rate else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams)"""
+            new_regressions_section += f""".
 This week your team committed {high_risk_changes} high risk[^risk] changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
 
@@ -1740,7 +1769,10 @@ Top intermittent failures from the past week:
 |---|---|---|---|---|
 {top_intermittent_failures}
 
-There are {skipped_tests} tests skipped in some configurations ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)}).
+There are {skipped_tests} tests skipped in some configurations"""
+            if team not in super_teams:
+                intermittent_failures_section += f""" ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)})"""
+            intermittent_failures_section += f""".
 They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
 
             test_coverage_section = f"""<b>TEST COVERAGE</b>
