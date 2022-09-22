@@ -746,7 +746,9 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg: hglib.client, revs: list[bytes]) -> tuple[Commit, ...]:
+def hg_log(
+    hg: hglib.client, revs: list[bytes], branch: str | None = "tip"
+) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -757,7 +759,7 @@ def hg_log(hg: hglib.client, revs: list[bytes]) -> tuple[Commit, ...]:
         template=template,
         no_merges=True,
         rev=revs,
-        branch="tip",
+        branch=branch,
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -832,8 +834,8 @@ def hg_log(hg: hglib.client, revs: list[bytes]) -> tuple[Commit, ...]:
     return tuple(commits)
 
 
-def _hg_log(revs: list[bytes]) -> tuple[Commit, ...]:
-    return hg_log(thread_local.hg, revs)
+def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
+    return hg_log(thread_local.hg, revs, branch)
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
@@ -1176,7 +1178,9 @@ def close_component_mapping():
     path_to_component = None
 
 
-def hg_log_multi(repo_dir: str, revs: list[bytes]) -> tuple[Commit, ...]:
+def hg_log_multi(
+    repo_dir: str, revs: list[bytes], branch: str | None = "tip"
+) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -1189,7 +1193,7 @@ def hg_log_multi(repo_dir: str, revs: list[bytes]) -> tuple[Commit, ...]:
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
-        commits_iter = executor.map(_hg_log, revs_groups)
+        commits_iter = executor.map(_hg_log, revs_groups, [branch] * len(revs_groups))
         commits_iter = tqdm(commits_iter, total=len(revs_groups))
         commits = tuple(itertools.chain.from_iterable(commits_iter))
 
@@ -1210,6 +1214,7 @@ def download_commits(
     repo_dir: str,
     rev_start: str = None,
     revs: list[bytes] = None,
+    branch: str | None = "tip",
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
@@ -1240,9 +1245,9 @@ def download_commits(
 
         if not use_single_process:
             logger.info(f"Using {os.cpu_count()} processes...")
-            commits = hg_log_multi(repo_dir, revs)
+            commits = hg_log_multi(repo_dir, revs, branch)
         else:
-            commits = hg_log(hg, revs)
+            commits = hg_log(hg, revs, branch)
 
         set_commits_to_ignore(hg, repo_dir, commits)
 
