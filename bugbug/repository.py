@@ -747,7 +747,7 @@ def _transform(commit):
 
 
 def hg_log(
-    hg: hglib.client, revs: list[bytes], branch: str | None = "tip"
+    hg: hglib.client, revs: list[bytes], branch: Optional[str] = "tip"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1179,7 +1179,7 @@ def close_component_mapping():
 
 
 def hg_log_multi(
-    repo_dir: str, revs: list[bytes], branch: str | None = "tip"
+    repo_dir: str, revs: list[bytes], branch: Optional[str] = "tip"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1214,7 +1214,7 @@ def download_commits(
     repo_dir: str,
     rev_start: str = None,
     revs: list[bytes] = None,
-    branch: str | None = "tip",
+    branch: Optional[str] = "tip",
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
