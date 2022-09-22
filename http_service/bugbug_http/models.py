@@ -199,9 +199,21 @@ def schedule_tests(branch: str, rev: str) -> str:
         os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
     )
 
+    # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
+    # On other repos, only consider "tip" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
+    if branch == "try":
+        repo_branch = None
+    else:
+        repo_branch = "tip"
+
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, revs=revs, save=False, use_single_process=True, include_no_bug=True
+        REPO_DIR,
+        revs=revs,
+        branch=repo_branch,
+        save=False,
+        use_single_process=True,
+        include_no_bug=True,
     )
 
     if len(commits) > 0:
