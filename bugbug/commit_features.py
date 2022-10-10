@@ -140,16 +140,16 @@ class source_code_file_metrics(object):
         commit_metrics = commit["metrics"]
         return {
             "Average file cyclomatic": commit_metrics["cyclomatic_avg"],
-            "Average file number of unique operands": commit_metrics[
-                "halstead_n2_avg"
-            ],
+            "Average file number of unique operands": commit_metrics["halstead_n2_avg"],
             "Average file number of operands": commit_metrics["halstead_N2_avg"],
             "Average file number of unique operators": commit_metrics[
                 "halstead_n1_avg"
             ],
             "Average file number of operators": commit_metrics["halstead_N1_avg"],
             "Average file length": commit_metrics["halstead_length_avg"],
-            "Average file estimated program length": commit_metrics["halstead_estimated_program_length_avg"],
+            "Average file estimated program length": commit_metrics[
+                "halstead_estimated_program_length_avg"
+            ],
             "Average file purity ratio": commit_metrics["halstead_purity_ratio_avg"],
             "Average file vocabulary": commit_metrics["halstead_vocabulary_avg"],
             "Average file volume": commit_metrics["halstead_volume_avg"],
@@ -164,24 +164,22 @@ class source_code_file_metrics(object):
             "Average file number of comment loc": commit_metrics["cloc_avg"],
             "Average file blank": commit_metrics["blank_avg"],
             "Average file number of function arguments": commit_metrics["nargs_avg"],
-            "Average file number of function exit points": commit_metrics[
-                "nexits_avg"
-            ],
+            "Average file number of function exit points": commit_metrics["nexits_avg"],
             "Average file cognitive": commit_metrics["cognitive_avg"],
             "Average file mi_original": commit_metrics["mi_original_avg"],
             "Average file mi_sei": commit_metrics["mi_sei_avg"],
             "Average file mi_visual_studio": commit_metrics["mi_visual_studio_avg"],
             "Maximum file cyclomatic": commit_metrics["cyclomatic_max"],
-            "Maximum file number of unique operands": commit_metrics[
-                "halstead_n2_max"
-            ],
+            "Maximum file number of unique operands": commit_metrics["halstead_n2_max"],
             "Maximum file number of operands": commit_metrics["halstead_N2_max"],
             "Maximum file number of unique operators": commit_metrics[
                 "halstead_n1_max"
             ],
             "Maximum file number of operators": commit_metrics["halstead_N1_max"],
             "Maximum file length": commit_metrics["halstead_length_max"],
-            "Maximum file estimated program length": commit_metrics["halstead_estimated_program_length_max"],
+            "Maximum file estimated program length": commit_metrics[
+                "halstead_estimated_program_length_max"
+            ],
             "Maximum file purity ratio": commit_metrics["halstead_purity_ratio_max"],
             "Maximum file vocabulary": commit_metrics["halstead_vocabulary_max"],
             "Maximum file volume": commit_metrics["halstead_volume_max"],
@@ -196,24 +194,22 @@ class source_code_file_metrics(object):
             "Maximum file number of comment loc": commit_metrics["cloc_max"],
             "Maximum file blank": commit_metrics["blank_max"],
             "Maximum file number of function arguments": commit_metrics["nargs_max"],
-            "Maximum file number of function exit points": commit_metrics[
-                "nexits_max"
-            ],
+            "Maximum file number of function exit points": commit_metrics["nexits_max"],
             "Maximum file cognitive": commit_metrics["cognitive_max"],
             "Maximum file mi_original": commit_metrics["mi_original_max"],
             "Maximum file mi_sei": commit_metrics["mi_sei_max"],
             "Maximum file mi_visual_studio": commit_metrics["mi_visual_studio_max"],
             "Minimum file cyclomatic": commit_metrics["cyclomatic_min"],
-            "Minimum file number of unique operands": commit_metrics[
-                "halstead_n2_min"
-            ],
+            "Minimum file number of unique operands": commit_metrics["halstead_n2_min"],
             "Minimum file number of operands": commit_metrics["halstead_N2_min"],
             "Minimum file number of unique operators": commit_metrics[
                 "halstead_n1_min"
             ],
             "Minimum file number of operators": commit_metrics["halstead_N1_min"],
             "Minimum file length": commit_metrics["halstead_length_min"],
-            "Minimum file estimated program length": commit_metrics["halstead_estimated_program_length_min"],
+            "Minimum file estimated program length": commit_metrics[
+                "halstead_estimated_program_length_min"
+            ],
             "Minimum file purity ratio": commit_metrics["halstead_purity_ratio_min"],
             "Minimum file vocabulary": commit_metrics["halstead_vocabulary_min"],
             "Minimum file volume": commit_metrics["halstead_volume_min"],
@@ -228,24 +224,22 @@ class source_code_file_metrics(object):
             "Minimum file number of comment loc": commit_metrics["cloc_min"],
             "Minimum file blank": commit_metrics["blank_min"],
             "Minimum file number of function arguments": commit_metrics["nargs_min"],
-            "Minimum file number of function exit points": commit_metrics[
-                "nexits_min"
-            ],
+            "Minimum file number of function exit points": commit_metrics["nexits_min"],
             "Minimum file cognitive": commit_metrics["cognitive_min"],
             "Minimum file mi_original": commit_metrics["mi_original_min"],
             "Minimum file mi_sei": commit_metrics["mi_sei_min"],
             "Minimum file mi_visual_studio": commit_metrics["mi_visual_studio_min"],
             "Total file cyclomatic": commit_metrics["cyclomatic_total"],
-            "Total file number of unique operands": commit_metrics[
-                "halstead_n2_total"
-            ],
+            "Total file number of unique operands": commit_metrics["halstead_n2_total"],
             "Total file number of operands": commit_metrics["halstead_N2_total"],
             "Total file number of unique operators": commit_metrics[
                 "halstead_n1_total"
             ],
             "Total file number of operators": commit_metrics["halstead_N1_total"],
             "Total file length": commit_metrics["halstead_length_total"],
-            "Total file estimated program length": commit_metrics["halstead_estimated_program_length_total"],
+            "Total file estimated program length": commit_metrics[
+                "halstead_estimated_program_length_total"
+            ],
             "Total file purity ratio": commit_metrics["halstead_purity_ratio_total"],
             "Total file vocabulary": commit_metrics["halstead_vocabulary_total"],
             "Total file volume": commit_metrics["halstead_volume_total"],
@@ -260,9 +254,7 @@ class source_code_file_metrics(object):
             "Total file number of comment loc": commit_metrics["cloc_total"],
             "Total file blank": commit_metrics["blank_total"],
             "Total file number of function arguments": commit_metrics["nargs_total"],
-            "Total file number of function exit points": commit_metrics[
-                "nexits_total"
-            ],
+            "Total file number of function exit points": commit_metrics["nexits_total"],
             "Total file cognitive": commit_metrics["cognitive_total"],
             "Total file mi_original": commit_metrics["mi_original_total"],
             "Total file mi_sei": commit_metrics["mi_sei_total"],
@@ -316,7 +308,9 @@ class source_code_function_metrics(object):
             ],
             "Average function number of operators": merged_metrics["halstead_N1_avg"],
             "Average file length": merged_metrics["halstead_length_avg"],
-            "Average file estimated program length": merged_metrics["halstead_estimated_program_length_avg"],
+            "Average file estimated program length": merged_metrics[
+                "halstead_estimated_program_length_avg"
+            ],
             "Average file purity ratio": merged_metrics["halstead_purity_ratio_avg"],
             "Average file vocabulary": merged_metrics["halstead_vocabulary_avg"],
             "Average file volume": merged_metrics["halstead_volume_avg"],
@@ -350,7 +344,9 @@ class source_code_function_metrics(object):
             ],
             "Maximum function number of operators": merged_metrics["halstead_N1_max"],
             "Maximum file length": merged_metrics["halstead_length_max"],
-            "Maximum file estimated program length": merged_metrics["halstead_estimated_program_length_max"],
+            "Maximum file estimated program length": merged_metrics[
+                "halstead_estimated_program_length_max"
+            ],
             "Maximum file purity ratio": merged_metrics["halstead_purity_ratio_max"],
             "Maximum file vocabulary": merged_metrics["halstead_vocabulary_max"],
             "Maximum file volume": merged_metrics["halstead_volume_max"],
@@ -384,7 +380,9 @@ class source_code_function_metrics(object):
             ],
             "Minimum function number of operators": merged_metrics["halstead_N1_min"],
             "Minimum file length": merged_metrics["halstead_length_min"],
-            "Minimum file estimated program length": merged_metrics["halstead_estimated_program_length_min"],
+            "Minimum file estimated program length": merged_metrics[
+                "halstead_estimated_program_length_min"
+            ],
             "Minimum file purity ratio": merged_metrics["halstead_purity_ratio_min"],
             "Minimum file vocabulary": merged_metrics["halstead_vocabulary_min"],
             "Minimum file volume": merged_metrics["halstead_volume_min"],
@@ -418,7 +416,9 @@ class source_code_function_metrics(object):
             ],
             "Total function number of operators": merged_metrics["halstead_N1_total"],
             "Total file length": merged_metrics["halstead_length_total"],
-            "Total file estimated program length": merged_metrics["halstead_estimated_program_length_total"],
+            "Total file estimated program length": merged_metrics[
+                "halstead_estimated_program_length_total"
+            ],
             "Total file purity ratio": merged_metrics["halstead_purity_ratio_total"],
             "Total file vocabulary": merged_metrics["halstead_vocabulary_total"],
             "Total file volume": merged_metrics["halstead_volume_total"],
@@ -449,43 +449,44 @@ class source_code_metrics_diff(object):
     name = "diff in metrics on source code"
 
     def __call__(self, commit, **kwargs):
+        commit_metrics_diff = commit["metrics_diff"]
         return {
-            "Diff in cyclomatic": commit["metrics_diff"]["cyclomatic_total"],
-            "Diff in number of unique operands": commit["metrics_diff"][
+            "Diff in cyclomatic": commit_metrics_diff["cyclomatic_total"],
+            "Diff in number of unique operands": commit_metrics_diff[
                 "halstead_n2_total"
             ],
-            "Diff in number of operands": commit["metrics_diff"]["halstead_N2_total"],
-            "Diff in number of unique operators": commit["metrics_diff"][
+            "Diff in number of operands": commit_metrics_diff["halstead_N2_total"],
+            "Diff in number of unique operators": commit_metrics_diff[
                 "halstead_n1_total"
             ],
-            "Diff in number of operators": commit["metrics_diff"]["halstead_N1_total"],
-            "Diff file length": commit["metrics"]["halstead_length_total"],
-            "Diff file estimated program length": commit["metrics"]["halstead_estimated_program_length_total"],
-            "Diff file purity ratio": commit["metrics"]["halstead_purity_ratio_total"],
-            "Diff file vocabulary": commit["metrics"]["halstead_vocabulary_total"],
-            "Diff file volume": commit["metrics"]["halstead_volume_total"],
-            "Diff file difficulty": commit["metrics"]["halstead_difficulty_total"],
-            "Diff file level": commit["metrics"]["halstead_level_total"],
-            "Diff file effort": commit["metrics"]["halstead_effort_total"],
-            "Diff file time": commit["metrics"]["halstead_time_total"],
-            "Diff file bugs": commit["metrics"]["halstead_bugs_total"],
-            "Diff in number of source loc": commit["metrics_diff"]["sloc_total"],
-            "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
-            "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
-            "Diff in number of comment loc": commit["metrics_diff"]["cloc_total"],
-            "Diff in blank": commit["metrics_diff"]["blank_total"],
-            "Diff in number of function arguments": commit["metrics_diff"][
-                "nargs_total"
+            "Diff in number of operators": commit_metrics_diff["halstead_N1_total"],
+            "Diff file length": commit_metrics_diff["halstead_length_total"],
+            "Diff file estimated program length": commit_metrics_diff[
+                "halstead_estimated_program_length_total"
             ],
-            "Diff in number of function exit points": commit["metrics_diff"][
+            "Diff file purity ratio": commit_metrics_diff[
+                "halstead_purity_ratio_total"
+            ],
+            "Diff file vocabulary": commit_metrics_diff["halstead_vocabulary_total"],
+            "Diff file volume": commit_metrics_diff["halstead_volume_total"],
+            "Diff file difficulty": commit_metrics_diff["halstead_difficulty_total"],
+            "Diff file level": commit_metrics_diff["halstead_level_total"],
+            "Diff file effort": commit_metrics_diff["halstead_effort_total"],
+            "Diff file time": commit_metrics_diff["halstead_time_total"],
+            "Diff file bugs": commit_metrics_diff["halstead_bugs_total"],
+            "Diff in number of source loc": commit_metrics_diff["sloc_total"],
+            "Diff in number of instruction loc": commit_metrics_diff["ploc_total"],
+            "Diff in number of logical loc": commit_metrics_diff["lloc_total"],
+            "Diff in number of comment loc": commit_metrics_diff["cloc_total"],
+            "Diff in blank": commit_metrics_diff["blank_total"],
+            "Diff in number of function arguments": commit_metrics_diff["nargs_total"],
+            "Diff in number of function exit points": commit_metrics_diff[
                 "nexits_total"
             ],
-            "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
-            "Diff in mi_original": commit["metrics_diff"]["mi_original_total"],
-            "Diff in mi_sei": commit["metrics_diff"]["mi_sei_total"],
-            "Diff in mi_visual_studio": commit["metrics_diff"][
-                "mi_visual_studio_total"
-            ],
+            "Diff in cognitive": commit_metrics_diff["cognitive_total"],
+            "Diff in mi_original": commit_metrics_diff["mi_original_total"],
+            "Diff in mi_sei": commit_metrics_diff["mi_sei_total"],
+            "Diff in mi_visual_studio": commit_metrics_diff["mi_visual_studio_total"],
         }
 
 
