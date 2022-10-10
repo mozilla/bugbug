@@ -135,10 +135,16 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
+        phabricator_deployment: Optional[str] = None,
+        diff_id: Optional[str] = None,
     ):
-        self.model_name = model_name
         self.repo_dir = repo_dir
 
+        with hglib.open(self.repo_dir) as hg:
+            if phabricator_deployment is not None and diff_id is not None:
+                self.apply_phab(hg, phabricator_deployment, diff_id)
+
+        self.model_name = model_name
         self.model = Model.load(download_model(model_name))
         assert self.model is not None
 
@@ -848,6 +854,8 @@ def main() -> None:
         args.method_defect_predictor_dir,
         args.use_single_process,
         args.skip_feature_importance,
+        args.phabricator_deployment,
+        args.diff_id,
     )
     classifier.classify(
         args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
