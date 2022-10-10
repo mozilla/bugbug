@@ -597,8 +597,6 @@ class CommitClassifier(object):
 
         if phabricator_deployment is not None and diff_id is not None:
             with hglib.open(self.repo_dir) as hg:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
-
                 revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
             commits = repository.download_commits(
