@@ -10,7 +10,7 @@ import os
 import traceback
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Any, Dict, Generator, List
+from typing import Any, Generator
 
 import dateutil.parser
 import mozci.errors
@@ -57,12 +57,13 @@ class Retriever(object):
 
         def generate(
             progress_bar: tqdm,
-            pushes: List[mozci.push.Push],
-            futures: List[concurrent.futures.Future],
+            pushes: list[mozci.push.Push],
+            futures: list[concurrent.futures.Future],
         ) -> Generator[PushResult, None, None]:
             nonlocal reretrieve
             num_cached = 0
             num_pushes = len(pushes)
+            num_errors = 0
 
             for push, future in zip(pushes, futures):
                 cached = future.result()
@@ -82,7 +83,10 @@ class Retriever(object):
                     num_cached += 1
                     value, mozci_version = cached
                     assert len(value) == 5
-                    yield value
+                    if value != "ERROR":
+                        yield value
+                    else:
+                        num_errors += 1
                 else:
                     logger.info(f"Analyzing {push.rev} at the {granularity} level...")
 
@@ -115,11 +119,18 @@ class Retriever(object):
                             f"Tasks for push {push.rev} can't be found on ActiveData"
                         )
                     except Exception:
+                        num_errors += 1
                         traceback.print_exc()
+                        mozci.config.cache.put(
+                            key,
+                            ("ERROR", MOZCI_VERSION),
+                            mozci.config["cache"]["retention"],
+                        )
 
                 progress_bar.update(1)
 
             logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
+            logger.info(f"There were errors in {num_errors} pushes")
 
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
@@ -207,7 +218,7 @@ class Retriever(object):
                 granularity, push_data_iter(), push_data_count
             )
 
-        def generate_all_data() -> Generator[Dict[str, Any], None, None]:
+        def generate_all_data() -> Generator[dict[str, Any], None, None]:
             past_failures = test_scheduling.get_past_failures(granularity, False)
 
             push_num = past_failures["push_num"] if "push_num" in past_failures else 0

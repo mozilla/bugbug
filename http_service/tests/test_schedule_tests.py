@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Callable, Dict, List, Tuple
+from typing import Callable
 
 import hglib
 import orjson
@@ -54,15 +54,15 @@ from bugbug_http import models
     ],
 )
 def test_simple_schedule(
-    labels_to_choose: Dict[str, float],
-    groups_to_choose: Dict[str, float],
-    reduced_labels: Dict[str, float],
-    config_groups: Dict[str, List[str]],
+    labels_to_choose: dict[str, float],
+    groups_to_choose: dict[str, float],
+    reduced_labels: dict[str, float],
+    config_groups: dict[str, list[str]],
     mock_hgmo: None,
-    mock_repo: Tuple[str, str],
+    mock_repo: tuple[str, str],
     mock_component_taskcluster_artifact: None,
     mock_coverage_mapping_artifact: None,
-    mock_schedule_tests_classify: Callable[[Dict[str, float], Dict[str, float]], None],
+    mock_schedule_tests_classify: Callable[[dict[str, float], dict[str, float]], None],
 ) -> None:
     # The repo should be almost empty at first
     repo_dir, remote_repo_dir = mock_repo

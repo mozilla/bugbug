@@ -145,7 +145,7 @@ class dll(object):
             ]
         ).replace(".", r"\.")
         self.pattern = re.compile(
-            fr"\b(?!{FIREFOX_DLLS_MATCH})\w+(\.dll|\.so|\.dylib)\b"
+            rf"\b(?!{FIREFOX_DLLS_MATCH})\w+(\.dll|\.so|\.dylib)\b"
         )
 
     def __call__(self, text):
@@ -178,7 +178,7 @@ class synonyms(object):
         self.pattern = {}
         for synonym_group, synonym_list in synonyms:
             self.pattern[synonym_group] = re.compile(
-                "|".join(fr"\b{synonym}\b" for synonym in synonym_list),
+                "|".join(rf"\b{synonym}\b" for synonym in synonym_list),
                 flags=re.IGNORECASE,
             )
 

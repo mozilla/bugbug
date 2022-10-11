@@ -10,7 +10,7 @@ import pickle
 import re
 from collections import defaultdict
 from datetime import datetime
-from typing import Callable, Dict, Tuple
+from typing import Callable
 
 import hglib
 import numpy as np
@@ -98,6 +98,9 @@ def patch_resources(monkeypatch, jobs):
         ):
             pass
 
+        def enqueue_many(self, job_datas, pipeline=None):
+            pass
+
     class JobMock:
         """Mock class to mimic rq.job.Job."""
 
@@ -159,7 +162,7 @@ def add_change_time():
 
 
 @pytest.fixture
-def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
+def mock_hgmo(mock_repo: tuple[str, str]) -> None:
     """Mock HGMO API to get patches to apply"""
 
     def fake_json_relevance(request):
@@ -202,7 +205,7 @@ def mock_hgmo(mock_repo: Tuple[str, str]) -> None:
 @pytest.fixture
 def mock_repo(
     tmpdir: py.path.local, monkeypatch: MonkeyPatch
-) -> Tuple[py.path.local, py.path.local]:
+) -> tuple[py.path.local, py.path.local]:
     """Create an empty mercurial repo"""
     local_dir = tmpdir / "local"
     remote_dir = tmpdir / "remote"
@@ -366,7 +369,7 @@ def mock_get_config_specific_groups(
 @pytest.fixture
 def mock_schedule_tests_classify(
     monkeypatch: MonkeyPatch,
-) -> Callable[[Dict[str, float], Dict[str, float]], None]:
+) -> Callable[[dict[str, float], dict[str, float]], None]:
     with open("known_tasks", "w") as f:
         f.write("prova")
 

@@ -8,14 +8,16 @@ import errno
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import tarfile
+import urllib.parse
 from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Iterator, List, Optional
+from typing import Any, Iterator, Optional
 
 import boto3
 import dateutil.parser
@@ -230,10 +232,10 @@ def download_model(model_name: str) -> str:
 
 
 def zstd_compress(path: str) -> None:
-    cctx = zstandard.ZstdCompressor(threads=-1)
-    with open(path, "rb") as input_f:
-        with open(f"{path}.zst", "wb") as output_f:
-            cctx.copy_stream(input_f, output_f)
+    if not os.path.exists(path):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
+    subprocess.run(["zstd", "-f", path], check=True)
 
 
 def zstd_decompress(path: str) -> None:
@@ -298,7 +300,7 @@ class CustomJsonEncoder(json.JSONEncoder):
         except (ValueError, IndexError, AttributeError, TypeError):
             pass
 
-        return super().default(self, obj)
+        return super().default(obj)
 
 
 class ExpQueue:
@@ -435,7 +437,7 @@ def get_session(name: str) -> requests.Session:
     return session
 
 
-def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
+def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
     """Load descriptions of patches in the stack for a given revision"""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)
@@ -468,3 +470,44 @@ def get_hgmo_stack(branch: str, revision: str) -> List[bytes]:
 
 def get_physical_cpu_count() -> int:
     return psutil.cpu_count(logical=False)
+
+
+def extract_metadata(body: str) -> dict:
+    """Extract metadata as dict from github issue body.
+
+    Extract all metadata items and return a dictionary
+    Example metadata format: <!-- @public_url: *** -->
+    """
+    match_list = re.findall(r"<!--\s@(\w+):\s(.+)\s-->", body)
+    return dict(match_list)
+
+
+def extract_private(issue_body: str) -> Optional[tuple]:
+    """Extract private issue information from public issue body
+
+    Parse public issue body and extract private issue number and
+    its owner/repository (webcompat repository usecase)
+    """
+    private_url = extract_metadata(issue_body).get("private_url", "").strip()
+    private_issue_path = urllib.parse.urlparse(private_url).path
+
+    if private_issue_path:
+        owner, repo, _, number = tuple(private_issue_path.split("/")[1:])
+        return owner, repo, number
+
+    return None
+
+
+def escape_markdown(text: str) -> str:
+    return (
+        text.replace("*", "\\*")
+        .replace("`", "\\`")
+        .replace("_", "\\_")
+        .replace("~", "\\~")
+        .replace(">", "\\>")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("|", "\\|")
+    )

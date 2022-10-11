@@ -5,7 +5,7 @@
 
 import pickle
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import matplotlib
 import numpy as np
@@ -21,9 +21,11 @@ from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
 
-from bugbug import bugzilla, db, github, repository
+from bugbug import bugzilla, db, repository
+from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
@@ -147,9 +149,11 @@ class Model:
         self.entire_dataset_training = False
 
         # DBs required for training.
-        self.training_dbs: List[str] = []
+        self.training_dbs: list[str] = []
         # DBs and DB support files required at runtime.
-        self.eval_dbs: Dict[str, Tuple[str, ...]] = {}
+        self.eval_dbs: dict[str, tuple[str, ...]] = {}
+
+        self.le = LabelEncoder()
 
     def download_eval_dbs(
         self, extract: bool = True, ensure_exist: bool = True
@@ -163,14 +167,6 @@ class Model:
                         db.download_support_file(eval_db, eval_file, extract=extract)
                         or not ensure_exist
                     )
-
-    @property
-    def le(self):
-        """Classifier agnostic getter for the label encoder property"""
-        try:
-            return self.clf._le
-        except AttributeError:
-            return self.clf.le_
 
     def get_feature_names(self):
         return []
@@ -333,7 +329,7 @@ class Model:
         """Subclasses can implement their own additional evaluation."""
         pass
 
-    def get_labels(self) -> Tuple[Dict[Any, Any], List[Any]]:
+    def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
         pass
 
@@ -349,6 +345,7 @@ class Model:
 
         # Calculate labels.
         y = np.array(y)
+        self.le.fit(y)
 
         if limit:
             X = X[:limit]
@@ -374,7 +371,9 @@ class Model:
             if len(self.class_names) == 2:
                 scorings += ["precision", "recall"]
 
-            scores = cross_validate(pipeline, X_train, y_train, scoring=scorings, cv=5)
+            scores = cross_validate(
+                pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+            )
 
             print("Cross Validation scores:")
             for scoring in scorings:
@@ -397,7 +396,7 @@ class Model:
 
         print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
-        self.clf.fit(X_train, y_train)
+        self.clf.fit(X_train, self.le.transform(y_train))
 
         print("Model trained")
 
@@ -443,6 +442,7 @@ class Model:
 
         print("Training Set scores:")
         y_pred = self.clf.predict(X_train)
+        y_pred = self.le.inverse_transform(y_pred)
         if not is_multilabel:
             print(
                 classification_report_imbalanced(
@@ -453,6 +453,7 @@ class Model:
         print("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
+        y_pred = self.le.inverse_transform(y_pred)
 
         if is_multilabel:
             assert isinstance(
@@ -558,7 +559,7 @@ class Model:
 
             print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
-            self.clf.fit(X_train, y_train)
+            self.clf.fit(X_train, self.le.transform(y_train))
 
         with open(self.__class__.__name__.lower(), "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -754,12 +755,14 @@ class BugCoupleModel(Model):
 
 
 class IssueModel(Model):
-    def __init__(self, lemmatization=False):
+    def __init__(self, owner, repo, lemmatization=False):
         Model.__init__(self, lemmatization)
-        self.training_dbs = [github.GITHUB_ISSUES_DB]
+
+        self.github = Github(owner=owner, repo=repo)
+        self.training_dbs = [self.github.db_path]
 
     def items_gen(self, classes):
-        for issue in github.get_issues():
+        for issue in self.github.get_issues():
             issue_number = issue["number"]
             if issue_number not in classes:
                 continue

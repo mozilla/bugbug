@@ -9,7 +9,7 @@ import xgboost
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from bugbug import feature_cleanup, github, issue_features, utils
+from bugbug import feature_cleanup, issue_features, utils
 from bugbug.model import IssueModel
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 class NeedsDiagnosisModel(IssueModel):
     def __init__(self, lemmatization=False):
-        IssueModel.__init__(self, lemmatization)
+        IssueModel.__init__(
+            self, owner="webcompat", repo="web-bugs", lemmatization=lemmatization
+        )
 
         self.calculate_importance = False
 
@@ -59,15 +61,19 @@ class NeedsDiagnosisModel(IssueModel):
     def get_labels(self):
         classes = {}
 
-        for issue in github.get_issues():
+        for issue in self.github.get_issues():
+            # Skip issues with empty title or body
+            if issue["title"] is None or issue["body"] is None:
+                continue
+
             # Skip issues that are not moderated yet as they don't have a meaningful title or body
             if issue["title"] == "In the moderation queue.":
                 continue
 
             for event in issue["events"]:
-                if (
-                    event["event"] == "milestoned"
-                    and event["milestone"]["title"] == "needsdiagnosis"
+                if event["event"] == "milestoned" and (
+                    event["milestone"]["title"] == "needsdiagnosis"
+                    or event["milestone"]["title"] == "moved"
                 ):
                     classes[issue["number"]] = 0
 

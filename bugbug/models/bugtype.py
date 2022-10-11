@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, Optional
 
 import numpy as np
 import xgboost
@@ -19,52 +19,47 @@ from bugbug.model import BugModel
 logger = logging.getLogger(__name__)
 
 KEYWORD_DICT = {
-    "sec-critical": "security",
-    "sec-high": "security",
-    "sec-moderate": "security",
-    "sec-low": "security",
-    "sec-other": "security",
-    "sec-audit": "security",
-    "sec-vector": "security",
-    "sec-want": "security",
-    "csectype-bounds": "security",
-    "csectype-disclosure": "security",
-    "csectype-dos": "security",
-    "csectype-framepoisoning": "security",
-    "csectype-intoverflow": "security",
-    "csectype-jit": "security",
-    "csectype-nullptr": "security",
-    "csectype-oom": "security",
-    "csectype-other": "security",
-    "csectype-priv-escalation": "security",
-    "csectype-race": "security",
-    "csectype-sop": "security",
-    "csectype-spoof": "security",
-    "csectype-uaf": "security",
-    "csectype-undefined": "security",
-    "csectype-uninitialized": "security",
-    "csectype-wildptr": "security",
-    "memory-footprint": "memory",
-    "memory-leak": "memory",
+    "sec-": "security",
+    "csectype-": "security",
+    "memory-": "memory",
     "crash": "crash",
     "crashreportid": "crash",
     "perf": "performance",
     "topperf": "performance",
+    "main-thread-io": "performance",
     "power": "power",
 }
 TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
 def bug_to_types(
-    bug: bugzilla.BugDict, bug_map: Optional[Dict[int, bugzilla.BugDict]] = None
-) -> List[str]:
+    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
+) -> list[str]:
     types = set()
 
-    if "[overhead" in bug["whiteboard"].lower():
+    if any(
+        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("overhead", "memshrink")
+    ):
         types.add("memory")
 
     if "[power" in bug["whiteboard"].lower():
         types.add("power")
+
+    if any(
+        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in (
+            "fxperf",
+            "fxperfsize",
+            "snappy",
+            "pdfjs-c-performance",
+            "pdfjs-performance",
+        )
+    ):
+        types.add("performance")
+
+    if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
+        types.add("performance")
 
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
@@ -78,15 +73,11 @@ def bug_to_types(
             if alias and alias.startswith("memshrink"):
                 types.add("memory")
 
-    return list(
-        types.union(
-            set(
-                KEYWORD_DICT[keyword]
-                for keyword in bug["keywords"]
-                if keyword in KEYWORD_DICT
-            )
-        )
-    )
+    for keyword_start, type in KEYWORD_DICT.items():
+        if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
+            types.add(type)
+
+    return list(types)
 
 
 class BugTypeModel(BugModel):
@@ -154,7 +145,7 @@ class BugTypeModel(BugModel):
             xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
-    def get_labels(self) -> Tuple[Dict[int, np.ndarray], List[str]]:
+    def get_labels(self) -> tuple[dict[int, np.ndarray], list[str]]:
         classes = {}
 
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
@@ -179,7 +170,7 @@ class BugTypeModel(BugModel):
     def overwrite_classes(
         self,
         bugs: Iterable[bugzilla.BugDict],
-        classes: Dict[int, np.ndarray],
+        classes: dict[int, np.ndarray],
         probabilities: bool,
     ):
         for i, bug in enumerate(bugs):

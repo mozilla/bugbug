@@ -33,6 +33,8 @@ More information on the Mozilla Hacks blog:
 
 - **duplicate** - The aim of this classifier is to detect duplicate bugs.
 
+- [**needsdiagnosis**](https://github.com/webcompat/webcompat.com/blob/main/docs/ml-process.md) - The aim of this classifier is to detect issues that are likely invalid and don't need to be diagnosed for webcompat use case.
+
 - **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
 
 - **regression vs non-regression** - Bugzilla has a `regression` keyword to identify bugs that are regressions. Unfortunately it isn't used consistently. The aim of this classifier is to detect bugs that are regressions.
@@ -63,7 +65,7 @@ pip3 install -r requirements.txt
 
 You may also need `pip install -r test-requirements.txt`. Depending on the parts of bugbug you want to run, you might need to install dependencies from other requirement files (find them with `find . -name "*requirements*"`).
 
-Currently, Python 3.7+ is required. You can double check the version we use by looking at setup.py.
+Currently, Python 3.9+ is required. You can double check the version we use by looking at setup.py.
 
 Also, libgit2 (needs [v1.0.0](https://github.com/libgit2/libgit2/releases/tag/v1.0.0), only in [experimental on Debian](https://wiki.debian.org/DebianExperimental)), **might** be required (if you can't install it, skip this step).
 
@@ -124,9 +126,10 @@ Note: the script will take a long time to run (on my laptop more than 7 hours). 
 - `bugbug/utils.py` contains misc utility functions;
 - `bugbug/nlp` contains utility functions for NLP;
 - `bugbug/labels.py` contains utility functions for handling labels;
-- `bugbug/bug_snapshot.py` contains a module to play back the history of a bug.
+- `bugbug/bug_snapshot.py` contains a module to play back the history of a bug;
+- `bugbug/github.py` contains functions to retrieve issues from GitHub for a specified owner/repository.
 
 ## Using bugbug for non-Mozilla projects
 
-Bugbug is focussing on Mozilla use-cases for Firefox and Bugzilla.
+Bugbug is focussing on Mozilla use-cases for Firefox, Bugzilla and GitHub.
 However, we will be happy to accept pull requests adding support for other projects or bug trackers.

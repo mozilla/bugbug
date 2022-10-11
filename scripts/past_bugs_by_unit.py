@@ -7,7 +7,6 @@ import argparse
 import json
 import logging
 from collections import defaultdict
-from typing import Dict, List
 
 from tqdm import tqdm
 
@@ -62,33 +61,36 @@ class PastBugsCollector(object):
         def dimension_to_field(dimension: str) -> str:
             return f"{dimension}s" if dimension != "directory" else "directories"
 
-        past_regressions_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_regressions_by: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_fixed_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_fixed_bugs_by: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_regression_blocked_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_regression_blocked_bugs_by: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_fixed_bug_blocked_bugs_by: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_fixed_bug_blocked_bugs_by: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_regressions_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_regressions_by_function: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_fixed_bugs_by_function: Dict[str, Dict[str, List[int]]] = defaultdict(
+        past_fixed_bugs_by_function: dict[str, dict[str, list[int]]] = defaultdict(
             lambda: defaultdict(list)
         )
-        past_regression_blocked_bugs_by_function: Dict[
-            str, Dict[str, List[int]]
+        past_regression_blocked_bugs_by_function: dict[
+            str, dict[str, list[int]]
         ] = defaultdict(lambda: defaultdict(list))
-        past_fixed_bug_blocked_bugs_by_function: Dict[
-            str, Dict[str, List[int]]
+        past_fixed_bug_blocked_bugs_by_function: dict[
+            str, dict[str, list[int]]
         ] = defaultdict(lambda: defaultdict(list))
 
         for commit in tqdm(repository.get_commits()):
             if commit["bug_id"] not in bug_map:
+                continue
+
+            if commit["backedoutby"]:
                 continue
 
             bug = bug_map[commit["bug_id"]]
@@ -131,7 +133,7 @@ class PastBugsCollector(object):
                             bugzilla.find_blocked_by(bug_map, bug)
                         )
 
-        def _transform(bug_ids: List[int]) -> List[dict]:
+        def _transform(bug_ids: list[int]) -> list[dict]:
             seen = set()
             results = []
             for bug_id in bug_ids:
@@ -151,8 +153,8 @@ class PastBugsCollector(object):
             return results
 
         def past_bug_ids_to_summaries(
-            past_bugs_by: Dict[str, List[int]]
-        ) -> Dict[str, List[dict]]:
+            past_bugs_by: dict[str, list[int]]
+        ) -> dict[str, list[dict]]:
             return {path: _transform(bug_ids) for path, bug_ids in past_bugs_by.items()}
 
         for dimension in by_dimensions:
@@ -187,8 +189,8 @@ class PastBugsCollector(object):
             zstd_compress(f"data/past_fixed_bug_blocked_bugs_by_{dimension}.json")
 
         def past_function_bug_ids_to_summaries(
-            past_bugs: Dict[str, Dict[str, List[int]]]
-        ) -> Dict[str, Dict[str, List[dict]]]:
+            past_bugs: dict[str, dict[str, list[int]]]
+        ) -> dict[str, dict[str, list[dict]]]:
             return {
                 path: {
                     func: _transform(bug_ids) for func, bug_ids in funcs_bugs.items()

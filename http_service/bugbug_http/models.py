@@ -7,15 +7,17 @@ import logging
 import os
 from datetime import timedelta
 from functools import lru_cache
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import orjson
 import requests
 import zstandard
 from redis import Redis
 
-from bugbug import bugzilla, github, repository, test_scheduling
+from bugbug import bugzilla, repository, test_scheduling
+from bugbug.github import Github
 from bugbug.model import Model
+from bugbug.models import testselect
 from bugbug.utils import get_hgmo_stack
 from bugbug_http.readthrough_cache import ReadthroughTTLCache
 
@@ -113,6 +115,8 @@ def classify_issue(
 ) -> str:
     from bugbug_http.app import JobInfo
 
+    github = Github(owner=owner, repo=repo)
+
     issue_ids_set = set(map(int, issue_nums))
 
     issues = {
@@ -167,7 +171,7 @@ def classify_issue(
 
 
 @lru_cache(maxsize=None)
-def get_known_tasks() -> Tuple[str, ...]:
+def get_known_tasks() -> tuple[str, ...]:
     with open("known_tasks", "r") as f:
         return tuple(line.strip() for line in f)
 
@@ -195,9 +199,21 @@ def schedule_tests(branch: str, rev: str) -> str:
         os.environ.get("TEST_SELECTION_CONFIDENCE_THRESHOLD", 0.5)
     )
 
+    # On "try", consider commits from other branches too (see https://bugzilla.mozilla.org/show_bug.cgi?id=1790493).
+    # On other repos, only consider "tip" commits (to exclude commits such as https://hg.mozilla.org/integration/autoland/rev/961f253985a4388008700a6a6fde80f4e17c0b4b).
+    if branch == "try":
+        repo_branch = None
+    else:
+        repo_branch = "tip"
+
     # Analyze patches.
     commits = repository.download_commits(
-        REPO_DIR, revs=revs, save=False, use_single_process=True, include_no_bug=True
+        REPO_DIR,
+        revs=revs,
+        branch=repo_branch,
+        save=False,
+        use_single_process=True,
+        include_no_bug=True,
     )
 
     if len(commits) > 0:
@@ -206,20 +222,20 @@ def schedule_tests(branch: str, rev: str) -> str:
 
         tasks = testlabelselect_model.select_tests(commits, test_selection_threshold)
 
-        reduced = testlabelselect_model.reduce(
+        reduced = testselect.reduce_configs(
             set(t for t, c in tasks.items() if c >= 0.8), 1.0
         )
 
-        reduced_higher = testlabelselect_model.reduce(
+        reduced_higher = testselect.reduce_configs(
             set(t for t, c in tasks.items() if c >= 0.9), 1.0
         )
 
         groups = testgroupselect_model.select_tests(commits, test_selection_threshold)
 
-        config_groups = testgroupselect_model.select_configs(groups.keys(), 0.9)
+        config_groups = testselect.select_configs(groups.keys(), 0.9)
     else:
         tasks = {}
-        reduced = {}
+        reduced = set()
         groups = {}
         config_groups = {}
 
@@ -242,8 +258,7 @@ def get_config_specific_groups(config: str) -> str:
     job = JobInfo(get_config_specific_groups, config)
     LOGGER.info(f"Processing {job}...")
 
-    testgroupselect_model = MODEL_CACHE.get("testgroupselect")
-    equivalence_sets = testgroupselect_model._get_equivalence_sets(0.9)
+    equivalence_sets = testselect._get_equivalence_sets(0.9)
 
     past_failures_data = test_scheduling.get_past_failures("group", True)
     all_runnables = past_failures_data["all_runnables"]

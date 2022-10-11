@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.3.1
+    taskboot_image: mozilla/taskboot:0.3.5
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -198,6 +198,7 @@ tasks:
       workerType: batch
       dependencies:
         - commit-retrieval
+        - bugs-retrieval
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
@@ -245,13 +246,14 @@ tasks:
           - --owner=webcompat
           - --repo=web-bugs
           - --retrieve-events
+          - --retrieve-private
 
         artifacts:
-          public/github_issues.json.zst:
-            path: /data/github_issues.json.zst
+          public/github_webcompat_web-bugs_issues.json.zst:
+            path: /data/github_webcompat_web-bugs_issues.json.zst
             type: file
-          public/github_issues.json.version:
-            path: /data/github_issues.json.version
+          public/github_webcompat_web-bugs_issues.json.version:
+            path: /data/github_webcompat_web-bugs_issues.json.version
             type: file
 
         features:
@@ -261,8 +263,8 @@ tasks:
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
-        - index.project.bugbug.data_github_issues.${version}
-        - index.project.bugbug.data_github_issues.latest
+        - index.project.bugbug.data_github_webcompat_web-bugs_issues.${version}
+        - index.project.bugbug.data_github_webcompat_web-bugs_issues.latest
       metadata:
         name: bugbug webcompat issues retrieval
         description: bugbug webcompat issues retrieval
@@ -1301,6 +1303,7 @@ tasks:
         - train-spambug
         - train-test-label-select
         - train-test-group-select
+        - train-needsdiagnosis
       payload:
         capabilities:
           privileged: true

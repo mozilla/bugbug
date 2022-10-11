@@ -1,28 +1,23 @@
 FROM mozilla/bugbug-base:latest
 
-# Activate testing for git
-COPY infra/testing.pinning /etc/apt/preferences.d/00testing
-RUN echo 'deb http://deb.debian.org/debian testing main non-free contrib' > /etc/apt/sources.list.d/testing.list
-
 ENV PATH="${PATH}:/git-cinnabar"
 
 # git is required by the annotate pipeline.
 # libcurl4 is required by git-cinnabar.
 # patch is required by the commit classifier script.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends -o APT::Immediate-Configure=false -t testing git && \
-    apt-get install -y --no-install-recommends curl patch libcurl4 && \
-    hg clone -r 65c9aa4f8f20384bc8633fdd354871a4f956a558 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
+    apt-get install -y --no-install-recommends git xz-utils curl patch libcurl4 && \
+    hg clone -r adc8bddf688ba0517542c64f912666df2ba1f2f0 https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
-    cd /git-cinnabar && git -c advice.detachedHead=false checkout 310e250cdedd1fd2c9553491b03928cb4fdeb4e0 && cd .. && \
+    cd /git-cinnabar && git -c advice.detachedHead=false checkout fab94c86f96a24f45180816d83db5184939648d3 && cd .. && \
     git config --global cinnabar.experiments python3 && \
     git config --global cinnabar.check no-version-check && \
     git config --global fetch.prune true && \
     git cinnabar download && \
     rm -r /git-cinnabar/.git /git-cinnabar/CI /git-cinnabar/tests && \
     curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv && \
-    apt-get purge -y curl && \
+    apt-get purge -y xz-utils curl && \
     apt-get autoremove -y && \
     rm -r /var/lib/apt/lists/*
 

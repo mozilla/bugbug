@@ -11,7 +11,7 @@ import re
 import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Optional, Tuple, cast
+from typing import Optional, cast
 
 import dateutil.parser
 import hglib
@@ -625,7 +625,7 @@ class CommitClassifier(object):
         else:
             self.classify_test_select(commits, runnable_jobs_path)
 
-    def classify_regressor(self, commits: Tuple[repository.CommitDict, ...]) -> None:
+    def classify_regressor(self, commits: tuple[repository.CommitDict, ...]) -> None:
         # We use "clean" (or "dirty") commits as the background dataset for feature importance.
         # This way, we can see the features which are most important in differentiating
         # the current commit from the "clean" (or "dirty") commits.

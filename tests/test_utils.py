@@ -272,6 +272,36 @@ def test_get_last_modified_missing():
     assert utils.get_last_modified(url) is None
 
 
+def test_zstd_compress_decompress(tmp_path):
+    path = tmp_path / "prova"
+    compressed_path = path.with_suffix(".zst")
+
+    with open(path, "w") as f:
+        json.dump({"Hello": "World"}, f)
+
+    utils.zstd_compress(path)
+
+    assert os.path.exists(compressed_path)
+    os.remove(path)
+
+    utils.zstd_decompress(path)
+
+    with open(path, "r") as f:
+        file_decomp = json.load(f)
+
+    assert file_decomp == {"Hello": "World"}
+
+
+def test_zstd_compress_not_existing(tmp_path, mock_zst):
+    path = tmp_path / "prova"
+    compressed_path = path.with_suffix(".zst")
+
+    with pytest.raises(FileNotFoundError):
+        utils.zstd_compress(path)
+
+    assert not os.path.exists(compressed_path)
+
+
 def test_extract_db_zst(tmp_path, mock_zst):
     path = tmp_path / "prova.zst"
 
@@ -293,3 +323,37 @@ def test_extract_db_bad_format(tmp_path):
 
     with pytest.raises(AssertionError):
         utils.extract_file(path)
+
+
+def test_extract_metadata() -> None:
+    body = """
+        <!-- @private_url: https://github.com/webcompat/web-bugs-private/issues/12345 -->\n
+        """
+
+    expected = {
+        "private_url": "https://github.com/webcompat/web-bugs-private/issues/12345"
+    }
+    result = utils.extract_metadata(body)
+    assert result == expected
+
+    result = utils.extract_metadata("test")
+    assert result == {}
+
+
+def test_extract_private_url() -> None:
+    body = """
+    <p>Thanks for the report. We have closed this issue\n
+    automatically as we suspect it is invalid. If we made
+    a mistake, please\nfile a new issue and try to provide
+    more context.</p>\n
+    <!-- @private_url: https://github.com/webcompat/web-bugs-private/issues/12345 -->\n
+    """
+    expected = ("webcompat", "web-bugs-private", "12345")
+    result = utils.extract_private(body)
+    assert result == expected
+
+
+def test_extract_private_url_empty() -> None:
+    body = """<p>Test content</p> """
+    result = utils.extract_private(body)
+    assert result is None

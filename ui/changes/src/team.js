@@ -1,4 +1,4 @@
-import { Temporal } from "proposal-temporal/lib/index.mjs";
+import { Temporal } from "@js-temporal/polyfill";
 import * as common from "./common.js";
 
 let resultGraphs = document.getElementById("result-graphs");
@@ -83,7 +83,7 @@ async function renderUI() {
 }
 
 (async function init() {
-  let startDate = Temporal.now.plainDateISO().subtract({ years: 1 }).toString();
+  let startDate = Temporal.Now.plainDateISO().subtract({ years: 1 }).toString();
   document.getElementById("createStartDate").value = document.getElementById(
     "fixStartDate"
   ).value = startDate;

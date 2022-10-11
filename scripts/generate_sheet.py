@@ -21,10 +21,8 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
 
-    today = datetime.utcnow()
-    start_date = today - timedelta(days)
     bugzilla.set_token(token)
-    bug_ids = bugzilla.get_ids_between(start_date, today)
+    bug_ids = bugzilla.get_ids_between(datetime.utcnow() - timedelta(days))
     bugs = bugzilla.get(bug_ids)
 
     print(f"Classifying {len(bugs)} bugs...")

@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import datetime
-from typing import List
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
@@ -15,27 +14,18 @@ from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
 
 
 def test_rename_runnables() -> None:
-    assert (
-        test_scheduling.rename_runnables(
-            "label",
-            (Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),),
-        )
-        == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
-    )
-    assert (
-        test_scheduling.rename_runnables(
-            "label",
-            (Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),),
-        )
-        == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
-    )
-    assert (
-        test_scheduling.rename_runnables(
-            "label",
-            (Task("test-linux64-shippable-qr/opt-mochitest-browser-chrome-e10s-2"),),
-        )
-        == (Task("test-linux1804-64-qr/opt-mochitest-browser-chrome-e10s-2"),)
-    )
+    assert test_scheduling.rename_runnables(
+        "label",
+        (Task("test-linux64/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
+        "label",
+        (Task("test-linux64-shippable/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64/opt-mochitest-browser-chrome-e10s-2"),)
+    assert test_scheduling.rename_runnables(
+        "label",
+        (Task("test-linux64-shippable-qr/opt-mochitest-browser-chrome-e10s-2"),),
+    ) == (Task("test-linux1804-64-qr/opt-mochitest-browser-chrome-e10s-2"),)
     assert test_scheduling.rename_runnables(
         "label",
         (
@@ -59,17 +49,14 @@ def test_rename_runnables() -> None:
         ),
     )
 
-    assert (
-        test_scheduling.rename_runnables(
-            "group",
-            (
-                Group(
-                    "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini"
-                ),
+    assert test_scheduling.rename_runnables(
+        "group",
+        (
+            Group(
+                "toolkit/components/extensions/test/mochitest/mochitest-remote.ini:toolkit/components/extensions/test/mochitest/mochitest-common.ini"
             ),
-        )
-        == (Group("toolkit/components/extensions/test/mochitest/mochitest-remote.ini"),)
-    )
+        ),
+    ) == (Group("toolkit/components/extensions/test/mochitest/mochitest-remote.ini"),)
     assert test_scheduling.rename_runnables(
         "group", (Group("dom/prova/mochitest.ini"),)
     ) == (Group("dom/prova/mochitest.ini"),)
@@ -168,7 +155,7 @@ def test_touched_together(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -286,7 +273,7 @@ def test_touched_together_restart(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -416,7 +403,7 @@ def test_touched_together_not_in_order(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)
@@ -530,7 +517,7 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
     ]
     commits = [c.to_dict() for c in commits]
 
-    def mock_get_commits() -> List[CommitDict]:
+    def mock_get_commits() -> list[CommitDict]:
         return commits
 
     monkeypatch.setattr(repository, "get_commits", mock_get_commits)

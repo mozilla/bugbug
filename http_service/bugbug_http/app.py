@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence
 
 import orjson
 import zstandard
@@ -174,12 +174,17 @@ def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
+def init_job(job: JobInfo, job_id: Optional[str] = None) -> str:
+    job_id = job_id or get_job_id()
+    redis_conn.mset({job.mapping_key: job_id})
+    return job_id
+
+
 def schedule_job(
     job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
 ) -> None:
-    job_id = job_id or get_job_id()
+    job_id = init_job(job, job_id)
 
-    redis_conn.mset({job.mapping_key: job_id})
     q.enqueue(
         job.func,
         *job.args,
@@ -190,8 +195,24 @@ def schedule_job(
     )
 
 
-def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None:
-    """Schedule the classification of a bug_id list"""
+def prepare_queue_job(
+    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+) -> Queue:
+    job_id = init_job(job, job_id)
+    return Queue.prepare_data(
+        job.func,
+        args=job.args,
+        job_id=job_id,
+        timeout=timeout,
+        ttl=QUEUE_TIMEOUT,
+        failure_ttl=FAILURE_TTL,
+    )
+
+
+def create_bug_classification_jobs(
+    model_name: str, bug_ids: Sequence[int]
+) -> tuple[JobInfo, str, int]:
+    """Create job_id and redis connection"""
     job_id = get_job_id()
 
     # Set the mapping before queuing to avoid some race conditions
@@ -202,10 +223,10 @@ def schedule_bug_classification(model_name: str, bug_ids: Sequence[int]) -> None
 
     redis_conn.mset(job_id_mapping)
 
-    schedule_job(
+    return (
         JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
-        job_id=job_id,
-        timeout=BUGZILLA_JOB_TIMEOUT,
+        job_id,
+        BUGZILLA_JOB_TIMEOUT,
     )
 
 
@@ -436,7 +457,10 @@ def model_prediction(model_name, bug_id):
 
     if not data:
         if not is_pending(job):
-            schedule_bug_classification(model_name, [bug_id])
+            job_info, job_id, timeout = create_bug_classification_jobs(
+                model_name, [bug_id]
+            )
+            schedule_job(job_info, job_id=job_id, timeout=timeout)
         status_code = 202
         data = {"ready": False}
 
@@ -685,8 +709,13 @@ def batch_prediction(model_name):
             status_code = 202
             data[str(bug_id)] = {"ready": False}
 
+    queueJobList: Queue = []
+
     for i in range(0, len(missing_bugs), 100):
-        schedule_bug_classification(model_name, missing_bugs[i : (i + 100)])
+        bug_ids = missing_bugs[i : (i + 100)]
+        job_info, job_id, timeout = create_bug_classification_jobs(model_name, bug_ids)
+        queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
+    q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
 
@@ -751,7 +780,7 @@ def push_schedules(branch, rev):
 
 @application.route("/config_specific_groups/<path:config>")
 @cross_origin()
-def config_specific_groups(config: str) -> Tuple[Response, int]:
+def config_specific_groups(config: str) -> tuple[Response, int]:
     """
     ---
     get:

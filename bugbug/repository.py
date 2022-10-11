@@ -19,18 +19,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import (
-    Collection,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    NewType,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Collection, Iterable, Iterator, NewType, Optional, Set, Union
 
 import hglib
 import lmdb
@@ -182,10 +171,10 @@ class Commit:
         desc: str,
         pushdate: datetime,
         bug_id: Optional[int],
-        backsout: List[str],
+        backsout: list[str],
         backedoutby: str,
         author_email: str,
-        reviewers: List[str],
+        reviewers: list[str],
         ignored: bool = False,
     ) -> None:
         self.node = node
@@ -205,7 +194,7 @@ class Commit:
         self.other_deleted = 0
         self.test_deleted = 0
         self.types: Set[str] = set()
-        self.functions: Dict[str, List[dict]] = {}
+        self.functions: dict[str, list[dict]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
         self.average_source_code_file_size = 0.0
@@ -405,7 +394,7 @@ def get_functions_from_metrics(metrics_space):
 
 def get_touched_functions(
     metrics_space: dict, deleted_lines: Iterable[int], added_lines: Iterable[int]
-) -> List[dict]:
+) -> list[dict]:
     touched_functions_indexes = set()
 
     functions = get_functions_from_metrics(metrics_space)
@@ -632,8 +621,8 @@ def get_space_metrics(
 def set_commit_metrics(
     commit: Commit,
     path: str,
-    deleted_lines: List[int],
-    added_lines: List[int],
+    deleted_lines: list[int],
+    added_lines: list[int],
     before_metrics: dict,
     after_metrics: dict,
 ) -> None:
@@ -842,7 +831,9 @@ def _transform(commit):
     return transform(HG, REPO_DIR, commit)
 
 
-def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
+def hg_log(
+    hg: hglib.client, revs: list[bytes], branch: Optional[str] = "tip"
+) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -853,7 +844,7 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
         template=template,
         no_merges=True,
         rev=revs,
-        branch="tip",
+        branch=branch,
     )
     x = hg.rawcommand(args)
     out = x.split(b"\x00")[:-1]
@@ -870,8 +861,38 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
         bug_id = int(rev[3].decode("ascii")) if rev[3] else None
 
         reviewers = (
-            list(set(sys.intern(r) for r in rev[7].decode("utf-8").split(" ")))
-            if rev[7] not in (b"", b"testonly", b"gaia-bump", b"me")
+            list(
+                set(
+                    sys.intern(r)
+                    for r in rev[7].decode("utf-8").split(" ")
+                    if r
+                    not in (
+                        "",
+                        "testonly",
+                        "gaia-bump",
+                        "me",
+                        "fix",
+                        "wpt-fix",
+                        "testing",
+                        "bustage",
+                        "test-only",
+                        "blocking",
+                        "blocking-fennec",
+                        "blocking1.9",
+                        "backout",
+                        "trivial",
+                        "DONTBUILD",
+                        "blocking-final",
+                        "blocking-firefox3",
+                        "test",
+                        "bustage-fix",
+                        "release",
+                        "tests",
+                        "lint-fix",
+                    )
+                )
+            )
+            if rev[7] != b""
             else []
         )
 
@@ -898,8 +919,8 @@ def hg_log(hg: hglib.client, revs: List[bytes]) -> Tuple[Commit, ...]:
     return tuple(commits)
 
 
-def _hg_log(revs: List[bytes]) -> Tuple[Commit, ...]:
-    return hg_log(thread_local.hg, revs)
+def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
+    return hg_log(thread_local.hg, revs, branch)
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
@@ -985,7 +1006,7 @@ def calculate_experiences(
         return f"{exp_type}${commit_type}${item}"
 
     def get_experience(
-        exp_type: str, commit_type: str, item: str, day: int, default: Union[int, Tuple]
+        exp_type: str, commit_type: str, item: str, day: int, default: Union[int, tuple]
     ) -> utils.ExpQueue:
         key = get_key(exp_type, commit_type, item)
         try:
@@ -1242,7 +1263,9 @@ def close_component_mapping():
     path_to_component = None
 
 
-def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
+def hg_log_multi(
+    repo_dir: str, revs: list[bytes], branch: Optional[str] = "tip"
+) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
 
@@ -1255,7 +1278,7 @@ def hg_log_multi(repo_dir: str, revs: List[bytes]) -> Tuple[Commit, ...]:
     with concurrent.futures.ThreadPoolExecutor(
         initializer=_init_thread, initargs=(repo_dir,), max_workers=threads_num
     ) as executor:
-        commits_iter = executor.map(_hg_log, revs_groups)
+        commits_iter = executor.map(_hg_log, revs_groups, [branch] * len(revs_groups))
         commits_iter = tqdm(commits_iter, total=len(revs_groups))
         commits = tuple(itertools.chain.from_iterable(commits_iter))
 
@@ -1275,13 +1298,14 @@ def get_first_pushdate(repo_dir):
 def download_commits(
     repo_dir: str,
     rev_start: str = None,
-    revs: List[bytes] = None,
+    revs: list[bytes] = None,
+    branch: Optional[str] = "tip",
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,
     include_backouts: bool = False,
     include_ignored: bool = False,
-) -> Tuple[CommitDict, ...]:
+) -> tuple[CommitDict, ...]:
     assert revs is not None or rev_start is not None
 
     with hglib.open(repo_dir) as hg:
@@ -1306,9 +1330,9 @@ def download_commits(
 
         if not use_single_process:
             logger.info(f"Using {os.cpu_count()} processes...")
-            commits = hg_log_multi(repo_dir, revs)
+            commits = hg_log_multi(repo_dir, revs, branch)
         else:
-            commits = hg_log(hg, revs)
+            commits = hg_log(hg, revs, branch)
 
         set_commits_to_ignore(hg, repo_dir, commits)
 
@@ -1317,9 +1341,10 @@ def download_commits(
         logger.info(f"Mining {commits_num} patches...")
 
         global code_analysis_server
-        code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
         if not use_single_process:
+            code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
             with concurrent.futures.ProcessPoolExecutor(
                 initializer=_init_process, initargs=(repo_dir,)
             ) as executor:
@@ -1327,6 +1352,8 @@ def download_commits(
                 commits_iter = tqdm(commits_iter, total=commits_num)
                 commits = tuple(commits_iter)
         else:
+            code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer(1)
+
             get_component_mapping()
 
             commits = tuple(transform(hg, repo_dir, c) for c in commits)

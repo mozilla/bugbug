@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import matplotlib.pyplot as plt
 import mozci.push
@@ -32,7 +32,7 @@ db.register(
 
 def analyze_shadow_schedulers(
     push: mozci.push.Push,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     schedulers = []
 
     for name, config_groups in push.generate_all_shadow_scheduler_config_groups():
@@ -189,7 +189,7 @@ def plot_graphs(granularity: str) -> None:
         if scheduler_stat["id"] not in regressions_by_rev:
             continue
 
-        obj: Dict[str, Any] = {
+        obj: dict[str, Any] = {
             "date": datetime.utcfromtimestamp(scheduler_stat["date"]),
         }
 

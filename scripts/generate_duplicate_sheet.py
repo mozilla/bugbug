@@ -34,9 +34,7 @@ def main(args):
         with open("duplicate_test_bugs.json", "r") as f:
             test_bugs = json.load(f)
     except FileNotFoundError:
-        test_bug_ids = bugzilla.get_ids_between(
-            datetime.now() - timedelta(days=21), datetime.now()
-        )
+        test_bug_ids = bugzilla.get_ids_between(datetime.now() - timedelta(days=21))
         test_bugs = bugzilla.get(test_bug_ids)
         test_bugs = [
             bug
