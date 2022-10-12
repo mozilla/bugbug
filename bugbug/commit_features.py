@@ -148,6 +148,7 @@ class source_code_file_metrics(object):
             ],
             "Average file number of operators": commit["metrics"]["halstead_N1_avg"],
             "Average file length": commit["metrics"]["halstead_length_avg"],
+
             "Average file estimated program length": commit["metrics"][
                 "halstead_estimated_program_length_avg"
             ],
@@ -193,6 +194,9 @@ class source_code_file_metrics(object):
             "Maximum file effort": commit["metrics"]["halstead_effort_max"],
             "Maximum file time": commit["metrics"]["halstead_time_max"],
             "Maximum file bugs": commit["metrics"]["halstead_bugs_max"],
+            "Maximum file estimated difficulty": commit["metrics"][
+                "halstead_difficulty_max"
+            ],
             "Maximum file number of source loc": commit["metrics"]["sloc_max"],
             "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
             "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
