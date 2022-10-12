@@ -39,8 +39,9 @@ tasks:
           maxRunTime: 3600
           image: python:3.9-slim
           command:
-            - "/bin/sh"
+            - "/bin/bash"
             - "-lcx"
+            - "apt-get update && apt-get install -y git"
             - "git clone --quiet ${repository} &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -63,8 +64,9 @@ tasks:
             maxRunTime: 3600
             image: python:3.9-slim
             command:
-              - "/bin/sh"
+              - "/bin/bash"
               - "-lcx"
+              - "apt-get update && apt-get install -y git"
               - "git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -86,10 +88,11 @@ tasks:
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
-            - "/bin/sh"
+            - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
               apt-get -qq install -y libhdf5-dev zstd &&
+              apt-get install -y git &&
               git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
@@ -119,8 +122,9 @@ tasks:
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
-            - "/bin/sh"
+            - "/bin/bash"
             - "-lcx"
+            - "apt-get update && apt-get install -y git"
             - "git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
@@ -149,9 +153,10 @@ tasks:
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
-            - "/bin/sh"
+            - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
+              apt-get install -y git &&
               apt-get -qq install -y libhdf5-dev &&
               git clone --quiet ${repository} &&
               cd bugbug &&
@@ -325,7 +330,7 @@ tasks:
               TC_SECRET_ID: project/bugbug/integration
               CACHE_DIR: "/cache"
             command:
-              - "/bin/sh"
+              - "/bin/bash"
               - "-lcx"
               - "apt-get -qq update &&
                 apt-get -qq install -y redis-server &&
