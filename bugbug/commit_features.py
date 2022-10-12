@@ -148,7 +148,6 @@ class source_code_file_metrics(object):
             ],
             "Average file number of operators": commit["metrics"]["halstead_N1_avg"],
             "Average file length": commit["metrics"]["halstead_length_avg"],
-
             "Average file estimated program length": commit["metrics"][
                 "halstead_estimated_program_length_avg"
             ],
