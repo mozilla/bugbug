@@ -464,44 +464,47 @@ class source_code_metrics_diff(object):
     name = "diff in metrics on source code"
 
     def __call__(self, commit, **kwargs):
-        commit_metrics_diff = commit["metrics_diff"]
         return {
-            "Diff in cyclomatic": commit_metrics_diff["cyclomatic_total"],
-            "Diff in number of unique operands": commit_metrics_diff[
+            "Diff in cyclomatic": commit["metrics_diff"]["cyclomatic_total"],
+            "Diff in number of unique operands": commit["metrics_diff"][
                 "halstead_n2_total"
             ],
-            "Diff in number of operands": commit_metrics_diff["halstead_N2_total"],
-            "Diff in number of unique operators": commit_metrics_diff[
+            "Diff in number of operands": commit["metrics_diff"]["halstead_N2_total"],
+            "Diff in number of unique operators": commit["metrics_diff"][
                 "halstead_n1_total"
             ],
-            "Diff in number of operators": commit_metrics_diff["halstead_N1_total"],
-            "Diff file length": commit_metrics_diff["halstead_length_total"],
-            "Diff file estimated program length": commit_metrics_diff[
+            "Diff in number of operators": commit["metrics_diff"]["halstead_N1_total"],
+            "Diff file length": commit["metrics_diff"]["halstead_length_total"],
+            "Diff file estimated program length": commit["metrics_diff"][
                 "halstead_estimated_program_length_total"
             ],
-            "Diff file purity ratio": commit_metrics_diff[
+            "Diff file purity ratio": commit["metrics_diff"][
                 "halstead_purity_ratio_total"
             ],
-            "Diff file vocabulary": commit_metrics_diff["halstead_vocabulary_total"],
-            "Diff file volume": commit_metrics_diff["halstead_volume_total"],
-            "Diff file difficulty": commit_metrics_diff["halstead_difficulty_total"],
-            "Diff file level": commit_metrics_diff["halstead_level_total"],
-            "Diff file effort": commit_metrics_diff["halstead_effort_total"],
-            "Diff file time": commit_metrics_diff["halstead_time_total"],
-            "Diff file bugs": commit_metrics_diff["halstead_bugs_total"],
-            "Diff in number of source loc": commit_metrics_diff["sloc_total"],
-            "Diff in number of instruction loc": commit_metrics_diff["ploc_total"],
-            "Diff in number of logical loc": commit_metrics_diff["lloc_total"],
-            "Diff in number of comment loc": commit_metrics_diff["cloc_total"],
-            "Diff in blank": commit_metrics_diff["blank_total"],
-            "Diff in number of function arguments": commit_metrics_diff["nargs_total"],
-            "Diff in number of function exit points": commit_metrics_diff[
+            "Diff file vocabulary": commit["metrics_diff"]["halstead_vocabulary_total"],
+            "Diff file volume": commit["metrics_diff"]["halstead_volume_total"],
+            "Diff file difficulty": commit["metrics_diff"]["halstead_difficulty_total"],
+            "Diff file level": commit["metrics_diff"]["halstead_level_total"],
+            "Diff file effort": commit["metrics_diff"]["halstead_effort_total"],
+            "Diff file time": commit["metrics_diff"]["halstead_time_total"],
+            "Diff file bugs": commit["metrics_diff"]["halstead_bugs_total"],
+            "Diff in number of source loc": commit["metrics_diff"]["sloc_total"],
+            "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
+            "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],
+            "Diff in number of comment loc": commit["metrics_diff"]["cloc_total"],
+            "Diff in blank": commit["metrics_diff"]["blank_total"],
+            "Diff in number of function arguments": commit["metrics_diff"][
+                "nargs_total"
+            ],
+            "Diff in number of function exit points": commit["metrics_diff"][
                 "nexits_total"
             ],
-            "Diff in cognitive": commit_metrics_diff["cognitive_total"],
-            "Diff in mi_original": commit_metrics_diff["mi_original_total"],
-            "Diff in mi_sei": commit_metrics_diff["mi_sei_total"],
-            "Diff in mi_visual_studio": commit_metrics_diff["mi_visual_studio_total"],
+            "Diff in cognitive": commit["metrics_diff"]["cognitive_total"],
+            "Diff in mi_original": commit["metrics_diff"]["mi_original_total"],
+            "Diff in mi_sei": commit["metrics_diff"]["mi_sei_total"],
+            "Diff in mi_visual_studio": commit["metrics_diff"][
+                "mi_visual_studio_total"
+            ],
         }
 
 
