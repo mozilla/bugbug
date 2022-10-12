@@ -160,6 +160,7 @@ tasks:
               apt-get install -y git &&
               apt-get install -y gcc &&
               apt-get install -y python3-dev &&
+              apt-get install -y g++ &&
               apt-get -qq install -y libhdf5-dev &&
               git clone --quiet ${repository} &&
               cd bugbug &&
