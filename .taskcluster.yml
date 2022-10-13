@@ -93,7 +93,8 @@ tasks:
             - "apt-get -qq update &&
               apt-get -qq install -y libhdf5-dev zstd &&
               apt-get install -y git &&
-              apt-get install curl &&
+              apt-get install -y curl &&
+              apt-get install -y mercurial &&
               git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
