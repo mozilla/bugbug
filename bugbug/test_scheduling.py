@@ -23,7 +23,6 @@ from typing import (
     NewType,
     Optional,
     Set,
-    Tuple,
     Union,
     cast,
 )
@@ -44,9 +43,9 @@ Runnable = Union[Task, Group, ConfigGroup]
 PushResult = tuple[
     tuple[Revision],
     Revision,
-    Tuple[Runnable, ...],
-    Tuple[Runnable, ...],
-    Tuple[Runnable, ...],
+    tuple[Runnable, ...],
+    tuple[Runnable, ...],
+    tuple[Runnable, ...],
 ]
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
