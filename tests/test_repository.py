@@ -61,10 +61,10 @@ def remove_file(hg, repo_dir, name):
 
 
 def commit(
-    hg,
-    commit_message=None,
-    date=datetime(2019, 4, 16, tzinfo=timezone.utc),
-    amend=False,
+        hg,
+        commit_message=None,
+        date=datetime(2019, 4, 16, tzinfo=timezone.utc),
+        amend=False,
 ):
     commit_message = (
         commit_message
@@ -171,7 +171,7 @@ def test_get_revs(fake_hg_repo):
     revs = repository.get_revs(hg, revision2, revision3)
 
     assert (
-        len(revs) == 2
+            len(revs) == 2
     ), "There should be two revision after the first and up to the third"
     assert revs[0].decode("ascii") == revision2
     assert revs[1].decode("ascii") == revision3
@@ -290,9 +290,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[0].author == "Moz Illa <milla@mozilla.org>"
     assert commits[0].desc == "Commit A file1"
     assert (
-        first_push_date - relativedelta(seconds=1)
-        <= commits[0].pushdate
-        <= first_push_date + relativedelta(seconds=1)
+            first_push_date - relativedelta(seconds=1)
+            <= commits[0].pushdate
+            <= first_push_date + relativedelta(seconds=1)
     )
     assert commits[0].bug_id is None
     assert commits[0].backedoutby == ""
@@ -303,9 +303,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[1].author == "Moz Illa <milla@mozilla.org>"
     assert commits[1].desc == "Bug 123 - Prova. r=moz,rev2"
     assert (
-        second_push_date - relativedelta(seconds=1)
-        <= commits[1].pushdate
-        <= second_push_date + relativedelta(seconds=1)
+            second_push_date - relativedelta(seconds=1)
+            <= commits[1].pushdate
+            <= second_push_date + relativedelta(seconds=1)
     )
     assert commits[1].bug_id == 123
     assert commits[1].backedoutby == ""
@@ -316,9 +316,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[2].author == "Moz Illa <milla@mozilla.org>"
     assert commits[2].desc == "Commit A file2copy"
     assert (
-        second_push_date - relativedelta(seconds=1)
-        <= commits[2].pushdate
-        <= second_push_date + relativedelta(seconds=1)
+            second_push_date - relativedelta(seconds=1)
+            <= commits[2].pushdate
+            <= second_push_date + relativedelta(seconds=1)
     )
     assert commits[2].bug_id is None
     assert commits[2].backedoutby == ""
@@ -329,9 +329,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[3].author == "Moz Illa <milla@mozilla.org>"
     assert commits[3].desc == "Commit A file2copymove R file2copy"
     assert (
-        second_push_date - relativedelta(seconds=1)
-        <= commits[3].pushdate
-        <= second_push_date + relativedelta(seconds=1)
+            second_push_date - relativedelta(seconds=1)
+            <= commits[3].pushdate
+            <= second_push_date + relativedelta(seconds=1)
     )
     assert commits[3].bug_id is None
     assert commits[3].backedoutby == revision5
@@ -342,9 +342,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[4].author == "sheriff"
     assert commits[4].desc == f"Backout {revision4[:12]}"
     assert (
-        second_push_date - relativedelta(seconds=1)
-        <= commits[4].pushdate
-        <= second_push_date + relativedelta(seconds=1)
+            second_push_date - relativedelta(seconds=1)
+            <= commits[4].pushdate
+            <= second_push_date + relativedelta(seconds=1)
     )
     assert commits[4].bug_id is None
     assert commits[4].backedoutby == ""
@@ -355,9 +355,9 @@ def test_hg_log(fake_hg_repo):
     assert commits[5].author == "Moz Illa <milla@mozilla.org>"
     assert commits[5].desc == "Commit A file3"
     assert (
-        hg_log_date - relativedelta(seconds=1)
-        <= commits[5].pushdate
-        <= hg_log_date + relativedelta(seconds=1)
+            hg_log_date - relativedelta(seconds=1)
+            <= commits[5].pushdate
+            <= hg_log_date + relativedelta(seconds=1)
     )
     assert commits[5].bug_id is None
     assert commits[5].backedoutby == ""
@@ -519,14 +519,14 @@ def test_download_component_mapping():
     repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
-        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+            repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
     )
 
     responses.reset()
     repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
-        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+            repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
     )
     repository.close_component_mapping()
 
@@ -542,7 +542,7 @@ def test_download_component_mapping():
     repository.get_component_mapping()
     assert repository.path_to_component[b"AUTHORS"] == b"mozilla.org::Licensing"
     assert (
-        repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
+            repository.path_to_component[b"Cargo.lock"] == b"Firefox Build System::General"
     )
     repository.close_component_mapping()
 
@@ -808,11 +808,11 @@ def test_filter_commits(ignored_commits_to_test):
         commit["node"]
         for commit in repository.filter_commits(commits, include_ignored=True)
     ) == {
-        "commit_backedout",
-        "commit",
-        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
-        "commit_with_ignore_in_desc",
-    }
+               "commit_backedout",
+               "commit",
+               "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+               "commit_with_ignore_in_desc",
+           }
 
     assert set(
         commit["node"]
@@ -820,12 +820,12 @@ def test_filter_commits(ignored_commits_to_test):
             commits, include_no_bug=True, include_ignored=True
         )
     ) == {
-        "commit_backedout",
-        "commit",
-        "commit_no_bug",
-        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
-        "commit_with_ignore_in_desc",
-    }
+               "commit_backedout",
+               "commit",
+               "commit_no_bug",
+               "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+               "commit_with_ignore_in_desc",
+           }
 
     assert set(
         commit["node"]
@@ -833,13 +833,13 @@ def test_filter_commits(ignored_commits_to_test):
             commits, include_no_bug=True, include_backouts=True, include_ignored=True
         )
     ) == {
-        "commit_backedout",
-        "commit",
-        "commit_no_bug",
-        "commit_backout",
-        "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
-        "commit_with_ignore_in_desc",
-    }
+               "commit_backedout",
+               "commit",
+               "commit_no_bug",
+               "commit_backout",
+               "8ba995b74e18334ab3707f27e9eb8f4e37ba3d29",
+               "commit_with_ignore_in_desc",
+           }
 
 
 def test_calculate_experiences() -> None:
@@ -1313,7 +1313,7 @@ def test_calculate_experiences() -> None:
     assert commits["commit6"].touched_prev_90_days_component_min == 2
 
     with pytest.raises(
-        Exception, match=r"Can't get a day \(368\) from earlier than start day \(644\)"
+            Exception, match=r"Can't get a day \(368\) from earlier than start day \(644\)"
     ):
         repository.calculate_experiences(commits.values(), datetime(2019, 1, 1))
 
@@ -2390,7 +2390,7 @@ void main() {
 +++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
 @@ -1,6 +1,6 @@
  #include <iostream>
- 
+
  void main() {
 -    cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
@@ -2490,6 +2490,14 @@ void main() {
         "halstead_bugs_max": 0.006149947511600477,
         "halstead_bugs_min": 0.006149947511600477,
         "halstead_bugs_total": 0.006149947511600477,
+        "functions_avg": 0.0,
+        "functions_max": 1.0,
+        "functions_min": 1.0,
+        'functions_total': 1.0,
+        "closures_avg": 0.0,
+        "closures_max": 0,
+        "closures_min": 0.0,
+        'closures_total': 0.0,
         "lloc_avg": 0.0,
         "lloc_max": 1.0,
         "lloc_min": 1.0,
@@ -2545,6 +2553,8 @@ void main() {
         "halstead_effort_total": 0.0,
         "halstead_time_total": 0.0,
         "halstead_bugs_total": 0.0,
+        "functions_total": 0.0,
+        "closures_total": 0.0,
         "lloc_total": 0.0,
         "nargs_total": 0.0,
         "nexits_total": 0.0,
@@ -2577,6 +2587,8 @@ void main() {
                     "halstead_effort_total": 79.2481250360578,
                     "halstead_time_total": 4.402673613114322,
                     "halstead_bugs_total": 0.006149947511600477,
+                    "functions_total": 1.0,
+                    "closures_total": 0.0,
                     "lloc_total": 1.0,
                     "nargs_total": 0.0,
                     "nexits_total": 0.0,
@@ -2629,7 +2641,7 @@ void main() {
 +++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
 @@ -1,6 +1,6 @@
  #include <iostream>
- 
+
  void main() {
      cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
@@ -2729,6 +2741,14 @@ void main() {
         "halstead_bugs_max": 0.010862528153285396,
         "halstead_bugs_min": 0.010862528153285396,
         "halstead_bugs_total": 0.010862528153285396,
+        "functions_avg": 0.0,
+        "functions_max": 1.0,
+        "functions_min": 1.0,
+        'functions_total': 1.0,
+        "closures_avg": 0.0,
+        "closures_max": 0,
+        "closures_min": 0.0,
+        'closures_total': 0.0,
         "lloc_avg": 0.0,
         "lloc_max": 2.0,
         "lloc_min": 2.0,
@@ -2784,6 +2804,8 @@ void main() {
         "halstead_effort_total": 106.77984827763449,
         "halstead_time_total": 5.932213793201916,
         "halstead_bugs_total": 0.00471258064168492,
+        "functions_total": 0.0,
+        "closures_total": 0.0,
         "lloc_total": 1.0,
         "nargs_total": 0.0,
         "nexits_total": 0.0,
@@ -2816,6 +2838,8 @@ void main() {
                     "halstead_effort_total": 186.02797331369229,
                     "halstead_time_total": 10.334887406316238,
                     "halstead_bugs_total": 0.010862528153285396,
+                    "functions_total": 1.0,
+                    "closures_total": 0.0,
                     "lloc_total": 2.0,
                     "nargs_total": 0.0,
                     "nexits_total": 0.0,
