@@ -23,7 +23,6 @@ from typing import (
     NewType,
     Optional,
     Set,
-    Tuple,
     Union,
     cast,
 )
