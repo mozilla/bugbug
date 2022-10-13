@@ -156,8 +156,7 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
               apt-get -qq install -y libhdf5-dev &&
-              git clone --quiet ${repository} &&
-              cd bugbug &&
+              git clone --quiet ${repository} && cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
               python -m coverage run setup.py sdist &&
