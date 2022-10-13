@@ -551,8 +551,8 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_bugs_min"] = min(
             obj["halstead_bugs_min"], metrics["halstead"]["bugs"]
         )
-        obj["functions_min"] = max(obj["functions_min"], metrics["nom"]["functions"])
-        obj["closures_min"] = max(obj["closures_min"], metrics["nom"]["closures"])
+        obj["functions_min"] = min(obj["functions_min"], metrics["nom"]["functions"])
+        obj["closures_min"] = min(obj["closures_min"], metrics["nom"]["closures"])
         obj["sloc_min"] = min(obj["sloc_min"], metrics["loc"]["sloc"])
         obj["ploc_min"] = min(obj["ploc_min"], metrics["loc"]["ploc"])
         obj["lloc_min"] = min(obj["lloc_min"], metrics["loc"]["lloc"])
