@@ -1823,6 +1823,10 @@ void func2() {
         [1],
     )
 
+
+
+
+
     assert _func_list_to_set(touched_functions) == {("func1", 1, 3)}
 
     metrics = code_analysis_server.metrics(

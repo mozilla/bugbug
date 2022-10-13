@@ -968,6 +968,8 @@ def merge_commits(commits: Sequence[repository.CommitDict]) -> repository.Commit
             "maximum_test_file_size": max(
                 commit["maximum_test_file_size"] for commit in commits
             ),
+
+
             "minimum_test_file_size": min(
                 commit["minimum_test_file_size"] for commit in commits
             ),
