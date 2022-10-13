@@ -41,8 +41,9 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "apt-get update && apt-get install -y git"
-            - "git clone --quiet ${repository} &&
+            - "apt-get update &&
+              apt-get install -y git &&
+              git clone --quiet ${repository} &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
@@ -66,8 +67,9 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "apt-get update && apt-get install -y git"
-              - "git clone --quiet ${repository} &&
+              - "apt-get update &&
+                apt-get install -y git &&
+                git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 python infra/version_check.py"
@@ -123,8 +125,9 @@ tasks:
           command:
             - "/bin/bash"
             - "-lcx"
-            - "apt-get update && apt-get install -y git"
-            - "git clone --quiet ${repository} &&
+            - "apt-get update &&
+              apt-get install -y git &&
+              git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -156,7 +159,8 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
               apt-get -qq install -y libhdf5-dev &&
-              git clone --quiet ${repository} && cd bugbug &&
+              git clone --quiet ${repository} &&
+              cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
               python -m coverage run setup.py sdist &&
