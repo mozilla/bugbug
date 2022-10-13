@@ -84,7 +84,7 @@ tasks:
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
-          image: python:3.9-slim
+          image: python:3.9
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -92,12 +92,6 @@ tasks:
             - "-lcx"
             - "apt-get -qq update &&
               apt-get -qq install -y libhdf5-dev zstd &&
-              apt-get install -y git &&
-              apt-get install -y curl &&
-              apt-get install -y gcc &&
-              apt-get install -y python3-dev &&
-              apt-get install -y g++ &&
-              apt-get install -y mercurial &&
               git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
@@ -154,17 +148,13 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.9-slim
+          image: python:3.9
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
-              apt-get install -y git &&
-              apt-get install -y gcc &&
-              apt-get install -y python3-dev &&
-              apt-get install -y g++ &&
               apt-get -qq install -y libhdf5-dev &&
               git clone --quiet ${repository} &&
               cd bugbug &&
