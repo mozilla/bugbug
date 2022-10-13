@@ -585,8 +585,6 @@ def get_space_metrics(
     if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
         raise AnalysisException("Analysis error")
 
-
-
     metrics = metrics_space["metrics"]
     obj["cyclomatic_total"] += metrics["cyclomatic"]["sum"]
     obj["halstead_n2_total"] += metrics["halstead"]["n2"]
