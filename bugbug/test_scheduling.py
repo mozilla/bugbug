@@ -44,9 +44,9 @@ Runnable = Union[Task, Group, ConfigGroup]
 PushResult = tuple[
     tuple[Revision],
     Revision,
-    tuple[Runnable, ...],
-    tuple[Runnable, ...],
-    tuple[Runnable, ...],
+    Tuple[Runnable, ...],
+    Tuple[Runnable, ...],
+    Tuple[Runnable, ...],
 ]
 
 TEST_LABEL_SCHEDULING_DB = "data/test_label_scheduling_history.pickle"
