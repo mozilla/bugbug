@@ -2390,7 +2390,7 @@ void main() {
 +++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
 @@ -1,6 +1,6 @@
  #include <iostream>
-
+ 
  void main() {
 -    cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
@@ -2641,7 +2641,7 @@ void main() {
 +++ prova.cpp	2021-02-03 11:32:45.114531901 +0100
 @@ -1,6 +1,6 @@
  #include <iostream>
-
+ 
  void main() {
      cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
