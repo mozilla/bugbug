@@ -2535,7 +2535,6 @@ void main() {
         "blank_min": 0.0,
         "blank_total": 1.0,
     }
-
     assert commit.metrics_diff == {
         "cloc_total": 0.0,
         "cognitive_total": 0.0,
