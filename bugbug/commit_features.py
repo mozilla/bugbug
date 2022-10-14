@@ -165,6 +165,8 @@ class source_code_file_metrics(object):
             "Average file estimated number of delivered bugs": commit["metrics"][
                 "halstead_bugs_avg"
             ],
+            "Average file number of functions": commit["metrics"]["functions_avg"],
+            "Average file number of closures": commit["metrics"]["closures_avg"],
             "Average file number of source loc": commit["metrics"]["sloc_avg"],
             "Average file number of instruction loc": commit["metrics"]["ploc_avg"],
             "Average file number of logical loc": commit["metrics"]["lloc_avg"],
@@ -205,6 +207,8 @@ class source_code_file_metrics(object):
             "Maximum file estimated number of delivered bugs": commit["metrics"][
                 "halstead_bugs_max"
             ],
+            "Maximum file number of functions": commit["metrics"]["functions_max"],
+            "Maximum file number of closures": commit["metrics"]["closures_max"],
             "Maximum file number of source loc": commit["metrics"]["sloc_max"],
             "Maximum file number of instruction loc": commit["metrics"]["ploc_max"],
             "Maximum file number of logical loc": commit["metrics"]["lloc_max"],
@@ -245,6 +249,8 @@ class source_code_file_metrics(object):
             "Minimum file estimated number of delivered bugs": commit["metrics"][
                 "halstead_bugs_min"
             ],
+            "Minimum file number of functions": commit["metrics"]["functions_min"],
+            "Minimum file number of closures": commit["metrics"]["closures_min"],
             "Minimum file number of source loc": commit["metrics"]["sloc_min"],
             "Minimum file number of instruction loc": commit["metrics"]["ploc_min"],
             "Minimum file number of logical loc": commit["metrics"]["lloc_min"],
@@ -285,6 +291,8 @@ class source_code_file_metrics(object):
             "Total file estimated number of delivered bugs": commit["metrics"][
                 "halstead_bugs_total"
             ],
+            "Total file number of functions": commit["metrics"]["functions_total"],
+            "Total file number of closures": commit["metrics"]["closures_total"],
             "Total file number of source loc": commit["metrics"]["sloc_total"],
             "Total file number of instruction loc": commit["metrics"]["ploc_total"],
             "Total file number of logical loc": commit["metrics"]["lloc_total"],
@@ -366,6 +374,8 @@ class source_code_function_metrics(object):
             "Average function estimated number of delivered bugs": merged_metrics[
                 "halstead_bugs_avg"
             ],
+            "Average function number of functions": merged_metrics["functions_avg"],
+            "Average function number of closures": merged_metrics["closures_avg"],
             "Average function number of source loc": merged_metrics["sloc_avg"],
             "Average function number of instruction loc": merged_metrics["ploc_avg"],
             "Average function number of logical loc": merged_metrics["lloc_avg"],
@@ -410,6 +420,8 @@ class source_code_function_metrics(object):
             "Maximum function estimated number of delivered bugs": merged_metrics[
                 "halstead_bugs_max"
             ],
+            "Maximum function number of functions": merged_metrics["functions_max"],
+            "Maximum function number of closures": merged_metrics["closures_max"],
             "Maximum function number of source loc": merged_metrics["sloc_max"],
             "Maximum function number of instruction loc": merged_metrics["ploc_max"],
             "Maximum function number of logical loc": merged_metrics["lloc_max"],
@@ -454,6 +466,8 @@ class source_code_function_metrics(object):
             "Minimum function estimated number of delivered bugs": merged_metrics[
                 "halstead_bugs_min"
             ],
+            "Minimum function number of functions": merged_metrics["functions_min"],
+            "Minimum function number of closures": merged_metrics["closures_min"],
             "Minimum function number of source loc": merged_metrics["sloc_min"],
             "Minimum function number of instruction loc": merged_metrics["ploc_min"],
             "Minimum function number of logical loc": merged_metrics["lloc_min"],
@@ -498,6 +512,8 @@ class source_code_function_metrics(object):
             "Total function estimated number of delivered bugs": merged_metrics[
                 "halstead_bugs_total"
             ],
+            "Total function number of functions": merged_metrics["functions_total"],
+            "Total function number of closures": merged_metrics["closures_total"],
             "Total function number of source loc": merged_metrics["sloc_total"],
             "Total function number of instruction loc": merged_metrics["ploc_total"],
             "Total function number of logical loc": merged_metrics["lloc_total"],
@@ -550,6 +566,8 @@ class source_code_metrics_diff(object):
             "Diff in estimated number of delivered bugs": commit["metrics_diff"][
                 "halstead_bugs_total"
             ],
+            "Diff in number of functions": commit["metrics_diff"]["functions_total"],
+            "Diff in number of closures": commit["metrics_diff"]["closures_total"],
             "Diff in number of source loc": commit["metrics_diff"]["sloc_total"],
             "Diff in number of instruction loc": commit["metrics_diff"]["ploc_total"],
             "Diff in number of logical loc": commit["metrics_diff"]["lloc_total"],

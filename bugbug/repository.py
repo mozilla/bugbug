@@ -132,6 +132,8 @@ METRIC_NAMES = [
     "halstead_effort",
     "halstead_time",
     "halstead_bugs",
+    "functions",
+    "closures",
     "sloc",
     "ploc",
     "lloc",
@@ -490,6 +492,8 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_bugs_max"] = max(
             obj["halstead_bugs_max"], metrics["halstead"]["bugs"]
         )
+        obj["functions_max"] = max(obj["functions_max"], metrics["nom"]["functions"])
+        obj["closures_max"] = max(obj["closures_max"], metrics["nom"]["closures"])
         obj["sloc_max"] = max(obj["sloc_max"], metrics["loc"]["sloc"])
         obj["ploc_max"] = max(obj["ploc_max"], metrics["loc"]["ploc"])
         obj["lloc_max"] = max(obj["lloc_max"], metrics["loc"]["lloc"])
@@ -547,6 +551,8 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_bugs_min"] = min(
             obj["halstead_bugs_min"], metrics["halstead"]["bugs"]
         )
+        obj["functions_min"] = min(obj["functions_min"], metrics["nom"]["functions"])
+        obj["closures_min"] = min(obj["closures_min"], metrics["nom"]["closures"])
         obj["sloc_min"] = min(obj["sloc_min"], metrics["loc"]["sloc"])
         obj["ploc_min"] = min(obj["ploc_min"], metrics["loc"]["ploc"])
         obj["lloc_min"] = min(obj["lloc_min"], metrics["loc"]["lloc"])
@@ -597,6 +603,8 @@ def get_space_metrics(
     obj["halstead_effort_total"] += metrics["halstead"]["effort"]
     obj["halstead_time_total"] += metrics["halstead"]["time"]
     obj["halstead_bugs_total"] += metrics["halstead"]["bugs"]
+    obj["functions_total"] += metrics["nom"]["functions"]
+    obj["closures_total"] += metrics["nom"]["closures"]
     obj["sloc_total"] += metrics["loc"]["sloc"]
     obj["ploc_total"] += metrics["loc"]["ploc"]
     obj["lloc_total"] += metrics["loc"]["lloc"]
