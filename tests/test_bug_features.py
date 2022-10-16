@@ -15,6 +15,7 @@ from bugbug.bug_features import (
     comment_count,
     comment_length,
     component,
+    delta_nightly_request_merge,
     has_crash_signature,
     has_cve_in_alias,
     has_github_url,
@@ -163,6 +164,11 @@ def test_comment_count(read):
 
 def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
+
+
+def test_delta_nightly_request_merge(read):
+    read("nightly_uplift.json", delta_nightly_request_merge, [None])
+    pass
 
 
 PRODUCT_PARAMS = [
