@@ -89,7 +89,7 @@ tasks:
             - "/bin/bash"
             - "-lcx"
             - "apt-get -qq update &&
-              apt-get -qq install -y libhdf5-dev zstd &&
+              apt-get -qq install -y libhdf5-dev zstd wget &&
               git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
