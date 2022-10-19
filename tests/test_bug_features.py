@@ -57,6 +57,23 @@ def read(get_fixture_path):
     return _read
 
 
+@pytest.fixture
+def read_approx(get_fixture_path):
+    def _read_approx(
+        path, feature_extractor_class, expected_results, approx_delta=None
+    ):
+        feature_extractor = feature_extractor_class()
+
+        path = get_fixture_path(os.path.join("bug_features", path))
+
+        with open(path, "r") as f:
+            results = (feature_extractor(json.loads(line)) for line in f)
+            for result, expected_result in zip(results, expected_results):
+                assert result == pytest.approx(expected_result, approx_delta)
+
+    return _read_approx
+
+
 def test_has_str(read):
     read("has_str.json", has_str, ["yes", None, "no"])
 
@@ -166,9 +183,10 @@ def test_comment_length(read):
     read("comment_length.json", comment_length, [566, 5291])
 
 
-def test_delta_nightly_request_merge(read):
-    read("nightly_uplift.json", delta_nightly_request_merge, [None])
-    pass
+def test_delta_nightly_request_merge(read_approx):
+    read_approx(
+        "nightly_uplift.json", delta_nightly_request_merge, [6.4318, 0.87326389], 1e-4
+    )
 
 
 PRODUCT_PARAMS = [
