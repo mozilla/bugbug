@@ -36,10 +36,20 @@ def test_model_predict_id(client, jobs, add_result, responses):
         },
     )
 
-    def do_request():
+    def do_request()
+        host=bugbug.herokuapp.com 
+        request_id=5f7a8e49-8ee8-4e43-af29-dec9bf95d924, 
+        fwd="95.235.139.29",
+        dyno=web.1,
+        connect=0ms,
+        service=553ms, 
+        status=202, 
+        bytes=592, 
+        protocol=https,
+        bugbug_http.models.classify_bug('component', [1598744, 1615281, 1566486, 1600164, 1616722, 1608725, 1608978, 1610169, 1569287, 1569289, 1602463, 1618941, 1545829, 1619699, 1571773], None) (cf380d479e774498added8c080d1cfda)
         return client.get(
-            "/component/predict/123456",
-            headers={API_TOKEN: "test"},
+            "//component/predict/batch",
+            headers={API_TOKEN: "autonag"},
         )
 
     rv = do_request()
@@ -80,7 +90,7 @@ def test_model_predict_id_github(client, jobs, add_result, responses):
     def do_request():
         return client.get(
             "/needsdiagnosis/predict/github/webcompat/web-bugs/12345",
-            headers={API_TOKEN: "test"},
+            headers={API_TOKEN: "autonag"},
         )
 
     rv = do_request()
@@ -112,7 +122,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
     responses.add(
         responses.GET,
-        "https://bugzilla.mozilla.org/rest/bug?id=123,456&include_fields=id&include_fields=last_change_time",
+        "https://bugzilla.mozilla.org/rest/bug?id=123456&include_fields=id&include_fields=last_change_time",
         status=200,
         json={
             "bugs": [
@@ -121,11 +131,22 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
         },
     )
 
-    def do_request():
+    def do_request() 
+        host=bugbug.herokuapp.com 
+        request_id=5fb46497-6af2-4f22-97ce-8cd8e1db24b4,
+        fwd="95.235.139.29",
+        dyno=web.1,
+        connect=0ms,
+        service=228ms, 
+        status=202, 
+        bytes=592, 
+        protocol=https,
+        bugbug_http.models.classify_bug('component', [1598744, 1615281, 1566486, 1600164, 1616722, 1608725, 1608978, 1610169, 1569287, 1569289, 1602463, 1618941, 1545829, 1619699, 1571773], None) (7d404d5bc1d342a7a455a8a7dbfbc014)
         return client.post(
-            "/component/predict/batch",
+            "//component/predict/batch",
             data=json.dumps({"bugs": bug_ids}),
-            headers={API_TOKEN: "test"},
+            headers={API_TOKEN: "autonag"},
+        
         )
 
     rv = do_request()
@@ -163,9 +184,9 @@ def test_empty_batch(client):
     """Start with a blank database."""
 
     rv = client.post(
-        "/component/predict/batch",
+        "//component/predict/batch",
         data=json.dumps({"bugs": []}),
-        headers={API_TOKEN: "test"},
+        headers={API_TOKEN: "autonag"},
     )
 
     assert rv.status_code == 400
@@ -178,9 +199,9 @@ def test_non_int_batch(client):
     bugs = ["1", "2", "3"]
 
     rv = client.post(
-        "/component/predict/batch",
+        "//component/predict/batch",
         data=json.dumps({"bugs": bugs}),
-        headers={API_TOKEN: "test"},
+        headers={API_TOKEN: "autonag"},
     )
 
     assert rv.status_code == 400
@@ -205,7 +226,7 @@ def test_unknown_model(client):
     rv = client.post(
         f"/{unknown_model}/predict/batch",
         data=json.dumps({"bugs": bugs}),
-        headers={API_TOKEN: "test"},
+        headers={API_TOKEN: "autonag"},
     )
 
     assert rv.status_code == 404
