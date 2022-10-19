@@ -224,11 +224,6 @@ class delta_nightly_request_merge(single_bug_feature):
                         landing_comments = Bugzilla.get_landing_comments(
                             bug["comments"], ["nightly"]
                         )
-                        # Retrieve the last landing found.
-                        # last_landing = landing_comments[-1]
-                        # nightly_patch = parser.parse(
-                        #    last_landing["comment"]["creation_time"]
-                        # )
 
                         # This will help us to find the closest landing before the uplift request
                         # last_distance = nightly_patch
@@ -249,14 +244,6 @@ class delta_nightly_request_merge(single_bug_feature):
                                     time_delta = min(curr_delta, time_delta)
                                 found = True
 
-                            # if (
-                            #    uplift_request_datetime >= current_time
-                            #    and last_distance >= delta_here
-                            # ):
-                            #    last_distance = delta_here
-                            #    nightly_patch = current_time
-
-                        # time_delta = nightly_patch - uplift_request_datetime
                         if found:
                             return time_delta.days + time_delta.seconds / (24 * 60 * 60)
         return None
