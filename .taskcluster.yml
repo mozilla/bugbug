@@ -67,8 +67,7 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "apt-get update &&
-                apt-get install -y git &&
+              - "apt-get update && apt-get install -y git &&
                 git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
