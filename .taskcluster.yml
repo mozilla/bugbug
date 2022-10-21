@@ -67,7 +67,8 @@ tasks:
             command:
               - "/bin/bash"
               - "-lcx"
-              - "apt-get update && apt-get install -y git &&
+              - "apt-get update &&
+                apt-get install -y git &&
                 git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
@@ -118,16 +119,13 @@ tasks:
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
-          image: python:3.9-slim
+          image: python:3.9
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
             - "/bin/bash"
             - "-lcx"
-            - "apt-get update &&
-              apt-get install -y git &&
-              apt-get install -y curl &&
-              git clone --quiet ${repository} &&
+            - "git clone --quiet ${repository} &&
               curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
