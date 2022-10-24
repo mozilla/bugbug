@@ -1357,6 +1357,7 @@ def download_commits(
             with concurrent.futures.ProcessPoolExecutor(
                 initializer=_init_process,
                 initargs=(repo_dir,),
+                # Fixing https://github.com/mozilla/bugbug/issues/3131
                 mp_context=mp.get_context("fork"),
             ) as executor:
                 commits_iter = executor.map(_transform, commits, chunksize=64)
