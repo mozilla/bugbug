@@ -462,9 +462,10 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_N2_max"] = max(obj["halstead_N2_max"], metrics["halstead"]["N2"])
         obj["halstead_n1_max"] = max(obj["halstead_n1_max"], metrics["halstead"]["n1"])
         obj["halstead_N1_max"] = max(obj["halstead_N1_max"], metrics["halstead"]["N1"])
-        obj["halstead_length_max"] = max(
-            obj["halstead_length_max"], metrics["halstead"]["length"]
-        )
+        if metrics["halstead"]["length"] is not None:
+            obj["halstead_length_max"] = max(
+                obj["halstead_length_max"], metrics["halstead"]["length"]
+            )
         if metrics["halstead"]["estimated_program_length"] is not None:
             obj["halstead_estimated_program_length_max"] = max(
                 obj["halstead_estimated_program_length_max"],
@@ -474,12 +475,14 @@ def get_summary_metrics(obj, metrics_space):
             obj["halstead_purity_ratio_max"] = max(
                 obj["halstead_purity_ratio_max"], metrics["halstead"]["purity_ratio"]
             )
-        obj["halstead_vocabulary_max"] = max(
-            obj["halstead_vocabulary_max"], metrics["halstead"]["vocabulary"]
-        )
-        obj["halstead_volume_max"] = max(
-            obj["halstead_volume_max"], metrics["halstead"]["volume"]
-        )
+        if metrics["halstead"]["vocabulary"] is not None:
+            obj["halstead_vocabulary_max"] = max(
+                obj["halstead_vocabulary_max"], metrics["halstead"]["vocabulary"]
+            )
+        if metrics["halstead"]["volume"] is not None:
+            obj["halstead_volume_max"] = max(
+                obj["halstead_volume_max"], metrics["halstead"]["volume"]
+            )
         if metrics["halstead"]["difficulty"] is not None:
             obj["halstead_difficulty_max"] = max(
                 obj["halstead_difficulty_max"], metrics["halstead"]["difficulty"]
@@ -528,9 +531,10 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_n1_min"] = min(obj["halstead_n1_min"], metrics["halstead"]["n1"])
         obj["halstead_N1_min"] = min(obj["halstead_N1_min"], metrics["halstead"]["N1"])
 
-        obj["halstead_length_min"] = min(
-            obj["halstead_length_min"], metrics["halstead"]["length"]
-        )
+        if metrics["halstead"]["length"] is not None:
+            obj["halstead_length_min"] = min(
+                obj["halstead_length_min"], metrics["halstead"]["length"]
+            )
         if metrics["halstead"]["estimated_program_length"] is not None:
             obj["halstead_estimated_program_length_min"] = min(
                 obj["halstead_estimated_program_length_min"],
@@ -540,12 +544,14 @@ def get_summary_metrics(obj, metrics_space):
             obj["halstead_purity_ratio_min"] = min(
                 obj["halstead_purity_ratio_min"], metrics["halstead"]["purity_ratio"]
             )
-        obj["halstead_vocabulary_min"] = min(
-            obj["halstead_vocabulary_min"], metrics["halstead"]["vocabulary"]
-        )
-        obj["halstead_volume_min"] = min(
-            obj["halstead_volume_min"], metrics["halstead"]["volume"]
-        )
+        if metrics["halstead"]["vocabulary"] is not None:
+            obj["halstead_vocabulary_min"] = min(
+                obj["halstead_vocabulary_min"], metrics["halstead"]["vocabulary"]
+            )
+        if metrics["halstead"]["volume"] is not None:
+            obj["halstead_volume_min"] = min(
+                obj["halstead_volume_min"], metrics["halstead"]["volume"]
+            )
         if metrics["halstead"]["difficulty"] is not None:
             obj["halstead_difficulty_min"] = min(
                 obj["halstead_difficulty_min"], metrics["halstead"]["difficulty"]
@@ -606,15 +612,18 @@ def get_space_metrics(
     obj["halstead_N2_total"] += metrics["halstead"]["N2"]
     obj["halstead_n1_total"] += metrics["halstead"]["n1"]
     obj["halstead_N1_total"] += metrics["halstead"]["N1"]
-    obj["halstead_length_total"] += metrics["halstead"]["length"]
+    if metrics["halstead"]["length"] is not None:
+        obj["halstead_length_total"] += metrics["halstead"]["length"]
     if metrics["halstead"]["estimated_program_length"] is not None:
         obj["halstead_estimated_program_length_total"] += metrics["halstead"][
             "estimated_program_length"
         ]
     if metrics["halstead"]["purity_ratio"] is not None:
         obj["halstead_purity_ratio_total"] += metrics["halstead"]["purity_ratio"]
-    obj["halstead_vocabulary_total"] += metrics["halstead"]["vocabulary"]
-    obj["halstead_volume_total"] += metrics["halstead"]["volume"]
+    if metrics["halstead"]["vocabulary"] is not None:
+        obj["halstead_vocabulary_total"] += metrics["halstead"]["vocabulary"]
+    if metrics["halstead"]["volume"] is not None:
+        obj["halstead_volume_total"] += metrics["halstead"]["volume"]
     if metrics["halstead"]["difficulty"] is not None:
         obj["halstead_difficulty_total"] += metrics["halstead"]["difficulty"]
     if metrics["halstead"]["level"] is not None:
