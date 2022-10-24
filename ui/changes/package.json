@@ -16,7 +16,7 @@
     "snowpack": "^3.8.8"
   },
   "dependencies": {
-    "@js-temporal/polyfill": "^0.4.2",
+    "@js-temporal/polyfill": "^0.4.3",
     "apexcharts": "^3.36.0",
     "localforage": "^1.10.0"
   }
