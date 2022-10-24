@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import math
+import multiprocessing as mp
 import os
 import pickle
 import re
@@ -1375,7 +1376,10 @@ def download_commits(
             code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
             with concurrent.futures.ProcessPoolExecutor(
-                initializer=_init_process, initargs=(repo_dir,)
+                initializer=_init_process,
+                initargs=(repo_dir,),
+                # Fixing https://github.com/mozilla/bugbug/issues/3131
+                mp_context=mp.get_context("fork"),
             ) as executor:
                 commits_iter = executor.map(_transform, commits, chunksize=64)
                 commits_iter = tqdm(commits_iter, total=commits_num)

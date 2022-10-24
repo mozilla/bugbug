@@ -7,6 +7,7 @@ import collections
 import concurrent.futures
 import logging
 import math
+import multiprocessing as mp
 import pickle
 import statistics
 from functools import reduce
@@ -835,7 +836,9 @@ class TestSelectModel(Model):
             print(message)
 
         with concurrent.futures.ProcessPoolExecutor(
-            max_workers=utils.get_physical_cpu_count()
+            max_workers=utils.get_physical_cpu_count(),
+            # Fixing https://github.com/mozilla/bugbug/issues/3131
+            mp_context=mp.get_context("fork"),
         ) as executor:
             scenarios = [
                 (None, None, None),
