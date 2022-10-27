@@ -37,13 +37,11 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.9-slim
+          image: python:3.9
           command:
             - "/bin/bash"
             - "-lcx"
-            - "apt-get update &&
-              apt-get install -y git &&
-              git clone --quiet ${repository} &&
+            - "git clone --quiet ${repository} &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
@@ -63,13 +61,11 @@ tasks:
           workerType: batch
           payload:
             maxRunTime: 3600
-            image: python:3.9-slim
+            image: python:3.9
             command:
               - "/bin/bash"
               - "-lcx"
-              - "apt-get update &&
-                apt-get install -y git &&
-                git clone --quiet ${repository} &&
+              - "git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 python infra/version_check.py"
