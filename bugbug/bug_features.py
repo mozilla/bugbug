@@ -216,35 +216,37 @@ class delta_nightly_request_merge(single_bug_feature):
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
-                if change["added"].startswith("approval-mozilla") and change[
-                    "added"
-                ].endswith("?"):
+                if not (
+                    change["added"].startswith("approval-mozilla")
+                    and change["added"].endswith("?")
+                ):
+                    continue
 
-                    uplift_request_datetime = parser.parse(history["when"])
+                uplift_request_datetime = parser.parse(history["when"])
 
-                    landing_comments = Bugzilla.get_landing_comments(
-                        bug["comments"], ["nightly"]
-                    )
+                landing_comments = Bugzilla.get_landing_comments(
+                    bug["comments"], ["nightly"]
+                )
 
-                    # This will help us to find the closest landing before the uplift request
-                    # last_distance = nightly_patch
-                    time_delta = None
-                    found = False
-                    for landing in landing_comments:
-                        landing_time = parser.parse(landing["comment"]["creation_time"])
+                # This will help us to find the closest landing before the uplift request
 
-                        # Only accept if the uplift is on the future and
-                        # if the last_distance is greater than the calculated now
-                        if uplift_request_datetime >= landing_time:
-                            curr_delta = uplift_request_datetime - landing_time
-                            if time_delta is None:
-                                time_delta = curr_delta
-                            else:
-                                time_delta = min(curr_delta, time_delta)
-                            found = True
+                time_delta = None
+                found = False
+                for landing in landing_comments:
+                    landing_time = parser.parse(landing["comment"]["creation_time"])
 
-                    if found:
-                        return time_delta.days + time_delta.seconds / (24 * 60 * 60)
+                    # Only accept if the uplift is on the future and
+                    # if the landing_time is greater than the calculated now
+                    if uplift_request_datetime >= landing_time:
+                        curr_delta = uplift_request_datetime - landing_time
+                        if time_delta is None:
+                            time_delta = curr_delta
+                        else:
+                            time_delta = min(curr_delta, time_delta)
+                        found = True
+
+                if found:
+                    return time_delta.days + time_delta.seconds / (24 * 60 * 60)
         return None
 
 
