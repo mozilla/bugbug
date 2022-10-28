@@ -170,7 +170,12 @@ def test_delta_nightly_request_merge(read):
     read(
         "nightly_uplift.json",
         delta_nightly_request_merge,
-        [pytest.approx(6.431805555555556), pytest.approx(0.8732638888888888)],
+        [
+            pytest.approx(6.431805555555556),
+            pytest.approx(0.8732638888888888),
+            None,
+            None,
+        ],
     )
 
 
