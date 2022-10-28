@@ -229,23 +229,17 @@ class delta_nightly_request_merge(single_bug_feature):
                 )
 
                 # This will help us to find the closest landing before the uplift request
-
-                time_delta = None
-                found = False
+                landing_time_list = []
                 for landing in landing_comments:
                     landing_time = parser.parse(landing["comment"]["creation_time"])
 
                     # Only accept if the uplift is on the future and
                     # if the landing_time is greater than the calculated now
                     if uplift_request_datetime >= landing_time:
-                        curr_delta = uplift_request_datetime - landing_time
-                        if time_delta is None:
-                            time_delta = curr_delta
-                        else:
-                            time_delta = min(curr_delta, time_delta)
-                        found = True
+                        landing_time_list.append(landing_time)
 
-                if found:
+                if len(landing_time_list) > 0:
+                    time_delta = uplift_request_datetime - max(landing_time_list)
                     return time_delta.days + time_delta.seconds / (24 * 60 * 60)
         return None
 
