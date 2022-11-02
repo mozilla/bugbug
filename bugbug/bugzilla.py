@@ -326,6 +326,9 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
                 continue
 
             value = int(raw_value)
+            # If there are no bugs, the product/component pair doesn't exist.
+            if value == 0:
+                continue
 
             full_comp = f"{product}::{component}"
             bugs_number[full_comp] = value
