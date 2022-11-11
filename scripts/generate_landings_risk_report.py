@@ -6,6 +6,7 @@
 import argparse
 import collections
 import copy
+import html
 import itertools
 import json
 import logging
@@ -1368,12 +1369,14 @@ def notification(days: int) -> None:
 
         return (
             "|[{}](https://bugzilla.mozilla.org/show_bug.cgi?id={})|{}|{}|{}|".format(
-                textwrap.shorten(
-                    "Bug {} - {}".format(
-                        bug["id"], escape_markdown(full_bug["summary"])
-                    ),
-                    width=98,
-                    placeholder="…",
+                escape_markdown(
+                    html.escape(
+                        textwrap.shorten(
+                            "Bug {} - {}".format(bug["id"], full_bug["summary"]),
+                            width=98,
+                            placeholder="…",
+                        )
+                    )
                 ),
                 bug["id"],
                 last_activity,
@@ -1404,7 +1407,7 @@ def notification(days: int) -> None:
 
             top_crashes.append(
                 "|[{}](https://crash-stats.mozilla.org/signature/?product=Firefox&{}) ({}#{} globally{})|{}{}".format(
-                    escape_markdown(signature),
+                    escape_markdown(html.escape(signature)),
                     urllib.parse.urlencode({"signature": signature}),
                     "**" if data["tc_rank"] <= 50 else "",
                     data["tc_rank"],
