@@ -9,7 +9,8 @@ import dateutil.parser
 
 from bugbug import bugzilla
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("team", help="Bugzilla team", type=str)
     parser.add_argument(
@@ -42,3 +43,7 @@ if __name__ == "__main__":
             2,
         )
     )
+
+
+if __name__ == "__main__":
+    main()
