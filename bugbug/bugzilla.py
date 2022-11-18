@@ -414,6 +414,10 @@ def calculate_maintenance_effectiveness_indicator(
         "closed": {},
     }
 
+    print(
+        f"Calculating maintenance effectiveness indicator for the {team} team from {from_date} to {to_date}"
+    )
+
     for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
         params = {
             "count_only": 1,
