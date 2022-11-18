@@ -9,7 +9,7 @@ matplotlib==3.6.2
 mercurial==6.3.0
 microannotate==0.0.24
 mozci==2.2.2
-numpy==1.22.4
+numpy==1.23.4
 orjson==3.8.1
 ortools==9.4.1874
 pandas==1.5.1
