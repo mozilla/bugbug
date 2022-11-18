@@ -50,7 +50,7 @@ setup(
             "bugbug-train = scripts.trainer:main",
             "bugbug-train-similarity = scripts.similarity_trainer:main",
             "bugbug-check = scripts.check:main",
-            "bugbug-maintenance-effectiveness-indicator = scripts.maintenance_effectiveness_indicator:main"
+            "bugbug-maintenance-effectiveness-indicator = scripts.maintenance_effectiveness_indicator:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
             "bugbug-classify-commit = scripts.commit_classifier:main",
             "bugbug-classify-bug = scripts.bug_classifier:main",
