@@ -449,7 +449,7 @@ def calculate_maintenance_effectiveness_indicator(
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
                 params=params,
-                headers={"User-Agent": "bugbug"},
+                headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
             )
             r.raise_for_status()
 
