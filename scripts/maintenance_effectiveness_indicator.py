@@ -4,10 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+from logging import getLogger
 
 import dateutil.parser
 
 from bugbug import bugzilla
+from bugbug.utils import get_secret
+
+logger = getLogger(__name__)
 
 
 def main():
@@ -31,6 +35,14 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Try to use a Bugzilla API key if available.
+    try:
+        bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
+    except ValueError:
+        logger.info(
+            "If you want to include security bugs too, please set the BUGBUG_BUGZILLA_TOKEN environment variable to your Bugzilla API key."
+        )
 
     print(
         round(
