@@ -4,12 +4,17 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+from logging import getLogger
 
 import dateutil.parser
 
 from bugbug import bugzilla
+from bugbug.utils import get_secret
 
-if __name__ == "__main__":
+logger = getLogger(__name__)
+
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("team", help="Bugzilla team", type=str)
     parser.add_argument(
@@ -31,6 +36,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    # Try to use a Bugzilla API key if available.
+    try:
+        bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
+    except ValueError:
+        logger.info(
+            "If you want to include security bugs too, please set the BUGBUG_BUGZILLA_TOKEN environment variable to your Bugzilla API key."
+        )
+
     print(
         round(
             bugzilla.calculate_maintenance_effectiveness_indicator(
@@ -42,3 +55,7 @@ if __name__ == "__main__":
             2,
         )
     )
+
+
+if __name__ == "__main__":
+    main()

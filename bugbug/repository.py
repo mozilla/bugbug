@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import math
+import multiprocessing as mp
 import os
 import pickle
 import re
@@ -461,37 +462,47 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_N2_max"] = max(obj["halstead_N2_max"], metrics["halstead"]["N2"])
         obj["halstead_n1_max"] = max(obj["halstead_n1_max"], metrics["halstead"]["n1"])
         obj["halstead_N1_max"] = max(obj["halstead_N1_max"], metrics["halstead"]["N1"])
-        obj["halstead_length_max"] = max(
-            obj["halstead_length_max"], metrics["halstead"]["length"]
-        )
-        obj["halstead_estimated_program_length_max"] = max(
-            obj["halstead_estimated_program_length_max"],
-            metrics["halstead"]["estimated_program_length"],
-        )
-        obj["halstead_purity_ratio_max"] = max(
-            obj["halstead_purity_ratio_max"], metrics["halstead"]["purity_ratio"]
-        )
-        obj["halstead_vocabulary_max"] = max(
-            obj["halstead_vocabulary_max"], metrics["halstead"]["vocabulary"]
-        )
-        obj["halstead_volume_max"] = max(
-            obj["halstead_volume_max"], metrics["halstead"]["volume"]
-        )
-        obj["halstead_difficulty_max"] = max(
-            obj["halstead_difficulty_max"], metrics["halstead"]["difficulty"]
-        )
-        obj["halstead_level_max"] = max(
-            obj["halstead_level_max"], metrics["halstead"]["level"]
-        )
-        obj["halstead_effort_max"] = max(
-            obj["halstead_effort_max"], metrics["halstead"]["effort"]
-        )
-        obj["halstead_time_max"] = max(
-            obj["halstead_time_max"], metrics["halstead"]["time"]
-        )
-        obj["halstead_bugs_max"] = max(
-            obj["halstead_bugs_max"], metrics["halstead"]["bugs"]
-        )
+        if metrics["halstead"]["length"] is not None:
+            obj["halstead_length_max"] = max(
+                obj["halstead_length_max"], metrics["halstead"]["length"]
+            )
+        if metrics["halstead"]["estimated_program_length"] is not None:
+            obj["halstead_estimated_program_length_max"] = max(
+                obj["halstead_estimated_program_length_max"],
+                metrics["halstead"]["estimated_program_length"],
+            )
+        if metrics["halstead"]["purity_ratio"] is not None:
+            obj["halstead_purity_ratio_max"] = max(
+                obj["halstead_purity_ratio_max"], metrics["halstead"]["purity_ratio"]
+            )
+        if metrics["halstead"]["vocabulary"] is not None:
+            obj["halstead_vocabulary_max"] = max(
+                obj["halstead_vocabulary_max"], metrics["halstead"]["vocabulary"]
+            )
+        if metrics["halstead"]["volume"] is not None:
+            obj["halstead_volume_max"] = max(
+                obj["halstead_volume_max"], metrics["halstead"]["volume"]
+            )
+        if metrics["halstead"]["difficulty"] is not None:
+            obj["halstead_difficulty_max"] = max(
+                obj["halstead_difficulty_max"], metrics["halstead"]["difficulty"]
+            )
+        if metrics["halstead"]["level"] is not None:
+            obj["halstead_level_max"] = max(
+                obj["halstead_level_max"], metrics["halstead"]["level"]
+            )
+        if metrics["halstead"]["effort"] is not None:
+            obj["halstead_effort_max"] = max(
+                obj["halstead_effort_max"], metrics["halstead"]["effort"]
+            )
+        if metrics["halstead"]["time"] is not None:
+            obj["halstead_time_max"] = max(
+                obj["halstead_time_max"], metrics["halstead"]["time"]
+            )
+        if metrics["halstead"]["bugs"] is not None:
+            obj["halstead_bugs_max"] = max(
+                obj["halstead_bugs_max"], metrics["halstead"]["bugs"]
+            )
         obj["functions_max"] = max(obj["functions_max"], metrics["nom"]["functions"])
         obj["closures_max"] = max(obj["closures_max"], metrics["nom"]["closures"])
         obj["sloc_max"] = max(obj["sloc_max"], metrics["loc"]["sloc"])
@@ -520,37 +531,47 @@ def get_summary_metrics(obj, metrics_space):
         obj["halstead_n1_min"] = min(obj["halstead_n1_min"], metrics["halstead"]["n1"])
         obj["halstead_N1_min"] = min(obj["halstead_N1_min"], metrics["halstead"]["N1"])
 
-        obj["halstead_length_min"] = min(
-            obj["halstead_length_min"], metrics["halstead"]["length"]
-        )
-        obj["halstead_estimated_program_length_min"] = min(
-            obj["halstead_estimated_program_length_min"],
-            metrics["halstead"]["estimated_program_length"],
-        )
-        obj["halstead_purity_ratio_min"] = min(
-            obj["halstead_purity_ratio_min"], metrics["halstead"]["purity_ratio"]
-        )
-        obj["halstead_vocabulary_min"] = min(
-            obj["halstead_vocabulary_min"], metrics["halstead"]["vocabulary"]
-        )
-        obj["halstead_volume_min"] = min(
-            obj["halstead_volume_min"], metrics["halstead"]["volume"]
-        )
-        obj["halstead_difficulty_min"] = min(
-            obj["halstead_difficulty_min"], metrics["halstead"]["difficulty"]
-        )
-        obj["halstead_level_min"] = min(
-            obj["halstead_level_min"], metrics["halstead"]["level"]
-        )
-        obj["halstead_effort_min"] = min(
-            obj["halstead_effort_min"], metrics["halstead"]["effort"]
-        )
-        obj["halstead_time_min"] = min(
-            obj["halstead_time_min"], metrics["halstead"]["time"]
-        )
-        obj["halstead_bugs_min"] = min(
-            obj["halstead_bugs_min"], metrics["halstead"]["bugs"]
-        )
+        if metrics["halstead"]["length"] is not None:
+            obj["halstead_length_min"] = min(
+                obj["halstead_length_min"], metrics["halstead"]["length"]
+            )
+        if metrics["halstead"]["estimated_program_length"] is not None:
+            obj["halstead_estimated_program_length_min"] = min(
+                obj["halstead_estimated_program_length_min"],
+                metrics["halstead"]["estimated_program_length"],
+            )
+        if metrics["halstead"]["purity_ratio"] is not None:
+            obj["halstead_purity_ratio_min"] = min(
+                obj["halstead_purity_ratio_min"], metrics["halstead"]["purity_ratio"]
+            )
+        if metrics["halstead"]["vocabulary"] is not None:
+            obj["halstead_vocabulary_min"] = min(
+                obj["halstead_vocabulary_min"], metrics["halstead"]["vocabulary"]
+            )
+        if metrics["halstead"]["volume"] is not None:
+            obj["halstead_volume_min"] = min(
+                obj["halstead_volume_min"], metrics["halstead"]["volume"]
+            )
+        if metrics["halstead"]["difficulty"] is not None:
+            obj["halstead_difficulty_min"] = min(
+                obj["halstead_difficulty_min"], metrics["halstead"]["difficulty"]
+            )
+        if metrics["halstead"]["level"] is not None:
+            obj["halstead_level_min"] = min(
+                obj["halstead_level_min"], metrics["halstead"]["level"]
+            )
+        if metrics["halstead"]["effort"] is not None:
+            obj["halstead_effort_min"] = min(
+                obj["halstead_effort_min"], metrics["halstead"]["effort"]
+            )
+        if metrics["halstead"]["time"] is not None:
+            obj["halstead_time_min"] = min(
+                obj["halstead_time_min"], metrics["halstead"]["time"]
+            )
+        if metrics["halstead"]["bugs"] is not None:
+            obj["halstead_bugs_min"] = min(
+                obj["halstead_bugs_min"], metrics["halstead"]["bugs"]
+            )
         obj["functions_min"] = min(obj["functions_min"], metrics["nom"]["functions"])
         obj["closures_min"] = min(obj["closures_min"], metrics["nom"]["closures"])
         obj["sloc_min"] = min(obj["sloc_min"], metrics["loc"]["sloc"])
@@ -591,18 +612,28 @@ def get_space_metrics(
     obj["halstead_N2_total"] += metrics["halstead"]["N2"]
     obj["halstead_n1_total"] += metrics["halstead"]["n1"]
     obj["halstead_N1_total"] += metrics["halstead"]["N1"]
-    obj["halstead_length_total"] += metrics["halstead"]["length"]
-    obj["halstead_estimated_program_length_total"] += metrics["halstead"][
-        "estimated_program_length"
-    ]
-    obj["halstead_purity_ratio_total"] += metrics["halstead"]["purity_ratio"]
-    obj["halstead_vocabulary_total"] += metrics["halstead"]["vocabulary"]
-    obj["halstead_volume_total"] += metrics["halstead"]["volume"]
-    obj["halstead_difficulty_total"] += metrics["halstead"]["difficulty"]
-    obj["halstead_level_total"] += metrics["halstead"]["level"]
-    obj["halstead_effort_total"] += metrics["halstead"]["effort"]
-    obj["halstead_time_total"] += metrics["halstead"]["time"]
-    obj["halstead_bugs_total"] += metrics["halstead"]["bugs"]
+    if metrics["halstead"]["length"] is not None:
+        obj["halstead_length_total"] += metrics["halstead"]["length"]
+    if metrics["halstead"]["estimated_program_length"] is not None:
+        obj["halstead_estimated_program_length_total"] += metrics["halstead"][
+            "estimated_program_length"
+        ]
+    if metrics["halstead"]["purity_ratio"] is not None:
+        obj["halstead_purity_ratio_total"] += metrics["halstead"]["purity_ratio"]
+    if metrics["halstead"]["vocabulary"] is not None:
+        obj["halstead_vocabulary_total"] += metrics["halstead"]["vocabulary"]
+    if metrics["halstead"]["volume"] is not None:
+        obj["halstead_volume_total"] += metrics["halstead"]["volume"]
+    if metrics["halstead"]["difficulty"] is not None:
+        obj["halstead_difficulty_total"] += metrics["halstead"]["difficulty"]
+    if metrics["halstead"]["level"] is not None:
+        obj["halstead_level_total"] += metrics["halstead"]["level"]
+    if metrics["halstead"]["effort"] is not None:
+        obj["halstead_effort_total"] += metrics["halstead"]["effort"]
+    if metrics["halstead"]["time"] is not None:
+        obj["halstead_time_total"] += metrics["halstead"]["time"]
+    if metrics["halstead"]["bugs"] is not None:
+        obj["halstead_bugs_total"] += metrics["halstead"]["bugs"]
     obj["functions_total"] += metrics["nom"]["functions"]
     obj["closures_total"] += metrics["nom"]["closures"]
     obj["sloc_total"] += metrics["loc"]["sloc"]
@@ -1354,7 +1385,10 @@ def download_commits(
             code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
             with concurrent.futures.ProcessPoolExecutor(
-                initializer=_init_process, initargs=(repo_dir,)
+                initializer=_init_process,
+                initargs=(repo_dir,),
+                # Fixing https://github.com/mozilla/bugbug/issues/3131
+                mp_context=mp.get_context("fork"),
             ) as executor:
                 commits_iter = executor.map(_transform, commits, chunksize=64)
                 commits_iter = tqdm(commits_iter, total=commits_num)

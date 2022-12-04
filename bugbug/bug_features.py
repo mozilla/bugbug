@@ -12,6 +12,7 @@ import dateutil.parser
 import pandas as pd
 from dateutil import parser
 from libmozdata import versions
+from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from bugbug import bug_snapshot, repository
@@ -206,6 +207,40 @@ class delta_request_merge(single_bug_feature):
                     )
                     return timedelta.days + timedelta.seconds / (24 * 60 * 60)
 
+        return None
+
+
+class delta_nightly_request_merge(single_bug_feature):
+    name = "Time delta between landing of the patch in Nightly and uplift request"
+
+    def __call__(self, bug, **kwargs):
+        for history in bug["history"]:
+            for change in history["changes"]:
+                if not (
+                    change["added"].startswith("approval-mozilla")
+                    and change["added"].endswith("?")
+                ):
+                    continue
+
+                uplift_request_datetime = parser.parse(history["when"])
+
+                landing_comments = Bugzilla.get_landing_comments(
+                    bug["comments"], ["nightly"]
+                )
+
+                # This will help us to find the closest landing before the uplift request
+                landing_time_list = []
+                for landing in landing_comments:
+                    landing_time = parser.parse(landing["comment"]["creation_time"])
+
+                    # Only accept if the uplift is on the future and
+                    # if the landing_time is greater than the calculated now
+                    if uplift_request_datetime >= landing_time:
+                        landing_time_list.append(landing_time)
+
+                if len(landing_time_list) > 0:
+                    time_delta = uplift_request_datetime - max(landing_time_list)
+                    return time_delta.days + time_delta.seconds / (24 * 60 * 60)
         return None
 
 

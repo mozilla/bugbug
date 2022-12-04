@@ -326,6 +326,9 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
                 continue
 
             value = int(raw_value)
+            # If there are no bugs, the product/component pair doesn't exist.
+            if value == 0:
+                continue
 
             full_comp = f"{product}::{component}"
             bugs_number[full_comp] = value
@@ -411,6 +414,10 @@ def calculate_maintenance_effectiveness_indicator(
         "closed": {},
     }
 
+    print(
+        f"Calculating maintenance effectiveness indicator for the {team} team from {from_date} to {to_date}"
+    )
+
     for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
         params = {
             "count_only": 1,
@@ -442,7 +449,7 @@ def calculate_maintenance_effectiveness_indicator(
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
                 params=params,
-                headers={"User-Agent": "bugbug"},
+                headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
             )
             r.raise_for_status()
 
