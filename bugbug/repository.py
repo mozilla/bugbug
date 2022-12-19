@@ -61,7 +61,7 @@ EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 SOURCE_CODE_TYPES_TO_EXT = {
     "Assembly": [".asm", ".S"],
-    "Javascript": [".js", ".jsm", ".sjs"],
+    "Javascript": [".js", ".jsm", ".sjs", ".mjs", ".jsx"],
     "C/C++": [".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".hxx"],
     "Objective-C/C++": [".mm", ".m"],
     "Java": [".java"],
