@@ -5,5 +5,5 @@ pre-commit==2.20.0
 pytest==7.2.0
 pytest-cov==4.0.0
 pytest-responses==0.5.1
-python-igraph==0.10.2
+python-igraph==0.10.3
 responses==0.21.0
