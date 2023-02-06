@@ -171,8 +171,8 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
                 1443466,
             ]
         )
-        or (field in ["cf_has_str", "cf_has_regression_range"] and bug_id == 1_440_338)
-        or (field == "cf_has_regression_range" and bug_id == 1542185)
+        or (field == "cf_has_str" and bug_id == 1_440_338)
+        or (field == "cf_has_regression_range")  # the field was removed
         or (
             field == "cf_has_str" and bug_id == 1462571
         )  # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1550104 is fixed
@@ -339,7 +339,7 @@ def is_expected_inconsistent_change_field(field, bug_id, new_value, new_value_ex
         or (
             field == "type" and bug_id == 1257155
         )  # TODO: Remove once https://bugzilla.mozilla.org/show_bug.cgi?id=1550129 is fixed.
-        or (bug_id == 1370035 and field in ("cf_has_str", "cf_has_regression_range"))
+        or (bug_id == 1370035 and field == "cf_has_str")
         or (bug_id == 1400540 and field in ("target_milestone", "status", "resolution"))
         or (bug_id == 1402929 and field == "priority")
         or (field == "whiteboard" and new_value.rstrip() == new_value_exp.rstrip())
