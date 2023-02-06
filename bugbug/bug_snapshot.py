@@ -173,9 +173,6 @@ def is_expected_inconsistent_field(field, last_product, bug_id):
         )
         or (field == "cf_has_str" and bug_id == 1_440_338)
         or (field == "cf_has_regression_range")  # the field was removed
-        or (
-            field == "cf_has_str" and bug_id == 1462571
-        )  # TODO: Remove when https://bugzilla.mozilla.org/show_bug.cgi?id=1550104 is fixed
     )
 
 
