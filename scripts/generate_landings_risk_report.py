@@ -1238,16 +1238,14 @@ def notification(days: int) -> None:
         }
     )
 
+    total_covered = sum(
+        cur_team_data["patch_coverage_covered"] for cur_team_data in team_data.values()
+    )
+    total_added = sum(
+        cur_team_data["patch_coverage_added"] for cur_team_data in team_data.values()
+    )
     average_patch_coverage = round(
-        100
-        * sum(
-            cur_team_data["patch_coverage_covered"]
-            for cur_team_data in team_data.values()
-        )
-        / sum(
-            cur_team_data["patch_coverage_added"]
-            for cur_team_data in team_data.values()
-        ),
+        100 * total_covered / total_added if total_added != 0 else 100,
         1,
     )
     average_median_fix_time = statistics.mean(
