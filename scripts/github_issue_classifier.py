@@ -19,7 +19,6 @@ logger = getLogger(__name__)
 def classify_issues(
     owner: str, repo: str, retrieve_events: bool, model_name: str, issue_number: int
 ) -> None:
-
     model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):

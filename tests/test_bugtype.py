@@ -9,7 +9,6 @@ from bugbug.models.bugtype import BugTypeModel
 
 
 def test_get_bugtype_labels():
-
     model = BugTypeModel()
     classes, keyword_list = model.get_labels()
 

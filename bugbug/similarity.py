@@ -138,7 +138,6 @@ class BaseSimilarity(abc.ABC):
         return similar_bug_ids
 
     def text_preprocess(self, text, stemming=True, lemmatization=False, join=False):
-
         for func in self.cleanup_functions:
             text = func(text)
 
@@ -274,7 +273,6 @@ class LSISimilarity(BaseSimilarity):
         self.corpus = []
 
         for bug in bugzilla.get_bugs():
-
             textual_features = self.text_preprocess(self.get_text(bug))
             self.corpus.append([bug["id"], textual_features])
 
@@ -349,7 +347,6 @@ class NeighborsSimilarity(BaseSimilarity):
         self.similarity_calculator.fit(self.vectorizer.transform(text))
 
     def search_similar_bugs(self, query):
-
         processed_query = self.vectorizer.transform([self.get_text(query)])
         _, indices = self.similarity_calculator.kneighbors(processed_query)
 
@@ -466,7 +463,6 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
         )
 
     def search_similar_bugs(self, query):
-
         words = self.text_preprocess(self.get_text(query))
         words = [word for word in words if word in self.w2vmodel.wv.vocab]
 
@@ -493,7 +489,6 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
         confirmed_distances = []
 
         for i, (doc_id, rwmd_distance) in enumerate(distances):
-
             if (
                 len(confirmed_distances) >= 10
                 and rwmd_distance > confirmed_distances[10 - 1]
@@ -520,7 +515,6 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
         ]
 
     def get_distance(self, query1, query2):
-
         words1 = self.text_preprocess(self.get_text(query1))
         words1 = [word for word in words1 if word in self.w2vmodel.wv.vocab]
         words2 = self.text_preprocess(self.get_text(query2))
@@ -550,7 +544,6 @@ class Word2VecWmdRelaxSimilarity(Word2VecSimilarityBase):
         self.tfidf = TfidfModel(dictionary=self.dictionary)
 
     def search_similar_bugs(self, query):
-
         query = self.text_preprocess(self.get_text(query))
         words = [
             word for word in set(chain(query, *self.corpus)) if word in self.w2vmodel.wv

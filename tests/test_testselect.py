@@ -186,7 +186,9 @@ def test_reduce4(failing_together: LMDBDict) -> None:
         },
         1.0,
     )
-    assert result == {"windows10/opt-e",} or result == {
+    assert result == {
+        "windows10/opt-e",
+    } or result == {
         "windows10/opt-b",
     }
 

@@ -45,7 +45,7 @@ class KerasClassifier(BaseEstimator, ClassifierMixin):
 
         self.model = self.model_creator(X_dict, y)
 
-        for (epochs, batch_size) in self.fit_params:
+        for epochs, batch_size in self.fit_params:
             self.model.fit(X_dict, y, epochs=epochs, batch_size=batch_size, verbose=1)
 
         return self

@@ -731,7 +731,6 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         already_rollbacked = set()
 
         def apply_transform(bug):
-
             is_couple = isinstance(bug, tuple)
 
             if not is_couple:

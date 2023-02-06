@@ -70,7 +70,6 @@ class Retriever(object):
         return updated_issues, updated_ids
 
     def retrieve_issues(self) -> None:
-
         last_modified = None
         db.download(self.github.db_path)
 

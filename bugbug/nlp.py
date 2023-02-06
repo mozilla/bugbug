@@ -48,7 +48,6 @@ def spacy_token_lemmatizer(text):
 
 class SpacyVectorizer(TfidfVectorizer):
     def __init__(self, *args, **kwargs):
-
         # Detect when the Spacy optional dependency is missing
         if not HAS_OPTIONAL_DEPENDENCIES:
             raise NotImplementedError(OPT_MSG_MISSING)

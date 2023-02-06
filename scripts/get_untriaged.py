@@ -47,7 +47,7 @@ def run_untriaged(untriaged_bugs):
         (ComponentModel, "../componentmodel"),
         (ComponentNNModel, "../componentnnmodel"),
     ]
-    for (model_class, model_file_name) in models:
+    for model_class, model_file_name in models:
         rows = []
         model = model_class.load(model_file_name)
         for bug in untriaged_bugs:

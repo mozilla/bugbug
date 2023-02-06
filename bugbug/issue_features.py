@@ -49,7 +49,6 @@ class IssueExtractor(BaseEstimator, TransformerMixin):
         results = []
 
         for issue in issues():
-
             if self.rollback:
                 issue = issue_snapshot.rollback(issue, self.rollback_when)
 

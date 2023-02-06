@@ -76,7 +76,6 @@ class DuplicateModel(BugCoupleModel):
         self.clf = XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
-
         random.seed(4)
 
         all_ids = set(

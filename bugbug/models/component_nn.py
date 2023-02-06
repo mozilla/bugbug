@@ -66,7 +66,7 @@ class ComponentNNClassifier(KerasClassifier):
         self.long_desc_emb_sz = kwargs.pop("long_desc_emb_sz")
         self.model_params = kwargs.pop("params")
 
-        for (k, v) in self.model_params.items():
+        for k, v in self.model_params.items():
             setattr(self, k, v)
 
         return self

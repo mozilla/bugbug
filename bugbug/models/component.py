@@ -258,7 +258,6 @@ class ComponentModel(BugModel):
         # than 0 bugs
 
         for conflated_component in self.CONFLATED_COMPONENTS:
-
             matching_components = [
                 full_comp
                 for full_comp in bugs_number
@@ -286,7 +285,6 @@ class ComponentModel(BugModel):
         # still exist as components and have more than 0 bugs
 
         for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
-
             if full_comp not in bugs_number:
                 print(
                     f"{full_comp} from conflated component mapping doesn't exists, failure"
@@ -302,7 +300,6 @@ class ComponentModel(BugModel):
         # exist as components or are in CONFLATED_COMPONENTS_MAPPING
 
         for conflated_component in self.CONFLATED_COMPONENTS:
-
             in_mapping = conflated_component in self.CONFLATED_COMPONENTS_MAPPING
 
             matching_components = [

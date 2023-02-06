@@ -31,7 +31,6 @@ def parse_args(args):
 
 
 def main(args):
-
     if args.algorithm == "elasticsearch":
         model = similarity.model_name_to_class[args.algorithm]()
     else:

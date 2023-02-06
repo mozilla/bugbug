@@ -121,7 +121,6 @@ def analyze_metrics(
 
     # First process the metrics JSON files
     for metric_file_path in root.glob("metric*.json"):
-
         date, model_name, metric = parse_metric_file(metric_file_path)
 
         # Then process the report
@@ -151,7 +150,6 @@ def analyze_metrics(
     # Then analyze them
     for model_name in metrics:
         for metric_name, values in metrics[model_name].items():
-
             if metric_name.endswith("_std"):
                 LOGGER.info(
                     "Skipping analysis of %r, analysis is not efficient on standard deviation",
