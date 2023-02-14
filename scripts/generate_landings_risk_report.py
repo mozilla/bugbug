@@ -1772,14 +1772,14 @@ Top intermittent failures from the past week:
 
 There are {skipped_tests} tests skipped in some configurations"""
             if team not in super_teams:
-                intermittent_failures_section += f""" ({"**higher**" if skipped_tests > median_skipped_tests else "lower"} than the median across other teams, {round(median_skipped_tests)})"""
+                intermittent_failures_section += f""" ({"**higher** than" if skipped_tests > median_skipped_tests else "lower than" if median_skipped_tests > skipped_tests else "equal to"} the median across other teams, {round(median_skipped_tests)})"""
             intermittent_failures_section += f""".
 They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing" if prev_skipped_tests > skipped_tests else "staying constant"} from {prev_skipped_tests} you had two weeks ago."""
 
             test_coverage_section = f"""<b>TEST COVERAGE</b>
 <br />
 
-Total coverage for patches landing this past week was {patch_coverage}% ({"higher" if patch_coverage > average_patch_coverage else "**lower**"} than the average across other teams, {average_patch_coverage}%)."""
+Total coverage for patches landing this past week was {patch_coverage}% ({"higher than" if patch_coverage > average_patch_coverage else "**lower** than" if average_patch_coverage > patch_coverage else "equal to"} the average across other teams, {average_patch_coverage}%)."""
 
             if len(low_coverage_patches) > 0:
                 test_coverage_section += f"""<br />List of lowest coverage patches:
