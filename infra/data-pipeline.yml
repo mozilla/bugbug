@@ -19,7 +19,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
-        maxRunTime: 604800
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -54,7 +54,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
-        maxRunTime: 432000
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -89,7 +89,7 @@ tasks:
       payload:
         env:
           TC_SECRET_ID: project/bugbug/production
-        maxRunTime: 432000
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-microannotate-generate
@@ -278,7 +278,7 @@ tasks:
       provisionerId: proj-bugbug
       workerType: batch
       payload:
-        maxRunTime: 259200
+        maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
@@ -317,7 +317,7 @@ tasks:
       provisionerId: proj-bugbug
       workerType: batch
       payload:
-        maxRunTime: 259200
+        maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
@@ -356,7 +356,7 @@ tasks:
       provisionerId: proj-bugbug
       workerType: batch
       payload:
-        maxRunTime: 259200
+        maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
           - bugbug-data-test-scheduling-history
@@ -748,7 +748,7 @@ tasks:
     #        - regressor-finder-commits-to-ignore
     #        - regressor-finder-bug-fixing-commits
     #      payload:
-    #        maxRunTime: 432000
+    #        maxRunTime: 86400
     #        image: mozilla/bugbug-commit-retrieval:${version}
     #        command:
     #          - bugbug-regressor-finder
@@ -782,7 +782,7 @@ tasks:
         - regressor-finder-commits-to-ignore
         - regressor-finder-bug-fixing-commits
       payload:
-        maxRunTime: 432000
+        maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}
         command:
           - bugbug-regressor-finder
