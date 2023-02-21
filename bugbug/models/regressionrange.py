@@ -87,4 +87,4 @@ class RegressionRangeModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names()
+        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()

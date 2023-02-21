@@ -857,7 +857,7 @@ class TestSelectModel(Model):
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names()
+        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
 
 
 class TestLabelSelectModel(TestSelectModel):
