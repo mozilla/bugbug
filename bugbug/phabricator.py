@@ -54,8 +54,8 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
+            stop=tenacity.stop_after_attempt(7),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
@@ -86,8 +86,8 @@ def get(
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
+            stop=tenacity.stop_after_attempt(7),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "differential.revision.search",
