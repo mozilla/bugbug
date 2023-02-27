@@ -2,7 +2,7 @@ amqp==5.1.1
 beautifulsoup4==4.11.2
 boto3==1.26.74
 imbalanced-learn==0.10.1
-libmozdata==0.1.83
+libmozdata==0.1.85
 lmdb==1.4.0
 markdown2==2.4.8
 matplotlib==3.7.0
