@@ -6,4 +6,4 @@ pytest==7.2.2
 pytest-cov==4.0.0
 pytest-responses==0.5.1
 python-igraph==0.10.4
-responses==0.21.0
+responses==0.22.0
