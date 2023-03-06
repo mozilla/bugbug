@@ -124,7 +124,7 @@ class DuplicateModel(BugCoupleModel):
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        logger.info(f"Number of duplicate labels is: {self.num_duplicates}")
+        logger.info("Number of duplicate labels is: %s", self.num_duplicates)
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
@@ -135,7 +135,7 @@ class DuplicateModel(BugCoupleModel):
             classes[(bug_id1, bug_id2)] = 0
             dup_nondup_num += 1
 
-        logger.info(f"Number of hybrid labels is: {self.num_dup_nondups}")
+        logger.info("Number of hybrid labels is: %s", self.num_dup_nondups)
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
@@ -146,7 +146,9 @@ class DuplicateModel(BugCoupleModel):
                 classes[(bug_id1, bug_id2)] = 0
                 nondup_nondup_num += 1
 
-        logger.info(f"Number of purely non-duplicate labels is: {self.num_nondups_nondups}")
+        logger.info(
+            "Number of purely non-duplicate labels is: %s", self.num_nondups_nondups
+        )
 
         return classes, [0, 1]
 
