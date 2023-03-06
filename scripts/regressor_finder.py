@@ -64,15 +64,14 @@ class RegressorFinder(object):
 
         with ThreadPoolExecutorResult(max_workers=3) as executor:
             if self.git_repo_url is not None:
-                logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
+                logger.info("Cloning %s to %s...", self.git_repo_url, self.git_repo_dir)
                 executor.submit(
                     self.clone_git_repo, self.git_repo_url, self.git_repo_dir
                 )
 
             if self.tokenized_git_repo_url is not None:
-                logger.info(
-                    f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
-                )
+                logger.info("Cloning %s to %s...", self.tokenized_git_repo_url, self.tokenized_git_repo_dir)
+
                 executor.submit(
                     self.clone_git_repo,
                     self.tokenized_git_repo_url,
@@ -93,9 +92,9 @@ class RegressorFinder(object):
                 )
             )()
 
-            logger.info(f"{repo_dir} cloned")
+            logger.info("%s cloned", repo_dir)
 
-        logger.info(f"Fetching {repo_dir}")
+        logger.info("Fetching %s", repo_dir)
 
         tenacity.retry(
             wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
@@ -109,7 +108,7 @@ class RegressorFinder(object):
             )
         )()
 
-        logger.info(f"{repo_dir} fetched")
+        logger.info("%s fetched", repo_dir)
 
     def init_mapping(self):
         if self.tokenized_git_repo_url is not None:
@@ -158,7 +157,7 @@ class RegressorFinder(object):
 
                     commits_to_ignore.append({"rev": backedout, "type": "backedout"})
 
-        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
+        logger.info("%d commits to ignore...", len(commits_to_ignore))
 
         # Skip backed-out commits which aren't in the repository (commits which landed *before* the Mercurial history
         # started, and backouts which mentioned a bad hash in their message).
@@ -166,12 +165,11 @@ class RegressorFinder(object):
             c for c in commits_to_ignore if c["rev"][:12] in all_commits
         ]
 
-        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
+        logger.info("%d commits to ignore...", len(commits_to_ignore))
 
         logger.info(
-            "...of which {} are backed-out".format(
+            "...of which %d are backed-out",
                 sum(1 for commit in commits_to_ignore if commit["type"] == "backedout")
-            )
         )
 
         db.write(IGNORED_COMMITS_DB, commits_to_ignore)
@@ -194,7 +192,7 @@ class RegressorFinder(object):
             for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
         )
         logger.info(
-            f"Already classified {len(prev_bug_fixing_commits_nodes)} commits..."
+            "Already classified %d commits...", len(prev_bug_fixing_commits_nodes)
         )
 
         # TODO: Switch to the pure Defect model, as it's better in this case.

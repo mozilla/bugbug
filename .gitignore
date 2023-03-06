@@ -50,6 +50,3 @@ node_modules/
 *.log
 # Desktop Service Store
 *.DS_Store
-
-#Python virtual environment
-bb_bug/
