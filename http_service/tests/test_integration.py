@@ -7,8 +7,11 @@ import os
 import time
 
 import requests
+from logging import INFO, basicConfig, getLogger
 
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000/")
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 # Test classifying a single bug.
@@ -30,7 +33,7 @@ def integration_test_single():
     if not response.ok:
         raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
-    print("Response for bug 1376406", response_json)
+    logger.info("Response for bug 1376406 %s", response_json)
     assert response_json["class"] is not None
 
 
@@ -55,10 +58,10 @@ def integration_test_batch():
         raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
     response_1376544 = response_json["bugs"]["1376544"]
-    print("Response for bug 1376544", response_1376544)
+    logger.info("Response for bug 1376544 %s", response_1376544)
     assert response_1376544["class"] is not None
     response_1376412 = response_json["bugs"]["1376412"]
-    print("Response for bug 1376412", response_1376412)
+    logger.info("Response for bug 1376412 %s", response_1376412)
     assert response_1376412["class"] is not None
 
 
