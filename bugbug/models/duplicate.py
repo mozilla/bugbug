@@ -5,7 +5,6 @@
 
 import random
 from itertools import combinations
-from logging import INFO, basicConfig, getLogger
 
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -14,9 +13,6 @@ from xgboost import XGBClassifier
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugCoupleModel
-
-basicConfig(level=INFO)
-logger = getLogger(__name__)
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
@@ -124,7 +120,7 @@ class DuplicateModel(BugCoupleModel):
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        logger.info("Number of duplicate labels is: %d", self.num_duplicates)
+        print(f"Number of duplicate labels is: {self.num_duplicates}")
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
