@@ -5,6 +5,7 @@
 
 import random
 from itertools import combinations
+from logging import INFO, basicConfig, getLogger
 
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -15,6 +16,9 @@ from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugCoupleModel
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class DuplicateModel(BugCoupleModel):
@@ -120,7 +124,7 @@ class DuplicateModel(BugCoupleModel):
         # Store all remaining ids
         non_duplicate_ids = list(all_ids - set(duplicate_ids))
 
-        print(f"Number of duplicate labels is: {self.num_duplicates}")
+        logger.info(f"Number of duplicate labels is: {self.num_duplicates}")
 
         # When the bug has no duplicates, we create dup-nondup labels.
         dup_nondup_num = 0
@@ -131,7 +135,7 @@ class DuplicateModel(BugCoupleModel):
             classes[(bug_id1, bug_id2)] = 0
             dup_nondup_num += 1
 
-        print(f"Number of hybrid labels is: {self.num_dup_nondups}")
+        logger.info(f"Number of hybrid labels is: {self.num_dup_nondups}")
 
         # Now we map non-dup to non-dup bug.
         nondup_nondup_num = 0
@@ -142,7 +146,7 @@ class DuplicateModel(BugCoupleModel):
                 classes[(bug_id1, bug_id2)] = 0
                 nondup_nondup_num += 1
 
-        print(f"Number of purely non-duplicate labels is: {self.num_nondups_nondups}")
+        logger.info(f"Number of purely non-duplicate labels is: {self.num_nondups_nondups}")
 
         return classes, [0, 1]
 
