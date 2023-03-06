@@ -352,7 +352,7 @@ class RegressorFinder(object):
             )
             f.writelines("{}\n".format(git_hash) for git_hash in git_hashes)
 
-        logger.info(f"{len(bug_fixing_commits)} commits to analyze")
+        logger.info("%d commits to analyze", len(bug_fixing_commits))
 
         # Skip already found bug-introducing commits.
         bug_fixing_commits = [
@@ -393,7 +393,7 @@ class RegressorFinder(object):
                 thread_local.git.get_head()
 
         def find_bic(bug_fixing_commit):
-            logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
+            logger.info("Analyzing %s...", bug_fixing_commit["rev"])
 
             git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
 
