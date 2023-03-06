@@ -76,6 +76,8 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS = {
 }
 MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 
+INCLUDE_FIELDS = ["_default", "filed_via"]
+
 
 def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     yield from (
@@ -147,6 +149,7 @@ def get(ids_or_query):
 
     Bugzilla(
         ids_or_query,
+        include_fields=INCLUDE_FIELDS,
         bughandler=bughandler,
         commenthandler=commenthandler,
         comment_include_fields=COMMENT_INCLUDE_FIELDS,

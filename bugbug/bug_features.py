@@ -509,6 +509,11 @@ class op_sys(single_bug_feature):
         return bug["op_sys"]
 
 
+class filed_via(single_bug_feature):
+    def __call__(self, bug, **kwargs):
+        return bug["filed_via"]
+
+
 class is_reporter_a_developer(single_bug_feature):
     def __call__(self, bug, author_ids, **kwargs):
         return bug_reporter()(bug).strip() in author_ids
