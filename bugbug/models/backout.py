@@ -112,11 +112,11 @@ class BackoutModel(CommitModel):
             classes[commit_data["node"]] = 1 if commit_data["backedoutby"] else 0
 
         logger.info(
-            "%s commits were backed out",
+            "%d commits were backed out",
             sum(1 for label in classes.values() if label == 1),
         )
         logger.info(
-            "%s commits were not backed out",
+            "%d commits were not backed out",
             sum(1 for label in classes.values() if label == 0),
         )
 

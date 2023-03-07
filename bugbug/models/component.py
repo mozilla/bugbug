@@ -168,9 +168,9 @@ class ComponentModel(BugModel):
         component_counts = Counter(classes.values()).most_common()
         top_components = set(component for component, count in component_counts)
 
-        logger.info("%s components", len(top_components))
+        logger.info("%d components", len(top_components))
         for component, count in component_counts:
-            logger.info("%s: %s", component, count)
+            logger.info("%s: %d", component, count)
 
         # Assert there is at least one bug for each conflated component.
         for conflated_component in self.CONFLATED_COMPONENTS:
