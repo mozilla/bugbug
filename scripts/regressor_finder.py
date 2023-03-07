@@ -75,7 +75,6 @@ class RegressorFinder(object):
                     self.tokenized_git_repo_url,
                     self.tokenized_git_repo_dir,
                 )
-
                 executor.submit(
                     self.clone_git_repo,
                     self.tokenized_git_repo_url,
