@@ -70,7 +70,11 @@ class RegressorFinder(object):
                 )
 
             if self.tokenized_git_repo_url is not None:
-                logger.info("Cloning %s to %s...", self.tokenized_git_repo_url, self.tokenized_git_repo_dir)
+                logger.info(
+                    "Cloning %s to %s...",
+                    self.tokenized_git_repo_url,
+                    self.tokenized_git_repo_dir,
+                )
 
                 executor.submit(
                     self.clone_git_repo,
@@ -169,7 +173,7 @@ class RegressorFinder(object):
 
         logger.info(
             "...of which %d are backed-out",
-                sum(1 for commit in commits_to_ignore if commit["type"] == "backedout")
+            sum(1 for commit in commits_to_ignore if commit["type"] == "backedout"),
         )
 
         db.write(IGNORED_COMMITS_DB, commits_to_ignore)
