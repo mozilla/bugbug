@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from datetime import datetime
+from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
@@ -15,6 +16,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, commit_features, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class BackoutModel(CommitModel):
@@ -107,15 +111,13 @@ class BackoutModel(CommitModel):
 
             classes[commit_data["node"]] = 1 if commit_data["backedoutby"] else 0
 
-        print(
-            "{} commits were backed out".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%s commits were backed out",
+            sum(1 for label in classes.values() if label == 1),
         )
-        print(
-            "{} commits were not backed out".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%s commits were not backed out",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]
