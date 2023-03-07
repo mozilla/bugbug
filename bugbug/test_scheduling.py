@@ -207,7 +207,7 @@ def get_push_data(
 
         push_data_queue.append(elem)
 
-    logger.info(f"push data nodes: {push_data_count}")
+    logger.info("push data nodes: {}".format(push_data_count))
 
     push_data = [
         (
@@ -245,7 +245,7 @@ def get_push_data(
         tuple(all_runnables_set), all_runnables_set, granularity
     )
     all_runnables_set = set(all_runnables)
-    logger.info(f"{len(all_runnables_set)} runnables run in the last 28 pushes")
+    logger.info("{} runnables run in the last 28 pushes".format(len(all_runnables_set)))
 
     def push_data_iter() -> Iterator[PushResult]:
         return (
@@ -281,8 +281,8 @@ def get_push_data(
             )
         )
 
-        print(
-            f"{manifest_combinations} possible combinations of manifests on configurations"
+        logger.info(
+            "{} possible combinations of manifests on configurations".format(manifest_combinations)
         )
 
     return push_data_iter, push_data_count, all_runnables
@@ -447,7 +447,7 @@ def generate_failing_together_probabilities(
 
         stats[couple] = (support, confidence)
 
-    logger.info(f"{skipped} couples skipped because their support was too low")
+    logger.info("{} couples skipped because their support was too low".format(skipped))
 
     logger.info("Redundancies with the highest support and confidence:")
     for couple, (support, confidence) in sorted(
@@ -515,7 +515,7 @@ def generate_failing_together_probabilities(
             failing_together[couple[0]][couple[1]] = (support, confidence)
 
     for percentage, count in count_redundancies.most_common():
-        logger.info(f"{count} with {percentage} confidence")
+        logger.info("{} with {} confidence".format(count, percentage))
 
     failing_together_db = get_failing_together_db(granularity, False)
 

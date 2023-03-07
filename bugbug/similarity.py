@@ -66,7 +66,7 @@ def download_similarity_model(model_name):
     path = f"{model_name_to_class[model_name].__name__.lower()}.similaritymodel"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_similarity.latest/artifacts/public/{path}.zst"
 
-    logger.info(f"Downloading similarity model from {url}...")
+    logger.info("Downloading similarity model from {}...".format(url))
     updated = download_check_etag(url)
     if updated:
         zstd_decompress(path)
@@ -235,15 +235,15 @@ class BaseSimilarity(abc.ABC):
 
                 apk.append(score / min(len(duplicates[bug["id"]]), 10))
 
-        print(f"Recall @ 1: {recall_rate_1/total_r * 100}%")
-        print(f"Recall @ 5: {recall_rate_5/total_r * 100}%")
-        print(f"Recall @ 10: {recall_rate_10/total_r * 100}%")
-        print(f"Precision @ 1: {precision_rate_1/queries * 100}%")
-        print(f"Precision @ 5: {precision_rate_5/queries * 100}%")
-        print(f"Precision @ 10: {precision_rate_10/queries * 100}%")
-        print(f"Recall: {hits_r/total_r * 100}%")
-        print(f"Precision: {hits_p/total_p * 100}%")
-        print(f"MAP@k : {np.mean(apk) * 100}%")
+        logger.info("Recall @ 1: {}%".format(recall_rate_1/total_r * 100))
+        logger.info("Recall @ 5: {}%".format(recall_rate_5/total_r * 100))
+        logger.info("Recall @ 10: {}%".format(recall_rate_10/total_r * 100))
+        logger.info("Precision @ 1: {}%".format(precision_rate_1/queries * 100))
+        logger.info("Precision @ 5: {}%".format(precision_rate_5/queries * 100))
+        logger.info("Precision @ 10: {}%".format(precision_rate_10/queries * 100))
+        logger.info("Recall: {}%".format(hits_r/total_r * 100))
+        logger.info("Precision: {}%".format(hits_p/total_p * 100))
+        logger.info("MAP@k : {}%".format(np.mean(apk) * 100))
 
     @abc.abstractmethod
     def get_distance(self, query1, query2):
@@ -407,7 +407,7 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
     def wmdistance(self, document1, document2, all_distances, distance_metric="cosine"):
         model = self.w2vmodel
         if len(document1) == 0 or len(document2) == 0:
-            print(
+            logger.info(
                 "At least one of the documents had no words that were in the vocabulary. Aborting (returning inf)."
             )
             return float("inf")
@@ -434,7 +434,7 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
                     distance_matrix[i, j] = all_distances[model.wv.vocab[t2].index, i]
 
         if np.sum(distance_matrix) == 0.0:
-            print("The distance matrix is all zeros. Aborting (returning inf).")
+            logger.info("The distance matrix is all zeros. Aborting (returning inf).")
             return float("inf")
 
         def nbow(document):

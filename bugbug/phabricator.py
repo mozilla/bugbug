@@ -126,14 +126,14 @@ def download_revisions(rev_ids: Collection[int]) -> None:
         if rev["id"] in new_rev_ids:
             new_rev_ids.remove(rev["id"])
 
-    print(f"Loaded {old_rev_count} revisions.")
+    logger.info("Loaded {} revisions.".format(old_rev_count))
 
     new_rev_ids_list = sorted(list(new_rev_ids))
     rev_ids_groups = (
         new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
     )
 
-    print(f"{len(new_rev_ids_list)} revisions left to download")
+    logger.info("{} revisions left to download".format(len(new_rev_ids_list)))
 
     with tqdm(total=len(new_rev_ids)) as progress_bar:
         for rev_ids_group in rev_ids_groups:

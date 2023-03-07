@@ -58,7 +58,7 @@ class Github:
 
     def fetch_events(self, events_url: str) -> list:
         self.api_limit()
-        logger.info(f"Fetching {events_url}")
+        logger.info("Fetching {}".format(events_url))
         headers = {"Authorization": "token {}".format(self.get_token())}
         response = get_session("github").get(events_url, headers=headers)
         response.raise_for_status()
@@ -78,7 +78,7 @@ class Github:
         if isinstance(data, dict):
             data = [data]
 
-        logger.info(f"Fetching {url}")
+        logger.info("Fetching {}".format(url))
 
         if retrieve_events:
             for item in data:

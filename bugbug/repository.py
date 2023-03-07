@@ -668,7 +668,7 @@ def set_commit_metrics(
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug("rust-code-analysis error on commit {}, path {}".format(commit.node, path))
 
     before_metrics_dict = get_total_metrics_dict()
     try:
@@ -677,7 +677,7 @@ def set_commit_metrics(
                 before_metrics_dict, before_metrics["spaces"], calc_summaries=False
             )
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug("rust-code-analysis error on commit {}, path {}".format(commit.node, path))
 
     commit.metrics_diff = {
         f"{metric}_total": commit.metrics[f"{metric}_total"]
@@ -702,7 +702,7 @@ def set_commit_metrics(
             get_space_metrics(metrics_dict, func, calc_summaries=False)
         except AnalysisException:
             logger.debug(
-                f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
+                "rust-code-analysis error on commit {}, path {}, function {}".format(commit.node, path, func['name'])
             )
 
         commit.functions[path].append(
@@ -1021,7 +1021,7 @@ class Experiences:
 def calculate_experiences(
     commits: Collection[Commit], first_pushdate: datetime, save: bool = True
 ) -> None:
-    logger.info(f"Analyzing seniorities from {len(commits)} commits...")
+    logger.info("Analyzing seniorities from {} commits...".format(len(commits)))
 
     experiences = Experiences(save)
 
@@ -1034,7 +1034,7 @@ def calculate_experiences(
             time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
 
-    logger.info(f"Analyzing experiences from {len(commits)} commits...")
+    logger.info("Analyzing experiences from {} commits...".format(len(commits)))
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
@@ -1365,10 +1365,10 @@ def download_commits(
 
         first_pushdate = get_first_pushdate(repo_dir)
 
-        logger.info(f"Mining {len(revs)} commits...")
+        logger.info("Mining {} commits...".format(len(revs)))
 
         if not use_single_process:
-            logger.info(f"Using {os.cpu_count()} processes...")
+            logger.info("Using {} processes...".format(os.cpu_count()))
             commits = hg_log_multi(repo_dir, revs, branch)
         else:
             commits = hg_log(hg, revs, branch)
@@ -1377,7 +1377,7 @@ def download_commits(
 
         commits_num = len(commits)
 
-        logger.info(f"Mining {commits_num} patches...")
+        logger.info("Mining {} patches...".format(commits_num))
 
         global code_analysis_server
 

@@ -6,6 +6,7 @@
 import collections
 import csv
 import re
+import logging
 from datetime import datetime
 from typing import Iterable, Iterator, NewType, Optional
 
@@ -15,6 +16,7 @@ from libmozdata.bugzilla import Bugzilla
 from tqdm import tqdm
 
 from bugbug import db, utils
+logger = logging.getLogger(__name__)
 
 BugDict = NewType("BugDict", dict)
 
@@ -191,7 +193,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
         old_bug_count += 1
         new_bug_ids_set.discard(int(bug["id"]))
 
-    print(f"Loaded {old_bug_count} bugs.")
+    logger.info("Loaded {} bugs.".format(old_bug_count))
 
     new_bug_ids = sorted(list(new_bug_ids_set))
 
@@ -466,8 +468,8 @@ def calculate_maintenance_effectiveness_indicator(
             if s != "--"
         )
 
-    print("Before applying weights:")
-    print(data)
+    logger.info("Before applying weights:")
+    logger.info(data)
 
     for query_type in ("opened", "closed"):
         # Apply weights.
@@ -477,7 +479,7 @@ def calculate_maintenance_effectiveness_indicator(
         ) in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.items():
             data[query_type][severity] *= weight
 
-    print("After applying weights:")
-    print(data)
+    logger.info("After applying weights:")
+    logger.info(data)
 
     return (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values()))
