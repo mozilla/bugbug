@@ -104,7 +104,7 @@ class AssigneeModel(BugModel):
             if count > MINIMUM_ASSIGNMENTS
         )
 
-        logger.info("%d assignees", {len(top_assignees)})
+        logger.info("%d assignees", len(top_assignees))
         for assignee, count in assignee_counts:
             logger.info("%s: %d", assignee, count)
 
