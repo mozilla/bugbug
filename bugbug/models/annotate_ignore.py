@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
@@ -11,6 +13,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, feature_cleanup, labels, repository, utils
 from bugbug.model import CommitModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class AnnotateIgnoreModel(CommitModel):
@@ -105,16 +110,14 @@ class AnnotateIgnoreModel(CommitModel):
         for node, label in labels.get_labels("annotateignore"):
             classes[node] = int(label)
 
-        print(
-            "{} commits that can be ignored".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d commits that can be ignored",
+            sum(1 for label in classes.values() if label == 1),
         )
 
-        print(
-            "{} commits that cannot be ignored".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d commits that cannot be ignored",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]

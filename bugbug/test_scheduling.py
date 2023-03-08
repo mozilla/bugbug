@@ -33,6 +33,7 @@ from tqdm import tqdm
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 Revision = NewType("Revision", str)
@@ -281,8 +282,9 @@ def get_push_data(
             )
         )
 
-        print(
-            f"{manifest_combinations} possible combinations of manifests on configurations"
+        logger.info(
+            "%d possible combinations of manifests on configurations",
+            manifest_combinations,
         )
 
     return push_data_iter, push_data_count, all_runnables

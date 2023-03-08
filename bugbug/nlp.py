@@ -6,10 +6,14 @@
 import sys
 from collections import defaultdict
 from functools import lru_cache
+from logging import INFO, basicConfig, getLogger
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 HAS_OPTIONAL_DEPENDENCIES = False
 
@@ -30,7 +34,7 @@ except OSError:
         "Spacy model is missing, install it with: "
         f"{sys.executable} -m spacy download en_core_web_sm"
     )
-    print(msg, file=sys.stderr)
+    logger.info(msg)
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"
