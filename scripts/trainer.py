@@ -47,7 +47,7 @@ class Trainer(object):
         else:
             logger.info("Skipping download of the databases")
 
-        logger.info(f"Training *{model_name}* model")
+        logger.info("Training *%s* model", model_name)
         metrics = model_obj.train(limit=args.limit)
 
         # Save the metrics as a file that can be uploaded as an artifact.
