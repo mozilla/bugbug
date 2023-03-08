@@ -76,7 +76,9 @@ def download_support_file(path, file_name, extract=True):
 
         return True
     except requests.exceptions.HTTPError:
-        logger.info("%s is not yet available to download for %s", file_name, path, exc_info=True)
+        logger.info(
+            "%s is not yet available to download for %s", file_name, path, exc_info=True
+        )
         return False
 
 

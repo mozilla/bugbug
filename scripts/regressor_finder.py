@@ -548,7 +548,8 @@ def evaluate(bug_introducing_commits):
 
     logger.info("%d fixes linked to regressors", len(fix_to_regressors_map))
     logger.info(
-        "%d regressors linked to fixes", sum(len(regressors) for regressors in fix_to_regressors_map.values())
+        "%d regressors linked to fixes",
+        sum(len(regressors) for regressors in fix_to_regressors_map.values()),
     )
 
     logger.info("Measuring how many known regressors SZZ was able to find correctly...")

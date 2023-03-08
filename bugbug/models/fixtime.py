@@ -92,7 +92,7 @@ class FixTimeModel(BugModel):
         quantiles = _quantiles(2)
 
         logger.info(
-            'Max fix time: %s', max(fix_time for bug_id, fix_time in bug_fix_times)
+            "Max fix time: %s", max(fix_time for bug_id, fix_time in bug_fix_times)
         )
         logger.info("Fix time quantiles: %s", quantiles)
         logger.info("Fix time quartiles: %s", _quantiles(4))
@@ -110,7 +110,9 @@ class FixTimeModel(BugModel):
 
         for i in range(len(quantiles) + 1):
             logger.info(
-                '%d bugs are in the %dth quantile', sum(1 for label in classes.values() if label == i), i
+                "%d bugs are in the %dth quantile",
+                sum(1 for label in classes.values() if label == i),
+                i,
             )
 
         return classes, list(range(len(quantiles) + 1))

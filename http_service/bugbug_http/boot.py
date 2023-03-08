@@ -198,7 +198,7 @@ def boot_worker() -> None:
                 logger.info("Touched together DB updated.")
             except Exception as e:
                 # It's not ideal, but better not to crash the service!
-                logger.error('Exception while updating commits DB: %s', e)
+                logger.error("Exception while updating commits DB: %s", e)
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()

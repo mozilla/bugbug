@@ -88,7 +88,9 @@ class Retriever(object):
                     else:
                         num_errors += 1
                 else:
-                    logger.info("Analyzing %s at the %s level...", push.rev, granularity)
+                    logger.info(
+                        "Analyzing %s at the %s level...", push.rev, granularity
+                    )
 
                     key = cache_key(push)
 
@@ -129,7 +131,9 @@ class Retriever(object):
 
                 progress_bar.update(1)
 
-            logger.info("%d pushes were already cached out of %d", num_cached, num_pushes)
+            logger.info(
+                "%d pushes were already cached out of %d", num_cached, num_pushes
+            )
             logger.info("There were errors in %d pushes", num_errors)
 
         def retrieve_from_cache(push):

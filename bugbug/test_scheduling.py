@@ -455,8 +455,14 @@ def generate_failing_together_probabilities(
     )[:7]:
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
-        logger.info('%s - %s redundancy confidence %f, support %d (%d over %d).', 
-            couple[0], couple[1], confidence, support, failure_count, run_count
+        logger.info(
+            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            couple[0],
+            couple[1],
+            confidence,
+            support,
+            failure_count,
+            run_count,
         )
 
     logger.info("Redundancies with the highest confidence and lowest support:")
@@ -466,8 +472,13 @@ def generate_failing_together_probabilities(
         failure_count = count_both_failures[couple]
         run_count = count_runs[couple]
         logger.info(
-            '%s - %s redundancy confidence %f, support %d (%d over %d).', couple[0], 
-            couple[1], confidence, support, failure_count, run_count
+            "%s - %s redundancy confidence %f, support %d (%d over %d).",
+            couple[0],
+            couple[1],
+            confidence,
+            support,
+            failure_count,
+            run_count,
         )
 
     failing_together: dict = {}
