@@ -325,10 +325,10 @@ class Retriever(object):
                 except StopIteration:
                     pass
 
-            logger.info(f"saved push data nodes: {len(saved_nodes)}")
-            logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
-            logger.info(f"skipped {skipped_too_big_commits} (too big commits)")
-            logger.info(f"skipped {skipped_no_runnables} (no interesting runnables)")
+            logger.info("saved push data nodes: %d", len(saved_nodes))
+            logger.info("skipped %d (no commits in our DB)", skipped_no_commits)
+            logger.info("skipped %d (too big commits)", skipped_too_big_commits)
+            logger.info("skipped %d (no interesting runnables)", skipped_no_runnables)
 
             past_failures["push_num"] = push_num
             past_failures.close()
