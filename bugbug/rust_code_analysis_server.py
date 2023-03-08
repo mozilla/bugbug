@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 START_RETRIES = 14
 HEADERS = {"Content-type": "application/octet-stream"}
 
+class AnalysisException(Exception): ...
+
 
 class RustCodeAnalysisServer:
     def __init__(self, thread_num: Optional[int] = None):
@@ -35,7 +37,7 @@ class RustCodeAnalysisServer:
                     time.sleep(0.35)
 
         self.terminate()
-        raise Exception("Unable to run rust-code-analysis server")
+        raise AnalysisException("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
@@ -50,7 +52,7 @@ class RustCodeAnalysisServer:
                 cmd += ["-j", str(thread_num)]
             self.proc = subprocess.Popen(cmd)
         except FileNotFoundError:
-            raise Exception("rust-code-analysis is required for code analysis")
+            raise AnalysisException("rust-code-analysis is required for code analysis")
 
     def terminate(self):
         if self.proc is not None:
