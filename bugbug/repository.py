@@ -668,7 +668,7 @@ def set_commit_metrics(
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug("rust-code-analysis error on commit %s, path %s",commit.node,path)
 
     before_metrics_dict = get_total_metrics_dict()
     try:
@@ -677,7 +677,7 @@ def set_commit_metrics(
                 before_metrics_dict, before_metrics["spaces"], calc_summaries=False
             )
     except AnalysisException:
-        logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
+        logger.debug("rust-code-analysis error on commit %s, path %s",commit.node,path)
 
     commit.metrics_diff = {
         f"{metric}_total": commit.metrics[f"{metric}_total"]
@@ -702,7 +702,8 @@ def set_commit_metrics(
             get_space_metrics(metrics_dict, func, calc_summaries=False)
         except AnalysisException:
             logger.debug(
-                f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
+                "rust-code-analysis error on commit %s, path %s, function %s",
+                commit.node,path,func['name']
             )
 
         commit.functions[path].append(
@@ -732,7 +733,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     try:
         patch_data = rs_parsepatch.get_lines(patch)
     except Exception:
-        logger.error(f"Exception while analyzing {commit.node}")
+        logger.error("Exception while analyzing %s", commit.node)
         raise
 
     for stats in patch_data:
@@ -963,7 +964,8 @@ def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
-    logger.info(f"Getting revs from {rev_start} to {rev_end}...")
+    logger.info("Getting revs from %s to %s...",
+                 rev_start,rev_end)
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -1021,7 +1023,7 @@ class Experiences:
 def calculate_experiences(
     commits: Collection[Commit], first_pushdate: datetime, save: bool = True
 ) -> None:
-    logger.info(f"Analyzing seniorities from {len(commits)} commits...")
+    logger.info("Analyzing seniorities from %d commits...",len(commits))
 
     experiences = Experiences(save)
 
@@ -1034,7 +1036,7 @@ def calculate_experiences(
             time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
 
-    logger.info(f"Analyzing experiences from {len(commits)} commits...")
+    logger.info("Analyzing experiences from %d commits...",len(commits))
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
@@ -1183,7 +1185,8 @@ def calculate_experiences(
                     )
                 else:
                     logger.warning(
-                        f"Experience missing for file {orig}, type '{commit_type}', on commit {commit.node}"
+                        "Experience missing for file %s, type '%s', on commit %s",
+                        orig,commit_type,commit.node
                     )
 
         if (
@@ -1365,10 +1368,10 @@ def download_commits(
 
         first_pushdate = get_first_pushdate(repo_dir)
 
-        logger.info(f"Mining {len(revs)} commits...")
+        logger.info("Mining %d commits...",len(revs))
 
         if not use_single_process:
-            logger.info(f"Using {os.cpu_count()} processes...")
+            logger.info("Using %d processes...",os.cpu_count())
             commits = hg_log_multi(repo_dir, revs, branch)
         else:
             commits = hg_log(hg, revs, branch)
@@ -1377,7 +1380,7 @@ def download_commits(
 
         commits_num = len(commits)
 
-        logger.info(f"Mining {commits_num} patches...")
+        logger.info("Mining %d patches...",commits_num)
 
         global code_analysis_server
 
@@ -1485,9 +1488,9 @@ def clone(
 
         # Pull, to make sure the pushlog is generated.
         with hglib.open(repo_dir) as hg:
-            logger.info(f"Pulling {repo_dir}")
+            logger.info("Pulling %s",repo_dir)
             hg.pull(update=update)
-            logger.info(f"{repo_dir} pulled")
+            logger.info("%s pulled",repo_dir)
 
         return
     except hglib.error.ServerError as e:
@@ -1506,7 +1509,7 @@ def clone(
     )
     subprocess.run(cmd, check=True)
 
-    logger.info(f"{repo_dir} cloned")
+    logger.info("%s cloned",repo_dir)
 
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
