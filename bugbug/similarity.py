@@ -66,7 +66,7 @@ def download_similarity_model(model_name):
     path = f"{model_name_to_class[model_name].__name__.lower()}.similaritymodel"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_similarity.latest/artifacts/public/{path}.zst"
 
-    logger.info(f"Downloading similarity model from {url}...")
+    logger.info("Downloading similarity model from %s...",url)
     updated = download_check_etag(url)
     if updated:
         zstd_decompress(path)
