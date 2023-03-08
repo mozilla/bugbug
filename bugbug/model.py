@@ -19,7 +19,8 @@ from imblearn.metrics import (
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import mean_squared_error, precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
@@ -454,6 +455,19 @@ class Model:
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
+
+        # calibrating the model
+
+        # Fit isotonic regression model to the predicted probabilities
+        iso_reg = IsotonicRegression(out_of_bounds="clip")
+        iso_reg.fit(y_pred, y_test)
+
+        # Use the isotonic regression model to transform the predicted probabilities
+        calibrated_y_pred = iso_reg.transform(y_pred)
+
+        # Evaluate the calibrated model's performance on the test data
+        mse = mean_squared_error(y_test, calibrated_y_pred)
+        print("MSE for the calibrated model: ", mse)
 
         if is_multilabel:
             assert isinstance(
