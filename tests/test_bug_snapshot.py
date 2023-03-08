@@ -4,13 +4,18 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+from logging import INFO, basicConfig, getLogger
+
 from bugbug import bugzilla
 from bugbug.bug_snapshot import rollback
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def test_bug_snapshot():
     for i, bug in enumerate(bugzilla.get_bugs()):
-        print(bug["id"])
-        print(i)
+        logger.info(bug["id"])
+        logger.info(i)
 
         rollback(bug, do_assert=True)

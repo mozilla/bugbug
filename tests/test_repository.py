@@ -9,6 +9,7 @@ import pickle
 import shutil
 import time
 from datetime import datetime, timezone
+from logging import INFO, basicConfig, getLogger
 
 import hglib
 import pytest
@@ -18,6 +19,9 @@ import zstandard
 from dateutil.relativedelta import relativedelta
 
 from bugbug import commit_features, repository, rust_code_analysis_server
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 @pytest.fixture
@@ -2399,7 +2403,7 @@ void main() {
 
     patch_data = rs_parsepatch.get_lines(patch)
 
-    print(patch_data)
+    logger.info(patch_data)
 
     assert len(patch_data) == 1
 
@@ -2650,7 +2654,7 @@ void main() {
 
     patch_data = rs_parsepatch.get_lines(patch)
 
-    print(patch_data)
+    logger.info(patch_data)
 
     assert len(patch_data) == 1
 
