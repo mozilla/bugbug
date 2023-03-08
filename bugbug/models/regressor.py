@@ -340,7 +340,7 @@ class RegressorModel(CommitModel):
                     continue
 
                 logger.info(
-                    "%d out of  patches with risk between %d and %d caused regressions (%d",
+                    "%d out of %d patches with risk between %d and %d caused regressions (%d",
                     total_regressions,
                     total_landings,
                     prob_start,
