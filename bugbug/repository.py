@@ -963,7 +963,7 @@ def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
-    logger.info("Getting revs from %d to %s...", rev_start, rev_end)
+    logger.info("Getting revs from %s to %s...", rev_start, rev_end)
 
     args = hglib.util.cmdbuilder(
         b"log",
