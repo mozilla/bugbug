@@ -5,6 +5,8 @@
 
 import subprocess
 
+class NotFound(Exception): ...
+
 with open("VERSION", "r") as f:
     version = f.read().rstrip()
 
@@ -18,7 +20,7 @@ except subprocess.CalledProcessError as e:
     print(e.stdout)
     print("stderr:")
     print(e.stderr)
-    raise Exception("Failure while getting latest tag")
+    raise NotFound("Failure while getting latest tag")
 
 cur_tag = p.stdout.decode("utf-8")[1:].rstrip()
 
