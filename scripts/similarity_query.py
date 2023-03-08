@@ -37,7 +37,7 @@ def main(args):
         model_file_name = f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
 
         if not os.path.exists(model_file_name):
-            logger.info(f"{model_file_name} does not exist. Downloading the model....")
+            logger.info("%s does not exist. Downloading the model....", model_file_name)
             try:
                 download_check_etag(URL.format(model_file_name))
             except requests.HTTPError:
