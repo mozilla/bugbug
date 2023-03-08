@@ -207,7 +207,7 @@ class CommitClassifier(object):
             assert self.testfailure_model is not None
 
     def clone_git_repo(self, repo_url, repo_dir, rev="origin/branches/default/tip"):
-        logger.info(f"Cloning {repo_url}...")
+        logger.info('Cloning %s...', repo_url)
 
         if not os.path.exists(repo_dir):
             tenacity.retry(
@@ -306,7 +306,7 @@ class CommitClassifier(object):
 
         if hg_base:
             hg.update(rev=hg_base, clean=True)
-            logger.info(f"Updated repo to {hg_base}")
+            logger.info('Updated repo to %s', hg_base)
 
             if self.git_repo_dir and hg_base != "tip":
                 try:
@@ -318,16 +318,16 @@ class CommitClassifier(object):
                         check=True,
                         cwd=self.git_repo_dir,
                     )
-                    logger.info(f"Updated git repo to {self.git_base}")
+                    logger.info('Updated git repo to %s', self.git_base)
                 except Exception as e:
-                    logger.info(f"Updating git repo to Mercurial {hg_base} failed: {e}")
+                    logger.info('Updating git repo to Mercurial %s failed: %s', hg_base, e)
 
         def load_user(phid):
             if phid.startswith("PHID-USER"):
                 return phabricator_api.load_user(user_phid=phid)
             elif phid.startswith("PHID-PROJ"):
                 # TODO: Support group reviewers somehow.
-                logger.info(f"Skipping group reviewer {phid}")
+                logger.info('Skipping group reviewer %s', phid)
             else:
                 raise Exception(f"Unsupported reviewer {phid}")
 
@@ -453,26 +453,28 @@ class CommitClassifier(object):
 
             logger.info("Feature: {}".format(name))
             logger.info("Shap value: {}{}".format("+" if (is_positive) else "-", val))
-            logger.info(f"spearman:  {spearman}")
-            logger.info(f"value: {value}")
-            logger.info(f"overall mean: {np.mean(X)}")
-            logger.info(f"overall median: {np.median(X)}")
-            logger.info(f"mean for y == 0: {np.mean(clean_X)}")
-            logger.info(f"mean for y == 1: {np.mean(buggy_X)}")
-            logger.info(f"median for y == 0: {np.median(clean_X)}")
-            logger.info(f"median for y == 1: {np.median(buggy_X)}")
+            logger.info('spearman: %f', spearman)
+            logger.info('value: %f', value)
+            logger.info('overall mean: %f', np.mean(X))
+            logger.info('overall median: %f', np.median(X))
+            logger.info('mean for y == 0: %f', np.mean(clean_X))
+            logger.info('mean for y == 1: %f', np.mean(buggy_X))
+            logger.info('median for y == 0: %f', np.median(clean_X))
+            logger.info('median for y == 1: %f', np.median(buggy_X))
+
             logger.info(
-                f"perc_buggy_values_higher_than_median: {perc_buggy_values_higher_than_median}"
+                'perc_buggy_values_higher_than_median: %f', perc_buggy_values_higher_than_median
             )
             logger.info(
-                f"perc_buggy_values_lower_than_median: {perc_buggy_values_lower_than_median}"
+                'perc_buggy_values_lower_than_median: %f', perc_buggy_values_lower_than_median
             )
             logger.info(
-                f"perc_clean_values_higher_than_median: {perc_clean_values_higher_than_median}"
+                'perc_clean_values_higher_than_median: %f', perc_clean_values_higher_than_median
             )
             logger.info(
-                f"perc_clean_values_lower_than_median: {perc_clean_values_lower_than_median}"
+                'perc_clean_values_lower_than_median: %f', perc_clean_values_lower_than_median
             )
+
 
             features.append(
                 {
@@ -651,7 +653,7 @@ class CommitClassifier(object):
             commits[-1], probabilities=True
         )
 
-        logger.info(f"Test failure risk: {testfailure_probs[0][1]}")
+        logger.info('Test failure risk: %f', testfailure_probs[0][1])
 
         if not runnable_jobs_path:
             runnable_jobs = {}
