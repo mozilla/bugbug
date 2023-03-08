@@ -10,6 +10,7 @@ import requests
 
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000/")
 
+class TimeoutError(Exception): ...
 
 # Test classifying a single bug.
 def integration_test_single():
@@ -28,7 +29,7 @@ def integration_test_single():
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
+        raise TimeoutError(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
     print("Response for bug 1376406", response_json)
     assert response_json["class"] is not None
@@ -52,7 +53,7 @@ def integration_test_batch():
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
+        raise TimeoutError(f"Couldn't get an answer in {timeout} seconds: {response_json}")
 
     response_1376544 = response_json["bugs"]["1376544"]
     print("Response for bug 1376544", response_1376544)
