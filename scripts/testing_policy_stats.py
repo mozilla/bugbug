@@ -120,25 +120,30 @@ class TestingPolicyStatsGenerator(object):
 
         testing_projects = list_testing_projects(commits)
 
-        print(f"Most common testing tags (in {len(commits)} revisions):")
+        logger.info("Most common testing tags (in %d revisions):", len(commits))
         for testing_project, count in collections.Counter(
             testing_projects
         ).most_common():
-            print(
-                f"{testing_project} - {round(100 * count / len(testing_projects), 1)}%"
+            logger.info(
+                "%s - %d%",
+                testing_project,
+                round(100 * count / len(testing_projects), 1),
             )
 
         backedout_commits = [commit for commit in commits if commit["backedoutby"]]
         backedout_testing_projects = list_testing_projects(backedout_commits)
 
-        print(
-            f"\nMost common testing tags for backed-out revisions (in {len(backedout_commits)} revisions):"
+        logger.info(
+            "\nMost common testing tags for backed-out revisions (in %d revisions):",
+            len(backedout_commits),
         )
         for testing_project, count in collections.Counter(
             backedout_testing_projects
         ).most_common():
-            print(
-                f"{testing_project} - {round(100 * count / len(backedout_testing_projects), 1)}%"
+            logger.info(
+                "%s - %d%",
+                testing_project,
+                round(100 * count / len(backedout_testing_projects), 1),
             )
 
         regressor_bug_ids = {
@@ -150,14 +155,17 @@ class TestingPolicyStatsGenerator(object):
         ]
         regressor_testing_projects = list_testing_projects(regressor_commits)
 
-        print(
-            f"\nMost common testing tags for revisions which caused regressions (in {len(regressor_commits)} revisions):"
+        logger.info(
+            "\nMost common testing tags for revisions which caused regressions (in %d revisions):",
+            len(regressor_commits),
         )
         for testing_project, count in collections.Counter(
             regressor_testing_projects
         ).most_common():
-            print(
-                f"{testing_project} - {round(100 * count / len(regressor_testing_projects), 1)}%"
+            logger.info(
+                "%s - %d%",
+                testing_project,
+                round(100 * count / len(regressor_testing_projects), 1),
             )
 
 

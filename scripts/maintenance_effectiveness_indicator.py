@@ -4,13 +4,14 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
-from logging import getLogger
+from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 
 from bugbug import bugzilla
 from bugbug.utils import get_secret
 
+basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
@@ -44,7 +45,7 @@ def main():
             "If you want to include security bugs too, please set the BUGBUG_BUGZILLA_TOKEN environment variable to your Bugzilla API key."
         )
 
-    print(
+    logger.info(
         round(
             bugzilla.calculate_maintenance_effectiveness_indicator(
                 args.team,

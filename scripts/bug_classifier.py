@@ -49,8 +49,10 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
         bugs = bugzilla.get_bugs()
 
     for bug in bugs:
-        print(
-            f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]} - {bug["summary"]} '
+        logger.info(
+            "https://bugzilla.mozilla.org/show_bug.cgi?id=%s - %s ",
+            bug["id"],
+            bug["summary"],
         )
 
         if model.calculate_importance:
@@ -70,7 +72,7 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
             pred_class = model.le.inverse_transform([pred_index])[0]
         else:
             pred_class = "Positive" if pred_index == 1 else "Negative"
-        print(f"{pred_class} {probability}")
+        logger.info("%s %s", pred_class, probability)
         input()
 
 

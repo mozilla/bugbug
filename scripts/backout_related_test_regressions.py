@@ -4,11 +4,15 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import argparse
 import json
+from logging import INFO, basicConfig, getLogger
 
 from mozci.push import Push
 from tqdm import tqdm
 
 from bugbug import db, repository
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def go() -> None:
@@ -49,10 +53,10 @@ def go() -> None:
                 "group": group_regressions,
             }
 
-    print(f"Likely labels for backouts: {likely_label_count}")
-    print(f"Likely groups for backouts: {likely_group_count}")
-    print(f"Possible labels for backouts: {possible_label_count}")
-    print(f"Possible groups for backouts: {possible_group_count}")
+    logger.info("Likely labels for backouts: %d", likely_label_count)
+    logger.info("Likely groups for backouts: %d", likely_group_count)
+    logger.info("Possible labels for backouts: %d", possible_label_count)
+    logger.info("Possible groups for backouts: %d", possible_group_count)
 
     backedout_regressions = {}
 

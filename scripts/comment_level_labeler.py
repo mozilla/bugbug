@@ -7,10 +7,14 @@ import argparse
 import csv
 import os
 import random
+from logging import INFO, basicConfig, getLogger
 
 from bugbug import bugzilla
 from bugbug.models.bug import BugModel
 from bugbug.models.regression import RegressionModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -73,16 +77,16 @@ for bug in bugs:
             continue
 
         os.system("clear")
-        print(f'Bug {bug["id"]} - {bug["summary"]}')
-        print(f"Comment {i}")
-        print(comment["text"])
+        logger.info("Bug %s - %s", bug["id"], bug["summary"])
+        logger.info("Comment %d", i)
+        logger.info(comment["text"])
 
         if args.goal == "str":
-            print(
+            logger.info(
                 "\nY for comment containing STR, N for comment not containing STR, K to skip, E to exit"
             )
         elif args.goal == "regressionrange":
-            print(
+            logger.info(
                 "\nY for comment containing regression range, N for comment not containing regression range, K to skip, E to exit"
             )
         v = input()
@@ -99,7 +103,7 @@ for bug in bugs:
             writer.writerow(["bug_id", "comment_num", f"has_{args.goal}"])
             writer.writerows(sorted(labeled_comments))
 
-        print("\nE to exit, anything else to continue")
+        logger.info("\nE to exit, anything else to continue")
         v = input()
 
     if v == "e":

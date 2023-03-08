@@ -1124,7 +1124,7 @@ def notification(days: int) -> None:
         ):
             cur_team_data["new_regressions"] += 1
             if bug["team"] == "Compiler and Development Tools":
-                print("New regression: {}".format(bug["id"]))
+                logger.info("New regression: %s", bug["id"])
             if "crash" in bug["types"]:
                 cur_team_data["new_crash_regressions"] += 1
 
@@ -1136,7 +1136,7 @@ def notification(days: int) -> None:
         if creation_date > datetime.utcnow() - relativedelta(weeks=2):
             if bug["regression"] and not bug["fixed"]:
                 if bug["team"] == "Compiler and Development Tools":
-                    print("Unfixed regression: {}".format(bug["id"]))
+                    logger.info("Unfixed regression: %s", bug["id"])
                 cur_team_data["unfixed_regressions"].append(bug)
 
         if creation_date > datetime.utcnow() - relativedelta(days=days):
@@ -1214,22 +1214,22 @@ def notification(days: int) -> None:
         cur_team_data["carryover_regressions"] for cur_team_data in team_data.values()
     )
 
-    print("New regressions")
-    print(
+    logger.info("New regressions")
+    logger.info(
         {
             cur_team: cur_team_data["new_regressions"]
             for cur_team, cur_team_data in team_data.items()
         }
     )
-    print("Month changes:")
-    print(
+    logger.info("Month changes:")
+    logger.info(
         {
             cur_team: cur_team_data["month_changes"]
             for cur_team, cur_team_data in team_data.items()
         }
     )
-    print("Rates:")
-    print(
+    logger.info("Rates:")
+    logger.info(
         {
             cur_team: cur_team_data["new_regressions"] / cur_team_data["month_changes"]
             if cur_team_data["month_changes"] != 0

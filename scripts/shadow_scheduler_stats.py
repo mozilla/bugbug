@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from bugbug import db, test_scheduling, utils
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -298,19 +299,32 @@ def print_uncaught(
 
         if len(caught_by_scheduler[scheduler1]) == 0:
             if scheduler2 is not None and scheduler2 not in caught_by_scheduler:
-                print(
-                    f"{scheduler1} didn't catch any of the {len(regressions)} regressions on {rev}"
+                logger.info(
+                    "%s didn't catch any of the %d regressions on %s",
+                    scheduler1,
+                    len(regressions),
+                    rev,
                 )
             elif scheduler2 is not None and len(caught_by_scheduler[scheduler2]) == 0:
-                print(
-                    f"{scheduler1} and {scheduler2} didn't catch any of the {len(regressions)} regressions on {rev}"
+                logger.info(
+                    "%s and %s didn't catch any of the %d regressions on %s",
+                    scheduler1,
+                    scheduler2,
+                    len(regressions),
+                    rev,
                 )
             else:
-                print(
-                    f"{scheduler1} didn't catch any of the {len(regressions)} regressions on {rev}, while {scheduler2} did"
+                logger.info(
+                    "%s didn't catch any of the %d regressions on %s, while %s did",
+                    scheduler1,
+                    len(regressions),
+                    rev,
+                    scheduler2,
                 )
-            print(f"Regressions: {regressions}")
-            print(f"Scheduled by {scheduler1}: {scheduled_by_scheduler[scheduler1]}")
+            logger.info("Regressions: %s", regressions)
+            logger.info(
+                "Scheduled by %s: %s", scheduler1, scheduled_by_scheduler[scheduler1]
+            )
 
 
 def main() -> None:

@@ -3,7 +3,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 from bugbug import db, test_scheduling
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def count(is_first_task, is_second_task):
@@ -11,11 +16,11 @@ def count(is_first_task, is_second_task):
 
     push_data = list(db.read(test_scheduling.PUSH_DATA_LABEL_DB))
 
-    print(f"Analyzing {len(push_data)} pushes...")
+    logger.info("Analyzing %d pushes...", len(push_data))
 
     all_tasks = set(task for _, _, push_tasks, _, _ in push_data for task in push_tasks)
 
-    print(f"Considering {len(all_tasks)} tasks...")
+    logger.info("Considering %d tasks...", len(all_tasks))
 
     count_runs = 0
     count_any_of_the_two = 0
@@ -96,8 +101,12 @@ def main():
         count_first_but_not_second,
         count_second_but_not_first,
     ) = count(is_first_task, is_second_task)
-    print(
-        f"Out of {count_runs} runs, any of the two failed {count_any_of_the_two} times. The first exclusively failed {count_first_but_not_second} times, the second exclusively failed {count_second_but_not_first} times."
+    logger.info(
+        "Out of %d runs, any of the two failed %d times. The first exclusively failed %d times, the second exclusively failed %d times.",
+        count_runs,
+        count_any_of_the_two,
+        count_first_but_not_second,
+        count_second_but_not_first,
     )
 
 

@@ -9,6 +9,10 @@ import json
 import os
 import sys
 from datetime import date, datetime, timedelta
+from logging import INFO, basicConfig, getLogger
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 # Inject project path
 sys.path.append("../")
@@ -61,16 +65,16 @@ def run_untriaged(untriaged_bugs):
                 bug["product"], bug["component"]
             )
             if not expected_component:
-                print("Skipping bug: {}".format(bug["id"]))
+                logger.info("Skipping bug: %s", bug["id"])
                 continue
 
             if classifiable:
-                print("Classifying bug with ID: {}".format(bug["id"]))
+                logger.info("Classifying bug with ID: %s", bug["id"])
                 classification = model.classify(bug)[0]
-                print("Classified bug as: {}".format(classification))
+                logger.info("Classified bug as: %s", classification)
 
             else:
-                print("Not classifiable bug: {}".format(bug["id"]))
+                logger.info("Not classifiable bug: %s", bug["id"])
 
             correct_prediction = expected_component == classification
             rows.append(

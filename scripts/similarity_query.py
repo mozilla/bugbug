@@ -60,9 +60,9 @@ def main(args):
         if bug["id"] in bug_ids or bug["id"] == args.bug_id:
             bugs[bug["id"]] = bug
 
-    print("{}: {}".format(args.bug_id, bugs[args.bug_id]["summary"]))
+    logger.info("%s: %s", args.bug_id, bugs[args.bug_id]["summary"])
     for bug_id in bug_ids:
-        print("{}: {}".format(bug_id, bugs[bug_id]["summary"]))
+        logger.info("%s: %s", bug_id, bugs[bug_id]["summary"])
 
 
 if __name__ == "__main__":
