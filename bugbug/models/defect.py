@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
+from logging import INFO, basicConfig, getLogger
 from typing import Any
 
 import xgboost
@@ -14,6 +15,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
 from bugbug.model import BugModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class DefectModel(BugModel):
@@ -254,8 +258,8 @@ class DefectModel(BugModel):
     def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("bug")
 
-        print("{} bugs".format(sum(1 for label in classes.values() if label == 1)))
-        print("{} non-bugs".format(sum(1 for label in classes.values() if label == 0)))
+        logger.info("%d bugs", (sum(1 for label in classes.values() if label == 1)))
+        logger.info("%d non-bugs", (sum(1 for label in classes.values() if label == 0)))
 
         return classes, [0, 1]
 

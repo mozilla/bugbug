@@ -5,6 +5,7 @@
 
 import itertools
 from datetime import datetime
+from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import numpy as np
@@ -17,6 +18,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
@@ -188,16 +192,14 @@ class RegressorModel(CommitModel):
 
                 classes[node] = 0
 
-        print(
-            "{} commits caused regressions".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d commits caused regressions",
+            sum(1 for label in classes.values() if label == 1),
         )
 
-        print(
-            "{} commits did not cause regressions".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d commits did not cause regressions",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]
@@ -224,9 +226,9 @@ class RegressorModel(CommitModel):
 
             commits.append(commit_data)
 
-        print(f"{len(commits)} commits in the evaluation set")
+        logger.info("%d commits in the evaluation set", len(commits))
         bugs_num = len(set(commit["bug_id"] for commit in commits))
-        print(f"{bugs_num} bugs in the evaluation set")
+        logger.info("%d bugs in the evaluation set", bugs_num)
 
         # Sort commits by bug ID, so we can use itertools.groupby to group them by bug ID.
         commits.sort(key=lambda x: x["bug_id"])
@@ -247,7 +249,7 @@ class RegressorModel(CommitModel):
         total_regressions = sum(1 for _, is_reg in results if is_reg)
         average_regression_rate = total_regressions / total_landings
 
-        print(f"Average risk is {average_regression_rate}")
+        logger.info("Average risk is %d", average_regression_rate)
 
         MIN_SAMPLE = 200
 
@@ -264,8 +266,12 @@ class RegressorModel(CommitModel):
             if total_landings < MIN_SAMPLE:
                 continue
 
-            print(
-                f"{total_regressions} out of {total_landings} patches with risk lower than {prob} caused regressions ({total_regressions / total_landings}"
+            logger.info(
+                "%d out of %d patches with risk lower than %d caused regressions (%d",
+                total_regressions,
+                total_landings,
+                prob,
+                total_regressions / total_landings,
             )
 
             # No need to go further, since we are interested in half than average risk.
@@ -276,7 +282,7 @@ class RegressorModel(CommitModel):
                 max_band1_prob = prob
                 break
 
-        print("\n\n")
+        logger.info("\n\n")
 
         # Step 3. Define risk band 3 (double than average risk).
         min_band3_prob = 0.0
@@ -291,8 +297,12 @@ class RegressorModel(CommitModel):
             if total_landings < MIN_SAMPLE:
                 continue
 
-            print(
-                f"{total_regressions} out of {total_landings} patches with risk higher than {prob} caused regressions ({total_regressions / total_landings}"
+            logger.info(
+                "%d out of %d patches with risk higher than %d caused regressions (%d",
+                total_regressions,
+                total_landings,
+                prob,
+                total_regressions / total_landings,
             )
 
             # No need to go further, since we are interested in double than average risk.
@@ -303,7 +313,7 @@ class RegressorModel(CommitModel):
                 min_band3_prob = prob
                 break
 
-        print("\n\n")
+        logger.info("\n\n")
 
         # Step 4. Define risk band 2 (average risk).
         results.sort(key=lambda x: x[0])
@@ -329,8 +339,13 @@ class RegressorModel(CommitModel):
                 ):
                     continue
 
-                print(
-                    f"{total_regressions} out of {total_landings} patches with risk between {prob_start} and {prob_end} caused regressions ({total_regressions / total_landings}"
+                logger.info(
+                    "%d out of  patches with risk between %d and %d caused regressions (%d",
+                    total_regressions,
+                    total_landings,
+                    prob_start,
+                    prob_end,
+                    total_regressions / total_landings,
                 )
 
     def get_feature_names(self):
