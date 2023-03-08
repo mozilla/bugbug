@@ -50,7 +50,7 @@ def is_different_schema(path):
     r = requests.get(url)
 
     if not r.ok:
-        logger.info(f"Version file is not yet available to download for {path}")
+        logger.info("Version file is not yet available to download for %s", path)
         return True
 
     prev_version = int(r.text)
@@ -67,7 +67,7 @@ def download_support_file(path, file_name, extract=True):
         url = urljoin(DATABASES[path]["url"], file_name)
         path = os.path.join(os.path.dirname(path), file_name)
 
-        logger.info(f"Downloading {url} to {path}")
+        logger.info("Downloading %s to %s", url, path)
         updated = utils.download_check_etag(url, path)
 
         if extract and updated and path.endswith(".zst"):
@@ -76,9 +76,7 @@ def download_support_file(path, file_name, extract=True):
 
         return True
     except requests.exceptions.HTTPError:
-        logger.info(
-            f"{file_name} is not yet available to download for {path}", exc_info=True
-        )
+        logger.info("%s is not yet available to download for %s", file_name, path, exc_info=True)
         return False
 
 
@@ -92,7 +90,7 @@ def download(path, support_files_too=False, extract=True):
 
     url = DATABASES[path]["url"]
     try:
-        logger.info(f"Downloading {url} to {zst_path}")
+        logger.info("Downloading %s to %s", url, zst_path)
         updated = utils.download_check_etag(url, zst_path)
 
         if extract and updated:
@@ -106,7 +104,7 @@ def download(path, support_files_too=False, extract=True):
 
         return successful
     except requests.exceptions.HTTPError:
-        logger.info(f"{url} is not yet available to download", exc_info=True)
+        logger.info("%s is not yet available to download", url, exc_info=True)
         return False
 
 

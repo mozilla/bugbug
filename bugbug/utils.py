@@ -224,7 +224,7 @@ def download_model(model_name: str) -> str:
 
     path = f"{model_name}model"
     url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
-    logger.info(f"Downloading {url}...")
+    logger.info("Downloading %s...", url)
     updated = download_check_etag(url)
     if updated:
         zstd_decompress(path)
