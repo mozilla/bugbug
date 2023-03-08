@@ -116,6 +116,8 @@ JOBS_TO_IGNORE = (
     "android-hw-gfx",
 )
 
+class GranularityError(Exception): ...
+
 
 def filter_runnables(
     runnables: tuple[Runnable, ...], all_runnables: Set[Runnable], granularity: str
@@ -184,7 +186,7 @@ def rename_runnables(
             for config, group in config_groups
         )
     else:
-        raise Exception(f"Unexpected {granularity} granularity")
+        raise GranularityError(f"Unexpected {granularity} granularity")
 
 
 def get_push_data(
@@ -296,7 +298,7 @@ def get_test_scheduling_history(granularity):
     elif granularity == "config_group":
         test_scheduling_db = TEST_CONFIG_GROUP_SCHEDULING_DB
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise GranularityError(f"{granularity} granularity unsupported")
 
     for obj in db.read(test_scheduling_db):
         yield obj["revs"], obj["data"]
@@ -310,7 +312,7 @@ def get_past_failures(granularity, readonly):
     elif granularity == "config_group":
         past_failures_db = os.path.join("data", PAST_FAILURES_CONFIG_GROUP_DB)
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise GranularityError(f"{granularity} granularity unsupported")
 
     return shelve.Shelf(
         LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
@@ -325,7 +327,7 @@ def get_failing_together_db_path(granularity: str) -> str:
     elif granularity == "config_group":
         path = FAILING_TOGETHER_CONFIG_GROUP_DB
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise GranularityError(f"{granularity} granularity unsupported")
 
     return os.path.join("data", path[: -len(".tar.zst")])
 
