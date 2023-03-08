@@ -64,7 +64,7 @@ class RegressorFinder(object):
 
         with ThreadPoolExecutorResult(max_workers=3) as executor:
             if self.git_repo_url is not None:
-                logger.info("Cloning %s to %s...", self.git_repo_url, self.git_repo_dir)
+                logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
                 executor.submit(
                     self.clone_git_repo, self.git_repo_url, self.git_repo_dir
                 )
