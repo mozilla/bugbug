@@ -456,17 +456,20 @@ class Model:
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
 
+        # these predictions on the training data are used for calibration
+        train_preds = self.clf.predict(X_train)
+
         # calibrating the model
 
         # Fit isotonic regression model to the predicted probabilities
         iso_reg = IsotonicRegression(out_of_bounds="clip")
-        iso_reg.fit(y_pred, y_test)
+        iso_reg.fit(train_preds, y_train)
 
         # Use the isotonic regression model to transform the predicted probabilities
-        calibrated_y_pred = iso_reg.transform(y_pred)
+        calibrated_y_pred = iso_reg.transform(y_train)
 
         # Evaluate the calibrated model's performance on the test data
-        mse = mean_squared_error(y_test, calibrated_y_pred)
+        mse = mean_squared_error(y_train, calibrated_y_pred)
         print("MSE for the calibrated model: ", mse)
 
         if is_multilabel:
