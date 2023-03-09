@@ -456,7 +456,7 @@ class Model:
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
 
-        # these predictions on the training data are used for calibration
+        # these predictions on the training data are used for model calibration
         train_preds = self.clf.predict(X_train)
 
         # calibrating the model
