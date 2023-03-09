@@ -363,7 +363,7 @@ class LandingsRiskReportGenerator(object):
 
             last_commit_by_bug[commit["bug_id"]] = push_date
 
-        logger.info(f"Retrieving bug IDs since {days} days ago")
+        logger.info("Retrieving bug IDs since %d days ago", days)
         timespan_ids = bugzilla.get_ids_between(since, resolution=["---", "FIXED"])
 
         return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
@@ -845,7 +845,7 @@ class LandingsRiskReportGenerator(object):
         meta_bugs = self.get_meta_bugs(days)
 
         last_modified = db.last_modified(bugzilla.BUGS_DB)
-        logger.info(f"Deleting bugs modified since the last run on {last_modified}")
+        logger.info("Deleting bugs modified since the last run on %s", last_modified)
         changed_ids = bugzilla.get_ids(
             {"f1": "delta_ts", "o1": "greaterthaneq", "v1": last_modified.date()}
         )
@@ -893,7 +893,7 @@ class LandingsRiskReportGenerator(object):
         logger.info("Download bugs of interest...")
         bugzilla.download_bugs(all_ids)
 
-        logger.info(f"{len(bugs)} bugs to analyze.")
+        logger.info("%d bugs to analyze.", len(bugs))
 
         bugs_set = set(bugs + test_info_bugs + meta_bugs)
 
@@ -1839,7 +1839,7 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
 
             receivers = team_to_receivers[team]
 
-            logger.info(f"Sending email to {team}")
+            logger.info("Sending email to %s", team)
             from_email = sendgrid.helpers.mail.From(get_secret("NOTIFICATION_SENDER"))
             to_emails = [sendgrid.helpers.mail.To(receivers[0])] + [
                 sendgrid.helpers.mail.Cc(receiver) for receiver in receivers[1:]
@@ -1856,9 +1856,9 @@ Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https
                 from_email, to_emails, subject, plain_text_content, html_content
             )
             response = send_grid_client.send(message=message)
-            logger.info(f"Status code: {response.status_code}")
-            logger.info(f"Headers: {response.headers}")
-            logger.info(f"Body: {response.body}")
+            logger.info("Status code: %s", response.status_code)
+            logger.info("Headers: %s", response.headers)
+            logger.info("Body: %s", response.body)
         except Exception:
             traceback.print_exc()
             failure = True

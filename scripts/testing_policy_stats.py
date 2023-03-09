@@ -90,7 +90,7 @@ class TestingPolicyStatsGenerator(object):
             for commit in commits
             if repository.get_revision_id(commit) in revision_map
         ]
-        logger.info(f"{len(commits)} revisions")
+        logger.info("%d revisions", len(commits))
 
         # Filter-out commits with no testing tags.
         commits = [
@@ -101,7 +101,7 @@ class TestingPolicyStatsGenerator(object):
             )
             is not None
         ]
-        logger.info(f"{len(commits)} revisions with testing tags")
+        logger.info("%d revisions with testing tags", len(commits))
 
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],

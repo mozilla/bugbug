@@ -42,7 +42,7 @@ class Retriever(object):
         else:
             changed_ids = set()
 
-        logger.info(f"Retrieved {len(changed_ids)} IDs.")
+        logger.info("Retrieved %d IDs.", len(changed_ids))
 
         all_components = bugzilla.get_product_component_count(9999)
 
@@ -60,17 +60,17 @@ class Retriever(object):
         two_years_and_six_months_ago = datetime.utcnow() - relativedelta(
             years=2, months=6
         )
-        logger.info(f"Retrieving bug IDs since {two_years_and_six_months_ago}")
+        logger.info("Retrieving bug IDs since %s", two_years_and_six_months_ago)
         timespan_ids = bugzilla.get_ids_between(two_years_and_six_months_ago)
         if limit:
             timespan_ids = timespan_ids[-limit:]
-        logger.info(f"Retrieved {len(timespan_ids)} IDs.")
+        logger.info("Retrieved %d IDs.", len(timespan_ids))
 
         # Get IDs of labelled bugs.
         labelled_bug_ids = labels.get_all_bug_ids()
         if limit:
             labelled_bug_ids = labelled_bug_ids[-limit:]
-        logger.info(f"{len(labelled_bug_ids)} labelled bugs to download.")
+        logger.info("%d labelled bugs to download.", len(labelled_bug_ids))
 
         # Get the commits DB, as we need it to get the bug IDs linked to recent commits.
         # XXX: Temporarily avoid downloading the commits DB when a limit is set, to avoid the integration test fail when the commits DB is bumped.
@@ -89,7 +89,7 @@ class Retriever(object):
         )
         if limit:
             commit_bug_ids = commit_bug_ids[-limit:]
-        logger.info(f"{len(commit_bug_ids)} bugs linked to commits to download.")
+        logger.info("%d bugs linked to commits to download.", len(commit_bug_ids))
 
         # Get IDs of bugs which are regressions, bugs which caused regressions (useful for the regressor model),
         # and blocked bugs.
@@ -119,7 +119,7 @@ class Retriever(object):
         ]
         if limit:
             test_failure_bug_ids = test_failure_bug_ids[-limit:]
-        logger.info(f"{len(test_failure_bug_ids)} bugs about test failures.")
+        logger.info("%d bugs about test failures.", len(test_failure_bug_ids))
 
         all_ids = (
             timespan_ids

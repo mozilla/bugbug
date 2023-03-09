@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 def get_task_metrics_from_uri(index_uri):
     index_url = BASE_URL.format(index_uri)
-    LOGGER.info(f"Retrieving metrics from {index_url}")
+    LOGGER.info("Retrieving metrics from %s", index_url)
     r = requests.get(index_url)
 
     if r.status_code == 404:

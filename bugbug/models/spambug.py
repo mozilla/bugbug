@@ -41,6 +41,7 @@ class SpamBugModel(BugModel):
             bug_features.has_attachment(),
             bug_features.platform(),
             bug_features.op_sys(),
+            bug_features.filed_via(),
         ]
 
         cleanup_functions = [

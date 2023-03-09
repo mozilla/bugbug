@@ -88,7 +88,9 @@ class Retriever(object):
                     else:
                         num_errors += 1
                 else:
-                    logger.info(f"Analyzing {push.rev} at the {granularity} level...")
+                    logger.info(
+                        "Analyzing %s at the %s level...", push.rev, granularity
+                    )
 
                     key = cache_key(push)
 
@@ -129,8 +131,10 @@ class Retriever(object):
 
                 progress_bar.update(1)
 
-            logger.info(f"{num_cached} pushes were already cached out of {num_pushes}")
-            logger.info(f"There were errors in {num_errors} pushes")
+            logger.info(
+                "%d pushes were already cached out of %d", num_cached, num_pushes
+            )
+            logger.info("There were errors in %d pushes", num_errors)
 
         def retrieve_from_cache(push):
             return mozci.config.cache.get(cache_key(push))
@@ -325,10 +329,10 @@ class Retriever(object):
                 except StopIteration:
                     pass
 
-            logger.info(f"saved push data nodes: {len(saved_nodes)}")
-            logger.info(f"skipped {skipped_no_commits} (no commits in our DB)")
-            logger.info(f"skipped {skipped_too_big_commits} (too big commits)")
-            logger.info(f"skipped {skipped_no_runnables} (no interesting runnables)")
+            logger.info("saved push data nodes: %d", len(saved_nodes))
+            logger.info("skipped %d (no commits in our DB)", skipped_no_commits)
+            logger.info("skipped %d (too big commits)", skipped_too_big_commits)
+            logger.info("skipped %d (no interesting runnables)", skipped_no_runnables)
 
             past_failures["push_num"] = push_num
             past_failures.close()

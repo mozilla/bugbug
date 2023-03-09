@@ -535,7 +535,7 @@ def evaluate(bug_introducing_commits):
     for bug in tqdm(bugzilla.get_bugs()):
         if bug["regressed_by"]:
             known_regressors[bug["id"]] = bug["regressed_by"]
-    logger.info(f"Loaded {len(known_regressors)} known regressors")
+    logger.info("Loaded %d known regressors", len(known_regressors))
 
     fix_to_regressors_map = defaultdict(list)
     for bug_introducing_commit in bug_introducing_commits:
@@ -546,9 +546,10 @@ def evaluate(bug_introducing_commits):
             bug_introducing_commit["bug_introducing_rev"]
         )
 
-    logger.info(f"{len(fix_to_regressors_map)} fixes linked to regressors")
+    logger.info("%d fixes linked to regressors", len(fix_to_regressors_map))
     logger.info(
-        f"{sum(len(regressors) for regressors in fix_to_regressors_map.values())} regressors linked to fixes"
+        "%d regressors linked to fixes",
+        sum(len(regressors) for regressors in fix_to_regressors_map.values()),
     )
 
     logger.info("Measuring how many known regressors SZZ was able to find correctly...")
@@ -609,7 +610,7 @@ def evaluate(bug_introducing_commits):
     logger.info(
         f"Perfectly found {perfect_regressors} regressors out of {all_regressors}"
     )
-    logger.info(f"Found {found_regressors} regressors out of {all_regressors}")
+    logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
     logger.info(
         f"Misassigned {misassigned_regressors} regressors out of {all_regressors}"
     )

@@ -171,7 +171,7 @@ def schedule_tests(branch: str, rev: str) -> str:
     from bugbug_http.app import JobInfo
 
     job = JobInfo(schedule_tests, branch, rev)
-    LOGGER.info(f"Processing {job}...")
+    LOGGER.info("Processing %s...", job)
 
     # Pull the revision to the local repository
     LOGGER.info("Pulling commits from the remote repository...")
@@ -246,7 +246,7 @@ def get_config_specific_groups(config: str) -> str:
     from bugbug_http.app import JobInfo
 
     job = JobInfo(get_config_specific_groups, config)
-    LOGGER.info(f"Processing {job}...")
+    LOGGER.info("Processing %s...", job)
 
     equivalence_sets = testselect._get_equivalence_sets(0.9)
 
