@@ -55,22 +55,22 @@ def setkey(key: str, value: bytes, compress: bool = False) -> None:
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
-    from bugbug_http.app import JobInfo 
+    from bugbug_http.app import JobInfo
 
     # This should be called in a process worker so it should be safe to set
     # the token here
-    fun_info = 'Bug Not Found'
+    fun_info = "Bug Not Found"
     bugzilla.set_token(bugzilla_token)
 
     bugs = bugzilla.get(bug_ids)
 
     if bugs:
-        fun_info = 'Bug Found'
+        fun_info = "Bug Found"
         model = MODEL_CACHE.get(model_name)
 
         if model:
             model_extra_data = model.get_extra_data()
-            
+
             # TODO: Classify could choke on a single bug which could make the whole
             # job to fails. What should we do here?
             probs = model.classify(list(bugs.values()), True)
@@ -93,13 +93,13 @@ def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -
                 setkey(job.result_key, orjson.dumps(data), compress=True)
 
                 # Save the bug last change
-                setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())  
+                setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())
         else:
             LOGGER.info("Missing model %r, aborting" % model_name)
 
     return fun_info
-    
-    
+
+
 def classify_issue(
     model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
 ) -> str:
