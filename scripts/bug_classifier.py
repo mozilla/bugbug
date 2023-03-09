@@ -29,7 +29,7 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
         model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
-        logger.info(f"{model_file_name} does not exist. Downloading the model....")
+        logger.info("%s does not exist. Downloading the model....", model_file_name)
         try:
             download_model(model_name)
         except requests.HTTPError:
