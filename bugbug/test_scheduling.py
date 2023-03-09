@@ -310,7 +310,7 @@ def get_past_failures(granularity, readonly):
     elif granularity == "config_group":
         past_failures_db = os.path.join("data", PAST_FAILURES_CONFIG_GROUP_DB)
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise ValueError(f"{granularity} granularity unsupported")
 
     return shelve.Shelf(
         LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
