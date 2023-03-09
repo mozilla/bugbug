@@ -64,16 +64,14 @@ class RegressorFinder(object):
 
         with ThreadPoolExecutorResult(max_workers=3) as executor:
             if self.git_repo_url is not None:
-                logger.info("Cloning %s to %s...", self.git_repo_url, self.git_repo_dir)
+                logger.info(f"Cloning {self.git_repo_url} to {self.git_repo_dir}...")
                 executor.submit(
                     self.clone_git_repo, self.git_repo_url, self.git_repo_dir
                 )
 
             if self.tokenized_git_repo_url is not None:
                 logger.info(
-                    "Cloning %s to %s...",
-                    self.tokenized_git_repo_url,
-                    self.tokenized_git_repo_dir,
+                    f"Cloning {self.tokenized_git_repo_url} to {self.tokenized_git_repo_dir}..."
                 )
                 executor.submit(
                     self.clone_git_repo,
@@ -95,9 +93,9 @@ class RegressorFinder(object):
                 )
             )()
 
-            logger.info("%s cloned", repo_dir)
+            logger.info(f"{repo_dir} cloned")
 
-        logger.info("Fetching %s", repo_dir)
+        logger.info(f"Fetching {repo_dir}")
 
         tenacity.retry(
             wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
@@ -111,7 +109,7 @@ class RegressorFinder(object):
             )
         )()
 
-        logger.info("%s fetched", repo_dir)
+        logger.info(f"{repo_dir} fetched")
 
     def init_mapping(self):
         if self.tokenized_git_repo_url is not None:
@@ -160,7 +158,7 @@ class RegressorFinder(object):
 
                     commits_to_ignore.append({"rev": backedout, "type": "backedout"})
 
-        logger.info("%d commits to ignore...", len(commits_to_ignore))
+        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
 
         # Skip backed-out commits which aren't in the repository (commits which landed *before* the Mercurial history
         # started, and backouts which mentioned a bad hash in their message).
@@ -168,11 +166,12 @@ class RegressorFinder(object):
             c for c in commits_to_ignore if c["rev"][:12] in all_commits
         ]
 
-        logger.info("%d commits to ignore...", len(commits_to_ignore))
+        logger.info(f"{len(commits_to_ignore)} commits to ignore...")
 
         logger.info(
-            "...of which %d are backed-out",
-            sum(1 for commit in commits_to_ignore if commit["type"] == "backedout"),
+            "...of which {} are backed-out".format(
+                sum(1 for commit in commits_to_ignore if commit["type"] == "backedout")
+            )
         )
 
         db.write(IGNORED_COMMITS_DB, commits_to_ignore)
@@ -195,7 +194,7 @@ class RegressorFinder(object):
             for bug_fixing_commit in db.read(BUG_FIXING_COMMITS_DB)
         )
         logger.info(
-            "Already classified %d commits...", len(prev_bug_fixing_commits_nodes)
+            f"Already classified {len(prev_bug_fixing_commits_nodes)} commits..."
         )
 
         # TODO: Switch to the pure Defect model, as it's better in this case.
@@ -353,7 +352,7 @@ class RegressorFinder(object):
             )
             f.writelines("{}\n".format(git_hash) for git_hash in git_hashes)
 
-        logger.info("%d commits to analyze", len(bug_fixing_commits))
+        logger.info(f"{len(bug_fixing_commits)} commits to analyze")
 
         # Skip already found bug-introducing commits.
         bug_fixing_commits = [
@@ -394,7 +393,7 @@ class RegressorFinder(object):
                 thread_local.git.get_head()
 
         def find_bic(bug_fixing_commit):
-            logger.info("Analyzing %s...", bug_fixing_commit["rev"])
+            logger.info("Analyzing {}...".format(bug_fixing_commit["rev"]))
 
             git_fix_revision = tuple(mercurial_to_git([bug_fixing_commit["rev"]]))[0]
 
@@ -535,7 +534,7 @@ def evaluate(bug_introducing_commits):
     for bug in tqdm(bugzilla.get_bugs()):
         if bug["regressed_by"]:
             known_regressors[bug["id"]] = bug["regressed_by"]
-    logger.info("Loaded %d known regressors", len(known_regressors))
+    logger.info(f"Loaded {len(known_regressors)} known regressors")
 
     fix_to_regressors_map = defaultdict(list)
     for bug_introducing_commit in bug_introducing_commits:
@@ -546,10 +545,9 @@ def evaluate(bug_introducing_commits):
             bug_introducing_commit["bug_introducing_rev"]
         )
 
-    logger.info("%d fixes linked to regressors", len(fix_to_regressors_map))
+    logger.info(f"{len(fix_to_regressors_map)} fixes linked to regressors")
     logger.info(
-        "%d regressors linked to fixes",
-        sum(len(regressors) for regressors in fix_to_regressors_map.values()),
+        f"{sum(len(regressors) for regressors in fix_to_regressors_map.values())} regressors linked to fixes"
     )
 
     logger.info("Measuring how many known regressors SZZ was able to find correctly...")
@@ -610,7 +608,7 @@ def evaluate(bug_introducing_commits):
     logger.info(
         f"Perfectly found {perfect_regressors} regressors out of {all_regressors}"
     )
-    logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
+    logger.info(f"Found {found_regressors} regressors out of {all_regressors}")
     logger.info(
         f"Misassigned {misassigned_regressors} regressors out of {all_regressors}"
     )
