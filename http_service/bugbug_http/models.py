@@ -55,61 +55,51 @@ def setkey(key: str, value: bytes, compress: bool = False) -> None:
 
 
 def classify_bug(model_name: str, bug_ids: Sequence[int], bugzilla_token: str) -> str:
-    from bugbug_http.app import JobInfo
+    from bugbug_http.app import JobInfo 
 
     # This should be called in a process worker so it should be safe to set
     # the token here
-    bug_ids_set = set(map(int, bug_ids))
+    fun_info = 'Bug Not Found'
     bugzilla.set_token(bugzilla_token)
 
     bugs = bugzilla.get(bug_ids)
 
-    missing_bugs = bug_ids_set.difference(bugs.keys())
+    if bugs:
+        fun_info = 'Bug Found'
+        model = MODEL_CACHE.get(model_name)
 
-    for bug_id in missing_bugs:
-        job = JobInfo(classify_bug, model_name, bug_id)
+        if model:
+            model_extra_data = model.get_extra_data()
+            
+            # TODO: Classify could choke on a single bug which could make the whole
+            # job to fails. What should we do here?
+            probs = model.classify(list(bugs.values()), True)
+            indexes = probs.argmax(axis=-1)
+            suggestions = model.le.inverse_transform(indexes)
 
-        # TODO: Find a better error format
-        setkey(job.result_key, orjson.dumps({"available": False}))
+            probs_list = probs.tolist()
+            indexes_list = indexes.tolist()
+            suggestions_list = suggestions.tolist()
 
-    if not bugs:
-        return "NOK"
+            for i, bug_id in enumerate(bugs.keys()):
+                data = {
+                    "prob": probs_list[i],
+                    "index": indexes_list[i],
+                    "class": suggestions_list[i],
+                    "extra_data": model_extra_data,
+                }
 
-    model = MODEL_CACHE.get(model_name)
+                job = JobInfo(classify_bug, model_name, bug_id)
+                setkey(job.result_key, orjson.dumps(data), compress=True)
 
-    if not model:
-        LOGGER.info("Missing model %r, aborting" % model_name)
-        return "NOK"
+                # Save the bug last change
+                setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())  
+        else:
+            LOGGER.info("Missing model %r, aborting" % model_name)
 
-    model_extra_data = model.get_extra_data()
-
-    # TODO: Classify could choke on a single bug which could make the whole
-    # job to fails. What should we do here?
-    probs = model.classify(list(bugs.values()), True)
-    indexes = probs.argmax(axis=-1)
-    suggestions = model.le.inverse_transform(indexes)
-
-    probs_list = probs.tolist()
-    indexes_list = indexes.tolist()
-    suggestions_list = suggestions.tolist()
-
-    for i, bug_id in enumerate(bugs.keys()):
-        data = {
-            "prob": probs_list[i],
-            "index": indexes_list[i],
-            "class": suggestions_list[i],
-            "extra_data": model_extra_data,
-        }
-
-        job = JobInfo(classify_bug, model_name, bug_id)
-        setkey(job.result_key, orjson.dumps(data), compress=True)
-
-        # Save the bug last change
-        setkey(job.change_time_key, bugs[bug_id]["last_change_time"].encode())
-
-    return "OK"
-
-
+    return fun_info
+    
+    
 def classify_issue(
     model_name: str, owner: str, repo: str, issue_nums: Sequence[int]
 ) -> str:
