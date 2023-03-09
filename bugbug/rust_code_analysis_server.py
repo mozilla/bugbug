@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 START_RETRIES = 14
 HEADERS = {"Content-type": "application/octet-stream"}
 
-class AnalysisException(Exception): ...
+
+class AnalysisException(Exception):
+    ...
 
 
 class RustCodeAnalysisServer:

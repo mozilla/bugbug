@@ -125,7 +125,10 @@ def replace_reviewers(commit_description, reviewers):
 
 # ------------------------------------------------------------------------------
 
-class UnsupportedReviewerError(Exception): ...
+
+class UnsupportedReviewerError(Exception):
+    ...
+
 
 class CommitClassifier(object):
     def __init__(

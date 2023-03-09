@@ -48,7 +48,10 @@ def get_commit_map(
     assert len(commit_map) > 0
     return commit_map
 
-class ValueError(Exception): ...
+
+class ValueError(Exception):
+    ...
+
 
 def _get_cost(config: str) -> int:
     costs = [

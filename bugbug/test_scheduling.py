@@ -116,7 +116,9 @@ JOBS_TO_IGNORE = (
     "android-hw-gfx",
 )
 
-class GranularityError(Exception): ...
+
+class GranularityError(Exception):
+    ...
 
 
 def filter_runnables(

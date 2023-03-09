@@ -165,7 +165,9 @@ def get_metrics_dict() -> dict:
         )
     return metrics
 
-class PullError(Exception): ...
+
+class PullError(Exception):
+    ...
 
 
 class Commit:

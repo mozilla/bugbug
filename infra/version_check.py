@@ -5,7 +5,10 @@
 
 import subprocess
 
-class NotFound(Exception): ...
+
+class NotFound(Exception):
+    ...
+
 
 with open("VERSION", "r") as f:
     version = f.read().rstrip()
