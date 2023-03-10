@@ -3,9 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
 from typing import Any
 
 from bugbug.models.defect import DefectModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class DefectEnhancementTaskModel(DefectModel):
@@ -17,19 +21,15 @@ class DefectEnhancementTaskModel(DefectModel):
     def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("defect_enhancement_task")
 
-        print(
-            "{} defects".format(
-                sum(1 for label in classes.values() if label == "defect")
-            )
+        logger.info(
+            "%d defects", sum(1 for label in classes.values() if label == "defect")
         )
-        print(
-            "{} enhancements".format(
-                sum(1 for label in classes.values() if label == "enhancement")
-            )
+
+        logger.info(
+            "%d enhancements",
+            sum(1 for label in classes.values() if label == "enhancement"),
         )
-        print(
-            "{} tasks".format(sum(1 for label in classes.values() if label == "task"))
-        )
+        logger.info("%d tasks", sum(1 for label in classes.values() if label == "task"))
 
         return classes, ["defect", "enhancement", "task"]
 
