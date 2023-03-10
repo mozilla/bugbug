@@ -5,8 +5,8 @@
 
 import pickle
 from collections import defaultdict
-from typing import Any
 from logging import INFO, basicConfig, getLogger
+from typing import Any
 
 import matplotlib
 import numpy as np
@@ -107,7 +107,7 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
 
     for num, table in enumerate(confusion_matrix_table):
         if is_multilabel:
-            print(f"label: {labels[num]}")
+            logger.info("label: %d", labels[num])
             table_labels = [0, 1]
         else:
             table_labels = labels
