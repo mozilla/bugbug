@@ -328,8 +328,7 @@ class Model:
 
     # To split the data into training and validation sets
     def train_validation_split(self, X, y):
-        X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=0.8)
-        return X_train, X_val, y_train, y_val
+        return train_test_split(X, y, train_size=0.8, random_state=0)
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
