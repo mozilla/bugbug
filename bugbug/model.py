@@ -323,12 +323,12 @@ class Model:
 
         return feature_report
 
-    def train_test_split(self, X, y):
-        return train_test_split(X, y, test_size=0.1, random_state=0)
+    def train_test_split(self, X, y, test_size=0.1, random_state=0):
+        return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
     # To split the data into training and validation sets
     def train_validation_split(self, X, y):
-        return train_test_split(X, y, train_size=0.8, random_state=0)
+        return train_test_split(X, y, train_size=0.5, random_state=0)
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
@@ -363,8 +363,8 @@ class Model:
 
         # Splitting the dataset in training, validation and test.
 
-        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
-        X_train, X_val, y_train, y_val = self.train_validation_split(X_train, y_train)
+        X_train, X_test, y_train, y_test = self.train_test_split(X, y, test_size=0.3)
+        X_test, X_val, y_test, y_val = self.train_validation_split(X_test, y_test)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
