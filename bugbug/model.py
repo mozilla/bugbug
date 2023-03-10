@@ -6,6 +6,7 @@
 import pickle
 from collections import defaultdict
 from typing import Any
+from logging import INFO, basicConfig, getLogger
 
 import matplotlib
 import numpy as np
@@ -28,6 +29,9 @@ from bugbug import bugzilla, db, repository
 from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def classification_report_imbalanced_values(
