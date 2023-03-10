@@ -357,10 +357,10 @@ class Model:
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
 
-        # Split dataset in training, validation and test.
+        # Splitting the dataset in training, validation and test.
 
         X_train, X_rem, y_train, y_rem = train_test_split(X, y, train_size=0.8)
-        X_test, X_val, y_test, y_val = train_test_split(X_rem, y_rem, train_size=0.5)
+        X_val, X_test, y_val, y_test = train_test_split(X_rem, y_rem, test_size=0.5)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
