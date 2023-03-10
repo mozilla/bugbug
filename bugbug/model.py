@@ -359,8 +359,8 @@ class Model:
 
         # Splitting the dataset in training, validation and test.
 
-        X_train, X_rem, y_train, y_rem = train_test_split(X, y, train_size=0.8)
-        X_val, X_test, y_val, y_test = train_test_split(X_rem, y_rem, test_size=0.5)
+        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+        X_train, X_val, y_train, y_val = self.train_validation_split(X_train, y_train)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:

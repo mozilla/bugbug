@@ -19,6 +19,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from ortools.linear_solver import pywraplp
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from tqdm import tqdm
 
@@ -501,6 +502,10 @@ class TestSelectModel(Model):
             f"{train_push_len} pushes in the training set (corresponding to {train_len} push/jobs)"
         )
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
+
+    # To split the data into training and validation sets
+    def train_validation_split(self, X, y):
+        return train_test_split(X, y, train_size=0.8)
 
     def items_gen(self, classes):
         commit_map = get_commit_map()
