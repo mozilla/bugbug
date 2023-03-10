@@ -121,9 +121,9 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
             )
         for i in range(len(table)):
             table[i].insert(0, f"{table_labels[i]} (Actual)")
-        print(
+        logger.info(
+            "\n%s\n",
             tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),
-            end="\n\n",
         )
 
 
@@ -291,18 +291,18 @@ class Model:
 
         # allow maximum of 3 columns in a row to fit the page better
         COLUMNS = 3
-        print("Top {} features:".format(len(top_feature_names)))
+        logger.info("Top %d features:", len(top_feature_names))
         for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
                 table.append(item[i : i + COLUMNS])
-            print(
+            logger.info(
+                "\n%s\n\n",
                 tabulate(
                     table,
                     headers=(["classes"] + top_feature_names)[i : i + COLUMNS],
                     tablefmt="grid",
                 ),
-                end="\n\n",
             )
 
     def save_feature_importances(self, important_features, feature_names):
@@ -355,7 +355,7 @@ class Model:
             X = X[:limit]
             y = y[:limit]
 
-        print(f"X: {X.shape}, y: {y.shape}")
+        logger.info("X: %s, y: %s", str(X.shape), str(y.shape))
 
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
@@ -379,30 +379,35 @@ class Model:
                 pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
             )
 
-            print("Cross Validation scores:")
+            logger.info("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
                 tracking_metrics[f"test_{scoring}"] = {
                     "mean": score.mean(),
                     "std": score.std() * 2,
                 }
-                print(
-                    f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
+                logger.info(
+                    "%s: f%.3f (+/- %.3f)",
+                    scoring.capitalize(),
+                    score.mean(),
+                    score.std() * 2,
                 )
 
-        print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+        logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
         # Training on the resampled dataset if sampler is provided.
         if self.sampler is not None:
             X_train, y_train = self.sampler.fit_resample(X_train, y_train)
 
-            print(f"resampled X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info(
+                "resampled X_train: %s, y_train: %s", X_train.shape, y_train.shape
+            )
 
-        print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
+        logger.info("X_test: %s, y_test: %s", X_test.shape, y_test.shape)
 
         self.clf.fit(X_train, self.le.transform(y_train))
 
-        print("Model trained")
+        logger.info("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
@@ -444,17 +449,18 @@ class Model:
 
             tracking_metrics["feature_report"] = feature_report
 
-        print("Training Set scores:")
+        logger.info("Training Set scores:")
         y_pred = self.clf.predict(X_train)
         y_pred = self.le.inverse_transform(y_pred)
         if not is_multilabel:
-            print(
+            logger.info(
+                "\n%s",
                 classification_report_imbalanced(
                     y_train, y_pred, labels=self.class_names
-                )
+                ),
             )
 
-        print("Test Set scores:")
+        logger.info("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
@@ -464,7 +470,7 @@ class Model:
                 y_pred[0], np.ndarray
             ), "The predictions should be multilabel"
 
-        print(f"No confidence threshold - {len(y_test)} classified")
+        logger.info("No confidence threshold - %d classified", len(y_test))
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -472,9 +478,11 @@ class Model:
                 y_test, y_pred, labels=self.class_names
             )
 
-            print(
-                classification_report_imbalanced(
-                    y_test, y_pred, labels=self.class_names
+            logger.info(
+                str(
+                    classification_report_imbalanced(
+                        y_test, y_pred, labels=self.class_names
+                    )
                 )
             )
             report = classification_report_imbalanced_values(
@@ -526,8 +534,10 @@ class Model:
 
             classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
 
-            print(
-                f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
+            logger.info(
+                "\nConfidence threshold > %d - %d classified",
+                confidence_threshold,
+                classified_num,
             )
             if is_multilabel:
                 confusion_matrix = metrics.multilabel_confusion_matrix(
@@ -539,12 +549,13 @@ class Model:
                     y_pred_filter.astype(str),
                     labels=confidence_class_names,
                 )
-                print(
+                logger.info(
+                    "\n%s",
                     classification_report_imbalanced(
                         y_test.astype(str),
                         y_pred_filter.astype(str),
                         labels=confidence_class_names,
-                    )
+                    ),
                 )
             print_labeled_confusion_matrix(
                 confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
@@ -553,7 +564,7 @@ class Model:
         self.evaluation()
 
         if self.entire_dataset_training:
-            print("Retraining on the entire dataset...")
+            logger.info("Retraining on the entire dataset...")
 
             if self.sampler is not None:
                 X_train, y_train = self.sampler.fit_resample(X, y)
@@ -561,7 +572,7 @@ class Model:
                 X_train = X
                 y_train = y
 
-            print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info("X_train: %s, y_train: %s", X_train.shape, y_train.shape)
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
