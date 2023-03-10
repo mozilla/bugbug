@@ -357,8 +357,10 @@ class Model:
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
 
-        # Split dataset in training and test.
-        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+        # Split dataset in training, validation and test.
+
+        X_train, X_rem, y_train, y_rem = train_test_split(X, y, train_size=0.8)
+        X_test, X_val, y_test, y_val = train_test_split(X_rem, y_rem, train_size=0.5)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -456,20 +458,20 @@ class Model:
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
 
-        # these predictions on the training data are used for calibrating the XGBoost model
-        train_preds = self.clf.predict(X_train)
+        # these predictions on the validation data are used to calibrate the XGBoost model
+        val_preds = self.clf.predict(X_val)
 
         # calibrating the model
 
         # Fit isotonic regression model to the predicted probabilities
         iso_reg = IsotonicRegression(out_of_bounds="clip")
-        iso_reg.fit(train_preds, y_train)
+        iso_reg.fit(val_preds, y_val)
 
         # Use the isotonic regression model to transform the predicted probabilities
-        calibrated_y_pred = iso_reg.transform(y_train)
+        calibrated_y_pred = iso_reg.transform(y_val)
 
         # Evaluate the calibrated model's performance on the test data
-        mse = mean_squared_error(y_train, calibrated_y_pred)
+        mse = mean_squared_error(y_val, calibrated_y_pred)
         print("MSE for the calibrated model: ", mse)
 
         if is_multilabel:
