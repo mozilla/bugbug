@@ -463,7 +463,7 @@ class Model:
 
         # calibrating the model
 
-        # Fit isotonic regression model to the predicted probabilities
+        # Fit isotonic regression model to predicted probabilities
         iso_reg = IsotonicRegression(out_of_bounds="clip")
         iso_reg.fit(val_preds, y_val)
 

@@ -10,6 +10,7 @@ import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.model_selection import train_test_split as sk_train_test_split
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
@@ -280,3 +281,9 @@ class DefectModel(BugModel):
                 classes[i] = 0 if not probabilities else [1.0, 0.0]
 
         return classes
+
+    # To split the data into training and validation sets
+    def train_validation_split(self, X, y):
+        X_train, X_val, y_train, y_val = sk_train_test_split(X, y, train_size=0.8)
+
+        return X_train, X_val, y_train, y_val
