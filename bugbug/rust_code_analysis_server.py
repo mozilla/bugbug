@@ -20,7 +20,9 @@ HEADERS = {"Content-type": "application/octet-stream"}
 
 
 class AnalysisException(Exception):
-    ...
+    """Raised when rust-code-analysis failed to analyze a file."""
+
+    pass
 
 
 class RustCodeAnalysisServer:

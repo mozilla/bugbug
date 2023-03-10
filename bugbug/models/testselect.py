@@ -49,10 +49,6 @@ def get_commit_map(
     return commit_map
 
 
-class ValueError(Exception):
-    ...
-
-
 def _get_cost(config: str) -> int:
     costs = [
         (("build", "opt"), 1),

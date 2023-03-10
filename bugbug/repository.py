@@ -167,7 +167,9 @@ def get_metrics_dict() -> dict:
 
 
 class PullError(Exception):
-    ...
+    def __init__(self, pull):
+        message = f"Unexpected {pull} pull"
+        super().__init__(message)
 
 
 class Commit:

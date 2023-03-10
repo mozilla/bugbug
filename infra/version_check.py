@@ -6,8 +6,10 @@
 import subprocess
 
 
-class NotFound(Exception):
-    ...
+class NotFoundError(Exception):
+    def __init__(self, notfound):
+        message = f"Unexpected {notfound} notfound"
+        super().__init__(message)
 
 
 with open("VERSION", "r") as f:
@@ -23,7 +25,7 @@ except subprocess.CalledProcessError as e:
     print(e.stdout)
     print("stderr:")
     print(e.stderr)
-    raise NotFound("Failure while getting latest tag")
+    raise NotFoundError("Failure while getting latest tag")
 
 cur_tag = p.stdout.decode("utf-8")[1:].rstrip()
 

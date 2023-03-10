@@ -11,8 +11,10 @@ import requests
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000/")
 
 
-class TimeoutError(Exception):
-    ...
+class TimeOutError(Exception):
+    def __init__(self, timeout):
+        message = f"Unexpected {timeout} timeout"
+        super().__init__(message)
 
 
 # Test classifying a single bug.
