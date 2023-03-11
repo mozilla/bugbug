@@ -625,6 +625,11 @@ class Model:
         X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
             classes = self.clf.predict_proba(X)
+            # Get calibrated probabilities as confidence levels
+            confidences = self.calibrated_clf.predict_proba(X)
+            for i in range(len(confidences)):
+                confidences[i] = max(confidences[i])
+            confidences = np.array(confidences)
         else:
             classes = self.clf.predict(X)
 
@@ -670,6 +675,8 @@ class Model:
                 classes,
                 {"importances": important_features, "feature_legend": feature_legend},
             )
+        elif probabilities:
+            return classes, {"confidence": confidences}
 
         return classes
 
