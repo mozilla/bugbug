@@ -1432,6 +1432,7 @@ def notification(days: int) -> None:
 table, td, th {
   border: 1px solid black;
 }
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1668,20 +1669,27 @@ table {
             )
 
             new_regressions_section = f"""<b>NEW REGRESSIONS</b>
+
 {new_regressions} new regressions ({new_crash_regressions} crashes) during the past two weeks. {fixed_new_regressions} of them were fixed, {unassigned_new_regressions} are still unassigned.
+
 The regression rate (regressions from the past two weeks / changes from this month) is {round(regression_rate, 2)}"""
             if team not in super_teams:
                 new_regressions_section += f""" ({"**higher** than" if regression_rate > median_regression_rate else "lower than" if median_regression_rate > regression_rate else "equal to"} the median of {round(median_regression_rate, 2)} across other similarly sized teams)"""
             new_regressions_section += f""".
 This week your team committed {high_risk_changes} high risk[^risk] changes, {"**more** than" if high_risk_changes > prev_high_risk_changes else "less than" if prev_high_risk_changes > high_risk_changes else "equal to"} {prev_high_risk_changes} from last week.
 Based on historical information, your past week changes are likely to cause {predicted_regressions} regressions in the future.
+
 [^risk]: The risk associated to changes is evaluated with a machine learning model trained on historical regressions. On average, more than 1 out of 3 high risk changes cause a regression.
+
 Unfixed regressions from the past two weeks:
+
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
 {unfixed_regressions}
+
 <br />
 {median_fix_time_text}
+
 {fix_time_diff}
 90% of bugs were fixed within {ninth_decile_fix_time} days."""
 
@@ -1698,6 +1706,7 @@ Unfixed regressions from the past two weeks:
                 + " AND ".join(carryover_regressions_section_title_texts)
                 + f"""</b>
 <br />
+
 There are {carryover_regressions} carryover regressions in your team out of a total of {total_carryover_regressions} in Firefox, {"**increasing**" if carryover_regressions > prev_carryover_regressions else "reducing" if prev_carryover_regressions > carryover_regressions else "staying constant"} from {prev_carryover_regressions} you had last week.<br /><br />"""
             )
 
@@ -1720,20 +1729,25 @@ There are {carryover_regressions} carryover regressions in your team out of a to
                 carryover_regressions_section += (
                     " and ".join(carryover_regressions_section_list_texts)
                     + f""":
+
 |Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|
 {affecting_carryover_regressions_and_s1_s2_text}
+
 [^severity]: Remember S1 bugs are defined as "(Catastrophic) Blocks development/testing, may impact more than 25% of users, causes data loss, potential chemspill, and no workaround available" (https://firefox-source-docs.mozilla.org/bug-mgmt/guides/severity.html). Please retriage as you see fit.
+
 """
                 )
 
             crashes_section = """<b>CRASHES</b>
 <br />
+
 """
 
             top_nightly_crashes = get_top_crashes(team, "nightly")
             if top_nightly_crashes is not None:
                 crashes_section += f"""Top recent Nightly crashes:
+
 {top_nightly_crashes}"""
             else:
                 crashes_section += "No crashes in the top 200 for Nightly."
@@ -1742,16 +1756,20 @@ There are {carryover_regressions} carryover regressions in your team out of a to
             if top_release_crashes is not None:
                 crashes_section += f"""
 <br />Top recent Release crashes:
+
 {top_release_crashes}"""
             else:
                 crashes_section += "\nNo crashes in the top 200 for Release."
 
             intermittent_failures_section = f"""<b>INTERMITTENT FAILURES</b>
 <br />
+
 Top intermittent failures from the past week:
+
 |# of failures|Bug|Last Activity|Assignment|Notes|
 |---|---|---|---|---|
 {top_intermittent_failures}
+
 There are {skipped_tests} tests skipped in some configurations"""
             if team not in super_teams:
                 intermittent_failures_section += f""" ({"**higher** than" if skipped_tests > median_skipped_tests else "lower than" if median_skipped_tests > skipped_tests else "equal to"} the median across other teams, {round(median_skipped_tests)})"""
@@ -1760,16 +1778,21 @@ They are {"**increasing**" if skipped_tests > prev_skipped_tests else "reducing"
 
             test_coverage_section = f"""<b>TEST COVERAGE</b>
 <br />
+
 Total coverage for patches landing this past week was {patch_coverage}% ({"higher than" if patch_coverage > average_patch_coverage else "**lower** than" if average_patch_coverage > patch_coverage else "equal to"} the average across other teams, {average_patch_coverage}%)."""
 
             if len(low_coverage_patches) > 0:
                 test_coverage_section += f"""<br />List of lowest coverage patches:
+
 {low_coverage_patches}"""
 
             review_section = f"""<b>REVIEW</b>
 <br />
+
 {median_first_review_time_text}
+
 List of revisions that have been waiting for a review for longer than 3 days:
+
 {slow_review_patches}"""
 
             def calculate_maintenance_effectiveness(period):
@@ -1783,6 +1806,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
 <br />
+
 Last week: {calculate_maintenance_effectiveness(relativedelta(weeks=1))}
 Last month: {calculate_maintenance_effectiveness(relativedelta(months=1))}
 Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
@@ -1806,7 +1830,9 @@ Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
             notification = (
                 "\n\n<br />\n<br />\n".join(sections)
                 + f"""
+
 Find the full report with fancy charts at [https://changes.moz.tools/team.html?{report_url_querystring}](https://changes.moz.tools/team.html?{report_url_querystring}).
+
 Report bugs or enhancement requests on [https://github.com/mozilla/bugbug](https://github.com/mozilla/bugbug) or to [mcastelluccio@mozilla.com](mailto:mcastelluccio@mozilla.com).
 """
             )
