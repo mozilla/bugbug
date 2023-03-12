@@ -381,7 +381,13 @@ class CommitClassifier(object):
 
             if self.git_repo_dir:
                 patch_proc = subprocess.Popen(
-                    ["git", "cinnabar", "hg2git", patch.phid],
+                    [
+                        "git",
+                        "cinnabar",
+                        "fetch",
+                        f"hg::{self.repo_dir}",
+                        diffs[patch.phid],
+                    ],
                     stdin=subprocess.PIPE,
                     cwd=self.git_repo_dir,
                 )
