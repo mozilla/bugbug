@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 
 
 # Wrapper class to calibrate a model
-class ModelWrapper:
+class IsotonicRegressionCalibrator:
     def __init__(self, model_class):
         self.model_class = model_class
         self.model = None
