@@ -19,8 +19,7 @@ from imblearn.metrics import (
 from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.isotonic import IsotonicRegression
-from sklearn.metrics import mean_squared_error, precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
@@ -323,12 +322,8 @@ class Model:
 
         return feature_report
 
-    def train_test_split(self, X, y, test_size=0.1, random_state=0):
-        return train_test_split(X, y, test_size=test_size, random_state=random_state)
-
-    # To split the data into training and validation sets
-    def train_validation_split(self, X, y):
-        return train_test_split(X, y, train_size=0.5, random_state=0)
+    def train_test_split(self, X, y):
+        return train_test_split(X, y, test_size=0.1, random_state=0)
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
@@ -361,10 +356,8 @@ class Model:
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
 
-        # Splitting the dataset in training, validation and test.
-
-        X_train, X_test, y_train, y_test = self.train_test_split(X, y, test_size=0.3)
-        X_test, X_val, y_test, y_val = self.train_validation_split(X_test, y_test)
+        # Split dataset in training and test.
+        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -458,25 +451,9 @@ class Model:
             )
 
         print("Test Set scores:")
-        # Evaluate results on the test set.
+        # Evaluating results on the test set.
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
-
-        # these predictions on the validation data are used to calibrate the XGBoost model
-        val_preds = self.clf.predict(X_val)
-
-        # calibrating the model
-
-        # Fit isotonic regression model to predicted probabilities
-        iso_reg = IsotonicRegression(out_of_bounds="clip")
-        iso_reg.fit(val_preds, y_val)
-
-        # Use the isotonic regression model to transform the predicted probabilities
-        calibrated_y_pred = iso_reg.transform(y_val)
-
-        # Evaluate the calibrated model's performance on the test data
-        mse = mean_squared_error(y_val, calibrated_y_pred)
-        print("MSE for the calibrated model: ", mse)
 
         if is_multilabel:
             assert isinstance(
@@ -625,11 +602,6 @@ class Model:
         X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
             classes = self.clf.predict_proba(X)
-            # Get calibrated probabilities as confidence levels
-            confidences = self.calibrated_clf.predict_proba(X)
-            for i in range(len(confidences)):
-                confidences[i] = max(confidences[i])
-            confidences = np.array(confidences)
         else:
             classes = self.clf.predict(X)
 
@@ -675,8 +647,6 @@ class Model:
                 classes,
                 {"importances": important_features, "feature_legend": feature_legend},
             )
-        elif probabilities:
-            return classes, {"confidence": confidences}
 
         return classes
 
