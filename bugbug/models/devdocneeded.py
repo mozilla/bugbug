@@ -10,6 +10,7 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug.calibration_wrapper import IsotonicRegressionCalibrator
 from bugbug.model import BugModel
 
 
@@ -72,7 +73,10 @@ class DevDocNeededModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        # wrapping the model with IsotonicRegressionCalibrator
+        self.clf = IsotonicRegressionCalibrator(
+            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        )
         self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
