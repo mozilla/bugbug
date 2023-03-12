@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def boot_worker() -> None:
     # Clone autoland
     def clone_autoland() -> None:
-        logger.info(f"Cloning autoland in {REPO_DIR}...")
+        logger.info("Cloning autoland in %s...", REPO_DIR)
         repository.clone(REPO_DIR, "https://hg.mozilla.org/integration/autoland")
 
     def extract_past_failures_label() -> None:
@@ -118,7 +118,7 @@ def boot_worker() -> None:
             for push_id, push_obj in r.json()["pushes"].items()
         ]
 
-        logger.info(f"Retrieving known tasks from {revs}")
+        logger.info("Retrieving known tasks from %s...", revs)
 
         # Store in a file the list of tasks in the latest autoland pushes.
         # We use more than one to protect ourselves from broken decision tasks.
@@ -130,7 +130,7 @@ def boot_worker() -> None:
             if r.ok:
                 known_tasks.update(r.json())
 
-        logger.info(f"Retrieved {len(known_tasks)} tasks")
+        logger.info("Retrieved %d tasks", len(known_tasks))
 
         assert len(known_tasks) > 0
 
@@ -198,7 +198,7 @@ def boot_worker() -> None:
                 logger.info("Touched together DB updated.")
             except Exception as e:
                 # It's not ideal, but better not to crash the service!
-                logger.error(f"Exception while updating commits DB: {e}")
+                logger.error("Exception while updating commits DB: %s", e)
 
         # Wait list of schedulable tasks to be downloaded and written to disk.
         retrieve_schedulable_tasks_future.result()

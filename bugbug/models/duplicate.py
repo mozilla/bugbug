@@ -20,6 +20,9 @@ logger = getLogger(__name__)
 
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
+basicConfig(level=INFO)
+logger = getLogger(__name__)
+
 
 class DuplicateModel(BugCoupleModel):
     def __init__(self, training_size=14000, lemmatization=False, cleanup_urls=True):
