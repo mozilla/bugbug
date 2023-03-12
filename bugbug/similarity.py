@@ -407,7 +407,7 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
     def wmdistance(self, document1, document2, all_distances, distance_metric="cosine"):
         model = self.w2vmodel
         if len(document1) == 0 or len(document2) == 0:
-            logger.info(
+            logger.warning(
                 "At least one of the documents had no words that were in the vocabulary. Aborting (returning inf)."
             )
             return float("inf")
