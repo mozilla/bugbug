@@ -75,7 +75,7 @@ def go(months: int) -> None:
     )
 
     pushes = [push for push in pushes if push.rev not in known_scheduler_stats]
-    logger.info(f"{len(pushes)} left to analyze")
+    logger.info("%d left to analyze", len(pushes))
 
     def compress_and_upload() -> None:
         utils.zstd_compress(SHADOW_SCHEDULER_STATS_DB)

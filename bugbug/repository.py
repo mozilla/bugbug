@@ -963,7 +963,7 @@ def _hg_log(revs: list[bytes], branch: str = "tip") -> tuple[Commit, ...]:
 
 
 def get_revs(hg, rev_start=0, rev_end="tip"):
-    logger.info(f"Getting revs from {rev_start} to {rev_end}...")
+    logger.info("Getting revs from %s to %s...", rev_start, rev_end)
 
     args = hglib.util.cmdbuilder(
         b"log",
@@ -1021,7 +1021,7 @@ class Experiences:
 def calculate_experiences(
     commits: Collection[Commit], first_pushdate: datetime, save: bool = True
 ) -> None:
-    logger.info(f"Analyzing seniorities from {len(commits)} commits...")
+    logger.info("Analyzing seniorities from %d commits...", len(commits))
 
     experiences = Experiences(save)
 
@@ -1034,7 +1034,7 @@ def calculate_experiences(
             time_lapse = commit.pushdate - experiences[key]
             commit.seniority_author = time_lapse.total_seconds()
 
-    logger.info(f"Analyzing experiences from {len(commits)} commits...")
+    logger.info("Analyzing experiences from %d commits...", len(commits))
 
     # Note: In the case of files, directories, components, we can't just use the sum of previous commits, as we could end
     # up overcounting them. For example, consider a commit A which modifies "dir1" and "dir2", a commit B which modifies
@@ -1365,10 +1365,10 @@ def download_commits(
 
         first_pushdate = get_first_pushdate(repo_dir)
 
-        logger.info(f"Mining {len(revs)} commits...")
+        logger.info("Mining %d commits...", len(revs))
 
         if not use_single_process:
-            logger.info(f"Using {os.cpu_count()} processes...")
+            logger.info("Using %d processes...", os.cpu_count())
             commits = hg_log_multi(repo_dir, revs, branch)
         else:
             commits = hg_log(hg, revs, branch)
@@ -1377,7 +1377,7 @@ def download_commits(
 
         commits_num = len(commits)
 
-        logger.info(f"Mining {commits_num} patches...")
+        logger.info("Mining %d patches...", commits_num)
 
         global code_analysis_server
 
@@ -1485,9 +1485,9 @@ def clone(
 
         # Pull, to make sure the pushlog is generated.
         with hglib.open(repo_dir) as hg:
-            logger.info(f"Pulling {repo_dir}")
+            logger.info("Pulling %s", repo_dir)
             hg.pull(update=update)
-            logger.info(f"{repo_dir} pulled")
+            logger.info("%s pulled", repo_dir)
 
         return
     except hglib.error.ServerError as e:
@@ -1506,7 +1506,7 @@ def clone(
     )
     subprocess.run(cmd, check=True)
 
-    logger.info(f"{repo_dir} cloned")
+    logger.info("%s cloned", repo_dir)
 
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
