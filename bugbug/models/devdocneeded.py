@@ -74,10 +74,9 @@ class DevDocNeededModel(BugModel):
         )
 
         # wrapping the model with IsotonicRegressionCalibrator
-        self.clf = IsotonicRegressionCalibrator(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        )
-        self.clf.set_params(predictor="cpu_predictor")
+        base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        base_clf.set_params(predictor="cpu_predictor")
+        self.clf = IsotonicRegressionCalibrator(base_clf)
 
     def rollback(self, change):
         return change["field_name"] == "keywords" and any(
