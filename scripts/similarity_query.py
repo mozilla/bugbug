@@ -37,7 +37,7 @@ def main(args):
         model_file_name = f"{similarity.model_name_to_class[args.algorithm].__name__.lower()}.similaritymodel"
 
         if not os.path.exists(model_file_name):
-            logger.info(f"{model_file_name} does not exist. Downloading the model....")
+            logger.info("%s does not exist. Downloading the model....", model_file_name)
             try:
                 download_check_etag(URL.format(model_file_name))
             except requests.HTTPError:
@@ -60,9 +60,9 @@ def main(args):
         if bug["id"] in bug_ids or bug["id"] == args.bug_id:
             bugs[bug["id"]] = bug
 
-    logger.info("%s: %s", args.bug_id, bugs[args.bug_id]["summary"])
+    print("{}: {}".format(args.bug_id, bugs[args.bug_id]["summary"]))
     for bug_id in bug_ids:
-        logger.info("%s: %s", bug_id, bugs[bug_id]["summary"])
+        print("{}: {}".format(bug_id, bugs[bug_id]["summary"]))
 
 
 if __name__ == "__main__":

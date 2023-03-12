@@ -30,11 +30,10 @@ try:
     if HAS_OPTIONAL_DEPENDENCIES:
         nlp = spacy.load("en_core_web_sm")
 except OSError:
-    msg = (
-        "Spacy model is missing, install it with: "
-        f"{sys.executable} -m spacy download en_core_web_sm"
+    logger.error(
+        "Spacy model is missing, install it with: %s -m spacy download en_core_web_sm",
+        sys.executable,
     )
-    logger.info(msg)
 
 OPT_MSG_MISSING = (
     "Optional dependencies are missing, install them with: pip install bugbug[nlp]\n"

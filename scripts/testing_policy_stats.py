@@ -90,7 +90,7 @@ class TestingPolicyStatsGenerator(object):
             for commit in commits
             if repository.get_revision_id(commit) in revision_map
         ]
-        logger.info(f"{len(commits)} revisions")
+        logger.info("%d revisions", len(commits))
 
         # Filter-out commits with no testing tags.
         commits = [
@@ -101,7 +101,7 @@ class TestingPolicyStatsGenerator(object):
             )
             is not None
         ]
-        logger.info(f"{len(commits)} revisions with testing tags")
+        logger.info("%d revisions with testing tags", len(commits))
 
         def list_testing_projects(
             commits: Iterable[repository.CommitDict],
@@ -120,30 +120,25 @@ class TestingPolicyStatsGenerator(object):
 
         testing_projects = list_testing_projects(commits)
 
-        logger.info("Most common testing tags (in %d revisions):", len(commits))
+        print(f"Most common testing tags (in {len(commits)} revisions):")
         for testing_project, count in collections.Counter(
             testing_projects
         ).most_common():
-            logger.info(
-                "%s - %d%",
-                testing_project,
-                round(100 * count / len(testing_projects), 1),
+            print(
+                f"{testing_project} - {round(100 * count / len(testing_projects), 1)}%"
             )
 
         backedout_commits = [commit for commit in commits if commit["backedoutby"]]
         backedout_testing_projects = list_testing_projects(backedout_commits)
 
-        logger.info(
-            "\nMost common testing tags for backed-out revisions (in %d revisions):",
-            len(backedout_commits),
+        print(
+            f"\nMost common testing tags for backed-out revisions (in {len(backedout_commits)} revisions):"
         )
         for testing_project, count in collections.Counter(
             backedout_testing_projects
         ).most_common():
-            logger.info(
-                "%s - %d%",
-                testing_project,
-                round(100 * count / len(backedout_testing_projects), 1),
+            print(
+                f"{testing_project} - {round(100 * count / len(backedout_testing_projects), 1)}%"
             )
 
         regressor_bug_ids = {
@@ -155,17 +150,14 @@ class TestingPolicyStatsGenerator(object):
         ]
         regressor_testing_projects = list_testing_projects(regressor_commits)
 
-        logger.info(
-            "\nMost common testing tags for revisions which caused regressions (in %d revisions):",
-            len(regressor_commits),
+        print(
+            f"\nMost common testing tags for revisions which caused regressions (in {len(regressor_commits)} revisions):"
         )
         for testing_project, count in collections.Counter(
             regressor_testing_projects
         ).most_common():
-            logger.info(
-                "%s - %d%",
-                testing_project,
-                round(100 * count / len(regressor_testing_projects), 1),
+            print(
+                f"{testing_project} - {round(100 * count / len(regressor_testing_projects), 1)}%"
             )
 
 

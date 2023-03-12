@@ -541,7 +541,7 @@ def rollback(bug, when=None, do_assert=False):
         if do_assert:
             assert False, msg
         else:
-            logger.info(msg)
+            logger.error(msg)
 
     def parse_flag_change(change):
         parts = change.split("(")
@@ -875,8 +875,8 @@ def get_inconsistencies(bugs):
         try:
             rollback(bug, do_assert=True)
         except Exception as e:
-            logger.info(bug["id"])
-            logger.info(e)
+            logger.exception(bug["id"])
+            logger.exception(e)
             inconsistencies.append(bug)
 
     return inconsistencies

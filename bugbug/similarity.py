@@ -434,7 +434,9 @@ class Word2VecWmdSimilarity(Word2VecSimilarityBase):
                     distance_matrix[i, j] = all_distances[model.wv.vocab[t2].index, i]
 
         if np.sum(distance_matrix) == 0.0:
-            logger.info("The distance matrix is all zeros. Aborting (returning inf).")
+            logger.warning(
+                "The distance matrix is all zeros. Aborting (returning inf)."
+            )
             return float("inf")
 
         def nbow(document):

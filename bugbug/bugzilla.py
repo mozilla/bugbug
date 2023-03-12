@@ -473,8 +473,8 @@ def calculate_maintenance_effectiveness_indicator(
             if s != "--"
         )
 
-    logger.info("Before applying weights:")
-    logger.info(data)
+    print("Before applying weights:")
+    print(data)
 
     for query_type in ("opened", "closed"):
         # Apply weights.
@@ -484,7 +484,7 @@ def calculate_maintenance_effectiveness_indicator(
         ) in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.items():
             data[query_type][severity] *= weight
 
-    logger.info("After applying weights:")
-    logger.info(data)
+    print("After applying weights:")
+    print(data)
 
     return (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values()))

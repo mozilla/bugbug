@@ -134,8 +134,8 @@ def main():
         logger.info(
             "https://community-tc.services.mozilla.com/tasks/groups/%s", task_group_id
         )
-    except taskcluster.exceptions.TaskclusterAuthFailure as e:
-        logger.info("TaskclusterAuthFailure: %s", e.body)
+    except taskcluster.exceptions.TaskclusterAuthFailure:
+        logger.exception("Failed to authenticate with Taskcluster")
         raise
 
 

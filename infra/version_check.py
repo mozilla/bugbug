@@ -4,10 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import subprocess
-from logging import INFO, basicConfig, getLogger
-
-basicConfig(level=INFO)
-logger = getLogger(__name__)
 
 with open("VERSION", "r") as f:
     version = f.read().rstrip()
@@ -17,11 +13,11 @@ try:
         ["git", "describe", "--abbrev=0", "--tags"], check=True, capture_output=True
     )
 except subprocess.CalledProcessError as e:
-    logger.info("%s failed with return code %d", e.cmd, e.returncode)
-    logger.info("stdout:")
-    logger.info(e.stdout)
-    logger.info("stderr:")
-    logger.info(e.stderr)
+    print(f"{e.cmd} failed with return code {e.returncode}")
+    print("stdout:")
+    print(e.stdout)
+    print("stderr:")
+    print(e.stderr)
     raise Exception("Failure while getting latest tag")
 
 cur_tag = p.stdout.decode("utf-8")[1:].rstrip()

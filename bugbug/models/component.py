@@ -246,7 +246,7 @@ class ComponentModel(BugModel):
             full_comp = f"{product}::{component}"
 
             if full_comp not in bugs_number.keys():
-                logger.info(
+                logger.warning(
                     "Component %r of product %r doesn't exists, failure",
                     component,
                     product,
@@ -254,7 +254,7 @@ class ComponentModel(BugModel):
                 success = False
 
             elif bugs_number[full_comp] <= 0:
-                logger.info(
+                logger.warning(
                     "Component %r of product %r have 0 bugs or less in it, failure",
                     component,
                     product,
@@ -273,7 +273,7 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components:
-                logger.info("%s doesn't match any component", conflated_component)
+                logger.warning("%s doesn't match any component", conflated_component)
                 success = False
                 continue
 
@@ -284,7 +284,7 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components_values:
-                logger.info(
+                logger.warning(
                     "%s should match at least one component with more than 0 bugs",
                     conflated_component,
                 )
@@ -295,13 +295,13 @@ class ComponentModel(BugModel):
 
         for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
             if full_comp not in bugs_number:
-                logger.info(
+                logger.warning(
                     "%s from conflated component mapping doesn't exists, failure",
                     full_comp,
                 )
                 success = False
             elif bugs_number[full_comp] <= 0:
-                logger.info(
+                logger.warning(
                     "%s from conflated component mapping have less than 1 bug, failure",
                     full_comp,
                 )
@@ -320,7 +320,7 @@ class ComponentModel(BugModel):
             ]
 
             if not (matching_components or in_mapping):
-                logger.info("It should be possible to map %s", conflated_component)
+                logger.warning("It should be possible to map %s", conflated_component)
                 success = False
                 continue
 
@@ -347,7 +347,7 @@ class ComponentModel(BugModel):
         if not meaningful_product_components.issubset(
             self.meaningful_product_components
         ):
-            logger.info("Meaningful product components mismatch")
+            logger.warning("Meaningful product components mismatch")
 
             new_meaningful_product_components = (
                 meaningful_product_components.difference(

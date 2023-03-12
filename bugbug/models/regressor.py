@@ -266,12 +266,8 @@ class RegressorModel(CommitModel):
             if total_landings < MIN_SAMPLE:
                 continue
 
-            logger.info(
-                "%d out of %d patches with risk lower than %d caused regressions (%d",
-                total_regressions,
-                total_landings,
-                prob,
-                total_regressions / total_landings,
+            print(
+                f"{total_regressions} out of {total_landings} patches with risk lower than {prob} caused regressions ({total_regressions / total_landings}"
             )
 
             # No need to go further, since we are interested in half than average risk.
@@ -282,7 +278,7 @@ class RegressorModel(CommitModel):
                 max_band1_prob = prob
                 break
 
-        logger.info("\n\n")
+        print("\n\n")
 
         # Step 3. Define risk band 3 (double than average risk).
         min_band3_prob = 0.0
@@ -297,12 +293,8 @@ class RegressorModel(CommitModel):
             if total_landings < MIN_SAMPLE:
                 continue
 
-            logger.info(
-                "%d out of %d patches with risk higher than %d caused regressions (%d",
-                total_regressions,
-                total_landings,
-                prob,
-                total_regressions / total_landings,
+            print(
+                f"{total_regressions} out of {total_landings} patches with risk higher than {prob} caused regressions ({total_regressions / total_landings}"
             )
 
             # No need to go further, since we are interested in double than average risk.
@@ -313,7 +305,7 @@ class RegressorModel(CommitModel):
                 min_band3_prob = prob
                 break
 
-        logger.info("\n\n")
+        print("\n\n")
 
         # Step 4. Define risk band 2 (average risk).
         results.sort(key=lambda x: x[0])
@@ -339,13 +331,8 @@ class RegressorModel(CommitModel):
                 ):
                     continue
 
-                logger.info(
-                    "%d out of %d patches with risk between %d and %d caused regressions (%d",
-                    total_regressions,
-                    total_landings,
-                    prob_start,
-                    prob_end,
-                    total_regressions / total_landings,
+                print(
+                    f"{total_regressions} out of {total_landings} patches with risk between {prob_start} and {prob_end} caused regressions ({total_regressions / total_landings}"
                 )
 
     def get_feature_names(self):

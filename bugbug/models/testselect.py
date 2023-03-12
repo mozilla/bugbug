@@ -708,7 +708,7 @@ class TestSelectModel(Model):
             for future in concurrent.futures.as_completed(futures):
                 exc = future.exception()
                 if exc is not None:
-                    logger.info(
+                    logger.error(
                         "Exception %s while running %s", exc, futures[future]["revs"][0]
                     )
                     for f in futures:
@@ -834,9 +834,11 @@ class TestSelectModel(Model):
                     and result["caught_percentage_config_group"] is not None
                 )
 
-                message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
-
-            logger.info(message)
+            logger.info(
+                " In %d%% of pushes we caught at least one config/group failure. On average, we caught %d%% of all seen config/group failures.",
+                percentage_caught_one_config_group,
+                average_caught_percentage_config_group,
+            )
 
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=utils.get_physical_cpu_count(),

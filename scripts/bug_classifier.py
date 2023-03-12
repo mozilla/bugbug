@@ -29,7 +29,7 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
         model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
-        logger.info(f"{model_file_name} does not exist. Downloading the model....")
+        logger.info("%s does not exist. Downloading the model....", model_file_name)
         try:
             download_model(model_name)
         except requests.HTTPError:
@@ -49,10 +49,8 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
         bugs = bugzilla.get_bugs()
 
     for bug in bugs:
-        logger.info(
-            "https://bugzilla.mozilla.org/show_bug.cgi?id=%s - %s ",
-            bug["id"],
-            bug["summary"],
+        print(
+            f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]} - {bug["summary"]} '
         )
 
         if model.calculate_importance:
@@ -72,7 +70,7 @@ def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
             pred_class = model.le.inverse_transform([pred_index])[0]
         else:
             pred_class = "Positive" if pred_index == 1 else "Negative"
-        logger.info("%s %s", pred_class, probability)
+        print(f"{pred_class} {probability}")
         input()
 
 
