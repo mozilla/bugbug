@@ -26,6 +26,8 @@ class IsotonicRegressionCalibrator:
 
     def fit(self):
         self.model.fit(self.X_train, self.y_train)
+        # invoking calibrate() to calibrate the model
+        self.calibrate()
 
     def predict(self, X):
         if self.calibrated:
