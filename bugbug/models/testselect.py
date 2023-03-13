@@ -835,7 +835,7 @@ class TestSelectModel(Model):
                 )
 
             logger.info(
-                " In %d%% of pushes we caught at least one config/group failure. On average, we caught %d%% of all seen config/group failures.",
+                "In %d%% of pushes we caught at least one config/group failure. On average, we caught %f%% of all seen config/group failures.",
                 percentage_caught_one_config_group,
                 average_caught_percentage_config_group,
             )

@@ -874,9 +874,8 @@ def get_inconsistencies(bugs):
     for bug in bugs:
         try:
             rollback(bug, do_assert=True)
-        except Exception as e:
-            logger.exception(bug["id"])
-            logger.exception(e)
+        except Exception:
+            logger.exception("Failed to rollback bug %s", bug["id"])
             inconsistencies.append(bug)
 
     return inconsistencies
