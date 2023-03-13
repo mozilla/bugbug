@@ -451,7 +451,7 @@ class Model:
             )
 
         print("Test Set scores:")
-        # Evaluating results on the test set.
+        # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
 

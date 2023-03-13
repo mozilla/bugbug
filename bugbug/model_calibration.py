@@ -9,22 +9,22 @@ from sklearn.model_selection import train_test_split
 
 # Wrapper class to calibrate a model
 class IsotonicRegressionCalibrator:
-    def __init__(self, model_class):
-        self.model_class = model_class
-        self.model = None
+    def __init__(self, model):
+        self.model = model
         self.calibrated = False
         self.X_train, self.X_val, self.X_test = None, None, None
         self.y_train, self.y_val, self.y_test = None, None, None
         self.ir = None
 
-    def fit(self, X, y):
+    def split_data(self, X, y):
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(
             self.X_train, self.y_train, test_size=0.2, random_state=42
         )
-        self.model = self.model_class()
+
+    def fit(self):
         self.model.fit(self.X_train, self.y_train)
 
     def predict(self, X):
