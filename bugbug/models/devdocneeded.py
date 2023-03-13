@@ -5,13 +5,13 @@
 
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
-from model_bugbug.calibration import IsotonicRegressionCalibrator
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 
 class DevDocNeededModel(BugModel):

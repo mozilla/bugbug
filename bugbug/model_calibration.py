@@ -33,6 +33,7 @@ class IsotonicRegressionCalibrator:
         else:
             return self.model.predict(X)
 
+    # Calibrate the model
     def calibrate(self):
         if not self.calibrated:
             self.ir = IsotonicRegression()
