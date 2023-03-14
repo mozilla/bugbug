@@ -11,11 +11,24 @@ from datetime import datetime, timedelta, timezone
 import dateutil.parser
 import pandas as pd
 from dateutil import parser
+from dateutil.rrule import DAILY, FR, MO, TH, TU, WE, rrule
 from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from bugbug import bug_snapshot, repository
+
+
+def date_range(start_date, end_date):
+    return rrule(
+        DAILY, dtstart=start_date, until=end_date, byweekday=(MO, TU, WE, TH, FR)
+    )
+
+
+def business_day_range(start_date, end_date):
+    if start_date >= end_date:
+        return (len(list(date_range(end_date, start_date))) - 1) * 1.0
+    return (len(list(date_range(start_date, end_date))) - 1) * -1.0
 
 
 def field(bug, field):
@@ -539,10 +552,10 @@ def get_time_to_fix(bug):
     if bug["cf_last_resolved"] is None:
         return None
 
-    return (
-        dateutil.parser.parse(bug["cf_last_resolved"])
-        - dateutil.parser.parse(bug["creation_time"])
-    ).total_seconds() / 86400
+    return business_day_range(
+        dateutil.parser.parse(bug["cf_last_resolved"]),
+        dateutil.parser.parse(bug["creation_time"]),
+    )
 
 
 class time_to_fix(single_bug_feature):
@@ -558,10 +571,10 @@ def get_time_to_assign(bug):
                 and change["removed"] in ("UNCONFIRMED", "NEW")
                 and change["added"] == "ASSIGNED"
             ):
-                return (
-                    dateutil.parser.parse(history["when"])
-                    - dateutil.parser.parse(bug["creation_time"])
-                ).total_seconds() / 86400
+                return business_day_range(
+                    dateutil.parser.parse(history["when"]),
+                    dateutil.parser.parse(bug["creation_time"]),
+                )
 
     return None
 

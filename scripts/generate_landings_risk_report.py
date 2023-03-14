@@ -27,6 +27,7 @@ import markdown2
 import requests
 import sendgrid
 from dateutil.relativedelta import relativedelta
+from dateutil.rrule import DAILY, FR, MO, TH, TU, WE, rrule
 from tqdm import tqdm
 
 from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
@@ -43,6 +44,18 @@ from bugbug.utils import (
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def date_range(start_date, end_date):
+    return rrule(
+        DAILY, dtstart=start_date, until=end_date, byweekday=(MO, TU, WE, TH, FR)
+    )
+
+
+def business_day_range(start_date, end_date):
+    if start_date >= end_date:
+        return (len(list(date_range(end_date, start_date))) - 1) * 1.0
+    return (len(list(date_range(start_date, end_date))) - 1) * -1.0
 
 
 TEST_INFOS_DB = "data/test_info.json"
@@ -606,9 +619,9 @@ class LandingsRiskReportGenerator(object):
                     continue
 
                 # Get the minimum "time to bug" (from the fix time of the closest regressor to the regression bug).
-                cur_time_to_bug = (
-                    dateutil.parser.parse(bug["creation_time"]) - last_commit_date
-                ).total_seconds() / 86400
+                cur_time_to_bug = business_day_range(
+                    dateutil.parser.parse(bug["creation_time"]), last_commit_date
+                )
                 if time_to_bug is None or cur_time_to_bug < time_to_bug:
                     time_to_bug = cur_time_to_bug
 
@@ -621,10 +634,10 @@ class LandingsRiskReportGenerator(object):
                             and change["removed"] == "UNCONFIRMED"
                             and change["added"] in ("NEW", "ASSIGNED")
                         ):
-                            time_to_confirm = (
-                                dateutil.parser.parse(history["when"])
-                                - dateutil.parser.parse(bug["creation_time"])
-                            ).total_seconds() / 86400
+                            time_to_confirm = business_day_range(
+                                dateutil.parser.parse(history["when"]),
+                                dateutil.parser.parse(bug["creation_time"]),
+                            )
                             break
 
                     if time_to_confirm is not None:
