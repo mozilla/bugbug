@@ -107,7 +107,6 @@ PHABRICATOR_REVISION_REGEX = re.compile(
     "Differential Revision: (https://phabricator.services.mozilla.com/D([0-9]+))"
 )
 
-
 def get_type(path: str) -> str:
     file_name = os.path.basename(path)
     if file_name in HARDCODED_TYPES:
@@ -148,10 +147,8 @@ METRIC_NAMES = [
     "mi_visual_studio",
 ]
 
-
 def get_total_metrics_dict() -> dict:
     return {f"{metric}_total": 0 for metric in METRIC_NAMES}
-
 
 def get_metrics_dict() -> dict:
     metrics = get_total_metrics_dict()
@@ -164,7 +161,6 @@ def get_metrics_dict() -> dict:
             }
         )
     return metrics
-
 
 class Commit:
     def __init__(
