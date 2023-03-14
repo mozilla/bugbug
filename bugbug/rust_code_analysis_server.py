@@ -19,12 +19,6 @@ START_RETRIES = 14
 HEADERS = {"Content-type": "application/octet-stream"}
 
 
-class AnalysisException(Exception):
-    """Raised when rust-code-analysis failed to analyze a file."""
-
-    pass
-
-
 class RustCodeAnalysisServer:
     def __init__(self, thread_num: Optional[int] = None):
         for _ in range(START_RETRIES):
@@ -41,7 +35,7 @@ class RustCodeAnalysisServer:
                     time.sleep(0.35)
 
         self.terminate()
-        raise AnalysisException("Unable to run rust-code-analysis server")
+        raise RuntimeError("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
