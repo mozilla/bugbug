@@ -126,10 +126,6 @@ def replace_reviewers(commit_description, reviewers):
 # ------------------------------------------------------------------------------
 
 
-class UnsupportedReviewerError(Exception):
-    ...
-
-
 class CommitClassifier(object):
     def __init__(
         self,
@@ -333,7 +329,7 @@ class CommitClassifier(object):
                 # TODO: Support group reviewers somehow.
                 logger.info(f"Skipping group reviewer {phid}")
             else:
-                raise UnsupportedReviewerError(f"Unsupported reviewer {phid}")
+                raise ValueError(f"Unsupported reviewer {phid}")
 
         for patch in needed_stack:
             revision = revisions[patch.phid]

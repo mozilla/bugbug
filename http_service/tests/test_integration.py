@@ -11,12 +11,6 @@ import requests
 BUGBUG_HTTP_SERVER = os.environ.get("BUGBUG_HTTP_SERVER", "http://localhost:8000/")
 
 
-class TimeOutError(Exception):
-    def __init__(self, timeout):
-        message = f"Unexpected {timeout} timeout"
-        super().__init__(message)
-
-
 # Test classifying a single bug.
 def integration_test_single():
     timeout = 1200
@@ -34,7 +28,7 @@ def integration_test_single():
     response_json = response.json()
 
     if not response.ok:
-        raise TimeoutError(
+        raise requests.HTTPError(
             f"Couldn't get an answer in {timeout} seconds: {response_json}"
         )
 
@@ -60,7 +54,7 @@ def integration_test_batch():
     response_json = response.json()
 
     if not response.ok:
-        raise TimeoutError(
+        raise requests.HTTPError(
             f"Couldn't get an answer in {timeout} seconds: {response_json}"
         )
 

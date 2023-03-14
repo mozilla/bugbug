@@ -166,12 +166,6 @@ def get_metrics_dict() -> dict:
     return metrics
 
 
-class PullError(Exception):
-    def __init__(self, pull):
-        message = f"Unexpected {pull} pull"
-        super().__init__(message)
-
-
 class Commit:
     def __init__(
         self,
@@ -737,7 +731,7 @@ def transform(hg: hglib.client, repo_dir: str, commit: Commit) -> Commit:
     patch = hg.export(revs=[commit.node.encode("ascii")], git=True)
     try:
         patch_data = rs_parsepatch.get_lines(patch)
-    except AnalysisException:
+    except Exception:
         logger.error(f"Exception while analyzing {commit.node}")
         raise
 
@@ -1542,7 +1536,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
             raise
 
         if p.returncode != 0:
-            raise PullError(
+            raise RuntimeError(
                 f"Error {p.returncode} when pulling {revision} from {branch}"
             )
 
