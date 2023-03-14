@@ -452,7 +452,7 @@ class AnalysisException(Exception):
 
 def get_summary_metrics(obj, metrics_space):
     if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
-        raise RuntimeError("Analysis error")
+        raise AnalysisException("Analysis error")
 
     if metrics_space["kind"] == "function":
         metrics = metrics_space["metrics"]
@@ -604,7 +604,7 @@ def get_space_metrics(
     obj: dict, metrics_space: dict, calc_summaries: bool = True
 ) -> None:
     if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
-        raise RuntimeError("Analysis error")
+        raise AnalysisException("Analysis error")
 
     metrics = metrics_space["metrics"]
     obj["cyclomatic_total"] += metrics["cyclomatic"]["sum"]
@@ -667,7 +667,7 @@ def set_commit_metrics(
 ) -> None:
     try:
         get_space_metrics(commit.metrics, after_metrics["spaces"])
-    except RuntimeError:
+    except AnalysisException:
         logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
 
     before_metrics_dict = get_total_metrics_dict()
@@ -676,7 +676,7 @@ def set_commit_metrics(
             get_space_metrics(
                 before_metrics_dict, before_metrics["spaces"], calc_summaries=False
             )
-    except RuntimeError:
+    except AnalysisException:
         logger.debug(f"rust-code-analysis error on commit {commit.node}, path {path}")
 
     commit.metrics_diff = {
@@ -700,7 +700,7 @@ def set_commit_metrics(
 
         try:
             get_space_metrics(metrics_dict, func, calc_summaries=False)
-        except RuntimeError:
+        except AnalysisException:
             logger.debug(
                 f"rust-code-analysis error on commit {commit.node}, path {path}, function {func['name']}"
             )
