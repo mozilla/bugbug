@@ -7,26 +7,24 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import train_test_split
 
 
-# Wrapper class to calibrate a model
 class IsotonicRegressionCalibrator:
     def __init__(self, model):
         self.model = model
         self.calibrated = False
-        self.X_train, self.X_val, self.X_test = None, None, None
-        self.y_train, self.y_val, self.y_test = None, None, None
         self.calibrator = None
 
     def split_data(self, X, y):
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+        X_train_val, X_test, y_train_val, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
-        self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(
-            self.X_train, self.y_train, test_size=0.2, random_state=42
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train_val, y_train_val, test_size=0.2, random_state=42
         )
+        return X_train, X_val, X_test, y_train, y_val, y_test
 
-    def fit(self):
-        self.model.fit(self.X_train, self.y_train)
-        self.calibrate()
+    def fit(self, X_train, y_train):
+        self.model.fit(X_train, y_train)
+        self.calibrate(X_train, y_train)
 
     def predict(self, X):
         if self.calibrated:
@@ -34,13 +32,13 @@ class IsotonicRegressionCalibrator:
         else:
             return self.model.predict(X)
 
-    # Calibrate the model
-    def calibrate(self):
+    def calibrate(self, X_val, y_val):
         if not self.calibrated:
             self.calibrator = IsotonicRegression()
-            self.calibrator.fit(self.model.predict(self.X_val), self.y_val)
+            self.calibrator.fit(self.model.predict(X_val), y_val)
             self.calibrated = True
 
     def train(self, X, y):
-        self.split_data(X, y)
-        self.fit()
+        X_train, X_val, X_test, y_train, y_val, y_test = self.split_data(X, y)
+        self.fit(X_train, y_train)
+        return X_train, X_val, X_test, y_train, y_val, y_test
