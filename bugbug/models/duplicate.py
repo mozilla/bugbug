@@ -15,9 +15,6 @@ from xgboost import XGBClassifier
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugCoupleModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
-
 REPORTERS_TO_IGNORE = {"intermittent-bug-filer@mozilla.bugs", "wptsync@mozilla.bugs"}
 
 basicConfig(level=INFO)
