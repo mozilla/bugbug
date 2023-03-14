@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
@@ -11,6 +13,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class StepsToReproduceModel(BugModel):
@@ -78,15 +83,13 @@ class StepsToReproduceModel(BugModel):
                         if change["removed"].startswith("stepswanted"):
                             classes[int(bug_data["id"])] = 1
 
-        print(
-            "{} bugs have no steps to reproduce".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d bugs have no steps to reproduce",
+            sum(1 for label in classes.values() if label == 0),
         )
-        print(
-            "{} bugs have steps to reproduce".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d bugs have steps to reproduce",
+            sum(1 for label in classes.values() if label == 1),
         )
 
         return classes, [0, 1]

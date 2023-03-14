@@ -3,10 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
 from bugbug import bugzilla
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def bool_str(val):
@@ -536,7 +541,7 @@ def rollback(bug, when=None, do_assert=False):
         if do_assert:
             assert False, msg
         else:
-            print(msg)
+            logger.error(msg)
 
     def parse_flag_change(change):
         parts = change.split("(")
@@ -869,9 +874,8 @@ def get_inconsistencies(bugs):
     for bug in bugs:
         try:
             rollback(bug, do_assert=True)
-        except Exception as e:
-            print(bug["id"])
-            print(e)
+        except Exception:
+            logger.exception("Failed to rollback bug %s", bug["id"])
             inconsistencies.append(bug)
 
     return inconsistencies
@@ -888,6 +892,6 @@ if __name__ == "__main__":
 
     for bug in tqdm(bugzilla.get_bugs()):
         if args.verbose:
-            print(bug["id"])
+            logger.info(bug["id"])
 
         rollback(bug, do_assert=True)

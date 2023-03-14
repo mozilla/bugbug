@@ -14,6 +14,7 @@ from tqdm import tqdm
 from bugbug import db
 from bugbug.db import LastModifiedNotAvailable
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 RevisionDict = NewType("RevisionDict", dict)
@@ -126,14 +127,14 @@ def download_revisions(rev_ids: Collection[int]) -> None:
         if rev["id"] in new_rev_ids:
             new_rev_ids.remove(rev["id"])
 
-    print(f"Loaded {old_rev_count} revisions.")
+    logger.info("Loaded %d revisions.", old_rev_count)
 
     new_rev_ids_list = sorted(list(new_rev_ids))
     rev_ids_groups = (
         new_rev_ids_list[i : i + 100] for i in range(0, len(new_rev_ids_list), 100)
     )
 
-    print(f"{len(new_rev_ids_list)} revisions left to download")
+    logger.info("%d revisions left to download", len(new_rev_ids_list))
 
     with tqdm(total=len(new_rev_ids)) as progress_bar:
         for rev_ids_group in rev_ids_groups:
