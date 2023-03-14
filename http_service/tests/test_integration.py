@@ -29,7 +29,8 @@ def integration_test_single():
 
     if not response.ok:
         raise requests.HTTPError(
-            f"Couldn't get an answer in {timeout} seconds: {response_json}"
+            f"Couldn't get an answer in {timeout} seconds: {response_json}",
+            response=response,
         )
 
     print("Response for bug 1376406", response_json)
@@ -55,7 +56,8 @@ def integration_test_batch():
 
     if not response.ok:
         raise requests.HTTPError(
-            f"Couldn't get an answer in {timeout} seconds: {response_json}"
+            f"Couldn't get an answer in {timeout} seconds: {response_json}",
+            response=response,
         )
 
     response_1376544 = response_json["bugs"]["1376544"]
