@@ -444,6 +444,12 @@ def get_touched_functions(
     return [functions[i] for i in touched_functions_indexes]
 
 
+class AnalysisException(Exception):
+    """Raised when rust-code-analysis failed to analyze a file."""
+
+    pass
+
+
 def get_summary_metrics(obj, metrics_space):
     if metrics_space["kind"] in {"unit", "function"} and metrics_space["name"] == "":
         raise RuntimeError("Analysis error")
