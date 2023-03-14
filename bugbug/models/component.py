@@ -5,6 +5,7 @@
 
 from collections import Counter
 from datetime import datetime, timezone
+from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
@@ -16,6 +17,9 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class ComponentModel(BugModel):
@@ -164,9 +168,9 @@ class ComponentModel(BugModel):
         component_counts = Counter(classes.values()).most_common()
         top_components = set(component for component, count in component_counts)
 
-        print(f"{len(top_components)} components")
+        logger.info("%d components", len(top_components))
         for component, count in component_counts:
-            print(f"{component}: {count}")
+            logger.info("%s: %d", component, count)
 
         # Assert there is at least one bug for each conflated component.
         for conflated_component in self.CONFLATED_COMPONENTS:
@@ -242,14 +246,18 @@ class ComponentModel(BugModel):
             full_comp = f"{product}::{component}"
 
             if full_comp not in bugs_number.keys():
-                print(
-                    f"Component {component!r} of product {product!r} doesn't exists, failure"
+                logger.warning(
+                    "Component %r of product %r doesn't exists, failure",
+                    component,
+                    product,
                 )
                 success = False
 
             elif bugs_number[full_comp] <= 0:
-                print(
-                    f"Component {component!r} of product {product!r} have 0 bugs or less in it, failure"
+                logger.warning(
+                    "Component %r of product %r have 0 bugs or less in it, failure",
+                    component,
+                    product,
                 )
                 success = False
 
@@ -265,7 +273,7 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components:
-                print(f"{conflated_component} doesn't match any component")
+                logger.warning("%s doesn't match any component", conflated_component)
                 success = False
                 continue
 
@@ -276,8 +284,9 @@ class ComponentModel(BugModel):
             ]
 
             if not matching_components_values:
-                print(
-                    f"{conflated_component} should match at least one component with more than 0 bugs"
+                logger.warning(
+                    "%s should match at least one component with more than 0 bugs",
+                    conflated_component,
                 )
                 success = False
 
@@ -286,13 +295,15 @@ class ComponentModel(BugModel):
 
         for full_comp in self.CONFLATED_COMPONENTS_MAPPING.values():
             if full_comp not in bugs_number:
-                print(
-                    f"{full_comp} from conflated component mapping doesn't exists, failure"
+                logger.warning(
+                    "%s from conflated component mapping doesn't exists, failure",
+                    full_comp,
                 )
                 success = False
             elif bugs_number[full_comp] <= 0:
-                print(
-                    f"{full_comp} from conflated component mapping have less than 1 bug, failure"
+                logger.warning(
+                    "%s from conflated component mapping have less than 1 bug, failure",
+                    full_comp,
                 )
                 success = False
 
@@ -309,7 +320,7 @@ class ComponentModel(BugModel):
             ]
 
             if not (matching_components or in_mapping):
-                print(f"It should be possible to map {conflated_component}")
+                logger.warning("It should be possible to map %s", conflated_component)
                 success = False
                 continue
 
@@ -336,15 +347,16 @@ class ComponentModel(BugModel):
         if not meaningful_product_components.issubset(
             self.meaningful_product_components
         ):
-            print("Meaningful product components mismatch")
+            logger.warning("Meaningful product components mismatch")
 
             new_meaningful_product_components = (
                 meaningful_product_components.difference(
                     self.meaningful_product_components
                 )
             )
-            print(
-                f"New meaningful product components {new_meaningful_product_components!r}"
+            logger.info(
+                "New meaningful product components %r",
+                new_meaningful_product_components,
             )
 
             success = False

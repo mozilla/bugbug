@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from collections import Counter
+from logging import INFO, basicConfig, getLogger
 
 import xgboost
 from sklearn.compose import ColumnTransformer
@@ -23,6 +24,9 @@ ADDRESSES_TO_EXCLUDE = [
     "nobody@nss.bugs",
     "nobody@t4b.me",
 ]
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class AssigneeModel(BugModel):
@@ -100,9 +104,9 @@ class AssigneeModel(BugModel):
             if count > MINIMUM_ASSIGNMENTS
         )
 
-        print(f"{len(top_assignees)} assignees")
+        logger.info("%d assignees", len(top_assignees))
         for assignee, count in assignee_counts:
-            print(f"{assignee}: {count}")
+            logger.info("%s: %d", assignee, count)
 
         classes = {
             bug_id: assignee

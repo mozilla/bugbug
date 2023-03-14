@@ -5,6 +5,7 @@
 
 import pickle
 from collections import defaultdict
+from logging import INFO, basicConfig, getLogger
 from typing import Any
 
 import matplotlib
@@ -28,6 +29,9 @@ from bugbug import bugzilla, db, repository
 from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def classification_report_imbalanced_values(
@@ -398,7 +402,7 @@ class Model:
 
         self.clf.fit(X_train, self.le.transform(y_train))
 
-        print("Model trained")
+        logger.info("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):

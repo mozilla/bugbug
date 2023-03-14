@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 import xgboost
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
@@ -11,6 +13,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import commit_features, repository, test_scheduling, utils
 from bugbug.model import CommitModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class TestFailureModel(CommitModel):
@@ -96,15 +101,12 @@ class TestFailureModel(CommitModel):
             else:
                 classes[rev] = 0
 
-        print(
-            "{} commits failed".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d commits failed", sum(1 for label in classes.values() if label == 1)
         )
-        print(
-            "{} commits did not fail".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d commits did not fail",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]
