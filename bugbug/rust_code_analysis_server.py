@@ -35,7 +35,7 @@ class RustCodeAnalysisServer:
                     time.sleep(0.35)
 
         self.terminate()
-        raise Exception("Unable to run rust-code-analysis server")
+        raise RuntimeError("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
@@ -50,7 +50,7 @@ class RustCodeAnalysisServer:
                 cmd += ["-j", str(thread_num)]
             self.proc = subprocess.Popen(cmd)
         except FileNotFoundError:
-            raise Exception("rust-code-analysis is required for code analysis")
+            raise RuntimeError("rust-code-analysis is required for code analysis")
 
     def terminate(self):
         if self.proc is not None:

@@ -82,7 +82,7 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    raise Exception(f"Couldn't find cost for {config}")
+    raise ValueError(f"Couldn't find cost for {config}")
 
 
 def _generate_equivalence_sets(

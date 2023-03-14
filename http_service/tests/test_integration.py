@@ -32,7 +32,10 @@ def integration_test_single():
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
+        raise requests.HTTPError(
+            f"Couldn't get an answer in {timeout} seconds: {response_json}",
+            response=response,
+        )
 
     logger.info("Response for bug 1376406 %s", response_json)
     assert response_json["class"] is not None
@@ -56,7 +59,10 @@ def integration_test_batch():
     response_json = response.json()
 
     if not response.ok:
-        raise Exception(f"Couldn't get an answer in {timeout} seconds: {response_json}")
+        raise requests.HTTPError(
+            f"Couldn't get an answer in {timeout} seconds: {response_json}",
+            response=response,
+        )
 
     response_1376544 = response_json["bugs"]["1376544"]
     logger.info("Response for bug 1376544 %s", response_1376544)
