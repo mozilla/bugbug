@@ -14,7 +14,7 @@ class IsotonicRegressionCalibrator:
         self.calibrated = False
         self.X_train, self.X_val, self.X_test = None, None, None
         self.y_train, self.y_val, self.y_test = None, None, None
-        self.ir = None
+        self.calibrator = None
 
     def split_data(self, X, y):
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
@@ -26,18 +26,21 @@ class IsotonicRegressionCalibrator:
 
     def fit(self):
         self.model.fit(self.X_train, self.y_train)
-        # invoking calibrate() to calibrate the model
         self.calibrate()
 
     def predict(self, X):
         if self.calibrated:
-            return self.ir.predict(self.model.predict(X))
+            return self.calibrator.predict(self.model.predict(X))
         else:
             return self.model.predict(X)
 
     # Calibrate the model
     def calibrate(self):
         if not self.calibrated:
-            self.ir = IsotonicRegression()
-            self.ir.fit(self.model.predict(self.X_val), self.y_val)
+            self.calibrator = IsotonicRegression()
+            self.calibrator.fit(self.model.predict(self.X_val), self.y_val)
             self.calibrated = True
+
+    def train(self, X, y):
+        self.split_data(X, y)
+        self.fit()
