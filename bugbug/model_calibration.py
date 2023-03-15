@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 class IsotonicRegressionCalibrator:
     def __init__(self, model):
         self.model = model
-        self.calibrator = None
+        self.calibrator = IsotonicRegression()
 
     def split_data(self, X, y):
         X_train_val, X_test, y_train_val, y_test = train_test_split(
@@ -21,21 +21,17 @@ class IsotonicRegressionCalibrator:
         )
         return X_train, X_val, X_test, y_train, y_val, y_test
 
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, X_val, y_val):
         self.model.fit(X_train, y_train)
-        self.calibrate(X_train, y_train)
+        self.calibrate(X_val, y_val)
 
     def predict(self, X):
-        if self.calibrator is None:
-            return self.model.predict(X)
-        else:
-            return self.calibrator.predict(self.model.predict(X))
+        return self.calibrator.predict(self.model.predict(X))
 
     def calibrate(self, X_val, y_val):
-        self.calibrator = IsotonicRegression()
         self.calibrator.fit(self.model.predict(X_val), y_val)
 
     def train(self, X, y):
         X_train, X_val, X_test, y_train, y_val, y_test = self.split_data(X, y)
-        self.fit(X_train, y_train)
+        self.fit(X_train, y_train, X_val, y_val)
         return X_train, X_val, X_test, y_train, y_val, y_test
