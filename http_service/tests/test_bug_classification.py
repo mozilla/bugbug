@@ -225,3 +225,5 @@ def test_no_api_key(client):
 
     assert rv.status_code == 401
     assert rv.json == {"message": "Error, missing X-API-KEY"}
+
+    # TODO: extend the tests to cover issue #1367
