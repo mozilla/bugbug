@@ -17,6 +17,7 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
@@ -122,8 +123,10 @@ class RegressorModel(CommitModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
+        # wrappinhg the xgboost classifier with the calibrator
+        base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        base_clf.set_params(predictor="cpu_predictor")
+        self.clf = IsotonicRegressionCalibrator(base_clf)
 
     def get_labels(self):
         classes = {}

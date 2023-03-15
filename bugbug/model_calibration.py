@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from sklearn.isotonic import IsotonicRegression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import mean_squared_error, train_test_split
 
 
 class IsotonicRegressionCalibrator:
@@ -23,7 +23,11 @@ class IsotonicRegressionCalibrator:
 
     def fit(self, X_train, y_train, X_val, y_val):
         self.model.fit(X_train, y_train)
+        mse_before = mean_squared_error(y_val, self.model.predict(X_val))
+        print(f"MSE of model before calibration: {mse_before:.4f}")
         self.calibrate(X_val, y_val)
+        mse_after = mean_squared_error(y_val, self.predict(X_val))
+        print(f"MSE of model after calibration: {mse_after:.4f}")
 
     def predict(self, X):
         return self.calibrator.predict(self.model.predict(X))
