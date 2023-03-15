@@ -4,7 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from sklearn.isotonic import IsotonicRegression
-from sklearn.model_selection import mean_squared_error, train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 
 
 class IsotonicRegressionCalibrator:
