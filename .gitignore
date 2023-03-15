@@ -45,6 +45,8 @@ share/python-wheels/
 MANIFEST
 cache/
 node_modules/
+envbugbug/
+.hypothesis/
 
 # Logs
 *.log
