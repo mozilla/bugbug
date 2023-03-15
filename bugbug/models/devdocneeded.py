@@ -11,7 +11,6 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
-from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 
 class DevDocNeededModel(BugModel):
@@ -73,10 +72,8 @@ class DevDocNeededModel(BugModel):
             ]
         )
 
-        # wrapping the model with IsotonicRegressionCalibrator
-        base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        base_clf.set_params(predictor="cpu_predictor")
-        self.clf = IsotonicRegressionCalibrator(base_clf)
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
         return change["field_name"] == "keywords" and any(

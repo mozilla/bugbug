@@ -123,7 +123,6 @@ class RegressorModel(CommitModel):
             ]
         )
 
-        # wrappinhg the xgboost classifier with the calibrator
         base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         base_clf.set_params(predictor="cpu_predictor")
         self.clf = IsotonicRegressionCalibrator(base_clf)
