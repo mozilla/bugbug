@@ -31,6 +31,7 @@ from bugbug import (
 )
 from bugbug.model import Model
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +82,7 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    raise Exception(f"Couldn't find cost for {config}")
+    raise ValueError(f"Couldn't find cost for {config}")
 
 
 def _generate_equivalence_sets(
@@ -497,8 +498,10 @@ class TestSelectModel(Model):
             len(push["failures"]) + len(push["passes"])
             for push in pushes[:train_push_len]
         )
-        print(
-            f"{train_push_len} pushes in the training set (corresponding to {train_len} push/jobs)"
+        logger.info(
+            "%d pushes in the training set (corresponding to %d push/jobs)",
+            train_push_len,
+            train_len,
         )
         return X[:train_len], X[train_len:], y[:train_len], y[train_len:]
 
@@ -534,21 +537,17 @@ class TestSelectModel(Model):
             for name in push["passes"]:
                 classes[(push["revs"][0], name)] = 0
 
-        print("{} pushes considered".format(len(pushes)))
-        print(
-            "{} pushes with at least one failure".format(
-                sum(1 for push in pushes if len(push["failures"]) > 0)
-            )
+        logger.info("%d pushes considered", len(pushes))
+        logger.info(
+            "%d pushes with at least one failure",
+            sum(1 for push in pushes if len(push["failures"]) > 0),
         )
-        print(
-            "{} push/jobs failed".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d push/jobs failed", sum(1 for label in classes.values() if label == 1)
         )
-        print(
-            "{} push/jobs did not fail".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d push/jobs did not fail",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]
@@ -595,7 +594,7 @@ class TestSelectModel(Model):
         # To evaluate the model with reductions enabled, we need to regenerate the failing together DB, using
         # only failure data from the training pushes (otherwise, we'd leak training information into the test
         # set).
-        print("Generate failing together DB (restricted to training pushes)")
+        logger.info("Generate failing together DB (restricted to training pushes)")
         push_data_iter, push_data_count, _ = test_scheduling.get_push_data(
             "label" if self.granularity == "label" else "config_group"
         )
@@ -644,12 +643,16 @@ class TestSelectModel(Model):
                 for push in test_pushes.values()
                 if "config_group_failures" not in push
             )
-            print(
-                f"{missing_config_group_failures} pushes without config_group failures"
+            logger.info(
+                "%d pushes without config_group failures", missing_config_group_failures
             )
 
-        print(
-            f"Testing on {len(test_pushes)} ({test_pushes_failures} with failures) out of {len(pushes)}. {len(all_tasks)} schedulable tasks."
+        logger.info(
+            "Testing on %d (%d with failures) out of %d. %d schedulable tasks.",
+            len(test_pushes),
+            test_pushes_failures,
+            len(pushes),
+            len(all_tasks),
         )
 
         del pushes
@@ -705,10 +708,8 @@ class TestSelectModel(Model):
             for future in concurrent.futures.as_completed(futures):
                 exc = future.exception()
                 if exc is not None:
-                    print(
-                        "Exception {} while running {}".format(
-                            exc, futures[future]["revs"][0]
-                        )
+                    logger.error(
+                        "Exception %s while running %s", exc, futures[future]["revs"][0]
                     )
                     for f in futures:
                         f.cancel()
@@ -833,9 +834,11 @@ class TestSelectModel(Model):
                     and result["caught_percentage_config_group"] is not None
                 )
 
-                message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
-
-            print(message)
+            logger.info(
+                "In %d%% of pushes we caught at least one config/group failure. On average, we caught %f%% of all seen config/group failures.",
+                percentage_caught_one_config_group,
+                average_caught_percentage_config_group,
+            )
 
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=utils.get_physical_cpu_count(),

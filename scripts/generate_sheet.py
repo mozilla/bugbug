@@ -4,11 +4,15 @@ import argparse
 import csv
 import os
 from datetime import datetime, timedelta
+from logging import INFO, basicConfig, getLogger
 
 import numpy as np
 
 from bugbug import bugzilla
 from bugbug.models import get_model_class
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> None:
@@ -25,7 +29,7 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
     bug_ids = bugzilla.get_ids_between(datetime.utcnow() - timedelta(days))
     bugs = bugzilla.get(bug_ids)
 
-    print(f"Classifying {len(bugs)} bugs...")
+    logger.info("Classifying %d bugs...", len(bugs))
 
     rows = [["Bug", f"{model_name}(model)", model_name, "Title"]]
 

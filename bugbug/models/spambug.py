@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+from logging import INFO, basicConfig, getLogger
+
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from sklearn.compose import ColumnTransformer
@@ -11,6 +13,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 class SpamBugModel(BugModel):
@@ -105,15 +110,13 @@ class SpamBugModel(BugModel):
             elif bug_data["product"] == "Invalid Bugs":
                 classes[bug_id] = 1
 
-        print(
-            "{} bugs are classified as non-spam".format(
-                sum(1 for label in classes.values() if label == 0)
-            )
+        logger.info(
+            "%d bugs are classified as non-spam",
+            sum(1 for label in classes.values() if label == 0),
         )
-        print(
-            "{} bugs are classified as spam".format(
-                sum(1 for label in classes.values() if label == 1)
-            )
+        logger.info(
+            "%d bugs are classified as spam",
+            sum(1 for label in classes.values() if label == 1),
         )
 
         return classes, [0, 1]

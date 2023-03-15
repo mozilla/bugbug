@@ -33,6 +33,7 @@ from tqdm import tqdm
 from bugbug import db, repository
 from bugbug.utils import ExpQueue, LMDBDict
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 Revision = NewType("Revision", str)
@@ -117,6 +118,12 @@ JOBS_TO_IGNORE = (
 )
 
 
+class UnexpectedGranularityError(ValueError):
+    def __init__(self, granularity):
+        message = f"Unexpected {granularity} granularity"
+        super().__init__(message)
+
+
 def filter_runnables(
     runnables: tuple[Runnable, ...], all_runnables: Set[Runnable], granularity: str
 ) -> tuple[Any, ...]:
@@ -184,7 +191,7 @@ def rename_runnables(
             for config, group in config_groups
         )
     else:
-        raise Exception(f"Unexpected {granularity} granularity")
+        raise UnexpectedGranularityError(granularity)
 
 
 def get_push_data(
@@ -281,8 +288,9 @@ def get_push_data(
             )
         )
 
-        print(
-            f"{manifest_combinations} possible combinations of manifests on configurations"
+        logger.info(
+            "%d possible combinations of manifests on configurations",
+            manifest_combinations,
         )
 
     return push_data_iter, push_data_count, all_runnables
@@ -296,7 +304,7 @@ def get_test_scheduling_history(granularity):
     elif granularity == "config_group":
         test_scheduling_db = TEST_CONFIG_GROUP_SCHEDULING_DB
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise UnexpectedGranularityError(granularity)
 
     for obj in db.read(test_scheduling_db):
         yield obj["revs"], obj["data"]
@@ -310,7 +318,7 @@ def get_past_failures(granularity, readonly):
     elif granularity == "config_group":
         past_failures_db = os.path.join("data", PAST_FAILURES_CONFIG_GROUP_DB)
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise UnexpectedGranularityError(granularity)
 
     return shelve.Shelf(
         LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
@@ -325,7 +333,7 @@ def get_failing_together_db_path(granularity: str) -> str:
     elif granularity == "config_group":
         path = FAILING_TOGETHER_CONFIG_GROUP_DB
     else:
-        raise Exception(f"{granularity} granularity unsupported")
+        raise UnexpectedGranularityError(granularity)
 
     return os.path.join("data", path[: -len(".tar.zst")])
 

@@ -1536,7 +1536,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
             raise
 
         if p.returncode != 0:
-            raise Exception(
+            raise RuntimeError(
                 f"Error {p.returncode} when pulling {revision} from {branch}"
             )
 

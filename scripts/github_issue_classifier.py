@@ -48,7 +48,7 @@ def classify_issues(
         issues = github.get_issues()
 
     for issue in issues:
-        print(f'{issue["url"]} - {issue["title"]} ')
+        logger.info("%s - %s ", issue["url"], issue["title"])
 
         if model.calculate_importance:
             probas, importance = model.classify(
@@ -67,7 +67,7 @@ def classify_issues(
             pred_class = model.le.inverse_transform([pred_index])[0]
         else:
             pred_class = "Positive" if pred_index == 1 else "Negative"
-        print(f"{pred_class} {probability}")
+        logger.info("%s %s", pred_class, probability)
         input()
 
 

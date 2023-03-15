@@ -21,12 +21,15 @@ This script triggers the data pipeline for the bugbug project
 
 import argparse
 import os
-import sys
+from logging import INFO, basicConfig, getLogger
 
 import jsone
 import requests.packages.urllib3
 import taskcluster
 import yaml
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 requests.packages.urllib3.disable_warnings()
 
@@ -128,9 +131,11 @@ def main():
         for task_id, task_payload in tasks:
             queue.createTask(task_id, task_payload)
 
-        print(f"https://community-tc.services.mozilla.com/tasks/groups/{task_group_id}")
-    except taskcluster.exceptions.TaskclusterAuthFailure as e:
-        print(f"TaskclusterAuthFailure: {e.body}", file=sys.stderr)
+        logger.info(
+            "https://community-tc.services.mozilla.com/tasks/groups/%s", task_group_id
+        )
+    except taskcluster.exceptions.TaskclusterAuthFailure:
+        logger.exception("Failed to authenticate with Taskcluster")
         raise
 
 

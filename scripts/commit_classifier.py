@@ -331,7 +331,7 @@ class CommitClassifier(object):
                 # TODO: Support group reviewers somehow.
                 logger.info("Skipping group reviewer %s", phid)
             else:
-                raise Exception(f"Unsupported reviewer {phid}")
+                raise ValueError(f"Unsupported reviewer {phid}")
 
         for patch in needed_stack:
             revision = revisions[patch.phid]

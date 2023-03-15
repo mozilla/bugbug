@@ -4,9 +4,13 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import importlib
+from logging import INFO, basicConfig, getLogger
 
 from bugbug import model
 from bugbug.models import MODELS, get_model_class
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def test_import_all_models():
@@ -18,7 +22,7 @@ def test_import_all_models():
         if model_name == "component_nn" and not importlib.util.find_spec("tensorflow"):
             continue
 
-        print("Try loading model", model_name)
+        logger.info("Try loading model %s", model_name)
         get_model_class(model_name)
 
 
