@@ -9,8 +9,8 @@ import time
 
 import orjson
 
-from bugbug_http.app import API_TOKEN
-
+from bugbug_http.app import API_TOKEN,BUGZILLA_TOKEN
+from bugbug import bugzilla
 
 def retrieve_compressed_reponse(response):
     # Response is of type "<class 'flask.wrappers.Response'>" -  Flask Client's  Response
@@ -157,6 +157,22 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     assert retrieve_compressed_reponse(rv) == {
         "bugs": {str(bug_id): result for bug_id in bug_ids}
     }
+    
+    # test Bugzilla API
+    # set bugzilla token
+    bugzilla.set_token(BUGZILLA_TOKEN)
+    # bug and no_bug list, source labels/bug_nobug
+    bugs_list = [1167544,1168630,1168666,1168891,1171903]
+    no_bugs_list = [1167614,1167673,1168853,1172645,1167477]
+    # merge the two list
+    bug_ids = bugs_list.extend(no_bugs_list)
+    # call the bugzilla API
+    bugs = bugzilla.get(bug_ids)
+    # run tests
+    assert len(bug_ids) > len(bugs.keys())
+    assert len(bugs.keys()) == 5
+    assert no_bugs_list[0] not in bugs.keys()
+    
 
 
 def test_empty_batch(client):
@@ -225,3 +241,4 @@ def test_no_api_key(client):
 
     assert rv.status_code == 401
     assert rv.json == {"message": "Error, missing X-API-KEY"}
+    
