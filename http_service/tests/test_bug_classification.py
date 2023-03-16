@@ -9,7 +9,10 @@ import time
 
 import orjson
 
+from bugbug import bugzilla
 from bugbug_http.app import API_TOKEN
+
+from .bugzilla_json_response import attachment, comments, history, include_fields
 
 
 def retrieve_compressed_reponse(response):
@@ -157,6 +160,56 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     assert retrieve_compressed_reponse(rv) == {
         "bugs": {str(bug_id): result for bug_id in bug_ids}
     }
+
+    # test Bugzilla API
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug?id=1566486%2C1598744%2C1602463%2C1615281%2C1619699&include_fields=id",
+        status=200,
+        json={"bugs": [{"id": 1602463}, {"id": 1619699}]},
+    )
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug?id=1566486%2C1598744%2C1602463%2C1615281%2C1619699&include_fields=_default&include_fields=filed_via",
+        status=200,
+        json=include_fields,
+    )
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/1602463/comment?ids=1619699&include_fields=id&include_fields=count&include_fields=text&include_fields=creation_time",
+        status=200,
+        json=comments,
+    )
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/1602463/history?ids=1619699",
+        status=200,
+        json=history,
+    )
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug/1602463/attachment?ids=1619699&include_fields=id&include_fields=flags&include_fields=is_patch&include_fields=content_type&include_fields=creation_time&include_fields=file_name",
+        status=200,
+        json=attachment,
+    )
+
+    # bug and no_bug list
+    bugs_list = [1602463, 1619699]
+    no_bugs_list = [1598744, 1615281, 1566486]
+    # merge the two list
+    bug_ids = [*bugs_list, *no_bugs_list]
+    # call the bugzilla API
+    bugs = bugzilla.get(bug_ids)
+    # run tests
+    assert len(bug_ids) > len(bugs.keys())
+    assert len(bugs.keys()) == 2
+    assert no_bugs_list[0] not in bugs.keys()
+    assert 1602463 in bugs
+    assert 1619699 in bugs
 
 
 def test_empty_batch(client):
