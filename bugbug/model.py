@@ -37,7 +37,9 @@ logger = getLogger(__name__)
 def classification_report_imbalanced_values(
     y_true, y_pred, labels, target_names=None, sample_weight=None, digits=2, alpha=0.1
 ):
-    """Copy of imblearn.metrics.classification_report_imbalanced to have
+    """Build a classification report based on metrics used with imbalanced dataset.
+
+    Copy of imblearn.metrics.classification_report_imbalanced to have
     access to the raw values. The code is mostly the same except the
     formatting code and generation of the report which haven removed. Copied
     from version 0.4.3. The original code is living here:
@@ -655,15 +657,19 @@ class Model:
         return classes
 
     def check(self):
-        """Subclasses can implement their own check, the base model doesn't
-        check anything at the moment
+        """Ensure everything is OK.
+
+        Subclasses can implement their own check, the base model doesn't check
+        anything at the moment.
         """
         return True
 
     def get_extra_data(self):
-        """Returns a dict that can be used for customers who need static
-        extra data for a given model. Must return a dict and JSON-encodable
-        types.
+        """Get extra data for the model.
+
+        Returns:
+            a dict that can be used for customers who need static extra data for
+            a given model. Must return a dict with JSON-encodable types.
         """
         return {}
 

@@ -67,9 +67,14 @@ class RustCodeAnalysisServer:
             return False
 
     def metrics(self, filename, code, unit=True):
-        """
-        When unit is True, then only metrics for top-level is returned,
-        when False, then we get detailed metrics for all classes, functions, nested functions, ...
+        """Get code metrics for file.
+
+        Args:
+            filename: the path for the file that we want to analyze
+            code: the content of the file
+            unit: when unit is True, then only metrics for top-level is
+                returned, when False, then we get detailed metrics for all
+                classes, functions, nested functions, ...
         """
         unit = 1 if unit else 0
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"

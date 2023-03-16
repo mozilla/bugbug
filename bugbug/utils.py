@@ -94,8 +94,8 @@ class DictExtractor(BaseEstimator, TransformerMixin):
 
 
 class MissingOrdinalEncoder(OrdinalEncoder):
-    """
-    Ordinal encoder that ignores missing values encountered after training.
+    """Ordinal encoder that ignores missing values encountered after training.
+
     Workaround for issue: scikit-learn/scikit-learn#11997
     """
 
@@ -110,9 +110,9 @@ class MissingOrdinalEncoder(OrdinalEncoder):
 
 
 def get_taskcluster_options() -> dict:
-    """
-    Helper to get the Taskcluster setup options
-    according to current environment (local or Taskcluster)
+    """Get the Taskcluster setup options according to current environment.
+
+    The current environment could be local.
     """
     options = taskcluster.optionsFromEnvironment()
     proxy_url = os.environ.get("TASKCLUSTER_PROXY_URL")
@@ -129,7 +129,7 @@ def get_taskcluster_options() -> dict:
 
 
 def get_secret(secret_id: str) -> Any:
-    """Return the secret value"""
+    """Return the secret value."""
     env_variable_name = f"BUGBUG_{secret_id}"
 
     # Try in the environment first
@@ -294,7 +294,7 @@ def extract_file(path: str) -> None:
 
 
 class CustomJsonEncoder(json.JSONEncoder):
-    """A custom Json Encoder to support Numpy types"""
+    """A custom Json Encoder to support Numpy types."""
 
     def default(self, obj):
         try:
@@ -440,7 +440,7 @@ def get_session(name: str) -> requests.Session:
 
 
 def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
-    """Load descriptions of patches in the stack for a given revision"""
+    """Load descriptions of patches in the stack for a given revision."""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
     r = get_session("hgmo").get(url)
     r.raise_for_status()
@@ -485,7 +485,7 @@ def extract_metadata(body: str) -> dict:
 
 
 def extract_private(issue_body: str) -> Optional[tuple]:
-    """Extract private issue information from public issue body
+    """Extract private issue information from public issue body.
 
     Parse public issue body and extract private issue number and
     its owner/repository (webcompat repository usecase)
