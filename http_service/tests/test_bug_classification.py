@@ -12,7 +12,12 @@ import orjson
 from bugbug import bugzilla
 from bugbug_http.app import API_TOKEN
 
-from .bugzilla_json_response import attachment, comments, history, include_fields
+from .json_data.bugzilla_json_response import (
+    attachment,
+    comments,
+    history,
+    include_fields,
+)
 
 
 def retrieve_compressed_reponse(response):
