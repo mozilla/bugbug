@@ -33,6 +33,9 @@ class IsotonicRegressionCalibrator:
     def predict(self, X):
         return self.calibrator.predict(self.model.predict(X))
 
+    def predict_proba(self, X_val):
+        return self.calibrator.transform(self.model.predict_proba(X_val))
+
     def calibrate(self, X_val, y_val):
         self.calibrator.fit(self.model.predict(X_val), y_val)
 
