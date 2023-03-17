@@ -67,7 +67,7 @@ class RustCodeAnalysisServer:
             return False
 
     def metrics(self, filename, code, unit=True):
-        """Get code metrics for file.
+        """Get code metrics for a file.
 
         Args:
             filename: the path for the file that we want to analyze
