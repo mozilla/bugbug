@@ -1510,7 +1510,7 @@ def clone(
 
 
 def pull(repo_dir: str, branch: str, revision: str) -> None:
-    """Pull a revision from a branch of a remote repository into a local repository"""
+    """Pull a revision from a branch of a remote repository into a local repository."""
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(2),

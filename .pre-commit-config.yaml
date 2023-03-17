@@ -21,6 +21,15 @@ repos:
           - "flake8-copyright==0.2.3"
           - "flake8-debugger==4.1.2"
           - "flake8-mypy==17.8.0"
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        exclude: ^http_service/
+        args:
+          - --convention=google
+          # Ignoring warnings about missing docstrings.
+          - --add-ignore=D100,D101,D102,D103,D104,D105,D107
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:

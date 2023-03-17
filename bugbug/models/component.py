@@ -211,11 +211,11 @@ class ComponentModel(BugModel):
         )
 
     def get_meaningful_product_components(self, full_comp_tuples, threshold_ratio=100):
-        """From the given full_comp_tuples iterable of (product, component)
-        tuples, returns the set of tuples which have at least 1% of the most
-        common tuple
-        """
+        """Filter out components which does not have more than 1% of the most common component.
 
+        Returns:
+            a set of tuples which have at least 1% of the most common tuple
+        """
         product_component_counts = Counter(full_comp_tuples).most_common()
 
         max_count = product_component_counts[0][1]
