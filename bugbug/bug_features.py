@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 import dateutil.parser
 import pandas as pd
 from dateutil import parser
-from dateutil.rrule import DAILY, FR, MO, TH, TU, WE, rrule
+from dateutil.rrule import DAILY, FR, MO, SA, SU, TH, TU, WE, rrule
 from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -19,16 +19,26 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from bugbug import bug_snapshot, repository
 
 
-def date_range(start_date, end_date):
+def date_range(end_date, start_date):
     return rrule(
         DAILY, dtstart=start_date, until=end_date, byweekday=(MO, TU, WE, TH, FR)
     )
 
 
-def business_day_range(start_date, end_date):
-    if start_date >= end_date:
-        return (len(list(date_range(end_date, start_date))) - 1) * 1.0
-    return (len(list(date_range(start_date, end_date))) - 1) * -1.0
+def business_day_range(end_date, start_date):
+    weekend_checker = [end_date]
+    if weekend_checker == list(rrule(DAILY, count=1, byweekday=(SA), dtstart=end_date)):
+        end_date = end_date + timedelta(days=2)
+    elif weekend_checker == list(
+        rrule(DAILY, count=1, byweekday=(SU), dtstart=end_date)
+    ):
+        end_date = end_date + timedelta(days=1)
+    if start_date > end_date:
+        range = date_range(start_date + timedelta(days=1), end_date)
+        return (len(list(range))) * -1.0
+    else:
+        range = date_range(end_date, start_date + timedelta(days=1))
+        return (len(list(range))) * 1.0
 
 
 def field(bug, field):
