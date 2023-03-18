@@ -8,6 +8,7 @@ import os
 import pickle
 from datetime import datetime
 
+import dateutil.parser
 import pytest
 import requests
 import responses
@@ -357,3 +358,57 @@ def test_extract_private_url_empty() -> None:
     body = """<p>Test content</p> """
     result = utils.extract_private(body)
     assert result is None
+
+
+def test_consecutive_work_days():
+    result = utils.business_day_range(
+        dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 13th 2023")
+    )
+    assert result == 4.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_with_weekend():
+    result = utils.business_day_range(
+        dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 8th 2023")
+    )
+    assert result == 7.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_full_month():
+    result = utils.business_day_range(
+        dateutil.parser.parse("February 28th 2023"),
+        dateutil.parser.parse("February 1st 2023"),
+    )
+    assert result == 19.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_start_on_weekend():
+    result = utils.business_day_range(
+        dateutil.parser.parse("March 10th 2023"),
+        dateutil.parser.parse("March 5th 2023"),
+    )
+    assert result == 5.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_end_on_weekend():
+    result = utils.business_day_range(
+        dateutil.parser.parse("March 11th 2023"),
+        dateutil.parser.parse("March 6th 2023"),
+    )
+    assert result == 5.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_start_and_end_on_weekend():
+    result = utils.business_day_range(
+        dateutil.parser.parse("March 11th 2023"),
+        dateutil.parser.parse("March 5th 2023"),
+    )
+    assert result == 6.0, f"Dates did not match, actual result: {result}"
+
+
+def test_work_days_start_and_end_on_weekend_over_year_change():
+    result = utils.business_day_range(
+        dateutil.parser.parse("January 7th 2023"),
+        dateutil.parser.parse("December 25th 2022"),
+    )
+    assert result == 11.0, f"Dates did not match, actual result: {result}"
