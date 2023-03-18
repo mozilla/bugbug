@@ -315,6 +315,15 @@ def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
 
 
 def get_fixed_versions(bug):
+    """Returns a list of versions where the given bug is fixed.
+    Args:
+    - bug: A dictionary representing the bug.
+    Returns:
+    - A list of integers representing the versions where the bug is fixed.
+    Raises:
+    - TypeError: If the input bug is not a dictionary.
+    - KeyError: If the input bug does not contain a required field.
+    """
     versions = set()
 
     target_milestone_patterns = [
@@ -340,10 +349,21 @@ def get_fixed_versions(bug):
 
 
 def delete_bugs(match):
+    """Delete bugs matching a given criteria.
+    Args:
+        A dictionary of fields to match against. Bugs with field values that match
+        the corresponding values in this dictionary will be deleted.
+    """
     db.delete(BUGS_DB, match)
 
 
 def count_bugs(bug_query_params):
+    """Count the number of bugs matching the given query parameters.
+    Args:
+        The parameters to use for the bug query.
+    Returns:
+        The number of bugs matching the given query parameters.
+    """
     bug_query_params["count_only"] = 1
 
     r = utils.get_session("bugzilla").get(
@@ -406,6 +426,27 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:
+    """Returns a dictionary where keys are product names and values are
+    dictionaries where keys are component names and values are their respective
+    team names.
+
+    Example:
+    {
+        "Firefox": {
+            "General": "Firefox Engineering",
+            "Search": "Firefox Engineering",
+            "New Tab Page": "Firefox Engineering",
+            "Address Bar": "Firefox Engineering",
+            ...
+        },
+        "Core": {
+            "Widget: Gtk": "Layout & CSS",
+            "Graphics: WebRender": "Graphics",
+            ...
+        },
+        ...
+    }
+    """
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/product",
         params={
@@ -425,6 +466,14 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
 
 
 def get_groups_users(group_names: list[str]) -> list[str]:
+    """Given a list of group names, returns a list of emails of all users who are members
+    of any of the groups. Uses the Bugzilla API to fetch the membership details of the
+    given groups.
+    Args:
+        A list of group names.
+    Returns:
+        A list of emails of all users who are members of any of the groups.
+    """
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/group",
         params={
@@ -443,6 +492,16 @@ def get_groups_users(group_names: list[str]) -> list[str]:
 
 
 def get_revision_ids(bug: BugDict) -> list[int]:
+    """Given a bug dictionary, returns a list of Phabricator revision
+    IDs extracted from its attachments.
+
+    Args:
+    A dictionary representing the bug.
+
+    Returns:
+    A list of integers representing the Phabricator revision
+    IDs extracted from the bug's attachments.
+    """
     revision_ids = []
 
     for attachment in bug["attachments"]:
