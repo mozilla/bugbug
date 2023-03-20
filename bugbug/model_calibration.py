@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
@@ -30,13 +31,19 @@ class IsotonicRegressionCalibrator:
         print(f"MSE of model after calibration : {mse_after:.4f}")
 
     def predict(self, X):
-        return self.calibrator.predict(self.model.predict(X))
+        p_pred = self.calibrator.predict(self.model.predict_proba(X)[:, 1])
+        # transforming predictions back to class labels
+        p_pred = p_pred.flatten()
+        y_pred = np.where(p_pred > 0.5, 1, 0)
+
+        return y_pred
 
     def predict_proba(self, X_val):
-        return self.calibrator.transform(self.model.predict_proba(X_val))
+        return self.calibrator.transform(self.model.predict_proba(X_val)[:, 1])
 
     def calibrate(self, X_val, y_val):
-        self.calibrator.fit(self.model.predict(X_val), y_val)
+        val_preds = self.model.predict_proba(X_val)[:, 1]
+        self.calibrator.fit(val_preds, y_val)
 
     def train(self, X, y):
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
