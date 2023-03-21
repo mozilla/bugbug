@@ -130,7 +130,7 @@ def get(ids_or_query):
     Args:
         ids_or_query: A query string or a list of bug IDs to retrieve.
 
-    Returns:
+    Returns: 
         A dictionary containing information about the bugs, keyed by bug ID.
     """
     new_bugs = {}
