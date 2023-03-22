@@ -7,6 +7,7 @@ from logging import INFO, basicConfig, getLogger
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
+from requests import HTTPError
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -88,9 +89,20 @@ class SpamBugModel(BugModel):
 
         for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
+            creator = bug_data["creator"]
+
+            try:
+                userswitheditbugs = bugzilla.get_groups_users(
+                    ["editbugs", "editbugs-team"]
+                )
+            except HTTPError:
+                userswitheditbugs = set()
+
+            if creator in userswitheditbugs:
+                continue
 
             # Skip bugs filed by Mozillians, since we are sure they are not spam.
-            if "@mozilla" in bug_data["creator"]:
+            if "@mozilla" in creator or "@softvision" in creator:
                 continue
 
             # A bug that was moved out of 'Invalid Bugs' is definitely a legitimate bug.
