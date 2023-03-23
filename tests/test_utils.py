@@ -360,55 +360,37 @@ def test_extract_private_url_empty() -> None:
     assert result is None
 
 
-def test_consecutive_work_days():
+def test_business_day_counter():
     result = utils.business_day_range(
         dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 13th 2023")
     )
-    assert result == 4.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_with_weekend():
+    assert result == 4.0, "Failed to correctly count days"
     result = utils.business_day_range(
         dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 8th 2023")
     )
-    assert result == 7.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_full_month():
+    assert result == 7.0, "Failed to correctly exclude weekend"
     result = utils.business_day_range(
         dateutil.parser.parse("February 28th 2023"),
         dateutil.parser.parse("February 1st 2023"),
     )
-    assert result == 19.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_start_on_weekend():
+    assert result == 19.0, "Failed to account for multiple weekends"
     result = utils.business_day_range(
         dateutil.parser.parse("March 10th 2023"),
         dateutil.parser.parse("March 5th 2023"),
     )
-    assert result == 5.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_end_on_weekend():
+    assert result == 5.0, "Failed when test starts on weekend"
     result = utils.business_day_range(
         dateutil.parser.parse("March 11th 2023"),
         dateutil.parser.parse("March 6th 2023"),
     )
-    assert result == 5.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_start_and_end_on_weekend():
+    assert result == 5.0, "Failed when test ends on weekend"
     result = utils.business_day_range(
         dateutil.parser.parse("March 11th 2023"),
         dateutil.parser.parse("March 5th 2023"),
     )
-    assert result == 6.0, f"Dates did not match, actual result: {result}"
-
-
-def test_work_days_start_and_end_on_weekend_over_year_change():
+    assert result == 6.0, "Failed when test starts and ends on weekend"
     result = utils.business_day_range(
         dateutil.parser.parse("January 7th 2023"),
         dateutil.parser.parse("December 25th 2022"),
     )
-    assert result == 11.0, f"Dates did not match, actual result: {result}"
+    assert result == 11.0, "Failed when testing over year change"
