@@ -97,8 +97,10 @@ def set_token(token):
 
 def get_ids(params):
     """Retrieves a list of bug IDs from Bugzilla based on the given parameters.
+
     Args:
         params: A dictionary of parameters to pass to the Bugzilla API.
+
     Returns:
         list of int: A list of bug IDs.
     """
@@ -124,8 +126,10 @@ def get_ids(params):
 
 def get(ids_or_query):
     """Retrieves information about bugs from Bugzilla based on the given IDs or query.
+
     Args:
         ids_or_query: A query string or a list of bug IDs to retrieve.
+
     Returns:
         A dictionary containing information about the bugs, keyed by bug ID.
     """
@@ -186,7 +190,8 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
         security: Whether to include security bugs. Defaults to False.
         resolution: The resolution status to include. Defaults to None.
 
-    Returns: A list of bug IDs.
+    Returns:
+        A list of bug IDs.
     """
     params = {
         "f1": "creation_ts",
@@ -212,8 +217,6 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
 
 def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDict]:
     """The download_bugs function takes a collection of bug IDs and a flag indicating whether or not to include security bugs.
-    It then retrieves information about the bugs from Bugzilla and appends it to a database. Finally,
-    it returns the information as a list of dictionaries.
 
     Args:
        bug_ids: Collection of integers representing bug IDs to download.
@@ -268,6 +271,7 @@ def _find_linked(
     bug_map: dict[int, BugDict], bug: BugDict, link_type: str
 ) -> list[int]:
     """Recursively searches through linked bugs for a given bug and returns a list of their ids.
+
     Args:
         bug_map: A dictionary of bug ids and their corresponding bug dictionaries.
         bug: The bug dictionary for the bug to search through linked bugs for.
@@ -300,8 +304,7 @@ def find_blocked_by(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
 
 
 def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
-    """Given a dictionary of bugs and a particular bug, return a list of bugs that the
-    particular bug is blocking.
+    """Given a dictionary of bugs and a particular bug, return a list of bugs that the particular bug is blocking.
 
     Args:
     bug_map: A dictionary of bugs with their IDs as keys and
@@ -316,13 +319,16 @@ def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
 
 def get_fixed_versions(bug):
     """Returns a list of versions where the given bug is fixed.
+
     Args:
-    - bug: A dictionary representing the bug.
+        A dictionary representing the bug.
+
     Returns:
-    - A list of integers representing the versions where the bug is fixed.
+        A list of integers representing the versions where the bug is fixed.
+
     Raises:
-    - TypeError: If the input bug is not a dictionary.
-    - KeyError: If the input bug does not contain a required field.
+        TypeError: If the input bug is not a dictionary.
+        KeyError: If the input bug does not contain a required field.
     """
     versions = set()
 
@@ -350,8 +356,9 @@ def get_fixed_versions(bug):
 
 def delete_bugs(match):
     """Delete bugs matching a given criteria.
+
     Args:
-        A dictionary of fields to match against. Bugs with field values that match
+        match: a dictionary of fields to match against. Bugs with field values that match
         the corresponding values in this dictionary will be deleted.
     """
     db.delete(BUGS_DB, match)
@@ -359,8 +366,10 @@ def delete_bugs(match):
 
 def count_bugs(bug_query_params):
     """Count the number of bugs matching the given query parameters.
+
     Args:
         The parameters to use for the bug query.
+
     Returns:
         The number of bugs matching the given query parameters.
     """
@@ -376,10 +385,7 @@ def count_bugs(bug_query_params):
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
-    """Returns a dictionary where keys are full components (in the form of
-    `{product}::{component}`) and the value of the number of bugs for the
-    given full components. Full component with 0 bugs are returned.
-    """
+    """Returns a dictionary where keys are full components (in the form of `{product}::{component}`) and the value of the number of bugs for the given full components. Full component with 0 bugs are returned."""
     since = datetime.utcnow() - relativedelta(months=months)
 
     # Base params
@@ -426,9 +432,7 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:
-    """Returns a dictionary where keys are product names and values are
-    dictionaries where keys are component names and values are their respective
-    team names.
+    """Returns a dictionary where keys are product names and values are dictionaries.
 
     Example:
     {
@@ -466,11 +470,11 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
 
 
 def get_groups_users(group_names: list[str]) -> list[str]:
-    """Given a list of group names, returns a list of emails of all users who are members
-    of any of the groups. Uses the Bugzilla API to fetch the membership details of the
-    given groups.
+    """Uses the Bugzilla API to fetch the membership details of given groups.
+
     Args:
         A list of group names.
+
     Returns:
         A list of emails of all users who are members of any of the groups.
     """
@@ -492,8 +496,7 @@ def get_groups_users(group_names: list[str]) -> list[str]:
 
 
 def get_revision_ids(bug: BugDict) -> list[int]:
-    """Given a bug dictionary, returns a list of Phabricator revision
-    IDs extracted from its attachments.
+    """Given a bug dictionary, returns a list of Phabricator revision IDs extracted from its attachments.
 
     Args:
     A dictionary representing the bug.
