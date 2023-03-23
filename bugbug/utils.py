@@ -15,7 +15,7 @@ import tarfile
 import urllib.parse
 from collections import deque
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import lru_cache
 from typing import Any, Iterator, Optional
 
@@ -28,7 +28,6 @@ import requests
 import scipy
 import taskcluster
 import zstandard
-from dateutil.rrule import DAILY, FR, MO, SA, SU, TH, TU, WE, rrule
 from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -517,23 +516,11 @@ def escape_markdown(text: str) -> str:
 
 
 # Remove business days from date range
-def date_range(end_date, start_date):
-    return rrule(
-        DAILY, dtstart=start_date, until=end_date, byweekday=(MO, TU, WE, TH, FR)
-    )
-
-
 def business_day_range(end_date, start_date):
-    weekend_checker = [end_date]
-    if weekend_checker == list(rrule(DAILY, count=1, byweekday=(SA), dtstart=end_date)):
-        end_date = end_date + timedelta(days=2)
-    elif weekend_checker == list(
-        rrule(DAILY, count=1, byweekday=(SU), dtstart=end_date)
-    ):
-        end_date = end_date + timedelta(days=1)
-    if start_date > end_date:
-        range = date_range(start_date + timedelta(days=1), end_date)
-        return (len(list(range))) * -1.0
-    else:
-        range = date_range(end_date, start_date + timedelta(days=1))
-        return (len(list(range))) * 1.0
+    np_start_date = np.datetime64(start_date, "D")
+    np_end_date = np.datetime64(end_date, "D")
+    if np.is_busday(np_end_date, weekmask="Sat"):
+        np_end_date = np_end_date + np.timedelta64(2, "D")
+    elif np.is_busday(np_end_date, weekmask="Sun"):
+        np_end_date = np_end_date + np.timedelta64(1, "D")
+    return np.busday_count(np_start_date + 1, np_end_date + 1) * 1.0
