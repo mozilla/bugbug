@@ -385,7 +385,13 @@ def count_bugs(bug_query_params):
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
-    """Returns a dictionary where keys are full components (in the form of `{product}::{component}`) and the value of the number of bugs for the given full components. Full component with 0 bugs are returned."""
+    """Get the number of bugs per component.
+
+    Returns:
+        a dictionary where keys are full components (in the form of
+        `{product}::{component}`) and the value of the number of bugs for the
+        given full components. Full component with 0 bugs are returned.
+    """
     since = datetime.utcnow() - relativedelta(months=months)
 
     # Base params

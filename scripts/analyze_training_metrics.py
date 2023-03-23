@@ -2,7 +2,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-""" Given a directory containing training metrics, generate SVF graphs and check that the metrics are not getting worse than before.
+
+"""Functions to analyze training metrics.
+
+Given a directory containing training metrics, generate SVF graphs and check
+that the metrics are not getting worse than before.
 """
 
 import argparse
