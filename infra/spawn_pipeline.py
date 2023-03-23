@@ -15,9 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-This script triggers the data pipeline for the bugbug project
-"""
+"""This script triggers the data pipeline for the bugbug project."""
 
 import argparse
 import os
@@ -37,9 +35,9 @@ TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
 
 
 def get_taskcluster_options():
-    """
-    Helper to get the Taskcluster setup options
-    according to current environment (local or Taskcluster)
+    """Get the Taskcluster setup options according to current environment.
+
+    The current environment could be local.
     """
     options = taskcluster.optionsFromEnvironment()
     proxy_url = os.environ.get("TASKCLUSTER_PROXY_URL")

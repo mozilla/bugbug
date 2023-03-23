@@ -35,7 +35,7 @@ class RustCodeAnalysisServer:
                     time.sleep(0.35)
 
         self.terminate()
-        raise Exception("Unable to run rust-code-analysis server")
+        raise RuntimeError("Unable to run rust-code-analysis server")
 
     @property
     def base_url(self):
@@ -50,7 +50,7 @@ class RustCodeAnalysisServer:
                 cmd += ["-j", str(thread_num)]
             self.proc = subprocess.Popen(cmd)
         except FileNotFoundError:
-            raise Exception("rust-code-analysis is required for code analysis")
+            raise RuntimeError("rust-code-analysis is required for code analysis")
 
     def terminate(self):
         if self.proc is not None:
@@ -67,9 +67,14 @@ class RustCodeAnalysisServer:
             return False
 
     def metrics(self, filename, code, unit=True):
-        """
-        When unit is True, then only metrics for top-level is returned,
-        when False, then we get detailed metrics for all classes, functions, nested functions, ...
+        """Get code metrics for a file.
+
+        Args:
+            filename: the path for the file that we want to analyze
+            code: the content of the file
+            unit: when unit is True, then only metrics for top-level is
+                returned, when False, then we get detailed metrics for all
+                classes, functions, nested functions, ...
         """
         unit = 1 if unit else 0
         url = f"{self.base_url}/metrics?file_name={filename}&unit={unit}"
