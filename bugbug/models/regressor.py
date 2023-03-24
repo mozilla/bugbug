@@ -4,8 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
+import logging
 from datetime import datetime
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import numpy as np
@@ -19,8 +19,8 @@ from sklearn.pipeline import Pipeline
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
