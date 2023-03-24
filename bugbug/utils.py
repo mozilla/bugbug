@@ -517,6 +517,7 @@ def escape_markdown(text: str) -> str:
 
 # Remove business days from date range
 
+
 def business_day_range(end_date, start_date):
     np_start_date = np.datetime64(start_date, "D")
     np_end_date = np.datetime64(end_date, "D")
