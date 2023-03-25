@@ -3,16 +3,18 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import numpy as np
-from sklearn.isotonic import IsotonicRegression
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
 
-class IsotonicRegressionCalibrator:
-    def __init__(self, model):
-        self.model = model
-        self.calibrator = IsotonicRegression()
+class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
+    def __init__(self, base_clf):
+        self.base_clf = base_clf
+        self.calibrated_clf = CalibratedClassifierCV(
+            base_clf, cv="prefit", method="isotonic"
+        )
 
     def train_test_split(self, X, y, test_size=0.2, random_state=42):
         X_train, X_test, y_train, y_test = train_test_split(
@@ -22,28 +24,24 @@ class IsotonicRegressionCalibrator:
 
     def fit(self, X_train, y_train):
         X_train, X_val, y_train, y_val = self.train_test_split(X_train, y_train)
-        self.model.fit(X_train, y_train)
-        mse_before = mean_squared_error(y_val, self.model.predict(X_val))
+        self.base_clf.fit(X_train, y_train)
+        mse_before = mean_squared_error(y_val, self.base_clf.predict(X_val))
         print(f"MSE of model before calibration : {mse_before:.4f}")
 
-        self.calibrate(X_val, y_val)
+        self.calibrated_clf.fit(X_val, y_val)
         mse_after = mean_squared_error(y_val, self.predict(X_val))
         print(f"MSE of model after calibration : {mse_after:.4f}")
 
     def predict(self, X):
-        p_pred = self.calibrator.predict(self.model.predict_proba(X)[:, 1])
-        # transforming predictions back to class labels
-        p_pred = p_pred.flatten()
-        y_pred = np.where(p_pred > 0.5, 1, 0)
-
-        return y_pred
+        return self.calibrated_clf.predict(X)
 
     def predict_proba(self, X_val):
-        return self.calibrator.transform(self.model.predict_proba(X_val)[:, 1])
+        return self.calibrated_clf.predict_proba(X_val)
 
     def calibrate(self, X_val, y_val):
-        val_preds = self.model.predict_proba(X_val)[:, 1]
-        self.calibrator.fit(val_preds, y_val)
+        self.calibrated_clf.cv = "prefit"
+        self.calibrated_clf.method = "isotonic"
+        self.calibrated_clf.fit(X_val, y_val)
 
     def train(self, X, y):
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
