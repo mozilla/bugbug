@@ -498,7 +498,6 @@ class Model:
             y_pred_filter = []
             classified_indices = []
             for i in range(0, len(y_test)):
-                argmax = np.zeros(len(y_pred_probas), dtype=float)
                 if not is_binary:
                     argmax = np.argmax(y_pred_probas[i])
                 else:
