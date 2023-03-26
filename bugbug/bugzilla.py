@@ -96,7 +96,7 @@ def set_token(token):
 
 
 def get_ids(params):
-    """Retrieves a list of bug IDs from Bugzilla based on the given parameters.
+    """Retrieves a list of bug IDs from Bugzilla based on the given search parameters.
 
     Args:
         params: A dictionary of parameters to pass to the Bugzilla API.
