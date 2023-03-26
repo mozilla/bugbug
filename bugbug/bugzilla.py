@@ -505,10 +505,10 @@ def get_revision_ids(bug: BugDict) -> list[int]:
     """Given a bug dictionary, returns a list of Phabricator revision IDs extracted from its attachments.
 
     Args:
-    	A dictionary representing the bug.
+        A dictionary representing the bug.
 
     Returns:
-    	A the Phabricator revision IDs extracted from the bug's attachments.
+        A the Phabricator revision IDs extracted from the bug's attachments.
     """
     revision_ids = []
 
