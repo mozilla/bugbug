@@ -99,7 +99,7 @@ def get_ids(params):
     """Retrieves a list of bug IDs from Bugzilla based on the given search parameters.
 
     Args:
-        params: A dictionary of parameters to pass to the Bugzilla API.
+        params: parameters to pass to the Bugzilla API.
 
     Returns:
         list of int: A list of bug IDs.
@@ -505,11 +505,10 @@ def get_revision_ids(bug: BugDict) -> list[int]:
     """Given a bug dictionary, returns a list of Phabricator revision IDs extracted from its attachments.
 
     Args:
-    A dictionary representing the bug.
+    	A dictionary representing the bug.
 
     Returns:
-    A list of integers representing the Phabricator revision
-    IDs extracted from the bug's attachments.
+    	A the Phabricator revision IDs extracted from the bug's attachments.
     """
     revision_ids = []
 
