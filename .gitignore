@@ -17,7 +17,6 @@ http_service/models/*model*
 
 data/
 sheets/
-repo_dir-shared/
 
 .mypy_cache/
 .pytest_cache/
