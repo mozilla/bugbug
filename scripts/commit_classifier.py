@@ -135,6 +135,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
+        phabricator_deployment=None,
+        diff_id=None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -147,6 +149,13 @@ class CommitClassifier(object):
             self.clone_git_repo(
                 "hg::https://hg.mozilla.org/mozilla-central", git_repo_dir
             )
+
+        self.revision = None
+        if phabricator_deployment is not None and diff_id is not None:
+            with hglib.open(self.repo_dir) as hg:
+                self.apply_phab(hg, phabricator_deployment, diff_id)
+
+                self.revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
@@ -597,10 +606,9 @@ class CommitClassifier(object):
         self.update_commit_db()
 
         if phabricator_deployment is not None and diff_id is not None:
-            with hglib.open(self.repo_dir) as hg:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
-
-                revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
+            
+            assert self.revision is not None
+            revision = self.revision
 
             commits = repository.download_commits(
                 self.repo_dir,
@@ -855,6 +863,8 @@ def main() -> None:
         args.method_defect_predictor_dir,
         args.use_single_process,
         args.skip_feature_importance,
+        args.phabricator_deployment, 
+        args.diff_id,
     )
     classifier.classify(
         args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
