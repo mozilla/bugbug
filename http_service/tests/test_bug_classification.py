@@ -168,7 +168,7 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     # Five bug Ids but returns just 2 bug Ids
     responses.add(
         responses.GET,
-        "https://bugzilla.mozilla.org/rest/bug?id=1566486%2C1598744%2C1602463%2C1615281%2C1619699&include_fields=id&include_fields=last_change_time",
+        "https://bugzilla.mozilla.org/rest/bug?id=1566486,1598744,1602463,1615281,1619699&include_fields=id&include_fields=last_change_time",
         status=200,
         json={
             "bugs": [
