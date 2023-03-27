@@ -159,15 +159,15 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     }
 
 
-def test_for_missing_bugs(client,responses):
+def test_for_missing_bugs(client, responses):
     bugs_list = [1602463, 1619699]
     missing_bugs_list = [1598744, 1615281, 1566486]
     # merge the two list
     bug_ids = [*bugs_list, *missing_bugs_list]
-    
+
     change_time = str(time.time())
-    
-    # A call to Buzgilla will return bugs for 
+
+    # A call to Buzgilla will return bugs for
     # IDs in bugs_list only
     responses.add(
         responses.GET,
@@ -181,14 +181,14 @@ def test_for_missing_bugs(client,responses):
     )
 
     rv = client.post(
-            "/component/predict/batch",
-            data=json.dumps({"bugs": bug_ids}),
-            headers={API_TOKEN: "test"},
-        )
+        "/component/predict/batch",
+        data=json.dumps({"bugs": bug_ids}),
+        headers={API_TOKEN: "test"},
+    )
     assert rv.status_code == 202
     bugs = retrieve_compressed_reponse(rv)["bugs"]
-    
-    assert len(bug_ids) == len(bugs.keys()), 'All the queried bug IDs must be returned'
+
+    assert len(bug_ids) == len(bugs.keys()), "All the queried bug IDs must be returned"
     # check for the bugs Bugzilla will return
     assert "1602463" in list(bugs.keys())
     assert "1619699" in list(bugs.keys())
