@@ -195,7 +195,7 @@ class Model:
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
-                raise ValueError(f"Unexpected feature type for: {full_feature_name}")
+                raise ValueError(f"Unexpected feature type for:{full_feature_name}")
 
             cleaned_feature_names.append(feature_name)
 

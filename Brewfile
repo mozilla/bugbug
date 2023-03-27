@@ -1,0 +1,7 @@
+tap "homebrew/bundle"
+tap "homebrew/cask"
+tap "homebrew/core"
+tap "ngrok/ngrok"
+brew "mingw-w64"
+brew "python@3.10"
+cask "ngrok"

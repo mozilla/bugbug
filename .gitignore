@@ -45,6 +45,7 @@ share/python-wheels/
 MANIFEST
 cache/
 node_modules/
+buggy/
 
 # Logs
 *.log
