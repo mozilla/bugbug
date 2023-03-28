@@ -606,7 +606,6 @@ class CommitClassifier(object):
         self.update_commit_db()
 
         if phabricator_deployment is not None and diff_id is not None:
-            
             assert self.revision is not None
             revision = self.revision
 
@@ -863,7 +862,7 @@ def main() -> None:
         args.method_defect_predictor_dir,
         args.use_single_process,
         args.skip_feature_importance,
-        args.phabricator_deployment, 
+        args.phabricator_deployment,
         args.diff_id,
     )
     classifier.classify(
