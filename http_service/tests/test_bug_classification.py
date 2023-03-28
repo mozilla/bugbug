@@ -160,9 +160,9 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
 
 def test_for_missing_bugs(client, responses):
-    existed_bugs_ids = [1602463, 1619699]
-    missing_bugs_ids = [1598744, 1615281, 1566486]
-    all_bug_ids = [*existed_bugs_ids, *missing_bugs_ids]
+    existed_bug_ids = ["1602463", "1619699"]
+    missing_bug_ids = ["1598744", "1615281", "1566486"]
+    all_bug_ids = [*existed_bug_ids, *missing_bug_ids]
 
     change_time = str(time.time())
 
@@ -173,25 +173,19 @@ def test_for_missing_bugs(client, responses):
         json={
             "bugs": [
                 {"id": bug_id, "last_change_time": change_time}
-                for bug_id in existed_bugs_ids
+                for bug_id in existed_bug_ids
             ],
         },
     )
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": all_bug_ids}),
+        data=json.dumps({"bugs": [int(bug_id) for bug_id in all_bug_ids]}),
         headers={API_TOKEN: "test"},
     )
     assert rv.status_code == 202
     bugs = retrieve_compressed_reponse(rv)["bugs"]
-
-    assert list(bugs.keys()) == [
-        str(bug_id) for bug_id in all_bug_ids
-    ], "All the queried bug IDs must be returned"
-    # check for the bugs Bugzilla will return
-    assert "1602463" in list(bugs.keys())
-    assert "1619699" in list(bugs.keys())
+    assert bugs.keys() == set(all_bug_ids), "All the queried bug IDs must be returned"
 
 
 def test_empty_batch(client):
