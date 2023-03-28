@@ -84,6 +84,14 @@ INCLUDE_FIELDS = ["_default", "filed_via"]
 
 
 def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
+    """Returns an iterator over the bugs in the bug database, optionally filtering out the invalid bugs.
+
+	Args:
+		A boolean indicating whether to include invalid bugs in the results. Defaults to False.
+
+	Yields:
+		A  bug in the database, with keys for 'id', 'product', 'description', and 'status'.
+	"""
     yield from (
         bug
         for bug in db.read(BUGS_DB)
@@ -92,6 +100,11 @@ def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
 
 
 def set_token(token):
+    """Set the Bugzilla API token to be used for authentication.
+    
+    Args:
+    	A string representing the API token.
+    """
     Bugzilla.TOKEN = token
 
 
@@ -99,10 +112,10 @@ def get_ids(params):
     """Retrieves a list of bug IDs from Bugzilla based on the given search parameters.
 
     Args:
-        params: parameters to pass to the Bugzilla API.
+        parameters to pass to the Bugzilla API.
 
     Returns:
-        list of int: A list of bug IDs.
+        The IDs of the bugs that match the search criteria.
     """
     assert "include_fields" not in params or params["include_fields"] == "id"
 
@@ -128,10 +141,10 @@ def get(ids_or_query):
     """Retrieves information about bugs from Bugzilla based on the given IDs or query.
 
     Args:
-        ids_or_query: A query string or a list of bug IDs to retrieve.
+        A query string or a list of bug IDs to retrieve.
 
     Returns:
-        A dictionary containing information about the bugs, keyed by bug ID.
+    	Information about the bugs.
     """
     new_bugs = {}
 
@@ -191,7 +204,7 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
         resolution: The resolution status to include. Defaults to None.
 
     Returns:
-        A list of bug IDs.
+        Bug IDs matching the search criteria.
     """
     params = {
         "f1": "creation_ts",
@@ -223,7 +236,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
        security: A flag indicating whether or not to include security bugs. Defaults to False.
 
     Returns:
-       A list of dictionaries representing information about the downloaded bugs.
+    	Information about the downloaded bugs.
     """
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
@@ -278,7 +291,7 @@ def _find_linked(
         link_type: The type of link to follow, either "blocks" or "depends_on".
 
     Returns:
-        A list of bug ids that are linked to the given bug through the specified link type.
+        Bug ids that are linked to the given bug through the specified link type.
     """
     return sum(
         (
