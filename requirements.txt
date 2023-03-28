@@ -4,6 +4,7 @@ boto3==1.26.94
 imbalanced-learn==0.10.1
 libmozdata==0.1.86
 lmdb==1.4.0
+marisa_tree==0.7.5
 markdown2==2.4.8
 matplotlib==3.7.1
 mercurial==6.3.3
