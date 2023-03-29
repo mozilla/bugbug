@@ -286,7 +286,7 @@ def _find_linked(
     """Recursively searches through linked bugs for a given bug and returns a list of their ids.
 
     Args:
-        bug_map: A dictionary of bug ids and their corresponding bug dictionaries.
+        bug_map: Bug ids and their corresponding bug dictionaries.
         bug: The bug dictionary for the bug to search through linked bugs for.
         link_type: The type of link to follow, either "blocks" or "depends_on".
 
@@ -308,10 +308,10 @@ def find_blocked_by(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
 
     Args:
         bug_map: A mapping of bug IDs to their corresponding BugDict objects.
-        bug: The BugDict object representing the bug for which to find all blocked bugs.
+        bug: The bug for which to find all blocked bugs.
 
     Returns:
-        A list of integers representing the IDs of all the bugs in the bug_map that are blocked by the given bug.
+    	The IDs of all the bugs in the bug_map that are blocked by the given bug.
     """
     return _find_linked(bug_map, bug, "blocks")
 
@@ -320,12 +320,11 @@ def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
     """Given a dictionary of bugs and a particular bug, return a list of bugs that the particular bug is blocking.
 
     Args:
-    bug_map: A dictionary of bugs with their IDs as keys and
-                                  their information as values.
-    bug: A dictionary containing the information for the bug being queried.
+    	bug_map: A mapping of bugs with their IDs as keys and their information as values.
+   		bug: Information for the bug being queried.
 
     Returns:
-    A list of bug IDs representing the bugs that are blocking the queried bug.
+   		Bug IDs representing the bugs that are blocking the queried bug.
     """
     return _find_linked(bug_map, bug, "depends_on")
 
@@ -334,10 +333,10 @@ def get_fixed_versions(bug):
     """Returns a list of versions where the given bug is fixed.
 
     Args:
-        A dictionary representing the bug.
+        The bug.
 
     Returns:
-        A list of integers representing the versions where the bug is fixed.
+        The versions where the bug is fixed.
 
     Raises:
         TypeError: If the input bug is not a dictionary.
@@ -371,8 +370,8 @@ def delete_bugs(match):
     """Delete bugs matching a given criteria.
 
     Args:
-        match: a dictionary of fields to match against. Bugs with field values that match
-        the corresponding values in this dictionary will be deleted.
+        match: Fields to match against. Bugs with field values that match
+        		the corresponding values in this dictionary will be deleted.
     """
     db.delete(BUGS_DB, match)
 
@@ -381,7 +380,7 @@ def count_bugs(bug_query_params):
     """Count the number of bugs matching the given query parameters.
 
     Args:
-        The parameters to use for the bug query.
+        bug_query_params: The parameters to use for the bug query.
 
     Returns:
         The number of bugs matching the given query parameters.
@@ -492,10 +491,10 @@ def get_groups_users(group_names: list[str]) -> list[str]:
     """Uses the Bugzilla API to fetch the membership details of given groups.
 
     Args:
-        A list of group names.
+        group_names: A list of group names.
 
     Returns:
-        A list of emails of all users who are members of any of the groups.
+        The emails of all users who are members of any of the groups.
     """
     r = utils.get_session("bugzilla").get(
         "https://bugzilla.mozilla.org/rest/group",
@@ -518,7 +517,7 @@ def get_revision_ids(bug: BugDict) -> list[int]:
     """Given a bug dictionary, returns a list of Phabricator revision IDs extracted from its attachments.
 
     Args:
-        A dictionary representing the bug.
+        bug: A dictionary representing the bug.
 
     Returns:
         The Phabricator revision IDs extracted from the bug's attachments.
