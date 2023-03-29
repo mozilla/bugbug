@@ -86,12 +86,12 @@ INCLUDE_FIELDS = ["_default", "filed_via"]
 def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     """Returns an iterator over the bugs in the bug database, optionally filtering out the invalid bugs.
 
-	Args:
-		A boolean indicating whether to include invalid bugs in the results. Defaults to False.
+    Args:
+            A boolean indicating whether to include invalid bugs in the results. Defaults to False.
 
-	Yields:
-		A  bug in the database, with keys for 'id', 'product', 'description', and 'status'.
-	"""
+    Yields:
+            A  bug in the database, with keys for 'id', 'product', 'description', and 'status'.
+    """
     yield from (
         bug
         for bug in db.read(BUGS_DB)
@@ -101,9 +101,9 @@ def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
 
 def set_token(token):
     """Set the Bugzilla API token to be used for authentication.
-    
+
     Args:
-    	A string representing the API token.
+        token: A string representing the API token.
     """
     Bugzilla.TOKEN = token
 
@@ -112,7 +112,7 @@ def get_ids(params):
     """Retrieves a list of bug IDs from Bugzilla based on the given search parameters.
 
     Args:
-        parameters to pass to the Bugzilla API.
+        params: parameters to pass to the Bugzilla API.
 
     Returns:
         The IDs of the bugs that match the search criteria.
@@ -141,10 +141,10 @@ def get(ids_or_query):
     """Retrieves information about bugs from Bugzilla based on the given IDs or query.
 
     Args:
-        A query string or a list of bug IDs to retrieve.
+        ids_or_query: A query string or a list of bug IDs to retrieve.
 
     Returns:
-    	Information about the bugs.
+        Information about the bugs.
     """
     new_bugs = {}
 
@@ -236,7 +236,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
        security: A flag indicating whether or not to include security bugs. Defaults to False.
 
     Returns:
-    	Information about the downloaded bugs.
+        Information about the downloaded bugs.
     """
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
@@ -311,7 +311,7 @@ def find_blocked_by(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
         bug: The bug for which to find all blocked bugs.
 
     Returns:
-    	The IDs of all the bugs in the bug_map that are blocked by the given bug.
+        The IDs of all the bugs in the bug_map that are blocked by the given bug.
     """
     return _find_linked(bug_map, bug, "blocks")
 
@@ -320,11 +320,11 @@ def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
     """Given a dictionary of bugs and a particular bug, return a list of bugs that the particular bug is blocking.
 
     Args:
-    	bug_map: A mapping of bugs with their IDs as keys and their information as values.
-   		bug: Information for the bug being queried.
+        bug_map: A mapping of bugs with their IDs as keys and their information as values.
+                bug: Information for the bug being queried.
 
     Returns:
-   		Bug IDs representing the bugs that are blocking the queried bug.
+                Bug IDs representing the bugs that are blocking the queried bug.
     """
     return _find_linked(bug_map, bug, "depends_on")
 
@@ -333,7 +333,7 @@ def get_fixed_versions(bug):
     """Returns a list of versions where the given bug is fixed.
 
     Args:
-        The bug.
+        bug: The bug.
 
     Returns:
         The versions where the bug is fixed.
@@ -371,7 +371,7 @@ def delete_bugs(match):
 
     Args:
         match: Fields to match against. Bugs with field values that match
-        		the corresponding values in this dictionary will be deleted.
+                        the corresponding values in this dictionary will be deleted.
     """
     db.delete(BUGS_DB, match)
 
