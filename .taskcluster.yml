@@ -84,22 +84,14 @@ tasks:
         image: python:3.9
         env:
           CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-        command:
-          - "/bin/bash"
-          - "-lcx"
-          - "apt-get -qq update &&
-            apt-get -qq install -y libhdf5
-        git clone --quiet ${repository} &&
-        cd bugbug &&
-        git -c advice.detachedHead=false checkout ${head_rev} &&
-        pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-        pytest --cov=. --cov-report=xml --cov-report=term-missing"
+        command: ["/bin/bash", "-lcx", "apt-get -qq update && apt-get -qq install -y libhdf5 && git clone --quiet ${repository} && cd bugbug && git -c advice.detachedHead=false checkout ${head_rev} && pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt && pytest --cov=. --cov-report=xml --cov-report=term-missing"]
+
   metadata:
     name: bugbug tests
     description: bugbug tests
     owner: mcastelluccio@mozilla.com
     source: ${repository}/raw/${head_rev}/.taskcluster.yml
-  
+steps:
 - $if: 'tasks_for == "github-pull-request"'
   then:
     - taskId: { $eval: as_slugid("lint_task") }
@@ -116,9 +108,9 @@ tasks:
           GECKO_HEAD_REF: ${head_branch}
           GECKO_HEAD_REV: ${head_rev}
       metadata:
-        name: gecko-projects taskcluster: lint
-        description: Run the linter against the code changes in this pull request
-        owner: nobody@mozilla.com
+        name: "gecko-projects taskcluster: lint"
+        description: "Run the linter against the code changes in this pull request"
+        owner: "nobody@mozilla.com"
         source: ${repository}
     
     - taskId: { $eval: as_slugid("static_analysis_task") }
@@ -135,10 +127,11 @@ tasks:
           GECKO_HEAD_REF: ${head_branch}
           GECKO_HEAD_REV: ${head_rev}
       metadata:
-        name: gecko-projects taskcluster: static analysis
-        description: Run static analysis on the code changes in this pull request
-        owner: nobody@mozilla.com
+        name: "gecko-projects taskcluster: static analysis"
+        description: "Run static analysis on the code changes in this pull request"
+        owner: "nobody@mozilla.com"
         source: ${repository}
+
   
 - $if: 'tasks_for == "github-push"'
   then:
