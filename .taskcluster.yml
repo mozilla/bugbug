@@ -91,7 +91,7 @@ tasks:
     description: bugbug tests
     owner: mcastelluccio@mozilla.com
     source: ${repository}/raw/${head_rev}/.taskcluster.yml
-...
+---
 - $if: 'tasks_for == "github-pull-request"'
   then:
     - taskId: { $eval: as_slugid("lint_task") }
