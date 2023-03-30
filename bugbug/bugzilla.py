@@ -87,10 +87,10 @@ def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     """Returns an iterator over the bugs in the bug database, optionally filtering out the invalid bugs.
 
     Args:
-            A boolean indicating whether to include invalid bugs in the results. Defaults to False.
+        include_invalid: A boolean indicating whether to include invalid bugs in the results. Defaults to False.
 
     Yields:
-            A  bug in the database, with keys for 'id', 'product', 'description', and 'status'.
+        An iterator that generates a sequence of BugDict objects.
     """
     yield from (
         bug
@@ -99,12 +99,8 @@ def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
     )
 
 
-def set_token(token):
-    """Set the Bugzilla API token to be used for authentication.
-
-    Args:
-        token: A string representing the API token.
-    """
+def set_token(token: str):
+    """Set the Bugzilla API token to be used for authentication."""
     Bugzilla.TOKEN = token
 
 
