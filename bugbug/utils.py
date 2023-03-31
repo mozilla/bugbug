@@ -517,6 +517,7 @@ def escape_markdown(text: str) -> str:
 
 def get_business_days_count(start_date, end_date):
     """Removes weekends from date range."""
-    np_start_date = np.datetime64(start_date, "D")
-    np_end_date = np.datetime64(end_date, "D")
+    np_start_date = np.datetime64(dateutil.parser.parse(start_date), "D")
+    np_end_date = np.datetime64(dateutil.parser.parse(end_date), "D")
+    # Uses dateutil.parser.parse() as numpy is deprecating timezone-aware datetimes
     return np.busday_count(np_start_date + 1, np_end_date + 1) * 1.0
