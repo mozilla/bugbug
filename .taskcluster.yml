@@ -85,138 +85,137 @@ tasks:
         env:
           CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
         command: ["/bin/bash", "-lcx", "apt-get -qq update && apt-get -qq install -y libhdf5 && git clone --quiet ${repository} && cd bugbug && git -c advice.detachedHead=false checkout ${head_rev} && pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt && pytest --cov=. --cov-report=xml --cov-report=term-missing"]
-
-  metadata:
-    name: bugbug tests
-    description: bugbug tests
-    owner: mcastelluccio@mozilla.com
-    source: ${repository}/raw/${head_rev}/.taskcluster.yml
----
-- $if: 'tasks_for == "github-pull-request"'
-  then:
-    - taskId: { $eval: as_slugid("lint_task") }
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
-      provisionerId: proj-bugbug
-      workerType: batch
-      payload:
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        command: ["./mach", "python-tests", "lint"]
-        env:
-          GECKO_BASE_REPOSITORY: https://hg.mozilla.org/mozilla-unified
-          GECKO_HEAD_REF: ${head_branch}
-          GECKO_HEAD_REV: ${head_rev}
       metadata:
-        name: "gecko-projects taskcluster: lint"
-        description: "Run the linter against the code changes in this pull request"
-        owner: "nobody@mozilla.com"
-        source: ${repository}
-    
-    - taskId: { $eval: as_slugid("static_analysis_task") }
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
-      provisionerId: proj-bugbug
-      workerType: batch
-      payload:
-        maxRunTime: 3600
-        image: ${taskboot_image}
-        command: ["./mach", "static-analysis"]
-        env:
-          GECKO_BASE_REPOSITORY: https://hg.mozilla.org/mozilla-unified
-          GECKO_HEAD_REF: ${head_branch}
-          GECKO_HEAD_REV: ${head_rev}
-      metadata:
-        name: "gecko-projects taskcluster: static analysis"
-        description: "Run static analysis on the code changes in this pull request"
-        owner: "nobody@mozilla.com"
-        source: ${repository}
-
-  
-- $if: 'tasks_for == "github-push"'
-  then:
-    - taskId: { $eval: as_slugid("upload_code_coverage_task") }
-      created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
-      provisionerId: proj-bugbug
-      workerType: batch
-      payload:
-        maxRunTime: 3600
-        image: python:3.9
-        command:
-          - "/bin/bash"
-          - "-lcx"
-          - "git clone --quiet ${repository} &&
-            cd bugbug &&
-            git -c advice.detachedHead=false checkout ${head_rev} &&
-            bash <(curl -s https://codecov.io/bash)"
-      metadata:
-        name: bugbug upload code coverage
-        description: bugbug upload code coverage to Codecov
+        name: bugbug tests
+        description: bugbug tests
         owner: mcastelluccio@mozilla.com
         source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-- $if: 'tasks_for == "github-release"'
-  then:
-    - taskId: { $eval: as_slugid("build_task") }
+    - $if: 'tasks_for == "github-pull-request"'
+      then:
+        - taskId: { $eval: as_slugid("lint_task") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 hour" }
+          provisionerId: proj-bugbug
+          workerType: batch
+          payload:
+            maxRunTime: 3600
+            image: ${taskboot_image}
+            command: ["./mach", "python-tests", "lint"]
+            env:
+              GECKO_BASE_REPOSITORY: https://hg.mozilla.org/mozilla-unified
+              GECKO_HEAD_REF: ${head_branch}
+              GECKO_HEAD_REV: ${head_rev}
+          metadata:
+            name: "gecko-projects taskcluster: lint"
+            description: "Run the linter against the code changes in this pull request"
+            owner: "nobody@mozilla.com"
+            source: ${repository}
+        
+        - taskId: { $eval: as_slugid("static_analysis_task") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 hour" }
+          provisionerId: proj-bugbug
+          workerType: batch
+          payload:
+            maxRunTime: 3600
+            image: ${taskboot_image}
+            command: ["./mach", "static-analysis"]
+            env:
+              GECKO_BASE_REPOSITORY: https://hg.mozilla.org/mozilla-unified
+              GECKO_HEAD_REF: ${head_branch}
+              GECKO_HEAD_REV: ${head_rev}
+          metadata:
+            name: "gecko-projects taskcluster: static analysis"
+            description: "Run static analysis on the code changes in this pull request"
+            owner: "nobody@mozilla.com"
+            source: ${repository}
+
+      
+    - $if: 'tasks_for == "github-push"'
+      then:
+        - taskId: { $eval: as_slugid("upload_code_coverage_task") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 hour" }
+          provisionerId: proj-bugbug
+          workerType: batch
+          payload:
+            maxRunTime: 3600
+            image: python:3.9
+            command:
+              - "/bin/bash"
+              - "-lcx"
+              - "git clone --quiet ${repository} &&
+                cd bugbug &&
+                git -c advice.detachedHead=false checkout ${head_rev} &&
+                bash <(curl -s https://codecov.io/bash)"
+          metadata:
+            name: bugbug upload code coverage
+            description: bugbug upload code coverage to Codecov
+            owner: mcastelluccio@mozilla.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+    - $if: 'tasks_for == "github-release"'
+      then:
+        - taskId: { $eval: as_slugid("build_task") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 hour" }
+          provisionerId: proj-bug
+      workerType: aws-provisioner-v1/gecko-{level}-b-linux
+      priority: low
+      payload:
+        build-attributes:
+          product: bugbug
+          target-tasks-method: none
+        features:
+          taskclusterProxy: true
+          chainOfTrust: true
+          taskclusterProxyGroupId: ${project}-build
+        env:
+          MOZ_BUILD_DATE: { $fromNow: "" }
+          MOZILLA_OFFICIAL: "1"
+          MOZILLA_SYMBOLS_UPLOAD_TOKEN: { $secrets: {token: "mozilla/symbols-upload/level-${level}/bugbug"} }
+          MOZ_SCM_LEVEL: { $if: "repository == 'https://github.com/mozilla/bugbug'", then: "1", else: "3" }
+          MOZ_SOURCE_CHANGESET: ${head_rev}
+          MOZ_SOURCE_REPO: ${repository}
+        command:
+          - /builds/worker/workspace/build/src/taskcluster/scripts/misc/build-linux.sh
+          - --target=linux
+          - --artifact-name=bugbug-${head_rev}-linux64
+      metadata:
+        name: build bugbug
+        description: Build BugBug for Linux
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}
+
+    - taskId: { $eval: as_slugid("sign_task") }
+      requires: [build_task]
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 hour" }
       provisionerId: proj-bug
-  workerType: aws-provisioner-v1/gecko-{level}-b-linux
-  priority: low
-  payload:
-    build-attributes:
-      product: bugbug
-      target-tasks-method: none
-    features:
-      taskclusterProxy: true
-      chainOfTrust: true
-      taskclusterProxyGroupId: ${project}-build
-    env:
-      MOZ_BUILD_DATE: { $fromNow: "" }
-      MOZILLA_OFFICIAL: "1"
-      MOZILLA_SYMBOLS_UPLOAD_TOKEN: { $secrets: {token: "mozilla/symbols-upload/level-${level}/bugbug"} }
-      MOZ_SCM_LEVEL: { $if: "repository == 'https://github.com/mozilla/bugbug'", then: "1", else: "3" }
-      MOZ_SOURCE_CHANGESET: ${head_rev}
-      MOZ_SOURCE_REPO: ${repository}
-    command:
-      - /builds/worker/workspace/build/src/taskcluster/scripts/misc/build-linux.sh
-      - --target=linux
-      - --artifact-name=bugbug-${head_rev}-linux64
-  metadata:
-    name: build bugbug
-    description: Build BugBug for Linux
-    owner: mcastelluccio@mozilla.com
-    source: ${repository}
-
-- taskId: { $eval: as_slugid("sign_task") }
-  requires: [build_task]
-  created: { $fromNow: "" }
-  deadline: { $fromNow: "1 hour" }
-  provisionerId: proj-bug
-  workerType: aws-provisioner-v1/gecko-{level}-b-linux
-  priority: high
-  payload:
-    build-attributes:
-      product: bugbug
-      target-tasks-method: nightly
-    features:
-      taskclusterProxy: true
-      chainOfTrust: true
-      taskclusterProxyGroupId: ${project}-build
-    env:
-      MOZ_BUILD_DATE: { $fromNow: "" }
-      MOZILLA_OFFICIAL: "1"
-      MOZILLA_SYMBOLS_UPLOAD_TOKEN: { $secrets: {token: "mozilla/symbols-upload/level-${level}/bugbug"} }
-      MOZ_SIGNING_SERVERS: ${signing_servers}
-      SIGNING_CERT: { $if: "level == 'nightly'", then: "${nightly_signing_cert}", else: "${release_signing_cert}" }
-      SIGNING_EXTRA_ARGS: { $if: "level == 'nightly'", then: "", else: "--release-config ${release_config}" }
-      TOOLTOOL_MANIFEST: { $if: "level == 'nightly'", then: "${nightly_tooltool_manifest}", else: "${release_tooltool_manifest}" }
-    command:
-      - /builds/worker/workspace/build/src/taskcluster/scripts/misc/sign-and-push.sh
-      - /builds/worker/workspace/build/src/artifacts/bugbug-${head_rev}-linux64.tar.bz2
-  metadata:
-    name: sign and push bugbug
-    description: Sign and push BugBug for Linux
-    owner: mcastelluccio@mozilla.com
-    source: ${repository}/raw/${head_rev}/.taskcluster.yml
+      workerType: aws-provisioner-v1/gecko-{level}-b-linux
+      priority: high
+      payload:
+        build-attributes:
+          product: bugbug
+          target-tasks-method: nightly
+        features:
+          taskclusterProxy: true
+          chainOfTrust: true
+          taskclusterProxyGroupId: ${project}-build
+        env:
+          MOZ_BUILD_DATE: { $fromNow: "" }
+          MOZILLA_OFFICIAL: "1"
+          MOZILLA_SYMBOLS_UPLOAD_TOKEN: { $secrets: {token: "mozilla/symbols-upload/level-${level}/bugbug"} }
+          MOZ_SIGNING_SERVERS: ${signing_servers}
+          SIGNING_CERT: { $if: "level == 'nightly'", then: "${nightly_signing_cert}", else: "${release_signing_cert}" }
+          SIGNING_EXTRA_ARGS: { $if: "level == 'nightly'", then: "", else: "--release-config ${release_config}" }
+          TOOLTOOL_MANIFEST: { $if: "level == 'nightly'", then: "${nightly_tooltool_manifest}", else: "${release_tooltool_manifest}" }
+        command:
+          - /builds/worker/workspace/build/src/taskcluster/scripts/misc/sign-and-push.sh
+          - /builds/worker/workspace/build/src/artifacts/bugbug-${head_rev}-linux64.tar.bz2
+      metadata:
+        name: sign and push bugbug
+        description: Sign and push BugBug for Linux
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/${head_rev}/.taskcluster.yml
