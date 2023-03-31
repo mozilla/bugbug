@@ -360,32 +360,32 @@ def test_extract_private_url_empty() -> None:
 
 
 def test_business_day_counter():
-    result = utils.get_business_days_count("March 13th 2023", "March 17 2023")
+    result = utils.get_business_days_count("2023-03-13T00:00:00", "2023-03-17T00:00:00")
     assert result == 4.0, "Failed to correctly count days"
-    result = utils.get_business_days_count("March 8th 2023", "March 17 2023")
+    result = utils.get_business_days_count("2023-03-08T00:00:00", "2023-03-17T00:00:00")
     assert result == 7.0, "Failed to correctly exclude weekend"
     result = utils.get_business_days_count(
-        "February 1st 2023",
-        "February 28st 2023",
+        "2023-02-01T00:00:00",
+        "2023-02-28T00:00:00",
     )
     assert result == 19.0, "Failed to account for multiple weekends"
     result = utils.get_business_days_count(
-        "March 5th 2023",
-        "March 10th 2023",
+        "2023-03-05T00:00:00",
+        "2023-03-10T00:00:00",
     )
     assert result == 5.0, "Failed when test starts on weekend"
     result = utils.get_business_days_count(
-        "March 6th 2023",
-        "March 11th 2023",
+        "2023-03-06T00:00:00",
+        "2023-03-11T00:00:00",
     )
     assert result == 4.0, "Failed when test ends on weekend"
     result = utils.get_business_days_count(
-        "March 5th 2023",
-        "March 11th 2023",
+        "2023-03-05T00:00:00",
+        "2023-03-11T00:00:00",
     )
     assert result == 5.0, "Failed when test starts and ends on weekend"
     result = utils.get_business_days_count(
-        "December 25th 2022",
-        "January 7th 2023",
+        "2022-12-25T00:00:00",
+        "2023-01-07T00:00:00",
     )
     assert result == 10.0, "Failed when testing over year change"
