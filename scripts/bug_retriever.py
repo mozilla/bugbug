@@ -18,7 +18,11 @@ class Retriever(object):
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
         last_modified = None
-        db.download(bugzilla.BUGS_DB)
+        try:
+            db.download(bugzilla.BUGS_DB)
+        except db.DBNotAvailable:
+            logger.warning("The bugs database is not available yet. Skipping download...")
+
 
         # Get IDs of bugs changed since last run.
         try:
