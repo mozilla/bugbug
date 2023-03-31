@@ -378,14 +378,14 @@ def test_business_day_counter():
         "March 6th 2023",
         "March 11th 2023",
     )
-    assert result == 5.0, "Failed when test ends on weekend"
+    assert result == 4.0, "Failed when test ends on weekend"
     result = utils.get_business_days_count(
         "March 5th 2023",
         "March 11th 2023",
     )
-    assert result == 6.0, "Failed when test starts and ends on weekend"
+    assert result == 5.0, "Failed when test starts and ends on weekend"
     result = utils.get_business_days_count(
         "December 25th 2022",
         "January 7th 2023",
     )
-    assert result == 11.0, "Failed when testing over year change"
+    assert result == 10.0, "Failed when testing over year change"

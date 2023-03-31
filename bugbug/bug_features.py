@@ -15,7 +15,7 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository
+from bugbug import bug_snapshot, repository, utils
 
 
 def field(bug, field):
@@ -558,11 +558,10 @@ def get_time_to_assign(bug):
                 and change["removed"] in ("UNCONFIRMED", "NEW")
                 and change["added"] == "ASSIGNED"
             ):
-                return (
-                    dateutil.parser.parse(history["when"])
-                    - dateutil.parser.parse(bug["creation_time"])
-                ).total_seconds() / 86400
-
+                return utils.get_business_days_count(
+                    bug["creation_time"],
+                    history["when"],
+                )
     return None
 
 
