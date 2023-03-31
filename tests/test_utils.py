@@ -8,7 +8,6 @@ import os
 import pickle
 from datetime import datetime
 
-import dateutil.parser
 import pytest
 import requests
 import responses
@@ -361,36 +360,32 @@ def test_extract_private_url_empty() -> None:
 
 
 def test_business_day_counter():
-    result = utils.business_day_range(
-        dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 13th 2023")
-    )
+    result = utils.get_business_days_count("March 13th 2023", "March 17 2023")
     assert result == 4.0, "Failed to correctly count days"
-    result = utils.business_day_range(
-        dateutil.parser.parse("March 17 2023"), dateutil.parser.parse("March 8th 2023")
-    )
+    result = utils.get_business_days_count("March 8th 2023", "March 17 2023")
     assert result == 7.0, "Failed to correctly exclude weekend"
-    result = utils.business_day_range(
-        dateutil.parser.parse("February 28th 2023"),
-        dateutil.parser.parse("February 1st 2023"),
+    result = utils.get_business_days_count(
+        "February 1st 2023",
+        "February 28st 2023",
     )
     assert result == 19.0, "Failed to account for multiple weekends"
-    result = utils.business_day_range(
-        dateutil.parser.parse("March 10th 2023"),
-        dateutil.parser.parse("March 5th 2023"),
+    result = utils.get_business_days_count(
+        "March 5th 2023",
+        "March 10th 2023",
     )
     assert result == 5.0, "Failed when test starts on weekend"
-    result = utils.business_day_range(
-        dateutil.parser.parse("March 11th 2023"),
-        dateutil.parser.parse("March 6th 2023"),
+    result = utils.get_business_days_count(
+        "March 6th 2023",
+        "March 11th 2023",
     )
     assert result == 5.0, "Failed when test ends on weekend"
-    result = utils.business_day_range(
-        dateutil.parser.parse("March 11th 2023"),
-        dateutil.parser.parse("March 5th 2023"),
+    result = utils.get_business_days_count(
+        "March 5th 2023",
+        "March 11th 2023",
     )
     assert result == 6.0, "Failed when test starts and ends on weekend"
-    result = utils.business_day_range(
-        dateutil.parser.parse("January 7th 2023"),
-        dateutil.parser.parse("December 25th 2022"),
+    result = utils.get_business_days_count(
+        "December 25th 2022",
+        "January 7th 2023",
     )
     assert result == 11.0, "Failed when testing over year change"

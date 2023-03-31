@@ -33,10 +33,10 @@ from bugbug import bug_features, bugzilla, db, phabricator, repository, test_sch
 from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
-    business_day_range,
     download_check_etag,
     download_model,
     escape_markdown,
+    get_business_days_count,
     get_secret,
     zstd_compress,
     zstd_decompress,
@@ -607,8 +607,8 @@ class LandingsRiskReportGenerator(object):
                     continue
 
                 # Get the minimum "time to bug" (from the fix time of the closest regressor to the regression bug).
-                cur_time_to_bug = business_day_range(
-                    dateutil.parser.parse(bug["creation_time"]), last_commit_date
+                cur_time_to_bug = get_business_days_count(
+                    last_commit_date, bug["creation_time"]
                 )
                 if time_to_bug is None or cur_time_to_bug < time_to_bug:
                     time_to_bug = cur_time_to_bug
@@ -622,9 +622,9 @@ class LandingsRiskReportGenerator(object):
                             and change["removed"] == "UNCONFIRMED"
                             and change["added"] in ("NEW", "ASSIGNED")
                         ):
-                            time_to_confirm = business_day_range(
-                                dateutil.parser.parse(history["when"]),
-                                dateutil.parser.parse(bug["creation_time"]),
+                            time_to_confirm = get_business_days_count(
+                                bug["creation_time"],
+                                history["when"],
                             )
                             break
 

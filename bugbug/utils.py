@@ -516,9 +516,9 @@ def escape_markdown(text: str) -> str:
 
 
 # Remove business days from date range
-def business_day_range(end_date, start_date):
-    np_start_date = np.datetime64(start_date, "D")
-    np_end_date = np.datetime64(end_date, "D")
+def get_business_days_count(start_date, end_date):
+    np_start_date = np.datetime64(dateutil.parser.parse(start_date), "D")
+    np_end_date = np.datetime64(dateutil.parser.parse(end_date), "D")
     if np.is_busday(np_end_date, weekmask="Sat"):
         np_end_date = np_end_date + np.timedelta64(2, "D")
     elif np.is_busday(np_end_date, weekmask="Sun"):
