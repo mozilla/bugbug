@@ -317,10 +317,10 @@ def find_blocking(bug_map: dict[int, BugDict], bug: BugDict) -> list[int]:
 
     Args:
         bug_map: A mapping of bugs with their IDs as keys and their information as values.
-                bug: Information for the bug being queried.
+        bug: Information for the bug being queried.
 
     Returns:
-                Bug IDs representing the bugs that are blocking the queried bug.
+        Bug IDs representing the bugs that are blocking the queried bug.
     """
     return _find_linked(bug_map, bug, "depends_on")
 
@@ -366,8 +366,7 @@ def delete_bugs(match):
     """Delete bugs matching a given criteria.
 
     Args:
-        match: Fields to match against. Bugs with field values that match
-                        the corresponding values in this dictionary will be deleted.
+        match: Fields to match against. Bugs with field values that match the corresponding values in this dictionary will be deleted.
     """
     db.delete(BUGS_DB, match)
 
