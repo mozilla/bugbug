@@ -20,14 +20,10 @@ class Retriever(object):
         last_modified = None
         try:
             db.download(bugzilla.BUGS_DB)
-        except db.LastModifiedNotAvailable:
-            logger.warning("The bugs database is not available yet. Skipping download...")
-
-        # Get IDs of bugs changed since last run.
-        try:
             last_modified = db.last_modified(bugzilla.BUGS_DB)
-        except db.LastModifiedNotAvailable:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to download or access bugs DB: {str(e)}")
+            last_modified = None
 
         if last_modified is not None:
             logger.info(
