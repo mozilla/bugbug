@@ -1470,7 +1470,7 @@ def _build_hg_cmd(cmd, *args, **kwargs):
 
 def clone(
     repo_dir: str,
-    url: str = "https://hg.mozilla.org/mozilla-central",
+    url: str = "https://hg.mozilla.org/mozilla-unified",
     update: bool = False,
 ) -> None:
     try:

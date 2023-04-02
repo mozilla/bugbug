@@ -145,7 +145,7 @@ class CommitClassifier(object):
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
             self.clone_git_repo(
-                "hg::https://hg.mozilla.org/mozilla-central", git_repo_dir
+                "hg::https://hg.mozilla.org/mozilla-unified", git_repo_dir
             )
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
