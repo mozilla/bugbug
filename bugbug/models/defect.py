@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
-from logging import INFO, basicConfig, getLogger
+import logging
 from typing import Any
 
 import xgboost
@@ -16,8 +16,8 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
 from bugbug.model import BugModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DefectModel(BugModel):
