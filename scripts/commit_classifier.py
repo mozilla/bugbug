@@ -157,7 +157,7 @@ class CommitClassifier(object):
 
                 self.revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
                 assert self.revision is not None
-    
+
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
             self.clone_git_repo(
@@ -594,7 +594,6 @@ class CommitClassifier(object):
         revision: Optional[str] = None,
         runnable_jobs_path: Optional[str] = None,
     ) -> None:
-
         self.update_commit_db()
 
         if self.revision is not None:
@@ -856,9 +855,7 @@ def main() -> None:
         args.phabricator_deployment,
         args.diff_id,
     )
-    classifier.classify(
-        args.revision, args.runnable_jobs
-    )
+    classifier.classify(args.revision, args.runnable_jobs)
 
 
 if __name__ == "__main__":
