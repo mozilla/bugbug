@@ -135,8 +135,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
-        phabricator_deployment=None,
-        diff_id=None,
+        phabricator_deployment: str,
+        diff_id: int,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -156,7 +156,8 @@ class CommitClassifier(object):
                 self.apply_phab(hg, phabricator_deployment, diff_id)
 
                 self.revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
-
+                assert self.revision is not None
+    
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
             self.clone_git_repo(
@@ -591,22 +592,12 @@ class CommitClassifier(object):
     def classify(
         self,
         revision: Optional[str] = None,
-        phabricator_deployment: Optional[str] = None,
-        diff_id: Optional[int] = None,
         runnable_jobs_path: Optional[str] = None,
     ) -> None:
-        if revision is not None:
-            assert phabricator_deployment is None
-            assert diff_id is None
-
-        if diff_id is not None:
-            assert phabricator_deployment is not None
-            assert revision is None
 
         self.update_commit_db()
 
-        if phabricator_deployment is not None and diff_id is not None:
-            assert self.revision is not None
+        if self.revision is not None:
             revision = self.revision
 
             commits = repository.download_commits(
@@ -866,7 +857,7 @@ def main() -> None:
         args.diff_id,
     )
     classifier.classify(
-        args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
+        args.revision, args.runnable_jobs
     )
 
 
