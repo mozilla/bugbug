@@ -95,7 +95,7 @@ def get_task_metrics_from_date(model, date, output_directory):
             file_path = abspath(join(output_directory, file_name))
             with open(file_path, "w") as metric_file:
                 metric_file.write(r.text)
-            LOGGER.info(f"Metrics saved to {file_path!r}")
+            LOGGER.info("Metrics saved to %r", file_path)
 
         for namespace in get_namespaces(index, ns_full_uri):
             new_ns = current_ns.copy()
