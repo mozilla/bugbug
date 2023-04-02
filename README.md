@@ -17,43 +17,43 @@ More information on the Mozilla Hacks blog:
 
 ## Classifiers
 
-- **assignee** - The aim of this classifier is to suggest an appropriate assignee for a bug.
+1. **assignee** - The aim of this classifier is to suggest an appropriate assignee for a bug.
 
-- **backout** - The aim of this classifier is to detect patches that might be more likely to be backed-out (because of build or test failures). It could be used for test prioritization/scheduling purposes.
+1. **backout** - The aim of this classifier is to detect patches that might be more likely to be backed-out (because of build or test failures). It could be used for test prioritization/scheduling purposes.
 
-- **bugtype** - The aim of this classifier is to classify bugs according to their type. The labels are gathered automatically from bugs: right now they are "crash/memory/performance/security". The plan is to add more types after manual labeling.
+1. **bugtype** - The aim of this classifier is to classify bugs according to their type. The labels are gathered automatically from bugs: right now they are "crash/memory/performance/security". The plan is to add more types after manual labeling.
 
-- **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
+1. **component** - The aim of this classifier is to assign product/component to (untriaged) bugs.
 
-- **defect vs enhancement vs task** - Extension of the **defect** classifier to detect differences also between feature requests and development tasks.
+1. **defect vs enhancement vs task** - Extension of the **defect** classifier to detect differences also between feature requests and development tasks.
 
-- **defect** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
+1. **defect** - Bugs on Bugzilla aren't always bugs. Sometimes they are feature requests, refactorings, and so on. The aim of this classifier is to distinguish between bugs that are actually bugs and bugs that aren't. The dataset currently contains 2110 bugs, the accuracy of the current classifier is ~93% (precision ~95%, recall ~94%).
 
-- **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
+1. **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
 
-- **duplicate** - The aim of this classifier is to detect duplicate bugs.
+1. **duplicate** - The aim of this classifier is to detect duplicate bugs.
 
-- [**needsdiagnosis**](https://github.com/webcompat/webcompat.com/blob/main/docs/ml-process.md) - The aim of this classifier is to detect issues that are likely invalid and don't need to be diagnosed for webcompat use case.
+1. [**needsdiagnosis**](https://github.com/webcompat/webcompat.com/blob/main/docs/ml-process.md) - The aim of this classifier is to detect issues that are likely invalid and don't need to be diagnosed for webcompat use case.
 
-- **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
+1. **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
 
-- **regression vs non-regression** - Bugzilla has a `regression` keyword to identify bugs that are regressions. Unfortunately it isn't used consistently. The aim of this classifier is to detect bugs that are regressions.
+1. **regression vs non-regression** - Bugzilla has a `regression` keyword to identify bugs that are regressions. Unfortunately it isn't used consistently. The aim of this classifier is to detect bugs that are regressions.
 
-- **regressionrange** - The aim of this classifier is to detect regression bugs that have a regression range vs those that don't.
+1. **regressionrange** - The aim of this classifier is to detect regression bugs that have a regression range vs those that don't.
 
-- [**regressor**](docs/models/regressor.md) - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
+1. [**regressor**](docs/models/regressor.md) - The aim of this classifier is to detect patches which are more likely to cause regressions. It could be used to make riskier patches undergo more scrutiny.
 
-- **spam** - The aim of this classifier is to detect bugs which are spam.
+1. **spam** - The aim of this classifier is to detect bugs which are spam.
 
-- **stepstoreproduce** - The aim of this classifier is to detect bugs that have steps to reproduce vs those that don't.
+1. **stepstoreproduce** - The aim of this classifier is to detect bugs that have steps to reproduce vs those that don't.
 
-- **testfailure** - The aim of this classifier is to detect patches that might be more likely to cause test failures.
+1. **testfailure** - The aim of this classifier is to detect patches that might be more likely to cause test failures.
 
-- **testselect** - The aim of this classifier is to select relevant tests to run for a given patch.
+1. **testselect** - The aim of this classifier is to select relevant tests to run for a given patch.
 
-- **tracking** - The aim of this classifier is to detect bugs to track.
+1. **tracking** - The aim of this classifier is to detect bugs to track.
 
-- **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
+1. **uplift** - The aim of this classifier is to detect bugs for which uplift should be approved and bugs for which uplift should not be approved.
 
 ## Setup and Prerequisites
 
