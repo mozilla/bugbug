@@ -5,7 +5,6 @@
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
 
@@ -16,21 +15,17 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
             base_clf, cv="prefit", method="isotonic"
         )
 
-    def train_test_split(self, X, y, test_size=0.2, random_state=42):
+    def split_data(self, X, y, test_size=0.2, random_state=42):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state
         )
         return X_train, X_test, y_train, y_test
 
     def fit(self, X_train, y_train):
-        X_train, X_val, y_train, y_val = self.train_test_split(X_train, y_train)
+        X_train, X_val, y_train, y_val = self.split_data(X_train, y_train)
         self.base_clf.fit(X_train, y_train)
-        mse_before = mean_squared_error(y_val, self.base_clf.predict(X_val))
-        print(f"MSE of model before calibration : {mse_before:.4f}")
 
         self.calibrated_clf.fit(X_val, y_val)
-        mse_after = mean_squared_error(y_val, self.predict(X_val))
-        print(f"MSE of model after calibration : {mse_after:.4f}")
 
     def predict(self, X):
         return self.calibrated_clf.predict(X)
@@ -44,5 +39,5 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
         self.calibrated_clf.fit(X_val, y_val)
 
     def train(self, X, y):
-        X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+        X_train, X_test, y_train, y_test = self.split_data(X, y)
         self.fit(X_train, y_train)
