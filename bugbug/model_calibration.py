@@ -15,16 +15,11 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
             base_clf, cv="prefit", method="isotonic"
         )
 
-    def split_data(self, X, y, test_size=0.2, random_state=42):
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state
-        )
-        return X_train, X_test, y_train, y_test
-
     def fit(self, X_train, y_train):
-        X_train, X_val, y_train, y_val = self.split_data(X_train, y_train)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train, y_train, test_size=0.2, random_state=42
+        )
         self.base_clf.fit(X_train, y_train)
-
         self.calibrated_clf.fit(X_val, y_val)
 
     def predict(self, X):
@@ -32,12 +27,3 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
 
     def predict_proba(self, X_val):
         return self.calibrated_clf.predict_proba(X_val)
-
-    def calibrate(self, X_val, y_val):
-        self.calibrated_clf.cv = "prefit"
-        self.calibrated_clf.method = "isotonic"
-        self.calibrated_clf.fit(X_val, y_val)
-
-    def train(self, X, y):
-        X_train, X_test, y_train, y_test = self.split_data(X, y)
-        self.fit(X_train, y_train)
