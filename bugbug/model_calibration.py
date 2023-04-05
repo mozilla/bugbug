@@ -25,5 +25,5 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
     def predict(self, X):
         return self.calibrated_clf.predict(X)
 
-    def predict_proba(self, X_val):
-        return self.calibrated_clf.predict_proba(X_val)
+    def predict_proba(self, X):
+        return self.calibrated_clf.predict_proba(X)
