@@ -845,6 +845,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.revision is not None:
+        assert args.phabricator_deployment is None
+        assert args.diff_id is None
+
+    if args.diff_id is not None:
+        assert args.phabricator_deployment is not None
+        assert args.revision is None
+
     classifier = CommitClassifier(
         args.model,
         args.repo_dir,
