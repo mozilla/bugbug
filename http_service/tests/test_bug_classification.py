@@ -160,8 +160,8 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
 
 
 def test_for_missing_bugs(client, responses):
-    existed_bug_ids = ["1602463", "1619699"]
-    missing_bug_ids = ["1598744", "1615281", "1566486"]
+    existed_bug_ids = [1602463, 1619699]
+    missing_bug_ids = [1598744, 1615281, 1566486]
     all_bug_ids = [*existed_bug_ids, *missing_bug_ids]
 
     change_time = str(time.time())
@@ -180,12 +180,14 @@ def test_for_missing_bugs(client, responses):
 
     rv = client.post(
         "/component/predict/batch",
-        data=json.dumps({"bugs": [int(bug_id) for bug_id in all_bug_ids]}),
+        data=json.dumps({"bugs": all_bug_ids}),
         headers={API_TOKEN: "test"},
     )
     assert rv.status_code == 202
     bugs = retrieve_compressed_reponse(rv)["bugs"]
-    assert bugs.keys() == set(all_bug_ids), "All the queried bug IDs must be returned"
+    assert bugs.keys() == set(
+        map(str, all_bug_ids)
+    ), "All the queried bug IDs must be returned"
 
 
 def test_empty_batch(client):
