@@ -517,6 +517,4 @@ def escape_markdown(text: str) -> str:
 
 def get_business_days_count(start_date, end_date):
     """Removes weekends from date range."""
-    np_start_date = np.datetime64(start_date[:10], "D")
-    np_end_date = np.datetime64(end_date[:10], "D")
-    return np.busday_count(np_start_date + 1, np_end_date + 1) * 1.0
+    return np.busday_count(start_date[:10], end_date[:10])
