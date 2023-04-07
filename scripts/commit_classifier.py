@@ -156,7 +156,6 @@ class CommitClassifier(object):
                 self.apply_phab(hg, phabricator_deployment, diff_id)
 
                 self.revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
-                assert self.revision is not None
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
@@ -597,6 +596,7 @@ class CommitClassifier(object):
         self.update_commit_db()
 
         if self.revision is not None:
+            assert revision is None
             revision = self.revision
 
             commits = repository.download_commits(
