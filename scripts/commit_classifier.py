@@ -135,8 +135,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
-        phabricator_deployment: str,
-        diff_id: int,
+        phabricator_deployment: Optional[str] = None,
+        diff_id: Optional[int] = None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
