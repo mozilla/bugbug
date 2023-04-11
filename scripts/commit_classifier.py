@@ -151,7 +151,8 @@ class CommitClassifier(object):
             )
 
         self.revision = None
-        if phabricator_deployment is not None and diff_id is not None:
+        if diff_id is not None:
+            assert phabricator_deployment is not None
             with hglib.open(self.repo_dir) as hg:
                 self.apply_phab(hg, phabricator_deployment, diff_id)
 
