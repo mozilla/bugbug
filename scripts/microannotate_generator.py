@@ -114,6 +114,7 @@ class MicroannotateGenerator(object):
             tenacity.retry(
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
+                reraise=True,
             )(
                 lambda: subprocess.run(
                     ["git", "pull", "origin", "master"],
