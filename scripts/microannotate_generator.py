@@ -64,7 +64,7 @@ class MicroannotateGenerator(object):
             ["git", "config", "--global", "http.postBuffer", "12M"], check=True
         )
 
-        push_args = ["git", "push", self.repo_url, "master"]
+        push_args = ["git", "push", "origin", "master"]
         if is_different_version:
             push_args.append("--force")
 
