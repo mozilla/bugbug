@@ -106,6 +106,10 @@ class MicroannotateGenerator(object):
             )
         )()
 
+        subprocess.run(
+            ["git", "checkout", "master"], cwd=self.git_repo_path, check=True
+        )
+
         try:
             tenacity.retry(
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
