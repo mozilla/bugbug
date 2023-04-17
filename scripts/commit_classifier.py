@@ -27,6 +27,7 @@ from scipy.stats import spearmanr
 
 from bugbug import db, repository, test_scheduling
 from bugbug.model import Model
+from bugbug.models.regressor import RegressorModel
 from bugbug.models.testfailure import TestFailureModel
 from bugbug.utils import (
     download_check_etag,
@@ -647,8 +648,14 @@ class CommitClassifier(object):
         if not self.skip_feature_importance:
             self.generate_feature_importance_data(probs, importance)
 
-        with open("probs.json", "w") as f:
-            json.dump(probs[0].tolist(), f)
+        results = {
+            "probs": probs[0].tolist(),
+        }
+        if self.model_name == "regressor":
+            results["risk_band"] = RegressorModel.find_risk_band(probs[0][1])
+
+        with open("results.json", "w") as f:
+            json.dump(results, f)
 
         if self.model_name == "regressor" and self.method_defect_predictor_dir:
             self.classify_methods(commits[-1])
