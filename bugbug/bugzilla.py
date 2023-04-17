@@ -32,15 +32,12 @@ db.register(
 PRODUCTS = (
     "Cloud Services",
     "Core",
-    "Core Graveyard",
     "Data Platform and Tools",
     "DevTools",
     "Developer Infrastructure",
-    "DevTools Graveyard",
     "External Software Affecting Firefox",
     "Fenix",
     "Firefox",
-    "Firefox Graveyard",
     "Firefox Build System",
     "Firefox for iOS",
     "GeckoView",
@@ -53,7 +50,6 @@ PRODUCTS = (
     "Shield",
     "Testing",
     "Toolkit",
-    "Toolkit Graveyard",
     "Web Compatibility",
     "WebExtensions",
 )
