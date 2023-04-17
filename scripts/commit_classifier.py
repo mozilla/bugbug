@@ -63,11 +63,11 @@ REVIEWERS_RE = re.compile(
     r"([\s\(\.\[;,])"                   # before "r" delimiter
     + r"(" + SPECIFIER + r")"           # flag
     + r"("                              # capture all reviewers
-        + r"#?"                         # Optional "#" group reviewer prefix
+        + r"#?"                         # Optional "#" group reviewer prefix  # noqa: E131
         + IRC_NICK                      # reviewer
         + r"!?"                         # Optional "!" blocking indicator
         + r"(?:"                        # additional reviewers
-            + LIST                      # delimiter
+            + LIST                      # delimiter  # noqa: E131
             + r"(?![a-z0-9\.\-]+[=?])"  # don"t extend match into next flag
             + r"#?"                     # Optional "#" group reviewer prefix
             + IRC_NICK                  # reviewer
