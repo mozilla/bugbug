@@ -47,6 +47,8 @@ EVALUATION_MONTHS = 3
 
 
 class RegressorModel(CommitModel):
+    RISK_BANDS = None
+
     def __init__(
         self,
         lemmatization: bool = False,
@@ -203,6 +205,28 @@ class RegressorModel(CommitModel):
         )
 
         return classes, [0, 1]
+
+    @staticmethod
+    def find_risk_band(risk: float) -> str:
+        if RegressorModel.RISK_BANDS is None:
+
+            def _parse_risk_band(risk_band: str) -> tuple[str, float, float]:
+                name, start, end = risk_band.split("-")
+                return (name, float(start), float(end))
+
+            RegressorModel.RISK_BANDS = sorted(
+                (
+                    _parse_risk_band(risk_band)
+                    for risk_band in utils.get_secret("REGRESSOR_RISK_BANDS").split(";")
+                ),
+                key=lambda x: x[1],
+            )
+
+        for name, start, end in RegressorModel.RISK_BANDS:
+            if start <= risk <= end:
+                return name
+
+        assert False
 
     def evaluation(self) -> None:
         bug_regressors = set(
