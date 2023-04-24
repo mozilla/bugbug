@@ -132,7 +132,7 @@ class RegressorModel(CommitModel):
         base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         base_clf.set_params(predictor="cpu_predictor")
         self.clf = IsotonicRegressionCalibrator(base_clf)
-        # this is a temporary workaround
+        # this is a temporary workaround for now
         self.calculate_importance = False
 
     def get_labels(self):
