@@ -133,6 +133,7 @@ class RegressorModel(CommitModel):
         base_clf.set_params(predictor="cpu_predictor")
         self.clf = IsotonicRegressionCalibrator(base_clf)
 
+        # this is a temporary workaround for now
         self.calculate_importance = False
 
     def get_labels(self):
