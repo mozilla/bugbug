@@ -75,7 +75,7 @@ def _get_cost(config: str) -> int:
         (("android-hw", "debug"), 19),
         (("tsan", "opt"), 20),
         (("tsan", "debug"), 21),
-        (("test-linux1804-64/opt-*-e10s",), 1),
+        (("test-linux1804-64-qr/opt-*",), 1),
     ]
 
     for substrings, cost in reversed(costs):
