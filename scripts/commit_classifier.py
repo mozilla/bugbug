@@ -148,7 +148,7 @@ class CommitClassifier(object):
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
             self.clone_git_repo(
-                "hg::https://hg.mozilla.org/mozilla-central", git_repo_dir
+                "hg::https://hg.mozilla.org/mozilla-unified", git_repo_dir
             )
 
         self.revision = None
@@ -247,7 +247,9 @@ class CommitClassifier(object):
         )
 
     def update_commit_db(self):
-        repository.clone(self.repo_dir, update=True)
+        repository.clone(
+            self.repo_dir, "https://hg.mozilla.org/mozilla-unified", update=True
+        )
 
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
