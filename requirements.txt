@@ -12,7 +12,7 @@ mozci==2.2.2
 numpy==1.22.4
 orjson==3.8.11
 ortools==9.6.2534
-pandas==2.0.0
+pandas==2.0.1
 psutil==5.9.5
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
