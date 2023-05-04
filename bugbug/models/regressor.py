@@ -52,6 +52,7 @@ class RegressorModel(CommitModel):
 
     def __init__(
         self,
+        calibration: bool = True,
         lemmatization: bool = False,
         interpretable: bool = True,
         use_finder: bool = False,
@@ -128,16 +129,14 @@ class RegressorModel(CommitModel):
                 ("union", ColumnTransformer(column_transformers)),
             ]
         )
-        self.calibration = True
-        if self.calibration:
-            base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-            base_clf.set_params(predictor="cpu_predictor")
+        base_clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        base_clf.set_params(predictor="cpu_predictor")
+        if calibration:
             self.clf = IsotonicRegressionCalibrator(base_clf)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
         else:
-            self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-            self.clf.set_params(predictor="cpu_predictor")
+            self.clf = base_clf
 
     def get_labels(self):
         classes = {}
