@@ -18,6 +18,7 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class RegressorModel(CommitModel):
 
     def __init__(
         self,
+        calibration: bool = True,
         lemmatization: bool = False,
         interpretable: bool = True,
         use_finder: bool = False,
@@ -127,9 +129,12 @@ class RegressorModel(CommitModel):
                 ("union", ColumnTransformer(column_transformers)),
             ]
         )
-
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
+        if calibration:
+            self.clf = IsotonicRegressionCalibrator(self.clf)
+            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
+            self.calculate_importance = False
 
     def get_labels(self):
         classes = {}
