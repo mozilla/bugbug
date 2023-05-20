@@ -47,8 +47,6 @@ class Retriever(object):
                 )
             )
         )
-        if limit is not None:
-            revision_ids = revision_ids[-limit:]
 
         # Get IDs of revisions linked to bugs since a year ago.
         for bug in bugzilla.get_bugs():
@@ -56,6 +54,9 @@ class Retriever(object):
                 continue
 
             revision_ids += bugzilla.get_revision_ids(bug)
+
+        if limit is not None:
+            revision_ids = revision_ids[-limit:]
 
         phabricator.download_revisions(revision_ids)
 
