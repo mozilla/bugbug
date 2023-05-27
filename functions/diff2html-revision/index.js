@@ -1,5 +1,8 @@
+const https = require("https");
+const functions = require("@google-cloud/functions-framework");
 const Diff2html = require("diff2html");
 
+const agent = new https.Agent({ keepAlive: true });
 const configuration = {
   // Diff2Html Configuration
   outputFormat: "line-by-line",
@@ -21,7 +24,7 @@ const configuration = {
  * @param {!express:Request} req HTTP request context.
  * @param {!express:Response} res HTTP response context.
  */
-exports.revisionDiff2html = (req, res) => {
+functions.http("revisionDiff2html", (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
 
   let revision_id = req.query.revision_id;
@@ -33,14 +36,13 @@ exports.revisionDiff2html = (req, res) => {
     return;
   }
 
-  fetch(
-    `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`
-  )
+  const url = `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
+  fetch(url, { agent })
     .then((res) => res.text())
     .then((text) => strDiff2Html(text, enableJS))
     .then((output) => res.status(200).send(output))
-    .catch((error) => res.status(500).send(error));
-};
+    .catch((err) => res.status(500).send(`Error: ${err.message}`));
+});
 
 const jsTemplate = `
 <meta charset="utf-8" />
