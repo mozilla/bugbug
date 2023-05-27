@@ -3,6 +3,9 @@ const functions = require("@google-cloud/functions-framework");
 const Diff2html = require("diff2html");
 
 const agent = new https.Agent({ keepAlive: true });
+const headers = new Headers({
+  "User-Agent": "bugbug-diff2html",
+});
 const configuration = {
   // Diff2Html Configuration
   outputFormat: "line-by-line",
@@ -37,7 +40,7 @@ functions.http("revisionDiff2html", (req, res) => {
   }
 
   const url = `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
-  fetch(url, { agent })
+  fetch(url, { agent, headers })
     .then((res) => res.text())
     .then((text) => strDiff2Html(text, enableJS))
     .then((output) => res.status(200).send(output))
