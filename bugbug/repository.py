@@ -510,7 +510,7 @@ def get_summary_metrics(obj, metrics_space):
         obj["lloc_max"] = max(obj["lloc_max"], metrics["loc"]["lloc"])
         obj["cloc_max"] = max(obj["cloc_max"], metrics["loc"]["cloc"])
         obj["blank_max"] = max(obj["blank_max"], metrics["loc"]["blank"])
-        obj["nargs_max"] = max(obj["nargs_max"], metrics["nargs"]["sum"])
+        obj["nargs_max"] = max(obj["nargs_max"], metrics["nargs"]["total"])
         obj["nexits_max"] = max(obj["nexits_max"], metrics["nexits"]["sum"])
         obj["cognitive_max"] = max(obj["cognitive_max"], metrics["cognitive"]["sum"])
         # TODO: Try removing the None checks after https://github.com/mozilla/rust-code-analysis/issues/528 is fixed.
@@ -579,7 +579,7 @@ def get_summary_metrics(obj, metrics_space):
         obj["lloc_min"] = min(obj["lloc_min"], metrics["loc"]["lloc"])
         obj["cloc_min"] = min(obj["cloc_min"], metrics["loc"]["cloc"])
         obj["blank_min"] = min(obj["blank_min"], metrics["loc"]["blank"])
-        obj["nargs_min"] = min(obj["nargs_min"], metrics["nargs"]["sum"])
+        obj["nargs_min"] = min(obj["nargs_min"], metrics["nargs"]["total"])
         obj["nexits_min"] = min(obj["nexits_min"], metrics["nexits"]["sum"])
         obj["cognitive_min"] = min(obj["cognitive_min"], metrics["cognitive"]["sum"])
         # TODO: Try removing the None checks after https://github.com/mozilla/rust-code-analysis/issues/528 is fixed.
@@ -641,7 +641,7 @@ def get_space_metrics(
     obj["lloc_total"] += metrics["loc"]["lloc"]
     obj["cloc_total"] += metrics["loc"]["cloc"]
     obj["blank_total"] += metrics["loc"]["blank"]
-    obj["nargs_total"] += metrics["nargs"]["sum"]
+    obj["nargs_total"] += metrics["nargs"]["total"]
     obj["nexits_total"] += metrics["nexits"]["sum"]
     obj["cognitive_total"] += metrics["cognitive"]["sum"]
     # TODO: Try removing the None checks after https://github.com/mozilla/rust-code-analysis/issues/528 is fixed.
