@@ -683,7 +683,7 @@ class CommitClassifier(object):
         selected_tasks = list(
             self.model.select_tests(
                 commits, float(get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD"))
-            ).values()
+            ).keys()
         )
 
         # XXX: For now, only restrict to linux64 test tasks (as for runnable jobs above, we could remove these right away).
