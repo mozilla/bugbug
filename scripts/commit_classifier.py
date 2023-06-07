@@ -700,8 +700,8 @@ class CommitClassifier(object):
             )
 
         # This should be kept in sync with the test scheduling history retriever script.
+        cleaned_selected_tasks = []
         if len(runnable_jobs) > 0:
-            cleaned_selected_tasks = []
             for selected_task in selected_tasks:
                 if (
                     selected_task.startswith("test-linux64")
