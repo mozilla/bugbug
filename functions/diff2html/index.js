@@ -27,21 +27,32 @@ const configuration = {
  * @param {!express:Request} req HTTP request context.
  * @param {!express:Response} res HTTP response context.
  */
-functions.http("revisionDiff2html", (req, res) => {
+functions.http("diff2html", (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
 
   let revision_id = req.query.revision_id;
   let diff_id = req.query.diff_id;
+  let changeset = req.query.changeset;
   let enableJS = req.query.format !== "html";
 
-  if (isNaN(revision_id) || isNaN(diff_id)) {
-    res.status(400).send("Invalid IDs");
+  if (
+    changeset == undefined &&
+    (revision_id == undefined || diff_id == undefined)
+  ) {
+    res.status(400).send("Missing required parameters");
     return;
   }
 
-  const url = `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
+  const url =
+    changeset != undefined
+      ? `https://hg.mozilla.org/mozilla-central/raw-rev/${changeset}`
+      : `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
+
   fetch(url, { agent, headers })
-    .then((res) => res.text())
+    .then((res) => {
+      if (!res.ok) throw Error(res.statusText);
+      return res.text();
+    })
     .then((text) => strDiff2Html(text, enableJS))
     .then((output) => res.status(200).send(output))
     .catch((err) => res.status(500).send(`Error: ${err.message}`));
