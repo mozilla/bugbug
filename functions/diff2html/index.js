@@ -32,14 +32,22 @@ functions.http("diff2html", (req, res) => {
 
   let revision_id = req.query.revision_id;
   let diff_id = req.query.diff_id;
+  let changeset = req.query.changeset;
   let enableJS = req.query.format !== "html";
 
-  if (isNaN(revision_id) || isNaN(diff_id)) {
-    res.status(400).send("Invalid IDs");
+  if (
+    changeset == undefined &&
+    (revision_id == undefined || diff_id == undefined)
+  ) {
+    res.status(400).send("Missing required parameters");
     return;
   }
 
-  const url = `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
+  const url =
+    changeset != undefined
+      ? `https://hg.mozilla.org/mozilla-central/raw-rev/${changeset}`
+      : `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
+
   fetch(url, { agent, headers })
     .then((res) => {
       if (!res.ok) throw Error(res.statusText);
