@@ -27,7 +27,7 @@ const configuration = {
  * @param {!express:Request} req HTTP request context.
  * @param {!express:Response} res HTTP response context.
  */
-functions.http("revisionDiff2html", (req, res) => {
+functions.http("diff2html", (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
 
   let revision_id = req.query.revision_id;
