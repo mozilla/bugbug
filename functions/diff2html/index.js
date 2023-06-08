@@ -41,7 +41,10 @@ functions.http("diff2html", (req, res) => {
 
   const url = `https://phabricator.services.mozilla.com/D${revision_id}?id=${diff_id}&download=true`;
   fetch(url, { agent, headers })
-    .then((res) => res.text())
+    .then((res) => {
+      if (!res.ok) throw Error(res.statusText);
+      return res.text();
+    })
     .then((text) => strDiff2Html(text, enableJS))
     .then((output) => res.status(200).send(output))
     .catch((err) => res.status(500).send(`Error: ${err.message}`));
