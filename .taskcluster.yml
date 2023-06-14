@@ -213,7 +213,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: node
+          image: node:lts
           command:
             - "/bin/sh"
             - "-lcxe"
