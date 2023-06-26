@@ -1,7 +1,7 @@
 coverage==7.2.7
 hypothesis==6.79.3
 jsonschema==4.17.3
-pre-commit==3.3.2
+pre-commit==3.3.3
 pytest==7.4.0
 pytest-cov==4.1.0
 pytest-responses==0.5.1
