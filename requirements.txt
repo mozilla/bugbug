@@ -4,7 +4,7 @@ boto3==1.26.155
 imbalanced-learn==0.10.1
 libmozdata==0.2.3
 lmdb==1.4.1
-markdown2==2.4.8
+markdown2==2.4.9
 matplotlib==3.7.1
 mercurial==6.4.4
 microannotate==0.0.24
