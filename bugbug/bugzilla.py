@@ -364,8 +364,9 @@ def get_active_product_components(products=[]) -> set[tuple[str, str]]:
     return set(
         (product["name"], component["name"])
         for product in r.json()["products"]
+        if product["is_active"]
         for component in product["components"]
-        if product["is_active"] and component["is_active"]
+        if component["is_active"]
     )
 
 
