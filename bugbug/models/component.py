@@ -221,10 +221,14 @@ class ComponentModel(BugModel):
         max_count = product_component_counts[0][1]
         threshold = max_count / threshold_ratio
 
+        active_product_components = bugzilla.get_active_product_components(
+            self.PRODUCTS + list(self.PRODUCT_COMPONENTS)
+        )
+
         return set(
             product_component
             for product_component, count in product_component_counts
-            if count > threshold
+            if count > threshold and product_component in active_product_components
         )
 
     def get_feature_names(self):
