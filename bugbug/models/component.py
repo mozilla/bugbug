@@ -222,7 +222,7 @@ class ComponentModel(BugModel):
         threshold = max_count / threshold_ratio
 
         active_product_components = bugzilla.get_active_product_components(
-            self.PRODUCTS + list(self.PRODUCT_COMPONENTS)
+            list(self.PRODUCTS) + list(self.PRODUCT_COMPONENTS)
         )
 
         return set(
