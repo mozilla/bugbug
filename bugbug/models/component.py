@@ -3,9 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from collections import Counter
 from datetime import datetime, timezone
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
@@ -18,8 +18,8 @@ from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ComponentModel(BugModel):
@@ -221,10 +221,14 @@ class ComponentModel(BugModel):
         max_count = product_component_counts[0][1]
         threshold = max_count / threshold_ratio
 
+        active_product_components = bugzilla.get_active_product_components(
+            list(self.PRODUCTS) + list(self.PRODUCT_COMPONENTS)
+        )
+
         return set(
             product_component
             for product_component, count in product_component_counts
-            if count > threshold
+            if count > threshold and product_component in active_product_components
         )
 
     def get_feature_names(self):

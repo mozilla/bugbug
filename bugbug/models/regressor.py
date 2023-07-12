@@ -4,8 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
+import logging
 from datetime import datetime
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import numpy as np
@@ -18,9 +18,10 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
@@ -47,8 +48,11 @@ EVALUATION_MONTHS = 3
 
 
 class RegressorModel(CommitModel):
+    RISK_BANDS = None
+
     def __init__(
         self,
+        calibration: bool = True,
         lemmatization: bool = False,
         interpretable: bool = True,
         use_finder: bool = False,
@@ -125,9 +129,12 @@ class RegressorModel(CommitModel):
                 ("union", ColumnTransformer(column_transformers)),
             ]
         )
-
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         self.clf.set_params(predictor="cpu_predictor")
+        if calibration:
+            self.clf = IsotonicRegressionCalibrator(self.clf)
+            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
+            self.calculate_importance = False
 
     def get_labels(self):
         classes = {}
@@ -203,6 +210,28 @@ class RegressorModel(CommitModel):
         )
 
         return classes, [0, 1]
+
+    @staticmethod
+    def find_risk_band(risk: float) -> str:
+        if RegressorModel.RISK_BANDS is None:
+
+            def _parse_risk_band(risk_band: str) -> tuple[str, float, float]:
+                name, start, end = risk_band.split("-")
+                return (name, float(start), float(end))
+
+            RegressorModel.RISK_BANDS = sorted(
+                (
+                    _parse_risk_band(risk_band)
+                    for risk_band in utils.get_secret("REGRESSOR_RISK_BANDS").split(";")
+                ),
+                key=lambda x: x[1],
+            )
+
+        for name, start, end in RegressorModel.RISK_BANDS:
+            if start <= risk <= end:
+                return name
+
+        assert False
 
     def evaluation(self) -> None:
         bug_regressors = set(

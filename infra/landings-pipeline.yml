@@ -62,7 +62,7 @@ tasks:
         - landings-risk-report-generator
       payload:
         maxRunTime: 3600
-        image: node
+        image: node:lts
         command:
           - "/bin/sh"
           - "-lcxe"

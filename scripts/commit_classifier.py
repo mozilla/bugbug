@@ -27,6 +27,7 @@ from scipy.stats import spearmanr
 
 from bugbug import db, repository, test_scheduling
 from bugbug.model import Model
+from bugbug.models.regressor import RegressorModel
 from bugbug.models.testfailure import TestFailureModel
 from bugbug.utils import (
     download_check_etag,
@@ -63,11 +64,11 @@ REVIEWERS_RE = re.compile(
     r"([\s\(\.\[;,])"                   # before "r" delimiter
     + r"(" + SPECIFIER + r")"           # flag
     + r"("                              # capture all reviewers
-        + r"#?"                         # Optional "#" group reviewer prefix
+        + r"#?"                         # Optional "#" group reviewer prefix  # noqa: E131
         + IRC_NICK                      # reviewer
         + r"!?"                         # Optional "!" blocking indicator
         + r"(?:"                        # additional reviewers
-            + LIST                      # delimiter
+            + LIST                      # delimiter  # noqa: E131
             + r"(?![a-z0-9\.\-]+[=?])"  # don"t extend match into next flag
             + r"#?"                     # Optional "#" group reviewer prefix
             + IRC_NICK                  # reviewer
@@ -135,6 +136,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
+        phabricator_deployment: Optional[str] = None,
+        diff_id: Optional[int] = None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -145,8 +148,16 @@ class CommitClassifier(object):
         self.git_repo_dir = git_repo_dir
         if git_repo_dir:
             self.clone_git_repo(
-                "hg::https://hg.mozilla.org/mozilla-central", git_repo_dir
+                "hg::https://hg.mozilla.org/mozilla-unified", git_repo_dir
             )
+
+        self.revision = None
+        if diff_id is not None:
+            assert phabricator_deployment is not None
+            with hglib.open(self.repo_dir) as hg:
+                self.apply_phab(hg, phabricator_deployment, diff_id)
+
+                self.revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
 
         self.method_defect_predictor_dir = method_defect_predictor_dir
         if method_defect_predictor_dir:
@@ -236,7 +247,9 @@ class CommitClassifier(object):
         )
 
     def update_commit_db(self):
-        repository.clone(self.repo_dir, update=True)
+        repository.clone(
+            self.repo_dir, "https://hg.mozilla.org/mozilla-unified", update=True
+        )
 
         assert db.download(repository.COMMITS_DB, support_files_too=True)
 
@@ -582,25 +595,13 @@ class CommitClassifier(object):
     def classify(
         self,
         revision: Optional[str] = None,
-        phabricator_deployment: Optional[str] = None,
-        diff_id: Optional[int] = None,
         runnable_jobs_path: Optional[str] = None,
     ) -> None:
-        if revision is not None:
-            assert phabricator_deployment is None
-            assert diff_id is None
-
-        if diff_id is not None:
-            assert phabricator_deployment is not None
-            assert revision is None
-
         self.update_commit_db()
 
-        if phabricator_deployment is not None and diff_id is not None:
-            with hglib.open(self.repo_dir) as hg:
-                self.apply_phab(hg, phabricator_deployment, diff_id)
-
-                revision = hg.log(revrange="not public()")[0].node.decode("utf-8")
+        if self.revision is not None:
+            assert revision is None
+            revision = self.revision
 
             commits = repository.download_commits(
                 self.repo_dir,
@@ -647,8 +648,14 @@ class CommitClassifier(object):
         if not self.skip_feature_importance:
             self.generate_feature_importance_data(probs, importance)
 
-        with open("probs.json", "w") as f:
-            json.dump(probs[0].tolist(), f)
+        results = {
+            "probs": probs[0].tolist(),
+        }
+        if self.model_name == "regressor":
+            results["risk_band"] = RegressorModel.find_risk_band(probs[0][1])
+
+        with open("results.json", "w") as f:
+            json.dump(results, f)
 
         if self.model_name == "regressor" and self.method_defect_predictor_dir:
             self.classify_methods(commits[-1])
@@ -676,7 +683,7 @@ class CommitClassifier(object):
         selected_tasks = list(
             self.model.select_tests(
                 commits, float(get_secret("TEST_SELECTION_CONFIDENCE_THRESHOLD"))
-            ).values()
+            ).keys()
         )
 
         # XXX: For now, only restrict to linux64 test tasks (as for runnable jobs above, we could remove these right away).
@@ -693,8 +700,8 @@ class CommitClassifier(object):
             )
 
         # This should be kept in sync with the test scheduling history retriever script.
+        cleaned_selected_tasks = []
         if len(runnable_jobs) > 0:
-            cleaned_selected_tasks = []
             for selected_task in selected_tasks:
                 if (
                     selected_task.startswith("test-linux64")
@@ -848,6 +855,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.revision is not None:
+        assert args.phabricator_deployment is None
+        assert args.diff_id is None
+
+    if args.diff_id is not None:
+        assert args.phabricator_deployment is not None
+        assert args.revision is None
+
     classifier = CommitClassifier(
         args.model,
         args.repo_dir,
@@ -855,10 +870,10 @@ def main() -> None:
         args.method_defect_predictor_dir,
         args.use_single_process,
         args.skip_feature_importance,
+        args.phabricator_deployment,
+        args.diff_id,
     )
-    classifier.classify(
-        args.revision, args.phabricator_deployment, args.diff_id, args.runnable_jobs
-    )
+    classifier.classify(args.revision, args.runnable_jobs)
 
 
 if __name__ == "__main__":

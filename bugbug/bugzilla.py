@@ -34,15 +34,14 @@ PRODUCTS = (
     "Chat Core",
     "Cloud Services",
     "Core",
-    "Core Graveyard",
     "Data Platform and Tools",
     "DevTools",
-    "DevTools Graveyard",
+    "Developer Infrastructure",
     "External Software Affecting Firefox",
     "Fenix",
     "Firefox",
-    "Firefox Graveyard",
     "Firefox Build System",
+    "Firefox for iOS",
     "GeckoView",
     "Invalid Bugs",
     "JSS",
@@ -55,7 +54,6 @@ PRODUCTS = (
     "Testing",
     "Thunderbird",
     "Toolkit",
-    "Toolkit Graveyard",
     "Web Compatibility",
     "WebExtensions",
 )
@@ -356,6 +354,32 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
             bugs_number[full_comp] = value
 
     return bugs_number
+
+
+def get_active_product_components(products=[]) -> set[tuple[str, str]]:
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/product",
+        params={
+            "type": "accessible",
+            "include_fields": [
+                "name",
+                "is_active",
+                "components.name",
+                "components.is_active",
+            ],
+            "names": products,
+        },
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+
+    return set(
+        (product["name"], component["name"])
+        for product in r.json()["products"]
+        if product["is_active"]
+        for component in product["components"]
+        if component["is_active"]
+    )
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:

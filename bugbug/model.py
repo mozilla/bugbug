@@ -3,9 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 import pickle
 from collections import defaultdict
-from logging import INFO, basicConfig, getLogger
 from typing import Any
 
 import matplotlib
@@ -30,8 +30,8 @@ from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def classification_report_imbalanced_values(

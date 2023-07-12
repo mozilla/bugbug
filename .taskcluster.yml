@@ -37,7 +37,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.9
+          image: python:3.10
           command:
             - "/bin/bash"
             - "-lcx"
@@ -61,7 +61,7 @@ tasks:
           workerType: batch
           payload:
             maxRunTime: 3600
-            image: python:3.9
+            image: python:3.10
             command:
               - "/bin/bash"
               - "-lcx"
@@ -82,7 +82,7 @@ tasks:
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
-          image: python:3.9
+          image: python:3.10
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -99,7 +99,7 @@ tasks:
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              hg clone -r c2afc715ea911e137c87e3bcda7563f6a90a6f9e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+              hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
               python -m pytest --cov=./ tests/test_*.py &&
               bash <(curl -s https://codecov.io/bash)"
         metadata:
@@ -115,7 +115,7 @@ tasks:
         workerType: compute-smaller
         payload:
           maxRunTime: 3600
-          image: python:3.9
+          image: python:3.10
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -129,7 +129,7 @@ tasks:
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
-              hg clone -r c2afc715ea911e137c87e3bcda7563f6a90a6f9e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+              hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
               pytest --cov=http_service http_service/tests/ -vvv &&
               bash <(curl -s https://codecov.io/bash)"
         metadata:
@@ -145,7 +145,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.9
+          image: python:3.10
           env:
             CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
           command:
@@ -213,7 +213,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: node
+          image: node:lts
           command:
             - "/bin/sh"
             - "-lcxe"

@@ -3,8 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from datetime import datetime
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
@@ -17,8 +17,8 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, commit_features, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class BackoutModel(CommitModel):

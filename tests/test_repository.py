@@ -2399,7 +2399,7 @@ void main() {
 -    cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
  }
- """
+ """  # noqa: W293
 
     patch_data = rs_parsepatch.get_lines(patch)
 
@@ -2650,7 +2650,7 @@ void main() {
      cout << "Ciao1" << endl;
 +    cout << "Ciao2" << endl;
  }
- """
+ """  # noqa: W293
 
     patch_data = rs_parsepatch.get_lines(patch)
 

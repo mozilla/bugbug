@@ -159,6 +159,37 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     }
 
 
+def test_for_missing_bugs(client, responses):
+    existed_bug_ids = [1602463, 1619699]
+    missing_bug_ids = [1598744, 1615281, 1566486]
+    all_bug_ids = [*existed_bug_ids, *missing_bug_ids]
+
+    change_time = str(time.time())
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug?id=1566486,1598744,1602463,1615281,1619699&include_fields=id&include_fields=last_change_time",
+        status=200,
+        json={
+            "bugs": [
+                {"id": bug_id, "last_change_time": change_time}
+                for bug_id in existed_bug_ids
+            ],
+        },
+    )
+
+    rv = client.post(
+        "/component/predict/batch",
+        data=json.dumps({"bugs": all_bug_ids}),
+        headers={API_TOKEN: "test"},
+    )
+    assert rv.status_code == 202
+    bugs = retrieve_compressed_reponse(rv)["bugs"]
+    assert bugs.keys() == set(
+        map(str, all_bug_ids)
+    ), "All the queried bug IDs must be returned"
+
+
 def test_empty_batch(client):
     """Start with a blank database."""
 
