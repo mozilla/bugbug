@@ -1,9 +1,9 @@
 coverage==7.2.7
 hypothesis==6.81.2
+igraph==0.10.6
 jsonschema==4.17.3
 pre-commit==3.3.3
 pytest==7.4.0
 pytest-cov==4.1.0
 pytest-responses==0.5.1
-igraph==0.10.6
 responses==0.21.0
