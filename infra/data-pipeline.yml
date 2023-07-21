@@ -32,6 +32,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -67,6 +68,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -103,6 +105,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -140,6 +143,7 @@ tasks:
           bugbug-mercurial-repository: /cache
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
@@ -1346,6 +1350,7 @@ tasks:
       scopes:
         - secrets:get:project/bugbug/integration
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       payload:
         features:
           taskclusterProxy: true
