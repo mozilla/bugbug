@@ -535,7 +535,7 @@ def generate_failing_together_probabilities(
             failing_together[couple[0]][couple[1]] = (support, confidence)
 
     for percentage, count in count_redundancies.most_common():
-        logger.info("%d with %f%% confidence", count, percentage)
+        logger.info("%d with %s confidence", count, percentage)
 
     failing_together_db = get_failing_together_db(granularity, False)
 
