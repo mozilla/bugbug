@@ -513,9 +513,6 @@ tasks:
           public/test_config_group_scheduling_history.pickle.version:
             path: /data/test_config_group_scheduling_history.pickle.version
             type: file
-          public/past_failures_config_group.lmdb.tar.zst:
-            path: /data/past_failures_config_group.lmdb.tar.zst
-            type: file
           public/failing_together_config_group.lmdb.tar.zst:
             path: /data/failing_together_config_group.lmdb.tar.zst
             type: file
@@ -659,10 +656,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -916,10 +909,6 @@ tasks:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
-            type: file
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -999,10 +988,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -1238,10 +1223,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
