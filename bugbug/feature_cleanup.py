@@ -21,9 +21,7 @@ class url(object):
 
 class fileref(object):
     def __init__(self):
-        self.pattern = re.compile(
-            r"\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.mjs\b|\w+\.jsx\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b"
-        )
+        self.pattern = re.compile(r"\w+\.(py|json|js|jsm|mjs|jsx|html|css|c|cpp|h)\b")
 
     def __call__(self, text):
         return self.pattern.sub("__FILE_REFERENCE__", text)
