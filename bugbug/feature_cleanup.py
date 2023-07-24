@@ -154,7 +154,7 @@ class dll(object):
 
 class synonyms(object):
     def __init__(self):
-        synonyms = [
+        synonyms = (
             ("safemode", ["safemode", "safe mode"]),
             ("str", ["str", "steps to reproduce", "repro steps"]),
             ("uaf", ["uaf", "use after free", "use-after-free"]),
@@ -174,18 +174,22 @@ class synonyms(object):
                 ],
             ),
             ("spec", ["spec", "specification"]),
-        ]
-        self.pattern = {}
-        for synonym_group, synonym_list in synonyms:
-            self.pattern[synonym_group] = re.compile(
-                "|".join(rf"\b{synonym}\b" for synonym in synonym_list),
-                flags=re.IGNORECASE,
-            )
+        )
+        self.synonyms_dict = {
+            synonym: synonym_group
+            for synonym_group, synonym_list in synonyms
+            for synonym in synonym_list
+        }
+        self.pattern = re.compile(
+            r"|".join(rf"\b{synonym}\b" for synonym in self.synonyms_dict.keys()),
+            flags=re.IGNORECASE,
+        )
+
+    def _replace(self, match):
+        return self.synonyms_dict[match.group(0).lower()]
 
     def __call__(self, text):
-        for synonym_group in self.pattern:
-            text = self.pattern[synonym_group].sub(synonym_group, text)
-        return text
+        return self.pattern.sub(self._replace, text)
 
 
 class crash(object):
