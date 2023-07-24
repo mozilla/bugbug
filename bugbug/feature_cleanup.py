@@ -185,11 +185,11 @@ class synonyms(object):
             flags=re.IGNORECASE,
         )
 
-    def __call__(self, text):
-        def replacement(match):
-            return self.synonyms_dict[match.group(0).lower()]
+    def _replace(self, match):
+        return self.synonyms_dict[match.group(0).lower()]
 
-        return self.pattern.sub(replacement, text)
+    def __call__(self, text):
+        return self.pattern.sub(self._replace, text)
 
 
 class crash(object):
