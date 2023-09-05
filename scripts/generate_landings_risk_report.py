@@ -1162,7 +1162,7 @@ def notification(days: int) -> None:
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
         team = component_team_mapping.get(product, {}).get(component)
-        if team is None or team in ("Other", "Mozilla"):
+        if team is None or team in ("Other", "Mozilla") or team not in team_data:
             continue
         cur_team_data = team_data[team]
 
