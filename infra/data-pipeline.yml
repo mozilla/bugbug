@@ -1292,7 +1292,7 @@ tasks:
       payload:
         capabilities:
           privileged: true
-        maxRunTime: 3600
+        maxRunTime: 7200
         image: ${taskboot_image}
         command:
           - "/bin/sh"
