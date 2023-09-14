@@ -241,10 +241,10 @@ def zstd_compress(path: str) -> None:
 
 
 def zstd_decompress(path: str) -> None:
-    dctx = zstandard.ZstdDecompressor()
-    with open(f"{path}.zst", "rb") as input_f:
-        with open(path, "wb") as output_f:
-            dctx.copy_stream(input_f, output_f)
+    if not os.path.exists(f"{path}.zst"):
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+
+    subprocess.run(["zstd", "-df", f"{path}.zst"], check=True)
 
 
 @contextmanager
