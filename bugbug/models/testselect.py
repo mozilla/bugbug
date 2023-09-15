@@ -82,7 +82,8 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    raise ValueError(f"Couldn't find cost for {config}")
+    logger.warning(f"Couldn't find cost for {config}")
+    return max(cost for _, cost in costs)
 
 
 def _generate_equivalence_sets(
