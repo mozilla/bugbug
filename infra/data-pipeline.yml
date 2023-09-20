@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.3.10
+    taskboot_image: mozilla/taskboot:0.4.2
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -1300,8 +1300,8 @@ tasks:
           - "git clone --quiet ${repository} /code &&
             cd /code &&
             git -c advice.detachedHead=false checkout ${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
         artifacts:
           public/bugbug:
             expires: { $fromNow: "2 weeks" }
