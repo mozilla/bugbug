@@ -13,6 +13,7 @@ from typing import Iterable, Iterator, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
+import libmozdata.bugzilla
 from libmozdata.bugzilla import Bugzilla
 from libmozdata.bugzilla import BugzillaProduct 
 from tqdm import tqdm
@@ -284,11 +285,11 @@ def delete_bugs(match):
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
 
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/bug", params=bug_query_params
-    )
-    r.raise_for_status()
-    count = r.json()["bug_count"]
+    bugzilla = libmozdata.bugzilla.Bugzilla("https://bugzilla.mozilla.org", params=bug_query_params)
+
+    r = bugzilla.get_data().wait() 
+    
+    count = r.result()["bug_count"]
 
     return count
 
