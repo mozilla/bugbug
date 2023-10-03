@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import collections
+import requests
 import csv
 import re
 from datetime import datetime
@@ -14,6 +15,7 @@ import tenacity
 from dateutil.relativedelta import relativedelta
 import libmozdata.bugzilla
 from libmozdata.bugzilla import Bugzilla
+from libmozdata.bugzilla import BugzillaProduct 
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -381,12 +383,16 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
         headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
     )
     r.raise_for_status()
-
-    mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
-    for product in r.json()["products"]:
-        for component in product["components"]:
-            mapping[product["name"]][component["name"]] = component["team_name"]
-
+    products = {}
+    for product_json in r.json()["products"]:
+        product = BugzillaProduct(product_json["name"])
+        products[product.name] = product
+        mapping = {}
+        for product in products.values():
+            components = product.get_components()
+            for component in components:
+                mapping.setdefault(product.name, {})[component.name] = component.team_name
+    
     return mapping
 
 

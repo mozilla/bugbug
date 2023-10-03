@@ -41,6 +41,7 @@ tasks:
           bugbug-mercurial-repository: /cache
       scopes:
         - docker-worker:cache:bugbug-mercurial-repository
+        - generic-worker:cache:bugbug-mercurial-repository
         - secrets:get:project/bugbug/production
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -98,7 +99,7 @@ tasks:
         features:
           taskclusterProxy: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.3.6
+        image: mozilla/taskboot:0.4.2
         env:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:

@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.3.6
+    taskboot_image: mozilla/taskboot:0.4.2
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -32,6 +32,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -67,6 +68,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -103,6 +105,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -140,6 +143,7 @@ tasks:
           bugbug-mercurial-repository: /cache
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
@@ -509,9 +513,6 @@ tasks:
           public/test_config_group_scheduling_history.pickle.version:
             path: /data/test_config_group_scheduling_history.pickle.version
             type: file
-          public/past_failures_config_group.lmdb.tar.zst:
-            path: /data/past_failures_config_group.lmdb.tar.zst
-            type: file
           public/failing_together_config_group.lmdb.tar.zst:
             path: /data/failing_together_config_group.lmdb.tar.zst
             type: file
@@ -655,10 +656,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -912,10 +909,6 @@ tasks:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
-            type: file
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -995,10 +988,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -1235,10 +1224,6 @@ tasks:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
-            type: file
 
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -1307,7 +1292,7 @@ tasks:
       payload:
         capabilities:
           privileged: true
-        maxRunTime: 3600
+        maxRunTime: 7200
         image: ${taskboot_image}
         command:
           - "/bin/sh"
@@ -1315,8 +1300,8 @@ tasks:
           - "git clone --quiet ${repository} /code &&
             cd /code &&
             git -c advice.detachedHead=false checkout ${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
         artifacts:
           public/bugbug:
             expires: { $fromNow: "2 weeks" }
@@ -1346,6 +1331,7 @@ tasks:
       scopes:
         - secrets:get:project/bugbug/integration
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       payload:
         features:
           taskclusterProxy: true

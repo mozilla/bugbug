@@ -57,14 +57,14 @@ def _get_cost(config: str) -> int:
         (("build", "plain"), 3),
         (("linux1804-64", "opt"), 2),
         (("linux1804-64", "debug"), 3),
-        (("windows11", "opt"), 4),
-        (("windows11", "debug"), 5),
-        (("windows10", "opt"), 6),
-        (("windows10", "debug"), 7),
-        (("android-em", "opt"), 8),
-        (("android-em", "debug"), 9),
-        (("windows7", "opt"), 10),
-        (("windows7", "debug"), 11),
+        (("linux2204-64", "opt"), 4),
+        (("linux2204-64", "debug"), 5),
+        (("windows11", "opt"), 6),
+        (("windows11", "debug"), 7),
+        (("windows10", "opt"), 8),
+        (("windows10", "debug"), 9),
+        (("android-em", "opt"), 10),
+        (("android-em", "debug"), 11),
         (("mac", "opt"), 12),
         (("mac", "debug"), 13),
         (("asan", "opt"), 14),
@@ -82,7 +82,8 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    raise ValueError(f"Couldn't find cost for {config}")
+    logger.warning(f"Couldn't find cost for {config}")
+    return max(cost for _, cost in costs)
 
 
 def _generate_equivalence_sets(
