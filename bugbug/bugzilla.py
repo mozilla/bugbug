@@ -373,31 +373,26 @@ def get_active_product_components(products=[]) -> set[tuple[str, str]]:
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:
-  """Returns a mapping of component names to team names."""
-
-  r = utils.get_session("bugzilla").get(
-      "https://bugzilla.mozilla.org/rest/product",
-      params={
-          "type": "accessible",
-          "include_fields": ["name", "components.name", "components.team_name"],
-      },
-      headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
-  )
-  r.raise_for_status()
-
-  products = {}
-  for product_json in r.json()["products"]:
-    product = BugzillaProduct(product_json["name"])
-    products[product.name] = product
-
-  mapping = {}
-  for product in products.values():
-    components = product.get_components()
-
-    for component in components:
-      mapping.setdefault(product.name, {})[component.name] = component.team_name
-
-  return mapping
+    r = utils.get_session("bugzilla").get(
+        "https://bugzilla.mozilla.org/rest/product",
+        params={
+            "type": "accessible",
+            "include_fields": ["name", "components.name", "components.team_name"],
+        },
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+    products = {}
+    for product_json in r.json()["products"]:
+        product = BugzillaProduct(product_json["name"])
+        products[product.name] = product
+        mapping = {}
+        for product in products.values():
+            components = product.get_components()
+            for component in components:
+                mapping.setdefault(product.name, {})[component.name] = component.team_name
+    
+    return mapping
 
 
 def get_groups_users(group_names: list[str]) -> list[str]:
