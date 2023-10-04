@@ -281,14 +281,14 @@ def delete_bugs(match):
 
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
+    count = []
 
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/bug", params=bug_query_params
-    )
-    r.raise_for_status()
-    count = r.json()["bug_count"]
+    def bughandler(bug):
+        count.append(bug["bug_count"])
 
-    return count
+    Bugzilla(bug_query_params, bughandler=bughandler).get_data().wait()
+
+    return sum(count)
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
