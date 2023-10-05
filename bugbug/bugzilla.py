@@ -374,7 +374,7 @@ def get_component_team_mapping() -> dict[str, dict[str, str]]:
     mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
 
     def product_handler(product):
-        for component in product.get("components", []):
+        for component in product["components"]:
             mapping[product["name"]][component["name"]] = component["team_name"]
 
     BugzillaProduct(
