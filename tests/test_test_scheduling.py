@@ -11,6 +11,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from bugbug import repository, test_scheduling
 from bugbug.repository import CommitDict
 from bugbug.test_scheduling import ConfigGroup, Group, Revision, Task
+from bugbug.utils import ExpQueue
 
 
 def test_rename_runnables() -> None:
@@ -564,7 +565,7 @@ def test_touched_together_with_backout(monkeypatch: MonkeyPatch) -> None:
 
 @pytest.mark.parametrize("granularity", ["group", "label"])
 def test_generate_data(granularity: str) -> None:
-    past_failures = test_scheduling.get_past_failures(granularity, False)
+    past_failures = test_scheduling.PastFailures(granularity, False)
 
     commits = [
         CommitDict(
@@ -1000,3 +1001,25 @@ def test_generate_data(granularity: str) -> None:
         obj["touched_together_directories"] = 0
         obj["touched_together_files"] = 0
     assert data[1] == obj
+
+
+def test_fallback_on_ini() -> None:
+    past_failures = test_scheduling.PastFailures("group", False)
+
+    past_failures.set("browser.ini", ExpQueue(0, 1, 42))
+    past_failures.set("reftest.list", ExpQueue(0, 1, 7))
+
+    def assert_val(manifest, val):
+        exp_queue = past_failures.get(manifest)
+        assert exp_queue is not None
+        assert exp_queue[0] == val
+
+    assert_val("browser.ini", 42)
+    assert_val("browser.toml", 42)
+    assert_val("reftest.list", 7)
+    assert past_failures.get("reftest.toml") is None
+    assert past_failures.get("unexisting.ini") is None
+
+    past_failures.set("browser.toml", ExpQueue(0, 1, 22))
+    assert_val("browser.toml", 22)
+    assert_val("browser.ini", 42)
