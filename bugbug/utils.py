@@ -279,7 +279,7 @@ def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["tar", "-I", "zstd", "-xf", path], check=True)
+    subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
 
 
 def extract_file(path: str) -> None:
