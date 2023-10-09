@@ -244,7 +244,7 @@ def zstd_decompress(path: str) -> None:
     if not os.path.exists(f"{path}.zst"):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstd", "-df", f"{path}.zst"], check=True)
+    subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
 
 
 @contextmanager
