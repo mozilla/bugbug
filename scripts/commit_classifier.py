@@ -210,7 +210,7 @@ class CommitClassifier(object):
                 test_scheduling.TEST_LABEL_SCHEDULING_DB,
                 test_scheduling.PAST_FAILURES_LABEL_DB,
             )
-            self.past_failures_data = test_scheduling.get_past_failures("label", True)
+            self.past_failures_data = test_scheduling.PastFailures("label", True)
 
             self.testfailure_model = cast(
                 TestFailureModel, TestFailureModel.load(download_model("testfailure"))
