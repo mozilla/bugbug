@@ -199,13 +199,13 @@ def main():
     args = parse_args(sys.argv[1:])
 
     if args.train_with_taskcluster:
-        script_path = os.path.join("scripts", "trainer.py")
-
         task_definition = {
             "payload": {
                 "command": [
                     "python",
-                    script_path,
+                    "-m",
+                    "scripts.trainer",
+                    args.model,
                     "--limit",
                     str(args.limit),
                     "--no-download" if not args.download_db else "",
@@ -216,7 +216,7 @@ def main():
                 ],
                 "maxRunTime": 25200,
                 "env": {
-                    "TAG": "test",
+                    "TAG": "test",  # This will be changed
                 },
             },
         }
