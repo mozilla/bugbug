@@ -5,56 +5,19 @@ import inspect
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 from logging import INFO, basicConfig, getLogger
 
 import taskcluster
 
 from bugbug import db
 from bugbug.models import MODELS, get_model_class
-from bugbug.utils import CustomJsonEncoder, zstd_compress
+from bugbug.utils import CustomJsonEncoder, get_taskcluster_options, zstd_compress
 
 MODELS_WITH_TYPE = ("component",)
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
-
-TASKCLUSTER_DEFAULT_URL = "https://community-tc.services.mozilla.com"
-
-
-def get_taskcluster_options():
-    """Get the Taskcluster setup options according to current environment.
-
-    The current environment could be local.
-    """
-    options = taskcluster.optionsFromEnvironment()
-    proxy_url = os.environ.get("TASKCLUSTER_PROXY_URL")
-
-    if proxy_url is not None:
-        # Always use proxy url when available
-        options["rootUrl"] = proxy_url
-
-    if "rootUrl" not in options:
-        # Always have a value in root url
-        options["rootUrl"] = TASKCLUSTER_DEFAULT_URL
-
-    return options
-
-
-def create_task(task_definition):
-    options = get_taskcluster_options()
-    queue = taskcluster.Queue(options)
-
-    task_id = taskcluster.utils.slugId()
-
-    try:
-        queue.createTask(task_id, task_definition)
-        logger.info(
-            "Task created at https://community-tc.services.mozilla.com/tasks/%s",
-            task_id,
-        )
-    except taskcluster.exceptions.TaskclusterAuthFailure:
-        logger.exception("Failed to authenticate with Taskcluster")
-        raise
 
 
 class Trainer(object):
@@ -146,6 +109,7 @@ def parse_args(args):
     parser.add_argument(
         "--taskcluster",
         action="store_true",
+        dest="train_with_taskcluster",
         help="Train the model using taskcluster",
     )
 
@@ -195,29 +159,54 @@ def parse_args(args):
     return main_parser.parse_args(args)
 
 
+def create_task(task_definition):
+    options = get_taskcluster_options()
+    queue = taskcluster.Queue(options)
+
+    task_id = taskcluster.utils.slugId()
+
+    try:
+        queue.createTask(task_id, task_definition)
+        logger.info(
+            "Task created at https://community-tc.services.mozilla.com/tasks/%s",
+            task_id,
+        )
+    except taskcluster.exceptions.TaskclusterAuthFailure:
+        logger.exception("Failed to authenticate with Taskcluster")
+        raise
+
+
 def main():
     args = parse_args(sys.argv[1:])
 
     if args.train_with_taskcluster:
+        now = datetime.utcnow()
+        created_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        deadline_time = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        command = ["python", "-m", "scripts.trainer"] + [
+            arg for arg in sys.argv[1:] if arg != "--taskcluster"
+        ]
+
         task_definition = {
+            "created": created_time,
+            "deadline": deadline_time,
+            "provisionerId": "proj-bugbug",
+            "workerType": "compute-smaller",
+            "priority": "normal",
             "payload": {
-                "command": [
-                    "python",
-                    "-m",
-                    "scripts.trainer",
-                    args.model,
-                    "--limit",
-                    str(args.limit),
-                    "--no-download" if not args.download_db else "",
-                    "--download-eval" if args.download_eval else "",
-                    "--lemmatization" if args.lemmatization else "",
-                    "--classifier",
-                    args.classifier,
-                ],
-                "maxRunTime": 25200,
+                "image": "python:3.10",
+                "command": command,
+                "maxRunTime": 3600,
                 "env": {
                     "TAG": "test",  # This will be changed
                 },
+            },
+            "metadata": {
+                "name": "bugbug train taskcluster",
+                "description": "bugbug train a specific on taskcluster",
+                "owner": "mcastelluccio@mozilla.com",
+                "source": "https://github.com/jpangas/bugbug/tree/train_on_task_cluster",  # this will be changed
             },
         }
         create_task(task_definition)
