@@ -4,23 +4,22 @@ repos:
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 23.9.1
     hooks:
       - id: black
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v2.7.1
+    rev: v3.0.3
     hooks:
       - id: prettier
         exclude: ^tests/fixtures/
   - repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+    rev: 6.1.0
     hooks:
       - id: flake8
         additional_dependencies:
           - flake8-coding==1.3.2
           - flake8-copyright==0.2.4
           - flake8-debugger==4.1.2
-          - flake8-mypy==17.8.0
   - repo: https://github.com/pycqa/pydocstyle
     rev: 6.3.0
     hooks:
@@ -31,7 +30,7 @@ repos:
           # Ignoring warnings about missing docstrings.
           - --add-ignore=D100,D101,D102,D103,D104,D105,D107
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v4.5.0
     hooks:
       - id: check-ast
       - id: check-docstring-first
@@ -55,11 +54,11 @@ repos:
       - id: codespell
         exclude_types: [json]
   - repo: https://github.com/marco-c/taskcluster_yml_validator
-    rev: v0.0.9
+    rev: v0.0.10
     hooks:
       - id: taskcluster_yml
   - repo: https://github.com/asottile/yesqa
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: yesqa
   - repo: https://github.com/pre-commit/mirrors-mypy
