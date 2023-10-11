@@ -572,8 +572,11 @@ class Model:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
-            Booster.save_model(X, f"{self.__class__.__name__.lower()}_data_X")
-            Booster.save_model(y, f"{self.__class__.__name__.lower()}_data_y")
+            with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
+                Booster.save_model(X, f)
+
+            with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
+                Booster.save_model(y, f)
 
         return tracking_metrics
 
