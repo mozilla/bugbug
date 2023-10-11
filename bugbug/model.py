@@ -11,7 +11,6 @@ from typing import Any
 import matplotlib
 import numpy as np
 import shap
-from xgboost import Booster
 from imblearn.metrics import (
     classification_report_imbalanced,
     geometric_mean_score,
@@ -25,6 +24,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
+from xgboost import Booster
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
