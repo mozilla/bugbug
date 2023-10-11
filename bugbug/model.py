@@ -11,6 +11,7 @@ from typing import Any
 import matplotlib
 import numpy as np
 import shap
+from xgboost import Booster
 from imblearn.metrics import (
     classification_report_imbalanced,
     geometric_mean_score,
@@ -571,11 +572,8 @@ class Model:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
-            with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
-                pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-            with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
-                pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
+            Booster.save_model(X, f"{self.__class__.__name__.lower()}_data_X")
+            Booster.save_model(y, f"{self.__class__.__name__.lower()}_data_y")
 
         return tracking_metrics
 
