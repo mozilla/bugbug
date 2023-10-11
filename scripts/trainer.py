@@ -206,7 +206,7 @@ def main():
                 "name": "bugbug train taskcluster",
                 "description": "bugbug train a specific on taskcluster",
                 "owner": "mcastelluccio@mozilla.com",
-                "source": "https://github.com/jpangas/bugbug/tree/train_on_task_cluster",  # this will be changed
+                "source": "https://github.com/jpangas/bugbug/tree/train_on_task_cluster",  # This will be changed
             },
         }
         create_task(task_definition)
