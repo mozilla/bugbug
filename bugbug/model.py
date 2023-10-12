@@ -569,8 +569,8 @@ class Model:
             self.clf.fit(X_train, self.le.transform(y_train))
 
         # Check if it is an xgboost model and save it
-        if self.clf.__class__.__name__ in ['XGBRegressor', 'XGBClassifier']:
-            f = self.__class__.__name__.lower() + '_xgb.bin'
+        if self.clf.__class__.__name__ in ["XGBRegressor", "XGBClassifier"]:
+            f = self.__class__.__name__.lower() + "_xgb.bin"
             if os.path.isfile(f):
                 os.remove(f)
             booster = self.clf.get_booster()
@@ -593,11 +593,11 @@ class Model:
         with open(model_file_name, "rb") as f:
             return pickle.load(f)
 
-    # Function to overide self.clf if XGBOOST is in use and use the saved XGBOOST model       
+    # Function to override self.clf if XGBOOST is in use and use the saved XGBOOST model
     def loadxgboost(self):
-        xgboostsavefilename = self.__class__.__name__.lower() + '_xgb.bin'
+        xgboostsavefilename = self.__class__.__name__.lower() + "_xgb.bin"
         if os.path.isfile(xgboostsavefilename):
-            #loading xgboost into memory with the instance booster load_model function
+            # loading xgboost into memory with the instance booster load_model function
             self.clf.load_model(xgboostsavefilename)
 
     def overwrite_classes(self, items, classes, probabilities):
@@ -620,7 +620,7 @@ class Model:
             items = [items]
 
         assert isinstance(items[0], (dict, tuple))
-        #loading xgboost using load_model to class instance
+        # loading xgboost using load_model to class instance
         self.loadxgboost()
 
         X = self.extraction_pipeline.transform(lambda: items)
