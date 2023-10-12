@@ -31,8 +31,6 @@ from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
 
-import xgboost
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -570,14 +568,16 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
+        # Check if it is an xgboost model and save it
         if self.clf.__class__.__name__ in ['XGBRegressor', 'XGBClassifier']:
             f = self.__class__.__name__.lower() + '_xgb.bin'
             if os.path.isfile(f):
                 os.remove(f)
             booster = self.clf.get_booster()
             booster.save_model(f)
-        with open(self.__class__.__name__.lower(), "wb") as j:
-            pickle.dump(self, j, protocol=pickle.HIGHEST_PROTOCOL)
+
+        with open(self.__class__.__name__.lower(), "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
             with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
@@ -590,11 +590,10 @@ class Model:
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        #loading the class snapshot with pickle
         with open(model_file_name, "rb") as f:
             return pickle.load(f)
 
-    # method to overide self.clf if XGBOOST is in use and use the dumped XGBOOST model       
+    # Function to overide self.clf if XGBOOST is in use and use the saved XGBOOST model       
     def loadxgboost(self):
         xgboostsavefilename = self.__class__.__name__.lower() + '_xgb.bin'
         if os.path.isfile(xgboostsavefilename):
@@ -621,7 +620,7 @@ class Model:
             items = [items]
 
         assert isinstance(items[0], (dict, tuple))
-        #loading xgboost using load_model to memory
+        #loading xgboost using load_model to class instance
         self.loadxgboost()
 
         X = self.extraction_pipeline.transform(lambda: items)
@@ -731,7 +730,7 @@ class BugModel(Model):
 
 
 class CommitModel(Model):
-    def __init__(self, lemmatization=False, bug_daclfta=False):
+    def __init__(self, lemmatization=False, bug_data=False):
         Model.__init__(self, lemmatization)
         self.bug_data = bug_data
         self.training_dbs = [repository.COMMITS_DB]
