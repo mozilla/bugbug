@@ -260,15 +260,14 @@ def get_config_specific_groups(config: str) -> str:
 
     equivalence_sets = testselect._get_equivalence_sets(0.9)
 
-    past_failures_data = test_scheduling.get_past_failures("group", True)
-    all_runnables = past_failures_data["all_runnables"]
+    past_failures_data = test_scheduling.PastFailures("group", True)
 
     setkey(
         job.result_key,
         orjson.dumps(
             [
                 {"name": group}
-                for group in all_runnables
+                for group in past_failures_data.all_runnables
                 if any(
                     equivalence_set == {config}
                     for equivalence_set in equivalence_sets[group]
