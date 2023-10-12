@@ -568,22 +568,32 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
+        self.clf.save_model(f"{self.__class__.__name__.lower()}_xgb")
+        self.clf = None
+
         with open(self.__class__.__name__.lower(), "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
             with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
-                Booster.save_model(X, f)
+                pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
 
             with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
-                Booster.save_model(y, f)
+                pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         return tracking_metrics
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
+        with open(f"{model_file_name}_xgb", "rb") as f:
+            xgb_model = Booster()
+            xgb_model.load_model(f)
+
         with open(model_file_name, "rb") as f:
-            return pickle.load(f)
+            model = pickle.load(f)
+
+        model.clf = xgb_model
+        return model
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
