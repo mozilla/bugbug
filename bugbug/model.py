@@ -571,7 +571,7 @@ class Model:
             self.clf.fit(X_train, self.le.transform(y_train))
 
         if self.clf.__class__.__name__ in ['XGBRegressor', 'XGBClassifier']:
-            f = self.__class__.__name__.lower() + '_xgb'
+            f = self.__class__.__name__.lower() + '_xgb.bin'
             if os.path.isfile(f):
                 os.remove(f)
             booster = self.clf.get_booster()
@@ -590,12 +590,16 @@ class Model:
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        if os.path.isfile(model_file_name + '_xgb'):
-            booster = xgboost.Booster()
-            return booster.load_model(model_file_name + '_xgb')
-        else:
-            with open(model_file_name, "rb") as f:
-                return pickle.load(f)
+        #loading the class snapshot with pickle
+        with open(model_file_name, "rb") as f:
+            return pickle.load(f)
+
+    # method to overide self.clf if XGBOOST is in use and use the dumped XGBOOST model       
+    def loadxgboost(self):
+        xgboostsavefilename = self.__class__.__name__.lower() + '_xgb.bin'
+        if os.path.isfile(xgboostsavefilename):
+            #loading xgboost into memory with the instance booster load_model function
+            self.clf.load_model(xgboostsavefilename)
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
@@ -617,6 +621,8 @@ class Model:
             items = [items]
 
         assert isinstance(items[0], (dict, tuple))
+        #loading xgboost using load_model to memory
+        self.loadxgboost()
 
         X = self.extraction_pipeline.transform(lambda: items)
         if probabilities:
@@ -725,7 +731,7 @@ class BugModel(Model):
 
 
 class CommitModel(Model):
-    def __init__(self, lemmatization=False, bug_data=False):
+    def __init__(self, lemmatization=False, bug_daclfta=False):
         Model.__init__(self, lemmatization)
         self.bug_data = bug_data
         self.training_dbs = [repository.COMMITS_DB]
