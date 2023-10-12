@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+import os
 import pickle
 from collections import defaultdict
 from typing import Any
@@ -29,6 +30,8 @@ from bugbug import bugzilla, db, repository
 from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
 from bugbug.utils import split_tuple_generator, to_array
+
+import xgboost
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -567,8 +570,14 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
-        with open(self.__class__.__name__.lower(), "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        if self.clf.__class__.__name__ in ['XGBRegressor', 'XGBClassifier']:
+            f = self.__class__.__name__.lower() + '_xgb'
+            if os.path.isfile(f):
+                os.remove(f)
+            booster = self.clf.get_booster()
+            booster.save_model(f)
+        with open(self.__class__.__name__.lower(), "wb") as j:
+            pickle.dump(self, j, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
             with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
@@ -581,8 +590,12 @@ class Model:
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        with open(model_file_name, "rb") as f:
-            return pickle.load(f)
+        if os.path.isfile(model_file_name + '_xgb'):
+            booster = xgboost.Booster()
+            return booster.load_model(model_file_name + '_xgb')
+        else:
+            with open(model_file_name, "rb") as f:
+                return pickle.load(f)
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
