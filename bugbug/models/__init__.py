@@ -13,7 +13,6 @@ MODELS = {
     "assignee": "bugbug.models.assignee.AssigneeModel",
     "backout": "bugbug.models.backout.BackoutModel",
     "browsername": "bugbug.models.browsername.BrowserNameModel",
-    "bug": "bugbug.model.BugModel",
     "bugtype": "bugbug.models.bugtype.BugTypeModel",
     "component": "bugbug.models.component.ComponentModel",
     "component_nn": "bugbug.models.component_nn.ComponentNNModel",
