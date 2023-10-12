@@ -593,12 +593,12 @@ class Model:
         with open(model_file_name, "rb") as f:
             return pickle.load(f)
 
-    # Function to override self.clf if XGBOOST is in use and use the saved XGBOOST model
+    # Function to override self.clf
     def loadxgboost(self):
         xgboostsavefilename = self.__class__.__name__.lower() + "_xgb.bin"
         if os.path.isfile(xgboostsavefilename):
-            # loading xgboost into memory with the instance booster load_model function
             self.clf.load_model(xgboostsavefilename)
+        return True
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
@@ -620,7 +620,8 @@ class Model:
             items = [items]
 
         assert isinstance(items[0], (dict, tuple))
-        # loading xgboost using load_model to class instance
+
+        # Loading xgboost using load_model to class instance
         self.loadxgboost()
 
         X = self.extraction_pipeline.transform(lambda: items)
