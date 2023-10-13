@@ -557,8 +557,14 @@ def calculate_maintenance_effectiveness_indicator(
     else:
         wbdtime = math.inf
 
+    estimated_start_open_defects = open_defects + closed_defects - opened_defects
+    incoming = 100 * opened_defects / estimated_start_open_defects
+    closed = 100 * closed_defects / estimated_start_open_defects
+
     return {
         "ME%": mei,
         "BDTime": bdtime,
         "WBDTime": wbdtime,
+        "Incoming%": incoming,
+        "Closed%": closed,
     }
