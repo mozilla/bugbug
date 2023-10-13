@@ -514,4 +514,9 @@ def calculate_maintenance_effectiveness_indicator(
     print("After applying weights:")
     print(data)
 
-    return (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values()))
+    weighed_opened_defects = sum(data["opened"].values())
+    weighed_closed_defects = sum(data["closed"].values())
+    if weighed_opened_defects > 0:
+        return 100 * weighed_closed_defects / weighed_opened_defects
+    else:
+        return 100 * (weighed_closed_defects + 1)
