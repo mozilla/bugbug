@@ -5,6 +5,7 @@
 
 import collections
 import csv
+import math
 import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -444,6 +445,7 @@ def calculate_maintenance_effectiveness_indicator(
     components=None,
 ):
     data: dict[str, dict[str, int]] = {
+        "open": {},
         "opened": {},
         "closed": {},
     }
@@ -460,8 +462,6 @@ def calculate_maintenance_effectiveness_indicator(
             "count_only": 1,
             "type": "defect",
             "team_name": team,
-            "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-            "chfieldto": to_date.strftime("%Y-%m-%d"),
         }
 
         if severity != "--":
@@ -470,8 +470,24 @@ def calculate_maintenance_effectiveness_indicator(
         if components is not None:
             params["component"] = components
 
-        for query_type in ("opened", "closed"):
-            if query_type == "opened":
+        for query_type in data.keys():
+            if query_type in ("opened", "closed"):
+                params.update(
+                    {
+                        "chfieldfrom": from_date.strftime("%Y-%m-%d"),
+                        "chfieldto": to_date.strftime("%Y-%m-%d"),
+                    }
+                )
+
+            if query_type == "open":
+                params.update(
+                    {
+                        "f1": "resolution",
+                        "o1": "equals",
+                        "v1": "---",
+                    }
+                )
+            elif query_type == "opened":
                 params["chfield"] = "[Bug creation]"
             elif query_type == "closed":
                 params.update(
@@ -493,17 +509,21 @@ def calculate_maintenance_effectiveness_indicator(
             data[query_type][severity] = r.json()["bug_count"]
 
     # Calculate number of bugs without severity set.
-    for query_type in ("opened", "closed"):
+    for query_type in data.keys():
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
             for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
             if s != "--"
         )
 
+    open_defects = sum(data["open"].values())
+    opened_defects = sum(data["opened"].values())
+    closed_defects = sum(data["closed"].values())
+
     print("Before applying weights:")
     print(data)
 
-    for query_type in ("opened", "closed"):
+    for query_type in data.keys():
         # Apply weights.
         for (
             severity,
@@ -514,9 +534,31 @@ def calculate_maintenance_effectiveness_indicator(
     print("After applying weights:")
     print(data)
 
+    weighed_open_defects = sum(data["open"].values())
     weighed_opened_defects = sum(data["opened"].values())
     weighed_closed_defects = sum(data["closed"].values())
+
     if weighed_opened_defects > 0:
-        return 100 * weighed_closed_defects / weighed_opened_defects
+        mei = 100 * weighed_closed_defects / weighed_opened_defects
     else:
-        return 100 * (weighed_closed_defects + 1)
+        mei = 100 * (weighed_closed_defects + 1)
+
+    duration = (to_date - from_date).total_seconds() / 31536000
+
+    if closed_defects > opened_defects:
+        bdtime = duration * (open_defects / (closed_defects - opened_defects))
+    else:
+        bdtime = math.inf
+
+    if weighed_closed_defects > weighed_opened_defects:
+        wbdtime = duration * (
+            weighed_open_defects / (weighed_closed_defects - weighed_opened_defects)
+        )
+    else:
+        wbdtime = math.inf
+
+    return {
+        "ME%": mei,
+        "BDTime": bdtime,
+        "WBDTime": wbdtime,
+    }
