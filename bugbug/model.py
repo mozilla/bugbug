@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+import os
 import pickle
 from collections import defaultdict
 from typing import Any
@@ -568,31 +569,54 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
-        self.clf.save_model(f"{self.__class__.__name__.lower()}_xgb")
-        self.clf = None
+        model_name = self.__class__.__name__.lower()
 
-        with open(self.__class__.__name__.lower(), "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        if hasattr(self.clf, "save_model"):
+            # If the model has the "save_model" attribute (is an XGBoost model),
+            # To handle multiple model files as one, place them in a directory with the expected model file name.
+            # when compressing the directory, it results in a single file.
+            os.makedirs(model_name, exist_ok=True)
+
+            # Save the XGBoost model to a file named "model.xgb"
+            self.clf.save_model(os.path.join(model_name, "model.xgb"))
+
+            # Clear the clf attribute to prevent the XGBoost model from being pickled with the object
+            self.clf = None
+
+            # Save the model object itself to a pickle file named "model.pkl"
+            with open(os.path.join(model_name, "model.pkl"), "wb") as f:
+                pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            # Fallback to saving the entire model object using pickle if not XGBoost
+            with open(model_name, "wb") as f:
+                pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
-            with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
+            with open(f"{model_name}_data_X", "wb") as f:
                 pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-            with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
+            with open(f"{model_name}_data_y", "wb") as f:
                 pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         return tracking_metrics
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        with open(f"{model_file_name}_xgb", "rb") as f:
-            xgb_model = Booster()
-            xgb_model.load_model(f)
+        if os.path.isdir(model_file_name):
+            # If the model file is a directory, it's assumed to be an XGBoost model
+            with open(os.path.join(model_file_name, "model.xgb"), "rb") as f:
+                xgb_model = Booster()
+                xgb_model.load_model(f)
 
-        with open(model_file_name, "rb") as f:
-            model = pickle.load(f)
+            with open(os.path.join(model_file_name, "model.pkl"), "rb") as f:
+                model = pickle.load(f)
 
-        model.clf = xgb_model
+            model.clf = xgb_model
+        else:
+            # If the model file is not a directory, it's assumed to be a pickle file
+            with open(model_file_name, "rb") as f:
+                model = pickle.load(f)
+
         return model
 
     def overwrite_classes(self, items, classes, probabilities):
