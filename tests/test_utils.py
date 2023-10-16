@@ -302,6 +302,29 @@ def test_zstd_compress_not_existing(tmp_path, mock_zst):
     assert not os.path.exists(compressed_path)
 
 
+def test_create_extract_tar_zst(tmp_path):
+    path = tmp_path / "prova"
+    tar_zst_path = "prova.tar.zst"
+
+    with open(path, "w") as f:
+        json.dump({"Hello": "World"}, f)
+
+    utils.create_tar_zst(tar_zst_path)
+
+    assert os.path.exists(tar_zst_path)
+
+    os.remove(path)
+
+    utils.extract_tar_zst(tar_zst_path)
+
+    assert os.path.exists(path)
+
+    with open(path, "r") as f:
+        file_decomp = json.load(f)
+
+    assert file_decomp == {"Hello": "World"}
+
+
 def test_extract_db_zst(tmp_path, mock_zst):
     path = tmp_path / "prova.zst"
 

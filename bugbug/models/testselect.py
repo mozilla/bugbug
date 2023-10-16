@@ -175,14 +175,13 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
         with open(f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb") as fr:
             return pickle.load(fr)
     except FileNotFoundError:
-        past_failures_data = test_scheduling.get_past_failures("group", True)
-        all_runnables = past_failures_data["all_runnables"]
+        past_failures_data = test_scheduling.PastFailures("group", True)
 
         equivalence_sets = {}
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
         configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
-        for group in all_runnables:
+        for group in past_failures_data.all_runnables:
             key = test_scheduling.failing_together_key(group)
             try:
                 failing_together_stats = pickle.loads(failing_together[key])
@@ -561,11 +560,10 @@ class TestSelectModel(Model):
     ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
+        past_failures_data = test_scheduling.PastFailures(self.granularity, False)
 
         if push_num is None:
-            push_num = past_failures_data["push_num"] + 1
-        all_runnables = past_failures_data["all_runnables"]
+            push_num = past_failures_data.push_num + 1
 
         commit_tests = []
         for data in test_scheduling.generate_data(
@@ -573,7 +571,7 @@ class TestSelectModel(Model):
             past_failures_data,
             commit_data,
             push_num,
-            all_runnables,
+            past_failures_data.all_runnables,
             tuple(),
             tuple(),
         ):
@@ -660,8 +658,8 @@ class TestSelectModel(Model):
 
         commit_map = get_commit_map(all_revs)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
-        last_push_num = past_failures_data["push_num"]
+        past_failures_data = test_scheduling.PastFailures(self.granularity, True)
+        last_push_num = past_failures_data.push_num
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.
