@@ -13,7 +13,7 @@ from typing import Iterable, Iterator, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
-from libmozdata.bugzilla import Bugzilla
+from libmozdata.bugzilla import Bugzilla, BugzillaProduct
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -346,46 +346,38 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
 
 
 def get_active_product_components(products=[]) -> set[tuple[str, str]]:
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/product",
-        params={
-            "type": "accessible",
-            "include_fields": [
-                "name",
-                "is_active",
-                "components.name",
-                "components.is_active",
-            ],
-            "names": products,
-        },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
-    )
-    r.raise_for_status()
+    active_components = set()
 
-    return set(
-        (product["name"], component["name"])
-        for product in r.json()["products"]
-        if product["is_active"]
-        for component in product["components"]
-        if component["is_active"]
-    )
+    def product_handler(product):
+        if product["is_active"]:
+            active_components.update(
+                (product["name"], component["name"])
+                for component in product["components"]
+                if component["is_active"]
+            )
+
+    BugzillaProduct(
+        product_names=products,
+        product_types=["accessible"],
+        include_fields=["name", "is_active", "components.name", "components.is_active"],
+        product_handler=product_handler,
+    ).wait()
+
+    return active_components
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/product",
-        params={
-            "type": "accessible",
-            "include_fields": ["name", "components.name", "components.team_name"],
-        },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
-    )
-    r.raise_for_status()
-
     mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
-    for product in r.json()["products"]:
+
+    def product_handler(product):
         for component in product["components"]:
             mapping[product["name"]][component["name"]] = component["team_name"]
+
+    BugzillaProduct(
+        product_types="accessible",
+        include_fields=["name", "components.name", "components.team_name"],
+        product_handler=product_handler,
+    ).wait()
 
     return mapping
 
