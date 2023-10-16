@@ -162,17 +162,16 @@ def parse_args(args):
 def create_task(task_definition):
     options = get_taskcluster_options()
     queue = taskcluster.Queue(options)
-
-    task_id = taskcluster.utils.slugId()
+    task_group_id = taskcluster.utils.slugId()
 
     try:
-        queue.createTask(task_id, task_definition)
+        queue.createTask(task_group_id, task_definition)
         logger.info(
             "Task created at https://community-tc.services.mozilla.com/tasks/%s",
-            task_id,
+            task_group_id,
         )
-    except taskcluster.exceptions.TaskclusterAuthFailure:
-        logger.exception("Failed to authenticate with Taskcluster")
+    except taskcluster.exceptions.TaskclusterRestFailure:
+        logger.info("Failed to create the task")
         raise
 
 
