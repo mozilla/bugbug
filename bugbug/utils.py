@@ -190,14 +190,7 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = requests.get(url, stream=True)
-    r.raise_for_status()
-
-    with open(path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=1048576):
-            f.write(chunk)
-
-    r.raise_for_status()
+    subprocess.run(["wget", "--progress=dot:giga", url, "-O", path], check=True)
 
     with open(f"{path}.etag", "w") as f:
         f.write(new_etag)
