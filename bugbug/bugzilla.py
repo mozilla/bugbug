@@ -349,9 +349,11 @@ def get_active_product_components(products=[]) -> set[tuple[str, str]]:
 
     def product_handler(product):
         if product["is_active"]:
-            for component in product["components"]:
-                if component["is_active"]:
-                    active_components.add((product["name"], component["name"]))
+            active_components.update(
+                (product["name"], component["name"])
+                for component in product["components"]
+                if component["is_active"]
+            )
 
     BugzillaProduct(
         product_names=products,
