@@ -244,7 +244,7 @@ def zstd_decompress(path: str) -> None:
     if not os.path.exists(f"{path}.zst"):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstd", "-df", f"{path}.zst"], check=True)
+    subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
 
 
 @contextmanager
@@ -279,7 +279,7 @@ def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["tar", "-I", "zstd", "-xf", path], check=True)
+    subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
 
 
 def extract_file(path: str) -> None:
