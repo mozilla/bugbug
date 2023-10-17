@@ -431,11 +431,11 @@ def get_last_activity_excluding_bots(bug: BugDict) -> str:
 
 
 def calculate_maintenance_effectiveness_indicator(
-    team,
-    from_date,
-    to_date,
-    components=None,
-):
+    team: str,
+    from_date: datetime,
+    to_date: datetime,
+    components: list[str] = None,
+) -> dict[str, float]:
     data: dict[str, dict[str, int]] = {
         "open": {},
         "opened": {},
@@ -450,7 +450,7 @@ def calculate_maintenance_effectiveness_indicator(
     )
 
     for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
-        params = {
+        params: dict[str, int | str | list[str]] = {
             "count_only": 1,
             "type": "defect",
             "team_name": team,
