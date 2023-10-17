@@ -1162,7 +1162,7 @@ def notification(days: int) -> None:
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
         team = component_team_mapping.get(product, {}).get(component)
-        if team is None or team in ("Other", "Mozilla"):
+        if team is None or team in ("Other", "Mozilla") or team not in team_data:
             continue
         cur_team_data = team_data[team]
 
@@ -1777,21 +1777,27 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
 {slow_review_patches}"""
 
-            def calculate_maintenance_effectiveness(period):
+            def calculate_maintenance_effectiveness(
+                period: relativedelta,
+            ) -> dict[str, float]:
                 start_date = datetime.utcnow() - period
-                return round(
-                    bugzilla.calculate_maintenance_effectiveness_indicator(
-                        team, start_date, datetime.utcnow()
-                    ),
-                    2,
+                return bugzilla.calculate_maintenance_effectiveness_indicator(
+                    team, start_date, datetime.utcnow()
+                )
+
+            def format_maintenance_effectiveness(period: relativedelta) -> str:
+                me = calculate_maintenance_effectiveness(period)
+                return ", ".join(
+                    f"{factor}: {round(value, 2) if value != math.inf else value}"
+                    for factor, value in me.items()
                 )
 
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
 <br />
 
-Last week: {calculate_maintenance_effectiveness(relativedelta(weeks=1))}
-Last month: {calculate_maintenance_effectiveness(relativedelta(months=1))}
-Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
+Last week: {format_maintenance_effectiveness(relativedelta(weeks=1))}
+Last month: {format_maintenance_effectiveness(relativedelta(months=1))}
+Last year: {format_maintenance_effectiveness(relativedelta(years=1))}
 """
 
             sections = [

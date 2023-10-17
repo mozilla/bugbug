@@ -57,14 +57,14 @@ def _get_cost(config: str) -> int:
         (("build", "plain"), 3),
         (("linux1804-64", "opt"), 2),
         (("linux1804-64", "debug"), 3),
-        (("windows11", "opt"), 4),
-        (("windows11", "debug"), 5),
-        (("windows10", "opt"), 6),
-        (("windows10", "debug"), 7),
-        (("android-em", "opt"), 8),
-        (("android-em", "debug"), 9),
-        (("windows7", "opt"), 10),
-        (("windows7", "debug"), 11),
+        (("linux2204-64", "opt"), 4),
+        (("linux2204-64", "debug"), 5),
+        (("windows11", "opt"), 6),
+        (("windows11", "debug"), 7),
+        (("windows10", "opt"), 8),
+        (("windows10", "debug"), 9),
+        (("android-em", "opt"), 10),
+        (("android-em", "debug"), 11),
         (("mac", "opt"), 12),
         (("mac", "debug"), 13),
         (("asan", "opt"), 14),
@@ -82,7 +82,8 @@ def _get_cost(config: str) -> int:
         if all(s in config for s in substrings):
             return cost
 
-    raise ValueError(f"Couldn't find cost for {config}")
+    logger.warning(f"Couldn't find cost for {config}")
+    return max(cost for _, cost in costs)
 
 
 def _generate_equivalence_sets(
@@ -174,14 +175,13 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
         with open(f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb") as fr:
             return pickle.load(fr)
     except FileNotFoundError:
-        past_failures_data = test_scheduling.get_past_failures("group", True)
-        all_runnables = past_failures_data["all_runnables"]
+        past_failures_data = test_scheduling.PastFailures("group", True)
 
         equivalence_sets = {}
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
         configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
-        for group in all_runnables:
+        for group in past_failures_data.all_runnables:
             key = test_scheduling.failing_together_key(group)
             try:
                 failing_together_stats = pickle.loads(failing_together[key])
@@ -453,7 +453,6 @@ class TestSelectModel(Model):
         )
 
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -560,11 +559,10 @@ class TestSelectModel(Model):
     ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
+        past_failures_data = test_scheduling.PastFailures(self.granularity, False)
 
         if push_num is None:
-            push_num = past_failures_data["push_num"] + 1
-        all_runnables = past_failures_data["all_runnables"]
+            push_num = past_failures_data.push_num + 1
 
         commit_tests = []
         for data in test_scheduling.generate_data(
@@ -572,7 +570,7 @@ class TestSelectModel(Model):
             past_failures_data,
             commit_data,
             push_num,
-            all_runnables,
+            past_failures_data.all_runnables,
             tuple(),
             tuple(),
         ):
@@ -659,8 +657,8 @@ class TestSelectModel(Model):
 
         commit_map = get_commit_map(all_revs)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
-        last_push_num = past_failures_data["push_num"]
+        past_failures_data = test_scheduling.PastFailures(self.granularity, True)
+        last_push_num = past_failures_data.push_num
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.

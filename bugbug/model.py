@@ -293,7 +293,7 @@ class Model:
 
         # allow maximum of 3 columns in a row to fit the page better
         COLUMNS = 3
-        print("Top {} features:".format(len(top_feature_names)))
+        logger.info("Top {} features:".format(len(top_feature_names)))
         for i in range(0, len(top_feature_names), COLUMNS):
             table = []
             for item in shap_val:
@@ -357,7 +357,7 @@ class Model:
             X = X[:limit]
             y = y[:limit]
 
-        print(f"X: {X.shape}, y: {y.shape}")
+        logger.info(f"X: {X.shape}, y: {y.shape}")
 
         is_multilabel = isinstance(y[0], np.ndarray)
         is_binary = len(self.class_names) == 2
@@ -381,26 +381,26 @@ class Model:
                 pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
             )
 
-            print("Cross Validation scores:")
+            logger.info("Cross Validation scores:")
             for scoring in scorings:
                 score = scores[f"test_{scoring}"]
                 tracking_metrics[f"test_{scoring}"] = {
                     "mean": score.mean(),
                     "std": score.std() * 2,
                 }
-                print(
+                logger.info(
                     f"{scoring.capitalize()}: f{score.mean()} (+/- {score.std() * 2})"
                 )
 
-        print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+        logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
         # Training on the resampled dataset if sampler is provided.
         if self.sampler is not None:
             X_train, y_train = self.sampler.fit_resample(X_train, y_train)
 
-            print(f"resampled X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info(f"resampled X_train: {X_train.shape}, y_train: {y_train.shape}")
 
-        print(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
+        logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
         self.clf.fit(X_train, self.le.transform(y_train))
 
@@ -446,7 +446,7 @@ class Model:
 
             tracking_metrics["feature_report"] = feature_report
 
-        print("Training Set scores:")
+        logger.info("Training Set scores:")
         y_pred = self.clf.predict(X_train)
         y_pred = self.le.inverse_transform(y_pred)
         if not is_multilabel:
@@ -456,7 +456,7 @@ class Model:
                 )
             )
 
-        print("Test Set scores:")
+        logger.info("Test Set scores:")
         # Evaluate results on the test set.
         y_pred = self.clf.predict(X_test)
         y_pred = self.le.inverse_transform(y_pred)
@@ -466,7 +466,7 @@ class Model:
                 y_pred[0], np.ndarray
             ), "The predictions should be multilabel"
 
-        print(f"No confidence threshold - {len(y_test)} classified")
+        logger.info(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
             confusion_matrix = metrics.multilabel_confusion_matrix(y_test, y_pred)
         else:
@@ -528,7 +528,7 @@ class Model:
 
             classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
 
-            print(
+            logger.info(
                 f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
             )
             if is_multilabel:
@@ -555,7 +555,7 @@ class Model:
         self.evaluation()
 
         if self.entire_dataset_training:
-            print("Retraining on the entire dataset...")
+            logger.info("Retraining on the entire dataset...")
 
             if self.sampler is not None:
                 X_train, y_train = self.sampler.fit_resample(X, y)
@@ -563,7 +563,7 @@ class Model:
                 X_train = X
                 y_train = y
 
-            print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
+            logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
             self.clf.fit(X_train, self.le.transform(y_train))
 

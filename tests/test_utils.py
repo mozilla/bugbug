@@ -11,6 +11,7 @@ from datetime import datetime
 import pytest
 import requests
 import responses
+import urllib3
 
 from bugbug import utils
 
@@ -225,7 +226,29 @@ def test_download_check_missing():
         responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
     )
 
-    with pytest.raises(requests.exceptions.HTTPError, match="HTTP error"):
+    with pytest.raises(requests.exceptions.HTTPError, match="404 Client Error"):
+        utils.download_check_etag(url)
+
+    assert not os.path.exists("prova.txt")
+
+
+def test_download_check_missing_etag():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=404,
+        headers={
+            "Last-Modified": "2019-04-16",
+        },
+    )
+
+    responses.add(
+        responses.GET, url, status=404, body=requests.exceptions.HTTPError("HTTP error")
+    )
+
+    with pytest.raises(requests.exceptions.HTTPError, match="404 Client Error"):
         utils.download_check_etag(url)
 
     assert not os.path.exists("prova.txt")
@@ -272,6 +295,22 @@ def test_get_last_modified_missing():
     assert utils.get_last_modified(url) is None
 
 
+def test_get_last_modified_error():
+    url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug/prova.txt"
+
+    responses.add(
+        responses.HEAD,
+        url,
+        status=429,
+        headers={},
+    )
+
+    with pytest.raises(urllib3.exceptions.MaxRetryError, match="Max retries exceeded"):
+        utils.get_last_modified(url)
+
+    assert not os.path.exists("prova.txt")
+
+
 def test_zstd_compress_decompress(tmp_path):
     path = tmp_path / "prova"
     compressed_path = path.with_suffix(".zst")
@@ -300,6 +339,29 @@ def test_zstd_compress_not_existing(tmp_path, mock_zst):
         utils.zstd_compress(path)
 
     assert not os.path.exists(compressed_path)
+
+
+def test_create_extract_tar_zst(tmp_path):
+    path = tmp_path / "prova"
+    tar_zst_path = "prova.tar.zst"
+
+    with open(path, "w") as f:
+        json.dump({"Hello": "World"}, f)
+
+    utils.create_tar_zst(tar_zst_path)
+
+    assert os.path.exists(tar_zst_path)
+
+    os.remove(path)
+
+    utils.extract_tar_zst(tar_zst_path)
+
+    assert os.path.exists(path)
+
+    with open(path, "r") as f:
+        file_decomp = json.load(f)
+
+    assert file_decomp == {"Hello": "World"}
 
 
 def test_extract_db_zst(tmp_path, mock_zst):

@@ -64,7 +64,6 @@ class TestFailureModel(CommitModel):
         )
 
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def items_gen(self, classes):
         commit_map = {}
