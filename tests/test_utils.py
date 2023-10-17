@@ -11,6 +11,7 @@ from datetime import datetime
 import pytest
 import requests
 import responses
+import urllib3
 
 from bugbug import utils
 
@@ -304,7 +305,7 @@ def test_get_last_modified_error():
         headers={},
     )
 
-    with pytest.raises(requests.exceptions.HTTPError, match="429 Client Error"):
+    with pytest.raises(urllib3.exceptions.MaxRetryError, match="Max retries exceeded"):
         utils.get_last_modified(url)
 
     assert not os.path.exists("prova.txt")
