@@ -5,6 +5,7 @@
 
 import collections
 import csv
+import math
 import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
@@ -12,7 +13,7 @@ from typing import Iterable, Iterator, NewType, Optional
 
 import tenacity
 from dateutil.relativedelta import relativedelta
-from libmozdata.bugzilla import Bugzilla
+from libmozdata.bugzilla import Bugzilla, BugzillaProduct
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -70,7 +71,7 @@ PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 PHAB_REVISION_PATTERN = re.compile(r"phabricator-D([0-9]+)-url.txt")
 
 MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS = {
-    "--": 5,
+    "--": 3,
     "S1": 8,
     "S2": 5,
     "S3": 2,
@@ -345,46 +346,38 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
 
 
 def get_active_product_components(products=[]) -> set[tuple[str, str]]:
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/product",
-        params={
-            "type": "accessible",
-            "include_fields": [
-                "name",
-                "is_active",
-                "components.name",
-                "components.is_active",
-            ],
-            "names": products,
-        },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
-    )
-    r.raise_for_status()
+    active_components = set()
 
-    return set(
-        (product["name"], component["name"])
-        for product in r.json()["products"]
-        if product["is_active"]
-        for component in product["components"]
-        if component["is_active"]
-    )
+    def product_handler(product):
+        if product["is_active"]:
+            active_components.update(
+                (product["name"], component["name"])
+                for component in product["components"]
+                if component["is_active"]
+            )
+
+    BugzillaProduct(
+        product_names=products,
+        product_types=["accessible"],
+        include_fields=["name", "is_active", "components.name", "components.is_active"],
+        product_handler=product_handler,
+    ).wait()
+
+    return active_components
 
 
 def get_component_team_mapping() -> dict[str, dict[str, str]]:
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/product",
-        params={
-            "type": "accessible",
-            "include_fields": ["name", "components.name", "components.team_name"],
-        },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
-    )
-    r.raise_for_status()
-
     mapping: dict[str, dict[str, str]] = collections.defaultdict(dict)
-    for product in r.json()["products"]:
+
+    def product_handler(product):
         for component in product["components"]:
             mapping[product["name"]][component["name"]] = component["team_name"]
+
+    BugzillaProduct(
+        product_types="accessible",
+        include_fields=["name", "components.name", "components.team_name"],
+        product_handler=product_handler,
+    ).wait()
 
     return mapping
 
@@ -444,6 +437,7 @@ def calculate_maintenance_effectiveness_indicator(
     components=None,
 ):
     data: dict[str, dict[str, int]] = {
+        "open": {},
         "opened": {},
         "closed": {},
     }
@@ -460,8 +454,6 @@ def calculate_maintenance_effectiveness_indicator(
             "count_only": 1,
             "type": "defect",
             "team_name": team,
-            "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-            "chfieldto": to_date.strftime("%Y-%m-%d"),
         }
 
         if severity != "--":
@@ -470,8 +462,24 @@ def calculate_maintenance_effectiveness_indicator(
         if components is not None:
             params["component"] = components
 
-        for query_type in ("opened", "closed"):
-            if query_type == "opened":
+        for query_type in data.keys():
+            if query_type in ("opened", "closed"):
+                params.update(
+                    {
+                        "chfieldfrom": from_date.strftime("%Y-%m-%d"),
+                        "chfieldto": to_date.strftime("%Y-%m-%d"),
+                    }
+                )
+
+            if query_type == "open":
+                params.update(
+                    {
+                        "f1": "resolution",
+                        "o1": "equals",
+                        "v1": "---",
+                    }
+                )
+            elif query_type == "opened":
                 params["chfield"] = "[Bug creation]"
             elif query_type == "closed":
                 params.update(
@@ -493,17 +501,21 @@ def calculate_maintenance_effectiveness_indicator(
             data[query_type][severity] = r.json()["bug_count"]
 
     # Calculate number of bugs without severity set.
-    for query_type in ("opened", "closed"):
+    for query_type in data.keys():
         data[query_type]["--"] = data[query_type]["--"] - sum(
             data[query_type][s]
             for s in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys()
             if s != "--"
         )
 
+    open_defects = sum(data["open"].values())
+    opened_defects = sum(data["opened"].values())
+    closed_defects = sum(data["closed"].values())
+
     print("Before applying weights:")
     print(data)
 
-    for query_type in ("opened", "closed"):
+    for query_type in data.keys():
         # Apply weights.
         for (
             severity,
@@ -514,4 +526,37 @@ def calculate_maintenance_effectiveness_indicator(
     print("After applying weights:")
     print(data)
 
-    return (1 + sum(data["closed"].values())) / (1 + sum(data["opened"].values()))
+    weighed_open_defects = sum(data["open"].values())
+    weighed_opened_defects = sum(data["opened"].values())
+    weighed_closed_defects = sum(data["closed"].values())
+
+    if weighed_opened_defects > 0:
+        mei = 100 * weighed_closed_defects / weighed_opened_defects
+    else:
+        mei = 100 * (weighed_closed_defects + 1)
+
+    duration = (to_date - from_date).total_seconds() / 31536000
+
+    if closed_defects > opened_defects:
+        bdtime = duration * (open_defects / (closed_defects - opened_defects))
+    else:
+        bdtime = math.inf
+
+    if weighed_closed_defects > weighed_opened_defects:
+        wbdtime = duration * (
+            weighed_open_defects / (weighed_closed_defects - weighed_opened_defects)
+        )
+    else:
+        wbdtime = math.inf
+
+    estimated_start_open_defects = open_defects + closed_defects - opened_defects
+    incoming = 100 * opened_defects / estimated_start_open_defects
+    closed = 100 * closed_defects / estimated_start_open_defects
+
+    return {
+        "ME%": mei,
+        "BDTime": bdtime,
+        "WBDTime": wbdtime,
+        "Incoming%": incoming,
+        "Closed%": closed,
+    }

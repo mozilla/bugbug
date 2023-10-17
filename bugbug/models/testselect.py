@@ -453,7 +453,6 @@ class TestSelectModel(Model):
         )
 
         self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -560,7 +559,7 @@ class TestSelectModel(Model):
     ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.PastFailures(self.granularity, True)
+        past_failures_data = test_scheduling.PastFailures(self.granularity, False)
 
         if push_num is None:
             push_num = past_failures_data.push_num + 1
