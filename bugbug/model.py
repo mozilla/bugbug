@@ -602,7 +602,7 @@ class Model:
     def load(model_file_name: str) -> "Model":
         if os.path.isdir(model_file_name):
             # If the model file is a directory, it's assumed to be an XGBoost model
-            with open(os.path.join(model_file_name, "model.xgb"), "rb") as f:
+            with open(os.path.join(model_file_name, "xgboost.ubj"), "rb") as f:
                 xgb_model = Booster()
                 xgb_model.load_model(f)
 
