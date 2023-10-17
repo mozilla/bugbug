@@ -25,7 +25,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
-from xgboost import Booster
+from xgboost import Booster, XGBClassifier
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
@@ -571,31 +571,29 @@ class Model:
 
         model_name = self.__class__.__name__.lower()
 
-        if hasattr(self.clf, "save_model"):
-            # If the model has the "save_model" attribute (is an XGBoost model),
-            # To handle multiple model files as one, place them in a directory with the expected model file name.
-            # when compressing the directory, it results in a single file.
+        if isinstance(self.clf, XGBClassifier):
+            # Since the workflow expects a single file
+            # we create a directory with the expected file name
+            # to store multiple model related files.
             os.makedirs(model_name, exist_ok=True)
 
-            # Save the XGBoost model to a file named "model.xgb"
-            self.clf.save_model(os.path.join(model_name, "model.xgb"))
+            self.clf.save_model(os.path.join(model_name, "xgboost.ubj"))
 
-            # Clear the clf attribute to prevent the XGBoost model from being pickled with the object
+            # Since we save the classifier separately, we need to clear the clf
+            # attribute to prevent it from being pickled with the model object.
             self.clf = None
 
-            # Save the model object itself to a pickle file named "model.pkl"
             with open(os.path.join(model_name, "model.pkl"), "wb") as f:
                 pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
         else:
-            # Fallback to saving the entire model object using pickle if not XGBoost
             with open(model_name, "wb") as f:
                 pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
-            with open(f"{model_name}_data_X", "wb") as f:
+            with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
                 pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-            with open(f"{model_name}_data_y", "wb") as f:
+            with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
                 pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         return tracking_metrics
