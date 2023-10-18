@@ -25,7 +25,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
-from xgboost import Booster, XGBClassifier
+from xgboost import Booster, XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
@@ -571,10 +571,9 @@ class Model:
 
         model_name = self.__class__.__name__.lower()
 
-        if isinstance(self.clf, XGBClassifier):
-            # Since the workflow expects a single file
-            # we create a directory with the expected file name
-            # to store multiple model related files.
+        if issubclass(type(self.clf), XGBModel):
+            # Since the workflow expects a single file, we create a directory
+            # with the expected file name to store multiple model-related files.
             os.makedirs(model_name, exist_ok=True)
 
             self.clf.save_model(os.path.join(model_name, "xgboost.ubj"))

@@ -9,7 +9,7 @@ from logging import INFO, basicConfig, getLogger
 
 from bugbug import db
 from bugbug.models import MODELS, get_model_class
-from bugbug.utils import CustomJsonEncoder, create_tar_zst, zstd_compress
+from bugbug.utils import CustomJsonEncoder, zstd_compress
 
 MODELS_WITH_TYPE = ("component",)
 
@@ -61,7 +61,15 @@ class Trainer(object):
         assert os.path.exists(model_file_name)
 
         if os.path.isdir(model_file_name):
-            create_tar_zst(f"{model_file_name}.tar.zst")
+            for root, dirs, files in os.walk(model_file_name):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    zstd_compress(file_path)
+                    os.remove(file_path)  # Remove the original file
+
+            # Rename to match what the pipeline expects (model_file_name.zst)
+            new_directory_name = model_file_name + ".zst"
+            os.rename(model_file_name, new_directory_name)
         else:
             zstd_compress(model_file_name)
 

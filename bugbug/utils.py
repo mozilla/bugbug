@@ -235,8 +235,19 @@ def download_model(model_name: str) -> str:
     logger.info("Downloading %s...", url)
     updated = download_check_etag(url)
     if updated:
-        zstd_decompress(path)
-        os.remove(f"{path}.zst")
+        if os.path.isdir(f"{path}.zst"):
+            for root, dirs, files in os.walk(f"{path}.zst"):
+                for file in files:
+                    file_name = file[: -len(".zst")] if file.endswith(".zst") else file
+                    file_path = os.path.join(root, file_name)
+                    zstd_decompress(file_path)
+                    os.remove(f"{file_path}.zst")
+
+            new_directory_name = path
+            os.rename(f"{path}.zst", new_directory_name)
+        else:
+            zstd_decompress(path)
+            os.remove(f"{path}.zst")
     assert os.path.exists(path), "Decompressed file exists"
     return path
 
