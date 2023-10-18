@@ -450,19 +450,19 @@ def calculate_maintenance_effectiveness_indicator(
     )
 
     for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
-        params: dict[str, int | str | list[str]] = {
-            "count_only": 1,
-            "type": "defect",
-            "team_name": team,
-        }
-
-        if severity != "--":
-            params["bug_severity"] = severity
-
-        if components is not None:
-            params["component"] = components
-
         for query_type in data.keys():
+            params: dict[str, int | str | list[str]] = {
+                "count_only": 1,
+                "type": "defect",
+                "team_name": team,
+            }
+
+            if severity != "--":
+                params["bug_severity"] = severity
+
+            if components is not None:
+                params["component"] = components
+
             if query_type in ("opened", "closed"):
                 params.update(
                     {
