@@ -1796,7 +1796,9 @@ List of revisions that have been waiting for a review for longer than 3 days:
 <br />
 
 Last week: {format_maintenance_effectiveness(relativedelta(weeks=1))}
+
 Last month: {format_maintenance_effectiveness(relativedelta(months=1))}
+
 Last year: {format_maintenance_effectiveness(relativedelta(years=1))}
 """
 
