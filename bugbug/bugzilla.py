@@ -558,9 +558,9 @@ def calculate_maintenance_effectiveness_indicator(
         closed = math.inf
 
     return {
-        "ME%": mei,
+        "ME": mei,
         "BDTime": bdtime,
         "WBDTime": wbdtime,
-        "Incoming%": incoming,
-        "Closed%": closed,
+        "Incoming vs total open": incoming,
+        "Closed vs total open": closed,
     }
