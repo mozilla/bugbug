@@ -1777,18 +1777,20 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
 {slow_review_patches}"""
 
-            def calculate_maintenance_effectiveness(period):
+            def calculate_maintenance_effectiveness(
+                period: relativedelta,
+            ) -> dict[str, float]:
                 start_date = datetime.utcnow() - period
-                return round(
-                    bugzilla.calculate_maintenance_effectiveness_indicator(
-                        team, start_date, datetime.utcnow()
-                    ),
-                    2,
+                return bugzilla.calculate_maintenance_effectiveness_indicator(
+                    team, start_date, datetime.utcnow()
                 )
 
-            def format_maintenance_effectiveness(period):
+            def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return ", ".join(f"{factor}: {value}" for factor, value in me.items())
+                return ", ".join(
+                    f"{factor}: {round(value, 2) if value != math.inf else value}"
+                    for factor, value in me.items()
+                )
 
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
 <br />

@@ -174,7 +174,9 @@ def upload_s3(paths: str) -> None:
 
 
 def download_check_etag(url, path=None):
-    r = requests.head(url, allow_redirects=True)
+    session = get_session(urllib.parse.urlparse(url).netloc)
+    r = session.head(url, allow_redirects=True)
+    r.raise_for_status()
 
     if path is None:
         path = url.split("/")[-1]
@@ -190,7 +192,7 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = requests.get(url, stream=True)
+    r = session.get(url, stream=True)
     r.raise_for_status()
 
     with open(path, "wb") as f:
@@ -206,7 +208,13 @@ def download_check_etag(url, path=None):
 
 
 def get_last_modified(url: str) -> Optional[datetime]:
-    r = requests.head(url, allow_redirects=True)
+    session = get_session(urllib.parse.urlparse(url).netloc)
+    r = session.head(url, allow_redirects=True)
+
+    if r.status_code == 404:
+        return None
+
+    r.raise_for_status()
 
     if "Last-Modified" not in r.headers:
         return None

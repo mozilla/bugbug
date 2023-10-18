@@ -16,7 +16,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("team", help="Bugzilla team", type=str)
     parser.add_argument(
