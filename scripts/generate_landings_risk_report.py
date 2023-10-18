@@ -1787,9 +1787,12 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return ", ".join(
-                    f"{factor}: {round(value, 2) if value != math.inf else value}"
-                    for factor, value in me.items()
+                return "ME: {}%, BDTime: {} y, WBDTime: {} y, Incoming vs total open: {} %, Closed vs total open: {} %".format(
+                    me["ME"],
+                    me["BDTime"],
+                    me["WBDTime"],
+                    me["Incoming vs total open"],
+                    me["Closed vs total open"],
                 )
 
             maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
