@@ -4,6 +4,7 @@ import argparse
 import inspect
 import json
 import os
+import subprocess
 import sys
 from logging import INFO, basicConfig, getLogger
 
@@ -61,15 +62,17 @@ class Trainer(object):
         assert os.path.exists(model_file_name)
 
         if os.path.isdir(model_file_name):
-            for root, dirs, files in os.walk(model_file_name):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    zstd_compress(file_path)
-                    os.remove(file_path)  # Remove the original file
-
-            # Rename to match what the pipeline expects (model_file_name.zst)
-            new_directory_name = model_file_name + ".zst"
-            os.rename(model_file_name, new_directory_name)
+            subprocess.run(
+                [
+                    "tar",
+                    "-I",
+                    "zstdmt",
+                    "-cf",
+                    f"{model_file_name}.zst",
+                    model_file_name,
+                ],
+                check=True,
+            )
         else:
             zstd_compress(model_file_name)
 
