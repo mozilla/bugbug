@@ -157,6 +157,10 @@ class Retriever(object):
                     if next_from_date > to_date:
                         next_from_date = to_date
 
+                    logger.info(
+                        f"Retrieving pushes from {from_date} to {next_from_date}..."
+                    )
+
                     pushes = mozci.push.make_push_objects(
                         from_date=from_date.strftime("%Y-%m-%d"),
                         to_date=next_from_date.strftime("%Y-%m-%d"),

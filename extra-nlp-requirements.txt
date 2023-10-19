@@ -2,5 +2,5 @@ elasticsearch==8.10.1
 gensim==4.3.2
 nltk==3.8.1
 pyemd==1.0.0
-spacy==3.7.1
+spacy==3.7.2
 wmd==1.3.2
