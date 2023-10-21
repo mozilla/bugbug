@@ -392,29 +392,14 @@ class CommitClassifier(object):
                 user=f"{author_name} <{author_email}>".encode("utf-8"),
             )
 
-            if self.git_repo_dir:
-                patch_proc = subprocess.Popen(
-                    ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
-                    stdin=subprocess.PIPE,
-                    cwd=self.git_repo_dir,
-                )
-                patch_proc.communicate(patch.patch.encode("utf-8"))
-                assert patch_proc.returncode == 0, "Failed to apply patch"
+        latest_rev = repository.get_revs(hg, f"-{len(stack)}")[-1]
 
-                subprocess.run(
-                    [
-                        "git",
-                        "-c",
-                        f"user.name={author_name}",
-                        "-c",
-                        f"user.email={author_email}",
-                        "commit",
-                        "-am",
-                        message,
-                    ],
-                    check=True,
-                    cwd=self.git_repo_dir,
-                )
+        if self.git_repo_dir:
+            subprocess.run(
+                ["git", "cinnabar", "fetch", f"hg::{self.repo_dir}", latest_rev],
+                check=True,
+                cwd=self.git_repo_dir,
+            )
 
     def generate_feature_importance_data(self, probs, importance):
         X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
