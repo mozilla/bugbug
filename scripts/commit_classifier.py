@@ -392,7 +392,7 @@ class CommitClassifier(object):
                 user=f"{author_name} <{author_email}>".encode("utf-8"),
             )
 
-        latest_rev = repository.get_revs(hg, f"-{len(stack)}")[-1]
+        latest_rev = repository.get_revs(hg, -1)[0]
 
         if self.git_repo_dir:
             subprocess.run(
