@@ -210,7 +210,7 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - $if: 'tasks_for == "github-push" && "Train with task cluster" in commit_message'
+      - $if: 'tasks_for == "github-push" && "Train with task cluster:" in commit_message'
         then:
           dependencies:
             - { $eval: as_slugid("docker_build") }
