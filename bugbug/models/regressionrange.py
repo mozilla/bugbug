@@ -69,6 +69,9 @@ class RegressionRangeModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
+            if not bug_data["regressions"]:
+                continue
+
             bug_id = int(bug_data["id"])
             if "regressionwindow-wanted" in bug_data["keywords"]:
                 classes[bug_id] = 0
