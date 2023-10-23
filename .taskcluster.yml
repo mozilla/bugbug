@@ -231,7 +231,7 @@ tasks:
             name: bugbug train on tc
             description: bugbug train on tc
             owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: { $eval: as_slugid("frontend_build") }
         created: { $fromNow: "" }
