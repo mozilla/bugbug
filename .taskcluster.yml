@@ -27,6 +27,10 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
+    commit_message:
+      $if: 'tasks_for == "github-push"'
+      then: ${event.head_commit.message}
+
     taskboot_image: "mozilla/taskboot:0.4.2"
   in:
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
@@ -206,6 +210,29 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
+      - $if: 'tasks_for == "github-push" && "Train with task cluster" in commit_message'
+        then:
+          dependencies:
+            - { $eval: as_slugid("docker_build") }
+          taskId: { $eval: as_slugid("train_on_taskcluster") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 day" }
+          provisionerId: proj-bugbug
+          workerType: compute-large
+          payload:
+            maxRunTime: 25200
+            image: "${taskboot_image}"
+            command:
+              - "/bin/sh"
+              - "-lcxe"
+              - "git clone --quiet ${repository} &&
+                python -m scripts.trainer spambug"
+          metadata:
+            name: Train model on Taskcluster
+            description: Train model on Taskcluster
+            owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
       - taskId: { $eval: as_slugid("frontend_build") }
         created: { $fromNow: "" }
         deadline: { $fromNow: "1 hour" }
@@ -374,28 +401,5 @@ tasks:
           metadata:
             name: bugbug update data hook
             description: bugbug update data hook
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
-      - $if: 'tasks_for == "github-push"'
-        then:
-          taskId: { $eval: as_slugid("train_on_taskcluster") }
-          dependencies:
-            - { $eval: as_slugid("docker_build") }
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "1 day" }
-          provisionerId: proj-bugbug
-          workerType: compute-large
-          payload:
-            maxRunTime: 25200
-            image: "${taskboot_image}"
-            command:
-              - "/bin/sh"
-              - "-lcxe"
-              - "git clone --quiet ${repository} &&
-                python -m scripts.trainer"
-          metadata:
-            name: Train model on Taskcluster
-            description: Train model on Taskcluster
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
