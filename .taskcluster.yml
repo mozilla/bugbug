@@ -27,9 +27,9 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
-    commit_message:
-      $if: 'tasks_for == "github-push"'
-      then: ${event.head_commit.message}
+    pr_description:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
   in:
@@ -210,7 +210,7 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - $if: 'tasks_for == "github-push" && "Train with task cluster:" in commit_message'
+      - $if: 'tasks_for == "github-pull-request" && "Train with task cluster:" in pr_description'
         then:
           dependencies:
             - { $eval: as_slugid("docker_build") }
@@ -228,8 +228,8 @@ tasks:
               - "git clone --quiet ${repository} &&
                 python -m scripts.trainer spambug"
           metadata:
-            name: Train model on Taskcluster
-            description: Train model on Taskcluster
+            name: bugbug train on tc
+            description: bugbug train on tc
             owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
