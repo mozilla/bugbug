@@ -218,18 +218,17 @@ tasks:
           created: { $fromNow: "" }
           deadline: { $fromNow: "1 day" }
           provisionerId: proj-bugbug
-          workerType: compute-large
+          workerType: compute-smaller
           payload:
             maxRunTime: 25200
             image: "${taskboot_image}"
             command:
               - "/bin/sh"
-              - "-lcxe"
+              - "-lcx"
               - "git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-                pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
                 python -m scripts.trainer spambug"
           metadata:
             name: bugbug train on tc
