@@ -220,12 +220,14 @@ tasks:
           provisionerId: proj-bugbug
           workerType: compute-smaller
           payload:
-            maxRunTime: 25200
-            image: "${taskboot_image}"
+            maxRunTime: 10800
+            image: python:3.10
             command:
               - "/bin/sh"
               - "-lcx"
-              - "git clone --quiet ${repository} &&
+              - "apt-get -qq update &&
+                apt-get -qq install -y zstd &&
+                git clone --quiet ${repository} &&
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
