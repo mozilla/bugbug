@@ -31,3 +31,4 @@ tenacity==8.2.3
 tqdm==4.66.1
 xgboost==2.0.0
 zstandard==0.21.0
+zstd==1.5.5.1
