@@ -229,7 +229,7 @@ tasks:
                 cd bugbug &&
                 git -c advice.detachedHead=false checkout ${head_rev} &&
                 pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-                python -m scripts.trainer spambug"
+                python -m scripts.trainer $(python -c 'print('${pr_description}'.rsplit(':', 1)[-1].strip())')"
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
