@@ -306,7 +306,17 @@ class CustomJsonEncoder(json.JSONEncoder):
 
     def default(self, obj):
         try:
-            return np.asscalar(obj)
+            if isinstance(obj, np.integer):
+                return int(obj)
+
+            if isinstance(obj, np.floating):
+                return float(obj)
+
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+
+            if isinstance(obj, np.generic):
+                return np.asscalar(obj)
         except (ValueError, IndexError, AttributeError, TypeError):
             pass
 
