@@ -290,26 +290,47 @@ def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
 # Using tar directly is twice as fast than through Python!
 def create_tar_zst(path: str) -> None:
     inner_path = path[: -len(".tar.zst")]
-    archive_name = f"{inner_path}.tar"
 
     if not os.path.exists(inner_path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
 
-    subprocess.run(["tar", "-cf", archive_name, inner_path], check=True)
-    zstd_compress(archive_name)
-    os.remove(archive_name)
+    try:
+        subprocess.run(
+            ["tar", "-I", "zstdmt", "-cf", path, inner_path],
+            check=True,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as error:
+        if (
+            error.returncode == 2
+            and "zstdmt: not found" in str(error.stderr, "utf-8").strip()
+        ):
+            with open_tar_zst(path, "w") as tar:
+                tar.add(inner_path)
+        else:
+            raise error
 
 
 def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    inner_path = path[: -len(".tar.zst")]
-    archive_name = f"{inner_path}.tar"
-
-    zstd_decompress(archive_name)
-    subprocess.run(["tar", "-xf", archive_name], check=True)
-    os.remove(archive_name)
+    try:
+        subprocess.run(
+            ["tar", "-I", "zstdmt", "-xf", path],
+            check=True,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as error:
+        if (
+            error.returncode == 2
+            and "zstdmt: Cannot exec: No such file or directory"
+            in str(error.stderr, "utf-8").strip()
+        ):
+            with open_tar_zst(path, "r") as tar:
+                tar.extractall()
+        else:
+            raise error
 
 
 def extract_file(path: str) -> None:
