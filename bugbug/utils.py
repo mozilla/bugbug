@@ -245,14 +245,28 @@ def zstd_compress(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-f", path], check=True)
+    try:
+        subprocess.run(["zstdmt", "-f", path], check=True)
+    except FileNotFoundError:
+        # Use zstandard API for compression if zstdmt is not available
+        cctx = zstandard.ZstdCompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
     if not os.path.exists(f"{path}.zst"):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    try:
+        subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    except FileNotFoundError:
+        # Use zstandard API for decompression if zstdmt is not available
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{path}.zst", "rb") as input_f:
+            with open(path, "wb") as output_f:
+                dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
@@ -276,18 +290,26 @@ def open_tar_zst(path: str, mode: str) -> Iterator[tarfile.TarFile]:
 # Using tar directly is twice as fast than through Python!
 def create_tar_zst(path: str) -> None:
     inner_path = path[: -len(".tar.zst")]
+    archive_name = f"{inner_path}.tar"
 
     if not os.path.exists(inner_path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
+    subprocess.run(["tar", "-cf", archive_name, inner_path], check=True)
+    zstd_compress(archive_name)
+    os.remove(archive_name)
 
 
 def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
+    inner_path = path[: -len(".tar.zst")]
+    archive_name = f"{inner_path}.tar"
+
+    zstd_decompress(archive_name)
+    subprocess.run(["tar", "-xf", archive_name], check=True)
+    os.remove(archive_name)
 
 
 def extract_file(path: str) -> None:
