@@ -69,7 +69,7 @@ class RegressionRangeModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            if not bug_data["regressions"]:
+            if "regression" not in bug_data["keywords"]:
                 continue
 
             bug_id = int(bug_data["id"])
