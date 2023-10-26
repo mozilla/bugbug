@@ -299,11 +299,7 @@ def create_tar_zst(path: str) -> None:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
 
     try:
-        subprocess.run(
-            ["tar", "-I", "zstdmt", "-cf", path, inner_path],
-            check=True,
-            stderr=subprocess.PIPE,
-        )
+        subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
     except subprocess.CalledProcessError:
         logger.warning(
             "zstdmt binary not present. Falling back to zstandard API, which could be slower."
@@ -317,11 +313,7 @@ def extract_tar_zst(path: str) -> None:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
     try:
-        subprocess.run(
-            ["tar", "-I", "zstdmt", "-xf", path],
-            check=True,
-            stderr=subprocess.PIPE,
-        )
+        subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
     except subprocess.CalledProcessError:
         logger.warning(
             "zstdmt binary not present. Falling back to zstandard API, which could be slower."
