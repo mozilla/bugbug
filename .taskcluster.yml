@@ -230,7 +230,7 @@ tasks:
             command:
               - "/bin/sh"
               - "-lcx"
-              - 'model=$(python -c ''import re; match = re.search(r"Train with task cluster:(.+)", os.environ.get("PR_DESCRIPTION")); model = match.group(1).strip() ; print(model)'')'
+              - 'model=$(python -c ''import re, os; match = re.search(r"Train with task cluster:(.+)", os.environ.get("PR_DESCRIPTION")); model = match.group(1).strip() ; print(model)'')'
               - "export MODEL=$model"
               - "python -m scripts.trainer $MODEL"
           metadata:
