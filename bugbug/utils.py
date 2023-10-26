@@ -248,7 +248,9 @@ def zstd_compress(path: str) -> None:
     try:
         subprocess.run(["zstdmt", "-f", path], check=True)
     except FileNotFoundError:
-        # Use zstandard API for compression if zstdmt is not available
+        logger.warning(
+            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+        )
         cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
             with open(f"{path}.zst", "wb") as output_f:
@@ -262,7 +264,9 @@ def zstd_decompress(path: str) -> None:
     try:
         subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
     except FileNotFoundError:
-        # Use zstandard API for decompression if zstdmt is not available
+        logger.warning(
+            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+        )
         dctx = zstandard.ZstdDecompressor()
         with open(f"{path}.zst", "rb") as input_f:
             with open(path, "wb") as output_f:
@@ -300,15 +304,12 @@ def create_tar_zst(path: str) -> None:
             check=True,
             stderr=subprocess.PIPE,
         )
-    except subprocess.CalledProcessError as error:
-        if (
-            error.returncode == 2
-            and "zstdmt: not found" in str(error.stderr, "utf-8").strip()
-        ):
-            with open_tar_zst(path, "w") as tar:
-                tar.add(inner_path)
-        else:
-            raise error
+    except subprocess.CalledProcessError:
+        logger.warning(
+            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+        )
+        with open_tar_zst(path, "w") as tar:
+            tar.add(inner_path)
 
 
 def extract_tar_zst(path: str) -> None:
@@ -321,16 +322,12 @@ def extract_tar_zst(path: str) -> None:
             check=True,
             stderr=subprocess.PIPE,
         )
-    except subprocess.CalledProcessError as error:
-        if (
-            error.returncode == 2
-            and "zstdmt: Cannot exec: No such file or directory"
-            in str(error.stderr, "utf-8").strip()
-        ):
-            with open_tar_zst(path, "r") as tar:
-                tar.extractall()
-        else:
-            raise error
+    except subprocess.CalledProcessError:
+        logger.warning(
+            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+        )
+        with open_tar_zst(path, "r") as tar:
+            tar.extractall()
 
 
 def extract_file(path: str) -> None:
