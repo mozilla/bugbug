@@ -218,21 +218,21 @@ tasks:
           created: { $fromNow: "" }
           deadline: { $fromNow: "1 day" }
           provisionerId: proj-bugbug
-          workerType: compute-smaller
+          workerType: compute-large
           payload:
             maxRunTime: 10800
-            image: python:3.10
+            image:
+              type: task-image
+              path: public/bugbug/bugbug-base.tar.zst
+              taskId: { $eval: as_slugid("docker_build") }
+            env:
+              PR_DESCRIPTION: "${pr_description}"
             command:
               - "/bin/sh"
               - "-lcx"
-              - "apt-get -qq update &&
-                apt-get -qq install -y zstd &&
-                git clone --quiet ${repository} &&
-                cd bugbug &&
-                git -c advice.detachedHead=false checkout ${head_rev} &&
-                pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-                train_options=$(python -c 'print('${pr_description}'.rsplit(':', 1)[-1].strip())') &&
-                python -m scripts.trainer $train_options"
+              - 'model=$(python -c ''import re; match = re.search(r"Train with task cluster:(.+)", os.environ.get("PR_DESCRIPTION")); model = match.group(1).strip() ; print(model)'')'
+              - "export MODEL=$model"
+              - "python -m scripts.trainer $MODEL"
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
