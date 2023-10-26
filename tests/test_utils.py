@@ -419,3 +419,18 @@ def test_extract_private_url_empty() -> None:
     body = """<p>Test content</p> """
     result = utils.extract_private(body)
     assert result is None
+
+
+def test_business_day_counter():
+    start_on_saturday = utils.get_business_days_count(
+        "2023-04-01T00:00:00Z", "2023-04-05T00:00:00Z"
+    )
+    start_on_sunday = utils.get_business_days_count(
+        "2023-04-02T00:00:00Z", "2023-04-05T00:00:00Z"
+    )
+    start_on_monday = utils.get_business_days_count(
+        "2023-04-03T00:00:00Z", "2023-04-05T00:00:00Z"
+    )
+    assert (
+        start_on_saturday == start_on_sunday == start_on_monday
+    ), "If the end date is the same, it should not matter if the start date is on Saturday, Sunday, or Monday"

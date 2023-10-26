@@ -15,7 +15,7 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository
+from bugbug import bug_snapshot, repository, utils
 
 
 def field(bug, field):
@@ -562,7 +562,21 @@ def get_time_to_assign(bug):
                     dateutil.parser.parse(history["when"])
                     - dateutil.parser.parse(bug["creation_time"])
                 ).total_seconds() / 86400
+    return None
 
+
+def get_time_to_assign_busdays(bug):
+    for history in bug["history"]:
+        for change in history["changes"]:
+            if (
+                change["field_name"] == "status"
+                and change["removed"] in ("UNCONFIRMED", "NEW")
+                and change["added"] == "ASSIGNED"
+            ):
+                return utils.get_business_days_count(
+                    bug["creation_time"],
+                    history["when"],
+                )
     return None
 
 
