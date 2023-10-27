@@ -50,3 +50,10 @@ node_modules/
 *.log
 # Desktop Service Store
 *.DS_Store
+
+# env
+bugbug-dev
+
+# IDE
+.idea/
+.vscode/
