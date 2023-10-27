@@ -22,7 +22,9 @@ class Trainer(object):
 
         model_name = args.model
         model_class = get_model_class(model_name)
-        parameter_names = set(inspect.signature(model_class.__init__).parameters)
+        parameter_names = set(inspect.signature(model_class.__init__).parameters) - {
+            "kwargs"
+        }
         parameters = {
             key: value for key, value in vars(args).items() if key in parameter_names
         }
