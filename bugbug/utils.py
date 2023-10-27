@@ -247,9 +247,9 @@ def zstd_compress(path: str) -> None:
 
     try:
         subprocess.run(["zstdmt", "-f", path], check=True)
-    except FileNotFoundError:
+    except FileNotFoundError as error:
         logger.warning(
-            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+            "%s. Falling back to zstandard API, which could be slower.", error
         )
         cctx = zstandard.ZstdCompressor()
         with open(path, "rb") as input_f:
@@ -263,9 +263,9 @@ def zstd_decompress(path: str) -> None:
 
     try:
         subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
-    except FileNotFoundError:
+    except FileNotFoundError as error:
         logger.warning(
-            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+            "%s. Falling back to zstandard API, which could be slower.", error
         )
         dctx = zstandard.ZstdDecompressor()
         with open(f"{path}.zst", "rb") as input_f:
@@ -300,9 +300,9 @@ def create_tar_zst(path: str) -> None:
 
     try:
         subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as error:
         logger.warning(
-            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+            "%s. Falling back to zstandard API, which could be slower.", error
         )
         with open_tar_zst(path, "w") as tar:
             tar.add(inner_path)
@@ -314,9 +314,9 @@ def extract_tar_zst(path: str) -> None:
 
     try:
         subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as error:
         logger.warning(
-            "zstdmt binary not present. Falling back to zstandard API, which could be slower."
+            "%s. Falling back to zstandard API, which could be slower.", error
         )
         with open_tar_zst(path, "r") as tar:
             tar.extractall()
