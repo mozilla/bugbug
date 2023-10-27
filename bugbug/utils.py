@@ -79,7 +79,7 @@ class StructuredColumnTransformer(ColumnTransformer):
         for i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
-        return result.todense().view(np.dtype(types))
+        return result.view(np.dtype(types))
 
 
 class DictExtractor(BaseEstimator, TransformerMixin):
