@@ -3,7 +3,7 @@ name: Tests
 on: [pull_request, workflow_dispatch]
 
 jobs:
-    test-editable-install:
+    pip-install:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
