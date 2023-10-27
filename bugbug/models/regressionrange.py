@@ -80,6 +80,11 @@ class RegressionRangeModel(BugModel):
                     classes[bug_id] = 1
                 elif bug_data["cf_has_regression_range"] == "no":
                     classes[bug_id] = 0
+            # Check the regressed_by field
+            elif "regressed_by" in bug_data and bug_data["regressed_by"]:
+                classes[bug_id] = 1
+            else:
+                classes[bug_id] = 0
         logger.info(
             "%d bugs have regression range",
             sum(1 for label in classes.values() if label == 1),
