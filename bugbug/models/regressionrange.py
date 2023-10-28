@@ -74,7 +74,7 @@ class RegressionRangeModel(BugModel):
 
             bug_id = int(bug_data["id"])
             if "regressionwindow-wanted" in bug_data["keywords"]:
-                classes[bug_id] = 0
+                classes[bug_id] = 1
             elif "regressed_by" in bug_data and bug_data["regressed_by"]:
                 classes[bug_id] = 1
             else:
