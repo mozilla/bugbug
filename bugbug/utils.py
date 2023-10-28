@@ -79,7 +79,7 @@ class StructuredColumnTransformer(ColumnTransformer):
         for i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
-        return result.todense().view(np.dtype(types))
+        return result.view(np.dtype(types))
 
 
 class DictExtractor(BaseEstimator, TransformerMixin):
@@ -245,14 +245,32 @@ def zstd_compress(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-f", path], check=True)
+    try:
+        subprocess.run(["zstdmt", "-f", path], check=True)
+    except FileNotFoundError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        cctx = zstandard.ZstdCompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
     if not os.path.exists(f"{path}.zst"):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    try:
+        subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    except FileNotFoundError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{path}.zst", "rb") as input_f:
+            with open(path, "wb") as output_f:
+                dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
@@ -280,14 +298,28 @@ def create_tar_zst(path: str) -> None:
     if not os.path.exists(inner_path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
+    try:
+        subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
+    except subprocess.CalledProcessError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        with open_tar_zst(path, "w") as tar:
+            tar.add(inner_path)
 
 
 def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
+    try:
+        subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
+    except subprocess.CalledProcessError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        with open_tar_zst(path, "r") as tar:
+            tar.extractall()
 
 
 def extract_file(path: str) -> None:
