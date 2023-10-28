@@ -75,12 +75,6 @@ class RegressionRangeModel(BugModel):
             bug_id = int(bug_data["id"])
             if "regressionwindow-wanted" in bug_data["keywords"]:
                 classes[bug_id] = 0
-            elif "cf_has_regression_range" in bug_data:
-                if bug_data["cf_has_regression_range"] == "yes":
-                    classes[bug_id] = 1
-                elif bug_data["cf_has_regression_range"] == "no":
-                    classes[bug_id] = 0
-            # Check the regressed_by field
             elif "regressed_by" in bug_data and bug_data["regressed_by"]:
                 classes[bug_id] = 1
             else:
