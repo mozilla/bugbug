@@ -1,4 +1,4 @@
-FROM python:3.10.7-slim
+FROM python:3.10.7-slim AS builder
 
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
@@ -13,10 +13,11 @@ ENV LD_PRELOAD="libjemalloc.so.2"
 
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
-RUN apt-get update && \
-	apt-get install -y --no-install-recommends git && \
-	pip install --disable-pip-version-check --quiet --no-cache-dir git+https://github.com/mozilla/bugbug.git#egg=bugbug && \
-	apt-get purge -y git && \
-	apt-get autoremove -y && \
-	rm -rf /var/lib/apt/lists/*
+COPY . /tmp/bugbug
+RUN pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
+
+FROM python:3.10.7-slim
+
+COPY --from=builder /root/.config/mozci/config.toml /root/.config/mozci/config.toml
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 
