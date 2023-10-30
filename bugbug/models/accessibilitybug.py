@@ -1,0 +1,124 @@
+# -*- coding: utf-8 -*-
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at http://mozilla.org/MPL/2.0/.
+
+import logging
+
+import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.pipeline import Pipeline
+
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug.model import BugModel
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class AccessibilityBugModel(BugModel):
+    def __init__(self, lemmatization=False):
+        BugModel.__init__(self, lemmatization)
+
+        self.sampler = BorderlineSMOTE(random_state=0)
+        self.calculate_importance = False
+
+        feature_extractors = [
+            bug_features.has_str(),
+            bug_features.severity(),
+            bug_features.keywords(),
+            bug_features.is_coverity_issue(),
+            bug_features.has_crash_signature(),
+            bug_features.has_url(),
+            bug_features.has_w3c_url(),
+            bug_features.has_github_url(),
+            bug_features.whiteboard(),
+            bug_features.patches(),
+            bug_features.landings(),
+            bug_features.blocked_bugs_number(),
+            bug_features.ever_affected(),
+            bug_features.affected_then_unaffected(),
+            bug_features.product(),
+            bug_features.component(),
+        ]
+
+        cleanup_functions = [
+            feature_cleanup.fileref(),
+            feature_cleanup.url(),
+            feature_cleanup.synonyms(),
+        ]
+
+        self.extraction_pipeline = Pipeline(
+            [
+                (
+                    "bug_extractor",
+                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                ),
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            (
+                                "first_comment",
+                                self.text_vectorizer(min_df=0.001),
+                                "first_comment",
+                            ),
+                            (
+                                "comments",
+                                self.text_vectorizer(min_df=0.001),
+                                "comments",
+                            ),
+                        ]
+                    ),
+                ),
+            ]
+        )
+
+        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+
+    def get_labels(self):
+        classes = {}
+
+        for bug_data in bugzilla.get_bugs():
+            bug_id = bug_data["id"]
+
+            # A bug that had "access" keyword removed is not an accessibility bug
+            for history in bug_data["history"]:
+                for change in history["changes"]:
+                    if (
+                        change["field_name"] == "keywords"
+                        and change["removed"] == "access"
+                    ):
+                        classes[bug_id] = 0
+
+            # A bug that was  manually labelled "access" is an access bug.
+            if "access" in bug_data["keywords"]:
+                classes[bug_id] = 1
+
+            # A bug with "access-s" in keyboard is also an accessibility bug
+            elif "[access-s" in bug_data["whiteboard"].lower():
+                classes[bug_id] = 1
+
+        logger.info(
+            "%d bugs are classified as non-accessibility",
+            sum(1 for label in classes.values() if label == 0),
+        )
+        logger.info(
+            "%d bugs are classified as accessibility",
+            sum(1 for label in classes.values() if label == 1),
+        )
+
+        return classes, [0, 1]
+
+    def get_feature_names(self):
+        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        for i, bug in enumerate(bugs):
+            if "access" in bug["keywords"] or "[access-s" in bug["whiteboard"].lower():
+                classes[i] = [1.0, 0.0] if probabilities else 0
+        return classes
