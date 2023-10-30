@@ -3,15 +3,20 @@ FROM python:3.10.7-slim
 # Setup dependencies in a cacheable step
 COPY requirements.txt /requirements.txt
 RUN apt-get update && \
-		apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch && \
-		pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
-		apt-get purge -y gcc g++ libffi-dev patch && \
-		apt-get autoremove -y && \
-		rm -rf /var/lib/apt/lists/*
+	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch && \
+	pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
+	apt-get purge -y gcc g++ libffi-dev patch && \
+	apt-get autoremove -y && \
+	rm -rf /var/lib/apt/lists/*
 
 ENV LD_PRELOAD="libjemalloc.so.2"
 
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
-COPY . /tmp/bugbug
-RUN pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
+RUN apt-get update && \
+	apt-get install -y --no-install-recommends git && \
+	pip install --disable-pip-version-check --quiet --no-cache-dir git+https://github.com/mozilla/bugbug.git#egg=bugbug && \
+	apt-get purge -y git && \
+	apt-get autoremove -y && \
+	rm -rf /var/lib/apt/lists/*
+
