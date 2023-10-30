@@ -10,7 +10,7 @@ mercurial==6.5.2
 microannotate==0.0.24
 mozci==2.3.4
 numpy==1.22.4
-orjson==3.9.9
+orjson==3.9.10
 ortools==9.7.2996
 pandas==2.1.0
 psutil==5.9.6
