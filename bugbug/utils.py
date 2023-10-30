@@ -338,7 +338,7 @@ class CustomJsonEncoder(json.JSONEncoder):
 
     def default(self, obj):
         try:
-            return np.asscalar(obj)
+            return obj.item()
         except (ValueError, IndexError, AttributeError, TypeError):
             pass
 

@@ -28,4 +28,4 @@ def test_trainer():
         headers={"ETag": "etag"},
     )
 
-    trainer.Trainer().go(trainer.parse_args(["defect"]))
+    trainer.Trainer().go(trainer.parse_args(["regression"]))
