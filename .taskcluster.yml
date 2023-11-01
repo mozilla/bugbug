@@ -225,12 +225,10 @@ tasks:
               type: task-image
               path: public/bugbug/bugbug-base.tar.zst
               taskId: { $eval: as_slugid("docker_build") }
-            env:
-              PR_DESCRIPTION: "${pr_description}"
             command:
               - "/bin/sh"
               - "-lcx"
-              - 'model=$(grep -Eo ''Train with task cluster:(.+)'' <<< "${PR_DESCRIPTION}") &&
+              - 'model=$(grep -Eo ''Train with task cluster:(.+)'' <<< "${pr_description}") &&
                 bugbug-train $model'
           metadata:
             name: bugbug train on tc
