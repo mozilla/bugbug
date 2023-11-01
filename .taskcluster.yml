@@ -230,9 +230,8 @@ tasks:
             command:
               - "/bin/sh"
               - "-lcx"
-              - 'model=$(python -c ''import re, os; match = re.search(r"Train with task cluster:(.+)", os.environ.get("PR_DESCRIPTION")); model = match.group(1).strip() ; print(model)'') &&
-                export MODEL=$model &&
-                python -m scripts.trainer $MODEL'
+              - 'model=$(grep -Eo ''Train with task cluster:(.+)'' <<< "${PR_DESCRIPTION}") &&
+                bugbug-train $model'
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
