@@ -225,11 +225,13 @@ tasks:
               type: task-image
               path: public/bugbug/bugbug-base.tar.zst
               taskId: { $eval: as_slugid("docker_build") }
+            env:
+              TEXT_TO_EXTRACT: "${pr_description}"
             command:
               - "/bin/sh"
               - "-lcx"
-              - 'model=$(grep -Eo ''Train with task cluster:(.+)'' <<< "${pr_description}") &&
-                bugbug-train $model'
+              - 'model=$(python -c ''import re, os; match = re.search(r"Train with task cluster:(.+)", os.environ.get("TEXT_TO_EXTRACT")); model = match.group(1).strip() ; print(model)'') &&
+                python -m scripts.trainer $model'
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
