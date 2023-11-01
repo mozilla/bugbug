@@ -6,7 +6,7 @@ ENV PATH="${PATH}:/git-cinnabar"
 # libcurl4 is required by git-cinnabar.
 # patch is required by the commit classifier script.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git xz-utils curl patch libcurl4 && \
+    apt-get install -y --no-install-recommends git xz-utils curl libcurl4 && \
     hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ && \
     rm -r /version-control-tools/.hg /version-control-tools/ansible /version-control-tools/docs /version-control-tools/testing && \
     git clone https://github.com/glandium/git-cinnabar.git /git-cinnabar && \
