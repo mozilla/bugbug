@@ -26,27 +26,27 @@ class SpamBugModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.whiteboard(),
-            bug_features.product(),
+            bug_features.HasStr(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasUrl(),
+            bug_features.Whiteboard(),
+            bug_features.Product(),
             # TODO: We would like to use the component at the time of filing too,
             # but we can't because the rollback script doesn't support changes to
             # components yet.
             # bug_features.component(),
-            bug_features.num_words_title(),
-            bug_features.num_words_comments(),
-            bug_features.keywords(),
-            bug_features.priority(),
-            bug_features.version(),
-            bug_features.target_milestone(),
-            bug_features.has_attachment(),
-            bug_features.platform(),
-            bug_features.op_sys(),
-            bug_features.filed_via(),
+            bug_features.NumWordsTitle(),
+            bug_features.NumWordsComments(),
+            bug_features.Keywords(),
+            bug_features.Priority(),
+            bug_features.Version(),
+            bug_features.TargetMilestone(),
+            bug_features.HasAttachment(),
+            bug_features.Platform(),
+            bug_features.OpSys(),
+            bug_features.FiledVia(),
         ]
 
         cleanup_functions = [

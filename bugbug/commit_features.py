@@ -15,7 +15,7 @@ EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 
-class source_code_files_modified_num(object):
+class SourceCodeFilesModifiedNum(object):
     name = "# of modified code files"
 
     def __call__(self, commit, **kwargs):
@@ -36,7 +36,7 @@ class test_files_modified_num(object):
         return commit["test_files_modified_num"]
 
 
-class source_code_file_size(object):
+class SourceCodeFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total code files size": commit["total_source_code_file_size"],
@@ -46,7 +46,7 @@ class source_code_file_size(object):
         }
 
 
-class other_file_size(object):
+class OtherFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total non-code files size": commit["total_other_file_size"],
@@ -56,7 +56,7 @@ class other_file_size(object):
         }
 
 
-class test_file_size(object):
+class TestFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total test files size": commit["total_test_file_size"],
@@ -66,56 +66,56 @@ class test_file_size(object):
         }
 
 
-class source_code_added(object):
+class SourceCodeAdded(object):
     name = "# of code lines added"
 
     def __call__(self, commit, **kwargs):
         return commit["source_code_added"]
 
 
-class other_added(object):
+class OtherAdded(object):
     name = "# of non-code lines added"
 
     def __call__(self, commit, **kwargs):
         return commit["other_added"]
 
 
-class test_added(object):
+class TestAdded(object):
     name = "# of lines added in tests"
 
     def __call__(self, commit, **kwargs):
         return commit["test_added"]
 
 
-class source_code_deleted(object):
+class SourceCodeDeleted(object):
     name = "# of code lines deleted"
 
     def __call__(self, commit, **kwargs):
         return commit["source_code_deleted"]
 
 
-class other_deleted(object):
+class OtherDeleted(object):
     name = "# of non-code lines deleted"
 
     def __call__(self, commit, **kwargs):
         return commit["other_deleted"]
 
 
-class test_deleted(object):
+class TestDeleted(object):
     name = "# of lines deleted in tests"
 
     def __call__(self, commit, **kwargs):
         return commit["test_deleted"]
 
 
-class functions_touched_num(object):
+class FunctionsTouchedNum(object):
     name = "# of functions touched"
 
     def __call__(self, commit, **kwargs):
         return sum(1 for f_group in commit["functions"].values() for f in f_group)
 
 
-class functions_touched_size(object):
+class FunctionsTouchedSize(object):
     def __call__(self, commit, **kwargs):
         function_sizes = [
             f["end"] - f["start"] + 1
@@ -133,7 +133,7 @@ class functions_touched_size(object):
         }
 
 
-class source_code_file_metrics(object):
+class SourceCodeFileMetrics(object):
     name = "metrics on source code file"
 
     def __call__(self, commit, **kwargs):
@@ -336,7 +336,7 @@ def merge_function_metrics(objects):
     return metrics
 
 
-class source_code_function_metrics(object):
+class SourceCodeFunctionMetrics(object):
     name = "metrics on source code functions"
 
     def __call__(self, commit, **kwargs):
@@ -532,7 +532,7 @@ class source_code_function_metrics(object):
         }
 
 
-class source_code_metrics_diff(object):
+class SourceCodeMetricsDiff(object):
     name = "diff in metrics on source code"
 
     def __call__(self, commit, **kwargs):
@@ -638,7 +638,7 @@ def get_exps(exp_type, commit):
     }
 
 
-class author_experience(object):
+class AuthorExperience(object):
     name = "Author experience"
 
     def __call__(self, commit, **kwargs):
@@ -655,7 +655,7 @@ class author_experience(object):
         }
 
 
-class reviewer_experience(object):
+class ReviewerExperience(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("reviewer", commit)
         return {
@@ -692,26 +692,26 @@ class reviewer_experience(object):
         }
 
 
-class reviewers_num(object):
+class ReviewersNum(object):
     name = "# of reviewers"
 
     def __call__(self, commit, **kwargs):
         return len(commit["reviewers"])
 
 
-class components(object):
+class Components(object):
     def __call__(self, commit, **kwargs):
         return commit["components"]
 
 
-class components_modified_num(object):
+class ComponentsModifiedNum(object):
     name = "# of components modified"
 
     def __call__(self, commit, **kwargs):
         return len(commit["components"])
 
 
-class component_touched_prev(object):
+class ComponentTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("component", commit)
         return {
@@ -750,19 +750,19 @@ class component_touched_prev(object):
         }
 
 
-class directories(object):
+class Directories(object):
     def __call__(self, commit, **kwargs):
         return commit["directories"]
 
 
-class directories_modified_num(object):
+class DirectoriesModifiedNum(object):
     name = "# of directories modified"
 
     def __call__(self, commit, **kwargs):
         return len(commit["directories"])
 
 
-class directory_touched_prev(object):
+class DirectoryTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("directory", commit)
         return {
@@ -807,7 +807,7 @@ class directory_touched_prev(object):
         }
 
 
-class files(object):
+class Files(object):
     def __init__(self, min_freq=0.0014):
         self.min_freq = min_freq
 
@@ -838,7 +838,7 @@ class files(object):
         ]
 
 
-class file_touched_prev(object):
+class FileTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("file", commit)
         return {
@@ -877,7 +877,7 @@ class file_touched_prev(object):
         }
 
 
-class types(object):
+class Types(object):
     name = "file types"
 
     def __call__(self, commit, **kwargs):

@@ -25,36 +25,36 @@ def field(bug, field):
     return None
 
 
-class single_bug_feature(object):
+class SingleBugFeature(object):
     pass
 
 
-class couple_bug_feature(object):
+class CoupleBugFeature(object):
     pass
 
 
-class has_str(single_bug_feature):
+class HasStr(SingleBugFeature):
     name = "Has STR"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_str")
 
 
-class has_regression_range(single_bug_feature):
+class HasRegressionRange(SingleBugFeature):
     name = "Has Regression Range"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "cf_has_regression_range")
 
 
-class has_crash_signature(single_bug_feature):
+class HasCrashSignature(SingleBugFeature):
     name = "Crash signature present"
 
     def __call__(self, bug, **kwargs):
         return "cf_crash_signature" in bug and bug["cf_crash_signature"] != ""
 
 
-class keywords(single_bug_feature):
+class Keywords(SingleBugFeature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
@@ -74,19 +74,19 @@ class keywords(single_bug_feature):
         return keywords + subkeywords
 
 
-class severity(single_bug_feature):
+class Severity(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return field(bug, "severity")
 
 
-class number_of_bug_dependencies(single_bug_feature):
+class NumberOfBugDependencies(SingleBugFeature):
     name = "# of bug dependencies"
 
     def __call__(self, bug, **kwargs):
         return len(bug["depends_on"])
 
 
-class is_coverity_issue(single_bug_feature):
+class IsCoverityIssue(SingleBugFeature):
     name = "Is Coverity issue"
 
     def __call__(self, bug, **kwargs):
@@ -96,21 +96,21 @@ class is_coverity_issue(single_bug_feature):
         )
 
 
-class has_url(single_bug_feature):
+class HasUrl(SingleBugFeature):
     name = "Has a URL"
 
     def __call__(self, bug, **kwargs):
         return bug["url"] != ""
 
 
-class has_w3c_url(single_bug_feature):
+class HasW3cUrl(SingleBugFeature):
     name = "Has a w3c URL"
 
     def __call__(self, bug, **kwargs):
         return "w3c" in bug["url"]
 
 
-class has_github_url(single_bug_feature):
+class HasGithubUrl(SingleBugFeature):
     name = "Has a GitHub URL"
 
     def __call__(self, bug, **kwargs):
@@ -139,12 +139,12 @@ def whiteboard_keywords(bug):
     return splits
 
 
-class whiteboard(single_bug_feature):
+class Whiteboard(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return whiteboard_keywords(bug)
 
 
-class patches(single_bug_feature):
+class Patches(SingleBugFeature):
     name = "# of patches"
 
     def __call__(self, bug, **kwargs):
@@ -157,24 +157,24 @@ class patches(single_bug_feature):
         )
 
 
-class landings(single_bug_feature):
+class Landings(SingleBugFeature):
     name = "# of landing comments"
 
     def __call__(self, bug, **kwargs):
         return sum(1 for c in bug["comments"] if "://hg.mozilla.org/" in c["text"])
 
 
-class product(single_bug_feature):
+class Product(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["product"]
 
 
-class component(single_bug_feature):
+class Component(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["component"]
 
 
-class is_mozillian(single_bug_feature):
+class IsMozillian(SingleBugFeature):
     name = "Reporter has a @mozilla email"
 
     def __call__(self, bug, **kwargs):
@@ -184,14 +184,14 @@ class is_mozillian(single_bug_feature):
         )
 
 
-class bug_reporter(single_bug_feature):
+class BugReporter(SingleBugFeature):
     name = "Bug reporter"
 
     def __call__(self, bug, **kwargs):
         return bug["creator_detail"]["email"]
 
 
-class delta_request_merge(single_bug_feature):
+class DeltaRequestMerge(SingleBugFeature):
     name = "Timespan between uplift request and following merge"
 
     def __call__(self, bug, **kwargs):
@@ -210,7 +210,7 @@ class delta_request_merge(single_bug_feature):
         return None
 
 
-class delta_nightly_request_merge(single_bug_feature):
+class DeltaNightlyRequestMerge(SingleBugFeature):
     name = "Time delta between landing of the patch in Nightly and uplift request"
 
     def __call__(self, bug, **kwargs):
@@ -244,19 +244,19 @@ class delta_nightly_request_merge(single_bug_feature):
         return None
 
 
-class blocked_bugs_number(single_bug_feature):
+class BlockedBugsNumber(SingleBugFeature):
     name = "# of blocked bugs"
 
     def __call__(self, bug, **kwargs):
         return len(bug["blocks"])
 
 
-class priority(single_bug_feature):
+class Priority(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return field(bug, "priority")
 
 
-class version(single_bug_feature):
+class Version(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         if bug["version"] in ("Default", "Trunk", "trunk"):
             return "Trunk"
@@ -268,7 +268,7 @@ class version(single_bug_feature):
             return "Has Value"
 
 
-class target_milestone(single_bug_feature):
+class TargetMilestone(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         if bug["target_milestone"] == "Future":
             return "Future"
@@ -278,35 +278,35 @@ class target_milestone(single_bug_feature):
             return "Has Value"
 
 
-class has_cve_in_alias(single_bug_feature):
+class HasCveInAlias(SingleBugFeature):
     name = "CVE in alias"
 
     def __call__(self, bug, **kwargs):
         return bug["alias"] is not None and "CVE" in bug["alias"]
 
 
-class comment_count(single_bug_feature):
+class CommentCount(SingleBugFeature):
     name = "# of comments"
 
     def __call__(self, bug, **kwargs):
         return field(bug, "comment_count")
 
 
-class comment_length(single_bug_feature):
+class CommentLength(SingleBugFeature):
     name = "Length of comments"
 
     def __call__(self, bug, **kwargs):
         return sum(len(x["text"]) for x in bug["comments"])
 
 
-class reporter_experience(single_bug_feature):
+class ReporterExperience(SingleBugFeature):
     name = "# of bugs previously opened by the reporter"
 
     def __call__(self, bug, reporter_experience, **kwargs):
         return reporter_experience
 
 
-class ever_affected(single_bug_feature):
+class EverAffected(SingleBugFeature):
     name = "status has ever been set to 'affected'"
 
     def __call__(self, bug, **kwargs):
@@ -350,7 +350,7 @@ def get_versions_statuses(bug):
     return unaffected, affected
 
 
-class affected_then_unaffected(single_bug_feature):
+class AffectedThenUnaffected(SingleBugFeature):
     name = "status has ever been set to 'affected' and 'unaffected'"
 
     def __call__(self, bug, **kwargs):
@@ -362,24 +362,24 @@ class affected_then_unaffected(single_bug_feature):
         )
 
 
-class num_words_title(single_bug_feature):
+class NumWordsTitle(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(bug["summary"].split())
 
 
-class num_words_comments(single_bug_feature):
+class NumWordsComments(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(len(comment["text"].split()) for comment in bug["comments"])
 
 
-class has_attachment(single_bug_feature):
+class HasAttachment(SingleBugFeature):
     name = "Attachment present"
 
     def __call__(self, bug, **kwargs):
         return len(bug["attachments"]) > 0
 
 
-class has_image_attachment_at_bug_creation(single_bug_feature):
+class HasImageAttachmentAtBugCreation(SingleBugFeature):
     name = "Image attachment present at bug creation"
 
     def __call__(self, bug, **kwargs):
@@ -390,7 +390,7 @@ class has_image_attachment_at_bug_creation(single_bug_feature):
         )
 
 
-class has_image_attachment(single_bug_feature):
+class HasImageAttachment(SingleBugFeature):
     name = "Image attachment present"
 
     def __call__(self, bug, **kwargs):
@@ -399,21 +399,21 @@ class has_image_attachment(single_bug_feature):
         )
 
 
-class commit_added(single_bug_feature):
+class CommitAdded(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["added"] for commit in bug["commits"] if not commit["backedoutby"]
         )
 
 
-class commit_deleted(single_bug_feature):
+class CommitDeleted(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["deleted"] for commit in bug["commits"] if not commit["backedoutby"]
         )
 
 
-class commit_types(single_bug_feature):
+class CommitTypes(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(
             (commit["types"] for commit in bug["commits"] if not commit["backedoutby"]),
@@ -421,7 +421,7 @@ class commit_types(single_bug_feature):
         )
 
 
-class commit_files_modified_num(single_bug_feature):
+class CommitFilesModifiedNum(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(
             commit["files_modified_num"]
@@ -430,7 +430,7 @@ class commit_files_modified_num(single_bug_feature):
         )
 
 
-class commit_author_experience(single_bug_feature):
+class CommitAuthorExperience(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["author_experience"]
@@ -440,7 +440,7 @@ class commit_author_experience(single_bug_feature):
         return sum(res) / len(res)
 
 
-class commit_author_experience_90_days(single_bug_feature):
+class CommitAuthorExperience90Days(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["author_experience_90_days"]
@@ -450,7 +450,7 @@ class commit_author_experience_90_days(single_bug_feature):
         return sum(res) / len(res)
 
 
-class commit_reviewer_experience(single_bug_feature):
+class CommitReviewerExperience(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["reviewer_experience"]
@@ -460,7 +460,7 @@ class commit_reviewer_experience(single_bug_feature):
         return sum(res) / len(res)
 
 
-class commit_reviewer_experience_90_days(single_bug_feature):
+class CommitReviewerExperience90Days(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         res = [
             commit["reviewer_experience_90_days"]
@@ -470,12 +470,12 @@ class commit_reviewer_experience_90_days(single_bug_feature):
         return sum(res) / len(res)
 
 
-class commit_no_of_backouts(single_bug_feature):
+class CommitNoOfBackouts(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return sum(1 for commit in bug["commits"] if commit["backedoutby"])
 
 
-class components_touched(single_bug_feature):
+class ComponentsTouched(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return list(
             set(
@@ -487,7 +487,7 @@ class components_touched(single_bug_feature):
         )
 
 
-class components_touched_num(single_bug_feature):
+class ComponentsTouchedNum(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(
             set(
@@ -499,27 +499,27 @@ class components_touched_num(single_bug_feature):
         )
 
 
-class platform(single_bug_feature):
+class Platform(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["platform"]
 
 
-class op_sys(single_bug_feature):
+class OpSys(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["op_sys"]
 
 
-class filed_via(single_bug_feature):
+class FiledVia(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["filed_via"]
 
 
-class is_reporter_a_developer(single_bug_feature):
+class IsReporterADeveloper(SingleBugFeature):
     def __call__(self, bug, author_ids, **kwargs):
-        return bug_reporter()(bug).strip() in author_ids
+        return BugReporter()(bug).strip() in author_ids
 
 
-class had_severity_enhancement(single_bug_feature):
+class HadSeverityEnhancement(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         for history in bug["history"]:
             for change in history["changes"]:
@@ -545,7 +545,7 @@ def get_time_to_fix(bug):
     ).total_seconds() / 86400
 
 
-class time_to_fix(single_bug_feature):
+class TimeToFix(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return get_time_to_fix(bug)
 
@@ -566,17 +566,17 @@ def get_time_to_assign(bug):
     return None
 
 
-class time_to_assign(single_bug_feature):
+class TimeToAssign(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return get_time_to_assign(bug)
 
 
-class cc_number(single_bug_feature):
+class CcNumber(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(bug["cc"])
 
 
-class is_uplifted(single_bug_feature):
+class IsUplifted(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return any(
             change["added"].startswith("approval-mozilla")
@@ -586,17 +586,17 @@ class is_uplifted(single_bug_feature):
         )
 
 
-class resolution(single_bug_feature):
+class Resolution(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["resolution"]
 
 
-class status(single_bug_feature):
+class Status(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["status"]
 
 
-class couple_common_whiteboard_keywords(couple_bug_feature):
+class CoupleCommonWhiteboardKeywords(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return [
             keyword
@@ -605,12 +605,12 @@ class couple_common_whiteboard_keywords(couple_bug_feature):
         ]
 
 
-class is_same_product(couple_bug_feature):
+class IsSameProduct(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["product"] == bugs[1]["product"]
 
 
-class is_same_component(couple_bug_feature):
+class IsSameComponent(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return (
             bugs[0]["product"] == bugs[1]["product"]
@@ -618,27 +618,27 @@ class is_same_component(couple_bug_feature):
         )
 
 
-class is_same_platform(couple_bug_feature):
+class IsSamePlatform(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["platform"] == bugs[1]["platform"]
 
 
-class is_same_version(couple_bug_feature):
+class IsSameVersion(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["version"] == bugs[1]["version"]
 
 
-class is_same_os(couple_bug_feature):
+class IsSameOs(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["op_sys"] == bugs[1]["op_sys"]
 
 
-class is_same_target_milestone(couple_bug_feature):
+class IsSameTargetMilestone(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
 
 
-class is_first_affected_same(couple_bug_feature):
+class IsFirstAffectedSame(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         version_status1 = get_versions_statuses(bugs[0])[1]
         version_status2 = get_versions_statuses(bugs[1])[1]
@@ -649,7 +649,7 @@ class is_first_affected_same(couple_bug_feature):
         return False
 
 
-class couple_delta_creation_date(couple_bug_feature):
+class CoupleDeltaCreationDate(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         delta = parser.parse(bugs[0]["creation_time"]) - parser.parse(
             bugs[1]["creation_time"]
@@ -657,7 +657,7 @@ class couple_delta_creation_date(couple_bug_feature):
         return delta / timedelta(days=1)
 
 
-class couple_common_words_summary(couple_bug_feature):
+class CoupleCommonWordsSummary(CoupleBugFeature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
@@ -667,7 +667,7 @@ class couple_common_words_summary(couple_bug_feature):
         )
 
 
-class couple_common_words_comments(couple_bug_feature):
+class CoupleCommonWordsComments(CoupleBugFeature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
@@ -677,7 +677,7 @@ class couple_common_words_comments(couple_bug_feature):
         return set(text1.split()).intersection(set(text2.split()))
 
 
-class couple_common_keywords(couple_bug_feature):
+class CoupleCommonKeywords(CoupleBugFeature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
@@ -761,14 +761,14 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
             for feature_extractor in self.feature_extractors:
                 res = None
-                if isinstance(feature_extractor, single_bug_feature) and not is_couple:
+                if isinstance(feature_extractor, SingleBugFeature) and not is_couple:
                     res = feature_extractor(
                         bug,
                         reporter_experience=reporter_experience_map[bug["creator"]],
                         author_ids=author_ids,
                     )
 
-                elif isinstance(feature_extractor, couple_bug_feature) and is_couple:
+                elif isinstance(feature_extractor, CoupleBugFeature) and is_couple:
                     res = feature_extractor(bug)
 
                 if hasattr(feature_extractor, "name"):

@@ -26,18 +26,18 @@ class FixTimeModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.whiteboard(),
-            bug_features.product(),
+            bug_features.HasStr(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasUrl(),
+            bug_features.Whiteboard(),
+            bug_features.Product(),
             # TODO: We would like to use the component at the time of filing too,
             # but we can't because the rollback script doesn't support changes to
             # components yet.
             # bug_features.component(),
-            bug_features.keywords(),
+            bug_features.Keywords(),
         ]
 
         cleanup_functions = [

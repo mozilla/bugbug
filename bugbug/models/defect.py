@@ -27,29 +27,29 @@ class DefectModel(BugModel):
         self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
+            bug_features.HasStr(),
+            bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords({"regression", "talos-regression", "feature"}),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.blocked_bugs_number(),
-            bug_features.ever_affected(),
-            bug_features.affected_then_unaffected(),
-            bug_features.product(),
-            bug_features.component(),
+            bug_features.Keywords({"regression", "talos-regression", "feature"}),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasUrl(),
+            bug_features.HasW3cUrl(),
+            bug_features.HasGithubUrl(),
+            bug_features.Whiteboard(),
+            bug_features.BlockedBugsNumber(),
+            bug_features.EverAffected(),
+            bug_features.AffectedThenUnaffected(),
+            bug_features.Product(),
+            bug_features.Component(),
         ]
 
         if historical:
             feature_extractors += [
-                bug_features.had_severity_enhancement(),
-                bug_features.patches(),
-                bug_features.landings(),
+                bug_features.HadSeverityEnhancement(),
+                bug_features.Patches(),
+                bug_features.Landings(),
             ]
 
         cleanup_functions = [

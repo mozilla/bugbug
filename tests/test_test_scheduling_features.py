@@ -7,7 +7,7 @@ from bugbug import test_scheduling_features
 
 
 def test_path_distance():
-    pd = test_scheduling_features.path_distance()
+    pd = test_scheduling_features.PathDistance()
 
     assert (
         pd(

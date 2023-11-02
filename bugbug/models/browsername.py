@@ -21,7 +21,7 @@ class BrowserNameModel(IssueModel):
         IssueModel.__init__(self, lemmatization)
 
         feature_extractors = [
-            issue_features.comment_count(),
+            issue_features.CommentCount(),
         ]
 
         cleanup_functions = [

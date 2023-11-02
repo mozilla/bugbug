@@ -20,18 +20,18 @@ class UpliftModel(BugModel):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.keywords(),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
+            bug_features.HasStr(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.Keywords(),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasUrl(),
+            bug_features.HasW3cUrl(),
+            bug_features.HasGithubUrl(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
         ]
 
         cleanup_functions = [
