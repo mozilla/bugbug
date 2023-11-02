@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from logging import INFO, basicConfig, getLogger
+from multiprocessing.pool import Pool
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
@@ -868,17 +869,21 @@ def rollback(bug, when=None, do_assert=False):
     return bug
 
 
+def _try_rollback(bug):
+    try:
+        return rollback(bug, do_assert=True), True
+    except Exception:
+        logger.exception("Failed to rollback bug %s", bug["id"])
+        return bug, False
+
+
 def get_inconsistencies(bugs):
-    inconsistencies = []
-
-    for bug in bugs:
-        try:
-            rollback(bug, do_assert=True)
-        except Exception:
-            logger.exception("Failed to rollback bug %s", bug["id"])
-            inconsistencies.append(bug)
-
-    return inconsistencies
+    with Pool() as p:
+        return [
+            bug
+            for bug, is_successful in p.imap(_try_rollback, bugs, chunksize=1024)
+            if not is_successful
+        ]
 
 
 if __name__ == "__main__":
