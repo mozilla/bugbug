@@ -25,7 +25,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
-from xgboost import Booster, XGBModel
+from xgboost import XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
@@ -571,22 +571,19 @@ class Model:
 
         model_name = self.__class__.__name__.lower()
 
-        if issubclass(type(self.clf), XGBModel):
-            # Since the workflow expects a single file, we create a directory
-            # with the expected file name to store multiple model-related files.
-            os.makedirs(model_name, exist_ok=True)
+        # Since the workflow expects a single file, we create a directory
+        # with the expected file name to store multiple model-related files.
+        os.makedirs(model_name, exist_ok=True)
 
+        if issubclass(type(self.clf), XGBModel):
             self.clf.save_model(os.path.join(model_name, "xgboost.ubj"))
 
             # Since we save the classifier separately, we need to clear the clf
             # attribute to prevent it from being pickled with the model object.
-            self.clf = None
+            self.clf = XGBModel()
 
-            with open(os.path.join(model_name, "model.pkl"), "wb") as f:
-                pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
-        else:
-            with open(model_name, "wb") as f:
-                pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(os.path.join(model_name, "pickled.pkl"), "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
             with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
@@ -599,20 +596,11 @@ class Model:
 
     @staticmethod
     def load(model_file_name: str) -> "Model":
-        if os.path.isdir(model_file_name):
-            # If the model file is a directory, it's assumed to be an XGBoost model
-            with open(os.path.join(model_file_name, "xgboost.ubj"), "rb") as f:
-                xgb_model = Booster()
-                xgb_model.load_model(f)
+        with open(os.path.join(model_file_name, "pickled.pkl"), "rb") as f:
+            model = pickle.load(f)
 
-            with open(os.path.join(model_file_name, "model.pkl"), "rb") as f:
-                model = pickle.load(f)
-
-            model.clf = xgb_model
-        else:
-            # If the model file is not a directory, it's assumed to be a pickle file
-            with open(model_file_name, "rb") as f:
-                model = pickle.load(f)
+        if os.path.exists(os.path.join(model_file_name, "xgboost.ubj")):
+            model.clf.load_model(os.path.join(model_file_name, "xgboost.ubj"))
 
         return model
 
