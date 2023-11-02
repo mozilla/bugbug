@@ -87,16 +87,16 @@ class BugTypeModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.HasStr(),
+            bug_features.HasSTR(),
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
             bug_features.Keywords(set(KEYWORD_DICT.keys())),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
-            bug_features.HasUrl(),
-            bug_features.HasW3cUrl(),
-            bug_features.HasGithubUrl(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
             bug_features.Patches(),
             bug_features.Landings(),

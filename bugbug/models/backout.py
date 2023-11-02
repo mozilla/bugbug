@@ -31,8 +31,8 @@ class BackoutModel(CommitModel):
 
         feature_extractors = [
             commit_features.SourceCodeFilesModifiedNum(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
             commit_features.SourceCodeFileSize(),
             commit_features.OtherFileSize(),
             commit_features.TestFileSize(),

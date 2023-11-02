@@ -20,15 +20,15 @@ class QANeededModel(BugModel):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            bug_features.HasStr(),
+            bug_features.HasSTR(),
             bug_features.HasRegressionRange(),
             bug_features.Severity(),
             bug_features.Keywords({"qawanted"}),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
-            bug_features.HasUrl(),
-            bug_features.HasW3cUrl(),
-            bug_features.HasGithubUrl(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
             bug_features.Patches(),
             bug_features.Landings(),

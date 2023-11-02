@@ -71,13 +71,13 @@ class RCATypeModel(BugModel):
         self.RCA_LIST = sorted(set(self.RCA_TYPES))
 
         feature_extractors = [
-            bug_features.HasStr(),
+            bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
-            bug_features.HasUrl(),
-            bug_features.HasW3cUrl(),
-            bug_features.HasGithubUrl(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
             # Ignore whiteboards that would make the ML completely skewed
             # bug_features.whiteboard(),
             bug_features.Patches(),

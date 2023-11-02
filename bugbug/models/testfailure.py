@@ -49,8 +49,8 @@ class TestFailureModel(CommitModel):
             commit_features.Directories(),
             commit_features.DirectoriesModifiedNum(),
             commit_features.SourceCodeFilesModifiedNum(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
         ]
 
         self.extraction_pipeline = Pipeline(

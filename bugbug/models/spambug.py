@@ -26,11 +26,11 @@ class SpamBugModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.HasStr(),
+            bug_features.HasSTR(),
             bug_features.HasRegressionRange(),
             bug_features.Severity(),
             bug_features.HasCrashSignature(),
-            bug_features.HasUrl(),
+            bug_features.HasURL(),
             bug_features.Whiteboard(),
             bug_features.Product(),
             # TODO: We would like to use the component at the time of filing too,

@@ -17,17 +17,17 @@ from bugbug.bug_features import (
     Component,
     DeltaNightlyRequestMerge,
     HasCrashSignature,
-    HasCveInAlias,
-    HasGithubUrl,
+    HasCVEInAlias,
+    HasGithubURL,
     HasRegressionRange,
-    HasStr,
-    HasUrl,
-    HasW3cUrl,
+    HasSTR,
+    HasURL,
+    HasW3CURL,
     IsCoverityIssue,
     IsFirstAffectedSame,
     IsMozillian,
     IsSameComponent,
-    IsSameOs,
+    IsSameOS,
     IsSamePlatform,
     IsSameProduct,
     IsSameTargetMilestone,
@@ -58,7 +58,7 @@ def read(get_fixture_path):
 
 
 def test_has_str(read):
-    read("has_str.json", HasStr, ["yes", None, "no"])
+    read("has_str.json", HasSTR, ["yes", None, "no"])
 
 
 def test_has_regression_range(read):
@@ -89,15 +89,15 @@ def test_is_coverity_issue(read):
 
 
 def test_has_url(read):
-    read("has_url.json", HasUrl, [True, False])
+    read("has_url.json", HasURL, [True, False])
 
 
 def test_has_w3c_url(read):
-    read("has_w3c_url.json", HasW3cUrl, [True, False])
+    read("has_w3c_url.json", HasW3CURL, [True, False])
 
 
 def test_has_github_url(read):
-    read("has_github_url.json", HasGithubUrl, [True, False])
+    read("has_github_url.json", HasGithubURL, [True, False])
 
 
 def test_whiteboard(read):
@@ -155,7 +155,7 @@ def test_bug_reporter(read):
 
 
 def test_has_cve_in_alias(read):
-    read("has_cve_in_alias.json", HasCveInAlias, [True, False])
+    read("has_cve_in_alias.json", HasCVEInAlias, [True, False])
 
 
 def test_comment_count(read):
@@ -257,7 +257,7 @@ OS_PARAMS = [
 
 @pytest.mark.parametrize("test_data, expected", OS_PARAMS)
 def test_is_same_os(test_data, expected):
-    assert IsSameOs()(test_data) == expected
+    assert IsSameOS()(test_data) == expected
 
 
 TARGET_MILESTONE_PARAMS = [
@@ -285,8 +285,8 @@ def test_is_first_affected_same(test_data, expected):
 
 
 def test_BugExtractor():
-    BugExtractor([HasStr(), HasUrl()], [fileref(), url()])
+    BugExtractor([HasSTR(), HasURL()], [fileref(), url()])
     with pytest.raises(AssertionError):
-        BugExtractor([HasStr(), HasStr()], [fileref(), url()])
+        BugExtractor([HasSTR(), HasSTR()], [fileref(), url()])
     with pytest.raises(AssertionError):
-        BugExtractor([HasStr(), HasUrl()], [fileref(), fileref()])
+        BugExtractor([HasSTR(), HasURL()], [fileref(), fileref()])

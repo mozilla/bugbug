@@ -33,7 +33,7 @@ class CoupleBugFeature(object):
     pass
 
 
-class HasStr(SingleBugFeature):
+class HasSTR(SingleBugFeature):
     name = "Has STR"
 
     def __call__(self, bug, **kwargs):
@@ -96,21 +96,21 @@ class IsCoverityIssue(SingleBugFeature):
         )
 
 
-class HasUrl(SingleBugFeature):
+class HasURL(SingleBugFeature):
     name = "Has a URL"
 
     def __call__(self, bug, **kwargs):
         return bug["url"] != ""
 
 
-class HasW3cUrl(SingleBugFeature):
+class HasW3CURL(SingleBugFeature):
     name = "Has a w3c URL"
 
     def __call__(self, bug, **kwargs):
         return "w3c" in bug["url"]
 
 
-class HasGithubUrl(SingleBugFeature):
+class HasGithubURL(SingleBugFeature):
     name = "Has a GitHub URL"
 
     def __call__(self, bug, **kwargs):
@@ -278,7 +278,7 @@ class TargetMilestone(SingleBugFeature):
             return "Has Value"
 
 
-class HasCveInAlias(SingleBugFeature):
+class HasCVEInAlias(SingleBugFeature):
     name = "CVE in alias"
 
     def __call__(self, bug, **kwargs):
@@ -571,7 +571,7 @@ class TimeToAssign(SingleBugFeature):
         return get_time_to_assign(bug)
 
 
-class CcNumber(SingleBugFeature):
+class CCNumber(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(bug["cc"])
 
@@ -628,7 +628,7 @@ class IsSameVersion(CoupleBugFeature):
         return bugs[0]["version"] == bugs[1]["version"]
 
 
-class IsSameOs(CoupleBugFeature):
+class IsSameOS(CoupleBugFeature):
     def __call__(self, bugs, **kwargs):
         return bugs[0]["op_sys"] == bugs[1]["op_sys"]
 

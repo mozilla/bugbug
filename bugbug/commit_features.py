@@ -22,14 +22,14 @@ class SourceCodeFilesModifiedNum(object):
         return commit["source_code_files_modified_num"]
 
 
-class other_files_modified_num(object):
+class OtherFilesModifiedNum(object):
     name = "# of modified non-code files"
 
     def __call__(self, commit, **kwargs):
         return commit["other_files_modified_num"]
 
 
-class test_files_modified_num(object):
+class TestFilesModifiedNum(object):
     name = "# of modified test files"
 
     def __call__(self, commit, **kwargs):

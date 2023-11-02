@@ -27,16 +27,16 @@ class DefectModel(BugModel):
         self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
-            bug_features.HasStr(),
+            bug_features.HasSTR(),
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
             bug_features.Keywords({"regression", "talos-regression", "feature"}),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
-            bug_features.HasUrl(),
-            bug_features.HasW3cUrl(),
-            bug_features.HasGithubUrl(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
             bug_features.BlockedBugsNumber(),
             bug_features.EverAffected(),

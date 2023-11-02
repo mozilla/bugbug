@@ -35,7 +35,7 @@ class DuplicateModel(BugCoupleModel):
             bug_features.IsSameComponent(),
             bug_features.IsSamePlatform(),
             bug_features.IsSameVersion(),
-            bug_features.IsSameOs(),
+            bug_features.IsSameOS(),
             bug_features.IsSameTargetMilestone(),
             bug_features.IsFirstAffectedSame(),
             bug_features.CoupleCommonWordsComments(),
