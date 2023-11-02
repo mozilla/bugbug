@@ -74,7 +74,6 @@ class ComponentModel(BugModel):
             bug_features.has_str(),
             bug_features.severity(),
             bug_features.keywords(),
-            # bug_features.is_coverity_issue(), # #3677 Removed after feature ablation study
             bug_features.has_crash_signature(),
             bug_features.has_url(),
             bug_features.has_w3c_url(),
