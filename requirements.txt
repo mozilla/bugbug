@@ -30,4 +30,4 @@ taskcluster==56.0.3
 tenacity==8.2.3
 tqdm==4.66.1
 xgboost==2.0.1
-zstandard==0.21.0
+zstandard==0.22.0
