@@ -810,14 +810,12 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         if not is_couple:
             if self.rollback:
                 with Pool() as p:
-                    return pd.DataFrame(
-                        apply_transform(bug)
-                        for bug in p.imap(
-                            partial(bug_snapshot.rollback, when=self.rollback_when),
-                            bugs_iter,
-                            chunksize=1024,
-                        )
+                    bugs_iter = p.imap(
+                        partial(bug_snapshot.rollback, when=self.rollback_when),
+                        bugs_iter,
+                        chunksize=1024,
                     )
+                    return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
             else:
                 return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
         else:
