@@ -72,7 +72,6 @@ class ComponentModel(BugModel):
 
         feature_extractors = [
             bug_features.has_str(),
-            bug_features.severity(),
             bug_features.keywords(),
             bug_features.is_coverity_issue(),
             bug_features.has_crash_signature(),
