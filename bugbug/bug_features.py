@@ -3,10 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import itertools
 import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from functools import partial
+from multiprocessing.pool import Pool
 
 import dateutil.parser
 import pandas as pd
@@ -730,22 +733,18 @@ class BugExtractor(BaseEstimator, TransformerMixin):
     def transform(self, bugs):
         results = []
 
+        bugs_iter = bugs()
+        first_bug = next(bugs_iter)
+        bugs_iter = itertools.chain([first_bug], bugs_iter)
+        is_couple = isinstance(first_bug, tuple)
+
         reporter_experience_map = defaultdict(int)
         author_ids = get_author_ids() if self.commit_data else None
 
         already_rollbacked = set()
 
         def apply_transform(bug):
-            is_couple = isinstance(bug, tuple)
-
-            if not is_couple:
-                bug_id = bug["id"]
-
-                if self.rollback and bug_id not in already_rollbacked:
-                    bug = bug_snapshot.rollback(bug, self.rollback_when)
-                    already_rollbacked.add(bug_id)
-
-            else:
+            if is_couple:
                 bug1_id = bug[0]["id"]
                 bug2_id = bug[1]["id"]
 
@@ -808,10 +807,21 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     "comments": " ".join(comments),
                 }
 
-        for bug in bugs():
-            if isinstance(bug, dict):
-                results.append(apply_transform(bug))
-            elif isinstance(bug, tuple):
+        def apply_rollback(bugs_iter):
+            with Pool() as p:
+                yield from p.imap(
+                    partial(bug_snapshot.rollback, when=self.rollback_when),
+                    bugs_iter,
+                    chunksize=1024,
+                )
+
+        if not is_couple:
+            if self.rollback:
+                bugs_iter = apply_rollback(bugs_iter)
+
+            return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
+        else:
+            for bug in bugs_iter:
                 result1 = apply_transform(bug[0])
                 result2 = apply_transform(bug[1])
 
@@ -839,4 +849,4 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                         }
                     )
 
-        return pd.DataFrame(results)
+            return pd.DataFrame(results)
