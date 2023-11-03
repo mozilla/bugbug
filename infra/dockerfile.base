@@ -1,12 +1,8 @@
-FROM python:3.10.7-slim AS builder
-
-COPY . /tmp/bugbug
-
 FROM python:3.10.7-slim
 
 # Setup dependencies in a cacheable step
-COPY requirements.txt /requirements.txt
-RUN apt-get update && \
+RUN --mount=type=bind,source=requirements.txt,target=requirements.txt,rw \
+	apt-get update && \
 	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch && \
 	pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
 	apt-get purge -y gcc g++ libffi-dev patch && \
@@ -17,5 +13,5 @@ ENV LD_PRELOAD="libjemalloc.so.2"
 
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
-RUN --mount=target=/tmp/bugbug,from=builder,source=/tmp/bugbug,rw \
+RUN --mount=type=bind,target=/tmp/bugbug,rw \
 	pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
