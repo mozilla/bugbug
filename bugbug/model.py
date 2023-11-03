@@ -4,9 +4,9 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-import os
 import pickle
 from collections import defaultdict
+from os import makedirs, path
 from typing import Any
 
 import matplotlib
@@ -569,20 +569,19 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
-        model_name = self.__class__.__name__.lower()
-
-        # Since the workflow expects a single file, we create a directory
-        # with the expected file name to store multiple model-related files.
-        os.makedirs(model_name, exist_ok=True)
+        model_directory = self.__class__.__name__.lower()
+        makedirs(model_directory, exist_ok=True)
 
         if issubclass(type(self.clf), XGBModel):
-            self.clf.save_model(os.path.join(model_name, "xgboost.ubj"))
+            xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+            self.clf.save_model(xgboost_model_path)
 
             # Since we save the classifier separately, we need to clear the clf
             # attribute to prevent it from being pickled with the model object.
-            self.clf = XGBModel()
+            self.clf = self.clf.__class__(n_jobs=self.clf.n_jobs)
 
-        with open(os.path.join(model_name, "pickled.pkl"), "wb") as f:
+        model_path = path.join(model_directory, "model.pkl")
+        with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
@@ -595,12 +594,15 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_file_name: str) -> "Model":
-        with open(os.path.join(model_file_name, "pickled.pkl"), "rb") as f:
+    def load(model_directory: str) -> "Model":
+        model_path = path.join(model_directory, "model.pkl")
+
+        with open(model_path, "rb") as f:
             model = pickle.load(f)
 
-        if os.path.exists(os.path.join(model_file_name, "xgboost.ubj")):
-            model.clf.load_model(os.path.join(model_file_name, "xgboost.ubj"))
+        xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+        if path.exists(xgboost_model_path):
+            model.clf.load_model(xgboost_model_path)
 
         return model
 
