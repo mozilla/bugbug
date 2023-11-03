@@ -74,7 +74,6 @@ class ComponentModel(BugModel):
             bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.Keywords(),
-            bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
             bug_features.HasW3CURL(),
