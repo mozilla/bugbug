@@ -31,18 +31,18 @@ class DuplicateModel(BugCoupleModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.is_same_product(),
-            bug_features.is_same_component(),
-            bug_features.is_same_platform(),
-            bug_features.is_same_version(),
-            bug_features.is_same_os(),
-            bug_features.is_same_target_milestone(),
-            bug_features.is_first_affected_same(),
-            bug_features.couple_common_words_comments(),
-            bug_features.couple_delta_creation_date(),
-            bug_features.couple_common_keywords(),
-            bug_features.couple_common_whiteboard_keywords(),
-            bug_features.couple_common_words_summary(),
+            bug_features.IsSameProduct(),
+            bug_features.IsSameComponent(),
+            bug_features.IsSamePlatform(),
+            bug_features.IsSameVersion(),
+            bug_features.IsSameOS(),
+            bug_features.IsSameTargetMilestone(),
+            bug_features.IsFirstAffectedSame(),
+            bug_features.CoupleCommonWordsComments(),
+            bug_features.CoupleDeltaCreationDate(),
+            bug_features.CoupleCommonKeywords(),
+            bug_features.CoupleCommonWhiteboardKeywords(),
+            bug_features.CoupleCommonWordsSummary(),
         ]
 
         cleanup_functions = [

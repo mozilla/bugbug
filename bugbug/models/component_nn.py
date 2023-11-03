@@ -292,9 +292,9 @@ class ComponentNNModel(ComponentModel):
         ]
 
         feature_extractors = [
-            bug_features.bug_reporter(),
-            bug_features.platform(),
-            bug_features.op_sys(),
+            bug_features.BugReporter(),
+            bug_features.Platform(),
+            bug_features.OpSys(),
         ]
 
         cleanup_functions = []

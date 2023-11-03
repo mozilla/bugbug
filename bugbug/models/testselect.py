@@ -426,20 +426,20 @@ class TestSelectModel(Model):
         self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
-            test_scheduling_features.prev_failures(),
+            test_scheduling_features.PrevFailures(),
         ]
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.platform(),
+                test_scheduling_features.Platform(),
                 # test_scheduling_features.chunk(),
-                test_scheduling_features.suite(),
+                test_scheduling_features.Suite(),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
-                test_scheduling_features.path_distance(),
-                test_scheduling_features.common_path_components(),
-                test_scheduling_features.touched_together(),
+                test_scheduling_features.PathDistance(),
+                test_scheduling_features.CommonPathComponents(),
+                test_scheduling_features.TouchedTogether(),
             ]
 
         self.extraction_pipeline = Pipeline(
