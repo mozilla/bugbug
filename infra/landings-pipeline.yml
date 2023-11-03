@@ -55,7 +55,7 @@ tasks:
 
     - ID: frontend-build
       created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
+      deadline: { $fromNow: "3 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
@@ -89,7 +89,7 @@ tasks:
 
     - ID: frontend-deploy
       created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
+      deadline: { $fromNow: "3 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
