@@ -1,7 +1,7 @@
 FROM python:3.10.7-slim
 
 # Setup dependencies in a cacheable step
-RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt,rw \
+RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt \
 	apt-get update && \
 	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch && \
 	pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
