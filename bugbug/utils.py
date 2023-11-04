@@ -237,7 +237,7 @@ def download_model(model_name: str) -> str:
     if updated:
         extract_tar_zst(f"{path}.tar.zst")
         os.remove(f"{path}.tar.zst")
-    assert os.path.exists(path), "Decompressed file exists"
+    assert os.path.exists(path), "Decompressed directory exists"
     return path
 
 

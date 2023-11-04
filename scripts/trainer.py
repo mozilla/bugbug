@@ -59,16 +59,15 @@ class Trainer(object):
 
         model_directory = f"{model_name}model"
         assert os.path.exists(model_directory)
-
         create_tar_zst(f"{model_directory}.tar.zst")
 
         logger.info("Model compressed")
 
         if model_obj.store_dataset:
-            assert os.path.exists(f"{model_directory}_data_X")
-            zstd_compress(f"{model_directory}_data_X")
-            assert os.path.exists(f"{model_directory}_data_y")
-            zstd_compress(f"{model_directory}_data_y")
+            assert os.path.exists(f"{model_name}model_data_X")
+            zstd_compress(f"{model_name}model_data_X")
+            assert os.path.exists(f"{model_name}model_data_y")
+            zstd_compress(f"{model_name}model_data_y")
 
 
 def parse_args(args):

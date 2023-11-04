@@ -596,7 +596,6 @@ class Model:
     @staticmethod
     def load(model_directory: str) -> "Model":
         model_path = path.join(model_directory, "model.pkl")
-
         with open(model_path, "rb") as f:
             model = pickle.load(f)
 
