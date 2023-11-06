@@ -210,7 +210,7 @@ tasks:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
-      - $if: 'tasks_for == "github-pull-request" && "Train with task cluster:" in pr_description'
+      - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
         then:
           dependencies:
             - { $eval: as_slugid("docker_build") }
@@ -230,8 +230,7 @@ tasks:
             command:
               - "/bin/sh"
               - "-lcx"
-              - 'model=$(python -c ''import re, os; match = re.search(r"Train with task cluster:(.+)", os.environ.get("TEXT_TO_EXTRACT")); model = match.group(1).strip() ; print(model)'') &&
-                python -m scripts.trainer $model'
+              - "python -m scripts.train_on_tc TEXT_TO_EXTRACT"
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
