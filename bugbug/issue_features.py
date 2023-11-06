@@ -11,7 +11,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from bugbug import issue_snapshot
 
 
-class comment_count(object):
+class CommentCount(object):
     name = "# of comments"
 
     def __call__(self, issue, **kwargs):
