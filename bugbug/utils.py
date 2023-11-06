@@ -231,13 +231,13 @@ def download_model(model_name: str) -> str:
             version = "latest"
 
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.tar.zst"
     logger.info("Downloading %s...", url)
     updated = download_check_etag(url)
     if updated:
-        zstd_decompress(path)
-        os.remove(f"{path}.zst")
-    assert os.path.exists(path), "Decompressed file exists"
+        extract_tar_zst(f"{path}.tar.zst")
+        os.remove(f"{path}.tar.zst")
+    assert os.path.exists(path), "Decompressed directory exists"
     return path
 
 

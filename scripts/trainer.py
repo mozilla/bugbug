@@ -9,7 +9,7 @@ from logging import INFO, basicConfig, getLogger
 
 from bugbug import db
 from bugbug.models import MODELS, get_model_class
-from bugbug.utils import CustomJsonEncoder, zstd_compress
+from bugbug.utils import CustomJsonEncoder, create_tar_zst, zstd_compress
 
 MODELS_WITH_TYPE = ("component",)
 
@@ -57,17 +57,17 @@ class Trainer(object):
 
         logger.info("Training done")
 
-        model_file_name = f"{model_name}model"
-        assert os.path.exists(model_file_name)
-        zstd_compress(model_file_name)
+        model_directory = f"{model_name}model"
+        assert os.path.exists(model_directory)
+        create_tar_zst(f"{model_directory}.tar.zst")
 
         logger.info("Model compressed")
 
         if model_obj.store_dataset:
-            assert os.path.exists(f"{model_file_name}_data_X")
-            zstd_compress(f"{model_file_name}_data_X")
-            assert os.path.exists(f"{model_file_name}_data_y")
-            zstd_compress(f"{model_file_name}_data_y")
+            assert os.path.exists(f"{model_name}model_data_X")
+            zstd_compress(f"{model_name}model_data_X")
+            assert os.path.exists(f"{model_name}model_data_y")
+            zstd_compress(f"{model_name}model_data_y")
 
 
 def parse_args(args):

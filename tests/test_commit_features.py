@@ -5,13 +5,13 @@
 
 import pytest
 
-from bugbug.commit_features import CommitExtractor, author_experience, reviewers_num
+from bugbug.commit_features import AuthorExperience, CommitExtractor, ReviewersNum
 from bugbug.feature_cleanup import fileref, url
 
 
 def test_CommitExtractor():
-    CommitExtractor([reviewers_num(), author_experience()], [fileref(), url()])
+    CommitExtractor([ReviewersNum(), AuthorExperience()], [fileref(), url()])
     with pytest.raises(AssertionError):
-        CommitExtractor([reviewers_num(), author_experience()], [fileref(), fileref()])
+        CommitExtractor([ReviewersNum(), AuthorExperience()], [fileref(), fileref()])
     with pytest.raises(AssertionError):
-        CommitExtractor([author_experience(), author_experience()], [fileref(), url()])
+        CommitExtractor([AuthorExperience(), AuthorExperience()], [fileref(), url()])
