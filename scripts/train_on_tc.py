@@ -23,10 +23,10 @@ def get_model_name(env_variable: str):
 
     logger.info(f"Searching for model name from env_variable {env_variable}")
 
-    match = re.search(r"Train on task cluster:\s+([a-z_1-9]+)", text)
+    match = re.search(r"Train on Taskcluster:\s+([a-z_1-9]+)", text)
 
     if not match:
-        logger.error("There is no match found for keyword 'Train on task cluster:'")
+        logger.error("There is no match found for keyword 'Train on Taskcluster:'")
         sys.exit(1)
 
     model = match.group(1)
@@ -44,7 +44,7 @@ def train(model: str):
 
 
 def main():
-    description = "Train a model on task cluster using the 'Train on taskcluster:' keyword passed in an environment variable"
+    description = "Train a model on task cluster using the 'Train on Taskcluster:' keyword passed in an environment variable"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument(
