@@ -44,9 +44,7 @@ def train(model: str):
 
 
 def main():
-    description = (
-        "Train a model on task cluster using a keyword in GitHub PR Description"
-    )
+    description = "Train a model on task cluster using the 'Train on taskcluster:' keyword passed in an environment variable"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument(
