@@ -6,6 +6,7 @@
 import logging
 import pickle
 from collections import defaultdict
+from os import makedirs, path
 from typing import Any
 
 import matplotlib
@@ -24,6 +25,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
+from xgboost import XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
@@ -567,7 +569,19 @@ class Model:
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
-        with open(self.__class__.__name__.lower(), "wb") as f:
+        model_directory = self.__class__.__name__.lower()
+        makedirs(model_directory, exist_ok=True)
+
+        if issubclass(type(self.clf), XGBModel):
+            xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+            self.clf.save_model(xgboost_model_path)
+
+            # Since we save the classifier separately, we need to clear the clf
+            # attribute to prevent it from being pickled with the model object.
+            self.clf = self.clf.__class__(n_jobs=self.clf.n_jobs)
+
+        model_path = path.join(model_directory, "model.pkl")
+        with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
@@ -580,9 +594,16 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_file_name: str) -> "Model":
-        with open(model_file_name, "rb") as f:
-            return pickle.load(f)
+    def load(model_directory: str) -> "Model":
+        model_path = path.join(model_directory, "model.pkl")
+        with open(model_path, "rb") as f:
+            model = pickle.load(f)
+
+        xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+        if path.exists(xgboost_model_path):
+            model.clf.load_model(xgboost_model_path)
+
+        return model
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
