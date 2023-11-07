@@ -17,6 +17,13 @@ from bugbug.model import BugModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SEVERITY = [
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+]
+
 
 class AccessibilityBugModel(BugModel):
     def __init__(self, lemmatization=False):
@@ -91,7 +98,7 @@ class AccessibilityBugModel(BugModel):
                 classes[bug_id] = 1
 
             # A bug with the accessibility severity flag set is also an accessibility bug
-            elif bug_data["cf_accessibility_severity"] in ("s1", "s2", "s3", "s4"):
+            elif bug_data.get("cf_accessibility_severity") in SEVERITY:
                 classes[bug_id] = 1
 
             else:
@@ -114,7 +121,7 @@ class AccessibilityBugModel(BugModel):
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
             if ("access" in bug["keywords"]) or (
-                bug["cf_accessibility_severity"] in ("s1", "s2", "s3", "s4")
+                bug["cf_accessibility_severity"] in SEVERITY
             ):
                 classes[i] = [1.0, 0.0] if probabilities else 1
         return classes
