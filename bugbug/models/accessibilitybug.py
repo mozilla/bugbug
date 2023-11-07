@@ -84,24 +84,18 @@ class AccessibilityBugModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            bug_id = bug_data["id"]
-
-            # A bug that had "access" keyword removed is not an accessibility bug
-            for history in bug_data["history"]:
-                for change in history["changes"]:
-                    if (
-                        change["field_name"] == "keywords"
-                        and change["removed"] == "access"
-                    ):
-                        classes[bug_id] = 0
+            bug_id = int(bug_data["id"])
 
             # A bug that was  manually labelled "access" is an access bug.
             if "access" in bug_data["keywords"]:
                 classes[bug_id] = 1
 
-            # A bug with "access-s" in keyboard is also an accessibility bug
-            elif "[access-s" in bug_data["whiteboard"].lower():
+            # A bug with the accessibility severity flag set is also an accessibility bug
+            elif bug_data["cf_accessibility_severity"] in ("s1", "s2", "s3", "s4"):
                 classes[bug_id] = 1
+
+            else:
+                classes[bug_id] = 0
 
         logger.info(
             "%d bugs are classified as non-accessibility",
@@ -119,6 +113,8 @@ class AccessibilityBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if "access" in bug["keywords"] or "[access-s" in bug["whiteboard"].lower():
-                classes[i] = [1.0, 0.0] if probabilities else 0
+            if ("access" in bug["keywords"]) or (
+                bug["cf_accessibility_severity"] in ("s1", "s2", "s3", "s4")
+            ):
+                classes[i] = [1.0, 0.0] if probabilities else 1
         return classes
