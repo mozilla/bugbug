@@ -2300,13 +2300,13 @@ def test_commit_dict_matches_expected():
     )
 
     # Ensure the fields expected by commit_features functions are actually present in the commit dict.
-    commit_features.source_code_file_metrics()(commit)
-    commit_features.source_code_function_metrics()(commit)
-    commit_features.functions_touched_size()(commit)
-    commit_features.source_code_metrics_diff()(commit)
+    commit_features.SourceCodeFileMetrics()(commit)
+    commit_features.SourceCodeFunctionMetrics()(commit)
+    commit_features.FunctionsTouchedSize()(commit)
+    commit_features.SourceCodeMetricsDiff()(commit)
 
     merged_commit = commit_features.merge_commits([commit, commit])
-    commit_features.source_code_file_metrics()(merged_commit)
+    commit_features.SourceCodeFileMetrics()(merged_commit)
     # TODO: Support merging functions in commit_features.merge_commits
     # commit_features.source_code_function_metrics()(merged_commit)
     # TODO: Support merging diff metrics in commit_features.merge_commits
@@ -2349,11 +2349,11 @@ def test_commit_dict_matches_expected():
 
     commit = commit.to_dict()
 
-    commit_features.source_code_function_metrics()(commit)
-    commit_features.functions_touched_size()(commit)
+    commit_features.SourceCodeFunctionMetrics()(commit)
+    commit_features.FunctionsTouchedSize()(commit)
 
     merged_commit = commit_features.merge_commits([commit, commit])
-    commit_features.source_code_file_metrics()(merged_commit)
+    commit_features.SourceCodeFileMetrics()(merged_commit)
     # TODO: Support merging functions in commit_features.merge_commits
     # commit_features.source_code_function_metrics()(merged_commit)
     # TODO: Support merging diff metrics in commit_features.merge_commits

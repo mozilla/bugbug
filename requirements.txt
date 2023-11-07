@@ -1,18 +1,18 @@
 amqp==5.1.1
 beautifulsoup4==4.12.2
-boto3==1.28.68
+boto3==1.28.78
 imbalanced-learn==0.11.0
 libmozdata==0.2.4
 lmdb==1.4.1
 markdown2==2.4.10
-matplotlib==3.8.0
+matplotlib==3.8.1
 mercurial==6.5.2
 microannotate==0.0.24
 mozci==2.3.4
-numpy==1.22.4
-orjson==3.9.9
+numpy==1.26.1
+orjson==3.9.10
 ortools==9.7.2996
-pandas==2.1.0
+pandas==2.1.2
 psutil==5.9.6
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
@@ -26,8 +26,8 @@ scipy==1.11.3
 sendgrid==6.10.0
 shap[plots]==0.43.0
 tabulate==0.9.0
-taskcluster==56.0.3
+taskcluster==57.1.0
 tenacity==8.2.3
 tqdm==4.66.1
-xgboost==2.0.0
-zstandard==0.21.0
+xgboost==2.0.1
+zstandard==0.22.0
