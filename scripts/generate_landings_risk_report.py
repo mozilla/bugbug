@@ -1787,12 +1787,10 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return "ME: {}%, BDTime: {} y, WBDTime: {} y, Incoming vs total open: {} %, Closed vs total open: {} %".format(
+                return "ME: {}%, BDTime: {} y, WBDTime: {} y".format(
                     round(me["ME"], 2),
                     round(me["BDTime"], 2),
                     round(me["WBDTime"], 2),
-                    round(me["Incoming vs total open"], 2),
-                    round(me["Closed vs total open"], 2),
                 )
 
             maintenance_effectiveness_section = f"""<b>[MAINTENANCE EFFECTIVENESS](https://docs.google.com/document/d/1y2dUDZI5U3xvY0jMY1LfIDARc5b_QB9mS2DV7MWrfa0/edit)</b>
