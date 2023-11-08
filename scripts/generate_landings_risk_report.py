@@ -1802,7 +1802,7 @@ Last week: {format_maintenance_effectiveness(relativedelta(weeks=1))}
 
 Last month: {format_maintenance_effectiveness(relativedelta(months=1))}
 
-Last year: {format_maintenance_effectiveness(relativedelta(years=1))}
+Last 3 months: {format_maintenance_effectiveness(relativedelta(months=3))}
 """
 
             sections = [
