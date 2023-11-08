@@ -232,8 +232,8 @@ tasks:
               - "-lcx"
               - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
           metadata:
-            name: bugbug train on tc
-            description: bugbug train on tc
+            name: bugbug train on TC
+            description: Train a BugBug model on Taskcluster
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
