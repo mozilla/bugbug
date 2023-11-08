@@ -1782,7 +1782,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
             ) -> dict[str, float]:
                 start_date = datetime.utcnow() - period
                 return bugzilla.calculate_maintenance_effectiveness_indicator(
-                    team, start_date, datetime.utcnow()
+                    [team], start_date, datetime.utcnow()
                 )
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
