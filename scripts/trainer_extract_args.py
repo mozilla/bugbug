@@ -6,29 +6,33 @@
 import logging
 import os
 import re
-import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_model_name():
-    text = os.environ.get("PR_DESCRIPTION")
+def get_model_name() -> str | None:
+    pr_description = os.environ.get("PR_DESCRIPTION")
+    if not pr_description:
+        logger.error("The PR_DESCRIPTION environment variable does not exist")
+        return None
 
-    match = re.search(r"Train on Taskcluster:\s+([a-z_1-9]+)", text)
-
+    match = re.search(r"Train on Taskcluster:\s+([a-z_1-9]+)", pr_description)
     if not match:
-        logger.error("There is no match found for keyword 'Train on Taskcluster:'")
-        sys.exit(1)
+        logger.error(
+            "Could not identify the model name using the 'Train on Taskcluster' keyword from the Pull Request description"
+        )
+        return None
 
-    model = match.group(1)
+    model_name = match.group(1)
 
-    return model
+    return model_name
 
 
 def main():
     model = get_model_name()
-    print(model)
+    if model:
+        print(model)
 
 
 if __name__ == "__main__":
