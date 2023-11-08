@@ -431,7 +431,7 @@ def get_last_activity_excluding_bots(bug: BugDict) -> str:
 
 
 def calculate_maintenance_effectiveness_indicator(
-    team: str,
+    teams: list[str],
     from_date: datetime,
     to_date: datetime,
     components: list[str] = None,
@@ -443,8 +443,8 @@ def calculate_maintenance_effectiveness_indicator(
     }
 
     logger.info(
-        "Calculating maintenance effectiveness indicator for the %s team from %s to %s",
-        team,
+        "Calculating maintenance effectiveness indicator for the %s teams from %s to %s",
+        ", ".join(teams),
         from_date,
         to_date,
     )
@@ -454,7 +454,7 @@ def calculate_maintenance_effectiveness_indicator(
             params: dict[str, int | str | list[str]] = {
                 "count_only": 1,
                 "type": "defect",
-                "team_name": team,
+                "team_name": teams,
             }
 
             if severity != "--":
