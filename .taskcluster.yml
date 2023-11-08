@@ -226,11 +226,11 @@ tasks:
               path: public/bugbug/bugbug-base.tar.zst
               taskId: { $eval: as_slugid("docker_build") }
             env:
-              TEXT_TO_EXTRACT: "${pr_description}"
+              PR_DESCRIPTION: "${pr_description}"
             command:
               - "/bin/sh"
               - "-lcx"
-              - "python -m scripts.train_on_tc TEXT_TO_EXTRACT"
+              - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
           metadata:
             name: bugbug train on tc
             description: bugbug train on tc
