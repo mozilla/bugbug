@@ -220,7 +220,7 @@ tasks:
           provisionerId: proj-bugbug
           workerType: compute-large
           payload:
-            maxRunTime: 10800
+            maxRunTime: 2700
             image:
               type: task-image
               path: public/bugbug/bugbug-base.tar.zst
