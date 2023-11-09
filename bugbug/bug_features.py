@@ -733,7 +733,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
     def transform(self, bugs):
         results = []
 
-        bugs_iter = bugs()
+        bugs_iter = iter(bugs())
         first_bug = next(bugs_iter)
         bugs_iter = itertools.chain([first_bug], bugs_iter)
         is_couple = isinstance(first_bug, tuple)
