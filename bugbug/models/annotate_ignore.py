@@ -79,7 +79,8 @@ class AnnotateIgnoreModel(CommitModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def get_labels(self):
         classes = {}
