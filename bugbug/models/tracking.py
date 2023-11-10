@@ -84,8 +84,8 @@ class TrackingModel(BugModel):
             ]
         )
 
-        self.param = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.param)
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def rollback(self, change):
         return change["field_name"].startswith("cf_tracking_firefox")

@@ -123,8 +123,8 @@ class RCATypeModel(BugModel):
             ]
         )
 
-        self.param = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(**self.param))
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(**self.hyperparameter))
 
     # return rca from a whiteboard string
     def get_rca_from_whiteboard(self, whiteboard_data):

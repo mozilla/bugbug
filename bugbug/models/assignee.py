@@ -84,8 +84,8 @@ class AssigneeModel(BugModel):
             ]
         )
 
-        self.param = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.param)
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def get_labels(self):
         classes = {}
