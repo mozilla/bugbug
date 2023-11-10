@@ -141,9 +141,8 @@ class BugTypeModel(BugModel):
             ]
         )
 
-        self.clf = OneVsRestClassifier(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        )
+        self.param = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(**self.param))
 
     def get_labels(self) -> tuple[dict[int, np.ndarray], list[str]]:
         classes = {}
