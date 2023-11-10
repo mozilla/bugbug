@@ -86,7 +86,8 @@ class DefectModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.param = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.param)
 
     def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]

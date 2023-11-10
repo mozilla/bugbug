@@ -578,7 +578,7 @@ class Model:
 
             # Since we save the classifier separately, we need to clear the clf
             # attribute to prevent it from being pickled with the model object.
-            self.clf = self.clf.__class__(n_jobs=self.clf.n_jobs)
+            self.clf = self.clf.__class__(**self.param)
 
         model_path = path.join(model_directory, "model.pkl")
         with open(model_path, "wb") as f:

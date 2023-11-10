@@ -71,7 +71,8 @@ class FixTimeModel(BugModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.param = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.param)
 
     def get_labels(self):
         bug_fix_times = []
