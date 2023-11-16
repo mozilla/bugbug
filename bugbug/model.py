@@ -348,24 +348,26 @@ class Model:
         # Get items and labels, filtering out those for which we have no labels.
         X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
 
-        # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_gen)
-
-        # Calculate labels.
+        X = np.fromiter(X_gen(), dtype=object)
         y = np.array(y)
-        self.le.fit(y)
-
         if limit:
             X = X[:limit]
             y = y[:limit]
-
-        logger.info(f"X: {X.shape}, y: {y.shape}")
-
-        is_multilabel = isinstance(y[0], np.ndarray)
-        is_binary = len(self.class_names) == 2
+        logger.info("Number of data points: %d", len(X))
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+
+        # Calculate labels.
+        self.le.fit(y_train)
+
+        # Extract features from the items.
+        X_train = self.extraction_pipeline.fit_transform(lambda: X_train)
+        X_test = self.extraction_pipeline.transform(lambda: X_test)
+
+        is_multilabel = isinstance(y_train[0], np.ndarray)
+        is_binary = len(self.class_names) == 2
+
         if self.sampler is not None:
             pipeline = make_pipeline(self.sampler, self.clf)
         else:
@@ -559,6 +561,8 @@ class Model:
         if self.entire_dataset_training:
             logger.info("Retraining on the entire dataset...")
 
+            X = np.concatenate((X_train, X_test))
+            y = np.concatenate((y_train, y_test))
             if self.sampler is not None:
                 X_train, y_train = self.sampler.fit_resample(X, y)
             else:
@@ -567,7 +571,7 @@ class Model:
 
             logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
-            self.clf.fit(X_train, self.le.transform(y_train))
+            self.clf.fit(X_train, self.le.fit_transform(y_train))
 
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)
