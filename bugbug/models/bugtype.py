@@ -39,7 +39,7 @@ def bug_to_types(
 
     if any(
         f"{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in ("overhead", "memshrink")
+        for whiteboard_text in ("overhead", "memshrink", "memshrink:p2")
     ):
         types.add("memory")
 
@@ -54,6 +54,10 @@ def bug_to_types(
             "snappy",
             "pdfjs-c-performance",
             "pdfjs-performance",
+            "sp3",
+            "fxperf:p3",
+            "fxperf:p1",
+            "fxperf:p2",
         )
     ):
         types.add("performance")
