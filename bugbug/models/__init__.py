@@ -21,6 +21,7 @@ MODELS = {
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
+    "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
