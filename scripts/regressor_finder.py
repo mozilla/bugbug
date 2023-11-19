@@ -340,7 +340,7 @@ class RegressorFinder(object):
             for bug_introducing_commit in prev_bug_introducing_commits
         )
         logger.info(
-            f"Already classified {len(prev_bug_introducing_commits)} commits..."
+            "Already classified %s commits...",len(prev_bug_introducing_commits)
         )
 
         hashes_to_ignore = set(commit["rev"] for commit in commits_to_ignore)

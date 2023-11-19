@@ -63,7 +63,7 @@ def go(months: int) -> None:
         scheduler_stat["id"] for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
     }
     logger.info(
-        f"Already gathered statistics for {len(known_scheduler_stats)} pushes..."
+        "Already gathered statistics for %d pushes...",len(known_scheduler_stats)
     )
 
     to_date = datetime.utcnow() - relativedelta(days=3)
