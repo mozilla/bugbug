@@ -158,7 +158,7 @@ class Retriever(object):
                         next_from_date = to_date
 
                     logger.info(
-                        "Retrieving pushes from %s to %s...",from_date,next_from_date
+                        "Retrieving pushes from %s to %s...", from_date, next_from_date
                     )
 
                     pushes = mozci.push.make_push_objects(
