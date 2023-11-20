@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_model_name() -> str or None:
+def get_model_name() -> str | None:
     pr_description = os.environ.get("PR_DESCRIPTION")
     if not pr_description:
         logger.error("The PR_DESCRIPTION environment variable does not exist")

@@ -278,7 +278,7 @@ class RegressorModel(CommitModel):
         total_regressions = sum(1 for _, is_reg in results if is_reg)
         average_regression_rate = total_regressions / total_landings
 
-        logger.info("Average risk is %f", average_regression_rate)
+        logger.info("Average risk is %d", average_regression_rate)
 
         MIN_SAMPLE = 200
 

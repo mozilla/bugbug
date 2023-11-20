@@ -503,7 +503,7 @@ class RegressorFinder(object):
                     exc = future.exception()
                     if exc is not None:
                         logger.info(
-                            "Exception %d while analyzing %s", exc, futures[future]
+                            "Exception %s while analyzing %s", exc, futures[future]
                         )
                         for f in futures:
                             f.cancel()
