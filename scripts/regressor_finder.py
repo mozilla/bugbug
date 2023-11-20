@@ -363,7 +363,8 @@ class RegressorFinder(object):
         ]
 
         logger.info(
-            f"{len(bug_fixing_commits)} commits left to analyze after skipping already analyzed ones"
+            "%d commits left to analyze after skipping already analyzed ones",
+            len(bug_fixing_commits),
         )
 
         bug_fixing_commits = [
@@ -372,7 +373,8 @@ class RegressorFinder(object):
             if bug_fixing_commit["rev"] not in hashes_to_ignore
         ]
         logger.info(
-            f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones in the ignore list"
+            "%d commits left to analyze after skipping the ones in the ignore list",
+            len(bug_fixing_commits),
         )
 
         if tokenized:
@@ -382,7 +384,8 @@ class RegressorFinder(object):
                 if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
             ]
             logger.info(
-                f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
+                "%d commits left to analyze after skipping the ones with no git hash",
+                len(bug_fixing_commits),
             )
 
         git_init_lock = threading.Lock()
@@ -476,7 +479,7 @@ class RegressorFinder(object):
 
         workers = os.cpu_count() + 1
         logger.info(
-            f"Analyzing {len(bug_fixing_commits)} commits using {workers} workers..."
+            "Analyzing %d commits using %d workers...", len(bug_fixing_commits), workers
         )
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -500,7 +503,7 @@ class RegressorFinder(object):
                     exc = future.exception()
                     if exc is not None:
                         logger.info(
-                            f"Exception {exc} while analyzing {futures[future]}"
+                            "Exception %d while analyzing %s", exc, futures[future]
                         )
                         for f in futures:
                             f.cancel()
@@ -608,11 +611,11 @@ def evaluate(bug_introducing_commits):
             misassigned_regressors += 1
 
     logger.info(
-        f"Perfectly found {perfect_regressors} regressors out of {all_regressors}"
+        "Perfectly found %d regressors out of %d", perfect_regressors, all_regressors
     )
     logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
     logger.info(
-        f"Misassigned {misassigned_regressors} regressors out of {all_regressors}"
+        "Misassigned %d regressors out of %d", misassigned_regressors, all_regressors
     )
 
 
