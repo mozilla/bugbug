@@ -5,7 +5,7 @@ Flask==3.0.0
 flask-apispec==0.11.4
 flask-cors==4.0.0
 gunicorn==21.2.0
-kombu==5.3.3
+kombu==5.3.4
 marshmallow==3.20.1
 requests==2.31.0
 rq==1.15.1
