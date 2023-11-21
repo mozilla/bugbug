@@ -99,9 +99,9 @@ To use a model to classify a given bug, you can run `python -m scripts.bug_class
 
 ### Training using Taskcluster (Mozilla's resources)
 
-In some situations, it is necessary to test and train a model on bigger resources (using Taskcluster), this is currently only supported in Github Pull requests. To do this, simply include the model's name after the keyword **Train on Taskcluster:** in the Pull request's description.
+In some situations, it is necessary to test and train a model using bigger resources (using Taskcluster). This is currently only supported in Github Pull requests and to do this, simply include the model's name after the keyword **Train on Taskcluster:** in the Pull request's description.
 
-## Example with the `spambug` model
+#### Example with the `spambug` model
 
 The following statement would need to be included somewhere in the Pull request description, ideally at the bottom:
 
