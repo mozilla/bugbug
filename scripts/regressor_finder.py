@@ -227,7 +227,9 @@ class RegressorFinder(object):
             commit_map[commit["bug_id"]].append(commit["node"])
 
         logger.info(
-            f"{sum(len(commit_list) for commit_list in commit_map.values())} commits found, {len(commit_map)} bugs linked to commits"
+            "%d commits found, %d bugs linked to commits",
+            sum(len(commit_list) for commit_list in commit_map.values()),
+            len(commit_map),
         )
         assert len(commit_map) > 0
 
@@ -236,7 +238,9 @@ class RegressorFinder(object):
 
         bug_count = sum(1 for bug in get_relevant_bugs())
         logger.info(
-            f"{bug_count} bugs in total, {len(commit_map) - bug_count} bugs linked to commits missing"
+            "%d bugs in total, %d bugs linked to commits missing",
+            bug_count,
+            len(commit_map) - bug_count,
         )
 
         known_defect_labels, _ = defect_model.get_labels()
@@ -479,7 +483,9 @@ class RegressorFinder(object):
 
         workers = os.cpu_count() + 1
         logger.info(
-            "Analyzing %d commits using %d workers...", len(bug_fixing_commits), workers
+            "Analyzing %d commits using %d workers...",
+            len(bug_fixing_commits),
+            len(bug_fixing_commits),
         )
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -615,7 +621,7 @@ def evaluate(bug_introducing_commits):
     )
     logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
     logger.info(
-        "Misassigned %d regressors out of %d", misassigned_regressors, all_regressors
+        "Misassigned %d regressors out of %d", {misassigned_regressors}, all_regressors
     )
 
 
