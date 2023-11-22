@@ -99,7 +99,7 @@ To use a model to classify a given bug, you can run `python -m scripts.bug_class
 
 ### Training on Taskcluster (Mozilla's CI platform)
 
-You could run the model training task on the CI. To do this, simply include `Train on Taskcluster: <model name>` in the pull request's description.
+You could run the model training task on the CI. To do this, simply include `Train on Taskcluster: <model name>` in the pull request description.
 
 #### Example
 
