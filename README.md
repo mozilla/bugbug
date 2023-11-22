@@ -97,21 +97,22 @@ To use a model to classify a given bug, you can run `python -m scripts.bug_class
 
 **testing** To use the model to classify a given bug, you can run `python -m scripts.bug_classifier defect --bug-id ID_OF_A_BUG_FROM_BUGZILLA`.
 
-### Training using Taskcluster (Mozilla's resources)
+### Training on Taskcluster (Mozilla's CI platform)
 
-In some situations, it is necessary to test and train a model using bigger resources (using Taskcluster). This is currently only supported in Github Pull requests and to do this, simply include the model's name after the keyword **Train on Taskcluster:** in the Pull request's description.
+You could run the model training task on the CI. To do this, simply include `Train on Taskcluster: <model name>` in the Pull request's description.
 
-#### Example with the `spambug` model
+#### Example
 
-The following statement would need to be included somewhere in the Pull request description, ideally at the bottom:
+To train the `spambug` model on Taskcluster, you need to add the following line in the Pull request description, ideally at the bottom:
 
 ```
 Train on Taskcluster: spambug
 ```
 
-There are a few things to consider when training a model on Taskcluster on a GitHub Pull Request:
+There are a few things to consider when training a model on Taskcluster:
 
-- The training task will be re-run every time you push to the branch linked to the Pull Request. It is wise to limit the number of times you push to avoid unnecessary training and wastage of resources.
+- This is currently only supported in GitHub Pull requests.
+- The training task will be re-run every time you push to the branch linked to the Pull Request. Limiting the number of times you push is wise to avoid unnecessary training and resource wastage. Alternatively, you could temporarily remove the "Train on Taskcluster" keyword from the Pull Request description.
 - Currently, the training task extracts only the model's name and does not consider arguments.
 
 ### Running the repository mining script
