@@ -37,17 +37,19 @@ def bug_to_types(
 ) -> list[str]:
     types = set()
 
+    bug_whiteboard = bug["whiteboard"].lower()
+
     if any(
-        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        f"{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in ("overhead", "memshrink")
     ):
         types.add("memory")
 
-    if "[power" in bug["whiteboard"].lower():
+    if "[power" in bug_whiteboard:
         types.add("power")
 
     if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        f"[{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in (
             "fxperf",
             "fxperfsize",
