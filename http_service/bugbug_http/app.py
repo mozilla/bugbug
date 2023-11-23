@@ -30,6 +30,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from bugbug import bugzilla, get_bugbug_version, utils
 from bugbug_http.models import (
     MODELS_NAMES,
+    classify_broken_site_report,
     classify_bug,
     classify_issue,
     get_config_specific_groups,
@@ -227,6 +228,29 @@ def create_bug_classification_jobs(
         JobInfo(classify_bug, model_name, bug_ids, BUGZILLA_TOKEN),
         job_id,
         BUGZILLA_JOB_TIMEOUT,
+    )
+
+
+def create_broken_site_report_classification_jobs(
+    model_name: str, reports: list[dict]
+) -> tuple[JobInfo, str, int]:
+    """Create job_id and redis connection"""
+    job_id = get_job_id()
+
+    # Set the mapping before queuing to avoid some race conditions
+    job_id_mapping = {}
+    for report in reports:
+        key = JobInfo(
+            classify_broken_site_report, model_name, report["uuid"]
+        ).mapping_key
+        job_id_mapping[key] = job_id
+
+    redis_conn.mset(job_id_mapping)
+
+    return (
+        JobInfo(classify_broken_site_report, model_name, reports),
+        job_id,
+        JOB_TIMEOUT,
     )
 
 
@@ -718,6 +742,191 @@ def batch_prediction(model_name):
     q.enqueue_many(queueJobList)
 
     return compress_response({"bugs": data}, status_code)
+
+
+@application.route("/<model_name>/predict/broken_site_report/batch", methods=["POST"])
+@cross_origin()
+def batch_prediction_broken_site_report(model_name):
+    """
+    ---
+    post:
+      description: >
+        Post a batch of reports to classify, answer either 200 if all are are
+        processed or 202 if at least one report is not processed.
+        <br/><br/>
+        Starts by sending a batch of reports like this:<br/>
+        ```
+        {"reports": [{"uuid": "954dbc23-91e6-4d6f-a10a-405f46663e31", "title: "https://example.com", "body": "Loads blank page."}]}
+        ```<br/><br>
+
+        You will likely get a 202 answer that indicates that no result is
+        available yet for any of the reports id you provided with the following
+        body:<br/>
+
+        ```
+        {"reports": {"<uuid 1>": {ready: False}, "<uuid 2>": {ready: False}}}
+        ```<br/><br/>
+
+        Call back the same endpoint with the same uuids a bit it later, and you
+        will get the results.<br/><br/>
+
+        You might get the following output if some bugs are not available:
+        <br/>
+
+        ```
+        {"reports": {"<uuid 1>": {"available": False}}}
+        ```<br/><br/>
+
+        And you will get the following output once the bugs are available:
+        <br/>
+        ```
+        {"reports": {"<uuid 1>": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
+        ```<br/><br/>
+
+        Please be aware that each report could be in a different state, so the
+        following output, where a report is returned and another one is still
+        being processed, is valid:
+        <br/>
+        ```
+        {"reports": {"<uuid 1>": {"available": False}, "<uuid 2>": {"extra_data": {}, "index": 0, "prob": [0], "suggestion": ""}}}
+        ```
+      summary: Classify a batch of reports
+      parameters:
+      - name: model_name
+        in: path
+        schema: ModelName
+      requestBody:
+        description: The list of reports to classify
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+              reports:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uuid:
+                      type: string
+                    title:
+                      type: string
+                    body:
+                      type: string
+            examples:
+              cat:
+                summary: An example of payload
+                value:
+                  reports:
+                    - uuid: "954dbc23-91e6-4d6f-a10a-405f46663e31"
+                      title: "https://example.com"
+                      body: "Loads blank page."
+      responses:
+        200:
+          description: A list of results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                example:
+                  reports:
+                    <uuid 1>:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
+                    <uuid 2>:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
+        202:
+          description: A temporary answer for reports being processed
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                        enum: [False]
+                example:
+                  reports:
+                    <uuid 1>:
+                      extra_data: {}
+                      index: 0
+                      prob: [0]
+                      suggestion: string
+                    <uuid 2>: {ready: False}
+        401:
+          description: API key is missing
+          content:
+            application/json:
+              schema: UnauthorizedError
+    """
+    headers = request.headers
+
+    auth = headers.get(API_TOKEN)
+
+    if not auth:
+        return jsonify(UnauthorizedError().dump({})), 401
+    else:
+        LOGGER.info("Request with API TOKEN %r", auth)
+
+    if model_name not in MODELS_NAMES:
+        return jsonify({"error": f"Model {model_name} doesn't exist"}), 404
+
+    batch_body = orjson.loads(request.data)
+
+    schema = {
+        "reports": {
+            "type": "list",
+            "minlength": 1,
+            "schema": {
+                "type": "dict",
+                "schema": {
+                    "uuid": {"type": "string", "required": True},
+                    "title": {"type": "string", "required": True},
+                    "body": {"type": "string", "required": True},
+                },
+            },
+        }
+    }
+    validator = Validator()
+    if not validator.validate(batch_body, schema):
+        return jsonify({"errors": validator.errors}), 400
+
+    reports = batch_body["reports"]
+
+    status_code = 200
+    data = {}
+    missing_reports = []
+
+    for report in reports:
+        report_uuid = report["uuid"]
+        job = JobInfo(classify_broken_site_report, model_name, report_uuid)
+
+        data[report_uuid] = get_result(job)
+        if not data[report_uuid]:
+            if not is_pending(job):
+                missing_reports.append(report)
+            status_code = 202
+            data[report_uuid] = {"ready": False}
+
+    queueJobList: Queue = []
+
+    for i in range(0, len(missing_reports), 100):
+        reports = missing_reports[i : (i + 100)]
+        job_info, job_id, timeout = create_broken_site_report_classification_jobs(
+            model_name, reports
+        )
+        queueJobList.append(prepare_queue_job(job_info, job_id=job_id, timeout=timeout))
+    q.enqueue_many(queueJobList)
+
+    return compress_response({"reports": data}, status_code)
 
 
 @application.route("/push/<path:branch>/<rev>/schedules")
