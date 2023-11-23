@@ -56,9 +56,16 @@ def bug_to_types(
             "snappy",
             "pdfjs-c-performance",
             "pdfjs-performance",
+            "sp3",
         )
     ):
         types.add("performance")
+
+    if any(
+        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("client-bounty-form", "sec-survey")
+    ):
+        types.add("security")
 
     if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
         types.add("performance")
