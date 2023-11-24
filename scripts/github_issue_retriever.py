@@ -80,7 +80,8 @@ class Retriever(object):
 
         if last_modified:
             logger.info(
-                f"Retrieving issues modified or created since the last run on {last_modified.isoformat()}"
+                "Retrieving issues modified or created since the last run on %s",
+                last_modified.isoformat(),
             )
             data = self.github.fetch_issues_updated_since_timestamp(
                 last_modified.isoformat()

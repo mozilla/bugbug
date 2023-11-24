@@ -81,10 +81,12 @@ class NeedsDiagnosisModel(IssueModel):
                 classes[issue["number"]] = 1
 
         logger.info(
-            f"{sum(1 for label in classes.values() if label == 1)} issues have not been moved to needsdiagnosis"
+            "%d issues have not been moved to needsdiagnosis",
+            sum(1 for label in classes.values() if label == 1),
         )
         logger.info(
-            f"{sum(1 for label in classes.values() if label == 0)} issues have been moved to needsdiagnosis"
+            "%d issues have been moved to needsdiagnosis",
+            sum(1 for label in classes.values() if label == 0),
         )
 
         return classes, [0, 1]
