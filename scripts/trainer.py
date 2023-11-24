@@ -49,7 +49,7 @@ class Trainer(object):
 
         logger.info("Training done")
 
-        model_directory = f"{model_name}model"
+        model_directory = model_obj.__class__.__name__.lower()
         assert os.path.exists(model_directory)
         create_tar_zst(f"{model_directory}.tar.zst")
 
