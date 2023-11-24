@@ -100,6 +100,7 @@ tasks:
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nn-requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
                     hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
