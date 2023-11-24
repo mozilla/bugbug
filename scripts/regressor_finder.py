@@ -621,7 +621,7 @@ def evaluate(bug_introducing_commits):
     )
     logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
     logger.info(
-        "Misassigned %d regressors out of %d", {misassigned_regressors}, all_regressors
+        "Misassigned %d regressors out of %d", misassigned_regressors, all_regressors
     )
 
 
