@@ -383,7 +383,7 @@ class CommitClassifier(object):
                 message = replace_reviewers(message, reviewers)
 
             logger.info(
-                "Applying %s from revision %s: %s", patch.phid, message, revision["id"]
+                "Applying %s from revision %s: %s", patch.phid, revision["id"], message
             )
 
             hg.import_(
