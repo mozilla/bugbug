@@ -62,7 +62,7 @@ def bug_to_types(
         types.add("performance")
 
     if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        f"[{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in ("client-bounty-form", "sec-survey")
     ):
         types.add("security")
