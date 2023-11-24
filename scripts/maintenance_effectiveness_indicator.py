@@ -54,7 +54,7 @@ def main() -> None:
     )
 
     for factor, value in result.items():
-        logger.info(f"{factor}: {round(value, 2) if value != math.inf else value}")
+        logger.info("%s: %d", factor, round(value, 2) if value != math.inf else value)
 
 
 if __name__ == "__main__":

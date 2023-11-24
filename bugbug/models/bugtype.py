@@ -167,7 +167,13 @@ class BugTypeModel(BugModel):
 
         for type_ in TYPE_LIST:
             logger.info(
-                f"{sum(1 for target in classes.values() if target[TYPE_LIST.index(type_)] == 1)} {type_} bugs"
+                "%d %s bugs",
+                sum(
+                    1
+                    for target in classes.values()
+                    if target[TYPE_LIST.index(type_)] == 1
+                ),
+                type_,
             )
 
         return classes, TYPE_LIST
