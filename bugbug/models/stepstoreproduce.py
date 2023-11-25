@@ -85,11 +85,11 @@ class StepsToReproduceModel(BugModel):
 
         logger.info(
             "%d bugs have no steps to reproduce",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs have steps to reproduce",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]

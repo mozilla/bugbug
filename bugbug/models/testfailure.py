@@ -101,12 +101,10 @@ class TestFailureModel(CommitModel):
             else:
                 classes[rev] = 0
 
-        logger.info(
-            "%d commits failed", sum(1 for label in classes.values() if label == 1)
-        )
+        logger.info("%d commits failed", sum(label == 1 for label in classes.values()))
         logger.info(
             "%d commits did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]

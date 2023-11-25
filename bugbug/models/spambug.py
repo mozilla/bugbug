@@ -112,11 +112,11 @@ class SpamBugModel(BugModel):
 
         logger.info(
             "%d bugs are classified as non-spam",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs are classified as spam",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]

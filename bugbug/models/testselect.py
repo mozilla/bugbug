@@ -540,14 +540,14 @@ class TestSelectModel(Model):
         logger.info("%d pushes considered", len(pushes))
         logger.info(
             "%d pushes with at least one failure",
-            sum(1 for push in pushes if len(push["failures"]) > 0),
+            sum(len(push["failures"]) > 0 for push in pushes),
         )
         logger.info(
-            "%d push/jobs failed", sum(1 for label in classes.values() if label == 1)
+            "%d push/jobs failed", sum(label == 1 for label in classes.values())
         )
         logger.info(
             "%d push/jobs did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]

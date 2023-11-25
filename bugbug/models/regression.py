@@ -20,11 +20,9 @@ class RegressionModel(DefectModel):
     def get_labels(self) -> tuple[dict[int, Any], list[int]]:
         classes = self.get_bugbug_labels("regression")
 
+        logger.info("%d regression bugs", sum(label == 1 for label in classes.values()))
         logger.info(
-            "%d regression bugs", sum(1 for label in classes.values() if label == 1)
-        )
-        logger.info(
-            "%d non-regression bugs", sum(1 for label in classes.values() if label == 0)
+            "%d non-regression bugs", sum(label == 0 for label in classes.values())
         )
 
         return classes, [0, 1]

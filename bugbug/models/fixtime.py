@@ -111,7 +111,7 @@ class FixTimeModel(BugModel):
         for i in range(len(quantiles) + 1):
             logger.info(
                 "%d bugs are in the %dth quantile",
-                sum(1 for label in classes.values() if label == i),
+                sum(label == i for label in classes.values()),
                 i,
             )
 

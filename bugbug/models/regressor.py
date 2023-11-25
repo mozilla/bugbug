@@ -201,12 +201,12 @@ class RegressorModel(CommitModel):
 
         logger.info(
             "%d commits caused regressions",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         logger.info(
             "%d commits did not cause regressions",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -275,7 +275,7 @@ class RegressorModel(CommitModel):
 
         # Step 1. Calculate % of patches which cause regressions.
         total_landings = len(results)
-        total_regressions = sum(1 for _, is_reg in results if is_reg)
+        total_regressions = sum(is_reg for _, is_reg in results)
         average_regression_rate = total_regressions / total_landings
 
         logger.info("Average risk is %d", average_regression_rate)

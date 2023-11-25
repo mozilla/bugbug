@@ -83,11 +83,11 @@ class RegressionRangeModel(BugModel):
                     classes[bug_id] = 0
         logger.info(
             "%d bugs have regression range",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
         logger.info(
             "%d bugs don't have a regression range",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
