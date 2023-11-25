@@ -194,7 +194,7 @@ class LandingsRiskReportGenerator(object):
         self,
         past_bugs_by: dict,
         commit: repository.CommitDict,
-        component: str = None,
+        component: str | None = None,
     ) -> list[dict]:
         paths = [
             path
@@ -258,7 +258,7 @@ class LandingsRiskReportGenerator(object):
         self,
         commit_group: dict,
         commit_list: list[repository.CommitDict],
-        component: str = None,
+        component: str | None = None,
     ) -> None:
         # Find previous regressions occurred in the same files as those touched by these commits.
         # And find previous bugs that were fixed by touching the same files as these commits.
