@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 class Retriever(object):
-    def retrieve_bugs(self, limit: int = None) -> None:
+    def retrieve_bugs(self, limit: int | None = None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
         last_modified = None

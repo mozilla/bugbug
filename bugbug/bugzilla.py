@@ -434,7 +434,7 @@ def calculate_maintenance_effectiveness_indicator(
     teams: list[str],
     from_date: datetime,
     to_date: datetime,
-    components: list[str] = None,
+    components: list[str] | None = None,
 ) -> dict[str, float]:
     data: dict[str, dict[str, int]] = {
         "open": {},
