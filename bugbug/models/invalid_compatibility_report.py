@@ -50,7 +50,8 @@ class InvalidCompatibilityReportModel(IssueModel):
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def items_gen(self, classes):
         # Do cleanup separately from extraction pipeline to

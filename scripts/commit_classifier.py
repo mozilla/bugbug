@@ -294,7 +294,7 @@ class CommitClassifier(object):
             # Stop as soon as a base revision is available
             if self.has_revision(hg, patch.base_revision):
                 logger.info(
-                    f"Stopping at diff {patch.id} and revision {patch.base_revision}"
+                    "Stopping at diff %s and revision %s", patch.id, patch.base_revision
                 )
                 break
 
@@ -383,7 +383,7 @@ class CommitClassifier(object):
                 message = replace_reviewers(message, reviewers)
 
             logger.info(
-                f"Applying {patch.phid} from revision {revision['id']}: {message}"
+                "Applying %s from revision %s: %s", patch.phid, revision["id"], message
             )
 
             hg.import_(

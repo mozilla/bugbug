@@ -227,7 +227,9 @@ class RegressorFinder(object):
             commit_map[commit["bug_id"]].append(commit["node"])
 
         logger.info(
-            f"{sum(len(commit_list) for commit_list in commit_map.values())} commits found, {len(commit_map)} bugs linked to commits"
+            "%d commits found, %d bugs linked to commits",
+            sum(len(commit_list) for commit_list in commit_map.values()),
+            len(commit_map),
         )
         assert len(commit_map) > 0
 
@@ -236,7 +238,9 @@ class RegressorFinder(object):
 
         bug_count = sum(1 for bug in get_relevant_bugs())
         logger.info(
-            f"{bug_count} bugs in total, {len(commit_map) - bug_count} bugs linked to commits missing"
+            "%d bugs in total, %d bugs linked to commits missing",
+            bug_count,
+            len(commit_map) - bug_count,
         )
 
         known_defect_labels, _ = defect_model.get_labels()
@@ -340,7 +344,7 @@ class RegressorFinder(object):
             for bug_introducing_commit in prev_bug_introducing_commits
         )
         logger.info(
-            f"Already classified {len(prev_bug_introducing_commits)} commits..."
+            "Already classified %d commits...", len(prev_bug_introducing_commits)
         )
 
         hashes_to_ignore = set(commit["rev"] for commit in commits_to_ignore)
@@ -363,7 +367,8 @@ class RegressorFinder(object):
         ]
 
         logger.info(
-            f"{len(bug_fixing_commits)} commits left to analyze after skipping already analyzed ones"
+            "%d commits left to analyze after skipping already analyzed ones",
+            len(bug_fixing_commits),
         )
 
         bug_fixing_commits = [
@@ -372,7 +377,8 @@ class RegressorFinder(object):
             if bug_fixing_commit["rev"] not in hashes_to_ignore
         ]
         logger.info(
-            f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones in the ignore list"
+            "%d commits left to analyze after skipping the ones in the ignore list",
+            len(bug_fixing_commits),
         )
 
         if tokenized:
@@ -382,7 +388,8 @@ class RegressorFinder(object):
                 if bug_fixing_commit["rev"] in self.mercurial_to_tokenized_git
             ]
             logger.info(
-                f"{len(bug_fixing_commits)} commits left to analyze after skipping the ones with no git hash"
+                "%d commits left to analyze after skipping the ones with no git hash",
+                len(bug_fixing_commits),
             )
 
         git_init_lock = threading.Lock()
@@ -476,7 +483,9 @@ class RegressorFinder(object):
 
         workers = os.cpu_count() + 1
         logger.info(
-            f"Analyzing {len(bug_fixing_commits)} commits using {workers} workers..."
+            "Analyzing %d commits using %d workers...",
+            len(bug_fixing_commits),
+            len(bug_fixing_commits),
         )
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -500,7 +509,7 @@ class RegressorFinder(object):
                     exc = future.exception()
                     if exc is not None:
                         logger.info(
-                            f"Exception {exc} while analyzing {futures[future]}"
+                            "Exception %s while analyzing %s", exc, futures[future]
                         )
                         for f in futures:
                             f.cancel()
@@ -608,11 +617,11 @@ def evaluate(bug_introducing_commits):
             misassigned_regressors += 1
 
     logger.info(
-        f"Perfectly found {perfect_regressors} regressors out of {all_regressors}"
+        "Perfectly found %d regressors out of %d", perfect_regressors, all_regressors
     )
     logger.info("Found %d regressors out of %d", found_regressors, all_regressors)
     logger.info(
-        f"Misassigned {misassigned_regressors} regressors out of {all_regressors}"
+        "Misassigned %d regressors out of %d", misassigned_regressors, all_regressors
     )
 
 

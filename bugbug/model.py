@@ -335,11 +335,10 @@ class Model:
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
-        pass
 
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
-        pass
+        raise NotImplementedError("The model must implement this method")
 
     def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()

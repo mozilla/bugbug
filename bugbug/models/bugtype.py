@@ -37,26 +37,35 @@ def bug_to_types(
 ) -> list[str]:
     types = set()
 
+    bug_whiteboard = bug["whiteboard"].lower()
+
     if any(
-        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        f"{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in ("overhead", "memshrink")
     ):
         types.add("memory")
 
-    if "[power" in bug["whiteboard"].lower():
+    if "[power" in bug_whiteboard:
         types.add("power")
 
     if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        f"[{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in (
             "fxperf",
             "fxperfsize",
             "snappy",
             "pdfjs-c-performance",
             "pdfjs-performance",
+            "sp3",
         )
     ):
         types.add("performance")
+
+    if any(
+        f"[{whiteboard_text}" in bug_whiteboard
+        for whiteboard_text in ("client-bounty-form", "sec-survey")
+    ):
+        types.add("security")
 
     if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
         types.add("performance")
@@ -158,7 +167,13 @@ class BugTypeModel(BugModel):
 
         for type_ in TYPE_LIST:
             logger.info(
-                f"{sum(1 for target in classes.values() if target[TYPE_LIST.index(type_)] == 1)} {type_} bugs"
+                "%d %s bugs",
+                sum(
+                    1
+                    for target in classes.values()
+                    if target[TYPE_LIST.index(type_)] == 1
+                ),
+                type_,
             )
 
         return classes, TYPE_LIST
