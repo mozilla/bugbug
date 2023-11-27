@@ -258,8 +258,8 @@ class DefectModel(BugModel):
     def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("bug")
 
-        logger.info("%d bugs", (sum(1 for label in classes.values() if label == 1)))
-        logger.info("%d non-bugs", (sum(1 for label in classes.values() if label == 0)))
+        logger.info("%d bugs", (sum(label == 1 for label in classes.values())))
+        logger.info("%d non-bugs", (sum(label == 0 for label in classes.values())))
 
         return classes, [0, 1]
 

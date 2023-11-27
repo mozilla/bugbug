@@ -113,11 +113,11 @@ class BackoutModel(CommitModel):
 
         logger.info(
             "%d commits were backed out",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
         logger.info(
             "%d commits were not backed out",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]

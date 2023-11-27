@@ -172,7 +172,7 @@ class RegressorFinder(object):
 
         logger.info(
             "...of which %d are backed-out",
-            sum(1 for commit in commits_to_ignore if commit["type"] == "backedout"),
+            sum(commit["type"] == "backedout" for commit in commits_to_ignore),
         )
 
         db.write(IGNORED_COMMITS_DB, commits_to_ignore)
