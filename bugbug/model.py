@@ -770,20 +770,6 @@ class CommitModel(Model):
             yield commit, classes[commit["node"]]
 
 
-class BugCoupleModel(Model):
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
-        self.training_dbs = [bugzilla.BUGS_DB]
-
-    def items_gen(self, classes):
-        bugs = {}
-        for bug in bugzilla.get_bugs():
-            bugs[bug["id"]] = bug
-
-        for (bug_id1, bug_id2), label in classes.items():
-            yield (bugs[bug_id1], bugs[bug_id2]), label
-
-
 class IssueModel(Model):
     def __init__(self, owner, repo, lemmatization=False):
         Model.__init__(self, lemmatization)
