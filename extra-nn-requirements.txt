@@ -1,1 +1,4 @@
+skorch==0.15.0
 tensorflow==2.15.0
+torch==2.1.1
+transformers==4.34.0
