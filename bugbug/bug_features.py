@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import itertools
 import re
 import sys
 from collections import defaultdict
@@ -731,44 +730,20 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, bugs):
-        results = []
-
         bugs_iter = iter(bugs())
-        first_bug = next(bugs_iter)
-        bugs_iter = itertools.chain([first_bug], bugs_iter)
-        is_couple = isinstance(first_bug, tuple)
 
         reporter_experience_map = defaultdict(int)
         author_ids = get_author_ids() if self.commit_data else None
 
-        already_rollbacked = set()
-
         def apply_transform(bug):
-            if is_couple:
-                bug1_id = bug[0]["id"]
-                bug2_id = bug[1]["id"]
-
-                if self.rollback:
-                    if bug1_id not in already_rollbacked:
-                        bug[0] = bug_snapshot.rollback(bug[0], self.rollback_when)
-                        already_rollbacked.add(bug1_id)
-                    if bug2_id not in already_rollbacked:
-                        bug[1] = bug_snapshot.rollback(bug[1], self.rollback_when)
-                        already_rollbacked.add(bug2_id)
-
             data = {}
 
             for feature_extractor in self.feature_extractors:
-                res = None
-                if isinstance(feature_extractor, SingleBugFeature) and not is_couple:
-                    res = feature_extractor(
-                        bug,
-                        reporter_experience=reporter_experience_map[bug["creator"]],
-                        author_ids=author_ids,
-                    )
-
-                elif isinstance(feature_extractor, CoupleBugFeature) and is_couple:
-                    res = feature_extractor(bug)
+                res = feature_extractor(
+                    bug,
+                    reporter_experience=reporter_experience_map[bug["creator"]],
+                    author_ids=author_ids,
+                )
 
                 if hasattr(feature_extractor, "name"):
                     feature_extractor_name = feature_extractor.name
@@ -785,27 +760,20 @@ class BugExtractor(BaseEstimator, TransformerMixin):
 
                 data[feature_extractor_name] = res
 
-            if is_couple:
-                reporter_experience_map[bug[0]["creator"]] += 1
-                reporter_experience_map[bug[1]["creator"]] += 1
+            reporter_experience_map[bug["creator"]] += 1
 
-                return {"data": data}
+            summary = bug["summary"]
+            comments = [c["text"] for c in bug["comments"]]
+            for cleanup_function in self.cleanup_functions:
+                summary = cleanup_function(summary)
+                comments = [cleanup_function(comment) for comment in comments]
 
-            else:
-                reporter_experience_map[bug["creator"]] += 1
-
-                summary = bug["summary"]
-                comments = [c["text"] for c in bug["comments"]]
-                for cleanup_function in self.cleanup_functions:
-                    summary = cleanup_function(summary)
-                    comments = [cleanup_function(comment) for comment in comments]
-
-                return {
-                    "data": data,
-                    "title": summary,
-                    "first_comment": "" if len(comments) == 0 else comments[0],
-                    "comments": " ".join(comments),
-                }
+            return {
+                "data": data,
+                "title": summary,
+                "first_comment": "" if len(comments) == 0 else comments[0],
+                "comments": " ".join(comments),
+            }
 
         def apply_rollback(bugs_iter):
             with Pool() as p:
@@ -815,38 +783,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
                     chunksize=1024,
                 )
 
-        if not is_couple:
-            if self.rollback:
-                bugs_iter = apply_rollback(bugs_iter)
+        if self.rollback:
+            bugs_iter = apply_rollback(bugs_iter)
 
-            return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
-        else:
-            for bug in bugs_iter:
-                result1 = apply_transform(bug[0])
-                result2 = apply_transform(bug[1])
-
-                result = apply_transform(bug)
-
-                if self.merge_data:
-                    results.append(
-                        {
-                            "text": f'{result1["title"]} {result1["first_comment"]} {result2["title"]} {result2["first_comment"]}',
-                            "couple_data": result["data"],
-                        }
-                    )
-                else:
-                    results.append(
-                        {
-                            "data1": result1["data"],
-                            "data2": result2["data"],
-                            "couple_data": result["data"],
-                            "title1": result1["title"],
-                            "title2": result2["title"],
-                            "first_comment1": result1["first_comment"],
-                            "first_comment2": result2["first_comment"],
-                            "comments1": result1["comments"],
-                            "comments2": result2["comments"],
-                        }
-                    )
-
-            return pd.DataFrame(results)
+        return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
