@@ -6,7 +6,7 @@
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import partial
 from multiprocessing.pool import Pool
 
@@ -28,10 +28,6 @@ def field(bug, field):
 
 
 class SingleBugFeature(object):
-    pass
-
-
-class CoupleBugFeature(object):
     pass
 
 
@@ -596,99 +592,6 @@ class Resolution(SingleBugFeature):
 class Status(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["status"]
-
-
-class CoupleCommonWhiteboardKeywords(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return [
-            keyword
-            for keyword in whiteboard_keywords(bugs[0])
-            if keyword in whiteboard_keywords(bugs[1])
-        ]
-
-
-class IsSameProduct(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return bugs[0]["product"] == bugs[1]["product"]
-
-
-class IsSameComponent(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return (
-            bugs[0]["product"] == bugs[1]["product"]
-            and bugs[0]["component"] == bugs[1]["component"]
-        )
-
-
-class IsSamePlatform(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return bugs[0]["platform"] == bugs[1]["platform"]
-
-
-class IsSameVersion(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return bugs[0]["version"] == bugs[1]["version"]
-
-
-class IsSameOS(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return bugs[0]["op_sys"] == bugs[1]["op_sys"]
-
-
-class IsSameTargetMilestone(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        return bugs[0]["target_milestone"] == bugs[1]["target_milestone"]
-
-
-class IsFirstAffectedSame(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        version_status1 = get_versions_statuses(bugs[0])[1]
-        version_status2 = get_versions_statuses(bugs[1])[1]
-
-        if len(version_status1) > 0 and len(version_status2) > 0:
-            return min(version_status1) == min(version_status2)
-
-        return False
-
-
-class CoupleDeltaCreationDate(CoupleBugFeature):
-    def __call__(self, bugs, **kwargs):
-        delta = parser.parse(bugs[0]["creation_time"]) - parser.parse(
-            bugs[1]["creation_time"]
-        )
-        return delta / timedelta(days=1)
-
-
-class CoupleCommonWordsSummary(CoupleBugFeature):
-    def __init__(self, to_ignore=set()):
-        self.to_ignore = to_ignore
-
-    def __call__(self, bugs):
-        return set(bugs[0]["summary"].split()).intersection(
-            set(bugs[1]["summary"].split())
-        )
-
-
-class CoupleCommonWordsComments(CoupleBugFeature):
-    def __init__(self, to_ignore=set()):
-        self.to_ignore = to_ignore
-
-    def __call__(self, bugs):
-        text1 = " ".join(comment["text"] for comment in bugs[0]["comments"])
-        text2 = " ".join(comment["text"] for comment in bugs[1]["comments"])
-        return set(text1.split()).intersection(set(text2.split()))
-
-
-class CoupleCommonKeywords(CoupleBugFeature):
-    def __init__(self, to_ignore=set()):
-        self.to_ignore = to_ignore
-
-    def __call__(self, bugs, **kwargs):
-        return [
-            keyword
-            for keyword in bugs[0]["keywords"]
-            if keyword in bugs[1]["keywords"] and keyword not in self.to_ignore
-        ]
 
 
 def get_author_ids():

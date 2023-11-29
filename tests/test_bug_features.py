@@ -24,14 +24,7 @@ from bugbug.bug_features import (
     HasURL,
     HasW3CURL,
     IsCoverityIssue,
-    IsFirstAffectedSame,
     IsMozillian,
-    IsSameComponent,
-    IsSameOS,
-    IsSamePlatform,
-    IsSameProduct,
-    IsSameTargetMilestone,
-    IsSameVersion,
     Keywords,
     Landings,
     Patches,
@@ -177,111 +170,6 @@ def test_delta_nightly_request_merge(read):
             None,
         ],
     )
-
-
-PRODUCT_PARAMS = [
-    ([{"product": "Firefox"}, {"product": "Firefox"}], True),
-    ([{"product": "Firefox"}, {"product": "Firefox for Android"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", PRODUCT_PARAMS)
-def test_is_same_product(test_data, expected):
-    assert IsSameProduct()(test_data) == expected
-
-
-COMPONENT_PARAMS = [
-    (
-        [
-            {"product": "Firefox", "component": "Graphics"},
-            {"product": "Firefox", "component": "Graphics"},
-        ],
-        True,
-    ),
-    (
-        [
-            {"product": "Firefox", "component": "Graphics"},
-            {"product": "Core", "component": "Graphics"},
-        ],
-        False,
-    ),
-    (
-        [
-            {"product": "Firefox", "component": "Graphics"},
-            {"product": "Firefox", "component": "General"},
-        ],
-        False,
-    ),
-    (
-        [
-            {"product": "Firefox", "component": "Graphics"},
-            {"product": "Core", "component": "General"},
-        ],
-        False,
-    ),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", COMPONENT_PARAMS)
-def test_is_same_component(test_data, expected):
-    assert IsSameComponent()(test_data) == expected
-
-
-PLATFORM_PARAMS = [
-    ([{"platform": "Unspecified"}, {"platform": "Unspecified"}], True),
-    ([{"platform": "All"}, {"platform": "x86_64"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", PLATFORM_PARAMS)
-def test_is_same_platform(test_data, expected):
-    assert IsSamePlatform()(test_data) == expected
-
-
-VERSION_PARAMS = [
-    ([{"version": "55 Branch"}, {"version": "55 Branch"}], True),
-    ([{"version": "Trunk"}, {"version": "unspecified"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", VERSION_PARAMS)
-def test_is_same_version(test_data, expected):
-    assert IsSameVersion()(test_data) == expected
-
-
-OS_PARAMS = [
-    ([{"op_sys": "Unspecified"}, {"op_sys": "Unspecified"}], True),
-    ([{"op_sys": "All"}, {"op_sys": "Unspecified"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", OS_PARAMS)
-def test_is_same_os(test_data, expected):
-    assert IsSameOS()(test_data) == expected
-
-
-TARGET_MILESTONE_PARAMS = [
-    ([{"target_milestone": "Firefox 57"}, {"target_milestone": "Firefox 57"}], True),
-    ([{"target_milestone": "mozilla57"}, {"target_milestone": "---"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", TARGET_MILESTONE_PARAMS)
-def test_is_same_target_milestone(test_data, expected):
-    assert IsSameTargetMilestone()(test_data) == expected
-
-
-FIRST_AFFECTED_PARAMS = [
-    ([{"cf_status_firefox55": "affected"}, {"cf_status_firefox55": "affected"}], True),
-    ([{"cf_status_firefox61": "unaffected"}, {"cf_status_firefox63": "fixed"}], False),
-    ([{"cf_status_geckoview66": "verified"}, {"cf_status_geckoview66": "---"}], False),
-    ([{"cf_status_firefox68": "---"}, {"cf_status_firefox68": "---"}], False),
-]
-
-
-@pytest.mark.parametrize("test_data, expected", FIRST_AFFECTED_PARAMS)
-def test_is_first_affected_same(test_data, expected):
-    assert IsFirstAffectedSame()(test_data) == expected
 
 
 def test_BugExtractor():
