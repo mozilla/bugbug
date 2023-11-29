@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import importlib
 from logging import INFO, basicConfig, getLogger
 
 from bugbug import model
@@ -19,9 +18,6 @@ def test_import_all_models():
     """
 
     for model_name in MODELS:
-        if model_name == "component_nn" and not importlib.util.find_spec("tensorflow"):
-            continue
-
         logger.info("Try loading model %s", model_name)
         get_model_class(model_name)
 
