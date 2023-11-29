@@ -11,8 +11,6 @@ from bugbug import db
 from bugbug.models import MODELS, get_model_class
 from bugbug.utils import CustomJsonEncoder, create_tar_zst, zstd_compress
 
-MODELS_WITH_TYPE = ("component",)
-
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
@@ -22,15 +20,7 @@ class Trainer(object):
         # Download datasets that were built by bugbug_data.
         os.makedirs("data", exist_ok=True)
 
-        if args.classifier != "default":
-            assert (
-                args.model in MODELS_WITH_TYPE
-            ), f"{args.classifier} is not a valid classifier type for {args.model}"
-
-            model_name = f"{args.model}_{args.classifier}"
-        else:
-            model_name = args.model
-
+        model_name = args.model
         model_class = get_model_class(model_name)
         parameter_names = set(inspect.signature(model_class.__init__).parameters)
         parameters = {
@@ -96,12 +86,6 @@ def parse_args(args):
         "--lemmatization",
         help="Perform lemmatization (using spaCy)",
         action="store_true",
-    )
-    parser.add_argument(
-        "--classifier",
-        help="Type of the classifier. Only used for component classification.",
-        choices=["default", "nn"],
-        default="default",
     )
 
     subparsers = main_parser.add_subparsers(title="model", dest="model", required=True)
