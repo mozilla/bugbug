@@ -19,7 +19,6 @@ MODELS = {
     "defect": "bugbug.models.defect.DefectModel",
     "defectenhancementtask": "bugbug.models.defect_enhancement_task.DefectEnhancementTaskModel",
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
-    "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
     "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",

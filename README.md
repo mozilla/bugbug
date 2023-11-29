@@ -31,8 +31,6 @@ More information on the Mozilla Hacks blog:
 
 - **devdocneeded** - The aim of this classifier is to detect bugs which should be documented for developers.
 
-- **duplicate** - The aim of this classifier is to detect duplicate bugs.
-
 - [**needsdiagnosis**](https://github.com/webcompat/webcompat.com/blob/main/docs/ml-process.md) - The aim of this classifier is to detect issues that are likely invalid and don't need to be diagnosed for webcompat use case.
 
 - **qaneeded** - The aim of this classifier is to detect bugs that would need QA verification.
