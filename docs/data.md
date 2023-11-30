@@ -1,4 +1,4 @@
-# Download data through BugBug
+# Downloading Data Using BugBug
 
 BugBug relies on various types of data, such as bugs, commits, issues, and crash reports, to build its models. Although all this data is publicly available through different APIs, retrieving it every time we train a model is not an efficient solution. Hence, a copy of the data is saved as downloadable compressed files through a simple API.
 
