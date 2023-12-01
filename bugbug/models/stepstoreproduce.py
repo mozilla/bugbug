@@ -6,6 +6,7 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -21,8 +22,6 @@ logger = logging.getLogger(__name__)
 class StepsToReproduceModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             bug_features.HasRegressionRange(),
@@ -54,7 +53,7 @@ class StepsToReproduceModel(BugModel):
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
@@ -66,6 +65,7 @@ class StepsToReproduceModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),

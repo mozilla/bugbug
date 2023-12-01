@@ -11,6 +11,7 @@ import dateutil.parser
 import numpy as np
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -66,7 +67,6 @@ class RegressorModel(CommitModel):
             self.training_dbs.append(BUG_FIXING_COMMITS_DB)
 
         self.store_dataset = True
-        self.sampler = RandomUnderSampler(random_state=0)
 
         self.use_finder = use_finder
         self.exclude_finder = exclude_finder
@@ -134,9 +134,10 @@ class RegressorModel(CommitModel):
             estimator = IsotonicRegressionCalibrator(estimator)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 ("union", ColumnTransformer(column_transformers)),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 ("estimator", estimator),
             ]
         )

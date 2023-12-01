@@ -9,6 +9,7 @@ from datetime import datetime
 import dateutil.parser
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -26,8 +27,6 @@ class BackoutModel(CommitModel):
         CommitModel.__init__(self, lemmatization, bug_data)
 
         self.calculate_importance = False
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             commit_features.SourceCodeFilesModifiedNum(),
@@ -74,7 +73,7 @@ class BackoutModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        self.extraction_pipeline = Pipeline(
+        self.extraction_pipeline = ImblearnPipeline(
             [
                 (
                     "commit_extractor",
@@ -97,6 +96,7 @@ class BackoutModel(CommitModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),

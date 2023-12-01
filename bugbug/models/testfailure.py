@@ -6,6 +6,7 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -23,8 +24,6 @@ class TestFailureModel(CommitModel):
         CommitModel.__init__(self, lemmatization)
 
         self.training_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             commit_features.SourceCodeFileSize(),
@@ -63,9 +62,10 @@ class TestFailureModel(CommitModel):
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),
