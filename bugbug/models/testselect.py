@@ -448,12 +448,19 @@ class TestSelectModel(Model):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
+        self.clf = Pipeline(
+            [
+                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
+            ]
+        )
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -859,7 +866,7 @@ class TestSelectModel(Model):
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
 
 class TestLabelSelectModel(TestSelectModel):

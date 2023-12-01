@@ -101,6 +101,12 @@ class RCATypeModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -120,11 +126,12 @@ class RCATypeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    OneVsRestClassifier(xgboost.XGBClassifier(**self.hyperparameter)),
+                ),
             ]
         )
-
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = OneVsRestClassifier(xgboost.XGBClassifier(**self.hyperparameter))
 
     # return rca from a whiteboard string
     def get_rca_from_whiteboard(self, whiteboard_data):
@@ -161,7 +168,7 @@ class RCATypeModel(BugModel):
         return classes, self.RCA_LIST
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         rca_values = self.get_rca(bugs)

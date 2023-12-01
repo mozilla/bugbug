@@ -126,15 +126,20 @@ class RegressorModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
-                ("union", ColumnTransformer(column_transformers)),
             ]
         )
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
+        estimator = xgboost.XGBClassifier(**self.hyperparameter)
         if calibration:
-            self.clf = IsotonicRegressionCalibrator(self.clf)
+            estimator = IsotonicRegressionCalibrator(estimator)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
+        self.clf = Pipeline(
+            [
+                ("union", ColumnTransformer(column_transformers)),
+                ("estimator", estimator),
+            ]
+        )
 
     def get_labels(self):
         classes = {}
@@ -365,7 +370,7 @@ class RegressorModel(CommitModel):
                 )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, commits, classes, probabilities):
         for i, commit in enumerate(commits):
