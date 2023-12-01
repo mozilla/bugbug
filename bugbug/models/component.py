@@ -97,6 +97,12 @@ class ComponentModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -111,11 +117,12 @@ class ComponentModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
             ]
         )
-
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
@@ -231,7 +238,7 @@ class ComponentModel(BugModel):
         )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def check(self):
         success = super().check()

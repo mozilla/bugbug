@@ -54,6 +54,12 @@ class FixTimeModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -68,11 +74,12 @@ class FixTimeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
             ]
         )
-
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def get_labels(self):
         bug_fix_times = []
@@ -118,4 +125,4 @@ class FixTimeModel(BugModel):
         return classes, list(range(len(quantiles) + 1))
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

@@ -59,12 +59,19 @@ class TestFailureModel(CommitModel):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
+        self.clf = Pipeline(
+            [
+                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
+            ]
+        )
 
     def items_gen(self, classes):
         commit_map = {}
@@ -110,4 +117,4 @@ class TestFailureModel(CommitModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

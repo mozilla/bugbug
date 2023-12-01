@@ -50,6 +50,12 @@ class StepsToReproduceModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -60,11 +66,12 @@ class StepsToReproduceModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
             ]
         )
-
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def get_labels(self):
         classes = {}
@@ -106,4 +113,4 @@ class StepsToReproduceModel(BugModel):
         return classes
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

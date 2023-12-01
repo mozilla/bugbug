@@ -59,6 +59,12 @@ class DevDocNeededModel(BugModel):
                         commit_data=True,
                     ),
                 ),
+            ]
+        )
+
+        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -69,11 +75,12 @@ class DevDocNeededModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(**self.hyperparameter),
+                ),
             ]
         )
-
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = xgboost.XGBClassifier(**self.hyperparameter)
 
     def rollback(self, change):
         return change["field_name"] == "keywords" and any(
@@ -121,4 +128,4 @@ class DevDocNeededModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
