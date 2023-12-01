@@ -9,6 +9,7 @@ from typing import Any
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -23,8 +24,6 @@ logger = logging.getLogger(__name__)
 class DefectModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = BorderlineSMOTE(random_state=0)
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -68,7 +67,7 @@ class DefectModel(BugModel):
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
@@ -89,6 +88,7 @@ class DefectModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),

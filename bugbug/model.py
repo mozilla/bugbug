@@ -18,7 +18,6 @@ from imblearn.metrics import (
     make_index_balanced_accuracy,
     specificity_score,
 )
-from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
@@ -148,7 +147,6 @@ class Model:
             self.text_vectorizer = TfidfVectorizer
 
         self.cross_validation_enabled = True
-        self.sampler = None
 
         self.calculate_importance = True
 
@@ -365,10 +363,6 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
-        if self.sampler is not None:
-            pipeline = make_pipeline(self.sampler, self.clf)
-        else:
-            pipeline = self.clf
 
         tracking_metrics = {}
 
@@ -379,7 +373,7 @@ class Model:
                 scorings += ["precision", "recall"]
 
             scores = cross_validate(
-                pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+                self.clf, X_train, self.le.transform(y_train), scoring=scorings, cv=5
             )
 
             logger.info("Cross Validation scores:")
@@ -394,13 +388,6 @@ class Model:
                 )
 
         logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
-
-        # Training on the resampled dataset if sampler is provided.
-        if self.sampler is not None:
-            X_train, y_train = self.sampler.fit_resample(X_train, y_train)
-
-            logger.info(f"resampled X_train: {X_train.shape}, y_train: {y_train.shape}")
-
         logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
         self.clf.fit(X_train, self.le.transform(y_train))
@@ -558,11 +545,8 @@ class Model:
         if self.entire_dataset_training:
             logger.info("Retraining on the entire dataset...")
 
-            if self.sampler is not None:
-                X_train, y_train = self.sampler.fit_resample(X, y)
-            else:
-                X_train = X
-                y_train = y
+            X_train = X
+            y_train = y
 
             logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 

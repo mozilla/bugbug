@@ -15,6 +15,7 @@ from typing import Any, Callable, Collection, Iterable, Optional, Sequence, Set
 
 import numpy as np
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from ortools.linear_solver import pywraplp
 from sklearn.compose import ColumnTransformer
@@ -423,8 +424,6 @@ class TestSelectModel(Model):
 
         self.entire_dataset_training = True
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
             test_scheduling_features.PrevFailures(),
         ]
@@ -452,9 +451,10 @@ class TestSelectModel(Model):
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),

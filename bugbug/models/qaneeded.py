@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -16,8 +17,6 @@ from bugbug.model import BugModel
 class QANeededModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -55,7 +54,7 @@ class QANeededModel(BugModel):
         )
 
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
@@ -67,6 +66,7 @@ class QANeededModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(**self.hyperparameter),
