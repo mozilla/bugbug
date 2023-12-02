@@ -348,7 +348,7 @@ class Model:
         X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_gen)
+        X = self.extraction_pipeline.transform(X_gen)
 
         # Calculate labels.
         y = np.array(y)
