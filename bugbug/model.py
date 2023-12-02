@@ -557,13 +557,15 @@ class Model:
         model_directory = self.__class__.__name__.lower()
         makedirs(model_directory, exist_ok=True)
 
-        if issubclass(type(self.clf), XGBModel):
+        step_name, estimator = self.clf.steps.pop()
+        if issubclass(type(estimator), XGBModel):
             xgboost_model_path = path.join(model_directory, "xgboost.ubj")
-            self.clf.save_model(xgboost_model_path)
+            estimator.save_model(xgboost_model_path)
 
-            # Since we save the classifier separately, we need to clear the clf
-            # attribute to prevent it from being pickled with the model object.
-            self.clf = self.clf.__class__(**self.hyperparameter)
+            # Since we save the estimator separately, we need to reset it to
+            # prevent its data from being pickled with the pipeline.
+            estimator = estimator.__class__(**self.hyperparameter)
+        self.clf.steps.append((step_name, estimator))
 
         model_path = path.join(model_directory, "model.pkl")
         with open(model_path, "wb") as f:
@@ -586,7 +588,7 @@ class Model:
 
         xgboost_model_path = path.join(model_directory, "xgboost.ubj")
         if path.exists(xgboost_model_path):
-            model.clf.load_model(xgboost_model_path)
+            model.clf.named_steps["estimator"].load_model(xgboost_model_path)
 
         return model
 
