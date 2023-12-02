@@ -66,7 +66,6 @@ class DefectModel(BugModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = ImblearnPipeline(
             [
                 (
@@ -91,7 +90,7 @@ class DefectModel(BugModel):
                 ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(**self.hyperparameter),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )

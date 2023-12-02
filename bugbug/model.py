@@ -565,7 +565,8 @@ class Model:
 
             # Since we save the estimator separately, we need to reset it to
             # prevent its data from being pickled with the pipeline.
-            estimator = estimator.__class__(**self.hyperparameter)
+            hyperparameters = estimator.get_params()
+            estimator = estimator.__class__(**hyperparameters)
         self.clf.steps.append((step_name, estimator))
 
         model_path = path.join(model_directory, "model.pkl")

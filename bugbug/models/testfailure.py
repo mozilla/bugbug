@@ -62,7 +62,6 @@ class TestFailureModel(CommitModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = ImblearnPipeline(
             [
                 (
@@ -85,7 +84,7 @@ class TestFailureModel(CommitModel):
                 ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(**self.hyperparameter),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )

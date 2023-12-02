@@ -38,7 +38,6 @@ class InvalidCompatibilityReportModel(IssueModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = Pipeline(
             [
                 (
@@ -55,7 +54,7 @@ class InvalidCompatibilityReportModel(IssueModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(**self.hyperparameter),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )

@@ -57,7 +57,6 @@ class FixTimeModel(BugModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = Pipeline(
             [
                 (
@@ -76,7 +75,7 @@ class FixTimeModel(BugModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(**self.hyperparameter),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )
