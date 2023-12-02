@@ -15,6 +15,7 @@ from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
@@ -111,7 +112,18 @@ class RegressorModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        column_transformers = [("data", DictVectorizer(), "data")]
+        column_transformers = [
+            ("data", DictVectorizer(), "data"),
+            (
+                "files",
+                CountVectorizer(
+                    analyzer=utils.keep_as_is,
+                    lowercase=False,
+                    min_df=0.0014,
+                ),
+                "files",
+            ),
+        ]
 
         if not interpretable:
             column_transformers.append(

@@ -194,6 +194,8 @@ class Model:
                 feature_name = f"Comments contain '{feature_name}'"
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "files":
+                feature_name = f"File '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
                 raise ValueError(f"Unexpected feature type for: {full_feature_name}")
 

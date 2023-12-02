@@ -553,3 +553,8 @@ def escape_markdown(text: str) -> str:
         .replace(")", "\\)")
         .replace("|", "\\|")
     )
+
+
+def keep_as_is(x):
+    """A tokenizer that does nothing."""
+    return x
