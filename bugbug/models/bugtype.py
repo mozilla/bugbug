@@ -131,7 +131,6 @@ class BugTypeModel(BugModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = Pipeline(
             [
                 (
@@ -155,7 +154,9 @@ class BugTypeModel(BugModel):
                 ),
                 (
                     "estimator",
-                    OneVsRestClassifier(xgboost.XGBClassifier(**self.hyperparameter)),
+                    OneVsRestClassifier(
+                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+                    ),
                 ),
             ]
         )

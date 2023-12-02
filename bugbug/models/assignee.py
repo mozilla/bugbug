@@ -70,7 +70,6 @@ class AssigneeModel(BugModel):
             ]
         )
 
-        self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = Pipeline(
             [
                 (
@@ -89,7 +88,7 @@ class AssigneeModel(BugModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(**self.hyperparameter),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )
