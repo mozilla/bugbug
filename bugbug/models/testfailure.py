@@ -10,6 +10,7 @@ from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import commit_features, repository, test_scheduling, utils
@@ -64,7 +65,23 @@ class TestFailureModel(CommitModel):
         self.hyperparameter = {"n_jobs": utils.get_physical_cpu_count()}
         self.clf = ImblearnPipeline(
             [
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
+                        ]
+                    ),
+                ),
                 ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",

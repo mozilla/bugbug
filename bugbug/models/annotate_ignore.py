@@ -10,6 +10,7 @@ from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, feature_cleanup, labels, repository, utils
@@ -24,6 +25,7 @@ class AnnotateIgnoreModel(CommitModel):
         CommitModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
+        self.cross_validation_enabled = False
 
         self.training_dbs += [bugzilla.BUGS_DB]
 
@@ -78,6 +80,15 @@ class AnnotateIgnoreModel(CommitModel):
                         [
                             ("data", DictVectorizer(), "data"),
                             ("desc", self.text_vectorizer(min_df=0.0001), "desc"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
                         ]
                     ),
                 ),
