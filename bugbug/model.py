@@ -651,15 +651,16 @@ class Model:
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 
             if background_dataset is None:
-                explainer = shap.TreeExplainer(self.clf)
+                explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             else:
                 explainer = shap.TreeExplainer(
-                    self.clf,
+                    self.clf.named_steps["estimator"],
                     to_array(background_dataset(pred_class)),
                     feature_perturbation="interventional",
                 )
 
-            shap_values = explainer.shap_values(to_array(X))
+            _X = get_transformer_pipeline(self.clf).transform(X)
+            shap_values = explainer.shap_values(to_array(_X))
 
             # In the binary case, sometimes shap returns a single shap values matrix.
             if len(classes[0]) == 2 and not isinstance(shap_values, list):
@@ -668,7 +669,7 @@ class Model:
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
-            important_features["values"] = X
+            important_features["values"] = _X
 
             top_indexes = [
                 int(index)
