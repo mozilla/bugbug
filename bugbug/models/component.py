@@ -27,6 +27,7 @@ class ComponentModel(BugModel):
         "Core",
         "External Software Affecting Firefox",
         "DevTools",
+        "Fenix",
         "Firefox",
         "Toolkit",
         "WebExtensions",
