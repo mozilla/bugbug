@@ -24,18 +24,22 @@ def _is_performance_bug(bug_data) -> bool:
     whiteboard = bug_data.get("whiteboard", "").lower()
     cf_performance = bug_data.get("cf_performance", "")
 
-    performance_keywords = {"perf", "topperf", "main-thread-io"}
+    performance_keywords = ("perf", "topperf", "main-thread-io")
 
-    whiteboard_performance_text = [
+    whiteboard_performance_text = (
         "fxperf",
         "fxperfsize",
         "snappy",
         "pdfjs-c-performance",
         "pdfjs-performance",
         "sp3",
-    ]
+    )
 
-    if any(keyword in performance_keywords for keyword in keywords):
+    if any(
+        keyword.startswith(performance_keyword)
+        for keyword in keywords
+        for performance_keyword in performance_keywords
+    ):
         return True
 
     if any(f"[{text}" in whiteboard for text in whiteboard_performance_text):
