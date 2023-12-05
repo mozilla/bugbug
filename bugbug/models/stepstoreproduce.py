@@ -6,6 +6,7 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -21,8 +22,6 @@ logger = logging.getLogger(__name__)
 class StepsToReproduceModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             bug_features.HasRegressionRange(),
@@ -50,6 +49,11 @@ class StepsToReproduceModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -60,10 +64,13 @@ class StepsToReproduceModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         classes = {}
@@ -84,11 +91,11 @@ class StepsToReproduceModel(BugModel):
 
         logger.info(
             "%d bugs have no steps to reproduce",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs have steps to reproduce",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -105,4 +112,4 @@ class StepsToReproduceModel(BugModel):
         return classes
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

@@ -15,28 +15,24 @@ from bugbug.model import IssueModel
 logger = logging.getLogger(__name__)
 
 
-class NeedsDiagnosisModel(IssueModel):
+class InvalidCompatibilityReportModel(IssueModel):
     def __init__(self, lemmatization=False):
-        IssueModel.__init__(
-            self, owner="webcompat", repo="web-bugs", lemmatization=lemmatization
+        super().__init__(
+            owner="webcompat", repo="web-bugs", lemmatization=lemmatization
         )
 
         self.calculate_importance = False
 
         feature_extractors = []
 
-        cleanup_functions = [
-            feature_cleanup.fileref(),
-            feature_cleanup.url(),
-            feature_cleanup.synonyms(),
-        ]
+        cleanup_functions = []
 
         self.extraction_pipeline = Pipeline(
             [
                 (
-                    "issue_extractor",
+                    "report_extractor",
                     issue_features.IssueExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
+                        feature_extractors, cleanup_functions, rollback=False
                     ),
                 ),
             ]
@@ -48,7 +44,6 @@ class NeedsDiagnosisModel(IssueModel):
                     "union",
                     ColumnTransformer(
                         [
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
                                 "first_comment",
                                 self.text_vectorizer(min_df=0.0001),
@@ -64,34 +59,50 @@ class NeedsDiagnosisModel(IssueModel):
             ]
         )
 
+    def items_gen(self, classes):
+        # Do cleanup separately from extraction pipeline to
+        # make sure it's not applied during classification due to differences
+        # in text structure between GitHub issues and reports
+        cleanup_function = feature_cleanup.CleanCompatibilityReportDescription()
+
+        for issue, label in super().items_gen(classes):
+            issue = {
+                **issue,
+                "body": cleanup_function(issue["body"]),
+            }
+            yield issue, label
+
     def get_labels(self):
         classes = {}
-
         for issue in self.github.get_issues():
-            # Skip issues with empty title or body
-            if issue["title"] is None or issue["body"] is None:
+            if not issue["title"] or not issue["body"]:
                 continue
 
-            # Skip issues that are not moderated yet as they don't have a meaningful title or body
+            # Skip issues that are not moderated yet as they don't have a
+            # meaningful title or body.
             if issue["title"] == "In the moderation queue.":
                 continue
 
-            for event in issue["events"]:
-                if event["event"] == "milestoned" and (
-                    event["milestone"]["title"] == "needsdiagnosis"
-                    or event["milestone"]["title"] == "moved"
-                ):
-                    classes[issue["number"]] = 0
-
-            if issue["number"] not in classes:
+            if (
+                issue["milestone"]
+                and (issue["milestone"]["title"] in ("invalid", "incomplete"))
+                and any(label["name"] == "wcrt-invalid" for label in issue["labels"])
+            ):
                 classes[issue["number"]] = 1
 
+            elif any(
+                event["event"] == "milestoned"
+                and (event["milestone"]["title"] in ("needsdiagnosis", "moved"))
+                for event in issue["events"]
+            ):
+                classes[issue["number"]] = 0
+
         logger.info(
-            "%d issues have not been moved to needsdiagnosis",
+            "%d issues have been moved to invalid",
             sum(label == 1 for label in classes.values()),
         )
         logger.info(
-            "%d issues have been moved to needsdiagnosis",
+            "%d issues have not been moved to invalid",
             sum(label == 0 for label in classes.values()),
         )
 

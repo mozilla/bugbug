@@ -21,14 +21,12 @@ class DefectEnhancementTaskModel(DefectModel):
     def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("defect_enhancement_task")
 
-        logger.info(
-            "%d defects", sum(1 for label in classes.values() if label == "defect")
-        )
+        logger.info("%d defects", sum(label == "defect" for label in classes.values()))
         logger.info(
             "%d enhancements",
-            sum(1 for label in classes.values() if label == "enhancement"),
+            sum(label == "enhancement" for label in classes.values()),
         )
-        logger.info("%d tasks", sum(1 for label in classes.values() if label == "task"))
+        logger.info("%d tasks", sum(label == "task" for label in classes.values()))
 
         return classes, ["defect", "enhancement", "task"]
 

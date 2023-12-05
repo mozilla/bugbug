@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
-from collections import defaultdict
 from typing import Sequence
 
 import pandas as pd
@@ -808,34 +807,14 @@ class DirectoryTouchedPrev(object):
 
 
 class Files(object):
-    def __init__(self, min_freq=0.0014):
-        self.min_freq = min_freq
-
-    def fit(self, commits):
-        self.count = defaultdict(int)
-
-        self.total_commits = 0
-
-        for commit in commits:
-            self.total_commits += 1
-
-            for f in commit["files"]:
-                self.count[f] += 1
-
-        # We no longer need to store counts for files which have low frequency.
-        to_del = set(
-            f for f, c in self.count.items() if c / self.total_commits < self.min_freq
-        )
-
-        for f in to_del:
-            del self.count[f]
+    name = "files"
 
     def __call__(self, commit, **kwargs):
-        return [
-            f
-            for f in commit["files"]
-            if (self.count[f] / self.total_commits) > self.min_freq
-        ]
+        return commit["files"]
+
+
+def _pass_through_tokenizer(doc):
+    return doc
 
 
 class FileTouchedPrev(object):
@@ -1008,6 +987,7 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
         for commit in commits():
             data = {}
+            result = {"data": data}
 
             for feature_extractor in self.feature_extractors:
                 if "bug_features" in feature_extractor.__module__:
@@ -1028,6 +1008,13 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                 else:
                     feature_extractor_name = feature_extractor.__class__.__name__
 
+                # FIXME: This is a workaround to pass the value to the
+                # union transformer independently. This will be dropped when we
+                # resolve https://github.com/mozilla/bugbug/issues/3876
+                if isinstance(feature_extractor, Files):
+                    result[sys.intern(feature_extractor_name)] = res
+                    continue
+
                 if isinstance(res, dict):
                     for key, value in res.items():
                         data[sys.intern(key)] = value
@@ -1040,7 +1027,6 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
                 data[sys.intern(feature_extractor_name)] = res
 
-            result = {"data": data}
             if "desc" in commit:
                 for cleanup_function in self.cleanup_functions:
                     result["desc"] = cleanup_function(commit["desc"])

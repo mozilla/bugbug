@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import InstanceHardnessThreshold
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -18,8 +19,6 @@ class TrackingModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
-
-        self.sampler = InstanceHardnessThreshold(random_state=0)
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -67,6 +66,11 @@ class TrackingModel(BugModel):
                         rollback_when=self.rollback,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -81,10 +85,13 @@ class TrackingModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", InstanceHardnessThreshold(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def rollback(self, change):
         return change["field_name"].startswith("cf_tracking_firefox")
@@ -131,7 +138,7 @@ class TrackingModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

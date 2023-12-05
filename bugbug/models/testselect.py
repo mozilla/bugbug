@@ -15,6 +15,7 @@ from typing import Any, Callable, Collection, Iterable, Optional, Sequence, Set
 
 import numpy as np
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from ortools.linear_solver import pywraplp
 from sklearn.compose import ColumnTransformer
@@ -423,8 +424,6 @@ class TestSelectModel(Model):
 
         self.entire_dataset_training = True
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
             test_scheduling_features.PrevFailures(),
         ]
@@ -448,11 +447,19 @@ class TestSelectModel(Model):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.clf = ImblearnPipeline(
+            [
+                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
+            ]
+        )
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -539,14 +546,14 @@ class TestSelectModel(Model):
         logger.info("%d pushes considered", len(pushes))
         logger.info(
             "%d pushes with at least one failure",
-            sum(1 for push in pushes if len(push["failures"]) > 0),
+            sum(len(push["failures"]) > 0 for push in pushes),
         )
         logger.info(
-            "%d push/jobs failed", sum(1 for label in classes.values() if label == 1)
+            "%d push/jobs failed", sum(label == 1 for label in classes.values())
         )
         logger.info(
             "%d push/jobs did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -858,7 +865,7 @@ class TestSelectModel(Model):
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
 
 class TestLabelSelectModel(TestSelectModel):

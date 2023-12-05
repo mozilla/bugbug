@@ -198,3 +198,66 @@ class crash(object):
 
     def __call__(self, text):
         return self.pattern.sub("__CRASH_STATS_LINK__", text)
+
+
+class CleanCompatibilityReportDescription(object):
+    def __init__(self):
+        self.sub_patterns = {
+            "details": re.compile(r"<details>.*?</details>", re.DOTALL),
+            "footer": re.compile(
+                r"_From \[webcompat\.com\]\(https://webcompat\.com/\) with ❤️_"
+            ),
+            "link": re.compile(
+                r"\[View console log messages\]\(https://webcompat\.com/console_logs/.*?\)"
+            ),
+            "screenshot": re.compile(r"\[\!\[Screenshot Description\]\(.*?\)\]\(.*?\)"),
+            "screenshot_md": re.compile(
+                r'\*\*Screenshot\*\*\s*\r?\n\<img width="[\d]+" alt="[^"]*" src="https?://[^"]+"[^>]*>'
+            ),
+            "watchers": re.compile(r"\*\*Watchers:\*\*(?:\r?\n@[\w-]+)+"),
+        }
+        self.extract_patterns = {
+            "description": re.compile(r"\*\*Description\*\*: (.*?)\n", re.DOTALL),
+            "problem_type": re.compile(r"\*\*Problem type\*\*: (.*?)\n", re.DOTALL),
+            "steps": re.compile(r"\*\*Steps to Reproduce\*\*:?(.*)", re.DOTALL),
+        }
+
+        self.default_problems = {
+            "Desktop site instead of mobile site",
+            "Browser unsupported",
+            "Page not loading correctly",
+            "Missing items",
+            "Buttons or links not working",
+            "Unable to type",
+            "Unable to login",
+            "Problems with Captcha",
+            "Images not loaded",
+            "Items are overlapped",
+            "Items are misaligned",
+            "Items not fully visible",
+            "There is no video",
+            "There is no audio",
+            "Media controls are broken or missing",
+            "The video or audio does not play",
+        }
+
+    def _extract_and_strip(self, pattern, text):
+        match = pattern.search(text)
+        return match.group(1).strip() if match else ""
+
+    def __call__(self, text):
+        for pattern in self.sub_patterns.values():
+            text = pattern.sub("", text)
+
+        problem_type = self._extract_and_strip(
+            self.extract_patterns["problem_type"], text
+        )
+        description = self._extract_and_strip(
+            self.extract_patterns["description"], text
+        )
+        steps = self._extract_and_strip(self.extract_patterns["steps"], text)
+
+        if problem_type == "Something else" or description not in self.default_problems:
+            return f"{description}\n {steps}" if steps else description
+        else:
+            return steps

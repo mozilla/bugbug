@@ -11,9 +11,11 @@ import dateutil.parser
 import numpy as np
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
@@ -66,7 +68,6 @@ class RegressorModel(CommitModel):
             self.training_dbs.append(BUG_FIXING_COMMITS_DB)
 
         self.store_dataset = True
-        self.sampler = RandomUnderSampler(random_state=0)
 
         self.use_finder = use_finder
         self.exclude_finder = exclude_finder
@@ -111,7 +112,18 @@ class RegressorModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        column_transformers = [("data", DictVectorizer(), "data")]
+        column_transformers = [
+            ("data", DictVectorizer(), "data"),
+            (
+                "files",
+                CountVectorizer(
+                    analyzer=utils.keep_as_is,
+                    lowercase=False,
+                    min_df=0.0014,
+                ),
+                "files",
+            ),
+        ]
 
         if not interpretable:
             column_transformers.append(
@@ -126,14 +138,20 @@ class RegressorModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
-                ("union", ColumnTransformer(column_transformers)),
             ]
         )
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         if calibration:
-            self.clf = IsotonicRegressionCalibrator(self.clf)
+            estimator = IsotonicRegressionCalibrator(estimator)
             # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
             self.calculate_importance = False
+        self.clf = ImblearnPipeline(
+            [
+                ("union", ColumnTransformer(column_transformers)),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                ("estimator", estimator),
+            ]
+        )
 
     def get_labels(self):
         classes = {}
@@ -200,12 +218,12 @@ class RegressorModel(CommitModel):
 
         logger.info(
             "%d commits caused regressions",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         logger.info(
             "%d commits did not cause regressions",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -274,10 +292,10 @@ class RegressorModel(CommitModel):
 
         # Step 1. Calculate % of patches which cause regressions.
         total_landings = len(results)
-        total_regressions = sum(1 for _, is_reg in results if is_reg)
+        total_regressions = sum(is_reg for _, is_reg in results)
         average_regression_rate = total_regressions / total_landings
 
-        logger.info("Average risk is %d", average_regression_rate)
+        logger.info("Average risk is %0.2f", average_regression_rate)
 
         MIN_SAMPLE = 200
 
@@ -364,7 +382,7 @@ class RegressorModel(CommitModel):
                 )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, commits, classes, probabilities):
         for i, commit in enumerate(commits):

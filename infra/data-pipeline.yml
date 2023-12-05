@@ -1003,44 +1003,6 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    #    - ID: train-duplicate
-    #      created: {$fromNow: ''}
-    #      deadline: {$fromNow: '3 days'}
-    #      expires: {$fromNow: '1 year'}
-    #      provisionerId: proj-bugbug
-    #      workerType: compute-smaller
-    #      dependencies:
-    #        - bugs-retrieval
-    #      payload:
-    #        maxRunTime: 25200
-    #        image: mozilla/bugbug-base:${version}
-    #        command:
-    #          - bugbug-train
-    #          - duplicate
-
-    #        artifacts:
-    #          public/duplicatemodel.zst:
-    #            expires: {$fromNow: '1 month'}
-    #            path: /duplicatemodel.zst
-    #            type: file
-    #          public/metrics.json:
-    #            expires: {$fromNow: '1 year'}
-    #            path: /metrics.json
-    #            type: file
-
-    #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
-    #        - index.project.bugbug.train_duplicate.${version}
-    #        - index.project.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-    #        - index.project.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-    #        - index.project.bugbug.train_duplicate.latest
-    #      metadata:
-    #        name: bugbug train duplicate model
-    #        description: bugbug train duplicate model
-    #        owner: release-mgmt-analysis@mozilla.com
-    #        source: ${repository}/raw/master/data-pipeline.yml
-
     - ID: train-test-label-select
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1161,45 +1123,6 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    #    - ID: train-similarity
-    #      created: {$fromNow: ''}
-    #      deadline: {$fromNow: '3 days'}
-    #      expires: {$fromNow: '1 year'}
-    #      provisionerId: proj-bugbug
-    #      workerType: compute-smaller
-    #      dependencies:
-    #        - bugs-retrieval
-    #      payload:
-    #        maxRunTime: 25200
-    #        image: mozilla/bugbug-base-nlp:${version}
-    #        command:
-    #          - bugbug-train-similarity
-    #          - --algorithm
-    #          - bm25
-
-    #        artifacts:
-    #          public/bm25similarity.similaritymodel.zst:
-    #            expires: {$fromNow: '1 month'}
-    #            path: /bm25similarity.similaritymodel.zst
-    #            type: file
-    #          public/metrics.json:
-    #            expires: {$fromNow: '1 year'}
-    #            path: /metrics.json
-    #            type: file
-
-    #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
-    #        - index.project.bugbug.train_similarity.${version}
-    #        - index.project.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-    #        - index.project.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-    #        - index.project.bugbug.train_similarity.latest
-    #      metadata:
-    #        name: bugbug train similarity model
-    #        description: bugbug train similarity model
-    #        owner: release-mgmt-analysis@mozilla.com
-    #        source: ${repository}/raw/master/data-pipeline.yml
-
     - ID: train-needsdiagnosis
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
@@ -1235,6 +1158,44 @@ tasks:
       metadata:
         name: bugbug train needsdiagnosis model
         description: bugbug train needsdiagnosis model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-invalidcompatibilityreport
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - issues-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - invalidcompatibilityreport
+
+        artifacts:
+          public/invalidcompatibilityreportmodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /invalidcompatibilityreportmodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_invalidcompatibilityreport.${version}
+        - index.project.bugbug.train_invalidcompatibilityreport.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_invalidcompatibilityreport.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_invalidcompatibilityreport.latest
+      metadata:
+        name: bugbug train invalidcompatibilityreport model
+        description: bugbug train invalidcompatibilityreport model
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 

@@ -27,6 +27,10 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
+    pr_description:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.body}
+
     taskboot_image: "mozilla/taskboot:0.4.2"
   in:
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
@@ -205,6 +209,36 @@ tasks:
           description: bugbug docker build
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
+
+      - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
+        then:
+          dependencies:
+            - { $eval: as_slugid("docker_build") }
+          taskId: { $eval: as_slugid("train_on_taskcluster") }
+          created: { $fromNow: "" }
+          deadline: { $fromNow: "1 day" }
+          provisionerId: proj-bugbug
+          workerType: compute-large
+          payload:
+            maxRunTime:
+              $switch:
+                '"Train on Taskcluster: regression" in pr_description': 2700
+                $default: 10800
+            image:
+              type: task-image
+              path: public/bugbug/bugbug-base.tar.zst
+              taskId: { $eval: as_slugid("docker_build") }
+            env:
+              PR_DESCRIPTION: "${pr_description}"
+            command:
+              - "/bin/sh"
+              - "-lcx"
+              - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+          metadata:
+            name: bugbug train on TC
+            description: Train a BugBug model on Taskcluster
+            owner: mcastelluccio@mozilla.com
+            source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
       - taskId: { $eval: as_slugid("frontend_build") }
         created: { $fromNow: "" }

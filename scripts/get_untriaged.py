@@ -45,11 +45,9 @@ def fetch_untriaged(args):
 
 def run_untriaged(untriaged_bugs):
     from bugbug.models.component import ComponentModel
-    from bugbug.models.component_nn import ComponentNNModel
 
     models = [
         (ComponentModel, "../componentmodel"),
-        (ComponentNNModel, "../componentnnmodel"),
     ]
     for model_class, model_file_name in models:
         rows = []

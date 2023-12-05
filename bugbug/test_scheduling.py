@@ -415,7 +415,7 @@ def generate_failing_together_probabilities(
     granularity: str,
     push_data: Iterator[PushResult],
     push_data_count: int,
-    up_to: str = None,
+    up_to: str | None = None,
 ) -> None:
     # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
     # `task2 failure -> task1 failure` separately, as they could be different.

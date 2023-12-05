@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -18,8 +19,6 @@ class DevDocNeededModel(BugModel):
         BugModel.__init__(self, lemmatization, commit_data=True)
 
         self.cross_validation_enabled = False
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -59,6 +58,11 @@ class DevDocNeededModel(BugModel):
                         commit_data=True,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -69,10 +73,13 @@ class DevDocNeededModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def rollback(self, change):
         return change["field_name"] == "keywords" and any(
@@ -120,4 +127,4 @@ class DevDocNeededModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

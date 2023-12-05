@@ -6,9 +6,11 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import commit_features, repository, test_scheduling, utils
@@ -23,8 +25,6 @@ class TestFailureModel(CommitModel):
         CommitModel.__init__(self, lemmatization)
 
         self.training_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             commit_features.SourceCodeFileSize(),
@@ -59,11 +59,35 @@ class TestFailureModel(CommitModel):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.clf = ImblearnPipeline(
+            [
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
+                        ]
+                    ),
+                ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
+            ]
+        )
 
     def items_gen(self, classes):
         commit_map = {}
@@ -100,15 +124,13 @@ class TestFailureModel(CommitModel):
             else:
                 classes[rev] = 0
 
-        logger.info(
-            "%d commits failed", sum(1 for label in classes.values() if label == 1)
-        )
+        logger.info("%d commits failed", sum(label == 1 for label in classes.values()))
         logger.info(
             "%d commits did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
