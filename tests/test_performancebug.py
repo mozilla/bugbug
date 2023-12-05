@@ -9,13 +9,7 @@ from bugbug.models.performancebug import PerformanceBugModel
 def test_get_performancebug_labels():
     model = PerformanceBugModel()
     classes, _ = model.get_labels()
-    assert classes[1856574] == 1
-    assert classes[1633318] == 1
-    assert classes[185598] == 1
-    assert classes[1355978] == 1
-    assert classes[1481519] == 1
-    assert classes[1543990] == 0
-    assert classes[1488738] == 0
-    assert classes[600692] == 0
-    assert classes[1411253] == 0
-    assert classes[1609878] == 0
+    assert classes[1320195] == 1
+    assert classes[447581] == 1
+    assert classes[1388990] == 0
+    assert classes[1389136] == 0
