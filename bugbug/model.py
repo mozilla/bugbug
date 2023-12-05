@@ -22,6 +22,7 @@ from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
 from xgboost import XGBModel
@@ -33,6 +34,27 @@ from bugbug.utils import split_tuple_generator, to_array
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_transformer_pipeline(pipeline: Pipeline) -> Pipeline:
+    """Create a pipeline that contains only the transformers.
+
+    This will exclude any steps that do not have a transform method, such as a
+    sampler or estimator.
+
+    Args:
+        pipeline: the pipeline to extract the transformers from.
+
+    Returns:
+        a pipeline that contains only the transformers.
+    """
+    return Pipeline(
+        [
+            (name, transformer)
+            for name, transformer in pipeline.steps
+            if hasattr(transformer, "transform")
+        ]
+    )
 
 
 def classification_report_imbalanced_values(
@@ -399,8 +421,9 @@ class Model:
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
-            explainer = shap.TreeExplainer(self.clf)
-            shap_values = explainer.shap_values(X_train)
+            explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
+            _X_train = get_transformer_pipeline(self.clf).transform(X_train)
+            shap_values = explainer.shap_values(_X_train)
 
             # In the binary case, sometimes shap returns a single shap values matrix.
             if is_binary and not isinstance(shap_values, list):
@@ -413,7 +436,7 @@ class Model:
 
             shap.summary_plot(
                 summary_plot_value,
-                to_array(X_train),
+                to_array(_X_train),
                 feature_names=feature_names,
                 class_names=self.class_names,
                 plot_type=summary_plot_type,
@@ -628,15 +651,16 @@ class Model:
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 
             if background_dataset is None:
-                explainer = shap.TreeExplainer(self.clf)
+                explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             else:
                 explainer = shap.TreeExplainer(
-                    self.clf,
+                    self.clf.named_steps["estimator"],
                     to_array(background_dataset(pred_class)),
                     feature_perturbation="interventional",
                 )
 
-            shap_values = explainer.shap_values(to_array(X))
+            _X = get_transformer_pipeline(self.clf).transform(X)
+            shap_values = explainer.shap_values(to_array(_X))
 
             # In the binary case, sometimes shap returns a single shap values matrix.
             if len(classes[0]) == 2 and not isinstance(shap_values, list):
@@ -645,7 +669,7 @@ class Model:
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
-            important_features["values"] = X
+            important_features["values"] = _X
 
             top_indexes = [
                 int(index)
