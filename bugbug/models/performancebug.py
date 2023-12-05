@@ -24,7 +24,7 @@ def _is_performance_bug(bug_data) -> bool:
     whiteboard = bug_data.get("whiteboard", "").lower()
     cf_performance = bug_data.get("cf_performance", "")
 
-    performance_keywords = {"perf", "topperf"}
+    performance_keywords = {"perf", "topperf", "main-thread-io"}
 
     whiteboard_performance_text = [
         "fxperf",
