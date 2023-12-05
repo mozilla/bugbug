@@ -21,6 +21,7 @@ MODELS = {
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
     "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
+    "performancebug": "bugbug.models.performancebug.PerformanceBugModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",
