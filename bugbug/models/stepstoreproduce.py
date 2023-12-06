@@ -76,18 +76,19 @@ class StepsToReproduceModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
-            if "cf_has_str" in bug_data:
-                if bug_data["cf_has_str"] == "no":
+            if bug_data["type"] == "defect":
+                if "cf_has_str" in bug_data:
+                    if bug_data["cf_has_str"] == "no":
+                        classes[int(bug_data["id"])] = 0
+                    elif bug_data["cf_has_str"] == "yes":
+                        classes[int(bug_data["id"])] = 1
+                elif "stepswanted" in bug_data["keywords"]:
                     classes[int(bug_data["id"])] = 0
-                elif bug_data["cf_has_str"] == "yes":
-                    classes[int(bug_data["id"])] = 1
-            elif "stepswanted" in bug_data["keywords"]:
-                classes[int(bug_data["id"])] = 0
-            else:
-                for entry in bug_data["history"]:
-                    for change in entry["changes"]:
-                        if change["removed"].startswith("stepswanted"):
-                            classes[int(bug_data["id"])] = 1
+                else:
+                    for entry in bug_data["history"]:
+                        for change in entry["changes"]:
+                            if change["removed"].startswith("stepswanted"):
+                                classes[int(bug_data["id"])] = 1
 
         logger.info(
             "%d bugs have no steps to reproduce",
