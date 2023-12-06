@@ -14,41 +14,15 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
+from bugbug.models.bugtype import bug_to_types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def _is_performance_bug(bug_data) -> bool:
-    keywords = bug_data.get("keywords", [])
-    whiteboard = bug_data.get("whiteboard", "").lower()
-    cf_performance = bug_data.get("cf_performance", "")
-
-    performance_keywords = ("perf", "topperf", "main-thread-io")
-
-    whiteboard_performance_text = (
-        "fxperf",
-        "fxperfsize",
-        "snappy",
-        "pdfjs-c-performance",
-        "pdfjs-performance",
-        "sp3",
-    )
-
-    if any(
-        keyword.startswith(performance_keyword)
-        for keyword in keywords
-        for performance_keyword in performance_keywords
-    ):
-        return True
-
-    if any(f"[{text}" in whiteboard for text in whiteboard_performance_text):
-        return True
-
-    if cf_performance and cf_performance not in ("---", "?"):
-        return True
-
-    return False
+    types = bug_to_types(bug_data)
+    return "performance" in types
 
 
 class PerformanceBugModel(BugModel):
@@ -125,6 +99,9 @@ class PerformanceBugModel(BugModel):
 
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
+
+            if "cf_performance" not in bug_data:
+                continue
 
             classes[bug_id] = 1 if _is_performance_bug(bug_data) else 0
 
