@@ -27,6 +27,7 @@ LOGGER = logging.getLogger()
 MODELS_NAMES = [
     "defectenhancementtask",
     "component",
+    "invalidcompatibilityreport",
     "needsdiagnosis",
     "regression",
     "stepstoreproduce",
@@ -166,6 +167,46 @@ def classify_issue(
 
         # Save the bug last change
         setkey(job.change_time_key, issues[issue_id]["updated_at"].encode())
+
+    return "OK"
+
+
+def classify_broken_site_report(model_name: str, reports_data: list[dict]) -> str:
+    from bugbug_http.app import JobInfo
+
+    reports = {
+        report["uuid"]: {"title": report["title"], "body": report["body"]}
+        for report in reports_data
+    }
+
+    if not reports:
+        return "NOK"
+
+    model = MODEL_CACHE.get(model_name)
+
+    if not model:
+        LOGGER.info("Missing model %r, aborting" % model_name)
+        return "NOK"
+
+    model_extra_data = model.get_extra_data()
+    probs = model.classify(list(reports.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.le.inverse_transform(indexes)
+
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
+
+    for i, report_uuid in enumerate(reports.keys()):
+        data = {
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "class": suggestions_list[i],
+            "extra_data": model_extra_data,
+        }
+
+        job = JobInfo(classify_broken_site_report, model_name, report_uuid)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
 
     return "OK"
 

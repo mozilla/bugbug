@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -16,8 +17,6 @@ from bugbug.model import BugModel
 class QANeededModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -51,6 +50,11 @@ class QANeededModel(BugModel):
                         rollback_when=self.rollback,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -61,10 +65,13 @@ class QANeededModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def rollback(self, change):
         return any(
@@ -108,4 +115,4 @@ class QANeededModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

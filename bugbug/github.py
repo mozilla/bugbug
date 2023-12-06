@@ -66,7 +66,7 @@ class Github:
         return events_raw
 
     def fetch_issues(
-        self, url: str, retrieve_events: bool, params: dict = None
+        self, url: str, retrieve_events: bool, params: dict | None = None
     ) -> tuple[list[IssueDict], dict]:
         self.api_limit()
         headers = {"Authorization": "token {}".format(self.get_token())}

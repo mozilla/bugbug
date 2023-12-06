@@ -54,6 +54,11 @@ class FixTimeModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -68,10 +73,12 @@ class FixTimeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         bug_fix_times = []
@@ -110,11 +117,11 @@ class FixTimeModel(BugModel):
         for i in range(len(quantiles) + 1):
             logger.info(
                 "%d bugs are in the %dth quantile",
-                sum(1 for label in classes.values() if label == i),
+                sum(label == i for label in classes.values()),
                 i,
             )
 
         return classes, list(range(len(quantiles) + 1))
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

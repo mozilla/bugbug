@@ -37,26 +37,35 @@ def bug_to_types(
 ) -> list[str]:
     types = set()
 
+    bug_whiteboard = bug["whiteboard"].lower()
+
     if any(
-        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        f"{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in ("overhead", "memshrink")
     ):
         types.add("memory")
 
-    if "[power" in bug["whiteboard"].lower():
+    if "[power" in bug_whiteboard:
         types.add("power")
 
     if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        f"[{whiteboard_text}" in bug_whiteboard
         for whiteboard_text in (
             "fxperf",
             "fxperfsize",
             "snappy",
             "pdfjs-c-performance",
             "pdfjs-performance",
+            "sp3",
         )
     ):
         types.add("performance")
+
+    if any(
+        f"[{whiteboard_text}" in bug_whiteboard
+        for whiteboard_text in ("client-bounty-form", "sec-survey")
+    ):
+        types.add("security")
 
     if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
         types.add("performance")
@@ -119,6 +128,11 @@ class BugTypeModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -138,11 +152,13 @@ class BugTypeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    OneVsRestClassifier(
+                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+                    ),
+                ),
             ]
-        )
-
-        self.clf = OneVsRestClassifier(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
     def get_labels(self) -> tuple[dict[int, np.ndarray], list[str]]:
@@ -159,13 +175,15 @@ class BugTypeModel(BugModel):
 
         for type_ in TYPE_LIST:
             logger.info(
-                f"{sum(1 for target in classes.values() if target[TYPE_LIST.index(type_)] == 1)} {type_} bugs"
+                "%d %s bugs",
+                sum(target[TYPE_LIST.index(type_)] == 1 for target in classes.values()),
+                type_,
             )
 
         return classes, TYPE_LIST
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(
         self,

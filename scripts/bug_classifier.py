@@ -11,22 +11,12 @@ from bugbug import bugzilla, db
 from bugbug.models import get_model_class
 from bugbug.utils import download_model
 
-MODELS_WITH_TYPE = ("component",)
-
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_bugs(model_name: str, classifier: str, bug_id: int) -> None:
-    if classifier != "default":
-        assert (
-            model_name in MODELS_WITH_TYPE
-        ), f"{classifier} is not a valid classifier type for {model_name}"
-
-        model_file_name = f"{model_name}{classifier}model"
-        model_name = f"{model_name}_{classifier}"
-    else:
-        model_file_name = f"{model_name}model"
+def classify_bugs(model_name: str, bug_id: int) -> None:
+    model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
         logger.info("%s does not exist. Downloading the model....", model_file_name)
@@ -79,17 +69,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("model", help="Which model to use for evaluation")
-    parser.add_argument(
-        "--classifier",
-        help="Type of the classifier. Only used for component classification.",
-        choices=["default", "nn"],
-        default="default",
-    )
     parser.add_argument("--bug-id", help="Classify the given bug id", type=int)
 
     args = parser.parse_args()
 
-    classify_bugs(args.model, args.classifier, args.bug_id)
+    classify_bugs(args.model, args.bug_id)
 
 
 if __name__ == "__main__":

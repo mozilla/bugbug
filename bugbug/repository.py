@@ -1336,8 +1336,8 @@ def get_first_pushdate(repo_dir):
 
 def download_commits(
     repo_dir: str,
-    rev_start: str = None,
-    revs: list[bytes] = None,
+    rev_start: str | None = None,
+    revs: list[bytes] | None = None,
     branch: Optional[str] = "tip",
     save: bool = True,
     use_single_process: bool = False,

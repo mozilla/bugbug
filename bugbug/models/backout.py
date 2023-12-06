@@ -9,9 +9,11 @@ from datetime import datetime
 import dateutil.parser
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, commit_features, feature_cleanup, repository, utils
@@ -26,8 +28,6 @@ class BackoutModel(CommitModel):
         CommitModel.__init__(self, lemmatization, bug_data)
 
         self.calculate_importance = False
-
-        self.sampler = RandomUnderSampler(random_state=0)
 
         feature_extractors = [
             commit_features.SourceCodeFilesModifiedNum(),
@@ -74,7 +74,7 @@ class BackoutModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        self.extraction_pipeline = Pipeline(
+        self.extraction_pipeline = ImblearnPipeline(
             [
                 (
                     "commit_extractor",
@@ -82,19 +82,36 @@ class BackoutModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
                             ("desc", self.text_vectorizer(), "desc"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         classes = {}
@@ -112,14 +129,14 @@ class BackoutModel(CommitModel):
 
         logger.info(
             "%d commits were backed out",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
         logger.info(
             "%d commits were not backed out",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

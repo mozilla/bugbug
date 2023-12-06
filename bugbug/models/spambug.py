@@ -7,6 +7,7 @@ import logging
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -22,7 +23,6 @@ class SpamBugModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
 
         feature_extractors = [
@@ -63,6 +63,11 @@ class SpamBugModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -77,10 +82,13 @@ class SpamBugModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", BorderlineSMOTE(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         classes = {}
@@ -111,11 +119,11 @@ class SpamBugModel(BugModel):
 
         logger.info(
             "%d bugs are classified as non-spam",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs are classified as spam",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -130,7 +138,7 @@ class SpamBugModel(BugModel):
         )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

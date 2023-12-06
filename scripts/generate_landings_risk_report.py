@@ -194,7 +194,7 @@ class LandingsRiskReportGenerator(object):
         self,
         past_bugs_by: dict,
         commit: repository.CommitDict,
-        component: str = None,
+        component: str | None = None,
     ) -> list[dict]:
         paths = [
             path
@@ -258,7 +258,7 @@ class LandingsRiskReportGenerator(object):
         self,
         commit_group: dict,
         commit_list: list[repository.CommitDict],
-        component: str = None,
+        component: str | None = None,
     ) -> None:
         # Find previous regressions occurred in the same files as those touched by these commits.
         # And find previous bugs that were fixed by touching the same files as these commits.
@@ -1781,28 +1781,30 @@ List of revisions that have been waiting for a review for longer than 3 days:
                 period: relativedelta,
             ) -> dict[str, float]:
                 start_date = datetime.utcnow() - period
+                if team in super_teams:
+                    me_teams = super_teams[team]
+                else:
+                    me_teams = [team]
                 return bugzilla.calculate_maintenance_effectiveness_indicator(
-                    team, start_date, datetime.utcnow()
+                    me_teams, start_date, datetime.utcnow()
                 )
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return "ME: {}%, BDTime: {} y, WBDTime: {} y, Incoming vs total open: {} %, Closed vs total open: {} %".format(
+                return "ME: {}%, BurnDownTime: {} y, WeightedBurnDownTime: {} y".format(
                     round(me["ME"], 2),
                     round(me["BDTime"], 2),
                     round(me["WBDTime"], 2),
-                    round(me["Incoming vs total open"], 2),
-                    round(me["Closed vs total open"], 2),
                 )
 
-            maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
+            maintenance_effectiveness_section = f"""<b>[MAINTENANCE EFFECTIVENESS](https://docs.google.com/document/d/1y2dUDZI5U3xvY0jMY1LfIDARc5b_QB9mS2DV7MWrfa0)</b>
 <br />
 
 Last week: {format_maintenance_effectiveness(relativedelta(weeks=1))}
 
 Last month: {format_maintenance_effectiveness(relativedelta(months=1))}
 
-Last year: {format_maintenance_effectiveness(relativedelta(years=1))}
+Last 3 months: {format_maintenance_effectiveness(relativedelta(months=3))}
 """
 
             sections = [
