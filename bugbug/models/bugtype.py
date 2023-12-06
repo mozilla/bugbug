@@ -67,7 +67,10 @@ def bug_to_types(
     ):
         types.add("security")
 
-    if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
+    if "cf_performance_impact" in bug and bug["cf_performance_impact"] not in (
+        "---",
+        "?",
+    ):
         types.add("performance")
 
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
