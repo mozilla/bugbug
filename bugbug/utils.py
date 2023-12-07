@@ -558,3 +558,54 @@ def escape_markdown(text: str) -> str:
 def keep_as_is(x):
     """A tokenizer that does nothing."""
     return x
+
+
+def get_keyword_dict() -> dict:
+    """Returns a dictionary mapping keywords to bug types."""
+    return {
+        "sec-": "security",
+        "csectype-": "security",
+        "memory-": "memory",
+        "crash": "crash",
+        "crashreportid": "crash",
+        "perf": "performance",
+        "topperf": "performance",
+        "main-thread-io": "performance",
+        "power": "power",
+    }
+
+
+def is_performance_related(bug: dict) -> bool:
+    """Determine if the bug is related to performance based on given bug data."""
+    keyword_dict = get_keyword_dict()
+
+    bug_whiteboard = bug["whiteboard"].lower()
+
+    if any(
+        f"[{whiteboard_text}" in bug_whiteboard
+        for whiteboard_text in (
+            "fxperf",
+            "fxperfsize",
+            "snappy",
+            "pdfjs-c-performance",
+            "pdfjs-performance",
+            "sp3",
+        )
+    ):
+        return True
+
+    if "cf_performance_impact" in bug and bug["cf_performance_impact"] not in (
+        "---",
+        "?",
+        "none",
+    ):
+        return True
+
+    for keyword_start, type_ in keyword_dict.items():
+        if type_ != "performance":
+            continue
+
+        if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
+            return True
+
+    return False

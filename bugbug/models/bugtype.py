@@ -13,22 +13,17 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
+from bugbug.utils import (
+    get_keyword_dict,
+    get_physical_cpu_count,
+    is_performance_related,
+)
 
 logger = logging.getLogger(__name__)
 
-KEYWORD_DICT = {
-    "sec-": "security",
-    "csectype-": "security",
-    "memory-": "memory",
-    "crash": "crash",
-    "crashreportid": "crash",
-    "perf": "performance",
-    "topperf": "performance",
-    "main-thread-io": "performance",
-    "power": "power",
-}
+KEYWORD_DICT = get_keyword_dict()
 TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
@@ -48,17 +43,7 @@ def bug_to_types(
     if "[power" in bug_whiteboard:
         types.add("power")
 
-    if any(
-        f"[{whiteboard_text}" in bug_whiteboard
-        for whiteboard_text in (
-            "fxperf",
-            "fxperfsize",
-            "snappy",
-            "pdfjs-c-performance",
-            "pdfjs-performance",
-            "sp3",
-        )
-    ):
+    if is_performance_related(bug):
         types.add("performance")
 
     if any(
@@ -66,12 +51,6 @@ def bug_to_types(
         for whiteboard_text in ("client-bounty-form", "sec-survey")
     ):
         types.add("security")
-
-    if "cf_performance_impact" in bug and bug["cf_performance_impact"] not in (
-        "---",
-        "?",
-    ):
-        types.add("performance")
 
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
         types.add("crash")
@@ -85,9 +64,12 @@ def bug_to_types(
             if alias and alias.startswith("memshrink"):
                 types.add("memory")
 
-    for keyword_start, type in KEYWORD_DICT.items():
+    for keyword_start, type_ in KEYWORD_DICT.items():
+        if type_ in ["performance"]:
+            continue
+
         if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
-            types.add(type)
+            types.add(type_)
 
     return list(types)
 
@@ -158,7 +140,7 @@ class BugTypeModel(BugModel):
                 (
                     "estimator",
                     OneVsRestClassifier(
-                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+                        xgboost.XGBClassifier(n_jobs=get_physical_cpu_count())
                     ),
                 ),
             ]
