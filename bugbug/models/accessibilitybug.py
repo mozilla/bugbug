@@ -6,7 +6,8 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -22,10 +23,9 @@ class AccessibilityBugModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
 
-        feature_extractors = [
+        feature_extractors = [  # Check effect of removing features
             bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.Keywords(),
@@ -56,17 +56,17 @@ class AccessibilityBugModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.001), "title"),
-                            (
-                                "first_comment",
-                                self.text_vectorizer(min_df=0.001),
-                                "first_comment",
-                            ),
                             (
                                 "comments",
                                 self.text_vectorizer(min_df=0.001),
@@ -75,10 +75,18 @@ class AccessibilityBugModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+    def is_accessbility_bug(self, bug_data):
+        return ("access" in bug_data["keywords"]) or (
+            bug_data.get("cf_accessibility_severity", "---") != "---"
+        )
 
     def get_labels(self):
         classes = {}
@@ -86,16 +94,7 @@ class AccessibilityBugModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            # A bug that was  manually labelled "access" is an access bug.
-            if "access" in bug_data["keywords"]:
-                classes[bug_id] = 1
-
-            # A bug with the any value in accessibility_severity is also an accessibility bug
-            elif bug_data.get("cf_accessibility_severity", "---") != "---":
-                classes[bug_id] = 1
-
-            else:
-                classes[bug_id] = 0
+            classes[bug_id] = 1 if self.is_accessbility_bug(bug_data) else 0
 
         logger.info(
             "%d bugs are classified as non-accessibility",
@@ -113,8 +112,6 @@ class AccessibilityBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if ("access" in bug["keywords"]) or (
-                bug.get("cf_accessibility_severity", "---") != "---"
-            ):
+            if self.is_accessbility_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
         return classes
