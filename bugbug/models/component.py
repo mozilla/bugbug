@@ -53,6 +53,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox",
         "WebExtensions",
         "Firefox Build System",
+        "Fenix",
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
@@ -63,6 +64,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
         "WebExtensions": "WebExtensions::Untriaged",
         "Firefox Build System": "Firefox Build System::General",
+        "Fenix": "Fenix::General",
     }
 
     def __init__(self, lemmatization=False):
