@@ -74,7 +74,7 @@ class BackoutModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        self.extraction_pipeline = ImblearnPipeline(
+        self.extraction_pipeline = Pipeline(
             [
                 (
                     "commit_extractor",
@@ -85,7 +85,7 @@ class BackoutModel(CommitModel):
             ]
         )
 
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
