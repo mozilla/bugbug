@@ -6,7 +6,7 @@
 from bugbug.models.accessibilitybug import AccessibilityBugModel
 
 
-def test_get_defect_labels():
+def test_get_access_labels():
     model = AccessibilityBugModel()
     classes, _ = model.get_labels()
     assert classes[1586960] == 1
