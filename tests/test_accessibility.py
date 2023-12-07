@@ -9,7 +9,7 @@ from bugbug.models.accessibility import AccessibilityModel
 def test_get_access_labels():
     model = AccessibilityModel()
     classes, _ = model.get_labels()
-    assert classes[1854279] == 1
+    assert classes[1864876] == 1
     assert classes[1242711] == 1
 
     assert classes[1325215] == 0
