@@ -3,11 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from bugbug.models.accessibilitybug import AccessibilityBugModel
+from bugbug.models.accessibility import AccessibilityModel
 
 
 def test_get_access_labels():
-    model = AccessibilityBugModel()
+    model = AccessibilityModel()
     classes, _ = model.get_labels()
     assert classes[1586960] == 1
     assert classes[1777805] == 1
