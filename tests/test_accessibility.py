@@ -9,10 +9,8 @@ from bugbug.models.accessibility import AccessibilityModel
 def test_get_access_labels():
     model = AccessibilityModel()
     classes, _ = model.get_labels()
-    assert classes[1586960] == 1
-    assert classes[1777805] == 1
-    assert classes[1844103] == 1
-    assert classes[1852935] == 1
+    assert classes[1854279] == 1
+    assert classes[1242711] == 1
 
-    assert classes[1042414] == 0
-    assert classes[1049816] == 0
+    assert classes[1325215] == 0
+    assert classes[1320039] == 0

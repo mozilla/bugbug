@@ -25,7 +25,7 @@ class AccessibilityModel(BugModel):
 
         self.calculate_importance = False
 
-        feature_extractors = [  # Check effect of removing features
+        feature_extractors = [  # TODO: Check effect of removing some features
             bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.Keywords(),
@@ -67,6 +67,11 @@ class AccessibilityModel(BugModel):
                         [
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            (
+                                "first_comment",
+                                self.text_vectorizer(min_df=0.001),
+                                "first_comment",
+                            ),
                             (
                                 "comments",
                                 self.text_vectorizer(min_df=0.001),
