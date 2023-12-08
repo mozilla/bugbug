@@ -100,10 +100,9 @@ class PerformanceBugModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            if (
-                "cf_performance_impact" not in bug_data
-                or bug_data["cf_performance_impact"] == "?"
-            ):
+            if "cf_performance_impact" not in bug_data or bug_data[
+                "cf_performance_impact"
+            ] in ("?", "none"):
                 continue
 
             classes[bug_id] = 1 if _is_performance_bug(bug_data) else 0
