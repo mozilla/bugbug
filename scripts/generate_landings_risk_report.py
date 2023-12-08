@@ -30,7 +30,6 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
@@ -662,7 +661,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
-                "types": bug_to_types(bug, bug_map)
+                "types": bug_features.infer_bug_types(bug, bug_map)
                 + (
                     ["intermittent"]
                     if "intermittent-failure" in bug["keywords"]
@@ -881,7 +880,7 @@ class LandingsRiskReportGenerator(object):
 
         bug_map = {}
         for bug in bugzilla.get_bugs():
-            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
+            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the infer_bug_types call) and bugs that caused regressions.
             if (
                 bug["id"] in bugs_set
                 or len(bug["depends_on"]) > 0

@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from functools import partial
 from multiprocessing.pool import Pool
+from typing import Optional
 
 import dateutil.parser
 import pandas as pd
@@ -17,7 +18,7 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository
+from bugbug import bug_snapshot, bugzilla, repository
 
 
 def field(bug, field):
@@ -692,7 +693,7 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
 
 
-def is_performance_bug(bug: dict) -> bool:
+def is_performance_bug(bug: bugzilla.BugDict) -> bool:
     """Determine if the bug is related to performance based on given bug data."""
     if any(
         f"[{whiteboard_text}" in bug["whiteboard"].lower()
@@ -726,3 +727,114 @@ def is_performance_bug(bug: dict) -> bool:
         return True
 
     return False
+
+
+def is_memory_bug(
+    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
+) -> bool:
+    """Determine if the bug is related to memory based on given bug data."""
+    if any(
+        f"{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("overhead", "memshrink")
+    ):
+        return True
+
+    if bug_map is not None:
+        for bug_id in bug["blocks"]:
+            if bug_id not in bug_map:
+                continue
+
+            alias = bug_map[bug_id]["alias"]
+            if alias and alias.startswith("memshrink"):
+                return True
+
+    if any(
+        keyword.startswith(keyword_start)
+        for keyword_start in ("memory-",)
+        for keyword in bug["keywords"]
+    ):
+        return True
+
+    return False
+
+
+def is_power_bug(bug: bugzilla.BugDict) -> bool:
+    """Determine if the bug is related to power based on given bug data."""
+    if "[power" in bug["whiteboard"].lower():
+        return True
+
+    if any(
+        keyword.startswith(keyword_start)
+        for keyword_start in ("power",)
+        for keyword in bug["keywords"]
+    ):
+        return True
+
+    return False
+
+
+def is_security_bug(bug: bugzilla.BugDict) -> bool:
+    """Determine if the bug is related to security based on given bug data."""
+    if any(
+        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in ("client-bounty-form", "sec-survey")
+    ):
+        return True
+
+    if any(
+        keyword.startswith(keyword_start)
+        for keyword_start in ("sec-", "csectype-")
+        for keyword in bug["keywords"]
+    ):
+        return True
+
+    return False
+
+
+def is_crash_bug(bug: bugzilla.BugDict) -> bool:
+    """Determine if the bug is related to crash based on given bug data."""
+    if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
+        return True
+
+    if any(
+        keyword.startswith(keyword_start)
+        for keyword_start in ("crash", "crashreportid")
+        for keyword in bug["keywords"]
+    ):
+        return True
+
+    return False
+
+
+def infer_bug_types(
+    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
+) -> list[str]:
+    """Infer bug types based on various bug characteristics.
+
+    Args:
+    - bug (bugzilla.BugDict): A dictionary containing bug data.
+    - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
+        of bug IDs to bug dictionaries. Default is None.
+
+    Returns:
+    - list[str]: A list of inferred bug types (e.g., "memory", "power",
+        "performance", "security", "crash").
+    """
+    types = set()
+
+    if is_memory_bug(bug, bug_map):
+        types.add("memory")
+
+    if is_power_bug(bug):
+        types.add("power")
+
+    if is_performance_bug(bug):
+        types.add("performance")
+
+    if is_security_bug(bug):
+        types.add("security")
+
+    if is_crash_bug(bug):
+        types.add("crash")
+
+    return list(types)

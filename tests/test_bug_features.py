@@ -32,7 +32,12 @@ from bugbug.bug_features import (
     Product,
     Severity,
     Whiteboard,
+    infer_bug_types,
+    is_crash_bug,
+    is_memory_bug,
     is_performance_bug,
+    is_power_bug,
+    is_security_bug,
 )
 from bugbug.feature_cleanup import fileref, url
 
@@ -189,3 +194,63 @@ def test_is_performance_bug() -> None:
     assert is_performance_bug(bug_map[1320195]) is True
     assert is_performance_bug(bug_map[1388990]) is False
     assert is_performance_bug(bug_map[1389136]) is False
+
+
+def test_is_memory_bug() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    assert is_memory_bug(bug_map[1325215], bug_map) is True
+    assert is_memory_bug(bug_map[52352], bug_map) is True
+    assert is_memory_bug(bug_map[1320195], bug_map) is False
+    assert is_performance_bug(bug_map[1388990]) is False
+
+
+def test_is_power_bug() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    assert is_power_bug(bug_map[922874]) is True
+    assert is_power_bug(bug_map[965392]) is True
+    assert is_power_bug(bug_map[1325215]) is False
+    assert is_power_bug(bug_map[1320195]) is False
+
+
+def test_is_security_bug() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    assert is_security_bug(bug_map[528988]) is True
+    assert is_security_bug(bug_map[1320039]) is True
+    assert is_security_bug(bug_map[922874]) is False
+    assert is_security_bug(bug_map[965392]) is False
+
+
+def test_is_crash_bug() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    assert is_crash_bug(bug_map[1046231]) is True
+    assert is_crash_bug(bug_map[1046231]) is True
+    assert is_crash_bug(bug_map[528988]) is False
+    assert is_crash_bug(bug_map[1320039]) is False
+
+
+def test_infer_bug_types() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    result = infer_bug_types(bug_map[447581])
+    assert isinstance(result, list)
+    assert "performance" in result
+
+    result = infer_bug_types(bug_map[1325215], bug_map)
+    assert isinstance(result, list)
+    assert "memory" in result
+
+    result = infer_bug_types(bug_map[922874])
+    assert isinstance(result, list)
+    assert "power" in result
+
+    result = infer_bug_types(bug_map[528988])
+    assert isinstance(result, list)
+    assert "security" in result
+
+    result = infer_bug_types(bug_map[1046231])
+    assert isinstance(result, list)
+    assert "crash" in result

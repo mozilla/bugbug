@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Iterable, Optional
+from typing import Iterable
 
 import numpy as np
 import xgboost
@@ -19,65 +19,7 @@ from bugbug.utils import get_physical_cpu_count
 
 logger = logging.getLogger(__name__)
 
-KEYWORD_DICT = {
-    "sec-": "security",
-    "csectype-": "security",
-    "memory-": "memory",
-    "crash": "crash",
-    "crashreportid": "crash",
-    "perf": "performance",
-    "topperf": "performance",
-    "main-thread-io": "performance",
-    "power": "power",
-}
-TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
-
-
-def bug_to_types(
-    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
-) -> list[str]:
-    types = set()
-
-    bug_whiteboard = bug["whiteboard"].lower()
-
-    if any(
-        f"{whiteboard_text}" in bug_whiteboard
-        for whiteboard_text in ("overhead", "memshrink")
-    ):
-        types.add("memory")
-
-    if "[power" in bug_whiteboard:
-        types.add("power")
-
-    if bug_features.is_performance_bug(bug):
-        types.add("performance")
-
-    if any(
-        f"[{whiteboard_text}" in bug_whiteboard
-        for whiteboard_text in ("client-bounty-form", "sec-survey")
-    ):
-        types.add("security")
-
-    if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
-        types.add("crash")
-
-    if bug_map is not None:
-        for bug_id in bug["blocks"]:
-            if bug_id not in bug_map:
-                continue
-
-            alias = bug_map[bug_id]["alias"]
-            if alias and alias.startswith("memshrink"):
-                types.add("memory")
-
-    for keyword_start, type_ in KEYWORD_DICT.items():
-        if type_ in ["performance"]:
-            continue
-
-        if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
-            types.add(type_)
-
-    return list(types)
+TYPE_LIST = sorted(["security", "memory", "crash", "performance", "power"])
 
 
 class BugTypeModel(BugModel):
@@ -91,7 +33,19 @@ class BugTypeModel(BugModel):
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.Keywords(set(KEYWORD_DICT.keys())),
+            bug_features.Keywords(
+                {
+                    "sec-",
+                    "csectype-",
+                    "memory-",
+                    "crash",
+                    "crashreportid",
+                    "perf",
+                    "topperf",
+                    "main-thread-io",
+                    "power",
+                }
+            ),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
@@ -159,7 +113,7 @@ class BugTypeModel(BugModel):
 
         for bug_data in bug_map.values():
             target = np.zeros(len(TYPE_LIST))
-            for type_ in bug_to_types(bug_data, bug_map):
+            for type_ in bug_features.infer_bug_types(bug_data, bug_map):
                 target[TYPE_LIST.index(type_)] = 1
 
             classes[int(bug_data["id"])] = target
@@ -183,7 +137,7 @@ class BugTypeModel(BugModel):
         probabilities: bool,
     ):
         for i, bug in enumerate(bugs):
-            for type_ in bug_to_types(bug):
+            for type_ in bug_features.infer_bug_types(bug):
                 if probabilities:
                     classes[i][TYPE_LIST.index(type_)] = 1.0
                 else:
