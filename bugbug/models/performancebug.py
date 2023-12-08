@@ -41,8 +41,6 @@ class PerformanceBugModel(BugModel):
             bug_features.HasW3CURL(),
             bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
-            bug_features.Patches(),
-            bug_features.Landings(),
             bug_features.BlockedBugsNumber(),
             bug_features.EverAffected(),
             bug_features.AffectedThenUnaffected(),
