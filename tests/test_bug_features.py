@@ -8,6 +8,7 @@ import os
 
 import pytest
 
+from bugbug import bugzilla
 from bugbug.bug_features import (
     BlockedBugsNumber,
     BugExtractor,
@@ -31,6 +32,7 @@ from bugbug.bug_features import (
     Product,
     Severity,
     Whiteboard,
+    is_performance_bug,
 )
 from bugbug.feature_cleanup import fileref, url
 
@@ -178,3 +180,12 @@ def test_BugExtractor():
         BugExtractor([HasSTR(), HasSTR()], [fileref(), url()])
     with pytest.raises(AssertionError):
         BugExtractor([HasSTR(), HasURL()], [fileref(), fileref()])
+
+
+def test_is_performance_bug() -> None:
+    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
+
+    assert is_performance_bug(bug_map[447581]) is True
+    assert is_performance_bug(bug_map[1320195]) is True
+    assert is_performance_bug(bug_map[1388990]) is False
+    assert is_performance_bug(bug_map[1389136]) is False

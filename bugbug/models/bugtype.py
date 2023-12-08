@@ -15,15 +15,21 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup
 from bugbug.model import BugModel
-from bugbug.utils import (
-    get_keyword_dict,
-    get_physical_cpu_count,
-    is_performance_related,
-)
+from bugbug.utils import get_physical_cpu_count
 
 logger = logging.getLogger(__name__)
 
-KEYWORD_DICT = get_keyword_dict()
+KEYWORD_DICT = {
+    "sec-": "security",
+    "csectype-": "security",
+    "memory-": "memory",
+    "crash": "crash",
+    "crashreportid": "crash",
+    "perf": "performance",
+    "topperf": "performance",
+    "main-thread-io": "performance",
+    "power": "power",
+}
 TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
@@ -43,7 +49,7 @@ def bug_to_types(
     if "[power" in bug_whiteboard:
         types.add("power")
 
-    if is_performance_related(bug):
+    if bug_features.is_performance_bug(bug):
         types.add("performance")
 
     if any(

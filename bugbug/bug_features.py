@@ -690,3 +690,39 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             bugs_iter = apply_rollback(bugs_iter)
 
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
+
+
+def is_performance_bug(bug: dict) -> bool:
+    """Determine if the bug is related to performance based on given bug data."""
+    if any(
+        f"[{whiteboard_text}" in bug["whiteboard"].lower()
+        for whiteboard_text in (
+            "fxperf",
+            "fxperfsize",
+            "snappy",
+            "pdfjs-c-performance",
+            "pdfjs-performance",
+            "sp3",
+        )
+    ):
+        return True
+
+    if bug.get("cf_performance_impact") in (
+        "low",
+        "medium",
+        "high",
+    ):
+        return True
+
+    if any(
+        keyword.startswith(keyword_start)
+        for keyword_start in (
+            "perf",
+            "topperf",
+            "main-thread-io",
+        )
+        for keyword in bug["keywords"]
+    ):
+        return True
+
+    return False
