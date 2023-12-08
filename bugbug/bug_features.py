@@ -693,117 +693,146 @@ class BugExtractor(BaseEstimator, TransformerMixin):
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
 
 
-def is_performance_bug(bug: bugzilla.BugDict) -> bool:
+class IsPerformanceBug(SingleBugFeature):
     """Determine if the bug is related to performance based on given bug data."""
-    if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in (
-            "fxperf",
-            "fxperfsize",
-            "snappy",
-            "pdfjs-c-performance",
-            "pdfjs-performance",
-            "sp3",
-        )
-    ):
-        return True
 
-    if bug.get("cf_performance_impact") in (
-        "low",
-        "medium",
-        "high",
-    ):
-        return True
+    name = "Is Performance Bug"
 
-    if any(
-        keyword.startswith(keyword_start)
-        for keyword_start in (
-            "perf",
-            "topperf",
-            "main-thread-io",
-        )
-        for keyword in bug["keywords"]
-    ):
-        return True
+    def __init__(self):
+        self.keywords = set(["perf", "topperf", "main-thread-io"])
 
-    return False
+    def __call__(self, bug: bugzilla.BugDict) -> bool:
+        if any(
+            f"[{whiteboard_text}" in bug["whiteboard"].lower()
+            for whiteboard_text in (
+                "fxperf",
+                "fxperfsize",
+                "snappy",
+                "pdfjs-c-performance",
+                "pdfjs-performance",
+                "sp3",
+            )
+        ):
+            return True
+
+        if bug.get("cf_performance_impact") in ("low", "medium", "high"):
+            return True
+
+        if any(
+            keyword.startswith(keyword_start)
+            for keyword_start in self.keywords
+            for keyword in bug["keywords"]
+        ):
+            return True
+
+        return False
 
 
-def is_memory_bug(
-    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
-) -> bool:
+class IsMemoryBug(SingleBugFeature):
     """Determine if the bug is related to memory based on given bug data."""
-    if any(
-        f"{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in ("overhead", "memshrink")
-    ):
-        return True
 
-    if bug_map is not None:
-        for bug_id in bug["blocks"]:
-            if bug_id not in bug_map:
-                continue
+    name = "Is Memory Bug"
 
-            alias = bug_map[bug_id]["alias"]
-            if alias and alias.startswith("memshrink"):
-                return True
+    def __init__(self):
+        self.keywords = set(["memory-"])
 
-    if any(
-        keyword.startswith(keyword_start)
-        for keyword_start in ("memory-",)
-        for keyword in bug["keywords"]
-    ):
-        return True
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> bool:
+        if any(
+            f"{whiteboard_text}" in bug["whiteboard"].lower()
+            for whiteboard_text in ("overhead", "memshrink")
+        ):
+            return True
 
-    return False
+        if bug_map is not None:
+            for bug_id in bug["blocks"]:
+                if bug_id not in bug_map:
+                    continue
+
+                alias = bug_map[bug_id]["alias"]
+                if alias and alias.startswith("memshrink"):
+                    return True
+
+        if any(
+            keyword.startswith(keyword_start)
+            for keyword_start in self.keywords
+            for keyword in bug["keywords"]
+        ):
+            return True
+
+        return False
 
 
-def is_power_bug(bug: bugzilla.BugDict) -> bool:
+class IsPowerBug(SingleBugFeature):
     """Determine if the bug is related to power based on given bug data."""
-    if "[power" in bug["whiteboard"].lower():
-        return True
 
-    if any(
-        keyword.startswith(keyword_start)
-        for keyword_start in ("power",)
-        for keyword in bug["keywords"]
-    ):
-        return True
+    name = "Is Power Bug"
 
-    return False
+    def __init__(self):
+        self.keywords = set(["power"])
+
+    def __call__(self, bug: bugzilla.BugDict) -> bool:
+        if "[power" in bug["whiteboard"].lower():
+            return True
+
+        if any(
+            keyword.startswith(keyword_start)
+            for keyword_start in self.keywords
+            for keyword in bug["keywords"]
+        ):
+            return True
+
+        return False
 
 
-def is_security_bug(bug: bugzilla.BugDict) -> bool:
+class IsSecurityBug(SingleBugFeature):
     """Determine if the bug is related to security based on given bug data."""
-    if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in ("client-bounty-form", "sec-survey")
-    ):
-        return True
 
-    if any(
-        keyword.startswith(keyword_start)
-        for keyword_start in ("sec-", "csectype-")
-        for keyword in bug["keywords"]
-    ):
-        return True
+    name = "Is Security Bug"
 
-    return False
+    def __init__(self):
+        self.keywords = set(["sec-", "csectype-"])
+
+    def __call__(self, bug: bugzilla.BugDict) -> bool:
+        if any(
+            f"[{whiteboard_text}" in bug["whiteboard"].lower()
+            for whiteboard_text in ("client-bounty-form", "sec-survey")
+        ):
+            return True
+
+        if any(
+            keyword.startswith(keyword_start)
+            for keyword_start in self.keywords
+            for keyword in bug["keywords"]
+        ):
+            return True
+
+        return False
 
 
-def is_crash_bug(bug: bugzilla.BugDict) -> bool:
+class IsCrashBug(SingleBugFeature):
     """Determine if the bug is related to crash based on given bug data."""
-    if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
-        return True
 
-    if any(
-        keyword.startswith(keyword_start)
-        for keyword_start in ("crash", "crashreportid")
-        for keyword in bug["keywords"]
-    ):
-        return True
+    name = "Is Crash Bug"
 
-    return False
+    def __init__(self):
+        self.keywords = set(["crash", "crashreportid"])
+
+    def __call__(self, bug: bugzilla.BugDict) -> bool:
+        if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
+            return True
+
+        if any(
+            keyword.startswith(keyword_start)
+            for keyword_start in self.keywords
+            for keyword in bug["keywords"]
+        ):
+            return True
+
+        return False
 
 
 def infer_bug_types(
@@ -820,6 +849,12 @@ def infer_bug_types(
     - list[str]: A list of inferred bug types (e.g., "memory", "power",
         "performance", "security", "crash").
     """
+    is_performance_bug = IsPerformanceBug()
+    is_memory_bug = IsMemoryBug()
+    is_power_bug = IsPowerBug()
+    is_security_bug = IsSecurityBug()
+    is_crash_bug = IsCrashBug()
+
     types = set()
 
     if is_memory_bug(bug, bug_map):

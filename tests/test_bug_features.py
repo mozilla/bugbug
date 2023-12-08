@@ -25,7 +25,12 @@ from bugbug.bug_features import (
     HasURL,
     HasW3CURL,
     IsCoverityIssue,
+    IsCrashBug,
+    IsMemoryBug,
     IsMozillian,
+    IsPerformanceBug,
+    IsPowerBug,
+    IsSecurityBug,
     Keywords,
     Landings,
     Patches,
@@ -33,11 +38,6 @@ from bugbug.bug_features import (
     Severity,
     Whiteboard,
     infer_bug_types,
-    is_crash_bug,
-    is_memory_bug,
-    is_performance_bug,
-    is_power_bug,
-    is_security_bug,
 )
 from bugbug.feature_cleanup import fileref, url
 
@@ -188,6 +188,8 @@ def test_BugExtractor():
 
 
 def test_is_performance_bug() -> None:
+    is_performance_bug = IsPerformanceBug()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_performance_bug(bug_map[447581]) is True
@@ -197,15 +199,19 @@ def test_is_performance_bug() -> None:
 
 
 def test_is_memory_bug() -> None:
+    is_memory_bug = IsMemoryBug()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_memory_bug(bug_map[1325215], bug_map) is True
     assert is_memory_bug(bug_map[52352], bug_map) is True
     assert is_memory_bug(bug_map[1320195], bug_map) is False
-    assert is_performance_bug(bug_map[1388990]) is False
+    assert is_memory_bug(bug_map[1388990]) is False
 
 
 def test_is_power_bug() -> None:
+    is_power_bug = IsPowerBug()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_power_bug(bug_map[922874]) is True
@@ -215,6 +221,8 @@ def test_is_power_bug() -> None:
 
 
 def test_is_security_bug() -> None:
+    is_security_bug = IsSecurityBug()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_security_bug(bug_map[528988]) is True
@@ -224,6 +232,8 @@ def test_is_security_bug() -> None:
 
 
 def test_is_crash_bug() -> None:
+    is_crash_bug = IsCrashBug()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_crash_bug(bug_map[1046231]) is True

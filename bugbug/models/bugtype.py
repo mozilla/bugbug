@@ -28,24 +28,26 @@ class BugTypeModel(BugModel):
 
         self.calculate_importance = False
 
+        self.label_extractors = [
+            bug_features.IsPerformanceBug(),
+            bug_features.IsMemoryBug(),
+            bug_features.IsPowerBug(),
+            bug_features.IsSecurityBug(),
+            bug_features.IsCrashBug(),
+        ]
+
+        keywords = {
+            keyword
+            for extractor in self.label_extractors
+            for keyword in extractor.keywords
+        }
+
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.Keywords(
-                {
-                    "sec-",
-                    "csectype-",
-                    "memory-",
-                    "crash",
-                    "crashreportid",
-                    "perf",
-                    "topperf",
-                    "main-thread-io",
-                    "power",
-                }
-            ),
+            bug_features.Keywords(keywords),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
