@@ -54,7 +54,12 @@ class AccessibilityModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
                 ),
             ]
         )
@@ -89,8 +94,9 @@ class AccessibilityModel(BugModel):
         )
 
     def is_accessbility_bug(self, bug_data):
-        return ("access" in bug_data["keywords"]) or (
-            bug_data.get("cf_accessibility_severity", "---") != "---"
+        return (
+            "access" in bug_data["keywords"]
+            or bug_data.get("cf_accessibility_severity", "---") != "---"
         )
 
     def get_labels(self):
@@ -103,11 +109,11 @@ class AccessibilityModel(BugModel):
 
         logger.info(
             "%d bugs are classified as non-accessibility",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs are classified as accessibility",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]
