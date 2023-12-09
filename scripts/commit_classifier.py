@@ -11,7 +11,7 @@ import re
 import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Optional, cast
+from typing import cast
 
 import dateutil.parser
 import hglib
@@ -136,8 +136,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
-        phabricator_deployment: Optional[str] = None,
-        diff_id: Optional[int] = None,
+        phabricator_deployment: str | None = None,
+        diff_id: int | None = None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -582,8 +582,8 @@ class CommitClassifier(object):
 
     def classify(
         self,
-        revision: Optional[str] = None,
-        runnable_jobs_path: Optional[str] = None,
+        revision: str | None = None,
+        runnable_jobs_path: str | None = None,
     ) -> None:
         self.update_commit_db()
 
