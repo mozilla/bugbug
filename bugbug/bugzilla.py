@@ -9,7 +9,7 @@ import math
 import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable, Iterator, NewType, Optional
+from typing import Iterable, Iterator, NewType
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -82,7 +82,7 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 INCLUDE_FIELDS = ["_default", "filed_via"]
 
 
-def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
+def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
     yield from (
         bug
         for bug in db.read(BUGS_DB)

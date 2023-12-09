@@ -3,7 +3,6 @@
 import argparse
 from datetime import datetime, timezone
 from logging import getLogger
-from typing import Optional
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta
@@ -18,7 +17,7 @@ class Retriever(object):
     def retrieve_revisions(
         self,
         limit_months: int = 2,
-        limit_count: Optional[int] = None,
+        limit_count: int | None = None,
     ) -> None:
         """Retrieve revisions from Phabricator.
 
