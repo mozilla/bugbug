@@ -18,7 +18,7 @@ import textwrap
 import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Set, cast
+from typing import Any, Set, cast
 
 import bs4
 import dateutil.parser
@@ -1366,7 +1366,7 @@ def notification(days: int) -> None:
             )
         )
 
-    def get_top_crashes(team: str, channel: str) -> Optional[str]:
+    def get_top_crashes(team: str, channel: str) -> str | None:
         top_crashes = []
 
         if team in super_teams:
