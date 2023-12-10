@@ -119,8 +119,8 @@ class PerformanceBugModel(BugModel):
             return True
 
         if change["field_name"] == "keywords" and any(
-            keyword.startswith(keyword_start)
-            for keyword_start in ("perf", "topperf", "main-thread-io")
+            keyword.startswith(prefix)
+            for prefix in ("perf", "topperf", "main-thread-io")
             for keyword in change["added"]
         ):
             return True
