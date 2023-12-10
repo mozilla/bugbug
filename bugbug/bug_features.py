@@ -697,11 +697,14 @@ class IsPerformanceBug(SingleBugFeature):
     """Determine if the bug is related to performance based on given bug data."""
 
     name = "Is Performance Bug"
+    type_name = "performance"
+    keywords = {"perf", "topperf", "main-thread-io"}
 
-    def __init__(self):
-        self.keywords = set(["perf", "topperf", "main-thread-io"])
-
-    def __call__(self, bug: bugzilla.BugDict) -> bool:
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> bool:
         if any(
             f"[{whiteboard_text}" in bug["whiteboard"].lower()
             for whiteboard_text in (
@@ -719,8 +722,8 @@ class IsPerformanceBug(SingleBugFeature):
             return True
 
         if any(
-            keyword.startswith(keyword_start)
-            for keyword_start in self.keywords
+            keyword.startswith(prefix)
+            for prefix in self.keywords
             for keyword in bug["keywords"]
         ):
             return True
@@ -732,9 +735,8 @@ class IsMemoryBug(SingleBugFeature):
     """Determine if the bug is related to memory based on given bug data."""
 
     name = "Is Memory Bug"
-
-    def __init__(self):
-        self.keywords = set(["memory-"])
+    type_name = "memory"
+    keywords = {"memory-"}
 
     def __call__(
         self,
@@ -757,8 +759,8 @@ class IsMemoryBug(SingleBugFeature):
                     return True
 
         if any(
-            keyword.startswith(keyword_start)
-            for keyword_start in self.keywords
+            keyword.startswith(prefix)
+            for prefix in self.keywords
             for keyword in bug["keywords"]
         ):
             return True
@@ -770,17 +772,20 @@ class IsPowerBug(SingleBugFeature):
     """Determine if the bug is related to power based on given bug data."""
 
     name = "Is Power Bug"
+    type_name = "power"
+    keywords = {"power"}
 
-    def __init__(self):
-        self.keywords = set(["power"])
-
-    def __call__(self, bug: bugzilla.BugDict) -> bool:
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> bool:
         if "[power" in bug["whiteboard"].lower():
             return True
 
         if any(
-            keyword.startswith(keyword_start)
-            for keyword_start in self.keywords
+            keyword.startswith(prefix)
+            for prefix in self.keywords
             for keyword in bug["keywords"]
         ):
             return True
@@ -792,11 +797,14 @@ class IsSecurityBug(SingleBugFeature):
     """Determine if the bug is related to security based on given bug data."""
 
     name = "Is Security Bug"
+    type_name = "security"
+    keywords = {"sec-", "csectype-"}
 
-    def __init__(self):
-        self.keywords = set(["sec-", "csectype-"])
-
-    def __call__(self, bug: bugzilla.BugDict) -> bool:
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> bool:
         if any(
             f"[{whiteboard_text}" in bug["whiteboard"].lower()
             for whiteboard_text in ("client-bounty-form", "sec-survey")
@@ -804,8 +812,8 @@ class IsSecurityBug(SingleBugFeature):
             return True
 
         if any(
-            keyword.startswith(keyword_start)
-            for keyword_start in self.keywords
+            keyword.startswith(prefix)
+            for prefix in self.keywords
             for keyword in bug["keywords"]
         ):
             return True
@@ -817,17 +825,20 @@ class IsCrashBug(SingleBugFeature):
     """Determine if the bug is related to crash based on given bug data."""
 
     name = "Is Crash Bug"
+    type_name = "crash"
+    keywords = {"crash", "crashreportid"}
 
-    def __init__(self):
-        self.keywords = set(["crash", "crashreportid"])
-
-    def __call__(self, bug: bugzilla.BugDict) -> bool:
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> bool:
         if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
             return True
 
         if any(
-            keyword.startswith(keyword_start)
-            for keyword_start in self.keywords
+            keyword.startswith(prefix)
+            for prefix in self.keywords
             for keyword in bug["keywords"]
         ):
             return True
@@ -835,41 +846,39 @@ class IsCrashBug(SingleBugFeature):
         return False
 
 
-def infer_bug_types(
-    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
-) -> list[str]:
-    """Infer bug types based on various bug characteristics.
+class BugTypes(SingleBugFeature):
+    """Determine bug type."""
 
-    Args:
-    - bug (bugzilla.BugDict): A dictionary containing bug data.
-    - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
-        of bug IDs to bug dictionaries. Default is None.
+    name = "Infer Bug Type"
+    bug_type_extractors: list = sorted(
+        [
+            IsPerformanceBug(),
+            IsMemoryBug(),
+            IsPowerBug(),
+            IsSecurityBug(),
+            IsCrashBug(),
+        ],
+        key=lambda x: x.type_name.lower(),
+    )
 
-    Returns:
-    - list[str]: A list of inferred bug types (e.g., "memory", "power",
-        "performance", "security", "crash").
-    """
-    is_performance_bug = IsPerformanceBug()
-    is_memory_bug = IsMemoryBug()
-    is_power_bug = IsPowerBug()
-    is_security_bug = IsSecurityBug()
-    is_crash_bug = IsCrashBug()
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+    ) -> list[str]:
+        """Infer bug types based on various bug characteristics.
 
-    types = set()
+        Args:
+        - bug (bugzilla.BugDict): A dictionary containing bug data.
+        - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
+            of bug IDs to bug dictionaries. Default is None.
 
-    if is_memory_bug(bug, bug_map):
-        types.add("memory")
-
-    if is_power_bug(bug):
-        types.add("power")
-
-    if is_performance_bug(bug):
-        types.add("performance")
-
-    if is_security_bug(bug):
-        types.add("security")
-
-    if is_crash_bug(bug):
-        types.add("crash")
-
-    return list(types)
+        Returns:
+        - list[str]: A list of inferred bug types (e.g., "memory", "power",
+            "performance", "security", "crash").
+        """
+        return [
+            is_type.type_name
+            for is_type in self.bug_type_extractors
+            if is_type(bug, bug_map)
+        ]

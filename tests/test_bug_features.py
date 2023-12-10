@@ -13,6 +13,7 @@ from bugbug.bug_features import (
     BlockedBugsNumber,
     BugExtractor,
     BugReporter,
+    BugTypes,
     CommentCount,
     CommentLength,
     Component,
@@ -37,7 +38,6 @@ from bugbug.bug_features import (
     Product,
     Severity,
     Whiteboard,
-    infer_bug_types,
 )
 from bugbug.feature_cleanup import fileref, url
 
@@ -242,7 +242,9 @@ def test_is_crash_bug() -> None:
     assert is_crash_bug(bug_map[1320039]) is False
 
 
-def test_infer_bug_types() -> None:
+def test_bug_types() -> None:
+    infer_bug_types = BugTypes()
+
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     result = infer_bug_types(bug_map[447581])

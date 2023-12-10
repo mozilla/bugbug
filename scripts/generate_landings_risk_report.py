@@ -554,6 +554,8 @@ class LandingsRiskReportGenerator(object):
 
         component_team_mapping = get_component_team_mapping()
 
+        infer_bug_types = bug_features.BugTypes()
+
         bug_summaries = []
         for bug_id in bugs:
             if bug_id not in bug_map:
@@ -661,7 +663,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
-                "types": bug_features.infer_bug_types(bug, bug_map)
+                "types": infer_bug_types(bug, bug_map)
                 + (
                     ["intermittent"]
                     if "intermittent-failure" in bug["keywords"]

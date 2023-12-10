@@ -13,13 +13,10 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup
+from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
-from bugbug.utils import get_physical_cpu_count
 
 logger = logging.getLogger(__name__)
-
-TYPE_LIST = sorted(["security", "memory", "crash", "performance", "power"])
 
 
 class BugTypeModel(BugModel):
@@ -28,15 +25,10 @@ class BugTypeModel(BugModel):
 
         self.calculate_importance = False
 
-        self.label_extractors = [
-            bug_features.IsPerformanceBug(),
-            bug_features.IsMemoryBug(),
-            bug_features.IsPowerBug(),
-            bug_features.IsSecurityBug(),
-            bug_features.IsCrashBug(),
-        ]
+        bug_types = bug_features.BugTypes()
+        self.label_extractors = bug_types.bug_type_extractors
 
-        keywords = {
+        label_keywords = {
             keyword
             for extractor in self.label_extractors
             for keyword in extractor.keywords
@@ -47,7 +39,7 @@ class BugTypeModel(BugModel):
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.Keywords(keywords),
+            bug_features.Keywords(label_keywords),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
@@ -102,7 +94,7 @@ class BugTypeModel(BugModel):
                 (
                     "estimator",
                     OneVsRestClassifier(
-                        xgboost.XGBClassifier(n_jobs=get_physical_cpu_count())
+                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
                     ),
                 ),
             ]
@@ -114,20 +106,23 @@ class BugTypeModel(BugModel):
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
 
         for bug_data in bug_map.values():
-            target = np.zeros(len(TYPE_LIST))
-            for type_ in bug_features.infer_bug_types(bug_data, bug_map):
-                target[TYPE_LIST.index(type_)] = 1
+            target = np.zeros(len(self.label_extractors))
+            for i, is_type in enumerate(self.label_extractors):
+                if is_type(bug_data, bug_map):
+                    target[i] = 1
 
             classes[int(bug_data["id"])] = target
 
-        for type_ in TYPE_LIST:
+        type_list = [extractor.type_name.lower() for extractor in self.label_extractors]
+
+        for type_ in type_list:
             logger.info(
                 "%d %s bugs",
-                sum(target[TYPE_LIST.index(type_)] == 1 for target in classes.values()),
+                sum(target[type_list.index(type_)] == 1 for target in classes.values()),
                 type_,
             )
 
-        return classes, TYPE_LIST
+        return classes, type_list
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
@@ -138,11 +133,14 @@ class BugTypeModel(BugModel):
         classes: dict[int, np.ndarray],
         probabilities: bool,
     ):
+        bug_map = {bug["id"]: bug for bug in bugs}
+
         for i, bug in enumerate(bugs):
-            for type_ in bug_features.infer_bug_types(bug):
-                if probabilities:
-                    classes[i][TYPE_LIST.index(type_)] = 1.0
-                else:
-                    classes[i][TYPE_LIST.index(type_)] = 1
+            for j, is_type in enumerate(self.label_extractors):
+                if is_type(bug, bug_map):
+                    if probabilities:
+                        classes[i][j] = 1.0
+                    else:
+                        classes[i][j] = 1
 
         return classes
