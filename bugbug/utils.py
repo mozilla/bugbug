@@ -17,7 +17,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 import boto3
 import dateutil.parser
@@ -207,7 +207,7 @@ def download_check_etag(url, path=None):
     return True
 
 
-def get_last_modified(url: str) -> Optional[datetime]:
+def get_last_modified(url: str) -> datetime | None:
     session = get_session(urllib.parse.urlparse(url).netloc)
     r = session.head(url, allow_redirects=True)
 
@@ -524,7 +524,7 @@ def extract_metadata(body: str) -> dict:
     return dict(match_list)
 
 
-def extract_private(issue_body: str) -> Optional[tuple]:
+def extract_private(issue_body: str) -> tuple | None:
     """Extract private issue information from public issue body.
 
     Parse public issue body and extract private issue number and
