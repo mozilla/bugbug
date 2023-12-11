@@ -42,10 +42,7 @@ class PerformanceBugModel(BugModel):
             bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
             bug_features.BlockedBugsNumber(),
-            bug_features.EverAffected(),
-            bug_features.AffectedThenUnaffected(),
             bug_features.Product(),
-            bug_features.Component(),
         ]
 
         cleanup_functions = [
@@ -73,11 +70,6 @@ class PerformanceBugModel(BugModel):
                         [
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
-                            (
-                                "first_comment",
-                                self.text_vectorizer(min_df=0.001),
-                                "first_comment",
-                            ),
                             (
                                 "comments",
                                 self.text_vectorizer(min_df=0.0001),
