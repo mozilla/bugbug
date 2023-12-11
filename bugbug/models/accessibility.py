@@ -25,21 +25,15 @@ class AccessibilityModel(BugModel):
 
         self.calculate_importance = False
 
-        feature_extractors = [  # TODO: Check effect of removing some features
+        feature_extractors = [  # TODO: Check effect of adding/removing some features
             bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.Keywords(),
-            bug_features.IsCoverityIssue(),
-            bug_features.HasCrashSignature(),
-            bug_features.HasURL(),
-            bug_features.HasW3CURL(),
-            bug_features.HasGithubURL(),
             bug_features.Whiteboard(),
-            bug_features.Patches(),
-            bug_features.Landings(),
-            bug_features.BlockedBugsNumber(),
             bug_features.EverAffected(),
             bug_features.AffectedThenUnaffected(),
+            bug_features.HasImageAttachment(),
+            bug_features.HasImageAttachmentAtBugCreation(),
             bug_features.Product(),
             bug_features.Component(),
         ]
@@ -71,15 +65,10 @@ class AccessibilityModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.001), "title"),
-                            (
-                                "first_comment",
-                                self.text_vectorizer(min_df=0.001),
-                                "first_comment",
-                            ),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
                                 "comments",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(min_df=0.0001),
                                 "comments",
                             ),
                         ]
@@ -97,6 +86,11 @@ class AccessibilityModel(BugModel):
         return (
             "access" in bug_data["keywords"]
             or bug_data.get("cf_accessibility_severity", "---") != "---"
+        )
+
+    def rollback(self, change):
+        return (change["field_name"] == "keywords" and change["added"] == "access") or (
+            change["field_name"].startswith("cf_accessibility_severity")
         )
 
     def get_labels(self):
