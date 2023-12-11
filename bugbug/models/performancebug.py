@@ -59,10 +59,7 @@ class PerformanceBugModel(BugModel):
                 (
                     "bug_extractor",
                     bug_features.BugExtractor(
-                        feature_extractors,
-                        cleanup_functions,
-                        rollback=True,
-                        rollback_when=self.rollback,
+                        feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
             ]
@@ -96,36 +93,6 @@ class PerformanceBugModel(BugModel):
                 ),
             ]
         )
-
-    def rollback(self, change):
-        if change["field_name"] == "whiteboard" and any(
-            f"[{whiteboard_text}" in change["added"].lower()
-            for whiteboard_text in (
-                "fxperf",
-                "fxperfsize",
-                "snappy",
-                "pdfjs-c-performance",
-                "pdfjs-performance",
-                "sp3",
-            )
-        ):
-            return True
-
-        if change["field_name"] == "cf_performance_impact" and change["added"] in (
-            "low",
-            "medium",
-            "high",
-        ):
-            return True
-
-        if change["field_name"] == "keywords" and any(
-            keyword.startswith(prefix)
-            for prefix in ("perf", "topperf", "main-thread-io")
-            for keyword in change["added"]
-        ):
-            return True
-
-        return False
 
     def get_labels(self):
         classes = {}
