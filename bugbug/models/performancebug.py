@@ -6,8 +6,8 @@
 import logging
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -89,7 +89,7 @@ class PerformanceBugModel(BugModel):
                         ]
                     ),
                 ),
-                ("sampler", RandomUnderSampler(random_state=0)),
+                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
