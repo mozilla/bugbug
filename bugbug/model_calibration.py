@@ -14,7 +14,6 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
         self.calibrated_clf = CalibratedClassifierCV(
             base_clf, cv="prefit", method="isotonic"
         )
-        self.n_features_in_ = None
 
     def fit(self, X_train, y_train):
         X_train, X_val, y_train, y_val = train_test_split(
@@ -22,10 +21,13 @@ class IsotonicRegressionCalibrator(BaseEstimator, ClassifierMixin):
         )
         self.base_clf.fit(X_train, y_train)
         self.calibrated_clf.fit(X_val, y_val)
-        self.n_features_in_ = self.base_clf.n_features_in_
 
     def predict(self, X):
         return self.calibrated_clf.predict(X)
 
     def predict_proba(self, X):
         return self.calibrated_clf.predict_proba(X)
+
+    @property
+    def n_features_in_(self):
+        return self.base_clf.n_features_in_
