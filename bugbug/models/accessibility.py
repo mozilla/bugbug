@@ -6,8 +6,8 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -23,7 +23,7 @@ class AccessibilityModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.calculate_importance = True
+        self.calculate_importance = False
 
         feature_extractors = [
             bug_features.HasSTR(),
@@ -70,7 +70,7 @@ class AccessibilityModel(BugModel):
                         ]
                     ),
                 ),
-                ("sampler", BorderlineSMOTE(random_state=0)),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
