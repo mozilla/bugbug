@@ -23,16 +23,13 @@ class AccessibilityModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.calculate_importance = False
+        self.calculate_importance = True
 
-        feature_extractors = [  # TODO: Check effect of adding/removing some features
+        feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Severity(),
             bug_features.Keywords(),
             bug_features.Whiteboard(),
-            bug_features.EverAffected(),
-            bug_features.AffectedThenUnaffected(),
-            bug_features.HasImageAttachment(),
             bug_features.HasImageAttachmentAtBugCreation(),
             bug_features.Product(),
             bug_features.Component(),
@@ -52,7 +49,6 @@ class AccessibilityModel(BugModel):
                         feature_extractors,
                         cleanup_functions,
                         rollback=True,
-                        rollback_when=self.rollback,
                     ),
                 ),
             ]
@@ -67,9 +63,9 @@ class AccessibilityModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "comments",
+                                "first_comment",
                                 self.text_vectorizer(min_df=0.0001),
-                                "comments",
+                                "first_comment",
                             ),
                         ]
                     ),
@@ -86,11 +82,6 @@ class AccessibilityModel(BugModel):
         return (
             "access" in bug_data["keywords"]
             or bug_data.get("cf_accessibility_severity", "---") != "---"
-        )
-
-    def rollback(self, change):
-        return (change["field_name"] == "keywords" and change["added"] == "access") or (
-            change["field_name"].startswith("cf_accessibility_severity")
         )
 
     def get_labels(self):
