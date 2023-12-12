@@ -71,9 +71,9 @@ class PerformanceBugModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "comments",
+                                "first_comment",
                                 self.text_vectorizer(min_df=0.0001),
-                                "comments",
+                                "first_comment",
                             ),
                         ]
                     ),
