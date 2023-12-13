@@ -28,11 +28,12 @@ class AccessibilityModel(BugModel):
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Severity(),
-            bug_features.Keywords({"access"}),
+            bug_features.Keywords(),
             bug_features.Whiteboard(),
             bug_features.HasImageAttachmentAtBugCreation(),
             bug_features.Product(),
             bug_features.Component(),
+            bug_features.FiledVia(),
         ]
 
         cleanup_functions = [
