@@ -34,7 +34,7 @@ class PerformanceBugModel(BugModel):
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Severity(),
-            bug_features.Keywords(),
+            bug_features.Keywords({"perf", "topperf", "main-thread-io"}),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
@@ -47,6 +47,8 @@ class PerformanceBugModel(BugModel):
             bug_features.BugReporter(),
             bug_features.Priority(),
             bug_features.HasCVEInAlias(),
+            bug_features.HasAttachment(),
+            bug_features.FiledVia(),
         ]
 
         cleanup_functions = [
@@ -122,6 +124,9 @@ class PerformanceBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
+            if bug["cf_performance_impact"] in ("low", "medium", "high"):
+                continue
+
             if _is_performance_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
 
