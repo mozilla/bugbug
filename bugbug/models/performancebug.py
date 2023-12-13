@@ -124,9 +124,6 @@ class PerformanceBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if bug["cf_performance_impact"] in ("low", "medium", "high"):
-                continue
-
             if _is_performance_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
 
