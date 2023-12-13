@@ -31,7 +31,7 @@ class BugTypeModel(BugModel):
         label_keywords = {
             keyword
             for extractor in self.label_extractors
-            for keyword in extractor.keywords
+            for keyword in extractor.keyword_prefixes
         }
 
         feature_extractors = [

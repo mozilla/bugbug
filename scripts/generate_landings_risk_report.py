@@ -554,7 +554,7 @@ class LandingsRiskReportGenerator(object):
 
         component_team_mapping = get_component_team_mapping()
 
-        infer_bug_types = bug_features.BugTypes()
+        bug_to_types = bug_features.BugTypes()
 
         bug_summaries = []
         for bug_id in bugs:
@@ -663,7 +663,7 @@ class LandingsRiskReportGenerator(object):
                 ),
                 "summary": bug["summary"],
                 "fixed": bug["status"] in ("VERIFIED", "RESOLVED"),
-                "types": infer_bug_types(bug, bug_map)
+                "types": bug_to_types(bug, bug_map)
                 + (
                     ["intermittent"]
                     if "intermittent-failure" in bug["keywords"]
@@ -882,7 +882,7 @@ class LandingsRiskReportGenerator(object):
 
         bug_map = {}
         for bug in bugzilla.get_bugs():
-            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the infer_bug_types call) and bugs that caused regressions.
+            # Only add to the map bugs we are interested in, bugs that are blocked by other bugs (needed for the bug_to_types call) and bugs that caused regressions.
             if (
                 bug["id"] in bugs_set
                 or len(bug["depends_on"]) > 0

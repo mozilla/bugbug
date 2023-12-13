@@ -9,7 +9,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from functools import partial
 from multiprocessing.pool import Pool
-from typing import Optional
 
 import dateutil.parser
 import pandas as pd
@@ -698,23 +697,23 @@ class IsPerformanceBug(SingleBugFeature):
 
     name = "Is Performance Bug"
     type_name = "performance"
-    keywords = {"perf", "topperf", "main-thread-io"}
+    keyword_prefixes = ("perf", "topperf", "main-thread-io")
+    whiteboard_prefixes = (
+        "[fxperf",
+        "[fxperfsize",
+        "[snappy",
+        "[pdfjs-c-performance",
+        "[pdfjs-performance",
+        "[sp3",
+    )
 
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
         if any(
-            f"[{whiteboard_text}" in bug["whiteboard"].lower()
-            for whiteboard_text in (
-                "fxperf",
-                "fxperfsize",
-                "snappy",
-                "pdfjs-c-performance",
-                "pdfjs-performance",
-                "sp3",
-            )
+            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
         ):
             return True
 
@@ -723,7 +722,7 @@ class IsPerformanceBug(SingleBugFeature):
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keywords
+            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
         ):
             return True
@@ -736,16 +735,16 @@ class IsMemoryBug(SingleBugFeature):
 
     name = "Is Memory Bug"
     type_name = "memory"
-    keywords = {"memory-"}
+    keyword_prefixes = ("memory-",)
+    whiteboard_prefixes = ("[overhead", "[memshrink")
 
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
         if any(
-            f"{whiteboard_text}" in bug["whiteboard"].lower()
-            for whiteboard_text in ("overhead", "memshrink")
+            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
         ):
             return True
 
@@ -760,7 +759,7 @@ class IsMemoryBug(SingleBugFeature):
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keywords
+            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
         ):
             return True
@@ -773,19 +772,22 @@ class IsPowerBug(SingleBugFeature):
 
     name = "Is Power Bug"
     type_name = "power"
-    keywords = {"power"}
+    keyword_prefixes = ("power",)
+    whiteboard_prefixes = ("[power",)
 
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if "[power" in bug["whiteboard"].lower():
+        if any(
+            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
+        ):
             return True
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keywords
+            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
         ):
             return True
@@ -798,22 +800,22 @@ class IsSecurityBug(SingleBugFeature):
 
     name = "Is Security Bug"
     type_name = "security"
-    keywords = {"sec-", "csectype-"}
+    keyword_prefixes = ("sec-", "csectype-")
+    whiteboard_prefixes = ("[client-bounty-form", "[sec-survey")
 
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
         if any(
-            f"[{whiteboard_text}" in bug["whiteboard"].lower()
-            for whiteboard_text in ("client-bounty-form", "sec-survey")
+            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
         ):
             return True
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keywords
+            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
         ):
             return True
@@ -826,19 +828,19 @@ class IsCrashBug(SingleBugFeature):
 
     name = "Is Crash Bug"
     type_name = "crash"
-    keywords = {"crash", "crashreportid"}
+    keyword_prefixes = ("crash", "crashreportid")
 
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
         if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
             return True
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keywords
+            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
         ):
             return True
@@ -864,7 +866,7 @@ class BugTypes(SingleBugFeature):
     def __call__(
         self,
         bug: bugzilla.BugDict,
-        bug_map: Optional[dict[int, bugzilla.BugDict]] = None,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> list[str]:
         """Infer bug types based on various bug characteristics.
 
