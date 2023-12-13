@@ -4,10 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from datetime import datetime
 
 import xgboost
-from dateutil.relativedelta import relativedelta
 from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
@@ -30,7 +28,7 @@ class AccessibilityModel(BugModel):
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Severity(),
-            bug_features.Keywords(),
+            bug_features.Keywords({"access"}),
             bug_features.Whiteboard(),
             bug_features.HasImageAttachmentAtBugCreation(),
             bug_features.Product(),
@@ -89,12 +87,6 @@ class AccessibilityModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        all_ids = self.get_access_ids(years=4, months=6) + self.get_access_sev_ids(
-            years=4, months=6
-        )
-
-        bugzilla.download_bugs(all_ids)
-
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
@@ -119,29 +111,3 @@ class AccessibilityModel(BugModel):
             if self.is_accessbility_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
         return classes
-
-    def get_access_ids(self, years: int, months: int) -> list[int]:
-        years_and_months_ago = datetime.utcnow() - relativedelta(
-            years=years, months=months
-        )
-        access_params = {
-            "f1": "creation_ts",
-            "o1": "greaterthan",
-            "v1": years_and_months_ago.strftime("%Y-%m-%d"),
-            "keywords": "access",
-        }
-
-        return bugzilla.get_ids(access_params)
-
-    def get_access_sev_ids(self, years: int, months: int) -> list[int]:
-        years_and_months_ago = datetime.utcnow() - relativedelta(
-            years=years, months=months
-        )
-        access_sev_params = {
-            "f1": "creation_ts",
-            "o1": "greaterthan",
-            "v1": years_and_months_ago.strftime("%Y-%m-%d"),
-            "cf_accessibility_severity": ["S1", "S2", "S3", "S4"],
-        }
-
-        return bugzilla.get_ids(access_sev_params)
