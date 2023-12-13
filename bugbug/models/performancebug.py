@@ -43,12 +43,19 @@ class PerformanceBugModel(BugModel):
             bug_features.Whiteboard(),
             bug_features.BlockedBugsNumber(),
             bug_features.Product(),
+            bug_features.HasRegressionRange(),
+            bug_features.BugReporter(),
+            bug_features.Priority(),
+            bug_features.HasCVEInAlias(),
         ]
 
         cleanup_functions = [
             feature_cleanup.fileref(),
             feature_cleanup.url(),
             feature_cleanup.synonyms(),
+            feature_cleanup.hex(),
+            feature_cleanup.dll(),
+            feature_cleanup.crash(),
         ]
 
         self.extraction_pipeline = Pipeline(
