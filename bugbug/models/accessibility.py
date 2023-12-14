@@ -30,7 +30,7 @@ class AccessibilityModel(BugModel):
             bug_features.Severity(),
             bug_features.Keywords(),
             bug_features.Whiteboard(),
-            bug_features.HasImageAttachmentAtBugCreation(),
+            bug_features.HasAttachment(),
             bug_features.Product(),
             bug_features.Component(),
             bug_features.FiledVia(),
