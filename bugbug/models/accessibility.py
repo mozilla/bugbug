@@ -34,6 +34,9 @@ class AccessibilityModel(BugModel):
             bug_features.Product(),
             bug_features.Component(),
             bug_features.FiledVia(),
+            bug_features.SeeAlsoBugs(),
+            bug_features.DependsOnBugs(),
+            bug_features.BlockedBugs(),
         ]
 
         cleanup_functions = [

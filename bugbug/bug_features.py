@@ -84,6 +84,13 @@ class NumberOfBugDependencies(SingleBugFeature):
         return len(bug["depends_on"])
 
 
+class DependsOnBugs(SingleBugFeature):
+    name = "Depends On"
+
+    def __call__(self, bug, **kwargs):
+        return bug["depends_on"]
+
+
 class IsCoverityIssue(SingleBugFeature):
     name = "Is Coverity issue"
 
@@ -247,6 +254,20 @@ class BlockedBugsNumber(SingleBugFeature):
 
     def __call__(self, bug, **kwargs):
         return len(bug["blocks"])
+
+
+class BlockedBugs(SingleBugFeature):
+    name = "Blocked Bugs"
+
+    def __call__(self, bug, **kwargs):
+        return bug["blocks"]
+
+
+class SeeAlsoBugs(SingleBugFeature):
+    name = "See Also Bugs"
+
+    def __call__(self, bug, **kwargs):
+        return bug["see_also"]
 
 
 class Priority(SingleBugFeature):
