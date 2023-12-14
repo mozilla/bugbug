@@ -712,19 +712,19 @@ class IsPerformanceBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if any(
-            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
-        ):
-            return True
+        bug_whiteboard = bug["whiteboard"].lower()
 
         if bug.get("cf_performance_impact") in ("low", "medium", "high"):
             return True
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
         ):
+            return True
+
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
         return False
@@ -743,10 +743,7 @@ class IsMemoryBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if any(
-            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
-        ):
-            return True
+        bug_whiteboard = bug["whiteboard"].lower()
 
         if bug_map is not None:
             for bug_id in bug["blocks"]:
@@ -759,9 +756,12 @@ class IsMemoryBug(SingleBugFeature):
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
         ):
+            return True
+
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
         return False
@@ -780,16 +780,16 @@ class IsPowerBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if any(
-            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
-        ):
-            return True
+        bug_whiteboard = bug["whiteboard"].lower()
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
         ):
+            return True
+
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
         return False
@@ -808,16 +808,16 @@ class IsSecurityBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if any(
-            prefix in bug["whiteboard"].lower() for prefix in self.whiteboard_prefixes
-        ):
-            return True
+        bug_whiteboard = bug["whiteboard"].lower()
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
         ):
+            return True
+
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
         return False
@@ -835,13 +835,15 @@ class IsCrashBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
+        # Checking for `[@` will exclude some bugs that do not have valid
+        # signatures: https://mzl.la/46XAqRF
+        if bug.get("cf_crash_signature") and "[@" in bug["cf_crash_signature"]:
             return True
 
         if any(
             keyword.startswith(prefix)
-            for prefix in self.keyword_prefixes
             for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
         ):
             return True
 
@@ -852,16 +854,13 @@ class BugTypes(SingleBugFeature):
     """Determine bug type."""
 
     name = "Infer Bug Type"
-    bug_type_extractors: list = sorted(
-        [
-            IsPerformanceBug(),
-            IsMemoryBug(),
-            IsPowerBug(),
-            IsSecurityBug(),
-            IsCrashBug(),
-        ],
-        key=lambda x: x.type_name.lower(),
-    )
+    bug_type_extractors: list = [
+        IsCrashBug(),
+        IsMemoryBug(),
+        IsPerformanceBug(),
+        IsPowerBug(),
+        IsSecurityBug(),
+    ]
 
     def __call__(
         self,
