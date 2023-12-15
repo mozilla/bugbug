@@ -27,13 +27,12 @@ class AccessibilityModel(BugModel):
 
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Severity(),
             bug_features.Keywords(),
-            bug_features.Whiteboard(),
             bug_features.HasAttachment(),
             bug_features.Product(),
             bug_features.Component(),
             bug_features.FiledVia(),
+            bug_features.HasImageAttachmentAtBugCreation(),
         ]
 
         cleanup_functions = [
@@ -62,10 +61,10 @@ class AccessibilityModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            ("title", self.text_vectorizer(min_df=0.001), "title"),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.0001),
+                                self.text_vectorizer(min_df=0.001),
                                 "first_comment",
                             ),
                         ]
@@ -79,10 +78,12 @@ class AccessibilityModel(BugModel):
             ]
         )
 
-    def is_accessbility_bug(self, bug_data):
+    @staticmethod
+    def __is_accessibility_bug(bug):
+        """Check if a bug is an accessibility bug."""
         return (
-            "access" in bug_data["keywords"]
-            or bug_data.get("cf_accessibility_severity", "---") != "---"
+            "access" in bug["keywords"]
+            or bug.get("cf_accessibility_severity", "---") != "---"
         )
 
     def get_labels(self):
@@ -91,7 +92,7 @@ class AccessibilityModel(BugModel):
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
 
-            classes[bug_id] = 1 if self.is_accessbility_bug(bug_data) else 0
+            classes[bug_id] = 1 if self.__is_accessibility_bug(bug_data) else 0
 
         logger.info(
             "%d bugs are classified as non-accessibility",
@@ -109,6 +110,6 @@ class AccessibilityModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if self.is_accessbility_bug(bug):
+            if self.__is_accessibility_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
         return classes
