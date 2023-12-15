@@ -61,10 +61,10 @@ class AccessibilityModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.001), "title"),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(min_df=0.0001),
                                 "first_comment",
                             ),
                         ]
@@ -89,10 +89,10 @@ class AccessibilityModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs():
-            bug_id = int(bug_data["id"])
+        for bug in bugzilla.get_bugs():
+            bug_id = int(bug["id"])
 
-            classes[bug_id] = 1 if self.__is_accessibility_bug(bug_data) else 0
+            classes[bug_id] = 1 if self.__is_accessibility_bug(bug) else 0
 
         logger.info(
             "%d bugs are classified as non-accessibility",
