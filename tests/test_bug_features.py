@@ -237,32 +237,18 @@ def test_is_crash_bug() -> None:
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
     assert is_crash_bug(bug_map[1046231]) is True
-    assert is_crash_bug(bug_map[1046231]) is True
+    assert is_crash_bug(bug_map[1372243]) is True
     assert is_crash_bug(bug_map[528988]) is False
     assert is_crash_bug(bug_map[1320039]) is False
 
 
 def test_bug_types() -> None:
-    infer_bug_types = BugTypes()
+    bug_types = BugTypes()
 
     bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
 
-    result = infer_bug_types(bug_map[447581])
-    assert isinstance(result, list)
-    assert "performance" in result
-
-    result = infer_bug_types(bug_map[1325215], bug_map)
-    assert isinstance(result, list)
-    assert "memory" in result
-
-    result = infer_bug_types(bug_map[922874])
-    assert isinstance(result, list)
-    assert "power" in result
-
-    result = infer_bug_types(bug_map[528988])
-    assert isinstance(result, list)
-    assert "security" in result
-
-    result = infer_bug_types(bug_map[1046231])
-    assert isinstance(result, list)
-    assert "crash" in result
+    assert bug_types(bug_map[447581]) == ["performance"]
+    assert bug_types(bug_map[1325215], bug_map) == ["memory"]
+    assert bug_types(bug_map[922874]) == ["power"]
+    assert bug_types(bug_map[528988]) == ["security"]
+    assert bug_types(bug_map[1046231]) == ["crash"]
