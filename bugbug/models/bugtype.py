@@ -25,12 +25,11 @@ class BugTypeModel(BugModel):
 
         self.calculate_importance = False
 
-        bug_types = bug_features.BugTypes()
-        self.label_extractors = bug_types.bug_type_extractors
+        self.bug_type_extractors = bug_features.BugTypes.bug_type_extractors
 
-        label_keywords = {
+        label_keyword_prefixes = {
             keyword
-            for extractor in self.label_extractors
+            for extractor in self.bug_type_extractors
             for keyword in extractor.keyword_prefixes
         }
 
@@ -39,7 +38,7 @@ class BugTypeModel(BugModel):
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.Keywords(label_keywords),
+            bug_features.Keywords(label_keyword_prefixes),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
@@ -106,23 +105,23 @@ class BugTypeModel(BugModel):
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
 
         for bug_data in bug_map.values():
-            target = np.zeros(len(self.label_extractors))
-            for i, is_type in enumerate(self.label_extractors):
+            target = np.zeros(len(self.bug_type_extractors))
+            for i, is_type in enumerate(self.bug_type_extractors):
                 if is_type(bug_data, bug_map):
                     target[i] = 1
 
             classes[int(bug_data["id"])] = target
 
-        type_list = [extractor.type_name for extractor in self.label_extractors]
+        bug_types = [extractor.type_name for extractor in self.bug_type_extractors]
 
-        for i, bug_type in enumerate(type_list):
+        for i, bug_type in enumerate(bug_types):
             logger.info(
                 "%d %s bugs",
                 sum(target[i] for target in classes.values()),
                 bug_type,
             )
 
-        return classes, type_list
+        return classes, bug_types
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
@@ -136,8 +135,8 @@ class BugTypeModel(BugModel):
         bug_map = {bug["id"]: bug for bug in bugs}
 
         for i, bug in enumerate(bugs):
-            for j, is_type in enumerate(self.label_extractors):
-                if is_type(bug, bug_map):
+            for j, is_type_applicable in enumerate(self.bug_type_extractors):
+                if is_type_applicable(bug, bug_map):
                     if probabilities:
                         classes[i][j] = 1.0
                     else:
