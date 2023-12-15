@@ -113,13 +113,13 @@ class BugTypeModel(BugModel):
 
             classes[int(bug_data["id"])] = target
 
-        type_list = [extractor.type_name.lower() for extractor in self.label_extractors]
+        type_list = [extractor.type_name for extractor in self.label_extractors]
 
-        for type_ in type_list:
+        for i, bug_type in enumerate(type_list):
             logger.info(
                 "%d %s bugs",
-                sum(target[type_list.index(type_)] == 1 for target in classes.values()),
-                type_,
+                sum(target[i] for target in classes.values()),
+                bug_type,
             )
 
         return classes, type_list
