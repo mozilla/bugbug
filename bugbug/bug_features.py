@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from functools import partial
 from multiprocessing.pool import Pool
 
-import dateutil.parser
 import pandas as pd
 from dateutil import parser
 from libmozdata import versions
@@ -538,8 +537,7 @@ def get_time_to_fix(bug):
         return None
 
     return (
-        dateutil.parser.parse(bug["cf_last_resolved"])
-        - dateutil.parser.parse(bug["creation_time"])
+        parser.parse(bug["cf_last_resolved"]) - parser.parse(bug["creation_time"])
     ).total_seconds() / 86400
 
 
@@ -557,8 +555,7 @@ def get_time_to_assign(bug):
                 and change["added"] == "ASSIGNED"
             ):
                 return (
-                    dateutil.parser.parse(history["when"])
-                    - dateutil.parser.parse(bug["creation_time"])
+                    parser.parse(history["when"]) - parser.parse(bug["creation_time"])
                 ).total_seconds() / 86400
 
     return None
