@@ -709,8 +709,6 @@ class IsPerformanceBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        bug_whiteboard = bug["whiteboard"].lower()
-
         if bug.get("cf_performance_impact") in ("low", "medium", "high"):
             return True
 
@@ -721,6 +719,7 @@ class IsPerformanceBug(SingleBugFeature):
         ):
             return True
 
+        bug_whiteboard = bug["whiteboard"].lower()
         if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
@@ -740,8 +739,6 @@ class IsMemoryBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        bug_whiteboard = bug["whiteboard"].lower()
-
         if bug_map is not None:
             for bug_id in bug["blocks"]:
                 if bug_id not in bug_map:
@@ -758,6 +755,7 @@ class IsMemoryBug(SingleBugFeature):
         ):
             return True
 
+        bug_whiteboard = bug["whiteboard"].lower()
         if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
@@ -777,8 +775,6 @@ class IsPowerBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        bug_whiteboard = bug["whiteboard"].lower()
-
         if any(
             keyword.startswith(prefix)
             for keyword in bug["keywords"]
@@ -786,6 +782,7 @@ class IsPowerBug(SingleBugFeature):
         ):
             return True
 
+        bug_whiteboard = bug["whiteboard"].lower()
         if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
@@ -805,8 +802,6 @@ class IsSecurityBug(SingleBugFeature):
         bug: bugzilla.BugDict,
         bug_map: dict[int, bugzilla.BugDict] | None = None,
     ) -> bool:
-        bug_whiteboard = bug["whiteboard"].lower()
-
         if any(
             keyword.startswith(prefix)
             for keyword in bug["keywords"]
@@ -814,6 +809,7 @@ class IsSecurityBug(SingleBugFeature):
         ):
             return True
 
+        bug_whiteboard = bug["whiteboard"].lower()
         if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
             return True
 
