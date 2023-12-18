@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Iterable, Optional
+from typing import Iterable
 
 import numpy as np
 import xgboost
@@ -33,7 +33,7 @@ TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
 
 
 def bug_to_types(
-    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
+    bug: bugzilla.BugDict, bug_map: dict[int, bugzilla.BugDict] | None = None
 ) -> list[str]:
     types = set()
 
@@ -67,7 +67,10 @@ def bug_to_types(
     ):
         types.add("security")
 
-    if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
+    if "cf_performance_impact" in bug and bug["cf_performance_impact"] not in (
+        "---",
+        "?",
+    ):
         types.add("performance")
 
     if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):

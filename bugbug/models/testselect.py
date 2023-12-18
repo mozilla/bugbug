@@ -11,7 +11,7 @@ import multiprocessing as mp
 import pickle
 import statistics
 from functools import reduce
-from typing import Any, Callable, Collection, Iterable, Optional, Sequence, Set
+from typing import Any, Callable, Collection, Iterable, Sequence, Set
 
 import numpy as np
 import xgboost
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_commit_map(
-    revs: Optional[Set[test_scheduling.Revision]] = None,
+    revs: Set[test_scheduling.Revision] | None = None,
 ) -> dict[test_scheduling.Revision, repository.CommitDict]:
     commit_map = {}
 
@@ -562,7 +562,7 @@ class TestSelectModel(Model):
         self,
         commits: Sequence[repository.CommitDict],
         confidence: float = 0.5,
-        push_num: Optional[int] = None,
+        push_num: int | None = None,
     ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
@@ -692,9 +692,9 @@ class TestSelectModel(Model):
         def do_eval(
             executor: concurrent.futures.ProcessPoolExecutor,
             confidence_threshold: float,
-            reduction: Optional[float],
-            cap: Optional[int],
-            minimum: Optional[int],
+            reduction: float | None,
+            cap: int | None,
+            minimum: int | None,
         ) -> None:
             futures: dict[concurrent.futures.Future, dict[str, Any]] = {}
             for push in test_pushes.values():
