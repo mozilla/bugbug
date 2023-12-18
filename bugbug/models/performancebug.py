@@ -42,8 +42,6 @@ class PerformanceBugModel(BugModel):
             bug_features.BlockedBugsNumber(),
             bug_features.Product(),
             bug_features.HasRegressionRange(),
-            bug_features.BugReporter(),
-            bug_features.Priority(),
             bug_features.HasCVEInAlias(),
             bug_features.HasAttachment(),
             bug_features.FiledVia(),
