@@ -8,7 +8,6 @@ import os
 
 import pytest
 
-from bugbug import bugzilla
 from bugbug.bug_features import (
     BlockedBugsNumber,
     BugExtractor,
@@ -26,12 +25,7 @@ from bugbug.bug_features import (
     HasURL,
     HasW3CURL,
     IsCoverityIssue,
-    IsCrashBug,
-    IsMemoryBug,
     IsMozillian,
-    IsPerformanceBug,
-    IsPowerBug,
-    IsSecurityBug,
     Keywords,
     Landings,
     Patches,
@@ -187,68 +181,9 @@ def test_BugExtractor():
         BugExtractor([HasSTR(), HasURL()], [fileref(), fileref()])
 
 
-def test_is_performance_bug() -> None:
-    is_performance_bug = IsPerformanceBug()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert is_performance_bug(bug_map[447581]) is True
-    assert is_performance_bug(bug_map[1320195]) is True
-    assert is_performance_bug(bug_map[1388990]) is False
-    assert is_performance_bug(bug_map[1389136]) is False
-
-
-def test_is_memory_bug() -> None:
-    is_memory_bug = IsMemoryBug()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert is_memory_bug(bug_map[1325215], bug_map) is True
-    assert is_memory_bug(bug_map[52352], bug_map) is True
-    assert is_memory_bug(bug_map[1320195], bug_map) is False
-    assert is_memory_bug(bug_map[1388990]) is False
-
-
-def test_is_power_bug() -> None:
-    is_power_bug = IsPowerBug()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert is_power_bug(bug_map[922874]) is True
-    assert is_power_bug(bug_map[965392]) is True
-    assert is_power_bug(bug_map[1325215]) is False
-    assert is_power_bug(bug_map[1320195]) is False
-
-
-def test_is_security_bug() -> None:
-    is_security_bug = IsSecurityBug()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert is_security_bug(bug_map[528988]) is True
-    assert is_security_bug(bug_map[1320039]) is True
-    assert is_security_bug(bug_map[922874]) is False
-    assert is_security_bug(bug_map[965392]) is False
-
-
-def test_is_crash_bug() -> None:
-    is_crash_bug = IsCrashBug()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert is_crash_bug(bug_map[1046231]) is True
-    assert is_crash_bug(bug_map[1372243]) is True
-    assert is_crash_bug(bug_map[528988]) is False
-    assert is_crash_bug(bug_map[1320039]) is False
-
-
-def test_bug_types() -> None:
-    bug_types = BugTypes()
-
-    bug_map = {int(bug["id"]): bug for bug in bugzilla.get_bugs(include_invalid=True)}
-
-    assert bug_types(bug_map[447581]) == ["performance"]
-    assert bug_types(bug_map[1325215], bug_map) == ["memory"]
-    assert bug_types(bug_map[922874]) == ["power"]
-    assert bug_types(bug_map[528988]) == ["security"]
-    assert bug_types(bug_map[1046231]) == ["crash"]
+def test_BugTypes(read) -> None:
+    read(
+        "bug_types.json",
+        BugTypes,
+        [["performance"], ["memory"], ["power"], ["security"], ["crash"]],
+    )
