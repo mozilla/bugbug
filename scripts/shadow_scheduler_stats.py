@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import matplotlib.pyplot as plt
 import mozci.push
@@ -254,7 +254,7 @@ def plot_graphs(granularity: str) -> None:
 
 
 def print_uncaught(
-    granularity: str, scheduler1: str, scheduler2: Optional[str] = None
+    granularity: str, scheduler1: str, scheduler2: str | None = None
 ) -> None:
     push_data_db = (
         test_scheduling.PUSH_DATA_GROUP_DB

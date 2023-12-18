@@ -21,7 +21,6 @@ from typing import (
     Iterable,
     Iterator,
     NewType,
-    Optional,
     Set,
     Union,
     cast,
@@ -646,7 +645,7 @@ def set_touched_together(f1: str, f2: str) -> None:
         )
 
 
-def update_touched_together() -> Generator[None, Optional[Revision], None]:
+def update_touched_together() -> Generator[None, Revision | None, None]:
     touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]

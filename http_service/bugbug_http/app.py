@@ -9,7 +9,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Sequence
 
 import orjson
 import zstandard
@@ -175,14 +175,14 @@ def get_job_id() -> str:
     return uuid.uuid4().hex
 
 
-def init_job(job: JobInfo, job_id: Optional[str] = None) -> str:
+def init_job(job: JobInfo, job_id: str | None = None) -> str:
     job_id = job_id or get_job_id()
     redis_conn.mset({job.mapping_key: job_id})
     return job_id
 
 
 def schedule_job(
-    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+    job: JobInfo, job_id: str | None = None, timeout: int | None = None
 ) -> None:
     job_id = init_job(job, job_id)
 
@@ -197,7 +197,7 @@ def schedule_job(
 
 
 def prepare_queue_job(
-    job: JobInfo, job_id: Optional[str] = None, timeout: Optional[int] = None
+    job: JobInfo, job_id: str | None = None, timeout: int | None = None
 ) -> Queue:
     job_id = init_job(job, job_id)
     return Queue.prepare_data(
@@ -379,7 +379,7 @@ def clean_prediction_cache(job):
     redis_conn.delete(job.change_time_key)
 
 
-def get_result(job: JobInfo) -> Optional[Any]:
+def get_result(job: JobInfo) -> Any | None:
     LOGGER.debug(f"Checking for existing results at {job.result_key}")
     result = redis_conn.get(job.result_key)
 
