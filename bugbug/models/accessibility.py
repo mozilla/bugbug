@@ -27,10 +27,9 @@ class AccessibilityModel(BugModel):
 
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Keywords(),
+            bug_features.Keywords({"access"}),
             bug_features.HasAttachment(),
             bug_features.Product(),
-            bug_features.Component(),
             bug_features.FiledVia(),
             bug_features.HasImageAttachmentAtBugCreation(),
         ]
