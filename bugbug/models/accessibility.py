@@ -80,16 +80,16 @@ class AccessibilityModel(BugModel):
     @staticmethod
     def __is_accessibility_bug(bug):
         """Check if a bug is an accessibility bug."""
-        return (
-            "access" in bug["keywords"]
-            or bug.get("cf_accessibility_severity", "---") != "---"
-        )
+        return bug["cf_accessibility_severity"] != "---" or "access" in bug["keywords"]
 
     def get_labels(self):
         classes = {}
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
+
+            if "cf_accessibility_severity" not in bug:
+                continue
 
             classes[bug_id] = 1 if self.__is_accessibility_bug(bug) else 0
 
