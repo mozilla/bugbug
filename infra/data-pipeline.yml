@@ -1253,7 +1253,7 @@ tasks:
         - train-test-group-select
         - train-test-failure
         - train-needsdiagnosis
-        - train-accessiblity
+        - train-accessibility
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
