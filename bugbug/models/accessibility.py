@@ -4,8 +4,10 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+from datetime import datetime
 
 import xgboost
+from dateutil.relativedelta import relativedelta
 from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
@@ -32,6 +34,7 @@ class AccessibilityModel(BugModel):
             bug_features.Product(),
             bug_features.FiledVia(),
             bug_features.HasImageAttachmentAtBugCreation(),
+            bug_features.Component(),
         ]
 
         cleanup_functions = [
@@ -63,7 +66,7 @@ class AccessibilityModel(BugModel):
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
                                 "first_comment",
-                                self.text_vectorizer(min_df=0.0001),
+                                self.text_vectorizer(min_df=0.001),
                                 "first_comment",
                             ),
                         ]
@@ -82,8 +85,33 @@ class AccessibilityModel(BugModel):
         """Check if a bug is an accessibility bug."""
         return bug["cf_accessibility_severity"] != "---" or "access" in bug["keywords"]
 
+    @staticmethod
+    def __get_access_bugs_ids():
+        """Get accessibility related bugs not older than 4 years and 6 months ago."""
+        four_years_and_six_months_ago = datetime.utcnow() - relativedelta(
+            years=4, months=6
+        )
+        params = {
+            "f1": "creation_ts",
+            "o1": "greaterthan",
+            "v1": four_years_and_six_months_ago.strftime("%Y-%m-%d"),
+            "f2": "OP",
+            "j2": "OR",
+            "f3": "cf_accessibility_severity",
+            "o3": "notequals",
+            "v3": "---",
+            "f4": "keywords",
+            "o4": "substring",
+            "v4": "access",
+        }
+
+        return bugzilla.get_ids(params)
+
     def get_labels(self):
         classes = {}
+
+        access_bugs = self.__get_access_bugs_ids()
+        bugzilla.download_bugs(access_bugs)
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
