@@ -29,11 +29,12 @@ class AccessibilityModel(BugModel):
 
         feature_extractors = [
             bug_features.HasSTR(),
+            bug_features.Severity(),
             bug_features.Keywords({"access"}),
             bug_features.HasAttachment(),
             bug_features.Product(),
             bug_features.FiledVia(),
-            bug_features.HasImageAttachmentAtBugCreation(),
+            bug_features.HasImageAttachment(),
             bug_features.Component(),
         ]
 
@@ -65,9 +66,9 @@ class AccessibilityModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "first_comment",
-                                self.text_vectorizer(min_df=0.001),
-                                "first_comment",
+                                "comments",
+                                self.text_vectorizer(min_df=0.0001),
+                                "comments",
                             ),
                         ]
                     ),
@@ -75,7 +76,9 @@ class AccessibilityModel(BugModel):
                 ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    xgboost.XGBClassifier(
+                        n_jobs=utils.get_physical_cpu_count(), scale_pos_weight=10
+                    ),
                 ),
             ]
         )
