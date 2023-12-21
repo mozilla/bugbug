@@ -29,7 +29,6 @@ class AccessibilityModel(BugModel):
 
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Severity(),
             bug_features.Keywords({"access"}),
             bug_features.HasAttachment(),
             bug_features.Product(),
@@ -76,9 +75,7 @@ class AccessibilityModel(BugModel):
                 ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(
-                        n_jobs=utils.get_physical_cpu_count(), scale_pos_weight=10
-                    ),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )
@@ -139,7 +136,9 @@ class AccessibilityModel(BugModel):
 
         ratio = round((negative_samples / positive_samples) ** 0.5)
 
-        self.clf.named_steps["estimator"].set_params(scale_pos_weight=ratio)
+        self.clf.named_steps["estimator"].set_params(
+            scale_pos_weight=ratio, subsample=0.5
+        )
 
         return classes, [0, 1]
 
