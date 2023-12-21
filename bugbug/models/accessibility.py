@@ -106,6 +106,7 @@ class AccessibilityModel(BugModel):
             "f4": "keywords",
             "o4": "substring",
             "v4": "access",
+            "product": bugzilla.PRODUCTS,
         }
 
         return bugzilla.get_ids(params)
@@ -124,14 +125,21 @@ class AccessibilityModel(BugModel):
 
             classes[bug_id] = 1 if self.__is_accessibility_bug(bug) else 0
 
+        positive_samples = sum(label == 1 for label in classes.values())
+        negative_samples = sum(label == 0 for label in classes.values())
+
         logger.info(
             "%d bugs are classified as non-accessibility",
-            sum(label == 0 for label in classes.values()),
+            negative_samples,
         )
         logger.info(
             "%d bugs are classified as accessibility",
-            sum(label == 1 for label in classes.values()),
+            positive_samples,
         )
+
+        ratio = round((negative_samples / positive_samples) ** 0.5)
+
+        self.clf.named_steps["estimator"].set_params(scale_pos_weight=ratio)
 
         return classes, [0, 1]
 
