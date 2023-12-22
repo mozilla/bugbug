@@ -881,7 +881,7 @@ tasks:
       deadline: { $fromNow: "5 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - regressor-finder-bug-introducing
