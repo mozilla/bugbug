@@ -86,15 +86,19 @@ class AccessibilityModel(BugModel):
         return bug["cf_accessibility_severity"] != "---" or "access" in bug["keywords"]
 
     @staticmethod
-    def __get_access_bugs_ids():
-        """Get accessibility related bugs not older than 4 years and 6 months ago."""
-        four_years_and_six_months_ago = datetime.utcnow() - relativedelta(
-            years=4, months=6
-        )
+    def __download_older_access_bugs():
+        """Retrieve accessibility related bugs newer than 4 years and 6 months ago.
+
+        By including older accessibility bugs, this function extends the dataset used
+        for model training compared to the default, which only considers bugs from 2 years
+        and 6 months ago. This extension in the time frame aims to improve the performance
+        of the model by providing a more comprehensive set of historical data.
+        """
+        lookup_start_date = datetime.utcnow() - relativedelta()
         params = {
             "f1": "creation_ts",
             "o1": "greaterthan",
-            "v1": four_years_and_six_months_ago.strftime("%Y-%m-%d"),
+            "v1": lookup_start_date.strftime("%Y-%m-%d"),
             "f2": "OP",
             "j2": "OR",
             "f3": "cf_accessibility_severity",
@@ -103,16 +107,18 @@ class AccessibilityModel(BugModel):
             "f4": "keywords",
             "o4": "substring",
             "v4": "access",
+            "f5": "CP",
             "product": bugzilla.PRODUCTS,
         }
 
-        return bugzilla.get_ids(params)
+        older_access_bugs_ids = bugzilla.get_ids(params)
+        bugzilla.download_bugs(older_access_bugs_ids)
 
     def get_labels(self):
         classes = {}
 
-        access_bugs = self.__get_access_bugs_ids()
-        bugzilla.download_bugs(access_bugs)
+        logger.info("Downloading older accessibility bugs...")
+        self.__download_older_access_bugs()
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
