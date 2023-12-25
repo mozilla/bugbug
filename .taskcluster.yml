@@ -414,3 +414,4 @@ tasks:
             description: bugbug update data hook
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            
