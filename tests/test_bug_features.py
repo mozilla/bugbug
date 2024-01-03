@@ -12,6 +12,7 @@ from bugbug.bug_features import (
     BlockedBugsNumber,
     BugExtractor,
     BugReporter,
+    BugTypes,
     CommentCount,
     CommentLength,
     Component,
@@ -178,3 +179,11 @@ def test_BugExtractor():
         BugExtractor([HasSTR(), HasSTR()], [fileref(), url()])
     with pytest.raises(AssertionError):
         BugExtractor([HasSTR(), HasURL()], [fileref(), fileref()])
+
+
+def test_BugTypes(read) -> None:
+    read(
+        "bug_types.json",
+        BugTypes,
+        [["performance"], ["memory"], ["power"], ["security"], ["crash"]],
+    )
