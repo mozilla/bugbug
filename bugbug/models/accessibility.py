@@ -8,7 +8,7 @@ from datetime import datetime
 
 import xgboost
 from dateutil.relativedelta import relativedelta
-from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -64,14 +64,14 @@ class AccessibilityModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "comments",
+                                "first_comment",
                                 self.text_vectorizer(min_df=0.0001),
-                                "comments",
+                                "first_comment",
                             ),
                         ]
                     ),
                 ),
-                ("sampler", BorderlineSMOTE(random_state=0)),
+                ("sampler", SMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
@@ -85,15 +85,17 @@ class AccessibilityModel(BugModel):
         return bug["cf_accessibility_severity"] != "---" or "access" in bug["keywords"]
 
     @staticmethod
-    def __download_older_access_bugs():
-        """Retrieve accessibility related bugs newer than 4 years and 6 months ago.
+    def __download_older_access_bugs(years: int, months: int) -> None:
+        """Retrieve accessibility related bugs from a specific time range.
 
         By including older accessibility bugs, this function extends the dataset used
         for model training compared to the default, which only considers bugs from 2 years
         and 6 months ago. This extension in the time frame aims to improve the performance
         of the model by providing a more comprehensive set of historical data.
         """
-        lookup_start_date = datetime.utcnow() - relativedelta()
+        lookup_start_date = datetime.utcnow() - relativedelta(
+            years=years, months=months
+        )
         params = {
             "f1": "creation_ts",
             "o1": "greaterthan",
@@ -110,14 +112,20 @@ class AccessibilityModel(BugModel):
             "product": bugzilla.PRODUCTS,
         }
 
-        older_access_bugs_ids = bugzilla.get_ids(params)
-        bugzilla.download_bugs(older_access_bugs_ids)
+        access_bugs_ids = bugzilla.get_ids(params)
+        older_access_bugs = bugzilla.download_bugs(access_bugs_ids)
+
+        logger.info(
+            "%d older accessibility bugs have been downloaded.", len(older_access_bugs)
+        )
 
     def get_labels(self):
         classes = {}
 
         logger.info("Downloading older accessibility bugs...")
-        self.__download_older_access_bugs()
+
+        # Download accessibility bugs newer than 3 years and 6 months ago
+        self.__download_older_access_bugs(years=3, months=6)
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
