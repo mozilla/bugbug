@@ -14,15 +14,9 @@ from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
-from bugbug.models.bugtype import bug_to_types
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def _is_performance_bug(bug_data) -> bool:
-    types = bug_to_types(bug_data)
-    return "performance" in types
 
 
 class PerformanceBugModel(BugModel):
@@ -102,7 +96,7 @@ class PerformanceBugModel(BugModel):
             ] in ("?", "none"):
                 continue
 
-            classes[bug_id] = 1 if _is_performance_bug(bug_data) else 0
+            classes[bug_id] = 1 if bug_features.IsPerformanceBug()(bug_data) else 0
 
         logger.info(
             "%d performance bugs",
@@ -120,7 +114,7 @@ class PerformanceBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if _is_performance_bug(bug):
+            if bug_features.IsPerformanceBug()(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
 
         return classes
