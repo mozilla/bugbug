@@ -76,6 +76,8 @@ class StepsToReproduceModel(BugModel):
         classes = {}
 
         for bug_data in bugzilla.get_bugs():
+            if bug_data["type"] != "defect":
+                continue
             if "cf_has_str" in bug_data:
                 if bug_data["cf_has_str"] == "no":
                     classes[int(bug_data["id"])] = 0

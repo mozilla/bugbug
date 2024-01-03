@@ -30,7 +30,6 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
@@ -554,6 +553,8 @@ class LandingsRiskReportGenerator(object):
             return commits_data
 
         component_team_mapping = get_component_team_mapping()
+
+        bug_to_types = bug_features.BugTypes()
 
         bug_summaries = []
         for bug_id in bugs:
