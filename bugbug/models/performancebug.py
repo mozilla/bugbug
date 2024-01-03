@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from math import sqrt
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
@@ -105,15 +104,14 @@ class PerformanceBugModel(BugModel):
 
             classes[bug_id] = 1 if _is_performance_bug(bug_data) else 0
 
-        positive_samples = sum(label == 1 for label in classes.values())
-        negative_samples = sum(label == 0 for label in classes.values())
-
-        ratio = sqrt(negative_samples / positive_samples)
-        self.clf.named_steps["estimator"].set_params(scale_pos_weight=ratio)
-
-        logger.info("%d performance bugs", positive_samples)
-        logger.info("%d non-performance bugs", negative_samples)
-        logger.info("scale_pos_weight: %d", ratio)
+        logger.info(
+            "%d performance bugs",
+            sum(label == 1 for label in classes.values()),
+        )
+        logger.info(
+            "%d non-performance bugs",
+            sum(label == 0 for label in classes.values()),
+        )
 
         return classes, [0, 1]
 
