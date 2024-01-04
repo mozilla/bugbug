@@ -1546,6 +1546,9 @@ table {
                     fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
                 else:
                     fix_time_diff = ""
+            else:
+                median_fix_time_text = ""
+                fix_time_diff = ""
 
             top_intermittent_failures = "\n".join(
                 "{} failures ({}#{} globally{}){}".format(
