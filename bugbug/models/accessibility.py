@@ -122,6 +122,11 @@ class AccessibilityModel(BugModel):
     def get_labels(self):
         classes = {}
 
+        logger.info("Downloading older accessibility bugs...")
+
+        # Download accessibility bugs newer than 3 years and 6 months ago
+        self.__download_older_access_bugs(years=3, months=6)
+
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
 
