@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class AccessibilityModel(BugModel):
-    def __init__(self, lemmatization=False):
+    def __init__(self, lemmatization=True):
         BugModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
@@ -86,7 +86,7 @@ class AccessibilityModel(BugModel):
 
     @staticmethod
     def __download_older_access_bugs(months: int) -> None:
-        """Retrieve accessibility related bugs filed within the specified number of months .
+        """Retrieve accessibility related bugs filed within the past specified number of months.
 
         This function provides an option to extend the dataset used for model training by including older bugs.
         """
@@ -118,8 +118,8 @@ class AccessibilityModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        # Extending the dataset by including older accessibility bugs within the past 42 months
-        # has proven to improve model performance metrics
+        # Extending the dataset by including older accessibility bugs within
+        # the past 42 months has proven to improve model performance
         self.__download_older_access_bugs(months=42)
 
         for bug in bugzilla.get_bugs():
