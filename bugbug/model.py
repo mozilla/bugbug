@@ -614,7 +614,7 @@ class Model:
         with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-        wandb.summary["Model"] = self.__class__.__name__.lower()
+        wandb.summary["Model"] = model_directory
 
         artifact = wandb.Artifact(name=model_directory, type="data")
         artifact.add_file(model_path)
