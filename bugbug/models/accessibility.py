@@ -118,8 +118,8 @@ class AccessibilityModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        # Extending the dataset by including older accessibility bugs within
-        # the past 42 months has proven to improve model performance
+        # Improved performance results were observed when older accessibility
+        # bugs were added to the dataset.
         self.__download_older_access_bugs(months=42)
 
         for bug in bugzilla.get_bugs():
