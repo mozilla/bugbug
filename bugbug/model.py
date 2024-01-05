@@ -80,7 +80,6 @@ def classification_report_imbalanced_values(
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
     )
-
     # Specificity
     specificity = specificity_score(
         y_true, y_pred, labels=labels, average=None, sample_weight=sample_weight
