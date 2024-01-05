@@ -16,6 +16,7 @@ http_service/models/*model*
 
 data/
 sheets/
+wandb/
 
 .mypy_cache/
 .pytest_cache/
