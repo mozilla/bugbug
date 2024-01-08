@@ -52,14 +52,17 @@ class HasCrashSignature(SingleBugFeature):
 
 
 class Keywords(SingleBugFeature):
-    def __init__(self, to_ignore=set()):
+    def __init__(self, to_ignore=set(), prefixes_to_ignore=set()):
         self.to_ignore = to_ignore
+        self.prefixes_to_ignore = prefixes_to_ignore
 
     def __call__(self, bug, **kwargs):
         keywords = []
         subkeywords = []
         for keyword in bug["keywords"]:
-            if keyword in self.to_ignore:
+            if keyword in self.to_ignore or any(
+                keyword.startswith(prefix) for prefix in self.prefixes_to_ignore
+            ):
                 continue
 
             keywords.append(keyword)

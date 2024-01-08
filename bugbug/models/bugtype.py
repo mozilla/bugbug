@@ -38,7 +38,7 @@ class BugTypeModel(BugModel):
             bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.Keywords(label_keyword_prefixes),
+            bug_features.Keywords(prefixes_to_ignore=label_keyword_prefixes),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
