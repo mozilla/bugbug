@@ -23,7 +23,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelBinarizer, LabelEncoder
 from tabulate import tabulate
 from xgboost import XGBModel
 
@@ -180,8 +180,6 @@ class Model:
         self.training_dbs: list[str] = []
         # DBs and DB support files required at runtime.
         self.eval_dbs: dict[str, tuple[str, ...]] = {}
-
-        self.le = LabelEncoder()
 
     def download_eval_dbs(
         self, extract: bool = True, ensure_exist: bool = True
@@ -372,8 +370,15 @@ class Model:
         # Extract features from the items.
         X = self.extraction_pipeline.transform(X_gen)
 
-        # Calculate labels.
         y = np.array(y)
+        is_multilabel = isinstance(y[0], np.ndarray)
+        is_binary = len(self.class_names) == 2
+
+        # Calculate labels.
+        if is_multilabel:
+            self.le = LabelBinarizer()
+        else:
+            self.le = LabelEncoder()
         self.le.fit(y)
 
         if limit:
@@ -381,9 +386,6 @@ class Model:
             y = y[:limit]
 
         logger.info(f"X: {X.shape}, y: {y.shape}")
-
-        is_multilabel = isinstance(y[0], np.ndarray)
-        is_binary = len(self.class_names) == 2
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
