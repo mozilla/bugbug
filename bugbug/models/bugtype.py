@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelBinarizer
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
@@ -24,6 +25,8 @@ class BugTypeModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
+
+        self.le = LabelBinarizer()
 
         self.bug_type_extractors = bug_features.BugTypes.bug_type_extractors
 
