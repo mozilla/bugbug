@@ -27,7 +27,7 @@ class PerformanceBugModel(BugModel):
 
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Keywords({"perf", "topperf", "main-thread-io"}),
+            bug_features.Keywords(),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
