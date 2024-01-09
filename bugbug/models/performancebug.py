@@ -25,15 +25,18 @@ class PerformanceBugModel(BugModel):
 
         self.calculate_importance = False
 
+        self.is_performance_bug = bug_features.IsPerformanceBug()
+
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Keywords(),
+            bug_features.Keywords(
+                prefixes_to_ignore=set(self.is_performance_bug.keyword_prefixes)
+            ),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
             bug_features.HasW3CURL(),
             bug_features.HasGithubURL(),
-            bug_features.BlockedBugsNumber(),
             bug_features.Product(),
             bug_features.HasRegressionRange(),
             bug_features.HasCVEInAlias(),
@@ -96,7 +99,7 @@ class PerformanceBugModel(BugModel):
             ] in ("?", "none"):
                 continue
 
-            classes[bug_id] = 1 if bug_features.IsPerformanceBug()(bug_data) else 0
+            classes[bug_id] = 1 if self.is_performance_bug(bug_data) else 0
 
         logger.info(
             "%d performance bugs",
@@ -114,7 +117,7 @@ class PerformanceBugModel(BugModel):
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):
-            if bug_features.IsPerformanceBug()(bug):
+            if self.is_performance_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
 
         return classes
