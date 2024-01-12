@@ -64,7 +64,14 @@ ATTACHMENT_INCLUDE_FIELDS = [
     "file_name",
 ]
 
-COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "creation_time"]
+COMMENT_INCLUDE_FIELDS = [
+    "id",
+    "count",
+    "text",
+    "creation_time",
+    "comment_tag",
+    "commenter",
+]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
