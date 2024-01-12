@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class WorksformeModel(BugModel):
+class WorksForMeModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
@@ -80,11 +80,9 @@ class WorksformeModel(BugModel):
     @staticmethod
     def _has_open_needinfo(bug):
         """Check if the bug has an open needinfo on the reporter."""
-        if bug["flags"]["name"] == "needinfo":
-            return (
-                bug["flags"]["requestee"] == bug["creator"]
-                and bug["flags"]["status"] == "?"
-            )
+        for flag in bug["flags"]:
+            if flag["name"] == "needinfo":
+                return flag["requestee"] == bug["creator"] and flag["status"] == "?"
 
         return None
 
