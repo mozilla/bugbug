@@ -69,8 +69,8 @@ COMMENT_INCLUDE_FIELDS = [
     "count",
     "text",
     "creation_time",
-    "comment_tag",
-    "commenter",
+    "tags",
+    "creator",
 ]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
