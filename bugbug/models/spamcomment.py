@@ -46,6 +46,7 @@ class SpamCommentModel(BugModel):
             bug_features.Platform(),
             bug_features.OpSys(),
             bug_features.FiledVia(),
+            # Use Commenter Experience Too
         ]
 
         cleanup_functions = [
@@ -95,7 +96,7 @@ class SpamCommentModel(BugModel):
         for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
 
-            # Skip bugs filed by Mozillians, since we are sure they are not spam.
+            # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
             if "@mozilla" in bug_data["creator"]:
                 continue
 

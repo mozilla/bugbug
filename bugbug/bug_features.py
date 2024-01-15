@@ -879,3 +879,39 @@ class BugTypes(SingleBugFeature):
             for is_type in self.bug_type_extractors
             if is_type(bug, bug_map)
         ]
+
+
+class CommentHasLink(SingleBugFeature):
+    pass
+
+
+class Commenter(SingleBugFeature):
+    pass
+
+
+class CommenterNumOfComments(SingleBugFeature):
+    pass
+
+
+class CommentHasKeywords(SingleBugFeature):
+    # Safekeywords
+    spam_keywords = ["free", "win", "discount", "limited time", "casino", "rent"]
+    pass
+
+
+class LengthofComment(SingleBugFeature):
+    # Extremely short of long comments
+    pass
+
+
+class TimeCommentWasPosted(SingleBugFeature):
+    # Time between when comment was posted and when user created account
+    pass
+
+
+class CommenterIsBugAuthor(SingleBugFeature):
+    pass
+
+
+class TimeDifferenceWithPreviousComment(SingleBugFeature):
+    pass
