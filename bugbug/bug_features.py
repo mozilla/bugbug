@@ -588,6 +588,11 @@ def get_time_to_close(bug):
     ).total_seconds() / 86400
 
 
+class TimeToClose(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        return get_time_to_close(bug)
+
+
 class CCNumber(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(bug["cc"])

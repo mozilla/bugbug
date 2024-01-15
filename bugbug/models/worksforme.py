@@ -32,6 +32,7 @@ class WorksForMeModel(BugModel):
             bug_features.Product(),
             bug_features.Component(),
             bug_features.Keywords(),
+            bug_features.TimeToClose(),
         ]
 
         cleanup_functions = [
@@ -73,11 +74,6 @@ class WorksForMeModel(BugModel):
         )
 
     @staticmethod
-    def _is_worksforme(bug):
-        """Check if a bug is considered as "WORKSFORME."""
-        return bug["resolution"] == "WORKSFORME" and bug["status"] == "VERIFIED"
-
-    @staticmethod
     def _has_open_needinfo(bug):
         """Check if the bug has an open needinfo on the reporter."""
         for flag in bug["flags"]:
@@ -89,16 +85,13 @@ class WorksForMeModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        time_threshold = 30
-
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
 
-            if self._is_worksforme(bug):
+            if bug["resolution"] == "WORKSFORME":
                 classes[bug_id] = 1
             else:
-                time_to_closure = bug_features.get_time_to_close(bug)
-                if time_to_closure >= time_threshold or self._has_open_needinfo(bug):
+                if self._has_open_needinfo(bug):
                     classes[bug_id] = 1
                 else:
                     classes[bug_id] = 0
