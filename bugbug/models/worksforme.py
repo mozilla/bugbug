@@ -24,6 +24,7 @@ class WorksForMeModel(BugModel):
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.HasRegressionRange(),
+            bug_features.Status(),
             bug_features.Severity(),
             bug_features.Priority(),
             bug_features.HasCrashSignature(),
@@ -33,6 +34,7 @@ class WorksForMeModel(BugModel):
             bug_features.Component(),
             bug_features.Keywords(),
             bug_features.TimeToClose(),
+            bug_features.HasOpenNeedinfoOnReporter(),
         ]
 
         cleanup_functions = [
@@ -73,28 +75,13 @@ class WorksForMeModel(BugModel):
             ]
         )
 
-    @staticmethod
-    def _has_open_needinfo(bug):
-        """Check if the bug has an open needinfo on the reporter."""
-        for flag in bug["flags"]:
-            if flag["name"] == "needinfo":
-                return flag["requestee"] == bug["creator"] and flag["status"] == "?"
-
-        return None
-
     def get_labels(self):
         classes = {}
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
 
-            if bug["resolution"] == "WORKSFORME":
-                classes[bug_id] = 1
-            else:
-                if self._has_open_needinfo(bug):
-                    classes[bug_id] = 1
-                else:
-                    classes[bug_id] = 0
+            classes[bug_id] = 1 if bug["resolution"] == "WORKSFORME" else 0
 
         logger.info(
             "%d bugs are classified as not worksforme",
