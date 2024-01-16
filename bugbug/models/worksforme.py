@@ -6,6 +6,8 @@
 import logging
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -52,7 +54,7 @@ class WorksForMeModel(BugModel):
             ]
         )
 
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
@@ -68,6 +70,7 @@ class WorksForMeModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
