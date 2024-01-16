@@ -25,12 +25,10 @@ class PerformanceBugModel(BugModel):
 
         self.calculate_importance = False
 
-        self.is_performance_bug = bug_features.IsPerformanceBug()
-
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.Keywords(
-                prefixes_to_ignore=set(self.is_performance_bug.keyword_prefixes)
+                prefixes_to_ignore=bug_features.IsPerformanceBug.keyword_prefixes
             ),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
@@ -90,6 +88,7 @@ class PerformanceBugModel(BugModel):
 
     def get_labels(self):
         classes = {}
+        is_performance_bug = bug_features.IsPerformanceBug()
 
         for bug_data in bugzilla.get_bugs():
             bug_id = int(bug_data["id"])
@@ -99,7 +98,7 @@ class PerformanceBugModel(BugModel):
             ] in ("?", "none"):
                 continue
 
-            classes[bug_id] = 1 if self.is_performance_bug(bug_data) else 0
+            classes[bug_id] = 1 if is_performance_bug(bug_data) else 0
 
         logger.info(
             "%d performance bugs",
@@ -116,8 +115,10 @@ class PerformanceBugModel(BugModel):
         return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
+        is_performance_bug = bug_features.IsPerformanceBug()
+
         for i, bug in enumerate(bugs):
-            if self.is_performance_bug(bug):
+            if is_performance_bug(bug):
                 classes[i] = [1.0, 0.0] if probabilities else 1
 
         return classes
