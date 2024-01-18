@@ -885,7 +885,8 @@ class CommentHasLink(SingleBugFeature):
     pass
 
 
-class Commenter(SingleBugFeature):
+class CommenterExperience(SingleBugFeature):
+    # The amount of time it took between posting comment and creating account
     pass
 
 

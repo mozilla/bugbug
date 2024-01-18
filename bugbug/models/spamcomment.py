@@ -46,7 +46,6 @@ class SpamCommentModel(BugModel):
             bug_features.Platform(),
             bug_features.OpSys(),
             bug_features.FiledVia(),
-            # Use Commenter Experience Too
         ]
 
         cleanup_functions = [
@@ -93,36 +92,25 @@ class SpamCommentModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs(include_invalid=True):
-            bug_id = bug_data["id"]
+        for bug in bugzilla.get_bugs(include_invalid=True):
+            for comment in bug["comments"]:
+                comment_id = comment["id"]
 
-            # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
-            if "@mozilla" in bug_data["creator"]:
-                continue
+                # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
+                if "@mozilla" in comment["creator"]:
+                    continue
 
-            # A bug that was moved out of 'Invalid Bugs' is definitely a legitimate bug.
-            for history in bug_data["history"]:
-                for change in history["changes"]:
-                    if (
-                        change["field_name"] == "product"
-                        and change["removed"] == "Invalid Bugs"
-                    ):
-                        classes[bug_id] = 0
-
-            # A fixed bug is definitely a legitimate bug.
-            if bug_data["resolution"] == "FIXED":
-                classes[bug_id] = 0
-
-            # A bug in the 'Invalid Bugs' product is definitely a spam bug.
-            elif bug_data["product"] == "Invalid Bugs":
-                classes[bug_id] = 1
+                if "spam" in comment["tags"]:
+                    classes[comment_id] = 1
+                else:
+                    classes[comment_id] = 0
 
         logger.info(
-            "%d bugs are classified as non-spam",
+            "%d comments are classified as non-spam",
             sum(label == 0 for label in classes.values()),
         )
         logger.info(
-            "%d bugs are classified as spam",
+            "%d comments are classified as spam",
             sum(label == 1 for label in classes.values()),
         )
 
