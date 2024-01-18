@@ -1199,6 +1199,44 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: train-worksforme
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-smaller
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - worksforme
+
+        artifacts:
+          public/worksformemodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /worksformemodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_worksforme.${version}
+        - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_worksforme.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_worksforme.latest
+      metadata:
+        name: bugbug train worksforme model
+        description: bugbug train worksforme model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: check_metrics
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
@@ -1215,6 +1253,7 @@ tasks:
         - train-test-group-select
         - train-test-failure
         - train-needsdiagnosis
+        - train-worksforme
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
@@ -1250,6 +1289,7 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-needsdiagnosis
+        - train-worksforme
       payload:
         capabilities:
           privileged: true
