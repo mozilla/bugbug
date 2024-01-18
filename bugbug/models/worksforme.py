@@ -36,7 +36,7 @@ class WorksForMeModel(BugModel):
             bug_features.Component(),
             bug_features.Keywords(),
             bug_features.TimeToClose(),
-            bug_features.HasOpenNeedinfoOnReporter(),
+            bug_features.HasPendingNeedinfoOnReporter(),
         ]
 
         cleanup_functions = [

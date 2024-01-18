@@ -618,16 +618,15 @@ class Status(SingleBugFeature):
         return bug["status"]
 
 
-class HasOpenNeedinfoOnReporter(SingleBugFeature):
-    name = "Has Open Needinfo on Reporter"
+class HasPendingNeedinfoOnReporter(SingleBugFeature):
+    name = "Has Pending Needinfo on Reporter"
 
     def __call__(self, bug, **kwargs):
         reporter_email = bug["creator_detail"]["email"]
 
         return any(
-            flag["status"] == "?" and flag["requestee"] == reporter_email
+            flag["name"] == "needinfo" and flag["requestee"] == reporter_email
             for flag in bug["flags"]
-            if flag["name"] == "needinfo"
         )
 
 
