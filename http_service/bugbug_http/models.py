@@ -34,6 +34,8 @@ MODELS_NAMES = [
     "spambug",
     "testlabelselect",
     "testgroupselect",
+    "accessibility",
+    "performancebug",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
