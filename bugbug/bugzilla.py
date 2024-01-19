@@ -27,7 +27,7 @@ BUGS_DB = "data/bugs.json"
 db.register(
     BUGS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
-    9,
+    10,
 )
 
 PRODUCTS = (
@@ -64,7 +64,14 @@ ATTACHMENT_INCLUDE_FIELDS = [
     "file_name",
 ]
 
-COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "creation_time"]
+COMMENT_INCLUDE_FIELDS = [
+    "id",
+    "count",
+    "text",
+    "creation_time",
+    "tags",
+    "creator",
+]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 

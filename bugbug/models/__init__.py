@@ -9,6 +9,7 @@ LOGGER = logging.getLogger()
 
 
 MODELS = {
+    "accessibility": "bugbug.models.accessibility.AccessibilityModel",
     "annotateignore": "bugbug.models.annotate_ignore.AnnotateIgnoreModel",
     "assignee": "bugbug.models.assignee.AssigneeModel",
     "backout": "bugbug.models.backout.BackoutModel",
@@ -21,6 +22,7 @@ MODELS = {
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
     "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
+    "performancebug": "bugbug.models.performancebug.PerformanceBugModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",

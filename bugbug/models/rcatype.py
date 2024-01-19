@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelBinarizer
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
@@ -60,6 +61,8 @@ class RCATypeModel(BugModel):
 
         self.calculate_importance = False
         self.rca_subcategories_enabled = rca_subcategories_enabled
+
+        self.le = LabelBinarizer()
 
         # should we consider only the main category or all sub categories
         self.RCA_TYPES = (
