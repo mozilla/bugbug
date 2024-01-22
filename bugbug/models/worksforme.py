@@ -23,6 +23,8 @@ class WorksForMeModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
         feature_extractors = [
             bug_features.HasSTR(),
             bug_features.HasRegressionRange(),
@@ -87,12 +89,13 @@ class WorksForMeModel(BugModel):
             classes[bug_id] = 1 if bug["resolution"] == "WORKSFORME" else 0
 
         logger.info(
-            "%d bugs are classified as not worksforme",
-            sum(label == 0 for label in classes.values()),
-        )
-        logger.info(
             "%d bugs are classified as worksforme",
             sum(label == 1 for label in classes.values()),
+        )
+
+        logger.info(
+            "%d bugs are classified as not worksforme",
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
