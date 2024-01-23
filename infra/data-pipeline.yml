@@ -1008,7 +1008,7 @@ tasks:
       deadline: { $fromNow: "3 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
