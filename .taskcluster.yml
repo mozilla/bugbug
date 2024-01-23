@@ -218,7 +218,7 @@ tasks:
           created: { $fromNow: "" }
           deadline: { $fromNow: "1 day" }
           provisionerId: proj-bugbug
-          workerType: compute-large
+          workerType: compute-small
           payload:
             maxRunTime:
               $switch:
