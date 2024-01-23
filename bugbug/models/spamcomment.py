@@ -6,13 +6,13 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bug_features, bugzilla, feature_cleanup, utils
+from bugbug import bugzilla, comment_features, feature_cleanup, utils
 from bugbug.model import BugModel
 
 logging.basicConfig(level=logging.INFO)
@@ -26,26 +26,11 @@ class SpamCommentModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.HasSTR(),
-            bug_features.HasRegressionRange(),
-            bug_features.Severity(),
-            bug_features.HasCrashSignature(),
-            bug_features.HasURL(),
-            bug_features.Whiteboard(),
-            bug_features.Product(),
-            # TODO: We would like to use the component at the time of filing too,
-            # but we can't because the rollback script doesn't support changes to
-            # components yet.
-            # bug_features.component(),
-            bug_features.NumWordsComments(),
-            bug_features.Keywords(),
-            bug_features.Priority(),
-            bug_features.Version(),
-            bug_features.TargetMilestone(),
-            bug_features.HasAttachment(),
-            bug_features.Platform(),
-            bug_features.OpSys(),
-            bug_features.FiledVia(),
+            comment_features.CommenterExperience(),
+            comment_features.CommentHasLink(),
+            comment_features.CommentTextHasKeywords(
+                {"free", "win", "discount", "limited time", "casino", "rent"}
+            ),
         ]
 
         cleanup_functions = [
@@ -57,9 +42,9 @@ class SpamCommentModel(BugModel):
         self.extraction_pipeline = Pipeline(
             [
                 (
-                    "bug_extractor",
-                    bug_features.BugExtractor(
-                        feature_extractors, cleanup_functions, rollback=True
+                    "comment_extractor",
+                    comment_features.CommentExtractor(
+                        feature_extractors, cleanup_functions
                     ),
                 ),
             ]
@@ -72,16 +57,15 @@ class SpamCommentModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "comments",
+                                "comment_text",
                                 self.text_vectorizer(min_df=0.0001),
-                                "comments",
+                                "comment_text",
                             ),
                         ]
                     ),
                 ),
-                ("sampler", BorderlineSMOTE(random_state=0)),
+                ("sampler", RandomUnderSampler(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
@@ -118,19 +102,20 @@ class SpamCommentModel(BugModel):
 
     def items_gen(self, classes):
         # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs.
+        # include spam bugs which may have spam comments.
         return (
-            (bug, classes[bug["id"]])
+            (comment, classes[comment["id"]])
             for bug in bugzilla.get_bugs(include_invalid=True)
-            if bug["id"] in classes
+            for comment in bug["comments"]
+            if comment["id"] in classes
         )
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
 
-    def overwrite_classes(self, bugs, classes, probabilities):
-        for i, bug in enumerate(bugs):
-            if "@mozilla" in bug["creator"]:
+    def overwrite_classes(self, comments, classes, probabilities):
+        for i, comment in enumerate(comments):
+            if "@mozilla" in comment["creator"]:
                 if probabilities:
                     classes[i] = [1.0, 0.0]
                 else:
