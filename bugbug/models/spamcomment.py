@@ -13,15 +13,15 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, comment_features, feature_cleanup, utils
-from bugbug.model import BugModel
+from bugbug.model import CommentModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class SpamCommentModel(BugModel):
+class SpamCommentModel(CommentModel):
     def __init__(self, lemmatization=True):
-        BugModel.__init__(self, lemmatization)
+        CommentModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
 
@@ -65,7 +65,12 @@ class SpamCommentModel(BugModel):
                         ]
                     ),
                 ),
-                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "sampler",
+                    RandomUnderSampler(
+                        random_state=0, sampling_strategy="not minority"
+                    ),
+                ),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
@@ -102,7 +107,7 @@ class SpamCommentModel(BugModel):
 
     def items_gen(self, classes):
         # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs which may have spam comments.
+        # include spam bugs which have a number of spam comments.
         return (
             (comment, classes[comment["id"]])
             for bug in bugzilla.get_bugs(include_invalid=True)

@@ -98,13 +98,6 @@ class CommentTextHasKeywords(CommentFeature):
         return any(keyword in comment["text"].lower() for keyword in self.keywords)
 
 
-class CommentTags(CommentFeature):
-    name = "Comment Tags"
-
-    def __call__(self, comment, **kwargs):
-        pass
-
-
 class CommentHasLink(CommentFeature):
     name = "Comment Has a Link"
 
@@ -126,8 +119,15 @@ class TimeCommentWasPosted(CommentFeature):
         pass
 
 
-class TimeDifferenceWithPreviousComment(CommentFeature):
-    name = "Time Difference With Previous Comment"
+class TimeDifferenceCommentAccountCreation(CommentFeature):
+    name = "Time Difference Between Account Creation and when Comment was Made "
 
     def __call__(self, comment, prev_comment_time, **kwargs):
+        pass
+
+
+class CommentTags(CommentFeature):
+    name = "Comment Tags"
+
+    def __call__(self, comment, **kwargs):
         pass
