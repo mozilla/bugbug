@@ -28,9 +28,7 @@ class SpamCommentModel(CommentModel):
         feature_extractors = [
             comment_features.CommenterExperience(),
             comment_features.CommentHasLink(),
-            comment_features.CommentTextHasKeywords(
-                {"free", "win", "discount", "limited time", "casino", "rent"}
-            ),
+            comment_features.LengthofComment(),
         ]
 
         cleanup_functions = [
@@ -59,7 +57,7 @@ class SpamCommentModel(CommentModel):
                             ("data", DictVectorizer(), "data"),
                             (
                                 "comment_text",
-                                self.text_vectorizer(min_df=0.0001),
+                                self.text_vectorizer(min_df=0.001),
                                 "comment_text",
                             ),
                         ]

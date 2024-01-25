@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import re
 import sys
 from collections import defaultdict
 from typing import Any
@@ -82,27 +83,20 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
 
 
 class CommenterExperience(CommentFeature):
-    name = "#of Comments made by Commenter before"
+    name = "# of Comments made by Commenter in the past"
 
     def __call__(self, comment, commenter_experience, **kwargs):
         return commenter_experience
 
 
-class CommentTextHasKeywords(CommentFeature):
-    name = "Comment Has Certain Keywords"
-
-    def __init__(self, keywords=set()):
-        self.keywords = keywords
-
-    def __call__(self, comment, **kwargs):
-        return any(keyword in comment["text"].lower() for keyword in self.keywords)
-
-
 class CommentHasLink(CommentFeature):
     name = "Comment Has a Link"
 
+    # We check for links that are not from Mozilla
+    url_pattern = re.compile(r"http[s]?://(?!mozilla\.org|mozilla\.com)\S+")
+
     def __call__(self, comment, **kwargs) -> Any:
-        return "http" in comment["text"]
+        return bool(self.url_pattern.search(comment["text"]))
 
 
 class LengthofComment(CommentFeature):
@@ -122,12 +116,21 @@ class TimeCommentWasPosted(CommentFeature):
 class TimeDifferenceCommentAccountCreation(CommentFeature):
     name = "Time Difference Between Account Creation and when Comment was Made "
 
-    def __call__(self, comment, prev_comment_time, **kwargs):
+    def __call__(self, comment, account_creation_time, **kwargs):
         pass
 
 
 class CommentTags(CommentFeature):
     name = "Comment Tags"
 
+    def __init__(self, to_ignore=set()):
+        self.to_ignore = to_ignore
+
     def __call__(self, comment, **kwargs):
-        pass
+        tags = []
+        for tag in comment["tags"]:
+            if tag in self.to_ignore:
+                continue
+
+            tags.append(tag)
+        return tags
