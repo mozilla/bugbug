@@ -7,7 +7,7 @@ import logging
 
 import xgboost
 from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import TomekLinks
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -57,7 +57,7 @@ class SpamCommentModel(CommentModel):
                             ("data", DictVectorizer(), "data"),
                             (
                                 "comment_text",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(min_df=0.0001),
                                 "comment_text",
                             ),
                         ]
@@ -65,7 +65,7 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "sampler",
-                    TomekLinks(),
+                    RandomUnderSampler(random_state=0),
                 ),
                 (
                     "estimator",
