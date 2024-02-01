@@ -70,9 +70,9 @@ class WorksForMeModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "first_comment",
+                                "comments",
                                 self.text_vectorizer(min_df=0.0001),
-                                "first_comment",
+                                "comments",
                             ),
                         ]
                     ),
