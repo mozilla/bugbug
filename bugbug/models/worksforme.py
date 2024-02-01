@@ -38,7 +38,7 @@ class WorksForMeModel(BugModel):
             bug_features.Component(),
             bug_features.Keywords(),
             bug_features.TimeToClose(),
-            bug_features.HasPendingNeedinfoOnReporter(),
+            # bug_features.HasPendingNeedinfoOnReporter(),
         ]
 
         cleanup_functions = [
@@ -51,7 +51,12 @@ class WorksForMeModel(BugModel):
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors,
+                        cleanup_functions,
+                        rollback=True,
+                        rollback_when=self.rollback,
+                    ),
                 ),
             ]
         )
@@ -65,9 +70,9 @@ class WorksForMeModel(BugModel):
                             ("data", DictVectorizer(), "data"),
                             ("title", self.text_vectorizer(min_df=0.0001), "title"),
                             (
-                                "comments",
+                                "first_comment",
                                 self.text_vectorizer(min_df=0.0001),
-                                "comments",
+                                "first_comment",
                             ),
                         ]
                     ),
@@ -80,11 +85,17 @@ class WorksForMeModel(BugModel):
             ]
         )
 
+    def rollback(self, change):
+        return change["field_name"] == "cf_last_resolved" and change["added"]
+
     def get_labels(self):
         classes = {}
 
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
+
+            if not bug["resolution"] and not bug["cf_last_resolved"]:
+                continue
 
             classes[bug_id] = 1 if bug["resolution"] == "WORKSFORME" else 0
 
