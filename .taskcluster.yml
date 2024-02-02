@@ -33,10 +33,12 @@ tasks:
 
     taskboot_image: "mozilla/taskboot:0.4.2"
 
-    owner_source_marco_c:
-      owner: mcastelluccio@mozilla.com
-      source: ${repository}/raw/${head_rev}/.taskcluster.yml 
   in:
+    $let:
+      marco_metadata:
+        metadata:
+          owner: mcastelluccio@mozilla.com
+          source: ${repository}/raw/${head_rev}/.taskcluster.yml 
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
       - taskId: { $eval: as_slugid("lint_task") }
@@ -55,11 +57,11 @@ tasks:
               git -c advice.detachedHead=false checkout ${head_rev} &&
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
               pre-commit run -a --show-diff-on-failure"
-        metadata:
-          $mergeDeep:
-            - {$eval: 'owner_source_marco_c'}
-            - name: bugbug lint
-            - description: bugbug lint
+        $mergeDeep:
+          - {$eval: 'marco_metadata'}
+          - metadata:
+              name: bugbug lint
+              description: bugbug lint
 
       - $if: 'tasks_for == "github-push"'
         then:
