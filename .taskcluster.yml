@@ -33,9 +33,9 @@ tasks:
 
     taskboot_image: "mozilla/taskboot:0.4.2"
 
-    owner_source_marco_c: &owner_source_marco_c
+    owner_source_marco_c:
       owner: mcastelluccio@mozilla.com
-      source: ${repository}/raw/${head_rev}/.taskcluster.yml  
+      source: ${repository}/raw/${head_rev}/.taskcluster.yml 
   in:
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
@@ -57,7 +57,7 @@ tasks:
               pre-commit run -a --show-diff-on-failure"
         metadata:
           $mergeDeep:
-            - *owner_source_marco_c
+            - {$eval: 'owner_source_marco_c'}
             - name: bugbug lint
             - description: bugbug lint
 
