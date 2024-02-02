@@ -32,7 +32,6 @@ tasks:
       then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
-
   in:
     $let:
       marco_metadata:
