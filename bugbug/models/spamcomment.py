@@ -6,8 +6,8 @@
 import logging
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -65,7 +65,7 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "sampler",
-                    RandomUnderSampler(random_state=0),
+                    BorderlineSMOTE(random_state=0),
                 ),
                 (
                     "estimator",
