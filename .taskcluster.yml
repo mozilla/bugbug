@@ -36,7 +36,7 @@ tasks:
     marco_metadata:
       metadata:
         owner: mcastelluccio@mozilla.com
-        source: ${repository}/raw/${head_rev}/.taskcluster.yml 
+        source: mcastelluccio@mozilla.com
   in:
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
