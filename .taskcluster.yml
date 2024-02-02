@@ -32,6 +32,10 @@ tasks:
       then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
+
+    owner_source_marco_c: &owner_source_marco_c
+      owner: mcastelluccio@mozilla.com
+      source: ${repository}/raw/${head_rev}/.taskcluster.yml  
   in:
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
@@ -52,10 +56,10 @@ tasks:
               pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
               pre-commit run -a --show-diff-on-failure"
         metadata:
-          name: bugbug lint
-          description: bugbug lint
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+          $mergeDeep:
+            *owner_source_marco_c
+            name: bugbug lint
+            description: bugbug lint
 
       - $if: 'tasks_for == "github-push"'
         then:
