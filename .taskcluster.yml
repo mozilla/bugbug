@@ -57,9 +57,9 @@ tasks:
               pre-commit run -a --show-diff-on-failure"
         metadata:
           $mergeDeep:
-            *owner_source_marco_c
-            name: bugbug lint
-            description: bugbug lint
+            - *owner_source_marco_c
+            - name: bugbug lint
+            - description: bugbug lint
 
       - $if: 'tasks_for == "github-push"'
         then:
