@@ -32,12 +32,12 @@ tasks:
       then: ${event.pull_request.body}
 
     taskboot_image: "mozilla/taskboot:0.4.2"
+
+    marco_metadata:
+      metadata:
+        owner: mcastelluccio@mozilla.com
+        source: ${repository}/raw/${head_rev}/.taskcluster.yml 
   in:
-    $let:
-      marco_metadata:
-        metadata:
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml 
     $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
     then:
       - taskId: { $eval: as_slugid("lint_task") }
