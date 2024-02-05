@@ -35,7 +35,6 @@ tasks:
   in:
     $let:
       default_task_definition:
-        taskId: default id
         created: { $fromNow: "" }
         deadline: { $fromNow: "1 hour" }
         provisionerId: proj-bugbug
@@ -247,145 +246,136 @@ tasks:
               name: bugbug ui build
               description: bugbug ui build
 
+        # why does this not have a task id ?
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
-            dependencies:
-              - { $eval: as_slugid("lint_task") }
-              - { $eval: as_slugid("tests_task") }
-              - { $eval: as_slugid("http_tests_task") }
-              - { $eval: as_slugid("frontend_build") }
-              - { $eval: as_slugid("packaging_test_task") }
-              - { $eval: as_slugid("version_check_task") }
-              - { $eval: as_slugid("integration_test") }
-            scopes:
-              - secrets:get:project/bugbug/deploy
-            created: { $fromNow: "" }
-            deadline: { $fromNow: "1 hour" }
-            provisionerId: proj-bugbug
-            workerType: batch
-            payload:
-              features:
-                taskclusterProxy: true
-              maxRunTime: 3600
-              image: "${taskboot_image}"
-              command:
-                - taskboot
-                - deploy-pypi
-              env:
-                TASKCLUSTER_SECRET: project/bugbug/deploy
-                GIT_REPOSITORY: "${repository}"
-                GIT_REVISION: "${head_rev}"
-            metadata:
-              name: bugbug PyPI release
-              description: bugbug PyPI release
-              owner: mcastelluccio@mozilla.com
-              source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            $mergeDeep:
+              - {$eval : default_task_definition}            
+              - dependencies:
+                  - { $eval: as_slugid("lint_task") }
+                  - { $eval: as_slugid("tests_task") }
+                  - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("packaging_test_task") }
+                  - { $eval: as_slugid("version_check_task") }
+                  - { $eval: as_slugid("integration_test") }
+                scopes:
+                  - secrets:get:project/bugbug/deploy
+                provisionerId: proj-bugbug
+                workerType: batch
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  image: "${taskboot_image}"
+                  command:
+                    - taskboot
+                    - deploy-pypi
+                  env:
+                    TASKCLUSTER_SECRET: project/bugbug/deploy
+                    GIT_REPOSITORY: "${repository}"
+                    GIT_REVISION: "${head_rev}"
+                metadata:
+                  name: bugbug PyPI release
+                  description: bugbug PyPI release
 
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
-            dependencies:
-              - { $eval: as_slugid("docker_build") }
-              - { $eval: as_slugid("lint_task") }
-              - { $eval: as_slugid("version_check_task") }
-              - { $eval: as_slugid("tests_task") }
-              - { $eval: as_slugid("http_tests_task") }
-              - { $eval: as_slugid("frontend_build") }
-              - { $eval: as_slugid("packaging_test_task") }
-            scopes:
-              - secrets:get:project/bugbug/deploy
-            taskId: { $eval: as_slugid("docker_push") }
-            created: { $fromNow: "" }
-            deadline: { $fromNow: "4 hours" }
-            provisionerId: proj-bugbug
-            workerType: batch
-            payload:
-              features:
-                taskclusterProxy: true
-              maxRunTime: 3600
-              image: "${taskboot_image}"
-              env:
-                TASKCLUSTER_SECRET: project/bugbug/deploy
-              command:
-                - taskboot
-                - push-artifact
-                - --exclude-filter
-                - "*http-service*"
-            metadata:
-              name: bugbug docker push
-              description: bugbug docker push
-              owner: mcastelluccio@mozilla.com
-              source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            $mergeDeep:
+              - {$eval : default_task_definition}           
+              - dependencies:
+                  - { $eval: as_slugid("docker_build") }
+                  - { $eval: as_slugid("lint_task") }
+                  - { $eval: as_slugid("version_check_task") }
+                  - { $eval: as_slugid("tests_task") }
+                  - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("packaging_test_task") }
+                scopes:
+                  - secrets:get:project/bugbug/deploy
+                taskId: { $eval: as_slugid("docker_push") }
+                workerType: batch
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  image: "${taskboot_image}"
+                  env:
+                    TASKCLUSTER_SECRET: project/bugbug/deploy
+                  command:
+                    - taskboot
+                    - push-artifact
+                    - --exclude-filter
+                    - "*http-service*"
+                metadata:
+                  name: bugbug docker push
+                  description: bugbug docker push
 
         # It's the same task integration_test as in data-pipeline.yml
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
-            taskId: { $eval: as_slugid("integration_test") }
-            dependencies:
-              - { $eval: as_slugid("docker_push") }
-            created: { $fromNow: "" }
-            deadline: { $fromNow: "1 hour" }
-            provisionerId: proj-bugbug
-            workerType: compute-small
-            scopes:
-              - secrets:get:project/bugbug/integration
-              - "docker-worker:cache:bugbug-mercurial-repository"
-              - "generic-worker:cache:bugbug-mercurial-repository"
-            payload:
-              features:
-                taskclusterProxy: true
-              maxRunTime: 10800
-              image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
-              env:
-                TC_SECRET_ID: project/bugbug/integration
-                CACHE_DIR: "/cache"
-              command:
-                - "/bin/bash"
-                - "-lcx"
-                - "apt-get -qq update &&
-                  apt-get -qq install -y redis-server &&
-                  git clone --quiet ${repository} &&
-                  cd bugbug &&
-                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                  python -c 'import os; print(os.environ.keys())' &&
-                  bash ./scripts/integration_test.sh"
-              cache:
-                bugbug-mercurial-repository: /cache
-            metadata:
-              name: bugbug integration test
-              description: bugbug integration test
-              owner: ${user}@users.noreply.github.com
-              source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            $mergeDeep:
+              - { $eval: default_task_definition }          
+              - taskId: { $eval: as_slugid("integration_test") }
+                dependencies:
+                  - { $eval: as_slugid("docker_push") }
+                workerType: compute-small
+                scopes:
+                  - secrets:get:project/bugbug/integration
+                  - "docker-worker:cache:bugbug-mercurial-repository"
+                  - "generic-worker:cache:bugbug-mercurial-repository"
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  maxRunTime: 10800
+                  image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
+                  env:
+                    TC_SECRET_ID: project/bugbug/integration
+                    CACHE_DIR: "/cache"
+                  command:
+                    - "/bin/bash"
+                    - "-lcx"
+                    - "apt-get -qq update &&
+                      apt-get -qq install -y redis-server &&
+                      git clone --quiet ${repository} &&
+                      cd bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      python -c 'import os; print(os.environ.keys())' &&
+                      bash ./scripts/integration_test.sh"
+                  cache:
+                    bugbug-mercurial-repository: /cache
+                metadata:
+                  name: bugbug integration test
+                  description: bugbug integration test
+                  owner: ${user}@users.noreply.github.com
+                  source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
-            taskId: { $eval: as_slugid("update_hook_data_pipeline") }
-            dependencies:
-              - { $eval: as_slugid("integration_test") }
-            scopes:
-              - hooks:modify-hook:project-bugbug/bugbug
-              - assume:hook-id:project-bugbug/bugbug
-              - queue:route:project.bugbug.deploy_ending.*
-            created: { $fromNow: "" }
-            deadline: { $fromNow: "5 hours" }
-            provisionerId: proj-bugbug
-            workerType: batch
-            payload:
-              features:
-                taskclusterProxy: true
-              maxRunTime: 3600
-              image: "${taskboot_image}"
-              command:
-                - "/bin/sh"
-                - "-lcxe"
-                - "git clone --quiet ${repository} &&
-                  cd bugbug &&
-                  git -c advice.detachedHead=false checkout ${head_rev} &&
-                  python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
-                  taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"
-            routes:
-              - project.bugbug.deploy_ending
-            metadata:
-              name: bugbug update data hook
-              description: bugbug update data hook
-              owner: mcastelluccio@mozilla.com
-              source: ${repository}/raw/${head_rev}/.taskcluster.yml
+            $mergeDeep:
+              - { $eval: default_task_definition }          
+              - taskId: { $eval: as_slugid("update_hook_data_pipeline") }
+                dependencies:
+                  - { $eval: as_slugid("integration_test") }
+                scopes:
+                  - hooks:modify-hook:project-bugbug/bugbug
+                  - assume:hook-id:project-bugbug/bugbug
+                  - queue:route:project.bugbug.deploy_ending.*
+                deadline: { $fromNow: "5 hours" }
+                workerType: batch
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  maxRunTime: 3600
+                  image: "${taskboot_image}"
+                  command:
+                    - "/bin/sh"
+                    - "-lcxe"
+                    - "git clone --quiet ${repository} &&
+                      cd bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
+                      taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"
+                routes:
+                  - project.bugbug.deploy_ending
+                metadata:
+                  name: bugbug update data hook
+                  description: bugbug update data hook
