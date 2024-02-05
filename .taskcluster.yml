@@ -197,61 +197,55 @@ tasks:
 
         - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
           then:
-            dependencies:
-              - { $eval: as_slugid("docker_build") }
-            taskId: { $eval: as_slugid("train_on_taskcluster") }
-            created: { $fromNow: "" }
-            deadline: { $fromNow: "1 day" }
-            provisionerId: proj-bugbug
-            workerType: compute-large
+            $mergeDeep:
+              - {$eval : default_task_definition}          
+              - dependencies:
+                - { $eval: as_slugid("docker_build") }
+                taskId: { $eval: as_slugid("train_on_taskcluster") }
+                workerType: compute-large
+                payload:
+                  maxRunTime:
+                    $switch:
+                      '"Train on Taskcluster: regression" in pr_description': 2700
+                      $default: 10800
+                  image:
+                    type: task-image
+                    path: public/bugbug/bugbug-base.tar.zst
+                    taskId: { $eval: as_slugid("docker_build") }
+                  env:
+                    PR_DESCRIPTION: "${pr_description}"
+                  command:
+                    - "/bin/sh"
+                    - "-lcx"
+                    - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+                metadata:
+                  name: bugbug train on TC
+                  description: Train a BugBug model on Taskcluster
+
+        - $mergeDeep:
+          - {$eval : default_task_definition}
+          - taskId: { $eval: as_slugid("frontend_build") }
+            workerType: batch
             payload:
-              maxRunTime:
-                $switch:
-                  '"Train on Taskcluster: regression" in pr_description': 2700
-                  $default: 10800
-              image:
-                type: task-image
-                path: public/bugbug/bugbug-base.tar.zst
-                taskId: { $eval: as_slugid("docker_build") }
-              env:
-                PR_DESCRIPTION: "${pr_description}"
+              maxRunTime: 3600
+              image: node:lts
               command:
                 - "/bin/sh"
-                - "-lcx"
-                - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+                - "-lcxe"
+                - "git clone --quiet ${repository} /bugbug &&
+                  cd /bugbug &&
+                  git -c advice.detachedHead=false checkout ${head_rev} &&
+                  cd ui/changes &&
+                  npm install --no-progress &&
+                  npm run release"
+              artifacts:
+                public/frontend:
+                  expires: { $fromNow: "2 weeks" }
+                  path: /bugbug/ui/changes/dist
+                  type: directory
             metadata:
-              name: bugbug train on TC
-              description: Train a BugBug model on Taskcluster
-              owner: mcastelluccio@mozilla.com
-              source: ${repository}/raw/${head_rev}/.taskcluster.yml
-
-        - taskId: { $eval: as_slugid("frontend_build") }
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "1 hour" }
-          provisionerId: proj-bugbug
-          workerType: batch
-          payload:
-            maxRunTime: 3600
-            image: node:lts
-            command:
-              - "/bin/sh"
-              - "-lcxe"
-              - "git clone --quiet ${repository} /bugbug &&
-                cd /bugbug &&
-                git -c advice.detachedHead=false checkout ${head_rev} &&
-                cd ui/changes &&
-                npm install --no-progress &&
-                npm run release"
-            artifacts:
-              public/frontend:
-                expires: { $fromNow: "2 weeks" }
-                path: /bugbug/ui/changes/dist
-                type: directory
-          metadata:
-            name: bugbug ui build
-            description: bugbug ui build
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+              name: bugbug ui build
+              description: bugbug ui build
 
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
