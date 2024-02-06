@@ -27,7 +27,7 @@ class SpamCommentModel(CommentModel):
 
         feature_extractors = [
             comment_features.CommenterExperience(),
-            comment_features.CommentHasLink(),
+            comment_features.CommentHasUnknownLink(),
             comment_features.LengthofComment(),
         ]
 
@@ -69,7 +69,9 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    xgboost.XGBClassifier(
+                        n_jobs=utils.get_physical_cpu_count(), max_delta_step=1
+                    ),
                 ),
             ]
         )
