@@ -38,6 +38,7 @@ tasks:
         created: { $fromNow: "" }
         deadline: { $fromNow: "1 hour" }
         provisionerId: proj-bugbug
+        workerType: batch
         payload:
           maxRunTime: 3600
           image: python:3.10
@@ -50,7 +51,6 @@ tasks:
         - $mergeDeep:
             - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("lint_task") }
-              workerType: batch
               payload:
                 command:
                   - "/bin/bash"
@@ -69,7 +69,6 @@ tasks:
             $mergeDeep:
               - { $eval: default_task_definition }
               - taskId: { $eval: as_slugid("version_check_task") }
-                workerType: batch
                 payload:
                   command:
                     - "/bin/bash"
@@ -140,7 +139,6 @@ tasks:
         - $mergeDeep:
             - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("packaging_test_task") }
-              workerType: batch
               payload:
                 env:
                   CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
@@ -164,6 +162,7 @@ tasks:
         - $mergeDeep:
             - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("docker_build") }
+              deadline: { $fromNow: "3 hours" }
               workerType: ci
               payload:
                 capabilities:
@@ -201,6 +200,7 @@ tasks:
               - dependencies:
                   - { $eval: as_slugid("docker_build") }
                 taskId: { $eval: as_slugid("train_on_taskcluster") }
+                deadline: { $fromNow: "1 day" }
                 workerType: compute-large
                 payload:
                   maxRunTime:
@@ -224,9 +224,7 @@ tasks:
         - $mergeDeep:
             - { $eval: default_task_definition }
             - taskId: { $eval: as_slugid("frontend_build") }
-              workerType: batch
               payload:
-                maxRunTime: 3600
                 image: node:lts
                 command:
                   - "/bin/sh"
@@ -261,8 +259,6 @@ tasks:
                   - { $eval: as_slugid("integration_test") }
                 scopes:
                   - secrets:get:project/bugbug/deploy
-                provisionerId: proj-bugbug
-                workerType: batch
                 payload:
                   features:
                     taskclusterProxy: true
@@ -293,7 +289,7 @@ tasks:
                 scopes:
                   - secrets:get:project/bugbug/deploy
                 taskId: { $eval: as_slugid("docker_push") }
-                workerType: batch
+                deadline: { $fromNow: "4 hours" }
                 payload:
                   features:
                     taskclusterProxy: true
@@ -346,7 +342,6 @@ tasks:
                   name: bugbug integration test
                   description: bugbug integration test
                   owner: ${user}@users.noreply.github.com
-                  source: ${repository}/raw/${head_rev}/.taskcluster.yml
 
         - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
           then:
@@ -360,11 +355,9 @@ tasks:
                   - assume:hook-id:project-bugbug/bugbug
                   - queue:route:project.bugbug.deploy_ending.*
                 deadline: { $fromNow: "5 hours" }
-                workerType: batch
                 payload:
                   features:
                     taskclusterProxy: true
-                  maxRunTime: 3600
                   image: "${taskboot_image}"
                   command:
                     - "/bin/sh"
