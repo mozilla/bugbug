@@ -6,6 +6,7 @@
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -89,35 +90,51 @@ class CommenterExperience(CommentFeature):
         return commenter_experience
 
 
-class CommentHasLink(CommentFeature):
-    name = "Comment Has a Link"
+class CommentHasUnknownLink(CommentFeature):
+    name = "Comment Has an Unknown Link"
 
-    # We check for links that are not from Mozilla
-    url_pattern = re.compile(r"http[s]?://(?!mozilla\.org|mozilla\.com)\S+")
+    def __init__(self, domains_to_ignore=set()):
+        self.domains_to_ignore = domains_to_ignore
+
+        ignored_domains_pattern = "|".join(
+            re.escape(domain) for domain in self.domains_to_ignore
+        )
+        self.url_pattern = re.compile(
+            rf"http[s]?://(?!((?:{ignored_domains_pattern})\.\S+))\S+"
+        )
 
     def __call__(self, comment, **kwargs) -> Any:
         return bool(self.url_pattern.search(comment["text"]))
 
 
-class LengthofComment(CommentFeature):
-    name = "Length of Comment"
+class CharacterCount(CommentFeature):
+    name = "# of Characters in the Comment"
 
     def __call__(self, comment, **kwargs):
         return len(comment["text"])
+
+
+class WordCount(CommentFeature):
+    name = "# of Words in the Comment"
+
+    def __call__(self, comment, **kwargs):
+        return len(comment["text"].split())
+
+
+class DateCommentWasPosted(CommentFeature):
+    name = "Date Comment Was Posted"
+
+    def __call__(self, comment, **kwargs):
+        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
+        return comment_time.strftime("%Y-%m-%d")
 
 
 class TimeCommentWasPosted(CommentFeature):
     name = "Time Comment Was Posted"
 
     def __call__(self, comment, **kwargs):
-        pass
-
-
-class TimeDifferenceCommentAccountCreation(CommentFeature):
-    name = "Time Difference Between Account Creation and when Comment was Made "
-
-    def __call__(self, comment, account_creation_time, **kwargs):
-        pass
+        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
+        return comment_time.strftime("%H:%M:%S")
 
 
 class CommentTags(CommentFeature):
