@@ -46,7 +46,7 @@ redis = Redis(
     host=url.hostname,
     port=url.port if url.port is not None else 6379,
     password=url.password,
-    ssl=True,
+    ssl=True if url.scheme == "rediss" else False,
     ssl_cert_reqs=None,
 )
 
