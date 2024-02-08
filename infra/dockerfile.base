@@ -1,4 +1,4 @@
-FROM python:3.10.7-slim
+FROM python:3.11.7-slim
 
 # Setup dependencies in a cacheable step
 RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt \
