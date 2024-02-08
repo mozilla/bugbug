@@ -31,20 +31,20 @@ class WorksForMeModel(BugModel):
             bug_features.Status(),
             bug_features.Severity(),
             bug_features.Priority(),
-            bug_features.HasCrashSignature(),
             bug_features.HasURL(),
             bug_features.Whiteboard(),
             bug_features.Product(),
             bug_features.Component(),
             bug_features.Keywords(),
             bug_features.TimeToClose(),
-            # bug_features.HasPendingNeedinfoOnReporter(),
+            bug_features.HasAttachment(),
         ]
 
         cleanup_functions = [
             feature_cleanup.fileref(),
             feature_cleanup.url(),
             feature_cleanup.synonyms(),
+            feature_cleanup.hex(),
         ]
 
         self.extraction_pipeline = Pipeline(
