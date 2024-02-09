@@ -8,6 +8,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -96,15 +97,24 @@ class CommentHasUnknownLink(CommentFeature):
     def __init__(self, domains_to_ignore=set()):
         self.domains_to_ignore = domains_to_ignore
 
-        ignored_domains_pattern = "|".join(
-            re.escape(domain) for domain in self.domains_to_ignore
-        )
-        self.url_pattern = re.compile(
-            rf"http[s]?://(?!((?:{ignored_domains_pattern})\.\S+))\S+"
+    def __call__(self, comment, **kwargs) -> Any:
+        potential_urls = re.findall(
+            r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
         )
 
-    def __call__(self, comment, **kwargs) -> Any:
-        return bool(self.url_pattern.search(comment["text"]))
+        for url in potential_urls:
+            parsed_url = urlparse(url)
+            hostname = parsed_url.netloc
+
+            if hostname:
+                parts = hostname.split(".")
+                if len(parts) > 1:
+                    main_domain = ".".join(parts[-2:])
+
+                    if main_domain.lower() not in self.domains_to_ignore:
+                        return True
+
+        return False
 
 
 class CharacterCount(CommentFeature):
@@ -121,20 +131,43 @@ class WordCount(CommentFeature):
         return len(comment["text"].split())
 
 
-class DateCommentWasPosted(CommentFeature):
-    name = "Date Comment Was Posted"
+class ID:
+    name = "Comment ID"
+
+    def __call__(self, comment, **kwargs):
+        return comment["id"]
+
+
+class HourOfDay(CommentFeature):
+    name = "Hour of the Day (0-23)"
 
     def __call__(self, comment, **kwargs):
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
-        return comment_time.strftime("%Y-%m-%d")
+        return comment_time.hour
 
 
-class TimeCommentWasPosted(CommentFeature):
-    name = "Time Comment Was Posted"
+class Weekday(CommentFeature):
+    name = "Day of the Week (0-7)"
 
     def __call__(self, comment, **kwargs):
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
-        return comment_time.strftime("%H:%M:%S")
+        return comment_time.weekday()
+
+
+class DayOfYear(CommentFeature):
+    name = "Day of the Year (0-366)"
+
+    def __call__(self, comment, **kwargs):
+        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
+        return comment_time.timetuple().tm_yday
+
+
+class WeekOfYear(CommentFeature):
+    name = "Week of Year"
+
+    def __call__(self, comment, **kwargs):
+        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
+        return comment_time.isocalendar()[1]
 
 
 class CommentTags(CommentFeature):

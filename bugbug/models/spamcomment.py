@@ -28,12 +28,13 @@ class SpamCommentModel(CommentModel):
         feature_extractors = [
             comment_features.CommenterExperience(),
             comment_features.CommentHasUnknownLink(
-                {"github.com/mozilla", "mozilla.com", "mozilla.org"}
+                {"github.com", "mozilla.com", "mozilla.org"}
             ),
-            comment_features.CharacterCount(),
             comment_features.WordCount(),
-            comment_features.DateCommentWasPosted(),
-            comment_features.TimeCommentWasPosted(),
+            comment_features.HourOfDay(),
+            comment_features.DayOfYear(),
+            comment_features.Weekday(),
+            comment_features.WeekOfYear(),
         ]
 
         cleanup_functions = [
