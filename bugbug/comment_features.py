@@ -131,13 +131,6 @@ class WordCount(CommentFeature):
         return len(comment["text"].split())
 
 
-class ID:
-    name = "Comment ID"
-
-    def __call__(self, comment, **kwargs):
-        return comment["id"]
-
-
 class HourOfDay(CommentFeature):
     name = "Hour of the Day (0-23)"
 
