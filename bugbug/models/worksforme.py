@@ -6,7 +6,7 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -77,7 +77,7 @@ class WorksForMeModel(BugModel):
                         ]
                     ),
                 ),
-                ("sampler", SMOTE(random_state=0)),
+                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
