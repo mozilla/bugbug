@@ -6,7 +6,6 @@
 import gzip
 
 import orjson
-
 from bugbug_http.app import API_TOKEN
 
 

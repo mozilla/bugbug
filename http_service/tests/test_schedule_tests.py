@@ -9,7 +9,6 @@ import hglib
 import orjson
 import pytest
 import zstandard
-
 from bugbug_http import models
 
 
