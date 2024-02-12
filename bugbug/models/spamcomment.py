@@ -26,7 +26,6 @@ class SpamCommentModel(CommentModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            comment_features.CommenterExperience(),
             comment_features.CommentHasUnknownLink(
                 {"github.com", "mozilla.com", "mozilla.org"}
             ),
@@ -85,7 +84,7 @@ class SpamCommentModel(CommentModel):
     def get_labels(self):
         classes = {}
 
-        for bug in bugzilla.get_bugs(include_invalid=True):
+        for bug in bugzilla.get_bugs(include_invalid=False):
             for comment in bug["comments"]:
                 comment_id = comment["id"]
 
