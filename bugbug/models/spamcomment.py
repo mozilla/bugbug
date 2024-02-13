@@ -74,9 +74,7 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(
-                        n_jobs=utils.get_physical_cpu_count(), max_delta_step=1
-                    ),
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
                 ),
             ]
         )
@@ -84,12 +82,16 @@ class SpamCommentModel(CommentModel):
     def get_labels(self):
         classes = {}
 
-        for bug in bugzilla.get_bugs(include_invalid=False):
+        for bug in bugzilla.get_bugs(include_invalid=True):
             for comment in bug["comments"]:
                 comment_id = comment["id"]
 
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
                 if "@mozilla" in comment["creator"]:
+                    continue
+
+                # Skip the first comment, spambug model already works on this comment.
+                if comment["count"] == 0:
                     continue
 
                 if "spam" in comment["tags"]:
