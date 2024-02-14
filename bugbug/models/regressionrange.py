@@ -80,13 +80,14 @@ class RegressionRangeModel(BugModel):
                 continue
 
             bug_id = int(bug_data["id"])
-            if "regressionwindow-wanted" in bug_data["keywords"]:
+            if (
+                bug_data.get("regressed_by")
+                or "regressionwindow-wanted" in bug_data["keywords"]
+            ):
+                classes[bug_id] = 1
+            else:
                 classes[bug_id] = 0
-            elif "cf_has_regression_range" in bug_data:
-                if bug_data["cf_has_regression_range"] == "yes":
-                    classes[bug_id] = 1
-                elif bug_data["cf_has_regression_range"] == "no":
-                    classes[bug_id] = 0
+
         logger.info(
             "%d bugs have regression range",
             sum(label == 1 for label in classes.values()),
