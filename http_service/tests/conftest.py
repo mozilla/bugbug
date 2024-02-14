@@ -12,8 +12,6 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Callable
 
-import bugbug_http
-import bugbug_http.models
 import hglib
 import numpy as np
 import orjson
@@ -22,12 +20,14 @@ import pytest
 import responses
 import zstandard
 from _pytest.monkeypatch import MonkeyPatch
-from bugbug_http import app
 from rq.exceptions import NoSuchJobError
 
 import bugbug.models
 import bugbug.models.testselect
+import bugbug_http
+import bugbug_http.models
 from bugbug import repository, test_scheduling
+from bugbug_http import app
 
 
 @pytest.fixture

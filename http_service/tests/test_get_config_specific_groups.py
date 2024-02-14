@@ -7,6 +7,7 @@ from typing import Callable
 
 import orjson
 import zstandard
+
 from bugbug_http import models
 
 

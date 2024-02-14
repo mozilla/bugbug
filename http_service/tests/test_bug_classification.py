@@ -8,6 +8,7 @@ import json
 import time
 
 import orjson
+
 from bugbug_http.app import API_TOKEN
 
 
