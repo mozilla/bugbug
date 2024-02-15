@@ -118,7 +118,7 @@ class NumberOfLinks(CommentFeature):
                     else:
                         links["mozilla"] += 1
 
-        links["total"] = links["unknown"] + links["mozilla"]
+        links["total"] = sum(links.values())
         return links
 
 
