@@ -102,8 +102,7 @@ class NumberOfLinks(CommentFeature):
             r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
         )
 
-        links = {"mozilla": 0, "unknown": 0}
-
+        domains = []
         for url in potential_urls:
             parsed_url = urlparse(url)
             hostname = parsed_url.netloc
@@ -112,14 +111,15 @@ class NumberOfLinks(CommentFeature):
                 parts = hostname.split(".")
                 if len(parts) > 1:
                     main_domain = ".".join(parts[-2:])
+                    domains.append(main_domain.lower())
 
-                    if main_domain.lower() not in self.domains_to_ignore:
-                        links["unknown"] += 1
-                    else:
-                        links["mozilla"] += 1
+        non_mozilla_links = sum(
+            domain not in self.domains_to_ignore for domain in domains
+        )
+        mozilla_links = sum(domain in self.domains_to_ignore for domain in domains)
+        total_links = len(domains)
 
-        links["total"] = sum(links.values())
-        return links
+        return [non_mozilla_links, mozilla_links, total_links]
 
 
 class CharacterCount(CommentFeature):
