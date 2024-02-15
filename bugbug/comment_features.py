@@ -91,8 +91,8 @@ class CommenterExperience(CommentFeature):
         return commenter_experience
 
 
-class CommentHasUnknownLink(CommentFeature):
-    name = "Comment Has an Unknown Link"
+class NumberOfLinks(CommentFeature):
+    name = "Number of Links in the comment"
 
     def __init__(self, domains_to_ignore=set()):
         self.domains_to_ignore = domains_to_ignore
@@ -101,6 +101,8 @@ class CommentHasUnknownLink(CommentFeature):
         potential_urls = re.findall(
             r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
         )
+
+        links = defaultdict(int)
 
         for url in potential_urls:
             parsed_url = urlparse(url)
@@ -112,9 +114,12 @@ class CommentHasUnknownLink(CommentFeature):
                     main_domain = ".".join(parts[-2:])
 
                     if main_domain.lower() not in self.domains_to_ignore:
-                        return True
+                        links['unknown'] += 1
+                    else:
+                        links['mozilla'] += 1
 
-        return False
+        links['total'] = len(potential_urls)
+        return links
 
 
 class CharacterCount(CommentFeature):
