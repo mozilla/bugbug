@@ -102,7 +102,7 @@ class NumberOfLinks(CommentFeature):
             r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
         )
 
-        links = defaultdict(int)
+        links = {"mozilla": 0, "unknown": 0}
 
         for url in potential_urls:
             parsed_url = urlparse(url)
@@ -114,11 +114,11 @@ class NumberOfLinks(CommentFeature):
                     main_domain = ".".join(parts[-2:])
 
                     if main_domain.lower() not in self.domains_to_ignore:
-                        links['unknown'] += 1
+                        links["unknown"] += 1
                     else:
-                        links['mozilla'] += 1
+                        links["mozilla"] += 1
 
-        links['total'] = len(potential_urls)
+        links["total"] = links["unknown"] + links["mozilla"]
         return links
 
 

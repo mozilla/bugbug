@@ -87,7 +87,7 @@ class SpamCommentModel(CommentModel):
                 comment_id = comment["id"]
 
                 # Skip the first comment because most first comments may contain links.
-                if str(comment["count"]) == '0':
+                if str(comment["count"]) == "0":
                     continue
 
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
