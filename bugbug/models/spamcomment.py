@@ -26,7 +26,7 @@ class SpamCommentModel(CommentModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            comment_features.CommentHasUnknownLink(
+            comment_features.NumberOfLinks(
                 {"github.com", "mozilla.com", "mozilla.org"}
             ),
             comment_features.WordCount(),
@@ -86,12 +86,12 @@ class SpamCommentModel(CommentModel):
             for comment in bug["comments"]:
                 comment_id = comment["id"]
 
-                # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
-                if "@mozilla" in comment["creator"]:
+                # Skip the first comment because most first comments may contain links.
+                if str(comment["count"]) == "0":
                     continue
 
-                # Skip the first comment, spambug model already works on this comment.
-                if comment["count"] == 0:
+                # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
+                if "@mozilla" in comment["creator"]:
                     continue
 
                 if "spam" in comment["tags"]:

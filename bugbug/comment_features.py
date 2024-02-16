@@ -91,8 +91,8 @@ class CommenterExperience(CommentFeature):
         return commenter_experience
 
 
-class CommentHasUnknownLink(CommentFeature):
-    name = "Comment Has an Unknown Link"
+class NumberOfLinks(CommentFeature):
+    name = "Number of Links in the comment"
 
     def __init__(self, domains_to_ignore=set()):
         self.domains_to_ignore = domains_to_ignore
@@ -102,6 +102,7 @@ class CommentHasUnknownLink(CommentFeature):
             r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
         )
 
+        domains = []
         for url in potential_urls:
             parsed_url = urlparse(url)
             hostname = parsed_url.netloc
@@ -110,11 +111,15 @@ class CommentHasUnknownLink(CommentFeature):
                 parts = hostname.split(".")
                 if len(parts) > 1:
                     main_domain = ".".join(parts[-2:])
+                    domains.append(main_domain.lower())
 
-                    if main_domain.lower() not in self.domains_to_ignore:
-                        return True
+        non_mozilla_links = sum(
+            domain not in self.domains_to_ignore for domain in domains
+        )
+        mozilla_links = sum(domain in self.domains_to_ignore for domain in domains)
+        total_links = len(domains)
 
-        return False
+        return [non_mozilla_links, mozilla_links, total_links]
 
 
 class CharacterCount(CommentFeature):
