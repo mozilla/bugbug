@@ -63,6 +63,11 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
                 if res is None:
                     continue
 
+                if isinstance(res, dict):
+                    for key, value in res.items():
+                        data[sys.intern(key)] = value
+                    continue
+
                 if isinstance(res, (list, set)):
                     for item in res:
                         data[sys.intern(f"{item} in {feature_extractor_name}")] = True
@@ -109,17 +114,22 @@ class NumberOfLinks(CommentFeature):
 
             if hostname:
                 parts = hostname.split(".")
+
+                # FIXME: Doesn't handle websites like shop.example.com.ca properly.
+                # It could extract a domain to look like com.ca
                 if len(parts) > 1:
                     main_domain = ".".join(parts[-2:])
                     domains.append(main_domain.lower())
 
-        non_mozilla_links = sum(
-            domain not in self.domains_to_ignore for domain in domains
-        )
-        mozilla_links = sum(domain in self.domains_to_ignore for domain in domains)
-        total_links = len(domains)
-
-        return [non_mozilla_links, mozilla_links, total_links]
+        return {
+            "# of Known links": sum(
+                domain in self.domains_to_ignore for domain in domains
+            ),
+            "# of Unknown links": sum(
+                domain not in self.domains_to_ignore for domain in domains
+            ),
+            "Total # of links": len(domains),
+        }
 
 
 class CharacterCount(CommentFeature):
