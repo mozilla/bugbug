@@ -25,8 +25,10 @@ from sklearn.model_selection import cross_validate, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
+from wandb.xgboost import WandbCallback
 from xgboost import XGBModel
 
+import wandb
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
 from bugbug.nlp import SpacyVectorizer
@@ -363,6 +365,9 @@ class Model:
         raise NotImplementedError("The model must implement this method")
 
     def train(self, importance_cutoff=0.15, limit=None):
+        run = wandb.init(
+            project="bugbug-john-test", config={"importance_cutoff": importance_cutoff}
+        )
         classes, self.class_names = self.get_labels()
         self.class_names = sort_class_names(self.class_names)
 
@@ -414,7 +419,19 @@ class Model:
         logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
         logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
+        if (
+            run.sweep_id
+        ):  # if we are running a grid search from wandb, use the hyperparameter options from there
+            self.clf.named_steps["estimator"].set_params(
+                max_depth=wandb.config.max_depth,
+                colsample_bytree=wandb.config.colsample_bytree,
+            )
+
+        self.clf.named_steps["estimator"].set_params(
+            callbacks=[WandbCallback(log_model=True)]
+        )
         self.clf.fit(X_train, self.le.transform(y_train))
+
         logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
@@ -601,6 +618,12 @@ class Model:
         with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+        wandb.summary["Model"] = model_directory
+
+        artifact = wandb.Artifact(name=model_directory, type="data")
+        artifact.add_file(model_path)
+        run.log_artifact(artifact)
+
         if self.store_dataset:
             with open(f"{self.__class__.__name__.lower()}_data_X", "wb") as f:
                 pickle.dump(X, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -608,7 +631,8 @@ class Model:
             with open(f"{self.__class__.__name__.lower()}_data_y", "wb") as f:
                 pickle.dump(y, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-        return tracking_metrics
+        wandb.log(tracking_metrics)
+        return tracking_metrics, run
 
     @staticmethod
     def load(model_directory: str) -> "Model":

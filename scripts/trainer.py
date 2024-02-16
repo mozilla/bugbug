@@ -7,6 +7,7 @@ import os
 import sys
 from logging import INFO, basicConfig, getLogger
 
+import wandb
 from bugbug import db
 from bugbug.models import MODELS, get_model_class
 from bugbug.utils import CustomJsonEncoder, create_tar_zst, zstd_compress
@@ -38,12 +39,15 @@ class Trainer(object):
             logger.info("Skipping download of the databases")
 
         logger.info("Training *%s* model", model_name)
-        metrics = model_obj.train(limit=args.limit)
-
+        metrics, wandb_run = model_obj.train(limit=args.limit)
         # Save the metrics as a file that can be uploaded as an artifact.
         metric_file_path = "metrics.json"
         with open(metric_file_path, "w") as metric_file:
             json.dump(metrics, metric_file, cls=CustomJsonEncoder)
+
+        artifact = wandb.Artifact(name="metrics_file", type="data")
+        artifact.add_file("metrics.json")
+        wandb_run.log_artifact(artifact)
 
         logger.info("Training done")
 
