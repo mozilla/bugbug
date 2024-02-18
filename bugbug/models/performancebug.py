@@ -6,8 +6,8 @@
 import logging
 
 import xgboost
+from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -19,35 +19,45 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class RegressionRangeModel(BugModel):
+class PerformanceBugModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
+        self.calculate_importance = False
+
         feature_extractors = [
             bug_features.HasSTR(),
-            bug_features.Severity(),
-            bug_features.Keywords({"regression", "regressionwindow-wanted"}),
+            bug_features.Keywords(
+                prefixes_to_ignore=bug_features.IsPerformanceBug.keyword_prefixes
+            ),
             bug_features.IsCoverityIssue(),
             bug_features.HasCrashSignature(),
             bug_features.HasURL(),
             bug_features.HasW3CURL(),
             bug_features.HasGithubURL(),
-            bug_features.Whiteboard(),
-            bug_features.Patches(),
-            bug_features.Landings(),
+            bug_features.Product(),
+            bug_features.HasRegressionRange(),
+            bug_features.HasCVEInAlias(),
+            bug_features.HasAttachment(),
+            bug_features.FiledVia(),
         ]
 
         cleanup_functions = [
             feature_cleanup.fileref(),
             feature_cleanup.url(),
             feature_cleanup.synonyms(),
+            feature_cleanup.hex(),
+            feature_cleanup.dll(),
+            feature_cleanup.crash(),
         ]
 
         self.extraction_pipeline = Pipeline(
             [
                 (
                     "bug_extractor",
-                    bug_features.BugExtractor(feature_extractors, cleanup_functions),
+                    bug_features.BugExtractor(
+                        feature_extractors, cleanup_functions, rollback=True
+                    ),
                 ),
             ]
         )
@@ -59,12 +69,16 @@ class RegressionRangeModel(BugModel):
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(), "title"),
-                            ("comments", self.text_vectorizer(), "comments"),
+                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
+                            (
+                                "first_comment",
+                                self.text_vectorizer(min_df=0.0001),
+                                "first_comment",
+                            ),
                         ]
                     ),
                 ),
-                ("sampler", RandomUnderSampler(random_state=0)),
+                ("sampler", BorderlineSMOTE(random_state=0)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
@@ -74,26 +88,24 @@ class RegressionRangeModel(BugModel):
 
     def get_labels(self):
         classes = {}
+        is_performance_bug = bug_features.IsPerformanceBug()
 
         for bug_data in bugzilla.get_bugs():
-            if "regression" not in bug_data["keywords"]:
+            bug_id = int(bug_data["id"])
+
+            if "cf_performance_impact" not in bug_data or bug_data[
+                "cf_performance_impact"
+            ] in ("?", "none"):
                 continue
 
-            bug_id = int(bug_data["id"])
-            if (
-                bug_data.get("regressed_by")
-                or "regressionwindow-wanted" in bug_data["keywords"]
-            ):
-                classes[bug_id] = 1
-            else:
-                classes[bug_id] = 0
+            classes[bug_id] = 1 if is_performance_bug(bug_data) else 0
 
         logger.info(
-            "%d bugs have regression range",
+            "%d performance bugs",
             sum(label == 1 for label in classes.values()),
         )
         logger.info(
-            "%d bugs don't have a regression range",
+            "%d non-performance bugs",
             sum(label == 0 for label in classes.values()),
         )
 
@@ -101,3 +113,12 @@ class RegressionRangeModel(BugModel):
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
+
+    def overwrite_classes(self, bugs, classes, probabilities):
+        is_performance_bug = bug_features.IsPerformanceBug()
+
+        for i, bug in enumerate(bugs):
+            if is_performance_bug(bug):
+                classes[i] = [1.0, 0.0] if probabilities else 1
+
+        return classes

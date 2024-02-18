@@ -8,6 +8,7 @@ import os
 from datetime import timedelta
 from functools import lru_cache
 from typing import Sequence
+from urllib.parse import urlparse
 
 import orjson
 import requests
@@ -34,10 +35,20 @@ MODELS_NAMES = [
     "spambug",
     "testlabelselect",
     "testgroupselect",
+    "accessibility",
+    "performancebug",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
-redis = Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost/0"))
+url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
+assert url.hostname is not None
+redis = Redis(
+    host=url.hostname,
+    port=url.port if url.port is not None else 6379,
+    password=url.password,
+    ssl=True if url.scheme == "rediss" else False,
+    ssl_cert_reqs=None,
+)
 
 MODEL_CACHE: ReadthroughTTLCache[str, Model] = ReadthroughTTLCache(
     timedelta(hours=1), lambda m: Model.load(f"{m}model")

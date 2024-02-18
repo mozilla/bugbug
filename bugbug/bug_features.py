@@ -10,14 +10,13 @@ from datetime import datetime, timezone
 from functools import partial
 from multiprocessing.pool import Pool
 
-import dateutil.parser
 import pandas as pd
 from dateutil import parser
 from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, repository
+from bugbug import bug_snapshot, bugzilla, repository
 
 
 def field(bug, field):
@@ -53,14 +52,17 @@ class HasCrashSignature(SingleBugFeature):
 
 
 class Keywords(SingleBugFeature):
-    def __init__(self, to_ignore=set()):
+    def __init__(self, to_ignore=set(), prefixes_to_ignore=set()):
         self.to_ignore = to_ignore
+        self.prefixes_to_ignore = prefixes_to_ignore
 
     def __call__(self, bug, **kwargs):
         keywords = []
         subkeywords = []
         for keyword in bug["keywords"]:
-            if keyword in self.to_ignore:
+            if keyword in self.to_ignore or any(
+                keyword.startswith(prefix) for prefix in self.prefixes_to_ignore
+            ):
                 continue
 
             keywords.append(keyword)
@@ -538,8 +540,7 @@ def get_time_to_fix(bug):
         return None
 
     return (
-        dateutil.parser.parse(bug["cf_last_resolved"])
-        - dateutil.parser.parse(bug["creation_time"])
+        parser.parse(bug["cf_last_resolved"]) - parser.parse(bug["creation_time"])
     ).total_seconds() / 86400
 
 
@@ -557,8 +558,7 @@ def get_time_to_assign(bug):
                 and change["added"] == "ASSIGNED"
             ):
                 return (
-                    dateutil.parser.parse(history["when"])
-                    - dateutil.parser.parse(bug["creation_time"])
+                    parser.parse(history["when"]) - parser.parse(bug["creation_time"])
                 ).total_seconds() / 86400
 
     return None
@@ -690,3 +690,192 @@ class BugExtractor(BaseEstimator, TransformerMixin):
             bugs_iter = apply_rollback(bugs_iter)
 
         return pd.DataFrame(apply_transform(bug) for bug in bugs_iter)
+
+
+class IsPerformanceBug(SingleBugFeature):
+    """Determine if the bug is related to performance based on given bug data."""
+
+    name = "Is Performance Bug"
+    type_name = "performance"
+    keyword_prefixes = ("perf", "topperf", "main-thread-io")
+    whiteboard_prefixes = (
+        "[fxperf",
+        "[fxperfsize",
+        "[snappy",
+        "[pdfjs-c-performance",
+        "[pdfjs-performance",
+        "[sp3",
+    )
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> bool:
+        if bug.get("cf_performance_impact") in ("low", "medium", "high"):
+            return True
+
+        if any(
+            keyword.startswith(prefix)
+            for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
+        ):
+            return True
+
+        bug_whiteboard = bug["whiteboard"].lower()
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
+            return True
+
+        return False
+
+
+class IsMemoryBug(SingleBugFeature):
+    """Determine if the bug is related to memory based on given bug data."""
+
+    name = "Is Memory Bug"
+    type_name = "memory"
+    keyword_prefixes = ("memory-",)
+    whiteboard_prefixes = ("[overhead", "[memshrink")
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> bool:
+        if bug_map is not None:
+            for bug_id in bug["blocks"]:
+                if bug_id not in bug_map:
+                    continue
+
+                alias = bug_map[bug_id]["alias"]
+                if alias and alias.startswith("memshrink"):
+                    return True
+
+        if any(
+            keyword.startswith(prefix)
+            for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
+        ):
+            return True
+
+        bug_whiteboard = bug["whiteboard"].lower()
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
+            return True
+
+        return False
+
+
+class IsPowerBug(SingleBugFeature):
+    """Determine if the bug is related to power based on given bug data."""
+
+    name = "Is Power Bug"
+    type_name = "power"
+    keyword_prefixes = ("power",)
+    whiteboard_prefixes = ("[power",)
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> bool:
+        if any(
+            keyword.startswith(prefix)
+            for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
+        ):
+            return True
+
+        bug_whiteboard = bug["whiteboard"].lower()
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
+            return True
+
+        return False
+
+
+class IsSecurityBug(SingleBugFeature):
+    """Determine if the bug is related to security based on given bug data."""
+
+    name = "Is Security Bug"
+    type_name = "security"
+    keyword_prefixes = ("sec-", "csectype-")
+    whiteboard_prefixes = ("[client-bounty-form", "[sec-survey")
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> bool:
+        if any(
+            keyword.startswith(prefix)
+            for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
+        ):
+            return True
+
+        bug_whiteboard = bug["whiteboard"].lower()
+        if any(prefix in bug_whiteboard for prefix in self.whiteboard_prefixes):
+            return True
+
+        return False
+
+
+class IsCrashBug(SingleBugFeature):
+    """Determine if the bug is related to crash based on given bug data."""
+
+    name = "Is Crash Bug"
+    type_name = "crash"
+    keyword_prefixes = ("crash", "crashreportid")
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> bool:
+        # Checking for `[@` will exclude some bugs that do not have valid
+        # signatures: https://mzl.la/46XAqRF
+        if bug.get("cf_crash_signature") and "[@" in bug["cf_crash_signature"]:
+            return True
+
+        if any(
+            keyword.startswith(prefix)
+            for keyword in bug["keywords"]
+            for prefix in self.keyword_prefixes
+        ):
+            return True
+
+        return False
+
+
+class BugTypes(SingleBugFeature):
+    """Determine bug type."""
+
+    name = "Infer Bug Type"
+    bug_type_extractors: list = [
+        IsCrashBug(),
+        IsMemoryBug(),
+        IsPerformanceBug(),
+        IsPowerBug(),
+        IsSecurityBug(),
+    ]
+
+    def __call__(
+        self,
+        bug: bugzilla.BugDict,
+        bug_map: dict[int, bugzilla.BugDict] | None = None,
+    ) -> list[str]:
+        """Infer bug types based on various bug characteristics.
+
+        Args:
+        - bug (bugzilla.BugDict): A dictionary containing bug data.
+        - bug_map (Optional[dict[int, bugzilla.BugDict]]): A mapping
+            of bug IDs to bug dictionaries. Default is None.
+
+        Returns:
+        - list[str]: A list of inferred bug types (e.g., "memory", "power",
+            "performance", "security", "crash").
+        """
+        return [
+            is_type.type_name
+            for is_type in self.bug_type_extractors
+            if is_type(bug, bug_map)
+        ]

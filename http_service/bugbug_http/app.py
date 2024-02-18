@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Sequence
+from urllib.parse import urlparse
 
 import orjson
 import zstandard
@@ -63,8 +64,15 @@ spec = APISpec(
 )
 
 application = Flask(__name__)
-redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
-redis_conn = Redis.from_url(redis_url)
+url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
+assert url.hostname is not None
+redis_conn = Redis(
+    host=url.hostname,
+    port=url.port if url.port is not None else 6379,
+    password=url.password,
+    ssl=True if url.scheme == "rediss" else False,
+    ssl_cert_reqs=None,
+)
 
 # Kill jobs which don't finish within 12 minutes.
 JOB_TIMEOUT = 12 * 60

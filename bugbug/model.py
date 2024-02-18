@@ -540,7 +540,12 @@ class Model:
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
 
-            classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
+            if is_multilabel:
+                classified_num = len(classified_indices)
+            else:
+                classified_num = sum(
+                    1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__"
+                )
 
             logger.info(
                 f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"

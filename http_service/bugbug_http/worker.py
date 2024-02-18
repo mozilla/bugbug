@@ -6,6 +6,7 @@
 
 import os
 import sys
+from urllib.parse import urlparse
 
 from redis import Redis
 from rq import Connection, Worker
@@ -24,8 +25,15 @@ def main():
 
     # Provide queue names to listen to as arguments to this script,
     # similar to rq worker
-    redis_url = os.environ.get("REDIS_URL", "redis://localhost/0")
-    redis_conn = Redis.from_url(redis_url)
+    url = urlparse(os.environ.get("REDIS_URL", "redis://localhost/0"))
+    assert url.hostname is not None
+    redis_conn = Redis(
+        host=url.hostname,
+        port=url.port if url.port is not None else 6379,
+        password=url.password,
+        ssl=True if url.scheme == "rediss" else False,
+        ssl_cert_reqs=None,
+    )
     with Connection(connection=redis_conn):
         qs = sys.argv[1:] or ["default"]
 
