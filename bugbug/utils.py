@@ -71,8 +71,8 @@ def to_array(val):
 
 
 class StructuredColumnTransformer(ColumnTransformer):
-    def _hstack(self, Xs):
-        result = super()._hstack(Xs)
+    def _hstack(self, Xs, n_samples):
+        result = super()._hstack(Xs, n_samples=n_samples)
 
         transformer_names = (name for name, transformer, column in self.transformers_)
         types = []
