@@ -4,10 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from datetime import datetime
 
 import xgboost
-from dateutil.relativedelta import relativedelta
 from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
@@ -34,7 +32,7 @@ class SpamCommentModel(CommentModel):
             comment_features.WordCount(),
             comment_features.HourOfDay(),
             comment_features.DayOfYear(),
-            comment_features.Weekday(),
+            comment_features.PostedOnWeekend(),
             comment_features.WeekOfYear(),
         ]
 
@@ -82,19 +80,15 @@ class SpamCommentModel(CommentModel):
         )
 
     @staticmethod
-    def __download_older_bugs_with_spam_comments(months: int) -> None:
+    def __download_older_bugs_with_spam_comments() -> None:
         """Retrieve older bugs within the past specified number of months which have spam comments.
 
         This function provides an option to extend the dataset used for model training by including older spam comments.
         """
-        lookup_start_date = datetime.utcnow() - relativedelta(months=months)
         params = {
-            "f1": "creation_ts",
-            "o1": "greaterthan",
-            "v1": lookup_start_date.strftime("%Y-%m-%d"),
-            "f2": "comment_tag",
-            "o2": "substring",
-            "v2": "spam",
+            "f1": "comment_tag",
+            "o1": "substring",
+            "v1": "spam",
             "product": bugzilla.PRODUCTS,
         }
 
@@ -107,7 +101,7 @@ class SpamCommentModel(CommentModel):
     def get_labels(self):
         classes = {}
 
-        self.__download_older_bugs_with_spam_comments(months=84)
+        self.__download_older_bugs_with_spam_comments()
 
         for bug in bugzilla.get_bugs(include_invalid=True):
             for comment in bug["comments"]:

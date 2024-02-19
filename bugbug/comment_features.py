@@ -101,11 +101,10 @@ class NumberOfLinks(CommentFeature):
 
     def __init__(self, domains_to_ignore=set()):
         self.domains_to_ignore = domains_to_ignore
+        self.pattern = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
 
     def __call__(self, comment, **kwargs) -> Any:
-        potential_urls = re.findall(
-            r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
-        )
+        potential_urls = self.pattern.findall(comment["text"])
 
         domains = []
         for url in potential_urls:
@@ -159,7 +158,15 @@ class Weekday(CommentFeature):
 
     def __call__(self, comment, **kwargs):
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
-        return comment_time.weekday()
+        return comment_time.isoweekday()
+
+
+class PostedOnWeekend(CommentFeature):
+    name = "Comment was Posted on Weekend"
+
+    def __call__(self, comment, **kwargs):
+        comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
+        return comment_time.isoweekday() in (5, 6)
 
 
 class DayOfYear(CommentFeature):
