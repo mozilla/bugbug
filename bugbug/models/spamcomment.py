@@ -105,16 +105,20 @@ class SpamCommentModel(CommentModel):
 
         self.__download_older_bugs_with_spam_comments()
 
-        for bug in bugzilla.get_bugs(include_invalid=True):
+        for bug in bugzilla.get_bugs():
             for comment in bug["comments"]:
                 comment_id = comment["id"]
 
                 # Skip the first comment because most first comments may contain links.
-                if str(comment["count"]) == "0":
-                    continue
-
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
-                if "@mozilla" in comment["creator"]:
+                # Skip comments whose text has been removed.
+                if any(
+                    [
+                        comment["count"] == "0",
+                        "@mozilla" in comment["creator"],
+                        "(comment removed)" in comment["text"],
+                    ]
+                ):
                     continue
 
                 if "spam" in comment["tags"]:
@@ -138,7 +142,7 @@ class SpamCommentModel(CommentModel):
         # include spam bugs which have a number of spam comments.
         return (
             (comment, classes[comment["id"]])
-            for bug in bugzilla.get_bugs(include_invalid=True)
+            for bug in bugzilla.get_bugs()
             for comment in bug["comments"]
             if comment["id"] in classes
         )

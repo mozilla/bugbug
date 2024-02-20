@@ -6,6 +6,7 @@
 import logging
 import pickle
 from collections import defaultdict
+from math import sqrt
 from os import makedirs, path
 from typing import Any
 
@@ -394,10 +395,10 @@ class Model:
 
         # Use scale_pos_weight to help in extremely imbalanced datasets
         if self.use_scale_pos_weight and is_binary:
-            y_array = np.array(y_train)
-            negative_samples = (y_array == self.class_names[0]).sum()
-            positive_samples = (y_array == self.class_names[1]).sum()
-            scale_pos_weight = np.sqrt(negative_samples / positive_samples)
+            negative_samples = sum(label == self.class_names[0] for label in y_train)
+            positive_samples = sum(label == self.class_names[1] for label in y_train)
+
+            scale_pos_weight = sqrt(negative_samples / positive_samples)
 
             logger.info("Scale Pos Weight: %d", scale_pos_weight)
 
