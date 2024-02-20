@@ -6,7 +6,7 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -24,6 +24,8 @@ class SpamCommentModel(CommentModel):
         CommentModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
+
+        self.use_scale_pos_weight = True
 
         feature_extractors = [
             comment_features.NumberOfLinks(
@@ -70,7 +72,7 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "sampler",
-                    BorderlineSMOTE(random_state=0),
+                    SMOTE(random_state=0),
                 ),
                 (
                     "estimator",

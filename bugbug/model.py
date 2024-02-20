@@ -174,6 +174,8 @@ class Model:
 
         self.store_dataset = False
 
+        self.use_scale_pos_weight = False
+
         self.entire_dataset_training = False
 
         # DBs required for training.
@@ -389,6 +391,19 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+
+        # Use scale_pos_weight to help in extremely imbalanced datasets
+        if self.use_scale_pos_weight and is_binary:
+            y_array = np.array(y_train)
+            negative_samples = (y_array == self.class_names[0]).sum()
+            positive_samples = (y_array == self.class_names[1]).sum()
+            scale_pos_weight = np.sqrt(negative_samples / positive_samples)
+
+            logger.info("Scale Pos Weight: %d", scale_pos_weight)
+
+            self.clf.named_steps["estimator"].set_params(
+                scale_pos_weight=scale_pos_weight
+            )
 
         tracking_metrics = {}
 
