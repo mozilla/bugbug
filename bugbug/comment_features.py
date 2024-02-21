@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -11,7 +12,6 @@ from urllib.parse import urlparse
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-from urlextract import URLExtract
 
 
 class CommentFeature(object):
@@ -101,23 +101,27 @@ class NumberOfLinks(CommentFeature):
 
     def __init__(self, domains_to_ignore=set()):
         self.domains_to_ignore = domains_to_ignore
-        self.extractor = URLExtract()
+        self.pattern = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
 
     def __call__(self, comment, **kwargs) -> Any:
-        urls = self.extractor.find_urls(comment["text"])
+        potential_urls = re.findall(
+            r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
+        )
+        potential_urls = self.pattern.findall(comment["text"])
+
         domains = []
-        for url in urls:
+        for url in potential_urls:
             parsed_url = urlparse(url)
             hostname = parsed_url.netloc
-
             if hostname:
                 parts = hostname.split(".")
+                # FIXME: Doesn't handle websites like shop.example.com.ca properly.
+                # It could extract a domain to look like com.ca
+                # Try with libraries like URL Extract
+
                 if len(parts) > 1:
                     main_domain = ".".join(parts[-2:])
                     domains.append(main_domain.lower())
-            else:
-                domains.append(url)
-
         return {
             "# of Known links": sum(
                 domain in self.domains_to_ignore for domain in domains
