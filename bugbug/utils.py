@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, Iterator
+from urllib.parse import urlparse
 
 import boto3
 import dateutil.parser
@@ -558,3 +559,44 @@ def escape_markdown(text: str) -> str:
 def keep_as_is(x):
     """A tokenizer that does nothing."""
     return x
+
+
+def extract_urls_and_domains(text: str, domains_to_ignore: set = set()) -> dict:
+    """Extracts URLs and domains from a given text, optionally filtering out ignored domains.
+
+    Args:
+        - text: The input text string where URLs and domains need to be found.
+        - domains_to_ignore:  A set of domain names to exclude from the results. e.g. mozilla.com
+
+    Returns:
+        A dictionary containing:
+            - "urls": A list of extracted URLs.
+            - "domains": A list of extracted domain names (excluding ignored domains if provided).
+                        (Note: current domain extraction is basic and has limitations)
+    """
+    pattern = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
+    urls = pattern.findall(text)
+
+    domains = []
+    urls_to_remove = []
+
+    for url in urls:
+        parsed_url = urlparse(url)
+        hostname = parsed_url.netloc
+        if hostname:
+            parts = hostname.split(".")
+            # FIXME: Doesn't handle websites like shop.example.com.ca properly.
+            # It could extract a domain to look like com.ca
+            # Try with libraries like URL Extract
+
+            if len(parts) > 1:
+                main_domain = ".".join(parts[-2:]).lower()
+                if main_domain in domains_to_ignore:
+                    urls_to_remove.append(url)
+                else:
+                    domains.append(main_domain)
+
+    if not domains_to_ignore:
+        urls = [url for url in urls if url not in urls_to_remove]
+
+    return {"urls": urls, "domains": domains}

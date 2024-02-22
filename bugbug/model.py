@@ -395,8 +395,10 @@ class Model:
 
         # Use scale_pos_weight to help in extremely imbalanced datasets
         if self.use_scale_pos_weight and is_binary:
-            negative_samples = sum(label == self.class_names[0] for label in y_train)
-            positive_samples = sum(label == self.class_names[1] for label in y_train)
+            negative_samples = sum(label == 0 for label in y_train)
+            positive_samples = sum(label == 1 for label in y_train)
+            logger.info("Negative Samples: %d", negative_samples)
+            logger.info("Positive Samples: %d", positive_samples)
 
             scale_pos_weight = sqrt(negative_samples / positive_samples)
 

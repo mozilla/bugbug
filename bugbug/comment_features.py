@@ -3,15 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import re
 import sys
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from bugbug.utils import extract_urls_and_domains
 
 
 class CommentFeature(object):
@@ -100,34 +100,15 @@ class NumberOfLinks(CommentFeature):
     name = "Number of Links in the comment"
 
     def __init__(self, domains_to_ignore=set()):
-        self.domains_to_ignore = domains_to_ignore
-        self.pattern = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
+        self.known_domains = domains_to_ignore
 
     def __call__(self, comment, **kwargs) -> Any:
-        potential_urls = re.findall(
-            r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+", comment["text"]
-        )
-        potential_urls = self.pattern.findall(comment["text"])
+        domains = extract_urls_and_domains(comment["text"])["domains"]
 
-        domains = []
-        for url in potential_urls:
-            parsed_url = urlparse(url)
-            hostname = parsed_url.netloc
-            if hostname:
-                parts = hostname.split(".")
-                # FIXME: Doesn't handle websites like shop.example.com.ca properly.
-                # It could extract a domain to look like com.ca
-                # Try with libraries like URL Extract
-
-                if len(parts) > 1:
-                    main_domain = ".".join(parts[-2:])
-                    domains.append(main_domain.lower())
         return {
-            "# of Known links": sum(
-                domain in self.domains_to_ignore for domain in domains
-            ),
+            "# of Known links": sum(domain in self.known_domains for domain in domains),
             "# of Unknown links": sum(
-                domain not in self.domains_to_ignore for domain in domains
+                domain not in self.known_domains for domain in domains
             ),
             "Total # of links": len(domains),
         }
@@ -145,6 +126,39 @@ class WordCount(CommentFeature):
 
     def __call__(self, comment, **kwargs):
         return len(comment["text"].split())
+
+
+class UnknownLinkAtBeginning(CommentFeature):
+    name = "Unknown Link found at Beginning of the Comment"
+
+    def __init__(self, domains_to_ignore=set()):
+        self.known_domains = domains_to_ignore
+
+    def __call__(self, comment, **kwargs):
+        urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
+
+        first_word = comment["text"].split()[0]
+
+        if first_word in urls:
+            return True
+
+        return False
+
+
+class UnknownLinkAtEnd(CommentFeature):
+    name = "Unknown Link found at End of the Comment"
+
+    def __init__(self, domains_to_ignore=set()):
+        self.known_domains = domains_to_ignore
+
+    def __call__(self, comment, **kwargs):
+        urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
+        last_word = comment["text"].split()[-1]
+
+        if last_word in urls:
+            return True
+
+        return False
 
 
 class HourOfDay(CommentFeature):

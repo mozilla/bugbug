@@ -18,6 +18,8 @@ from bugbug.model import CommentModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SAFE_DOMAINS = {"github.com", "mozilla.com", "mozilla.org"}
+
 
 class SpamCommentModel(CommentModel):
     def __init__(self, lemmatization=True):
@@ -28,14 +30,14 @@ class SpamCommentModel(CommentModel):
         self.use_scale_pos_weight = True
 
         feature_extractors = [
-            comment_features.NumberOfLinks(
-                {"github.com", "mozilla.com", "mozilla.org"}
-            ),
+            comment_features.NumberOfLinks(SAFE_DOMAINS),
             comment_features.WordCount(),
             comment_features.HourOfDay(),
             comment_features.DayOfYear(),
-            comment_features.PostedOnWeekend(),
             comment_features.WeekOfYear(),
+            comment_features.Weekday(),
+            # comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
+            # comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
         ]
 
         cleanup_functions = [
@@ -138,8 +140,6 @@ class SpamCommentModel(CommentModel):
         return classes, [0, 1]
 
     def items_gen(self, classes):
-        # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs which have a number of spam comments.
         return (
             (comment, classes[comment["id"]])
             for bug in bugzilla.get_bugs()
