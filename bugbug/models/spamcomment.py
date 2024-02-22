@@ -78,7 +78,9 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "estimator",
-                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                    xgboost.XGBClassifier(
+                        n_jobs=utils.get_physical_cpu_count(), n_estimators=200
+                    ),
                 ),
             ]
         )
