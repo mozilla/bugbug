@@ -6,7 +6,6 @@
 import logging
 import pickle
 from collections import defaultdict
-from math import sqrt
 from os import makedirs, path
 from typing import Any
 
@@ -400,7 +399,7 @@ class Model:
             logger.info("Negative Samples: %d", negative_samples)
             logger.info("Positive Samples: %d", positive_samples)
 
-            scale_pos_weight = sqrt(negative_samples / positive_samples)
+            scale_pos_weight = float(negative_samples / positive_samples)
 
             logger.info("Scale Pos Weight: %d", scale_pos_weight)
 
