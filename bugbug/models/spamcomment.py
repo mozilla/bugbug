@@ -36,8 +36,8 @@ class SpamCommentModel(CommentModel):
             comment_features.DayOfYear(),
             comment_features.WeekOfYear(),
             comment_features.Weekday(),
-            # comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
-            # comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
+            comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
+            comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
         ]
 
         cleanup_functions = [
