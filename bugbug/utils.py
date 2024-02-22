@@ -18,7 +18,6 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, Iterator
-from urllib.parse import urlparse
 
 import boto3
 import dateutil.parser
@@ -28,6 +27,7 @@ import psutil
 import requests
 import scipy
 import taskcluster
+import tldextract
 import zstandard
 from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
@@ -574,29 +574,17 @@ def extract_urls_and_domains(text: str, domains_to_ignore: set = set()) -> dict:
             - "domains": A list of extracted domain names (excluding ignored domains if provided).
                         (Note: current domain extraction is basic and has limitations)
     """
-    pattern = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+")
-    urls = pattern.findall(text)
+    pattern = re.compile(r"(?:https?://|www\.)(?:[^\s/?#]+)+(?:[\/?#][^\s]*)?")
+    potential_urls = pattern.findall(text)
 
     domains = []
-    urls_to_remove = []
+    urls = []
 
-    for url in urls:
-        parsed_url = urlparse(url)
-        hostname = parsed_url.netloc
-        if hostname:
-            parts = hostname.split(".")
-            # FIXME: Doesn't handle websites like shop.example.com.ca properly.
-            # It could extract a domain to look like com.ca
-            # Try with libraries like URL Extract
-
-            if len(parts) > 1:
-                main_domain = ".".join(parts[-2:]).lower()
-                if main_domain in domains_to_ignore:
-                    urls_to_remove.append(url)
-                else:
-                    domains.append(main_domain)
-
-    if not domains_to_ignore:
-        urls = [url for url in urls if url not in urls_to_remove]
+    for url in potential_urls:
+        url_info = tldextract.extract(url)
+        domain = url_info.registered_domain
+        if domain and domain not in domains_to_ignore:
+            domains.append(domain)
+            urls.append(url)
 
     return {"urls": urls, "domains": domains}

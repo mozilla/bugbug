@@ -137,12 +137,8 @@ class UnknownLinkAtBeginning(CommentFeature):
     def __call__(self, comment, **kwargs):
         urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
 
-        first_word = comment["text"].split()[0]
-
-        if first_word in urls:
-            return True
-
-        return False
+        words = comment["text"].split()
+        return words[0] in urls if words else False
 
 
 class UnknownLinkAtEnd(CommentFeature):
@@ -153,12 +149,9 @@ class UnknownLinkAtEnd(CommentFeature):
 
     def __call__(self, comment, **kwargs):
         urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
-        last_word = comment["text"].split()[-1]
 
-        if last_word in urls:
-            return True
-
-        return False
+        words = comment["text"].split()
+        return words[-1] in urls if words else False
 
 
 class HourOfDay(CommentFeature):
