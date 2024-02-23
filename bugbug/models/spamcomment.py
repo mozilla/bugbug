@@ -79,7 +79,18 @@ class SpamCommentModel(CommentModel):
                 (
                     "estimator",
                     xgboost.XGBClassifier(
-                        n_jobs=utils.get_physical_cpu_count(), n_estimators=200
+                        n_jobs=utils.get_physical_cpu_count(),
+                        learning_rate=0.01,
+                        n_estimators=1000,
+                        max_depth=4,
+                        min_child_weight=6,
+                        gamma=0,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        reg_alpha=0.005,
+                        objective="binary:logistic",
+                        nthread=4,
+                        scale_pos_weight=1,
                     ),
                 ),
             ]
