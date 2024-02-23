@@ -27,6 +27,8 @@ class SpamCommentModel(CommentModel):
 
         self.calculate_importance = False
 
+        self.use_scale_pos_weight = False
+
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
             comment_features.WordCount(),
