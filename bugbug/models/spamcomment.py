@@ -6,7 +6,7 @@
 import logging
 
 import xgboost
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -27,12 +27,12 @@ class SpamCommentModel(CommentModel):
 
         self.calculate_importance = False
 
-        self.use_scale_pos_weight = False
+        self.use_scale_pos_weight = True
 
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
             comment_features.WordCount(),
-            comment_features.HourOfDay(),
+            # comment_features.HourOfDay(),
             comment_features.DayOfYear(),
             comment_features.WeekOfYear(),
             comment_features.Weekday(),
@@ -74,14 +74,14 @@ class SpamCommentModel(CommentModel):
                 ),
                 (
                     "sampler",
-                    SMOTE(random_state=0),
+                    BorderlineSMOTE(random_state=0),
                 ),
                 (
                     "estimator",
                     xgboost.XGBClassifier(
                         n_jobs=utils.get_physical_cpu_count(),
                         learning_rate=0.01,
-                        n_estimators=1000,
+                        n_estimators=500,
                     ),
                 ),
             ]
@@ -117,11 +117,12 @@ class SpamCommentModel(CommentModel):
 
                 # Skip the first comment because most first comments may contain links.
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
-                # Skip comments whose text has been removed.
+                # Skip comments whose text has been removed or redacted.
                 if any(
                     [
                         comment["count"] == "0",
                         "@mozilla" in comment["creator"],
+                        "redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
                     ]
                 ):
