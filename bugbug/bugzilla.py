@@ -290,14 +290,14 @@ def delete_bugs(match):
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
 
-    counts = [0]
+    data = {}
 
     def handler(bug):
-        counts[0] = bug["bug_count"]
+        data["bug_count"] = bug["bug_count"]
 
     Bugzilla(queries=Query(Bugzilla.API_URL, bug_query_params, handler)).wait()
 
-    return counts[0]
+    return data["bug_count"]
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
