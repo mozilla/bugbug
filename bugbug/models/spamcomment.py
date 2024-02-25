@@ -66,7 +66,7 @@ class SpamCommentModel(CommentModel):
                             ("data", DictVectorizer(), "data"),
                             (
                                 "comment_text",
-                                self.text_vectorizer(min_df=0.0001),
+                                self.text_vectorizer(min_df=0.001),
                                 "comment_text",
                             ),
                         ]
@@ -117,11 +117,13 @@ class SpamCommentModel(CommentModel):
                 # Skip the first comment because most first comments may contain links.
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
                 # Skip comments whose text has been removed or redacted.
+                # TODO: Skip comments for Mozillians using non-Mozilla email domains.
                 if any(
                     [
                         comment["count"] == "0",
                         "@mozilla" in comment["creator"],
-                        "redacted -" in comment["text"],
+                        "@softvision" in comment["creator"],
+                        "[redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
                     ]
                 ):
