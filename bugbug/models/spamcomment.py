@@ -32,7 +32,6 @@ class SpamCommentModel(CommentModel):
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
             comment_features.WordCount(),
-            comment_features.CommentTags({"spam"}),
             comment_features.HourOfDay(),
             comment_features.DayOfYear(),
             comment_features.WeekOfYear(),
@@ -67,7 +66,7 @@ class SpamCommentModel(CommentModel):
                             ("data", DictVectorizer(), "data"),
                             (
                                 "comment_text",
-                                self.text_vectorizer(min_df=0.001),
+                                self.text_vectorizer(min_df=0.0015),
                                 "comment_text",
                             ),
                         ]
