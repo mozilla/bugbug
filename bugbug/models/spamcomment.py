@@ -32,7 +32,8 @@ class SpamCommentModel(CommentModel):
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
             comment_features.WordCount(),
-            # comment_features.HourOfDay(),
+            comment_features.CommentTags({"spam"}),
+            comment_features.HourOfDay(),
             comment_features.DayOfYear(),
             comment_features.WeekOfYear(),
             comment_features.Weekday(),
