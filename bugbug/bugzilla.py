@@ -13,7 +13,7 @@ from typing import Iterable, Iterator, NewType
 
 import tenacity
 from dateutil.relativedelta import relativedelta
-from libmozdata.bugzilla import Bugzilla, BugzillaProduct
+from libmozdata.bugzilla import Bugzilla, BugzillaProduct, Query
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -290,13 +290,14 @@ def delete_bugs(match):
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
 
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/bug", params=bug_query_params
-    )
-    r.raise_for_status()
-    count = r.json()["bug_count"]
+    data = {}
 
-    return count
+    def handler(bug):
+        data["bug_count"] = bug["bug_count"]
+
+    Bugzilla(queries=Query(Bugzilla.API_URL, bug_query_params, handler)).wait()
+
+    return data["bug_count"]
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
