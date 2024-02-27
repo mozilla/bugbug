@@ -12,7 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
 
-from bugbug import bugzilla, comment_features, feature_cleanup, utils
+from bugbug import bugzilla, comment_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommentModel
 
 logging.basicConfig(level=logging.INFO)
@@ -110,6 +110,13 @@ class SpamCommentModel(CommentModel):
 
         self.__download_older_bugs_with_spam_comments()
 
+        # Get emails of commit authors. Comments from such people will be skipped.
+        assert db.download(repository.COMMITS_DB)
+        commit_emails = {
+            commit["author_email"]
+            for commit in repository.get_commits(include_backouts=True)
+        }
+
         for bug in bugzilla.get_bugs():
             for comment in bug["comments"]:
                 comment_id = comment["id"]
@@ -117,10 +124,10 @@ class SpamCommentModel(CommentModel):
                 # Skip the first comment because most first comments may contain links.
                 # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
                 # Skip comments whose text has been removed or redacted.
-                # TODO: Skip comments for Mozillians using non-Mozilla email domains.
                 if any(
                     [
                         comment["count"] == "0",
+                        comment["creator"] in commit_emails,
                         "@mozilla" in comment["creator"],
                         "@softvision" in comment["creator"],
                         "[redacted -" in comment["text"],
