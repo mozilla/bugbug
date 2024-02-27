@@ -400,7 +400,7 @@ class Model:
             logger.info("Negative Samples: %d", negative_samples)
             logger.info("Positive Samples: %d", positive_samples)
 
-            scale_pos_weight = sqrt(negative_samples / positive_samples) / 2
+            scale_pos_weight = sqrt(negative_samples / positive_samples)
 
             logger.info("Scale Pos Weight: %d", scale_pos_weight)
 

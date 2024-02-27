@@ -27,7 +27,7 @@ class SpamCommentModel(CommentModel):
 
         self.calculate_importance = False
 
-        self.use_scale_pos_weight = True
+        self.use_scale_pos_weight = False
 
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
@@ -66,7 +66,7 @@ class SpamCommentModel(CommentModel):
                             ("data", DictVectorizer(), "data"),
                             (
                                 "comment_text",
-                                self.text_vectorizer(min_df=0.0015),
+                                self.text_vectorizer(min_df=0.0001),
                                 "comment_text",
                             ),
                         ]
@@ -80,7 +80,6 @@ class SpamCommentModel(CommentModel):
                     "estimator",
                     xgboost.XGBClassifier(
                         n_jobs=utils.get_physical_cpu_count(),
-                        n_estimators=500,
                     ),
                 ),
             ]
