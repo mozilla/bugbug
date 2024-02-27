@@ -38,6 +38,9 @@ class WorksForMeModel(BugModel):
             bug_features.Keywords(),
             bug_features.TimeToClose(),
             bug_features.HasAttachment(),
+            bug_features.CommentCount(),
+            bug_features.CommentLength(),
+            bug_features.NumWordsComments(),
         ]
 
         cleanup_functions = [
