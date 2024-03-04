@@ -611,18 +611,6 @@ class Status(SingleBugFeature):
         return bug["status"]
 
 
-class HasPendingNeedinfoOnReporter(SingleBugFeature):
-    name = "Has Pending Needinfo on Reporter"
-
-    def __call__(self, bug, **kwargs):
-        reporter_email = bug["creator_detail"]["email"]
-
-        return any(
-            flag["name"] == "needinfo" and flag["requestee"] == reporter_email
-            for flag in bug["flags"]
-        )
-
-
 def get_author_ids():
     author_ids = set()
     for commit in repository.get_commits():
