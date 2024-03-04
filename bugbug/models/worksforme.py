@@ -97,7 +97,7 @@ class WorksForMeModel(BugModel):
         for bug in bugzilla.get_bugs():
             bug_id = int(bug["id"])
 
-            if not bug["resolution"] and not bug["cf_last_resolved"]:
+            if not bug["resolution"] or not bug["cf_last_resolved"]:
                 continue
 
             classes[bug_id] = 1 if bug["resolution"] == "WORKSFORME" else 0
