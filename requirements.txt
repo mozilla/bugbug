@@ -16,7 +16,7 @@ pandas==2.2.0
 psutil==5.9.8
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
 python-hglib==2.6.2
 ratelimit==2.2.1
 requests==2.31.0
