@@ -37,6 +37,7 @@ MODELS_NAMES = [
     "testgroupselect",
     "accessibility",
     "performancebug",
+    "worksforme",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
