@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Iterable, Iterator, NewType
+from urllib.parse import urlencode
 
 import tenacity
 from dateutil.relativedelta import relativedelta
@@ -443,7 +444,7 @@ def calculate_maintenance_effectiveness_indicator(
     from_date: datetime,
     to_date: datetime,
     components: list[str] | None = None,
-) -> dict[str, float]:
+) -> dict[str, dict]:
     data: dict[str, dict[str, int]] = {
         "open": {},
         "opened": {},
@@ -457,51 +458,55 @@ def calculate_maintenance_effectiveness_indicator(
         to_date,
     )
 
+    def build_query(severity: str | None, query_type: str):
+        params: dict[str, int | str | list[str]] = {
+            "bug_type": "defect",
+            "team_name": teams,
+        }
+
+        if severity is not None and severity != "--":
+            params["bug_severity"] = severity
+
+        if components is not None:
+            params["component"] = components
+
+        if query_type in ("opened", "closed"):
+            params.update(
+                {
+                    "chfieldfrom": from_date.strftime("%Y-%m-%d"),
+                    "chfieldto": to_date.strftime("%Y-%m-%d"),
+                }
+            )
+
+        if query_type == "open":
+            params.update(
+                {
+                    "f1": "resolution",
+                    "o1": "equals",
+                    "v1": "---",
+                }
+            )
+        elif query_type == "opened":
+            params["chfield"] = "[Bug creation]"
+        elif query_type == "closed":
+            params.update(
+                {
+                    "chfield": "cf_last_resolved",
+                    "f1": "resolution",
+                    "o1": "notequals",
+                    "v1": "---",
+                }
+            )
+
+        return params
+
     for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
         for query_type in data.keys():
-            params: dict[str, int | str | list[str]] = {
-                "count_only": 1,
-                "type": "defect",
-                "team_name": teams,
-            }
-
-            if severity != "--":
-                params["bug_severity"] = severity
-
-            if components is not None:
-                params["component"] = components
-
-            if query_type in ("opened", "closed"):
-                params.update(
-                    {
-                        "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-                        "chfieldto": to_date.strftime("%Y-%m-%d"),
-                    }
-                )
-
-            if query_type == "open":
-                params.update(
-                    {
-                        "f1": "resolution",
-                        "o1": "equals",
-                        "v1": "---",
-                    }
-                )
-            elif query_type == "opened":
-                params["chfield"] = "[Bug creation]"
-            elif query_type == "closed":
-                params.update(
-                    {
-                        "chfield": "cf_last_resolved",
-                        "f1": "resolution",
-                        "o1": "notequals",
-                        "v1": "---",
-                    }
-                )
+            params = build_query(severity, query_type)
 
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
-                params=params,
+                params={**params, "count_only": 1},
                 headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
             )
             r.raise_for_status()
@@ -565,10 +570,19 @@ def calculate_maintenance_effectiveness_indicator(
         incoming = math.inf
         closed = math.inf
 
+    opened_query = build_query(None, "opened")
+    closed_query = build_query(None, "closed")
+
     return {
-        "ME": mei,
-        "BDTime": bdtime,
-        "WBDTime": wbdtime,
-        "Incoming vs total open": incoming,
-        "Closed vs total open": closed,
+        "stats": {
+            "ME": mei,
+            "BDTime": bdtime,
+            "WBDTime": wbdtime,
+            "Incoming vs total open": incoming,
+            "Closed vs total open": closed,
+        },
+        "queries": {
+            "Opened": f"https://bugzilla.mozilla.org/buglist.cgi?query_format=advanced&{urlencode(opened_query, doseq=True)}",
+            "Closed": f"https://bugzilla.mozilla.org/buglist.cgi?query_format=advanced&{urlencode(closed_query, doseq=True)}",
+        },
     }
