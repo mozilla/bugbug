@@ -1795,7 +1795,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return "ME: {}%, WeightedBurnDownTime: {} y\nOpened bugs: {}\nClosed bugs: {}".format(
+                return "ME: {}%, WeightedBurnDownTime: {} y\n[Opened bugs]({})\n[Closed bugs]({})".format(
                     round(me["stats"]["ME"], 2),
                     round(me["stats"]["WBDTime"], 2),
                     me["queries"]["Opened"],
