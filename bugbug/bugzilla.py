@@ -407,6 +407,16 @@ def get_groups_users(group_names: list[str]) -> list[str]:
     ]
 
 
+def get_comment(comment_id) -> dict:
+    r = utils.get_session("bugzilla").get(
+        f"https://bugzilla.mozilla.org/rest/bug/comment/{comment_id}",
+        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+    )
+    r.raise_for_status()
+
+    return r.json()["comments"][str(comment_id)]
+
+
 def get_revision_ids(bug: BugDict) -> list[int]:
     revision_ids = []
 

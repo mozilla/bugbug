@@ -101,31 +101,46 @@ class SpamCommentModel(CommentModel):
 
         logger.info("%d older bugs have been downloaded.", len(older_bugs))
 
-    def get_labels(self):
-        classes = {}
+    @staticmethod
+    def __safe_comment(comment) -> bool:
+        """Determines if a comment is certainly safe (not spam) and should be excluded from the training set.
 
-        self.__download_older_bugs_with_spam_comments()
-
-        # Get emails of commit authors. Comments from such people will be skipped.
+        This function applies filtering rules to identify comments that are likely
+        authored by legitimate Mozillians or bots.
+        """
+        # Get emails of commit authors.
         assert db.download(repository.COMMITS_DB)
         commit_emails = {
             commit["author_email"]
             for commit in repository.get_commits(include_backouts=True)
         }
 
+        # Ignore comments filed by Mozillians and bots, since we are sure they are not spam.
+        if any(
+            [
+                comment["creator"] in commit_emails,
+                "@mozilla" in comment["creator"],
+                "@softvision" in comment["creator"],
+            ]
+        ):
+            return True
+
+        return False
+
+    def get_labels(self):
+        classes = {}
+
+        self.__download_older_bugs_with_spam_comments()
+
         for bug in bugzilla.get_bugs():
             for comment in bug["comments"]:
                 comment_id = comment["id"]
 
-                # Skip the first comment because most first comments may contain links.
-                # Skip comments filed by Mozillians and bots, since we are sure they are not spam.
-                # Skip comments whose text has been removed or redacted.
                 if any(
                     [
                         comment["count"] == "0",
-                        comment["creator"] in commit_emails,
-                        "@mozilla" in comment["creator"],
-                        "@softvision" in comment["creator"],
+                        self.__safe_comment(comment),
+                        comment["creator"] == bug["creator"],
                         "[redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
                     ]
@@ -161,7 +176,7 @@ class SpamCommentModel(CommentModel):
 
     def overwrite_classes(self, comments, classes, probabilities):
         for i, comment in enumerate(comments):
-            if "@mozilla" in comment["creator"]:
+            if self.__safe_comment(comment):
                 if probabilities:
                     classes[i] = [1.0, 0.0]
                 else:
