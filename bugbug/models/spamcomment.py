@@ -27,7 +27,7 @@ class SpamCommentModel(CommentModel):
 
         self.calculate_importance = False
 
-        self.use_scale_pos_weight = True
+        self.use_scale_pos_weight = False
 
         feature_extractors = [
             comment_features.NumberOfLinks(SAFE_DOMAINS),
@@ -102,11 +102,11 @@ class SpamCommentModel(CommentModel):
         logger.info("%d older bugs have been downloaded.", len(older_bugs))
 
     @staticmethod
-    def __safe_comment(comment) -> bool:
-        """Determines if a comment is certainly safe (not spam) and should be excluded from the training set.
+    def __is_safe_comment(comment) -> bool:
+        """Determines if a comment is certainly safe (not spam) based on certain conditions.
 
         This function applies filtering rules to identify comments that are likely
-        authored by legitimate Mozillians or bots.
+        authored by legitimate contributors or bots. Such comments are definitely not spam.
         """
         # Get emails of commit authors.
         assert db.download(repository.COMMITS_DB)
@@ -116,16 +116,13 @@ class SpamCommentModel(CommentModel):
         }
 
         # Ignore comments filed by Mozillians and bots, since we are sure they are not spam.
-        if any(
+        return any(
             [
                 comment["creator"] in commit_emails,
                 "@mozilla" in comment["creator"],
                 "@softvision" in comment["creator"],
             ]
-        ):
-            return True
-
-        return False
+        )
 
     def get_labels(self):
         classes = {}
@@ -139,7 +136,7 @@ class SpamCommentModel(CommentModel):
                 if any(
                     [
                         comment["count"] == "0",
-                        self.__safe_comment(comment),
+                        self.__is_safe_comment(comment),
                         comment["creator"] == bug["creator"],
                         "[redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
@@ -176,7 +173,7 @@ class SpamCommentModel(CommentModel):
 
     def overwrite_classes(self, comments, classes, probabilities):
         for i, comment in enumerate(comments):
-            if self.__safe_comment(comment):
+            if self.__is_safe_comment(comment):
                 if probabilities:
                     classes[i] = [1.0, 0.0]
                 else:

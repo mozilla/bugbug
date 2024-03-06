@@ -52,6 +52,7 @@ setup(
             "bugbug-maintenance-effectiveness-indicator = scripts.maintenance_effectiveness_indicator:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
             "bugbug-classify-commit = scripts.commit_classifier:main",
+            "bugbug-classify-comment scripts.comment_classifier:main",
             "bugbug-classify-bug = scripts.bug_classifier:main",
             "bugbug-regressor-finder = scripts.regressor_finder:main",
             "bugbug-retrieve-training-metrics = scripts.retrieve_training_metrics:main",

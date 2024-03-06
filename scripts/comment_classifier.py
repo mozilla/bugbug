@@ -15,7 +15,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_comments(model_name: str, comment_id: int) -> None:
+def classify_comment(model_name: str, comment_id: int) -> None:
     model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
@@ -70,7 +70,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    classify_comments(args.model, args.comment_id)
+    classify_comment(args.model, args.comment_id)
 
 
 if __name__ == "__main__":
