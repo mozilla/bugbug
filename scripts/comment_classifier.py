@@ -7,7 +7,7 @@ from logging import INFO, basicConfig, getLogger
 import numpy as np
 import requests
 
-from bugbug import bugzilla
+from bugbug import bugzilla, db
 from bugbug.models import get_model_class
 from bugbug.utils import download_model
 
@@ -15,7 +15,7 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def classify_comment(model_name: str, comment_id: int) -> None:
+def classify_comments(model_name: str, comment_id: int) -> None:
     model_file_name = f"{model_name}model"
 
     if not os.path.exists(model_file_name):
@@ -33,11 +33,20 @@ def classify_comment(model_name: str, comment_id: int) -> None:
 
     if comment_id:
         # Get a comment by its id
-        comment = bugzilla.get_comment(comment_id)
-        assert comment, f"A comment with a comment id of {comment_id} was not found"
+        comments = list(bugzilla.get_comment(comment_id).values())
+        assert comments, f"A comment with a comment id of {comment_id} was not found"
+    else:
+        assert db.download(bugzilla.BUGS_DB)
+        bugs = bugzilla.get_bugs()
+        comments = [
+            {**comment, "bug_id": bug["id"]}
+            for bug in bugs
+            for comment in bug["comments"]
+        ]
 
+    for comment in comments:
         print(
-            f'https://bugzilla.mozilla.org/show_bug.cgi?id={comment["bug_id"]}#{comment["count"]}'
+            f'https://bugzilla.mozilla.org/show_bug.cgi?id={comment["bug_id"]}#c{comment["count"]}'
         )
 
         if model.calculate_importance:
@@ -70,7 +79,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    classify_comment(args.model, args.comment_id)
+    classify_comments(args.model, args.comment_id)
 
 
 if __name__ == "__main__":

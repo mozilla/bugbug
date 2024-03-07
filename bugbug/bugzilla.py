@@ -414,7 +414,7 @@ def get_comment(comment_id) -> dict:
     )
     r.raise_for_status()
 
-    return r.json()["comments"][str(comment_id)]
+    return r.json()["comments"]
 
 
 def get_revision_ids(bug: BugDict) -> list[int]:
