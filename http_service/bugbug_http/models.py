@@ -37,6 +37,7 @@ MODELS_NAMES = [
     "testgroupselect",
     "accessibility",
     "performancebug",
+    "spamcomment",
     "worksforme",
 ]
 
@@ -179,6 +180,67 @@ def classify_issue(
 
         # Save the bug last change
         setkey(job.change_time_key, issues[issue_id]["updated_at"].encode())
+
+    return "OK"
+
+
+def classify_comment(
+    model_name: str, comment_ids: Sequence[int], bugzilla_token: str
+) -> str:
+    from bugbug_http.app import JobInfo
+
+    # This should be called in a process worker so it should be safe to set
+    # the token here
+    comment_ids_set = set(map(int, comment_ids))
+    bugzilla.set_token(bugzilla_token)
+
+    comments = {
+        comment_id: bugzilla.get_comment(comment_id).values()
+        for comment_id in comment_ids
+    }
+
+    missing_comments = comment_ids_set.difference(comments.keys())
+
+    for comment_id in missing_comments:
+        job = JobInfo(classify_comment, model_name, comment_id)
+
+        # TODO: Find a better error format
+        setkey(job.result_key, orjson.dumps({"available": False}))
+
+    if not comments:
+        return "NOK"
+
+    model = MODEL_CACHE.get(model_name)
+
+    if not model:
+        LOGGER.info("Missing model %r, aborting" % model_name)
+        return "NOK"
+
+    model_extra_data = model.get_extra_data()
+
+    # TODO: Classify could choke on a single bug which could make the whole
+    # job to fails. What should we do here?
+    probs = model.classify(list(comments.values()), True)
+    indexes = probs.argmax(axis=-1)
+    suggestions = model.le.inverse_transform(indexes)
+
+    probs_list = probs.tolist()
+    indexes_list = indexes.tolist()
+    suggestions_list = suggestions.tolist()
+
+    for i, comment_id in enumerate(comments.keys()):
+        data = {
+            "prob": probs_list[i],
+            "index": indexes_list[i],
+            "class": suggestions_list[i],
+            "extra_data": model_extra_data,
+        }
+
+        job = JobInfo(classify_comment, model_name, comment_id)
+        setkey(job.result_key, orjson.dumps(data), compress=True)
+
+        # TODO: Save the comment last change
+        # We shall need to update one of the comment keys to show an updated comment
 
     return "OK"
 
