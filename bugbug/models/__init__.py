@@ -37,6 +37,7 @@ MODELS = {
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
+    "worksforme": "bugbug.models.worksforme.WorksForMeModel",
 }
 
 

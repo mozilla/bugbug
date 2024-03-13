@@ -569,6 +569,23 @@ class TimeToAssign(SingleBugFeature):
         return get_time_to_assign(bug)
 
 
+def get_time_to_close(bug):
+    """Calculate the time until closure or the time since closure for a bug."""
+    if bug["cf_last_resolved"]:
+        return (
+            parser.parse(bug["cf_last_resolved"]) - parser.parse(bug["creation_time"])
+        ).total_seconds() / 86400
+
+    return (
+        datetime.now(timezone.utc) - parser.parse(bug["creation_time"])
+    ).total_seconds() / 86400
+
+
+class TimeToClose(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        return get_time_to_close(bug)
+
+
 class CCNumber(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return len(bug["cc"])

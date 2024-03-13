@@ -41,7 +41,7 @@ tasks:
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.10
+          image: python:3.12
         metadata:
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml

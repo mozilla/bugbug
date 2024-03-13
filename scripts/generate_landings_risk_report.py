@@ -1783,7 +1783,7 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def calculate_maintenance_effectiveness(
                 period: relativedelta,
-            ) -> dict[str, float]:
+            ) -> dict[str, dict]:
                 start_date = datetime.utcnow() - period
                 if team in super_teams:
                     me_teams = super_teams[team]
@@ -1795,10 +1795,11 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
             def format_maintenance_effectiveness(period: relativedelta) -> str:
                 me = calculate_maintenance_effectiveness(period)
-                return "ME: {}%, BurnDownTime: {} y, WeightedBurnDownTime: {} y".format(
-                    round(me["ME"], 2),
-                    round(me["BDTime"], 2),
-                    round(me["WBDTime"], 2),
+                return "ME: {}%, WeightedBurnDownTime: {} y\n[Opened bugs]({})\n[Closed bugs]({})".format(
+                    round(me["stats"]["ME"], 2),
+                    round(me["stats"]["WBDTime"], 2),
+                    me["queries"]["Opened"],
+                    me["queries"]["Closed"],
                 )
 
             maintenance_effectiveness_section = f"""<b>[MAINTENANCE EFFECTIVENESS](https://docs.google.com/document/d/1y2dUDZI5U3xvY0jMY1LfIDARc5b_QB9mS2DV7MWrfa0)</b>

@@ -53,8 +53,11 @@ def main() -> None:
         args.components,
     )
 
-    for factor, value in result.items():
-        logger.info("%s: %d", factor, round(value, 2) if value != math.inf else value)
+    for factor, value in result["stats"].items():
+        print("%s: %d", factor, round(value, 2) if value != math.inf else value)
+
+    for query, link in result["queries"].items():
+        print(f"{query}: {link}")
 
 
 if __name__ == "__main__":

@@ -153,7 +153,7 @@ class PastBugsCollector(object):
             return results
 
         def past_bug_ids_to_summaries(
-            past_bugs_by: dict[str, list[int]]
+            past_bugs_by: dict[str, list[int]],
         ) -> dict[str, list[dict]]:
             return {path: _transform(bug_ids) for path, bug_ids in past_bugs_by.items()}
 
@@ -189,7 +189,7 @@ class PastBugsCollector(object):
             zstd_compress(f"data/past_fixed_bug_blocked_bugs_by_{dimension}.json")
 
         def past_function_bug_ids_to_summaries(
-            past_bugs: dict[str, dict[str, list[int]]]
+            past_bugs: dict[str, dict[str, list[int]]],
         ) -> dict[str, dict[str, list[dict]]]:
             return {
                 path: {
