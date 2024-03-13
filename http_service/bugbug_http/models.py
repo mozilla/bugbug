@@ -37,7 +37,6 @@ MODELS_NAMES = [
     "testgroupselect",
     "accessibility",
     "performancebug",
-    "spamcomment",
     "worksforme",
 ]
 
