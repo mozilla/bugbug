@@ -412,6 +412,7 @@ def get_comment(comment_id) -> dict:
         f"https://bugzilla.mozilla.org/rest/bug/comment/{comment_id}",
         headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
     )
+    # TODO: Do we raise the error or we just ignore the comment?
     r.raise_for_status()
 
     return r.json()["comments"]
