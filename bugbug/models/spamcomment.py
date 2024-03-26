@@ -42,6 +42,7 @@ class SpamCommentModel(CommentModel):
             comment_features.Weekday(),
             comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
             comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
+            comment_features.BugTitleLength(),
         ]
 
         cleanup_functions = [
@@ -158,7 +159,7 @@ class SpamCommentModel(CommentModel):
 
     def items_gen(self, classes):
         return (
-            (comment, classes[comment["id"]])
+            ((bug, comment), classes[comment["id"]])
             for bug in bugzilla.get_bugs()
             for comment in bug["comments"]
             if comment["id"] in classes

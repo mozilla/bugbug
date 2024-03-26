@@ -836,4 +836,4 @@ class CommentModel(Model):
                 if comment["id"] not in classes:
                     continue
 
-            yield comment, classes[comment_id]
+            yield (bug, comment), classes[comment_id]

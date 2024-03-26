@@ -4,7 +4,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import sys
-from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -41,18 +40,16 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
 
         return self
 
-    def transform(self, comments):
-        comments_iter = iter(comments())
+    def transform(self, items):
+        items_iter = iter(items())
 
-        commenter_experience_map = defaultdict(int)
-
-        def apply_transform(comment):
+        def apply_transform(item):
+            bug, comment = item
             data = {}
 
             for feature_extractor in self.feature_extractors:
                 res = feature_extractor(
-                    comment,
-                    commenter_experience=commenter_experience_map[comment["creator"]],
+                    item,
                 )
 
                 if hasattr(feature_extractor, "name"):
@@ -75,8 +72,6 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
 
                 data[feature_extractor_name] = res
 
-            commenter_experience_map[comment["creator"]] += 1
-
             comment_text = comment["text"]
             for cleanup_function in self.cleanup_functions:
                 comment_text = cleanup_function(comment_text)
@@ -86,14 +81,16 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
                 "comment_text": comment_text,
             }
 
-        return pd.DataFrame(apply_transform(comment) for comment in comments_iter)
+        return pd.DataFrame(apply_transform(item) for item in items_iter)
 
 
-class CommenterExperience(CommentFeature):
-    name = "# of Comments made by Commenter in the past"
+class BugTitleLength(CommentFeature):
+    name = "Length of Bug's Title"
 
-    def __call__(self, comment, commenter_experience, **kwargs):
-        return commenter_experience
+    def __call__(self, item, **kwargs):
+        bug, _ = item
+
+        return len(bug["title"])
 
 
 class NumberOfLinks(CommentFeature):
@@ -102,7 +99,9 @@ class NumberOfLinks(CommentFeature):
     def __init__(self, domains_to_ignore=set()):
         self.known_domains = domains_to_ignore
 
-    def __call__(self, comment, **kwargs) -> Any:
+    def __call__(self, item, **kwargs) -> Any:
+        _, comment = item
+
         domains = extract_urls_and_domains(comment["text"])["domains"]
 
         return {
@@ -117,14 +116,18 @@ class NumberOfLinks(CommentFeature):
 class CharacterCount(CommentFeature):
     name = "# of Characters in the Comment"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         return len(comment["text"])
 
 
 class WordCount(CommentFeature):
     name = "# of Words in the Comment"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         return len(comment["text"].split())
 
 
@@ -134,7 +137,9 @@ class UnknownLinkAtBeginning(CommentFeature):
     def __init__(self, domains_to_ignore=set()):
         self.known_domains = domains_to_ignore
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
 
         words = comment["text"].split()
@@ -147,7 +152,9 @@ class UnknownLinkAtEnd(CommentFeature):
     def __init__(self, domains_to_ignore=set()):
         self.known_domains = domains_to_ignore
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         urls = extract_urls_and_domains(comment["text"], self.known_domains)["urls"]
 
         words = comment["text"].split()
@@ -157,7 +164,9 @@ class UnknownLinkAtEnd(CommentFeature):
 class HourOfDay(CommentFeature):
     name = "Hour of the Day (0-23)"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.hour
 
@@ -165,7 +174,9 @@ class HourOfDay(CommentFeature):
 class Weekday(CommentFeature):
     name = "Day of the Week (0-7)"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.isoweekday()
 
@@ -173,7 +184,9 @@ class Weekday(CommentFeature):
 class PostedOnWeekend(CommentFeature):
     name = "Comment was Posted on Weekend"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.isoweekday() in (5, 6)
 
@@ -181,7 +194,9 @@ class PostedOnWeekend(CommentFeature):
 class DayOfYear(CommentFeature):
     name = "Day of the Year (0-366)"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.timetuple().tm_yday
 
@@ -189,7 +204,9 @@ class DayOfYear(CommentFeature):
 class WeekOfYear(CommentFeature):
     name = "Week of Year"
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
+
         comment_time = datetime.strptime(comment["creation_time"], "%Y-%m-%dT%H:%M:%SZ")
         return comment_time.isocalendar()[1]
 
@@ -200,8 +217,10 @@ class CommentTags(CommentFeature):
     def __init__(self, to_ignore=set()):
         self.to_ignore = to_ignore
 
-    def __call__(self, comment, **kwargs):
+    def __call__(self, item, **kwargs):
+        _, comment = item
         tags = []
+
         for tag in comment["tags"]:
             if tag in self.to_ignore:
                 continue
