@@ -27,6 +27,7 @@ import psutil
 import requests
 import scipy
 import taskcluster
+import tldextract
 import zstandard
 from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
@@ -558,3 +559,32 @@ def escape_markdown(text: str) -> str:
 def keep_as_is(x):
     """A tokenizer that does nothing."""
     return x
+
+
+def extract_urls_and_domains(text: str, domains_to_ignore: set = set()) -> dict:
+    """Extracts URLs and domains from a given text, optionally filtering out ignored domains.
+
+    Args:
+        - text: The input text string where URLs and domains need to be found.
+        - domains_to_ignore:  A set of domain names to exclude from the results. e.g. mozilla.com
+
+    Returns:
+        A dictionary containing:
+            - "urls": A list of extracted URLs.
+            - "domains": A list of extracted domain names (excluding ignored domains if provided).
+                        (Note: current domain extraction is basic and has limitations)
+    """
+    pattern = re.compile(r"(?:https?://|www\.)(?:[^\s/?#]+)+(?:[\/?#][^\s]*)?")
+    potential_urls = pattern.findall(text)
+
+    domains = []
+    urls = []
+
+    for url in potential_urls:
+        url_info = tldextract.extract(url)
+        domain = url_info.registered_domain
+        if domain and domain not in domains_to_ignore:
+            domains.append(domain)
+            urls.append(url)
+
+    return {"urls": urls, "domains": domains}
