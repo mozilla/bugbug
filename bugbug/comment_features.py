@@ -84,13 +84,13 @@ class CommentExtractor(BaseEstimator, TransformerMixin):
         return pd.DataFrame(apply_transform(item) for item in items_iter)
 
 
-class BugTitleLength(CommentFeature):
-    name = "Length of Bug's Title"
+class CommentCreatorIsBugCreator(CommentFeature):
+    name = "Comment Creator is the Bug Creator"
 
-    def __call__(self, item, **kwargs):
-        bug, _ = item
+    def __call__(self, item, **kwargs) -> Any:
+        bug, comment = item
 
-        return len(bug["title"])
+        return bug["creator"] == comment["creator"]
 
 
 class NumberOfLinks(CommentFeature):

@@ -42,7 +42,7 @@ class SpamCommentModel(CommentModel):
             comment_features.Weekday(),
             comment_features.UnknownLinkAtBeginning(SAFE_DOMAINS),
             comment_features.UnknownLinkAtEnd(SAFE_DOMAINS),
-            comment_features.BugTitleLength(),
+            comment_features.CommentCreatorIsBugCreator(),
         ]
 
         cleanup_functions = [
@@ -134,7 +134,6 @@ class SpamCommentModel(CommentModel):
                     [
                         comment["count"] == "0",
                         self.is_safe_comment(comment),
-                        comment["creator"] == bug["creator"],
                         "[redacted -" in comment["text"],
                         "(comment removed)" in comment["text"],
                     ]
