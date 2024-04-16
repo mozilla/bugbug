@@ -16,7 +16,7 @@ class Name(object):
 class Platform(object):
     def __call__(self, test_job, **kwargs):
         platforms = []
-        for ps in (("linux",), ("windows", "win"), ("android",), ("macosx",)):
+        for ps in (("linux",), ("windows", "win"), ("android",), ("macosx",), ("ios",)):
             for p in ps:
                 if p in test_job["name"][: test_job["name"].index("/")]:
                     platforms.append(ps[0])
