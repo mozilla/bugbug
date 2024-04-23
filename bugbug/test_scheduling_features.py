@@ -44,7 +44,7 @@ def get_chunk(name):
 
     assert name.startswith("test-"), f"{name} should start with test-"
 
-    name = name.split("/")[1]
+    name = name.split("/")[1] if "/" in name else name
 
     return "-".join([p for p in name.split("-") if p not in NAME_PARTS_TO_SKIP])
 
