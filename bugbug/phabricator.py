@@ -70,7 +70,7 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
 def get(
     rev_ids: Collection[int] | None = None, modified_start: datetime | None = None
-) -> Collection[RevisionDict]:
+) -> list[RevisionDict]:
     assert PHABRICATOR_API is not None
 
     assert (rev_ids is not None) ^ (modified_start is not None)
