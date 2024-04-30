@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import os
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -17,8 +16,11 @@ def create_llm(llm):
     if llm == "human":
         return HumanInputLLM()
     elif llm == "openai":
-        os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
-        return ChatOpenAI(model_name="gpt-4-0125-preview", temperature=0.2)
+        return ChatOpenAI(
+            model_name="gpt-4-0125-preview",
+            api_key=get_secret("OPENAI_API_KEY"),
+            temperature=0.2,
+        )
     else:
         raise NotImplementedError
 
