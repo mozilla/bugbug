@@ -49,15 +49,17 @@ def is_bug_fixed(bug_id: int) -> bool:
         bool: True if the bug is RESOLVED, False otherwise
     """
 
+    # get bug details
     bug_details = bugzilla.get([bug_id])
     bug = bug_details.get(bug_id, {})
 
+    # if the bug is fixed, we return True
     if bug.get("resolution") == 'FIXED':
         return True
 
     return False
 
-def filter_commits(count_limit: int) -> None:
+def filter_commits(directory_path: str, destination_filepath: str, count_limit: int) -> None:
     """
     Filters the commits based on:
         1. if it is backing out another commit
@@ -65,17 +67,24 @@ def filter_commits(count_limit: int) -> None:
     Saves to a .json file in ../data/raw_backout_data.json
     
     Args:
+        directory_path (str): the directory where the dataset will be saved
+        destination_filepath (str): where the raw filtered dataset will be saved
         count_limit (int): limit of commits that are added to the json
     
     Returns:
         None
 
     """
+
     filtered_list = []
     counter = 0
 
     pbar = tqdm(total=count_limit, desc="Filtering commits")
+    
+    # iterate over all commits
     for commit in repository.get_commits(include_no_bug=False, include_backouts=True, include_ignored=False):
+        
+        # if the commit is backing out other commits and the bug is fixed
         if len(commit["backsout"]) > 0 and is_bug_fixed(commit["bug_id"]):
             filtered_list.append(commit)
             counter += 1
@@ -84,18 +93,18 @@ def filter_commits(count_limit: int) -> None:
             if counter >= count_limit:
                 break
 
+    # convert to json
     json_data = json.dumps(filtered_list, indent=4)
-    directory_path = 'data'
-    file_path = f'{directory_path}/raw_backout_data.json'
 
+    # write to a file
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
         print(f"Directory {directory_path} created")
 
-    with open(file_path, 'w') as file:
+    with open(destination_filepath, 'w') as file:
         file.write(json_data)
 
-    logger.info(f"Data successfully saved to {file_path}")
+    logger.info(f"Data successfully saved to {destination_filepath}")
 
 def preprocess_commits():
     """
@@ -109,6 +118,7 @@ def preprocess_commits():
         commit_dict (dict): dictionary of commit hashes
     
     """
+
     commit_dict = {}
     for commit in repository.get_commits(include_no_bug=False, include_backouts=True, include_ignored=False):
         shortened_hash = commit['node'][:12]
@@ -140,6 +150,7 @@ def find_full_hash(source_filepath: str, destination_filepath: str, commit_dict:
     Returns:
         None
     """
+
     with open(source_filepath, 'r') as file:
         data = json.load(file)
 
@@ -147,9 +158,11 @@ def find_full_hash(source_filepath: str, destination_filepath: str, commit_dict:
         for index, backout_commit in enumerate(commit['backsout']):
             full_hash = get_full_hash(backout_commit, commit_dict)
 
+            # replace shortened hash with full hash
             if full_hash:
                 commit['backsout'][index] = full_hash
     
+    # save to a new file
     with open(destination_filepath, 'w') as file:
         json.dump(data, file, indent=4)
         logger.info(f"Updated data has been saved to {destination_filepath}")
@@ -172,6 +185,7 @@ def clean_dataset(source_filepath: str, destination_filepath: str):
     
     filtered_data = []
 
+    # fields to keep, rest will be discarded
     fields_to_keep = ['node', 'bug_id', 'desc', 'pushdate', 'backsout']
 
     for commit in data:
@@ -191,9 +205,15 @@ if __name__ == "__main__":
     download_bugs()
 
     # filter commits based on backout and are fixed bugs, save to .json
-    filter_commits(count_limit=100)
+    filter_commits(directory_path="dataset", destination_filepath="dataset/raw_backout_data.json", count_limit=500)
+    
+    # create dictionary mapping shortened hashes to their full hashes
     commit_dict = preprocess_commits()
-    find_full_hash(source_filepath="data/raw_backout_data.json", destination_filepath="data/processed_backout_data.json", commit_dict=commit_dict)
-    clean_dataset(source_filepath="data/processed_backout_data.json", destination_filepath="data/cleaned_backout_data.json")
+
+    # find and replace shortened hashes with full hashes
+    find_full_hash(source_filepath="dataset/raw_backout_data.json", destination_filepath="dataset/processed_backout_data.json", commit_dict=commit_dict)
+    
+    # remove unnecessary fields
+    clean_dataset(source_filepath="dataset/processed_backout_data.json", destination_filepath="dataset/cleaned_backout_data.json")
 
 
