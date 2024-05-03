@@ -86,8 +86,11 @@ def filter_commits(
                 commit["bug_id"], bug_to_commit_dict, commit["node"]
             )
 
-            # if fixing commit could not be found, do not add it to dataset
-            if fixing_commit["node"] == commit["backedoutby"]:
+            # if fixing commit could not be found or is another backing out commit, do not add it to dataset
+            if (
+                fixing_commit["node"] == commit["backedoutby"]
+                or len(fixing_commit["backsout"]) > 0
+            ):
                 counter += 1
                 continue
 
