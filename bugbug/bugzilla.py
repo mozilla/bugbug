@@ -473,8 +473,8 @@ def calculate_maintenance_effectiveness_indicator(
         if query_type in ("opened", "closed"):
             params.update(
                 {
-                    "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-                    "chfieldto": to_date.strftime("%Y-%m-%d"),
+                    "chfieldfrom": from_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    "chfieldto": to_date.strftime("%Y-%m-%d %H:%M:%S"),
                 }
             )
 
