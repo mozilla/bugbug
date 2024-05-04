@@ -54,7 +54,7 @@ def main() -> None:
     )
 
     for factor, value in result["stats"].items():
-        print("%s: %d", factor, round(value, 2) if value != math.inf else value)
+        print("%s: %d" % (factor, round(value, 2) if value != math.inf else value))
 
     for query, link in result["queries"].items():
         print(f"{query}: {link}")
