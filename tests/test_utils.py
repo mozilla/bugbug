@@ -466,3 +466,111 @@ def test_StructuredColumnTransformer() -> None:
         .view(np.dtype("int64")),
         ColumnTransformer(transformers).fit_transform(df),
     )
+
+
+@pytest.mark.parametrize(
+    "test_input, expected_urls, expected_domains",
+    [
+        ("This is a sample text without any links.", [], []),
+        (
+            "Visit https://www.testdomain.com for more info.",
+            ["https://www.testdomain.com"],
+            ["testdomain.com"],
+        ),
+        (
+            "Links: http://www.example.com but ignore https://www.mozilla.com",
+            ["http://www.example.com"],
+            ["example.com"],
+        ),
+        (
+            "Check out https://example.org ,sign up on www.anothersite.net and proceed to https://firefox.mozilla.org",
+            ["https://example.org", "www.anothersite.net"],
+            ["example.org", "anothersite.net"],
+        ),
+        (
+            "Visit https://www.example.org.uk ,sign up on www.anothersite.net.ac and proceed to www.test.mozilla.org",
+            ["https://www.example.org.uk", "www.anothersite.net.ac"],
+            ["example.org.uk", "anothersite.net.ac"],
+        ),
+        (
+            "Check out http://example.com/a/abc/cat.jpg ,sign up on www.anothersite.net/abc/cde and proceed to https://firefox.mozilla.com/download/macos",
+            ["http://example.com/a/abc/cat.jpg", "www.anothersite.net/abc/cde"],
+            ["example.com", "anothersite.net"],
+        ),
+        (
+            "Visit https://www.example.org.uk/a/abc/cat.jpg ,sign up on www.anothersite.net.ac/abc/cde and visit https://www.mozilla.com/signup",
+            [
+                "https://www.example.org.uk/a/abc/cat.jpg",
+                "www.anothersite.net.ac/abc/cde",
+            ],
+            ["example.org.uk", "anothersite.net.ac"],
+        ),
+    ],
+)
+def test_url_extraction_ignore_domains(test_input, expected_urls, expected_domains):
+    """Tests extraction of URLs and domains while ignoring some domains"""
+    domains_to_ignore = {"mozilla.com", "mozilla.org"}
+    result = utils.extract_urls_and_domains(test_input, domains_to_ignore)
+
+    assert result["urls"] == expected_urls
+    assert result["domains"] == expected_domains
+
+
+@pytest.mark.parametrize(
+    "test_input, expected_urls, expected_domains",
+    [
+        ("This is a sample text without any links.", [], []),
+        (
+            "Visit https://www.testdomain.com for more info.",
+            ["https://www.testdomain.com"],
+            ["testdomain.com"],
+        ),
+        (
+            "Links: http://www.example.com , but do not ignore https://www.mozilla.com",
+            ["http://www.example.com", "https://www.mozilla.com"],
+            ["example.com", "mozilla.com"],
+        ),
+        (
+            "Check out https://example.org ,sign up on www.anothersite.net and proceed to https://firefox.mozilla.org",
+            [
+                "https://example.org",
+                "www.anothersite.net",
+                "https://firefox.mozilla.org",
+            ],
+            ["example.org", "anothersite.net", "mozilla.org"],
+        ),
+        (
+            "Visit https://www.example.org.uk ,sign up on www.anothersite.net.ac and proceed to www.test.mozilla.org",
+            [
+                "https://www.example.org.uk",
+                "www.anothersite.net.ac",
+                "www.test.mozilla.org",
+            ],
+            ["example.org.uk", "anothersite.net.ac", "mozilla.org"],
+        ),
+        (
+            "Check out http://example.com/a/abc/cat.jpg ,sign up on www.anothersite.net/abc/cde and proceed to https://firefox.mozilla.com/download/macos",
+            [
+                "http://example.com/a/abc/cat.jpg",
+                "www.anothersite.net/abc/cde",
+                "https://firefox.mozilla.com/download/macos",
+            ],
+            ["example.com", "anothersite.net", "mozilla.com"],
+        ),
+        (
+            "Visit http://www.example.org.uk/a/abc/cat.jpg ,sign up on www.anothersite.net.ac/abc/cde and visit https://www.mozilla.com/signup",
+            [
+                "http://www.example.org.uk/a/abc/cat.jpg",
+                "www.anothersite.net.ac/abc/cde",
+                "https://www.mozilla.com/signup",
+            ],
+            ["example.org.uk", "anothersite.net.ac", "mozilla.com"],
+        ),
+    ],
+)
+def test_url_extraction(test_input, expected_urls, expected_domains):
+    """Tests extraction of URLs and domains without ignoring domains"""
+    result = utils.extract_urls_and_domains(test_input)
+
+    assert result["urls"] == expected_urls
+    assert result["domains"] == expected_domains

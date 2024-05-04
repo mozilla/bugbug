@@ -174,6 +174,8 @@ class Model:
 
         self.store_dataset = False
 
+        self.use_scale_pos_weight = False
+
         self.entire_dataset_training = False
 
         # DBs required for training.
@@ -216,6 +218,8 @@ class Model:
                 feature_name = f"Comments contain '{feature_name}'"
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "comment_text":
+                feature_name = f"Comment text contains '{feature_name}'"
             elif type_ == "files":
                 feature_name = f"File '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
@@ -387,6 +391,21 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
+
+        # Use scale_pos_weight to help in extremely imbalanced datasets
+        if self.use_scale_pos_weight and is_binary:
+            negative_samples = sum(label == 0 for label in y_train)
+            positive_samples = sum(label == 1 for label in y_train)
+            logger.info("Negative Samples: %d", negative_samples)
+            logger.info("Positive Samples: %d", positive_samples)
+
+            scale_pos_weight = (negative_samples / positive_samples) / 10
+
+            logger.info("Scale Pos Weight: %d", scale_pos_weight)
+
+            self.clf.named_steps["estimator"].set_params(
+                scale_pos_weight=scale_pos_weight
+            )
 
         tracking_metrics = {}
 
@@ -803,3 +822,18 @@ class IssueModel(Model):
                 continue
 
             yield issue, classes[issue_number]
+
+
+class CommentModel(Model):
+    def __init__(self, lemmatization=False):
+        Model.__init__(self, lemmatization)
+        self.training_dbs = [bugzilla.BUGS_DB]
+
+    def items_gen(self, classes):
+        for bug in bugzilla.get_bugs():
+            for comment in bug["comments"]:
+                comment_id = comment["id"]
+                if comment["id"] not in classes:
+                    continue
+
+            yield (bug, comment), classes[comment_id]
