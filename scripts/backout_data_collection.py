@@ -20,30 +20,35 @@ def download_databases() -> None:
     assert db.download(repository.COMMITS_DB, support_files_too=True)
 
 
-def save_dict_to_file(data_dict, file_path):
+def save_dict_to_file(data_dict, file_path) -> None:
     with open(file_path, "w") as file:
         json.dump(data_dict, file, indent=4)
 
 
-def load_dict_from_file(file_path):
+def load_dict_from_file(file_path) -> dict:
     with open(file_path, "r") as file:
         return json.load(file)
 
 
-def preprocess_commits_and_bugs():
-    cache_path_commit = "dataset/cache_commit_dict.json"
-    cache_path_bug_to_commit = "dataset/cache_bug_to_commit_dict.json"
-    cache_path_bug = "dataset/cache_bug_dict.json"
+def preprocess_commits_and_bugs(
+    directory_path: str,
+    commit_cache_filename: str,
+    bug_to_commit_cache_filename: str,
+    bug_cache_filename: str,
+) -> tuple[dict, dict, dict]:
+    commit_cache_filepath = directory_path + "/" + commit_cache_filename
+    bug_to_commit_cache_filepath = directory_path + "/" + bug_to_commit_cache_filename
+    bug_cache_filepath = directory_path + "/" + bug_cache_filename
 
     if (
-        os.path.exists(cache_path_commit)
-        and os.path.exists(cache_path_bug_to_commit)
-        and os.path.exists(cache_path_bug)
+        os.path.exists(commit_cache_filepath)
+        and os.path.exists(bug_to_commit_cache_filepath)
+        and os.path.exists(bug_cache_filepath)
     ):
         logger.info("Loading cached data...")
-        commit_dict = load_dict_from_file(cache_path_commit)
-        bug_to_commit_dict = load_dict_from_file(cache_path_bug_to_commit)
-        bug_dict = load_dict_from_file(cache_path_bug)
+        commit_dict = load_dict_from_file(commit_cache_filepath)
+        bug_to_commit_dict = load_dict_from_file(bug_to_commit_cache_filepath)
+        bug_dict = load_dict_from_file(bug_cache_filepath)
 
     else:
         logger.info("Preprocessing commits and bugs...")
@@ -82,35 +87,49 @@ def preprocess_commits_and_bugs():
                 bug = json.loads(line)
                 bug_dict[bug.get("id")] = bug["resolution"]
 
-        save_dict_to_file(commit_dict, cache_path_commit)
-        save_dict_to_file(bug_to_commit_dict, cache_path_bug_to_commit)
-        save_dict_to_file(bug_dict, cache_path_bug)
+        save_dict_to_file(commit_dict, commit_cache_filepath)
+        save_dict_to_file(bug_to_commit_dict, bug_to_commit_cache_filepath)
+        save_dict_to_file(bug_dict, bug_cache_filepath)
 
     return commit_dict, bug_to_commit_dict, bug_dict
 
 
+def ensure_directory_exists(directory_path: str) -> None:
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+        logger.info(f"Directory {directory_path} created")
+
+
+def save_dataset(directory_path: str, filename: str, filtered_list: list) -> None:
+    json_data = json.dumps(filtered_list, indent=4)
+
+    with open(directory_path + "/" + filename, "w") as file:
+        file.write(json_data)
+
+    logger.info(f"Data successfully saved to {directory_path + '/' + filename}")
+
+
 def filter_commits(
-    directory_path: str,
-    destination_filepath: str,
-    count_limit: int,
-    bug_dict: dict,
+    commit_limit: int,
     commit_dict: dict,
     bug_to_commit_dict: dict,
-) -> None:
+    bug_dict: dict,
+) -> list:
     filtered_list = []
     counter = 0
+    commit_limit = min(commit_limit, 709458)
 
-    pbar = tqdm(total=count_limit, desc="Filtering commits")
+    pbar = tqdm(total=commit_limit, desc="Filtering commits")
 
     for commit in repository.get_commits(
-        include_no_bug=False, include_backouts=True, include_ignored=False
+        include_no_bug=True, include_backouts=True, include_ignored=True
     ):
         # add commit if it was backed out and the bug is fixed
-        if (
-            bug_dict.get(str(commit["bug_id"]))
-            and commit["backedoutby"]
-            and bug_dict[str(commit["bug_id"])] == "FIXED"
-        ):
+        bug_info = bug_dict.get(str(commit["bug_id"]))
+
+        counter += 1
+        pbar.update(1)
+        if commit["backedoutby"] and bug_info == "FIXED":
             fixing_commit = find_next_commit(
                 commit["bug_id"], bug_to_commit_dict, commit["node"]
             )
@@ -120,7 +139,6 @@ def filter_commits(
                 fixing_commit["node"] == commit["backedoutby"]
                 or len(fixing_commit["backsout"]) > 0
             ):
-                counter += 1
                 continue
 
             # add the hashes of the bug-inducing commit, the back out commit, and the fixing commit
@@ -145,24 +163,11 @@ def filter_commits(
             }
 
             filtered_list.append(list_entry)
-            counter += 1
-            pbar.update(1)
 
-            if counter >= count_limit:
-                break
+        if counter >= commit_limit:
+            break
 
-    json_data = json.dumps(filtered_list, indent=4)
-
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
-        print(f"Directory {directory_path} created")
-
-    with open(destination_filepath, "w") as file:
-        file.write(json_data)
-
-    logger.info(f"Data successfully saved to {destination_filepath}")
-
-    return
+    return filtered_list
 
 
 def find_next_commit(bug_id: int, bug_to_commit_dict: dict, inducing_node: str) -> dict:
@@ -179,18 +184,32 @@ def find_next_commit(bug_id: int, bug_to_commit_dict: dict, inducing_node: str) 
     return commit
 
 
+DIRECTORY = "dataset"
+
+
 def main():
     download_databases()
 
-    commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
+    ensure_directory_exists(directory_path=DIRECTORY)
 
-    filter_commits(
-        directory_path="dataset",
-        destination_filepath="dataset/backout_dataset.json",
-        count_limit=500,
-        bug_dict=bug_dict,
+    commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs(
+        directory_path=DIRECTORY,
+        commit_cache_filename="commit_cache.json",
+        bug_to_commit_cache_filename="bug_to_commit_cache.json",
+        bug_cache_filename="bug_cache.json",
+    )
+
+    filtered_list = filter_commits(
+        commit_limit=1000000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
+        bug_dict=bug_dict,
+    )
+
+    save_dataset(
+        directory_path=DIRECTORY,
+        filename="backout_dataset.json",
+        filtered_list=filtered_list,
     )
 
 
