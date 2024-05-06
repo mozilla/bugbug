@@ -20,46 +20,73 @@ def download_databases() -> None:
     assert db.download(repository.COMMITS_DB, support_files_too=True)
 
 
+def save_dict_to_file(data_dict, file_path):
+    with open(file_path, "w") as file:
+        json.dump(data_dict, file, indent=4)
+
+
+def load_dict_from_file(file_path):
+    with open(file_path, "r") as file:
+        return json.load(file)
+
+
 def preprocess_commits_and_bugs():
-    logger.info("Preprocessing commits")
-    commit_dict = {}
-    bug_to_commit_dict = {}
+    cache_path_commit = "dataset/cache_commit_dict.json"
+    cache_path_bug_to_commit = "dataset/cache_bug_to_commit_dict.json"
+    cache_path_bug = "dataset/cache_bug_dict.json"
 
-    # store commits with their hashes and bug IDs as keys
-    for commit in tqdm(
-        repository.get_commits(
-            include_no_bug=True, include_backouts=True, include_ignored=True
-        ),
-        desc="Processing commits",
+    if (
+        os.path.exists(cache_path_commit)
+        and os.path.exists(cache_path_bug_to_commit)
+        and os.path.exists(cache_path_bug)
     ):
-        commit_dict[commit["node"]] = commit
+        logger.info("Loading cached data...")
+        commit_dict = load_dict_from_file(cache_path_commit)
+        bug_to_commit_dict = load_dict_from_file(cache_path_bug_to_commit)
+        bug_dict = load_dict_from_file(cache_path_bug)
 
-        if commit["bug_id"] not in bug_to_commit_dict:
-            bug_to_commit_dict[commit["bug_id"]] = [commit]
-        else:
-            bug_to_commit_dict[commit["bug_id"]].append(commit)
+    else:
+        logger.info("Preprocessing commits and bugs...")
+        commit_dict = {}
+        bug_to_commit_dict = {}
 
-    logger.info("Preprocessing bugs")
-    bug_dict = {}
+        # store commits with their hashes and bug IDs as keys
+        for commit in tqdm(
+            repository.get_commits(
+                include_no_bug=True, include_backouts=True, include_ignored=True
+            ),
+            desc="Processing commits",
+        ):
+            commit_dict[commit["node"]] = {
+                "node": commit["node"],
+                "bug_id": commit["bug_id"],
+                "desc": commit["desc"],
+                "pushdate": commit["pushdate"],
+                "backedoutby": commit["backedoutby"],
+                "backsout": commit["backsout"],
+            }
 
-    num_lines = sum(1 for line in open(bugzilla.BUGS_DB, "r"))
+            if commit_dict[commit["node"]]["bug_id"] not in bug_to_commit_dict:
+                bug_to_commit_dict[commit["bug_id"]] = [commit_dict[commit["node"]]]
+            else:
+                bug_to_commit_dict[commit["bug_id"]].append(commit_dict[commit["node"]])
 
-    # store bugs with their bug IDs as keys
-    with open(bugzilla.BUGS_DB, "r") as f:
-        for line in tqdm(f, total=num_lines, desc="Processing bugs"):
-            bug = json.loads(line)
-            bug_dict[bug.get("id")] = bug
+        logger.info("Preprocessing bugs")
+        bug_dict = {}
+
+        num_lines = sum(1 for line in open(bugzilla.BUGS_DB, "r"))
+
+        # store bugs with their bug IDs as keys
+        with open(bugzilla.BUGS_DB, "r") as f:
+            for line in tqdm(f, total=num_lines, desc="Processing bugs"):
+                bug = json.loads(line)
+                bug_dict[bug.get("id")] = bug["resolution"]
+
+        save_dict_to_file(commit_dict, cache_path_commit)
+        save_dict_to_file(bug_to_commit_dict, cache_path_bug_to_commit)
+        save_dict_to_file(bug_dict, cache_path_bug)
 
     return commit_dict, bug_to_commit_dict, bug_dict
-
-
-def is_bug_fixed(bug_id: int, bug_dict: dict) -> bool:
-    bug = bug_dict.get(bug_id)
-
-    if bug:
-        return bug.get("resolution") == "FIXED"
-
-    return False
 
 
 def filter_commits(
@@ -79,8 +106,10 @@ def filter_commits(
         include_no_bug=False, include_backouts=True, include_ignored=False
     ):
         # add commit if it was backed out and the bug is fixed
-        if len(commit["backedoutby"]) > 0 and is_bug_fixed(
-            bug_id=commit["bug_id"], bug_dict=bug_dict
+        if (
+            bug_dict.get(str(commit["bug_id"]))
+            and commit["backedoutby"]
+            and bug_dict[str(commit["bug_id"])] == "FIXED"
         ):
             fixing_commit = find_next_commit(
                 commit["bug_id"], bug_to_commit_dict, commit["node"]
@@ -138,7 +167,7 @@ def filter_commits(
 
 def find_next_commit(bug_id: int, bug_to_commit_dict: dict, inducing_node: str) -> dict:
     inducing_commit_found = False
-    for commit in bug_to_commit_dict[bug_id]:
+    for commit in bug_to_commit_dict[str(bug_id)]:
         # if the inducing commit has been found, find next commit that has not been backed out
         if inducing_commit_found:
             if len(commit["backedoutby"]) == 0:
