@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Any, Dict, Generator, Tuple
 
 from tqdm import tqdm
 
@@ -18,7 +19,7 @@ def download_databases() -> None:
     assert db.download(repository.COMMITS_DB, support_files_too=True)
 
 
-def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
+def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
     logger.info("Preprocessing commits and bugs...")
     commit_dict = {}
     bug_to_commit_dict = {}
@@ -28,7 +29,7 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
         repository.get_commits(
             include_no_bug=True, include_backouts=True, include_ignored=True
         ),
-        desc="Processing commits",
+        desc="Preprocessing commits",
     ):
         commit_dict[commit["node"]] = {
             "node": commit["node"],
@@ -47,13 +48,9 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
     logger.info("Preprocessing bugs")
     bug_dict = {}
 
-    num_lines = sum(1 for line in open(bugzilla.BUGS_DB, "r"))
-
     # store bugs with their bug IDs as keys
-    with open(bugzilla.BUGS_DB, "r") as f:
-        for line in tqdm(f, total=num_lines, desc="Processing bugs"):
-            bug = json.loads(line)
-            bug_dict[bug.get("id")] = bug["resolution"]
+    for bug in tqdm(bugzilla.get_bugs(include_invalid=True), desc="Preprocessing bugs"):
+        bug_dict[bug.get("id")] = bug["resolution"]
 
     return commit_dict, bug_to_commit_dict, bug_dict
 
@@ -63,34 +60,50 @@ def filter_commits(
     commit_dict: dict,
     bug_to_commit_dict: dict,
     bug_dict: dict,
-):
+) -> Generator[Dict[str, Any], None, None]:
     counter = 0
     commit_limit = min(commit_limit, 709458)
-    pbar = tqdm(total=commit_limit, desc="Filtering commits")
+    logger.info("Filtering commits...")
 
     for commit in repository.get_commits(
         include_no_bug=True, include_backouts=True, include_ignored=True
     ):
-        # add commit if it was backed out and the bug is fixed
         bug_info = bug_dict.get(commit["bug_id"])
 
         counter += 1
-        pbar.update(1)
+
+        # add commit if it was backed out and the bug is fixed
         if commit["backedoutby"] and bug_info == "FIXED":
             fixing_commit = find_next_commit(
-                commit["bug_id"], bug_to_commit_dict, commit["node"]
+                commit["bug_id"],
+                bug_to_commit_dict,
+                commit["node"],
+                commit["backedoutby"],
             )
 
-            # if fixing commit could not be found or is another backing out commit, do not add it to dataset
-            if (
-                fixing_commit["node"] == commit["backedoutby"]
-                or fixing_commit["backsout"]
-            ):
+            # if fixing commit could not be found, do not add to the dataset
+            # instead, will log and add to separate file
+            if not fixing_commit:
+                yield {
+                    "fix_found": False,
+                    "bug_id": commit["bug_id"],
+                    "inducing_commit": {
+                        "node": commit["node"],
+                        "pushdate": commit["pushdate"],
+                        "desc": commit["desc"],
+                    },
+                    "backout_commit": {
+                        "node": commit["backedoutby"],
+                        "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
+                        "desc": commit_dict[commit["backedoutby"]]["desc"],
+                    },
+                }
                 continue
 
-            # add the hashes of the bug-inducing commit, the back out commit, and the fixing commit
+            # generate the hashes of the bug-inducing commit, the backout commit, and the fixing commit
             # include metadata such as push date and description for further context
             yield {
+                "fix_found": True,
                 "bug_id": commit["bug_id"],
                 "inducing_commit": {
                     "node": commit["node"],
@@ -112,41 +125,76 @@ def filter_commits(
         if counter >= commit_limit:
             break
 
-    pbar.close()
 
+def find_next_commit(
+    bug_id: int, bug_to_commit_dict: dict, inducing_node: str, backout_node: str
+) -> Dict:
+    backout_commit_found = False
+    fixing_commit = None
 
-def find_next_commit(bug_id: int, bug_to_commit_dict: dict, inducing_node: str) -> dict:
-    inducing_commit_found = False
     for commit in bug_to_commit_dict[bug_id]:
-        # if the inducing commit has been found, find next commit that has not been backed out
-        if inducing_commit_found:
-            if len(commit["backedoutby"]) == 0:
-                return commit
+        # if the backout commit is found, find the next commit that isn't backed out by any other commit
+        if backout_commit_found:
+            if not commit["backedoutby"]:
+                fixing_commit = commit
+                break
 
-        if commit["node"] == inducing_node:
-            inducing_commit_found = True
+        if commit["node"] == backout_node:
+            backout_commit_found = True
 
-    return commit
+    if (
+        not fixing_commit
+        or fixing_commit["node"] == inducing_node
+        or fixing_commit["node"] == backout_node
+    ):
+        return {}
+
+    return fixing_commit
 
 
-def save_dataset(directory_path: str, filename: str, data_generator):
+def save_datasets(
+    directory_path: str,
+    dataset_filename: str,
+    no_fix_commit_filename: str,
+    data_generator,
+) -> None:
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
         logger.info(f"Directory {directory_path} created")
 
-    file_path = os.path.join(directory_path, filename)
-    with open(file_path, "w") as file:
-        file.write("[\n")
-        first = True
-        for item in data_generator:
-            if not first:
-                file.write(",\n")
-            json_data = json.dumps(item, indent=4)
-            file.write(json_data)
-            first = False
-        file.write("\n]")
+    dataset_filepath = os.path.join(directory_path, dataset_filename)
+    no_fix_commit_filepath = os.path.join(directory_path, no_fix_commit_filename)
 
-    logger.info(f"Data successfully saved to {file_path}")
+    with open(dataset_filepath, "w") as file1, open(
+        no_fix_commit_filepath, "w"
+    ) as file2:
+        file1.write("[\n")
+        first1 = True
+
+        file2.write("[\n")
+        first2 = True
+
+        for item in data_generator:
+            if item["fix_found"]:
+                item.pop("fix_found", None)
+                if not first1:
+                    file1.write(",\n")
+                json_data = json.dumps(item, indent=4)
+                file1.write(json_data)
+                first1 = False
+            else:
+                item.pop("fix_found", None)
+                if not first2:
+                    file2.write(",\n")
+                json_data = json.dumps(item, indent=4)
+                file2.write(json_data)
+                first2 = False
+
+        file1.write("\n]")
+        file2.write("\n]")
+
+    logger.info(f"Dataset successfully saved to {dataset_filepath}")
+    logger.info(f"Commits without a fix successfully saved to {no_fix_commit_filepath}")
 
 
 def main():
@@ -161,9 +209,10 @@ def main():
         bug_dict=bug_dict,
     )
 
-    save_dataset(
+    save_datasets(
         directory_path="dataset",
-        filename="backout_dataset.json",
+        dataset_filename="backout_dataset.json",
+        no_fix_commit_filename="no_fix_dataset.json",
         data_generator=data_generator,
     )
 
