@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 import dateutil.parser
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -91,22 +93,19 @@ class FenixComponentModel(BugModel):
             ]
         )
 
-        self.clf = Pipeline(
+        self.clf = ImblearnPipeline(
             [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
-                            ("title", self.text_vectorizer(min_df=0.0001), "title"),
-                            (
-                                "comments",
-                                self.text_vectorizer(min_df=0.0001),
-                                "comments",
-                            ),
+                            ("title", self.text_vectorizer(), "title"),
+                            ("comments", self.text_vectorizer(), "comments"),
                         ]
                     ),
                 ),
+                ("smote", SMOTE(random_state=42)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
