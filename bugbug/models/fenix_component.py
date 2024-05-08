@@ -23,42 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class FenixComponentModel(BugModel):
-    PRODUCT_COMPONENTS = [
-        "Accounts and Sync",
-        "App Links",
-        "Autofill",
-        "Bookmarks",
-        "Browser Engine",
-        "Collections",
-        "Crash Reporting",
-        "Design System and Theming",
-        "Downloads",
-        "Experimentation and Telemetry",
-        "General",
-        "History",
-        "Homepage",
-        "Logins",
-        "Media",
-        "Onboarding",
-        "Performance",
-        "Pocket",
-        "Privacy",
-        "Push",
-        "PWA",
-        "QR",
-        "Search",
-        "Share",
-        "Shopping",
-        "Tabs",
-        "Toolbar",
-        "Tooling",
-        "Top Sites",
-        "Translations",
-        "UI Tests",
-        "WebAuthn",
-        "WebExtensions",
-    ]
-
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
@@ -117,13 +81,15 @@ class FenixComponentModel(BugModel):
         fenix_component_classes = {}
 
         for bug_data in bugzilla.get_bugs():
+            if bug_data["product"] != "Fenix":
+                continue
+
             if dateutil.parser.parse(bug_data["creation_time"]) < datetime.now(
                 timezone.utc
             ) - relativedelta(years=2):
                 continue
 
-            if bug_data["product"] == "Fenix":
-                fenix_component_classes[int(bug_data["id"])] = bug_data["component"]
+            fenix_component_classes[int(bug_data["id"])] = bug_data["component"]
 
         return fenix_component_classes, set(fenix_component_classes.values())
 
