@@ -63,6 +63,7 @@ def filter_commits(
 ) -> Generator[Dict[str, Any], None, None]:
     counter = 0
     commit_limit = min(commit_limit, 709458)
+
     logger.info("Filtering commits...")
 
     for commit in repository.get_commits(
@@ -74,7 +75,7 @@ def filter_commits(
 
         # add commit if it was backed out and the bug is fixed
         if commit["backedoutby"] and bug_info == "FIXED":
-            fixing_commit = find_next_commit(
+            fixing_commit, non_backed_out_commits = find_next_commit(
                 commit["bug_id"],
                 bug_to_commit_dict,
                 commit["node"],
@@ -85,6 +86,7 @@ def filter_commits(
             # instead, will log and add to separate file
             if not fixing_commit:
                 yield {
+                    "non_backed_out_commits": non_backed_out_commits,
                     "fix_found": False,
                     "bug_id": commit["bug_id"],
                     "inducing_commit": {
@@ -103,6 +105,7 @@ def filter_commits(
             # generate the hashes of the bug-inducing commit, the backout commit, and the fixing commit
             # include metadata such as push date and description for further context
             yield {
+                "non_backed_out_commits": non_backed_out_commits,
                 "fix_found": True,
                 "bug_id": commit["bug_id"],
                 "inducing_commit": {
@@ -128,16 +131,20 @@ def filter_commits(
 
 def find_next_commit(
     bug_id: int, bug_to_commit_dict: dict, inducing_node: str, backout_node: str
-) -> Dict:
+) -> Tuple[Dict, int]:
     backout_commit_found = False
     fixing_commit = None
+
+    non_backed_out_counter = 0
 
     for commit in bug_to_commit_dict[bug_id]:
         # if the backout commit is found, find the next commit that isn't backed out by any other commit
         if backout_commit_found:
-            if not commit["backedoutby"]:
+            if not commit["backedoutby"] and not fixing_commit:
                 fixing_commit = commit
-                break
+                non_backed_out_counter += 1
+            elif not commit["backedoutby"]:
+                non_backed_out_counter += 1
 
         if commit["node"] == backout_node:
             backout_commit_found = True
@@ -147,9 +154,9 @@ def find_next_commit(
         or fixing_commit["node"] == inducing_node
         or fixing_commit["node"] == backout_node
     ):
-        return {}
+        return {}, non_backed_out_counter
 
-    return fixing_commit
+    return fixing_commit, non_backed_out_counter
 
 
 def save_datasets(
@@ -165,6 +172,10 @@ def save_datasets(
     dataset_filepath = os.path.join(directory_path, dataset_filename)
     no_fix_commit_filepath = os.path.join(directory_path, no_fix_commit_filename)
 
+    fix_found_counter = 0
+    no_fix_found_counter = 0
+    backed_out_counter = 0
+
     with open(dataset_filepath, "w") as file1, open(
         no_fix_commit_filepath, "w"
     ) as file2:
@@ -175,6 +186,11 @@ def save_datasets(
         first2 = True
 
         for item in data_generator:
+            if item["non_backed_out_commits"] > 1:
+                backed_out_counter += 1
+
+            item.pop("non_backed_out_commits", None)
+
             if item["fix_found"]:
                 item.pop("fix_found", None)
                 if not first1:
@@ -182,6 +198,7 @@ def save_datasets(
                 json_data = json.dumps(item, indent=4)
                 file1.write(json_data)
                 first1 = False
+                fix_found_counter += 1
             else:
                 item.pop("fix_found", None)
                 if not first2:
@@ -189,12 +206,19 @@ def save_datasets(
                 json_data = json.dumps(item, indent=4)
                 file2.write(json_data)
                 first2 = False
+                no_fix_found_counter += 1
 
         file1.write("\n]")
         file2.write("\n]")
 
     logger.info(f"Dataset successfully saved to {dataset_filepath}")
     logger.info(f"Commits without a fix successfully saved to {no_fix_commit_filepath}")
+
+    logger.info(f"Number of commits with fix found saved: {fix_found_counter}")
+    logger.info(f"Number of commits with no fix found saved: {no_fix_found_counter}")
+    logger.info(
+        f"Number of commits with multiple non backed out commits following it: {backed_out_counter}"
+    )
 
 
 def main():
