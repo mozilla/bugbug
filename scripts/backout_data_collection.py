@@ -24,6 +24,7 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
     commit_dict = {}
     bug_to_commit_dict = {}
 
+    logger.info("Preprocessing commits...")
     # store commits with their hashes and bug IDs as keys
     for commit in tqdm(
         repository.get_commits(
@@ -45,7 +46,7 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
         else:
             bug_to_commit_dict[commit["bug_id"]].append(commit_dict[commit["node"]])
 
-    logger.info("Preprocessing bugs")
+    logger.info("Preprocessing bugs...")
     bug_dict = {}
 
     # store bugs with their bug IDs as keys
@@ -140,7 +141,11 @@ def find_next_commit(
     for commit in bug_to_commit_dict[bug_id]:
         # if the backout commit is found, find the next commit that isn't backed out by any other commit
         if backout_commit_found:
-            if not commit["backedoutby"] and not fixing_commit:
+            if (
+                not commit["backedoutby"]
+                and not fixing_commit
+                and not commit["backsout"]
+            ):
                 fixing_commit = commit
                 non_backed_out_counter += 1
             elif not commit["backedoutby"]:
@@ -189,9 +194,9 @@ def save_datasets(
             if item["non_backed_out_commits"] > 1:
                 backed_out_counter += 1
 
-            item.pop("non_backed_out_commits", None)
+            # item.pop("non_backed_out_commits", None)
 
-            if item["fix_found"]:
+            if item["fix_found"] and item["non_backed_out_commits"] <= 2:
                 item.pop("fix_found", None)
                 if not first1:
                     file1.write(",\n")
@@ -199,7 +204,7 @@ def save_datasets(
                 file1.write(json_data)
                 first1 = False
                 fix_found_counter += 1
-            else:
+            elif not item["fix_found"]:
                 item.pop("fix_found", None)
                 if not first2:
                     file2.write(",\n")
