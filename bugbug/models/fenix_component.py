@@ -11,6 +11,7 @@ import xgboost
 from dateutil.relativedelta import relativedelta
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
+from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -70,6 +71,7 @@ class FenixComponentModel(BugModel):
                     ),
                 ),
                 ("smote", SMOTE(random_state=42)),
+                ("undersample", RandomUnderSampler(random_state=42)),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
@@ -82,6 +84,10 @@ class FenixComponentModel(BugModel):
 
         for bug_data in bugzilla.get_bugs():
             if bug_data["product"] != "Fenix":
+                continue
+
+            # exclude 'General' because it contains bugs that may belong to other components (introducing noise)
+            if bug_data["component"] == "General":
                 continue
 
             if dateutil.parser.parse(bug_data["creation_time"]) < datetime.now(
