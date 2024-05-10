@@ -3,8 +3,6 @@ import logging
 import os
 from typing import Any, Dict, Generator, Tuple
 
-from tqdm import tqdm
-
 from bugbug import bugzilla, db, repository
 
 logging.basicConfig(level=logging.INFO)
@@ -26,11 +24,8 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
     logger.info("Preprocessing commits and bugs...")
     commit_dict, bug_to_commit_dict, bug_dict = {}, {}, {}
 
-    for commit in tqdm(
-        repository.get_commits(
-            include_no_bug=True, include_backouts=True, include_ignored=True
-        ),
-        desc="Preprocessing commits",
+    for commit in repository.get_commits(
+        include_no_bug=True, include_backouts=True, include_ignored=True
     ):
         commit_dict[commit["node"]] = {
             "node": commit["node"],
@@ -41,13 +36,14 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
             "backsout": commit["backsout"],
         }
 
-        if commit_dict[commit["node"]]["bug_id"] not in bug_to_commit_dict:
-            bug_to_commit_dict[commit["bug_id"]] = [commit_dict[commit["node"]]]
+        bug_id = commit["bug_id"]
+        if bug_id not in bug_to_commit_dict:
+            bug_to_commit_dict[bug_id] = [commit_dict[commit["node"]]]
         else:
-            bug_to_commit_dict[commit["bug_id"]].append(commit_dict[commit["node"]])
+            bug_to_commit_dict[bug_id].append(commit_dict[commit["node"]])
 
     # We only require the bug's resolution (to check if it is 'FIXED').
-    for bug in tqdm(bugzilla.get_bugs(include_invalid=True), desc="Preprocessing bugs"):
+    for bug in bugzilla.get_bugs(include_invalid=True):
         bug_dict[bug.get("id")] = bug["resolution"]
 
     return commit_dict, bug_to_commit_dict, bug_dict
@@ -105,6 +101,7 @@ def generate_datapoints(
         commit_diff = repository.get_diff(
             repo_dir, commit["node"], fixing_commit["node"]
         )
+
         yield {
             "non_backed_out_commits": non_backed_out_commits,
             "fix_found": True,
@@ -192,6 +189,7 @@ def save_datasets(
         file2.write("[\n")
         first2 = True
 
+        logger.info("Populating dataset...")
         for item in data_generator:
             if item["non_backed_out_commits"] > 1:
                 backed_out_counter += 1

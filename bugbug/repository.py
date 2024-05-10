@@ -20,7 +20,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Collection, Dict, Iterable, Iterator, List, NewType, Set, Union
+from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
 import hglib
 import lmdb
@@ -1543,55 +1543,21 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
     trigger_pull()
 
 
-def parse_diff(diff_output):
-    parsed_diff = {"added_lines": [], "removed_lines": []}
-    current_file = None
-    lines = diff_output.decode("utf-8", errors="replace").split("\n")
-
-    for line in lines:
-        if line.startswith("diff"):
-            current_file = line.split()[-1]
-        elif line.startswith("+") and not line.startswith("+++"):
-            parsed_diff["added_lines"].append(
-                {"line_content": line[1:], "file": current_file}
-            )
-        elif line.startswith("-") and not line.startswith("---"):
-            parsed_diff["removed_lines"].append(
-                {"line_content": line[1:], "file": current_file}
-            )
-
-    return parsed_diff
-
-
-def get_diff(repo_dir: str, hash_a, hash_b) -> Dict[str, Dict[str, List[str]]]:
-    """Fetch the diff between two specific commits.
+def get_diff(repo_dir: str, hash_a: str, hash_b: str) -> str:
+    """Fetch and parse the diff between two specific commits.
 
     Args:
         repo_dir: The path to the directory of the cloned Mercurial repository.
-        commit_hash1: The hash of the first commit.
-        commit_hash2: The hash of the second commit.
+        hash_a: The hash of the first commit.
+        hash_b: The hash of the second commit.
 
     Returns:
-         Dictionary of the diff between the two commits, separated by filename and broken up into added_lines and deleted_lines.
+         A structured and readable diff between the two commits.
     """
     hg_client = hglib.open(repo_dir)
-
     diff_output = hg_client.diff(revs=[hash_a, hash_b])
 
-    parsed_diff = parse_diff(diff_output)
-
-    file_changes: Dict[str, Dict[str, List[str]]] = {}
-    for change_type in ["added_lines", "removed_lines"]:
-        for line in parsed_diff[change_type]:
-            file = line["file"]
-            if file not in file_changes:
-                file_changes[file] = {"additions": [], "deletions": []}
-            if change_type == "added_lines":
-                file_changes[file]["additions"].append(line["line_content"])
-            else:
-                file_changes[file]["deletions"].append(line["line_content"])
-
-    return file_changes
+    return str(diff_output)
 
 
 if __name__ == "__main__":
