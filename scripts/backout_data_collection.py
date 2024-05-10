@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def download_databases() -> None:
+    logger.info("Cloning Mercurial database...")
+    repository.clone(repo_dir="hg_dir")
+
     logger.info("Downloading bugs database...")
     assert db.download(bugzilla.BUGS_DB)
 
@@ -21,11 +24,8 @@ def download_databases() -> None:
 
 def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
     logger.info("Preprocessing commits and bugs...")
-    commit_dict = {}
-    bug_to_commit_dict = {}
+    commit_dict, bug_to_commit_dict, bug_dict = {}, {}, {}
 
-    logger.info("Preprocessing commits...")
-    # store commits with their hashes and bug IDs as keys
     for commit in tqdm(
         repository.get_commits(
             include_no_bug=True, include_backouts=True, include_ignored=True
@@ -46,26 +46,24 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
         else:
             bug_to_commit_dict[commit["bug_id"]].append(commit_dict[commit["node"]])
 
-    logger.info("Preprocessing bugs...")
-    bug_dict = {}
-
-    # store bugs with their bug IDs as keys
+    # We only require the bug's resolution (to check if it is 'FIXED').
     for bug in tqdm(bugzilla.get_bugs(include_invalid=True), desc="Preprocessing bugs"):
         bug_dict[bug.get("id")] = bug["resolution"]
 
     return commit_dict, bug_to_commit_dict, bug_dict
 
 
-def filter_commits(
+def generate_datapoints(
     commit_limit: int,
     commit_dict: dict,
     bug_to_commit_dict: dict,
     bug_dict: dict,
+    repo_dir: str,
 ) -> Generator[Dict[str, Any], None, None]:
     counter = 0
     commit_limit = min(commit_limit, 709458)
 
-    logger.info("Filtering commits...")
+    logger.info("Generating datapoints...")
 
     for commit in repository.get_commits(
         include_no_bug=True, include_backouts=True, include_ignored=True
@@ -74,40 +72,22 @@ def filter_commits(
 
         counter += 1
 
-        # add commit if it was backed out and the bug is fixed
-        if commit["backedoutby"] and bug_info == "FIXED":
-            fixing_commit, non_backed_out_commits = find_next_commit(
-                commit["bug_id"],
-                bug_to_commit_dict,
-                commit["node"],
-                commit["backedoutby"],
-            )
+        if not commit["backedoutby"] or bug_info != "FIXED":
+            continue
 
-            # if fixing commit could not be found, do not add to the dataset
-            # instead, will log and add to separate file
-            if not fixing_commit:
-                yield {
-                    "non_backed_out_commits": non_backed_out_commits,
-                    "fix_found": False,
-                    "bug_id": commit["bug_id"],
-                    "inducing_commit": {
-                        "node": commit["node"],
-                        "pushdate": commit["pushdate"],
-                        "desc": commit["desc"],
-                    },
-                    "backout_commit": {
-                        "node": commit["backedoutby"],
-                        "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
-                        "desc": commit_dict[commit["backedoutby"]]["desc"],
-                    },
-                }
-                continue
+        # We only add the commit if it has been backed out and the bug it is for is FIXED.
+        fixing_commit, non_backed_out_commits = find_next_commit(
+            commit["bug_id"],
+            bug_to_commit_dict,
+            commit["node"],
+            commit["backedoutby"],
+        )
 
-            # generate the hashes of the bug-inducing commit, the backout commit, and the fixing commit
-            # include metadata such as push date and description for further context
+        # If the fixing commit could not be found, omit from dataset. Add to a separate file for logging purposes.
+        if not fixing_commit:
             yield {
                 "non_backed_out_commits": non_backed_out_commits,
-                "fix_found": True,
+                "fix_found": False,
                 "bug_id": commit["bug_id"],
                 "inducing_commit": {
                     "node": commit["node"],
@@ -119,12 +99,33 @@ def filter_commits(
                     "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
                     "desc": commit_dict[commit["backedoutby"]]["desc"],
                 },
-                "fixing_commit": {
-                    "node": fixing_commit["node"],
-                    "pushdate": fixing_commit["pushdate"],
-                    "desc": fixing_commit["desc"],
-                },
             }
+            continue
+
+        commit_diff = repository.get_diff(
+            repo_dir, commit["node"], fixing_commit["node"]
+        )
+        yield {
+            "non_backed_out_commits": non_backed_out_commits,
+            "fix_found": True,
+            "bug_id": commit["bug_id"],
+            "inducing_commit": {
+                "node": commit["node"],
+                "pushdate": commit["pushdate"],
+                "desc": commit["desc"],
+            },
+            "backout_commit": {
+                "node": commit["backedoutby"],
+                "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
+                "desc": commit_dict[commit["backedoutby"]]["desc"],
+            },
+            "fixing_commit": {
+                "node": fixing_commit["node"],
+                "pushdate": fixing_commit["pushdate"],
+                "desc": fixing_commit["desc"],
+            },
+            "commit_diff": commit_diff,
+        }
 
         if counter >= commit_limit:
             break
@@ -139,7 +140,8 @@ def find_next_commit(
     non_backed_out_counter = 0
 
     for commit in bug_to_commit_dict[bug_id]:
-        # if the backout commit is found, find the next commit that isn't backed out by any other commit
+        # If the backout commit has been found in the bug's commit history,
+        # find the next commit that has not been backed out or backs out other commits.
         if backout_commit_found:
             if (
                 not commit["backedoutby"]
@@ -194,9 +196,7 @@ def save_datasets(
             if item["non_backed_out_commits"] > 1:
                 backed_out_counter += 1
 
-            # item.pop("non_backed_out_commits", None)
-
-            if item["fix_found"] and item["non_backed_out_commits"] <= 2:
+            if item["fix_found"] and item["non_backed_out_commits"] <= 1:
                 item.pop("fix_found", None)
                 if not first1:
                     file1.write(",\n")
@@ -231,11 +231,12 @@ def main():
 
     commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
 
-    data_generator = filter_commits(
-        commit_limit=1000000,
+    data_generator = generate_datapoints(
+        commit_limit=10000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
         bug_dict=bug_dict,
+        repo_dir="hg_dir",
     )
 
     save_datasets(
