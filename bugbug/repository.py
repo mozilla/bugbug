@@ -20,7 +20,17 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Collection, Iterable, Iterator, NewType, Set, Union
+from typing import (
+    Collection,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Set,
+    Tuple,
+    Union,
+)
 
 import hglib
 import lmdb
@@ -1543,7 +1553,45 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
     trigger_pull()
 
 
-def get_diff(repo_dir: str, hash_a: str, hash_b: str) -> str:
+def parse_diff(diff: bytes) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
+    """Parse the raw diff bytes into a dictionary, grouped by file, and calculate total number of changes.
+
+    Args:
+        diff: The byte output from hglib's diff command.
+
+    Returns:
+        A tuple containing the dictionary with file paths as keys and two lists of changes, and the total number of changes.
+    """
+    diff_text = diff.decode("utf-8", errors="replace")
+    files = {}
+    current_file = None
+    additions: List[str] = []
+    removals: List[str] = []
+    total_changes = 0
+
+    diff_lines = diff_text.split("\n")
+    for line in diff_lines:
+        if line.startswith("diff --git"):
+            if current_file is not None:
+                files[current_file] = {"additions": additions, "removals": removals}
+                total_changes += len(additions) + len(removals)
+            current_file = line.split()[-1][2:]  # Parse the file path
+            additions, removals = [], []
+        elif line.startswith("+") and not line.startswith("+++"):
+            additions.append(line[1:])
+        elif line.startswith("-") and not line.startswith("---"):
+            removals.append(line[1:])
+
+    if current_file is not None:
+        files[current_file] = {"additions": additions, "removals": removals}
+        total_changes += len(additions) + len(removals)
+
+    return files, total_changes
+
+
+def get_diff(
+    repo_dir: str, hash_a: str, hash_b: str
+) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
     """Fetch and parse the diff between two specific commits.
 
     Args:
@@ -1557,7 +1605,7 @@ def get_diff(repo_dir: str, hash_a: str, hash_b: str) -> str:
     hg_client = hglib.open(repo_dir)
     diff_output = hg_client.diff(revs=[hash_a, hash_b])
 
-    return str(diff_output)
+    return parse_diff(diff_output)
 
 
 if __name__ == "__main__":

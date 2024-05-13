@@ -55,6 +55,7 @@ def generate_datapoints(
     bug_to_commit_dict: dict,
     bug_dict: dict,
     repo_dir: str,
+    change_threshold: int = 100,
 ) -> Generator[Dict[str, Any], None, None]:
     counter = 0
     commit_limit = min(commit_limit, 709458)
@@ -98,9 +99,12 @@ def generate_datapoints(
             }
             continue
 
-        commit_diff = repository.get_diff(
+        commit_diff, num_changes = repository.get_diff(
             repo_dir, commit["node"], fixing_commit["node"]
         )
+
+        if num_changes > change_threshold:
+            continue
 
         yield {
             "non_backed_out_commits": non_backed_out_commits,
@@ -121,6 +125,7 @@ def generate_datapoints(
                 "pushdate": fixing_commit["pushdate"],
                 "desc": fixing_commit["desc"],
             },
+            "num_changes": num_changes,
             "commit_diff": commit_diff,
         }
 
@@ -230,11 +235,12 @@ def main():
     commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
 
     data_generator = generate_datapoints(
-        commit_limit=10000,
+        commit_limit=50000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
         bug_dict=bug_dict,
         repo_dir="hg_dir",
+        change_threshold=100,
     )
 
     save_datasets(
