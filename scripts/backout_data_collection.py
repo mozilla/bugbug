@@ -3,6 +3,8 @@ import logging
 import os
 from typing import Any, Dict, Generator, Tuple
 
+from tqdm import tqdm
+
 from bugbug import bugzilla, db, repository
 
 logging.basicConfig(level=logging.INFO)
@@ -62,8 +64,10 @@ def generate_datapoints(
 
     logger.info("Generating datapoints...")
 
-    for commit in repository.get_commits(
-        include_no_bug=True, include_backouts=True, include_ignored=True
+    for commit in tqdm(
+        repository.get_commits(
+            include_no_bug=True, include_backouts=True, include_ignored=True
+        )
     ):
         bug_info = bug_dict.get(commit["bug_id"])
 
@@ -103,7 +107,7 @@ def generate_datapoints(
             repo_dir, commit["node"], fixing_commit["node"]
         )
 
-        if num_changes > change_threshold:
+        if num_changes > change_threshold or num_changes == -1:
             continue
 
         yield {
@@ -235,12 +239,12 @@ def main():
     commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
 
     data_generator = generate_datapoints(
-        commit_limit=50000,
+        commit_limit=100000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
         bug_dict=bug_dict,
         repo_dir="hg_dir",
-        change_threshold=100,
+        change_threshold=1000000,
     )
 
     save_datasets(
@@ -253,3 +257,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # test, test2 = repository.get_diff("hg_dir", "e63a23edb90c92f0cd591e0507906f14978a1f4f", "44853b2a5fc227fe6cbac4e89ab5d44db14ee81e")
+    # print(test2)
