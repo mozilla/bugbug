@@ -1575,7 +1575,7 @@ def parse_diff(diff: bytes) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
             if current_file is not None:
                 files[current_file] = {"additions": additions, "removals": removals}
                 total_changes += len(additions) + len(removals)
-            current_file = line.split()[-1][2:]  # Parse the file path
+            current_file = line.split()[-1][2:]
             additions, removals = [], []
         elif line.startswith("+") and not line.startswith("+++"):
             additions.append(line[1:])
@@ -1590,22 +1590,75 @@ def parse_diff(diff: bytes) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
 
 
 def get_diff(
-    repo_dir: str, hash_a: str, hash_b: str
+    repo_path, original_hash, fix_hash
 ) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
-    """Fetch and parse the diff between two specific commits.
+    client = hglib.open(repo_path)
+
+    current_rev = client.identify(id=True)
+
+    try:
+        client.rawcommand([b"shelve"])
+    except Exception:
+        pass
+
+    parents = client.parents(rev=fix_hash)
+    parent_of_fix = parents[0][1]
+    client.update(rev=parent_of_fix, clean=True)
+
+    print(f"OG HASH: {original_hash}, FIX HASH: {fix_hash}")
+    graft_result = graft(
+        client, revs=[original_hash], no_commit=True, force=True, c=False
+    )
+
+    if not graft_result:
+        return {}, -1
+
+    final_diff = client.diff(
+        revs=[fix_hash], ignoreallspace=True, ignorespacechange=True
+    )
+
+    client.update(rev=current_rev, clean=True)
+
+    return parse_diff(final_diff)
+
+
+global counter
+counter = 0
+
+
+def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
+    """Graft changesets specified by revs into the current repository state.
 
     Args:
-        repo_dir: The path to the directory of the cloned Mercurial repository.
-        hash_a: The hash of the first commit.
-        hash_b: The hash of the second commit.
+        client: The hglib client.
+        revs: A list of the hashes of the commits to be applied to the current repository state.
+        no_commit: If True, does not commit and just applies changes in working directory.
+        force: If True, forces the grafts even if the revs are ancestors of the current repository state.
+        c: If True, resumes interrupted grafts.
 
     Returns:
-         A structured and readable diff between the two commits.
+        Boolean of graft operation result (True for success, False for failure).
     """
-    hg_client = hglib.open(repo_dir)
-    diff_output = hg_client.diff(revs=[hash_a, hash_b])
+    global counter
+    counter += 1
+    print(f"COUNTER: {counter}")
+    args = hglib.util.cmdbuilder(
+        str.encode("graft"), r=revs, no_commit=no_commit, f=force, c=c
+    )
 
-    return parse_diff(diff_output)
+    print(f"ARGS: {args}")
+
+    eh = hglib.util.reterrorhandler(args)
+
+    client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
+
+    return True
+
+
+def auto_resolve_conflict_prompt(max_bytes, current_output):
+    if b"was deleted in" in current_output:
+        return b"c\n"  # Return 'c' to use the changed version
+    return b"\n"  # Default to doing nothing, just proceed
 
 
 if __name__ == "__main__":
