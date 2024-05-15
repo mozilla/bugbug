@@ -1605,7 +1605,6 @@ def get_diff(
     parent_of_fix = parents[0][1]
     client.update(rev=parent_of_fix, clean=True)
 
-    print(f"OG HASH: {original_hash}, FIX HASH: {fix_hash}")
     graft_result = graft(
         client, revs=[original_hash], no_commit=True, force=True, c=False
     )
@@ -1622,10 +1621,6 @@ def get_diff(
     return parse_diff(final_diff)
 
 
-global counter
-counter = 0
-
-
 def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
     """Graft changesets specified by revs into the current repository state.
 
@@ -1639,18 +1634,16 @@ def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
     Returns:
         Boolean of graft operation result (True for success, False for failure).
     """
-    global counter
-    counter += 1
-    print(f"COUNTER: {counter}")
     args = hglib.util.cmdbuilder(
         str.encode("graft"), r=revs, no_commit=no_commit, f=force, c=c
     )
 
-    print(f"ARGS: {args}")
-
     eh = hglib.util.reterrorhandler(args)
 
-    client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
+    try:
+        client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
+    except Exception:
+        return False
 
     return True
 
