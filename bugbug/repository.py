@@ -22,13 +22,10 @@ from datetime import datetime
 from functools import lru_cache
 from typing import (
     Collection,
-    Dict,
     Iterable,
     Iterator,
-    List,
     NewType,
     Set,
-    Tuple,
     Union,
 )
 
@@ -1553,45 +1550,7 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
     trigger_pull()
 
 
-def parse_diff(diff: bytes) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
-    """Parse the raw diff bytes into a dictionary, grouped by file, and calculate total number of changes.
-
-    Args:
-        diff: The byte output from hglib's diff command.
-
-    Returns:
-        A tuple containing the dictionary with file paths as keys and two lists of changes, and the total number of changes.
-    """
-    diff_text = diff.decode("utf-8", errors="replace")
-    files = {}
-    current_file = None
-    additions: List[str] = []
-    removals: List[str] = []
-    total_changes = 0
-
-    diff_lines = diff_text.split("\n")
-    for line in diff_lines:
-        if line.startswith("diff --git"):
-            if current_file is not None:
-                files[current_file] = {"additions": additions, "removals": removals}
-                total_changes += len(additions) + len(removals)
-            current_file = line.split()[-1][2:]
-            additions, removals = [], []
-        elif line.startswith("+") and not line.startswith("+++"):
-            additions.append(line[1:])
-        elif line.startswith("-") and not line.startswith("---"):
-            removals.append(line[1:])
-
-    if current_file is not None:
-        files[current_file] = {"additions": additions, "removals": removals}
-        total_changes += len(additions) + len(removals)
-
-    return files, total_changes
-
-
-def get_diff(
-    repo_path, original_hash, fix_hash
-) -> Tuple[Dict[str, Dict[str, List[str]]], int]:
+def get_diff(repo_path, original_hash, fix_hash) -> bytes:
     client = hglib.open(repo_path)
 
     current_rev = client.identify(id=True)
@@ -1610,7 +1569,7 @@ def get_diff(
     )
 
     if not graft_result:
-        return {}, -1
+        return b""
 
     final_diff = client.diff(
         revs=[fix_hash], ignoreallspace=True, ignorespacechange=True
@@ -1618,7 +1577,7 @@ def get_diff(
 
     client.update(rev=current_rev, clean=True)
 
-    return parse_diff(final_diff)
+    return final_diff
 
 
 def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
