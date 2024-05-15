@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, Tuple
 
 from tqdm import tqdm
@@ -69,9 +70,14 @@ def generate_datapoints(
             include_no_bug=True, include_backouts=True, include_ignored=True
         )
     ):
+        counter += 1
+
         bug_info = bug_dict.get(commit["bug_id"])
 
-        counter += 1
+        pushdate = datetime.strptime(commit["pushdate"], "%Y-%m-%d %H:%M:%S")
+
+        if (datetime.now() - pushdate) > timedelta(days=730):
+            continue
 
         if not commit["backedoutby"] or bug_info != "FIXED":
             continue
@@ -84,30 +90,14 @@ def generate_datapoints(
             commit["backedoutby"],
         )
 
-        # If the fixing commit could not be found, omit from dataset. Add to a separate file for logging purposes.
-        if not fixing_commit:
-            yield {
-                "non_backed_out_commits": non_backed_out_commits,
-                "fix_found": False,
-                "bug_id": commit["bug_id"],
-                "inducing_commit": {
-                    "node": commit["node"],
-                    "pushdate": commit["pushdate"],
-                    "desc": commit["desc"],
-                },
-                "backout_commit": {
-                    "node": commit["backedoutby"],
-                    "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
-                    "desc": commit_dict[commit["backedoutby"]]["desc"],
-                },
-            }
+        if not fixing_commit or non_backed_out_commits > 1:
             continue
 
         commit_diff, num_changes = repository.get_diff(
             repo_dir, commit["node"], fixing_commit["node"]
         )
 
-        if num_changes > change_threshold or num_changes == -1:
+        if num_changes > change_threshold or num_changes < 0:
             continue
 
         yield {
@@ -173,64 +163,51 @@ def find_next_commit(
 
 
 def save_datasets(
-    directory_path: str,
-    dataset_filename: str,
-    no_fix_commit_filename: str,
-    data_generator,
+    directory_path: str, dataset_filename: str, data_generator, batch_size: int = 10
 ) -> None:
     if not os.path.exists(directory_path):
         os.makedirs(directory_path)
         logger.info(f"Directory {directory_path} created")
 
     dataset_filepath = os.path.join(directory_path, dataset_filename)
-    no_fix_commit_filepath = os.path.join(directory_path, no_fix_commit_filename)
 
     fix_found_counter = 0
-    no_fix_found_counter = 0
-    backed_out_counter = 0
+    fix_batch = []
 
-    with open(dataset_filepath, "w") as file1, open(
-        no_fix_commit_filepath, "w"
-    ) as file2:
-        file1.write("[\n")
-        first1 = True
-
-        file2.write("[\n")
-        first2 = True
+    with open(dataset_filepath, "w") as file:
+        file.write("[\n")
+        first = True
 
         logger.info("Populating dataset...")
         for item in data_generator:
-            if item["non_backed_out_commits"] > 1:
-                backed_out_counter += 1
+            item.pop("fix_found", None)
+            fix_batch.append(item)
+            fix_found_counter += 1
 
-            if item["fix_found"] and item["non_backed_out_commits"] <= 1:
-                item.pop("fix_found", None)
-                if not first1:
-                    file1.write(",\n")
-                json_data = json.dumps(item, indent=4)
-                file1.write(json_data)
-                first1 = False
-                fix_found_counter += 1
-            elif not item["fix_found"]:
-                item.pop("fix_found", None)
-                if not first2:
-                    file2.write(",\n")
-                json_data = json.dumps(item, indent=4)
-                file2.write(json_data)
-                first2 = False
-                no_fix_found_counter += 1
+            if len(fix_batch) >= batch_size:
+                if not first:
+                    file.write(",\n")
+                else:
+                    first = False
 
-        file1.write("\n]")
-        file2.write("\n]")
+                json_data = ",\n".join(json.dumps(i, indent=4) for i in fix_batch)
+                file.write(json_data)
+                file.flush()
+                os.fsync(file.fileno())
+                fix_batch = []
+
+        if fix_batch:
+            if not first:
+                file.write(",\n")
+            json_data = ",\n".join(json.dumps(i, indent=4) for i in fix_batch)
+            file.write(json_data)
+            file.flush()
+            os.fsync(file.fileno())
+
+        file.write("\n]")
 
     logger.info(f"Dataset successfully saved to {dataset_filepath}")
-    logger.info(f"Commits without a fix successfully saved to {no_fix_commit_filepath}")
-
     logger.info(f"Number of commits with fix found saved: {fix_found_counter}")
-    logger.info(f"Number of commits with no fix found saved: {no_fix_found_counter}")
-    logger.info(
-        f"Number of commits with multiple non backed out commits following it: {backed_out_counter}"
-    )
 
 
 def main():
@@ -239,23 +216,20 @@ def main():
     commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
 
     data_generator = generate_datapoints(
-        commit_limit=100000,
+        commit_limit=1000000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
         bug_dict=bug_dict,
         repo_dir="hg_dir",
-        change_threshold=1000000,
+        change_threshold=1000,
     )
 
     save_datasets(
         directory_path="dataset",
         dataset_filename="backout_dataset.json",
-        no_fix_commit_filename="no_fix_dataset.json",
         data_generator=data_generator,
     )
 
 
 if __name__ == "__main__":
     main()
-    # test, test2 = repository.get_diff("hg_dir", "e63a23edb90c92f0cd591e0507906f14978a1f4f", "44853b2a5fc227fe6cbac4e89ab5d44db14ee81e")
-    # print(test2)
