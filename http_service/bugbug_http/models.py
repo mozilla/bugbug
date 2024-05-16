@@ -38,6 +38,7 @@ MODELS_NAMES = [
     "accessibility",
     "performancebug",
     "worksforme",
+    "fenixcomponent",
 ]
 
 DEFAULT_EXPIRATION_TTL = 7 * 24 * 3600  # A week
