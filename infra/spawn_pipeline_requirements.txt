@@ -1,4 +1,4 @@
 json-e==4.7.0
 pyyaml==6.0.1
-requests==2.31.0
+requests==2.32.0
 taskcluster==64.2.8
