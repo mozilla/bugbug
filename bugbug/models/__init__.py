@@ -37,6 +37,7 @@ MODELS = {
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
     "worksforme": "bugbug.models.worksforme.WorksForMeModel",
+    "fenixcomponent": "bugbug.models.fenixcomponent.FenixComponentModel",
 }
 
 
