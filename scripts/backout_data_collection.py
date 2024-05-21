@@ -33,7 +33,6 @@ def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
         commit_dict[commit["node"]] = {
             "node": commit["node"],
             "bug_id": commit["bug_id"],
-            "desc": commit["desc"],
             "pushdate": commit["pushdate"],
             "backedoutby": commit["backedoutby"],
             "backsout": commit["backsout"],
@@ -105,21 +104,9 @@ def generate_datapoints(
             "non_backed_out_commits": non_backed_out_commits,
             "fix_found": True,
             "bug_id": commit["bug_id"],
-            "inducing_commit": {
-                "node": commit["node"],
-                "pushdate": commit["pushdate"],
-                "desc": commit["desc"],
-            },
-            "backout_commit": {
-                "node": commit["backedoutby"],
-                "pushdate": commit_dict[commit["backedoutby"]]["pushdate"],
-                "desc": commit_dict[commit["backedoutby"]]["desc"],
-            },
-            "fixing_commit": {
-                "node": fixing_commit["node"],
-                "pushdate": fixing_commit["pushdate"],
-                "desc": fixing_commit["desc"],
-            },
+            "inducing_commit": commit["node"],
+            "backout_commit": commit["backedoutby"],
+            "fixing_commit": fixing_commit["node"],
             "commit_diff": commit_diff_encoded,
         }
 
@@ -227,7 +214,7 @@ def main():
         directory_path="dataset",
         dataset_filename="backout_dataset.json",
         data_generator=data_generator,
-        batch_size=10,
+        batch_size=1,
     )
 
 

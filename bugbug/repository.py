@@ -1572,7 +1572,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
         return b""
 
     final_diff = client.diff(
-        revs=[fix_hash], ignoreallspace=True, ignorespacechange=True
+        revs=[fix_hash], ignoreallspace=True, ignorespacechange=True, reverse=True
     )
 
     client.update(rev=current_rev, clean=True)
