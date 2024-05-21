@@ -80,7 +80,9 @@ class FenixComponentModel(BugModel):
         )
 
     def get_labels(self):
-        fenix_component_classes = {}
+        classes = {}
+
+        date_limit = datetime.now(timezone.utc) - relativedelta(years=2)
 
         for bug_data in bugzilla.get_bugs():
             if bug_data["product"] != "Fenix":
@@ -90,14 +92,12 @@ class FenixComponentModel(BugModel):
             if bug_data["component"] == "General":
                 continue
 
-            if dateutil.parser.parse(bug_data["creation_time"]) < datetime.now(
-                timezone.utc
-            ) - relativedelta(years=2):
+            if dateutil.parser.parse(bug_data["creation_time"]) < date_limit:
                 continue
 
-            fenix_component_classes[int(bug_data["id"])] = bug_data["component"]
+            classes[int(bug_data["id"])] = bug_data["component"]
 
-        return fenix_component_classes, set(fenix_component_classes.values())
+        return classes, set(classes.values())
 
     def get_feature_names(self):
         return self.clf.named_steps["union"].get_feature_names_out()
