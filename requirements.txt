@@ -11,7 +11,7 @@ microannotate==0.0.24
 mozci==2.4.0
 numpy==1.26.4
 orjson==3.10.3
-ortools==9.9.3963
+ortools==9.10.4067
 pandas==2.2.2
 psutil==5.9.8
 pydriller==1.12
