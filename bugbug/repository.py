@@ -1588,7 +1588,7 @@ def graft(client, revs, no_commit=False, force=False, tool=":mergediff") -> bool
         revs: A list of the hashes of the commits to be applied to the current repository state.
         no_commit: If True, does not commit and just applies changes in working directory.
         force: If True, forces the grafts even if the revs are ancestors of the current repository state.
-        c: If True, resumes interrupted grafts.
+        tool: A string representing a merge tool (see `hg help merge-tools`).
 
     Returns:
         Boolean of graft operation result (True for success, False for failure).
