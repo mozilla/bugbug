@@ -1,8 +1,8 @@
 import json
 import logging
 import os
+from collections.abc import Generator
 from datetime import datetime, timedelta
-from typing import Any, Dict, Generator, Tuple
 
 from tqdm import tqdm
 
@@ -23,7 +23,7 @@ def download_databases() -> None:
     assert db.download(repository.COMMITS_DB, support_files_too=True)
 
 
-def preprocess_commits_and_bugs() -> Tuple[Dict, Dict, Dict]:
+def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
     logger.info("Preprocessing commits and bugs...")
     commit_dict, bug_to_commit_dict, bug_dict = {}, {}, {}
 
@@ -57,7 +57,7 @@ def generate_datapoints(
     bug_to_commit_dict: dict,
     bug_dict: dict,
     repo_dir: str,
-) -> Generator[Dict[str, Any], None, None]:
+) -> Generator[dict, None, None]:
     counter = 0
     commit_limit = min(commit_limit, 709458)
 
@@ -116,7 +116,7 @@ def generate_datapoints(
 
 def find_next_commit(
     bug_id: int, bug_to_commit_dict: dict, inducing_node: str, backout_node: str
-) -> Tuple[Dict, int]:
+) -> tuple[dict, int]:
     backout_commit_found = False
     fixing_commit = None
 
@@ -214,7 +214,7 @@ def main():
         directory_path="dataset",
         dataset_filename="backout_dataset.json",
         data_generator=data_generator,
-        batch_size=1,
+        batch_size=10,
     )
 
 
