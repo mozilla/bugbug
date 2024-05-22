@@ -1565,7 +1565,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
     client.update(rev=parent_of_fix, clean=True)
 
     graft_result = graft(
-        client, revs=[original_hash], no_commit=True, force=True, c=False
+        client, revs=[original_hash], no_commit=True, force=True, tool=":mergediff"
     )
 
     if not graft_result:
@@ -1580,7 +1580,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
     return final_diff
 
 
-def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
+def graft(client, revs, no_commit=False, force=False, tool=":mergediff") -> bool:
     """Graft changesets specified by revs into the current repository state.
 
     Args:
@@ -1594,7 +1594,7 @@ def graft(client, revs, no_commit=False, force=False, c=False) -> bool:
         Boolean of graft operation result (True for success, False for failure).
     """
     args = hglib.util.cmdbuilder(
-        str.encode("graft"), r=revs, no_commit=no_commit, f=force, c=c
+        str.encode("graft"), r=revs, no_commit=no_commit, f=force, tool=tool
     )
 
     eh = hglib.util.reterrorhandler(args)
