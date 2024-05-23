@@ -51,6 +51,12 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
     return commit_dict, bug_to_commit_dict, bug_dict
 
 
+def has_conflicts(diff: str) -> bool:
+    """Return True if the diff contains any conflict markers. Used with merge-tool ':fail'."""
+    conflict_markers = ["<<<<<<<", "=======", ">>>>>>>"]
+    return any(marker in diff for marker in conflict_markers)
+
+
 def generate_datapoints(
     commit_limit: int,
     commit_dict: dict,
@@ -99,6 +105,9 @@ def generate_datapoints(
             continue
 
         commit_diff_encoded = commit_diff.decode("utf-8")
+
+        if has_conflicts(commit_diff_encoded):
+            continue
 
         yield {
             "non_backed_out_commits": non_backed_out_commits,
@@ -214,7 +223,7 @@ def main():
         directory_path="dataset",
         dataset_filename="backout_dataset.json",
         data_generator=data_generator,
-        batch_size=10,
+        batch_size=1,
     )
 
 

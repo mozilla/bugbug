@@ -1565,7 +1565,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
     client.update(rev=parent_of_fix, clean=True)
 
     graft_result = graft(
-        client, revs=[original_hash], no_commit=True, force=True, tool=":mergediff"
+        client, revs=[original_hash], no_commit=True, force=True, tool=":merge"
     )
 
     if not graft_result:
@@ -1580,7 +1580,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
     return final_diff
 
 
-def graft(client, revs, no_commit=False, force=False, tool=":mergediff") -> bool:
+def graft(client, revs, no_commit=False, force=False, tool=":merge") -> bool:
     """Graft changesets specified by revs into the current repository state.
 
     Args:
