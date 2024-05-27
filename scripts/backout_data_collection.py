@@ -25,28 +25,24 @@ def download_databases() -> None:
 
 def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
     logger.info("Preprocessing commits and bugs...")
-    commit_dict, bug_to_commit_dict, bug_dict = {}, {}, {}
+    commit_dict, bug_dict = {}, {}
+    bug_to_commit_dict: dict[int, list] = {}
 
     for commit in repository.get_commits(
         include_no_bug=True, include_backouts=True, include_ignored=True
     ):
-        commit_dict[commit["node"]] = {
-            "node": commit["node"],
-            "bug_id": commit["bug_id"],
-            "pushdate": commit["pushdate"],
-            "backedoutby": commit["backedoutby"],
-            "backsout": commit["backsout"],
+        commit_data = {
+            key: commit[key]
+            for key in ["node", "bug_id", "pushdate", "backedoutby", "backsout"]
         }
+        commit_dict[commit["node"]] = commit_data
 
-        bug_id = commit["bug_id"]
-        if bug_id not in bug_to_commit_dict:
-            bug_to_commit_dict[bug_id] = [commit_dict[commit["node"]]]
-        else:
-            bug_to_commit_dict[bug_id].append(commit_dict[commit["node"]])
+        bug_to_commit_dict.setdefault(commit["bug_id"], []).append(commit_data)
 
     # We only require the bug's resolution (to check if it is 'FIXED').
-    for bug in bugzilla.get_bugs(include_invalid=True):
-        bug_dict[bug.get("id")] = bug["resolution"]
+    bug_dict = {
+        bug["id"]: bug["resolution"] for bug in bugzilla.get_bugs(include_invalid=True)
+    }
 
     return commit_dict, bug_to_commit_dict, bug_dict
 
@@ -161,9 +157,8 @@ def find_next_commit(
 def save_datasets(
     directory_path: str, dataset_filename: str, data_generator, batch_size: int = 10
 ) -> None:
-    if not os.path.exists(directory_path):
-        os.makedirs(directory_path)
-        logger.info(f"Directory {directory_path} created")
+    os.makedirs(directory_path, exist_ok=True)
+    logger.info(f"Directory {directory_path} created")
 
     dataset_filepath = os.path.join(directory_path, dataset_filename)
 
