@@ -147,6 +147,8 @@ class InlineComment:
     end_line: int
     comment: str
     on_added_code: bool
+    id: int | None = None
+    date_created: int | None = None
 
 
 def find_comment_scope(file: PatchedFile, line_number: int):

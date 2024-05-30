@@ -18,6 +18,7 @@ pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.9.0.post0
 python-hglib==2.6.2
+qdrant-client==1.9.1
 ratelimit==2.2.1
 requests==2.32.0
 rs_parsepatch==0.4.0
