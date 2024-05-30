@@ -6,7 +6,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from langchain.llms.human import HumanInputLLM
+from langchain_community.llms import HumanInputLLM
 from langchain_openai import ChatOpenAI
 
 from bugbug.utils import get_secret
