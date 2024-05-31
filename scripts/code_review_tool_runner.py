@@ -16,14 +16,16 @@ def run(args) -> None:
     code_review_tool = code_review.CodeReviewTool(llm)
 
     review_data = code_review.review_data_classes[args.review_platform]()
-
-    revision = review_data.get_review_request_by_id(args.review_request_id)
-    patch = review_data.get_patch_by_id(revision.patch_id)
-
+    
+    if args.review_platform == 'phabricator':
+        revision = review_data.get_review_request_by_id(args.review_request_id)
+        patch = review_data.get_patch_by_id(revision.patch_id)
+    elif args.review_platform == 'swarm':
+        patch = review_data.get_patch_by_version_fromto(args.review_request_id)
     print(patch)
     print(code_review_tool.run(patch))
     input()
-
+    
 
 def parse_args(args):
     parser = argparse.ArgumentParser()
@@ -39,7 +41,7 @@ def parse_args(args):
     parser.add_argument(
         "--llm",
         help="LLM",
-        choices=["human", "openai", "llama2"],
+        choices=["human", "openai", "azureopenai", "llama2"],
     )
     return parser.parse_args(args)
 
