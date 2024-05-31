@@ -3,15 +3,21 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import re
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass
+from typing import Iterable
 
+import tenacity
 from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
+from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
+from unidiff.errors import UnidiffParseError
 
-from bugbug import phabricator
+from bugbug import db, phabricator
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 
@@ -120,6 +126,8 @@ class Patch:
 
 
 class ReviewData(ABC):
+    NIT_PATTERN = re.compile(r"[^a-zA-Z0-9]nit[\s:,]", re.IGNORECASE)
+
     @abstractmethod
     def get_review_request_by_id(self, review_id: int) -> ReviewRequest:
         raise NotImplementedError
@@ -128,9 +136,121 @@ class ReviewData(ABC):
     def get_patch_by_id(self, patch_id: int) -> Patch:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_all_inline_comments(
+        self, comment_filter
+    ) -> Iterable[tuple[int, list[InlineComment]]]:
+        raise NotImplementedError
+
+    def load_patch_by_id(self, diff_id) -> Patch:
+        """Load a patch from local cache if it exists.
+
+        If the patch is not in the local cache it will be requested from the
+        provider and cache it locally.
+
+        Args:
+            diff_id: The ID of the patch.
+
+        Returns:
+            The patch.
+        """
+        try:
+            with open(f"patches/{diff_id}.patch", "r") as f:
+                patch = Patch(f.read())
+        except FileNotFoundError:
+            with open(f"patches/{diff_id}.patch", "w") as f:
+                patch = self.get_patch_by_id(diff_id)
+                f.write(patch.raw_diff)
+
+        return patch
+
+    def get_matching_hunk(self, patched_file: PatchedFile, start_line: int) -> Hunk:
+        matching_hunks = [
+            hunk
+            for hunk in patched_file
+            if hunk.target_start <= start_line < hunk.target_start + hunk.target_length
+            or hunk.source_start <= start_line < hunk.source_start + hunk.source_length
+        ]
+
+        # If there is more than one matching hunk, choose the one where the
+        # line number of the comment corresponds to an added or deleted line. We
+        # prioritize added lines over deleted lines because comments are more
+        # likely to be on added lines than deleted lines.
+        if len(matching_hunks) > 1:
+            for hunk in matching_hunks:
+                for line in hunk:
+                    if line.is_added and line.target_line_no == start_line:
+                        return hunk
+
+                for line in hunk:
+                    if line.is_removed and line.source_line_no == start_line:
+                        return hunk
+
+        if len(matching_hunks) != 0:
+            return matching_hunks[0]
+
+    def retrieve_comments_with_hunks(self):
+        def comment_filter(comment: InlineComment):
+            comment_content = comment.comment
+
+            # Ignore very short and very log comments
+            if not 50 < len(comment_content) < 500:
+                return False
+
+            # Ignore comments with URLs
+            if "https://" in comment_content or "http://" in comment_content:
+                return False
+
+            #  Ignore nit comments
+            if self.NIT_PATTERN.search(comment_content):
+                return False
+
+            # Ignore comments with code blocks
+            if "```" in comment_content:
+                return False
+
+            comment_lower = comment_content.lower()
+            if any(
+                phrase in comment_lower
+                for phrase in [
+                    "wdyt?",
+                    "what do you think?",
+                    "you explain",
+                    "understand",
+                ]
+            ):
+                return False
+
+        for diff_id, comments in self.get_all_inline_comments(comment_filter):
+            try:
+                patch_set = PatchSet.from_string(
+                    self.load_patch_by_id(diff_id).raw_diff
+                )
+            except UnidiffParseError:
+                # TODO: use log instead of print
+                print(f"Failed to parse {diff_id}")
+                continue
+
+            file_map = {
+                patched_file.path: patched_file
+                for patched_file in patch_set
+                if patched_file.is_modified_file
+            }
+            for comment in comments:
+                patched_file = file_map.get(comment.filename)
+                if not patched_file:
+                    continue
+
+                hunk = self.get_matching_hunk(patched_file, comment)
+                if not hunk:
+                    continue
+
+                yield comment, hunk
+
 
 class PhabricatorReviewData(ReviewData):
     def __init__(self):
+        super().__init__()
         phabricator.set_api_key(
             get_secret("PHABRICATOR_URL"), get_secret("PHABRICATOR_TOKEN")
         )
@@ -140,10 +260,80 @@ class PhabricatorReviewData(ReviewData):
         assert len(revisions) == 1
         return ReviewRequest(revisions[0]["fields"]["diffID"])
 
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(7),
+        wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+        reraise=True,
+    )
     def get_patch_by_id(self, patch_id: int) -> Patch:
         assert phabricator.PHABRICATOR_API is not None
         raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(int(patch_id))
         return Patch(raw_diff)
+
+    def _get_revisions_count(self):
+        return sum(1 for _ in phabricator.get_revisions())
+
+    def get_all_inline_comments(
+        self, comment_filter
+    ) -> Iterable[tuple[int, list[InlineComment]]]:
+        db.download(phabricator.REVISIONS_DB)
+
+        for revision in tqdm(
+            phabricator.get_revisions(), total=self._get_revisions_count()
+        ):
+            diff_comments: dict[int, list[InlineComment]] = defaultdict(list)
+
+            for transaction in revision["transactions"]:
+                if transaction["type"] != "inline":
+                    continue
+
+                # Ignore replies
+                if transaction["fields"]["replyToCommentPHID"] is not None:
+                    continue
+
+                # Ignore bot comments
+                if transaction["authorPHID"] == "PHID-USER-cje4weq32o3xyuegalpj":
+                    continue
+
+                if len(transaction["comments"]) != 1:
+                    print(transaction)
+                    # raise Exception("Unexpected, need to look into it")
+                    continue
+
+                transaction_comment = transaction["comments"][0]
+                comment_id = transaction_comment["id"]
+                date_created = transaction_comment["dateCreated"]
+                comment_content = transaction_comment["content"]["raw"]
+
+                diff_id = transaction["fields"]["diff"]["id"]
+                filename = transaction["fields"]["path"]
+                start_line = transaction["fields"]["line"]
+                end_line = (
+                    transaction["fields"]["line"] + transaction["fields"]["length"] - 1
+                )
+                # Unfortunately, we do not have this information for a limitation
+                # in Phabricator's API. We assume it as true as a workaround.
+                on_added_code = True
+
+                # TODO: we could create an extended dataclass for this
+                # instead of adding optional fields.
+                comment = InlineComment(
+                    filename,
+                    start_line,
+                    end_line,
+                    comment_content,
+                    on_added_code,
+                    comment_id,
+                    date_created,
+                )
+
+                if not comment_filter(comment):
+                    continue
+
+                diff_comments[diff_id].append(comment)
+
+            for diff_id, comments in diff_comments.items():
+                yield diff_id, comments
 
 
 review_data_classes = {
