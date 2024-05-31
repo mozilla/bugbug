@@ -16,6 +16,17 @@ from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 
 
+@dataclass
+class InlineComment:
+    filename: str
+    start_line: int
+    end_line: int
+    comment: str
+    on_added_code: bool
+    id: int | None = None
+    date_created: int | None = None
+
+
 class ModelResultError(Exception):
     """Occurs when the model returns an unexpected result."""
 
@@ -138,17 +149,6 @@ class PhabricatorReviewData(ReviewData):
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
 }
-
-
-@dataclass
-class InlineComment:
-    filename: str
-    start_line: int
-    end_line: int
-    comment: str
-    on_added_code: bool
-    id: int | None = None
-    date_created: int | None = None
 
 
 def find_comment_scope(file: PatchedFile, line_number: int):
