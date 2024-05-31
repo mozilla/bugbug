@@ -15,6 +15,7 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from unidiff import Hunk
 
 from bugbug.tools.code_review import InlineComment
+from bugbug.utils import get_secret
 
 
 @dataclass
@@ -44,12 +45,12 @@ class VectorDB(ABC):
 
 
 class QdrantVectorDB(VectorDB):
-    def __init__(
-        self, location: str, api_key: str, collection_name: str, *args, **kwargs
-    ):
+    def __init__(self, collection_name: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.collection_name = collection_name
-        self.client = QdrantClient(location=location, api_key=api_key)
+        self.client = QdrantClient(
+            location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
+        )
 
     def setup(self):
         config = VectorParams(

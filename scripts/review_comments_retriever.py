@@ -189,11 +189,7 @@ class PhabricatorReviewCommentRetriever:
 
 def main():
     retriever = PhabricatorReviewCommentRetriever()
-    vector_db = QdrantVectorDB(
-        get_secret("QDRANT_LOCATION"),
-        get_secret("QDRANT_API_KEY"),
-        "diff_comments",
-    )
+    vector_db = QdrantVectorDB("diff_comments")
     vector_db.setup()
     comments_db = ReviewCommentsDB(vector_db)
     # TODO: support resuming from where last run left off. We should run it from
