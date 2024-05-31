@@ -245,6 +245,8 @@ class ReviewData(ABC):
             ):
                 return False
 
+            return True
+
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
                 patch_set = PatchSet.from_string(
