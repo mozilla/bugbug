@@ -6,7 +6,6 @@
 import re
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from itertools import islice
 from typing import Iterable
 
 from langchain_openai import OpenAIEmbeddings
@@ -16,19 +15,6 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from unidiff import Hunk
 
 from bugbug.tools.code_review import InlineComment
-
-
-# TODO: Replace this with `from itertools import batched` once we move to
-# Python 3.12. The function below was copied from Itertools recipes.
-# Source: https://docs.python.org/3.11/library/itertools.html#itertools-recipes
-def batched(iterable, n):
-    """Batch data into tuples of length n. The last batch may be shorter."""
-    # batched('ABCDEFG', 3) --> ABC DEF G
-    if n < 1:
-        raise ValueError("n must be at least one")
-    it = iter(iterable)
-    while batch := tuple(islice(it, n)):
-        yield batch
 
 
 @dataclass
@@ -49,7 +35,7 @@ class VectorDB(ABC):
         ...
 
     @abstractmethod
-    def upsert(self, points: Iterable[VectorPoint]):
+    def insert(self, points: Iterable[VectorPoint]):
         ...
 
     @abstractmethod
@@ -77,17 +63,17 @@ class QdrantVectorDB(VectorDB):
             if e.status_code != 409:
                 raise Exception("Failed to create collection") from e
 
-    def upsert(self, points: Iterable[VectorPoint]):
-        self.client.upsert(
+    def insert(self, points: Iterable[VectorPoint]):
+        self.client.upload_points(
             self.collection_name,
-            [
+            (
                 PointStruct(
                     id=point.id,
                     vector=point.vector,
                     payload=point.payload,
                 )
                 for point in points
-            ],
+            ),
         )
 
     def search(self, query: list[float]):
@@ -111,15 +97,14 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        for batch in batched(items, 100):
-            self.vector_db.upsert(
-                VectorPoint(
-                    id=comment.id,
-                    vector=self.embeddings.embed_query(str(hunk)),
-                    payload=asdict(comment),
-                )
-                for comment, hunk in batch
+        self.vector_db.insert(
+            VectorPoint(
+                id=comment.id,
+                vector=self.embeddings.embed_query(str(hunk)),
+                payload=asdict(comment),
             )
+            for comment, hunk in items
+        )
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
