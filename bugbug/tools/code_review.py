@@ -6,13 +6,14 @@
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Iterable
 
 import tenacity
 from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
+from langchain_openai import OpenAIEmbeddings
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
@@ -20,6 +21,7 @@ from unidiff.errors import UnidiffParseError
 from bugbug import db, phabricator
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
+from bugbug.vectordb import VectorDB, VectorPoint
 
 
 @dataclass
@@ -471,3 +473,33 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
 
         return raw_output
+
+
+class ReviewCommentsDB:
+    NAV_PATTERN = re.compile(r"\{nav, [^}]+\}")
+    WHITESPACE_PATTERN = re.compile(r"[\n\s]+")
+
+    def __init__(self, vector_db: VectorDB) -> None:
+        self.vector_db = vector_db
+        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+
+    def clean_comment(self, comment):
+        # TODO: use the nav info instead of removing it
+        comment = self.NAV_PATTERN.sub("", comment)
+        comment = self.WHITESPACE_PATTERN.sub(" ", comment)
+        comment = comment.strip()
+
+        return comment
+
+    def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
+        self.vector_db.insert(
+            VectorPoint(
+                id=comment.id,
+                vector=self.embeddings.embed_query(str(hunk)),
+                payload=asdict(comment),
+            )
+            for comment, hunk in items
+        )
+
+    def find_similar_hunk_comments(self, hunk: Hunk):
+        return self.vector_db.search(self.embeddings.embed_query(str(hunk)))

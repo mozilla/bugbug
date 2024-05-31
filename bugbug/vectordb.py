@@ -3,18 +3,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import re
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Iterable
 
-from langchain_openai import OpenAIEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
-from unidiff import Hunk
 
-from bugbug.tools.code_review import InlineComment
 from bugbug.utils import get_secret
 
 
@@ -79,33 +75,3 @@ class QdrantVectorDB(VectorDB):
 
     def search(self, query: list[float]):
         return self.client.search(self.collection_name, query)
-
-
-class ReviewCommentsDB:
-    NAV_PATTERN = re.compile(r"\{nav, [^}]+\}")
-    WHITESPACE_PATTERN = re.compile(r"[\n\s]+")
-
-    def __init__(self, vector_db: VectorDB) -> None:
-        self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-
-    def clean_comment(self, comment):
-        # TODO: use the nav info instead of removing it
-        comment = self.NAV_PATTERN.sub("", comment)
-        comment = self.WHITESPACE_PATTERN.sub(" ", comment)
-        comment = comment.strip()
-
-        return comment
-
-    def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        self.vector_db.insert(
-            VectorPoint(
-                id=comment.id,
-                vector=self.embeddings.embed_query(str(hunk)),
-                payload=asdict(comment),
-            )
-            for comment, hunk in items
-        )
-
-    def find_similar_hunk_comments(self, hunk: Hunk):
-        return self.vector_db.search(self.embeddings.embed_query(str(hunk)))

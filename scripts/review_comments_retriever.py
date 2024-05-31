@@ -4,8 +4,8 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.vectordb import QdrantVectorDB, ReviewCommentsDB
+from bugbug.tools.code_review import PhabricatorReviewData, ReviewCommentsDB
+from bugbug.vectordb import QdrantVectorDB
 
 
 def main():
