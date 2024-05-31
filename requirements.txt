@@ -22,7 +22,7 @@ pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpe
 python-dateutil==2.9.0.post0
 python-hglib==2.6.2
 ratelimit==2.2.1
-requests==2.32.0
+requests==2.32.3
 rs_parsepatch==0.4.0
 scikit-learn==1.4.2
 scipy==1.13.1
