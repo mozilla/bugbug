@@ -113,7 +113,7 @@ class PhabricatorReviewCommentRetriever:
                 end_line = (
                     transaction["fields"]["line"] + transaction["fields"]["length"] - 1
                 )
-                # Unfortantliy, we do not have this information for a limitation
+                # Unfortunately, we do not have this information for a limitation
                 # in Phabricator's API. We assume it as true as a workaround.
                 on_added_code = True
 
