@@ -29,8 +29,8 @@ class InlineComment:
     filename: str
     start_line: int
     end_line: int
-    comment: str
-    on_added_code: bool
+    content: str
+    on_removed_code: bool | None
     id: int | None = None
     date_created: int | None = None
 
@@ -193,7 +193,7 @@ class ReviewData(ABC):
 
     def retrieve_comments_with_hunks(self):
         def comment_filter(comment: InlineComment):
-            comment_content = comment.comment
+            comment_content = comment.content
 
             # Ignore very short and very log comments
             if not 50 < len(comment_content) < 500:
@@ -315,7 +315,7 @@ class PhabricatorReviewData(ReviewData):
                 )
                 # Unfortunately, we do not have this information for a limitation
                 # in Phabricator's API. We assume it as true as a workaround.
-                on_added_code = True
+                on_removed_code = True
 
                 # TODO: we could create an extended dataclass for this
                 # instead of adding optional fields.
@@ -324,7 +324,7 @@ class PhabricatorReviewData(ReviewData):
                     start_line,
                     end_line,
                     comment_content,
-                    on_added_code,
+                    on_removed_code,
                     comment_id,
                     date_created,
                 )
