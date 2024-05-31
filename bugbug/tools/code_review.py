@@ -166,30 +166,52 @@ class ReviewData(ABC):
 
         return patch
 
-    def get_matching_hunk(self, patched_file: PatchedFile, start_line: int) -> Hunk:
-        matching_hunks = [
-            hunk
-            for hunk in patched_file
-            if hunk.target_start <= start_line < hunk.target_start + hunk.target_length
-            or hunk.source_start <= start_line < hunk.source_start + hunk.source_length
-        ]
+    def get_matching_hunk(
+        self, patched_file: PatchedFile, comment: InlineComment
+    ) -> Hunk:
+        def source_end(hunk: Hunk) -> int:
+            return hunk.source_start + hunk.source_length
 
-        # If there is more than one matching hunk, choose the one where the
-        # line number of the comment corresponds to an added or deleted line. We
-        # prioritize added lines over deleted lines because comments are more
-        # likely to be on added lines than deleted lines.
-        if len(matching_hunks) > 1:
-            for hunk in matching_hunks:
-                for line in hunk:
-                    if line.is_added and line.target_line_no == start_line:
-                        return hunk
+        def target_end(hunk: Hunk) -> int:
+            return hunk.target_start + hunk.target_length
 
-                for line in hunk:
-                    if line.is_removed and line.source_line_no == start_line:
-                        return hunk
+        if comment.on_removed_code is None:
+            matching_hunks = [
+                hunk
+                for hunk in patched_file
+                if hunk.target_start <= comment.start_line < target_end(hunk)
+                or hunk.source_start <= comment.start_line < source_end(hunk)
+            ]
 
-        if len(matching_hunks) != 0:
-            return matching_hunks[0]
+            # If there is more than one matching hunk, choose the one where the
+            # line number of the comment corresponds to an added or deleted line. We
+            # prioritize added lines over deleted lines because comments are more
+            # likely to be on added lines than deleted lines.
+            if len(matching_hunks) > 1:
+                for hunk in matching_hunks:
+                    for line in hunk:
+                        if line.is_added and line.target_line_no == comment.start_line:
+                            return hunk
+
+                    for line in hunk:
+                        if (
+                            line.is_removed
+                            and line.source_line_no == comment.start_line
+                        ):
+                            return hunk
+
+            if len(matching_hunks) != 0:
+                return matching_hunks[0]
+
+        elif comment.on_removed_code:
+            for hunk in patched_file:
+                if hunk.source_start <= comment.start_line < source_end(hunk):
+                    return hunk
+
+        else:
+            for hunk in patched_file:
+                if hunk.target_start <= comment.start_line < target_end(hunk):
+                    return hunk
 
     def retrieve_comments_with_hunks(self):
         def comment_filter(comment: InlineComment):
