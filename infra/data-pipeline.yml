@@ -1329,7 +1329,7 @@ tasks:
           - fenixcomponent
 
         artifacts:
-          public/componentmodel.tar.zst:
+          public/fenixcomponentmodel.tar.zst:
             expires: { $fromNow: "1 month" }
             path: /fenixcomponentmodel.tar.zst
             type: file
