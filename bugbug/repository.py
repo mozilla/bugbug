@@ -18,16 +18,10 @@ import shelve
 import subprocess
 import sys
 import threading
+from collections.abc import Collection, Iterable, Iterator
 from datetime import datetime
 from functools import lru_cache
-from typing import (
-    Collection,
-    Iterable,
-    Iterator,
-    NewType,
-    Set,
-    Union,
-)
+from typing import NewType, Union
 
 import hglib
 import lmdb
@@ -203,7 +197,7 @@ class Commit:
         self.source_code_deleted = 0
         self.other_deleted = 0
         self.test_deleted = 0
-        self.types: Set[str] = set()
+        self.types: set[str] = set()
         self.functions: dict[str, list[dict]] = {}
         self.seniority_author = 0.0
         self.total_source_code_file_size = 0
