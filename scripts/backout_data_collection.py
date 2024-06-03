@@ -23,9 +23,9 @@ def download_databases() -> None:
     assert db.download(repository.COMMITS_DB, support_files_too=True)
 
 
-def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
+def preprocess_commits_and_bugs() -> tuple[dict, dict]:
     logger.info("Preprocessing commits and bugs...")
-    commit_dict, bug_resolution_map = {}, {}
+    bug_resolution_map = {}
     bug_to_commit_dict: dict[int, list] = {}
 
     for commit in repository.get_commits(
@@ -35,7 +35,6 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
             key: commit[key]
             for key in ["node", "bug_id", "pushdate", "backedoutby", "backsout"]
         }
-        commit_dict[commit["node"]] = commit_data
 
         bug_to_commit_dict.setdefault(commit["bug_id"], []).append(commit_data)
 
@@ -44,7 +43,7 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
         bug["id"]: bug["resolution"] for bug in bugzilla.get_bugs(include_invalid=True)
     }
 
-    return commit_dict, bug_to_commit_dict, bug_resolution_map
+    return bug_to_commit_dict, bug_resolution_map
 
 
 def has_conflicts(diff: str) -> bool:
@@ -55,7 +54,6 @@ def has_conflicts(diff: str) -> bool:
 
 def generate_datapoints(
     commit_limit: int,
-    commit_dict: dict,
     bug_to_commit_dict: dict,
     bug_resolution_map: dict,
     repo_dir: str,
@@ -204,11 +202,10 @@ def save_datasets(
 def main():
     download_databases()
 
-    commit_dict, bug_to_commit_dict, bug_resolution_map = preprocess_commits_and_bugs()
+    bug_to_commit_dict, bug_resolution_map = preprocess_commits_and_bugs()
 
     data_generator = generate_datapoints(
         commit_limit=1000000,
-        commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
         bug_resolution_map=bug_resolution_map,
         repo_dir="hg_dir",
