@@ -25,7 +25,7 @@ def download_databases() -> None:
 
 def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
     logger.info("Preprocessing commits and bugs...")
-    commit_dict, bug_dict = {}, {}
+    commit_dict, bug_resolution_map = {}, {}
     bug_to_commit_dict: dict[int, list] = {}
 
     for commit in repository.get_commits(
@@ -40,11 +40,11 @@ def preprocess_commits_and_bugs() -> tuple[dict, dict, dict]:
         bug_to_commit_dict.setdefault(commit["bug_id"], []).append(commit_data)
 
     # We only require the bug's resolution (to check if it is 'FIXED').
-    bug_dict = {
+    bug_resolution_map = {
         bug["id"]: bug["resolution"] for bug in bugzilla.get_bugs(include_invalid=True)
     }
 
-    return commit_dict, bug_to_commit_dict, bug_dict
+    return commit_dict, bug_to_commit_dict, bug_resolution_map
 
 
 def has_conflicts(diff: str) -> bool:
@@ -57,7 +57,7 @@ def generate_datapoints(
     commit_limit: int,
     commit_dict: dict,
     bug_to_commit_dict: dict,
-    bug_dict: dict,
+    bug_resolution_map: dict,
     repo_dir: str,
 ) -> Generator[dict, None, None]:
     counter = 0
@@ -72,14 +72,14 @@ def generate_datapoints(
     ):
         counter += 1
 
-        bug_info = bug_dict.get(commit["bug_id"])
+        bug_resolution = bug_resolution_map.get(commit["bug_id"])
 
         pushdate = datetime.strptime(commit["pushdate"], "%Y-%m-%d %H:%M:%S")
 
         if (datetime.now() - pushdate) > timedelta(days=730):
             continue
 
-        if not commit["backedoutby"] or bug_info != "FIXED":
+        if not commit["backedoutby"] or bug_resolution != "FIXED":
             continue
 
         # We only add the commit if it has been backed out and the bug it is for is FIXED.
@@ -204,13 +204,13 @@ def save_datasets(
 def main():
     download_databases()
 
-    commit_dict, bug_to_commit_dict, bug_dict = preprocess_commits_and_bugs()
+    commit_dict, bug_to_commit_dict, bug_resolution_map = preprocess_commits_and_bugs()
 
     data_generator = generate_datapoints(
         commit_limit=1000000,
         commit_dict=commit_dict,
         bug_to_commit_dict=bug_to_commit_dict,
-        bug_dict=bug_dict,
+        bug_resolution_map=bug_resolution_map,
         repo_dir="hg_dir",
     )
 
