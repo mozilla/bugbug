@@ -1554,8 +1554,7 @@ def get_diff(repo_path, original_hash, fix_hash) -> bytes:
         if b"nothing changed" in e.out:
             logger.info(f"Nothing to shelve: {e}")
         else:
-            logger.info(f"Error while shelving: {e}")
-            raise
+            raise RuntimeError("Error occurred while shelving") from e
 
     parents = client.parents(rev=fix_hash)
     parent_of_fix = parents[0][1]
