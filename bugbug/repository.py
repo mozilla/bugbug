@@ -1595,11 +1595,7 @@ def graft(client, revs, no_commit=False, force=False, tool=":merge") -> bool:
 
     eh = hglib.util.reterrorhandler(args)
 
-    try:
-        client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
-    except hglib.error.CommandError as e:
-        logger.warning(f"Error when grafting {e}")
-        return False
+    client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
 
     return True
 
