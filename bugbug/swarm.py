@@ -67,8 +67,8 @@ def get( AUTH,
     instance = AUTH['instance']
     for r in rev_ids:
         loc = get_review(instance, r, version_l, AUTH)
-        loc = ''.join([loc['diffs'][e] for e in loc['diffs']])
-
-        data += [{'fields':{'diffID':int(r), 'version':version_l, 'diff':loc}}]
+        full_diff = ''.join([loc['diffs'][e] for e in loc['diffs']])
+        
+        data += [{'fields':{'diffID':int(r), 'version':version_l, 'file_diff': loc['diffs'], 'diff':full_diff}}]
 
     return data
