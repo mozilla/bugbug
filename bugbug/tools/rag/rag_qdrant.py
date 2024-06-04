@@ -3,9 +3,10 @@ import bugbug.tools.rag.embedding as embedding
 import bugbug.tools.rag.pick_call as my_pick
 import bugbug.tools.rag.filter_data as filter_data
 import json
+import numpy as np 
 
 COLLECTION = 'ubi_revcom'
-FOLDER_SAVE = None
+FOLDER_SAVE = None #folder where to save the embedding. Does not save if is None.
 
 review_rag_encoder = {
     "starencoder": embedding.encoder_starencode,
@@ -15,12 +16,18 @@ review_rag_encoder = {
 class RAGObject(): 
     def __init__(self, data_file, fun_embedding, num_ex):
         self.data = load_data(data_file)
-        self.data = filter_data.filter_data(self.data, 'info_text')
         
-        self.data['info_dir'] = [e[:1] for e in self.data['info_dir']]
+        # COLUMNS NEEDED IN DATASET TO RUN:
+        assert np.all([e in self.data.columns for e in ['body', 'diff', 'info_text', 'info_dir']])
+        # body: body of the diff (lines) with no information on line position and filenames
+        # diff: diff formated for prompt with all information
+        # info_text: only text of the comments 
+        # info_dir: comments in the json format for prompt
+        
+        self.data = filter_data.filter_data(self.data, 'info_text')
         self.data = [{str(what):str(self.data.iloc[i][what]) for what in self.data.columns} for i in range(len(self.data))]
         
-        self.get_hits = rag_approach(self.data[:100], 'body', review_rag_encoder[fun_embedding])
+        self.get_hits = rag_approach(self.data, 'body', review_rag_encoder[fun_embedding])
         
         self.num_ex = num_ex 
         
@@ -72,3 +79,7 @@ def rag_approach(documents, target_X, fun_embedding=embedding.encoder_starencode
         return hits
         
     return get_hits
+
+# Need to have a data loader for mozilla too
+def load_data(data_file):
+    return my_pick.pickle_load(data_file)
