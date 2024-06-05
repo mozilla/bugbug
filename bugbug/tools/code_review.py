@@ -221,7 +221,7 @@ class ReviewData(ABC):
         def comment_filter(comment: InlineComment):
             comment_content = comment.content
 
-            # Ignore very short and very log comments
+            # Ignore very short and very long comments
             if not 50 < len(comment_content) < 500:
                 return False
 
