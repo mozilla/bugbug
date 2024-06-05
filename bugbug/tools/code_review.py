@@ -338,8 +338,8 @@ class PhabricatorReviewData(ReviewData):
                     transaction["fields"]["line"] + transaction["fields"]["length"] - 1
                 )
                 # Unfortunately, we do not have this information for a limitation
-                # in Phabricator's API. We assume it as true as a workaround.
-                on_removed_code = True
+                # in Phabricator's API.
+                on_removed_code = None
 
                 # TODO: we could create an extended dataclass for this
                 # instead of adding optional fields.
