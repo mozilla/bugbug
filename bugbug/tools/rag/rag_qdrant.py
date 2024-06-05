@@ -8,7 +8,6 @@ import numpy as np
 COLLECTION = 'ubi_revcom'
 FOLDER_SAVE = None #folder where to save the embedding. Does not save if is None.
 
-
 review_rag_encoder = {
     "starencoder": embedding.encoder_starencode,
     "SentenceTransformer": embedding.encoder_sentence_trans,
@@ -16,14 +15,15 @@ review_rag_encoder = {
 
 class RAGObject(): 
     def __init__(self, data_file, fun_embedding, num_ex):
-        self.data = load_data(data_file)        
+        self.data = load_data(data_file)
+        
         # COLUMNS NEEDED IN DATASET TO RUN:
         assert np.all([e in self.data.columns for e in ['body', 'diff', 'info_text', 'info_dir']])
         # body: body of the diff (lines) with no information on line position and filenames
         # diff: diff formated for prompt with all information
         # info_text: only text of the comments 
         # info_dir: comments in the json format for prompt
-        
+
         self.data = filter_data.filter_data(self.data, 'info_text')
         self.data = [{str(what):str(self.data.iloc[i][what]) for what in self.data.columns} for i in range(len(self.data))]
         
