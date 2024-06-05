@@ -393,6 +393,7 @@ class SwarmReviewData(ReviewData):
     def get_patch_by_version_fromto(self, revision_id: int, version_before: int =0, version_num: int = 1) -> Patch:
         revisions = swarm.get(self.auth, rev_ids=[int(revision_id)], version_l = [version_before, version_num])
         assert len(revisions) == 1
+
         return Patch(revisions[0]["fields"]["diff"], revisions[0]["fields"]["file_diff"])
     
     def get_all_inline_comments(
@@ -400,6 +401,7 @@ class SwarmReviewData(ReviewData):
     ) -> Iterable[tuple[int, list[InlineComment]]]:
         # Todo 
         raise NotImplementedError
+
 
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
