@@ -301,6 +301,33 @@ def count_bugs(bug_query_params):
     return data["bug_count"]
 
 
+def fetch_components_list(product_types="accessible") -> list[tuple]:
+    """Fetch all components from all products.
+
+    Args:
+        product_types: The types of products to fetch components from. Defaults
+            to "accessible".
+
+    Returns:
+        A list of tuples where the first element is the product name and the
+        second element is the component name.
+    """
+    components: list[tuple] = []
+
+    def handler(product):
+        components.extend(
+            (product["name"], component["name"]) for component in product["components"]
+        )
+
+    BugzillaProduct(
+        product_types=product_types,
+        include_fields=["name", "components.name"],
+        product_handler=handler,
+    ).wait()
+
+    return components
+
+
 def get_product_component_count(months: int = 12) -> dict[str, int]:
     """Get the number of bugs per component.
 
