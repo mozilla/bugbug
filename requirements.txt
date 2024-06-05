@@ -15,6 +15,7 @@ mozci==2.4.1
 numpy==1.26.4
 orjson==3.10.3
 ortools==9.10.4067
+p4python==2023.2.2581979
 pandas==2.2.2
 psutil==5.9.8
 pydriller==1.12

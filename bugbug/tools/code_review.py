@@ -23,6 +23,7 @@ from bugbug import db, phabricator, swarm
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
+from bugbug.tools.rag.rag_qdrant import RAGObject
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -114,6 +115,10 @@ As examples of not expected comments, not related to the current patch, please, 
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
 
+PROMPT_TEMPLATE_SIMPLE_REVIEW = """ Review the following C++ patch:
+
+{patch}
+"""
 
 class ReviewRequest:
     patch_id: int
@@ -125,10 +130,11 @@ class ReviewRequest:
 
 class Patch:
     raw_diff: str
-
-    def __init__(self, raw_diff) -> None:
+    
+    def __init__(self, raw_diff, file_diff=None) -> None:
         super().__init__()
         self.raw_diff = raw_diff
+        self.file_diff = file_diff
 
 
 class ReviewData(ABC):
@@ -388,6 +394,25 @@ class SwarmReviewData(ReviewData):
         assert len(revisions) == 1
         return Patch(revisions[0]["fields"]["diff"])
 
+class SwarmReviewData(ReviewData):
+    def __init__(self):
+        self.auth = {'user':get_secret('SWARM_USER'),'password':get_secret('SWARM_PASS'),'port':get_secret('SWARM_PORT'),'instance':get_secret('INSTANCE')}
+
+    # return ReviewRequest object with patch_id = revision_id
+    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
+        return ReviewRequest(revision_id)
+
+    # return rawdiff from the initial version of the revision with id patch_id
+    def get_patch_by_id(self, patch_id: int) -> Patch:
+        revisions = swarm.get(self.auth, rev_ids=[int(patch_id)], version_l = [0, 1])
+        assert len(revisions) == 1
+        return Patch(revisions[0]["fields"]["diff"])
+    
+    # return rawdiff from the initial version of a specific version of the revision_id
+    def get_patch_by_version_fromto(self, revision_id: int, version_before: int =0, version_num: int = 1) -> Patch:
+        revisions = swarm.get(self.auth, rev_ids=[int(revision_id)], version_l = [version_before, version_num])
+        assert len(revisions) == 1
+        return Patch(revisions[0]["fields"]["diff"], revisions[0]["fields"]["file_diff"])
 
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
@@ -470,11 +495,10 @@ def format_patch_set(patch_set):
 
     return output
 
-
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, rag, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.summarization_chain = LLMChain(
@@ -485,7 +509,9 @@ class CodeReviewTool(GenerativeModelTool):
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
             llm=self.llm,
         )
-
+        
+        self.rag = rag
+        
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
         formatted_patch = format_patch_set(patch_set)
@@ -533,7 +559,71 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
 
         return raw_output
+    
+    def run_rag(self, patch: Patch) -> list[InlineComment] | None:
+        assert self.rag is not None
+        
+        rag_examples = self.rag.get_examples(patch.file_diff)
+        
+        patch_set = PatchSet.from_string(patch.raw_diff)
+        formatted_patch = format_patch_set(patch_set)
+        if formatted_patch == "":
+            return None
 
+        output_summarization = self.summarization_chain.invoke(
+            {"patch": formatted_patch},
+            return_only_outputs=True,
+        )["text"]
+
+        print(output_summarization)
+
+        memory = ConversationBufferMemory()
+        conversation_chain = ConversationChain(
+            llm=self.llm,
+            memory=memory,
+        )
+
+        memory.save_context(
+            {
+                "input": "You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews."
+            },
+            {"output": "Sure, I'm aware of source code practices in Firefox."},
+        )
+        memory.save_context(
+            {
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". '
+                + patch.raw_diff
+            },
+            {"output": output_summarization},
+        )
+        
+        memory.save_context(
+            {
+                "input":PROMPT_TEMPLATE_REVIEW.format(patch='')
+            },
+            {"output": 'No, problem, I will apply those rules.'},
+        )
+        
+        for ex in rag_examples:
+            memory.save_context(
+                {
+                    "input":PROMPT_TEMPLATE_SIMPLE_REVIEW.format(patch=ex[1]['diff'])
+                },
+                {"output": f"[{ex[1]['info_dir']}]"},
+            )
+            
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_SIMPLE_REVIEW.format(patch=formatted_patch)
+        )
+
+        memory.clear()
+
+        raw_output = self.filtering_chain.invoke(
+            {"review": output, "patch": patch.raw_diff},
+            return_only_outputs=True,
+        )["text"]
+
+        return raw_output
 
 class ReviewCommentsDB:
     NAV_PATTERN = re.compile(r"\{nav, [^}]+\}")
@@ -563,3 +653,4 @@ class ReviewCommentsDB:
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
+

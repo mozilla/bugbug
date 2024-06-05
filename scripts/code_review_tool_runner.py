@@ -8,12 +8,13 @@ import sys
 
 from bugbug import generative_model_tool
 from bugbug.tools import code_review
-
+from bugbug.tools.rag.rag_qdrant import RAGObject, review_rag_encoder
 
 def run(args) -> None:
     llm = generative_model_tool.create_llm(args.llm)
+    rag = RAGObject(args.rag_dataset, args.rag_encoder, args.rag_num_ex) if args.rag_dataset is not None else None
 
-    code_review_tool = code_review.CodeReviewTool(llm)
+    code_review_tool = code_review.CodeReviewTool(llm=llm, rag=rag)
 
     review_data = code_review.review_data_classes[args.review_platform]()
     
@@ -23,7 +24,11 @@ def run(args) -> None:
     elif args.review_platform == 'swarm':
         patch = review_data.get_patch_by_version_fromto(args.review_request_id)
     print(patch)
-    print(code_review_tool.run(patch))
+    
+    if args.rag_dataset is None:
+        print(code_review_tool.run(patch))
+    else:
+        print(code_review_tool.run_rag(patch))
     input()
     
 
@@ -43,6 +48,27 @@ def parse_args(args):
         help="LLM",
         choices=["human", "openai", "azureopenai", "llama2"],
     )
+    
+    parser.add_argument(
+        "--rag_dataset",
+        help="Filename that contain the dataset.",
+        default=None,
+        required=False,
+    )
+    parser.add_argument(
+        "--rag_num_ex",
+        help="Max number of examples to show with rag.",
+        default=3,
+        required=False,
+    )
+    parser.add_argument(
+        "--rag_encoder",
+        help="Encoder to use for rag.",
+        choices=list(review_rag_encoder.keys()),
+        default='starencoder',
+        required=False,
+    )
+    
     return parser.parse_args(args)
 
 
