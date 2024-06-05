@@ -300,17 +300,13 @@ class PhabricatorReviewData(ReviewData):
         raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(int(patch_id))
         return Patch(raw_diff)
 
-    def _get_revisions_count(self):
-        return sum(1 for _ in phabricator.get_revisions())
-
     def get_all_inline_comments(
         self, comment_filter
     ) -> Iterable[tuple[int, list[InlineComment]]]:
         db.download(phabricator.REVISIONS_DB)
 
-        for revision in tqdm(
-            phabricator.get_revisions(), total=self._get_revisions_count()
-        ):
+        revision_count = sum(1 for _ in phabricator.get_revisions())
+        for revision in tqdm(phabricator.get_revisions(), total=revision_count):
             diff_comments: dict[int, list[InlineComment]] = defaultdict(list)
 
             for transaction in revision["transactions"]:
