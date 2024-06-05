@@ -205,6 +205,11 @@ class ReviewData(ABC):
                             return hunk
 
             if len(matching_hunks) != 0:
+                logger.warning(
+                    "Multiple matching hunks found for comment %s in file %s",
+                    comment.id,
+                    comment.filename,
+                )
                 return matching_hunks[0]
 
         elif comment.on_removed_code:
