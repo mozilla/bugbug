@@ -394,26 +394,12 @@ class SwarmReviewData(ReviewData):
         revisions = swarm.get(self.auth, rev_ids=[int(revision_id)], version_l = [version_before, version_num])
         assert len(revisions) == 1
         return Patch(revisions[0]["fields"]["diff"], revisions[0]["fields"]["file_diff"])
-
-class SwarmReviewData(ReviewData):
-    def __init__(self):
-        self.auth = {'user':get_secret('SWARM_USER'),'password':get_secret('SWARM_PASS'),'port':get_secret('SWARM_PORT'),'instance':get_secret('INSTANCE')}
-
-    # return ReviewRequest object with patch_id = revision_id
-    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
-        return ReviewRequest(revision_id)
-
-    # return rawdiff from the initial version of the revision with id patch_id
-    def get_patch_by_id(self, patch_id: int) -> Patch:
-        revisions = swarm.get(self.auth, rev_ids=[int(patch_id)], version_l = [0, 1])
-        assert len(revisions) == 1
-        return Patch(revisions[0]["fields"]["diff"])
     
-    # return rawdiff from the initial version of a specific version of the revision_id
-    def get_patch_by_version_fromto(self, revision_id: int, version_before: int =0, version_num: int = 1) -> Patch:
-        revisions = swarm.get(self.auth, rev_ids=[int(revision_id)], version_l = [version_before, version_num])
-        assert len(revisions) == 1
-        return Patch(revisions[0]["fields"]["diff"], revisions[0]["fields"]["file_diff"])
+    def get_all_inline_comments(
+        self, comment_filter
+    ) -> Iterable[tuple[int, list[InlineComment]]]:
+        # Todo 
+        raise NotImplementedError
 
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
