@@ -17,8 +17,7 @@ review_rag_encoder = {
 
 class RAGObject(): 
     def __init__(self, data_file, fun_embedding, num_ex):
-        self.data = load_data(data_file)
-        
+        self.data = load_data(data_file)        
         # COLUMNS NEEDED IN DATASET TO RUN:
         assert np.all([e in self.data.columns for e in ['body', 'diff', 'info_text', 'info_dir']])
         # body: body of the diff (lines) with no information on line position and filenames

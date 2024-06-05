@@ -549,7 +549,7 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
 
         return raw_output
-    
+
     def run_rag(self, patch: Patch) -> list[InlineComment] | None:
         assert self.rag is not None
         
@@ -612,6 +612,7 @@ class CodeReviewTool(GenerativeModelTool):
             {"review": output, "patch": patch.raw_diff},
             return_only_outputs=True,
         )["text"]
+
 
         return raw_output
 
