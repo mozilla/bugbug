@@ -45,12 +45,12 @@ class Retriever(object):
 
         logger.info("Retrieved %d IDs.", len(changed_ids))
 
-        all_components = bugzilla.get_product_component_count(9999)
+        all_components = set(bugzilla.fetch_components_list())
 
         deleted_component_ids = set(
             bug["id"]
             for bug in bugzilla.get_bugs()
-            if "{}::{}".format(bug["product"], bug["component"]) not in all_components
+            if (bug["product"], bug["component"]) not in all_components
         )
         logger.info(
             "%d bugs belonging to deleted components", len(deleted_component_ids)
