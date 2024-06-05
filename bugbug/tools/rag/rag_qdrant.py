@@ -3,6 +3,7 @@ import bugbug.tools.rag.embedding as embedding
 import bugbug.tools.rag.pick_call as my_pick
 import bugbug.tools.rag.filter_data as filter_data
 import json
+import numpy as np 
 
 import numpy as np 
 
