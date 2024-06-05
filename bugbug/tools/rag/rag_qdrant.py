@@ -7,7 +7,7 @@ import numpy as np
 
 COLLECTION = 'ubi_revcom'
 FOLDER_SAVE = None #folder where to save the embedding. Does not save if is None.
-FOLDER_SAVE = 'D:/REVIEW_AUTOMATION_PROJECT/filleemb_ap/'
+
 
 review_rag_encoder = {
     "starencoder": embedding.encoder_starencode,
@@ -16,8 +16,7 @@ review_rag_encoder = {
 
 class RAGObject(): 
     def __init__(self, data_file, fun_embedding, num_ex):
-        self.data = load_data(data_file)
-        
+        self.data = load_data(data_file)        
         # COLUMNS NEEDED IN DATASET TO RUN:
         assert np.all([e in self.data.columns for e in ['body', 'diff', 'info_text', 'info_dir']])
         # body: body of the diff (lines) with no information on line position and filenames
