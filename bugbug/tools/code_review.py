@@ -7,6 +7,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import asdict, dataclass
+from logging import INFO, basicConfig, getLogger
 from typing import Iterable
 
 import tenacity
@@ -22,6 +23,9 @@ from bugbug import db, phabricator
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -322,9 +326,11 @@ class PhabricatorReviewData(ReviewData):
                     continue
 
                 if len(transaction["comments"]) != 1:
-                    print(transaction)
-                    # raise Exception("Unexpected, need to look into it")
-                    continue
+                    # Follow up: https://github.com/mozilla/bugbug/issues/4218
+                    logger.warning(
+                        "Unexpected number of comments in transaction %s",
+                        transaction["id"],
+                    )
 
                 transaction_comment = transaction["comments"][0]
                 comment_id = transaction_comment["id"]
