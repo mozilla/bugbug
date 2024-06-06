@@ -125,12 +125,10 @@ class ReviewRequest:
 
 class Patch:
     raw_diff: str
-    file_diff: str
 
     def __init__(self, raw_diff, file_diff=None) -> None:
         super().__init__()
         self.raw_diff = raw_diff
-        self.file_diff = file_diff
 
 
 class ReviewData(ABC):
@@ -402,7 +400,7 @@ class SwarmReviewData(ReviewData):
         assert len(revisions) == 1
 
         return Patch(
-            revisions[0]["fields"]["diff"], revisions[0]["fields"]["file_diff"]
+            revisions[0]["fields"]["diff"]
         )
 
     def get_all_inline_comments(
