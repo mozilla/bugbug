@@ -114,6 +114,11 @@ As examples of not expected comments, not related to the current patch, please, 
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
 
+PROMPT_TEMPLATE_SIMPLE_REVIEW = """Review this patch:
+
+{patch}
+"""
+
 
 class ReviewRequest:
     patch_id: int
@@ -126,7 +131,7 @@ class ReviewRequest:
 class Patch:
     raw_diff: str
 
-    def __init__(self, raw_diff) -> None:
+    def __init__(self, raw_diff, file_diff=None) -> None:
         super().__init__()
         self.raw_diff = raw_diff
 
@@ -445,7 +450,7 @@ def format_patch_set(patch_set):
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, rag, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.summarization_chain = LLMChain(
@@ -456,6 +461,7 @@ class CodeReviewTool(GenerativeModelTool):
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
             llm=self.llm,
         )
+        self.rag = rag
 
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
@@ -495,6 +501,67 @@ class CodeReviewTool(GenerativeModelTool):
         )
 
         print(output)
+
+        memory.clear()
+
+        raw_output = self.filtering_chain.invoke(
+            {"review": output, "patch": patch.raw_diff},
+            return_only_outputs=True,
+        )["text"]
+
+        return raw_output
+
+    def run_rag(self, patch: Patch) -> list[InlineComment] | None:
+        assert self.rag is not None
+
+        rag_examples = self.rag.get_examples(patch.raw_diff)
+
+        patch_set = PatchSet.from_string(patch.raw_diff)
+        formatted_patch = format_patch_set(patch_set)
+        if formatted_patch == "":
+            return None
+
+        output_summarization = self.summarization_chain.invoke(
+            {"patch": formatted_patch},
+            return_only_outputs=True,
+        )["text"]
+
+        print(output_summarization)
+
+        memory = ConversationBufferMemory()
+        conversation_chain = ConversationChain(
+            llm=self.llm,
+            memory=memory,
+        )
+
+        memory.save_context(
+            {
+                "input": "You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews."
+            },
+            {"output": "Sure, I'm aware of source code practices in Firefox."},
+        )
+        memory.save_context(
+            {
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". '
+                + patch.raw_diff
+            },
+            {"output": output_summarization},
+        )
+
+        memory.save_context(
+            {"input": PROMPT_TEMPLATE_REVIEW.format(patch="")},
+            {"output": "No, problem, I will apply those rules."},
+        )
+
+        for ex in rag_examples:
+            memory.save_context(
+                {"input": PROMPT_TEMPLATE_SIMPLE_REVIEW.format(patch=ex[1]["diff"])},
+                {"output": f"[{ex[1]['info_dir']}]"},
+            )
+
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_SIMPLE_REVIEW.format(patch=formatted_patch)
+        )
 
         memory.clear()
 
