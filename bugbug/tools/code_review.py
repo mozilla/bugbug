@@ -375,7 +375,7 @@ class SwarmReviewData(ReviewData):
             "user": get_secret("SWARM_USER"),
             "password": get_secret("SWARM_PASS"),
             "port": get_secret("SWARM_PORT"),
-            "instance": get_secret("INSTANCE"),
+            "instance": get_secret("SWARM_INSTANCE"),
         }
 
     # return ReviewRequest object with patch_id = revision_id
