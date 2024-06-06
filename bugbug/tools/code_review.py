@@ -126,7 +126,7 @@ class ReviewRequest:
 class Patch:
     raw_diff: str
 
-    def __init__(self, raw_diff, file_diff=None) -> None:
+    def __init__(self, raw_diff) -> None:
         super().__init__()
         self.raw_diff = raw_diff
 
