@@ -132,6 +132,8 @@ class ComponentModel(BugModel):
 
     def filter_component(self, product, component):
         full_comp = f"{product}::{component}"
+        if product == "Fenix":
+            return "Fenix"
 
         if full_comp in self.CONFLATED_COMPONENTS_INVERSE_MAPPING:
             return self.CONFLATED_COMPONENTS_INVERSE_MAPPING[full_comp]
