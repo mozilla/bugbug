@@ -8,7 +8,8 @@ import subprocess
 import sys
 
 import config
-from utils import get_session
+
+from bugbug.utils import get_session
 
 
 class SearchfoxDataNotAvailable(Exception):

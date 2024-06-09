@@ -6,16 +6,18 @@
 import logging
 import subprocess
 
-import config
-import utils
-
 from bugbug import repository, rust_code_analysis_server
+from bugbug.code_search.function_search import (
+    Function,
+    FunctionSearch,
+    register_function_search,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("function_search_parser")
 
 
-def search(commit_hash, symbol_name):
+def search(repo_dir, commit_hash, symbol_name):
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
     found_functions = []
@@ -30,7 +32,7 @@ def search(commit_hash, symbol_name):
                 commit_hash,
                 "--files-with-matches",
             ],
-            cwd=config.REPO_DIR,
+            cwd=repo_dir,
             check=True,
             capture_output=True,
         )
@@ -52,7 +54,7 @@ def search(commit_hash, symbol_name):
         try:
             result = subprocess.run(
                 ["hg", "cat", path, "--rev", commit_hash],
-                cwd=config.REPO_DIR,
+                cwd=repo_dir,
                 check=True,
                 capture_output=True,
             )
@@ -73,16 +75,16 @@ def search(commit_hash, symbol_name):
         for function in functions:
             if symbol_name in function["name"]:
                 found_functions.append(
-                    {
-                        "name": function["name"],
-                        "start": function["start_line"],
-                        "file": path,
-                        "source": "\n".join(
+                    Function(
+                        function["name"],
+                        function["start_line"],
+                        path,
+                        "\n".join(
                             source.decode().split("\n")[
                                 function["start_line"] - 1 : function["end_line"]
                             ]
                         ),
-                    }
+                    )
                 )
 
     code_analysis_server.terminate()
@@ -90,10 +92,10 @@ def search(commit_hash, symbol_name):
     return found_functions
 
 
-def find_functions_for_lines(commit_hash, path, deleted_lines, added_lines):
+def find_functions_for_lines(get_file, commit_hash, path, deleted_lines, added_lines):
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
-    source = utils.get_file(commit_hash, path)
+    source = get_file(commit_hash, path)
     metrics = code_analysis_server.metrics(path, source, unit=False)
     if "spaces" not in metrics:
         return None
@@ -106,34 +108,67 @@ def find_functions_for_lines(commit_hash, path, deleted_lines, added_lines):
     results = []
     for function in functions:
         results.append(
-            {
-                "name": function["name"],
-                "start": function["start_line"],
-                "file": path,
-                "source": "\n".join(
+            Function(
+                function["name"],
+                function["start_line"],
+                path,
+                "\n".join(
                     source.split("\n")[
                         function["start_line"] - 1 : function["end_line"]
                     ]
                 ),
-            }
+            )
         )
     return results
 
 
+class FunctionSearchParser(FunctionSearch):
+    def __init__(self, repo_dir, get_file):
+        super().__init__()
+        self.repo_dir = repo_dir
+        self.get_file = get_file
+
+    def get_function_by_line(
+        self, commit_hash: str, path: str, line: int
+    ) -> list[Function]:
+        return find_functions_for_lines(self.get_file, commit_hash, path, [], [line])
+
+    def get_function_by_name(
+        self, commit_hash: str, path: str, function_name: str
+    ) -> list[Function]:
+        return search(self.repo_dir, commit_hash, function_name)
+
+
+register_function_search("parser", FunctionSearchParser)
+
 if __name__ == "__main__":
     import os
+    import sys
+
+    import requests
+
+    def get_file(commit_hash, path):
+        r = requests.get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+        )
+        r.raise_for_status()
+        return r.text
+
+    repo_dir = sys.argv[1]
 
     with open(
         os.path.join(
-            config.REPO_DIR,
+            repo_dir,
             "browser/components/asrouter/modules/CFRPageActions.sys.mjs",
         ),
         "r",
     ) as f:
         content = f.read()
 
+    print("RESULT 1")
     print(
         find_functions_for_lines(
+            get_file,
             "4ba1b499b812",
             "browser/components/asrouter/modules/CFRPageActions.jsm",
             [],
@@ -141,6 +176,8 @@ if __name__ == "__main__":
         )
     )
 
-    print(search("4ba1b499b812", "getStrings"))
+    print("RESULT 2")
+    print(search(repo_dir, "4ba1b499b812", "getStrings"))
 
-    print(search("4ba1b499b812", "itdoesntexistofcourse"))
+    print("RESULT 3")
+    print(search(repo_dir, "4ba1b499b812", "itdoesntexistofcourse"))

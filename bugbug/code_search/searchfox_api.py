@@ -6,8 +6,14 @@
 import json
 
 import requests
-import utils
 from requests_html import HTMLSession
+
+from bugbug.code_search import searchfox_data
+from bugbug.code_search.function_search import (
+    Function,
+    FunctionSearch,
+    register_function_search,
+)
 
 
 # TODO: we should use commit_hash...
@@ -92,24 +98,94 @@ def search(commit_hash, symbol_name):
     return sum((get_functions(commit_hash, path, symbol_name) for path in paths), [])
 
 
+class FunctionSearchSearchfoxAPI(FunctionSearch):
+    def __init__(self, get_file):
+        super().__init__()
+        self.get_file = get_file
+
+    def definitions_to_results(self, commit_hash, definitions):
+        result = []
+
+        for definition in definitions:
+            source = searchfox_data.extract_source(
+                definition["path"],
+                definition["start"],
+                definition["end"] + 1
+                if definition["end"] != definition["start"]
+                else definition["end"],
+                read_mc_path=lambda path: io.StringIO(
+                    self.get_file(
+                        commit_hash or "tip",
+                        path,
+                    )
+                ),
+            )
+            result.append(
+                Function(
+                    definition["name"],
+                    definition["start"],
+                    definition["path"],
+                    source,
+                )
+            )
+
+        return result
+
+    def get_function_by_line(
+        self, commit_hash: str, path: str, line: int
+    ) -> list[Function]:
+        definition = find_function_for_line(
+            commit_hash or "tip",
+            path,
+            line,
+        )
+        return (
+            self.definitions_to_results(commit_hash, [definition])
+            if definition is not None
+            else []
+        )
+
+    def get_function_by_name(
+        self, commit_hash: str, path: str, function_name: str
+    ) -> list[Function]:
+        definitions = search(
+            commit_hash or "tip",
+            function_name,
+        )
+
+        return self.definitions_to_results(commit_hash, definitions)
+
+
+register_function_search("searchfox_api", FunctionSearchSearchfoxAPI)
+
+
 if __name__ == "__main__":
+    print("RESULT1")
     print(search("hash", "getStrings"))
 
     import io
 
-    import searchfox_search
+    import requests
+
+    def get_file(commit_hash, path):
+        r = requests.get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+        )
+        r.raise_for_status()
+        return r.text
 
     definitions = search("hash", "GetFramebufferForBuffer")
+    print("RESULT2")
     print(definitions)
     result = []
     for definition in definitions:
-        source = searchfox_search.extract_source(
+        source = searchfox_data.extract_source(
             definition["path"],
             definition["start"],
             definition["end"] + 1
             if definition["end"] != definition["start"]
             else definition["end"],
-            read_mc_path=lambda path: io.StringIO(utils.get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
         )
         result.append(
             {
@@ -119,19 +195,21 @@ if __name__ == "__main__":
                 "annotations": [],
             }
         )
+    print("RESULT3")
     print(result)
 
     func = find_function_for_line(
-        "hash", "browser/components/asrouter/modules/CFRPageActions.jsm", 333
+        "hash", "browser/components/asrouter/modules/CFRPageActions.sys.mjs", 333
     )
+    print("RESULT4")
     print(
-        searchfox_search.extract_source(
+        searchfox_data.extract_source(
             func["path"],
             func["start"],
             func["end"] + 1 if func["end"] != func["start"] else func["end"],
             read_mc_path=lambda path: io.StringIO(
-                utils.get_file(
-                    "tip", "browser/components/asrouter/modules/CFRPageActions.jsm"
+                get_file(
+                    "tip", "browser/components/asrouter/modules/CFRPageActions.sys.mjs"
                 )
             ),
         )

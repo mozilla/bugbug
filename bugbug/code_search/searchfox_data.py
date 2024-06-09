@@ -10,7 +10,12 @@ import os
 import re
 import sys
 
-import utils
+from bugbug.code_search import searchfox_download
+from bugbug.code_search.function_search import (
+    Function,
+    FunctionSearch,
+    register_function_search,
+)
 
 
 def find_symbol_definition_for_line(path, line, searchfox_path):
@@ -355,8 +360,165 @@ def extract_function_approx(
     return ret_context
 
 
+CPP_EXTENSIONS = [
+    ".c",
+    ".cpp",
+    ".cc",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".mm",
+    ".m",
+]
+
+
+class FunctionSearchSearchfoxData(FunctionSearch):
+    def get_function_by_line(
+        self, commit_hash: str, path: str, line: int
+    ) -> list[Function]:
+        try:
+            searchfox_path = searchfox_download.fetch(commit_hash)
+        except searchfox_download.SearchfoxDataNotAvailable:
+            return []
+
+        if not any(path.endswith(ext) for ext in CPP_EXTENSIONS):
+            return []
+
+        result = []
+
+        definitions = [find_symbol_definition_for_line(path, line, searchfox_path)]
+
+        for definition in definitions:
+            definition_path = definition["file"].replace(searchfox_path, "")
+            source = extract_source(
+                definition_path,
+                definition["target_line"],
+                definition["target_end_line"],
+                read_mc_path=lambda path: io.StringIO(
+                    get_file(
+                        commit_hash or "tip",
+                        path,
+                    )
+                ),
+            )
+            result.append(
+                Function(
+                    definition["name"],
+                    definition["target_line"],
+                    definition_path,
+                    source,
+                )
+            )
+
+        return result
+
+    def get_function_by_name(
+        self, commit_hash: str, path: str, function_name: str
+    ) -> list[Function]:
+        try:
+            searchfox_path = searchfox_download.fetch(commit_hash)
+        except searchfox_download.SearchfoxDataNotAvailable:
+            return []
+
+        if not any(path.endswith(ext) for ext in CPP_EXTENSIONS):
+            return []
+
+        result: list[Function] = []
+
+        # TODO: Try looking for a function call within the "before patch" first (it'll be more precise, as we can identify the exact call and so full symbol name)
+        # caller_obj = {
+        #     "file": path,
+        #     "start": XXX,
+        #     "source": XXX,  # the content doesn't matter, extract_function_approx only uses it for the number of lines
+        # }
+        # out = searchfox_search.extract_function_approx(
+        #     function_name,
+        #     caller_obj,
+        #     "",
+        #     searchfox_path
+        # )
+        # if out is not None:
+        #     result.append(out)
+
+        # If it wasn't found, try with entire file next
+        if not result:
+            if commit_hash is None:
+                mc_file = get_file("tip", path)
+            else:
+                mc_file = get_file(commit_hash, path)
+
+            caller_obj = {
+                "file": path,
+                "start": 0,
+                "source": mc_file,  # the content doesn't matter, extract_function_approx only uses it for the number of lines
+            }
+
+            out = extract_function_approx(
+                function_name,
+                caller_obj,
+                "",
+                searchfox_path,
+                read_mc_path=lambda path: io.StringIO(
+                    get_file(
+                        commit_hash or "tip",
+                        path,
+                    )
+                ),
+            )
+            if out is not None:
+                result.append(out)
+
+        # If it wasn't found, try with string matching
+        if not result:
+            definitions = find_symbol_definition(
+                searchfox_path,
+                [function_name],
+                target_sym_is_pretty=True,
+                headers_first=False,
+                target_sym_type_restriction="function",
+            )[function_name]
+
+            for definition in definitions:
+                definition_path = definition["file"].replace(searchfox_path, "")
+                source = extract_source(
+                    definition_path,
+                    definition["target_line"],
+                    definition["target_end_line"],
+                    read_mc_path=lambda path: io.StringIO(
+                        get_file(
+                            commit_hash or "tip",
+                            path,
+                        )
+                    ),
+                )
+                result.append(
+                    Function(
+                        definition["name"],
+                        definition["target_line"],
+                        definition_path,
+                        source,
+                    )
+                )
+
+        return result
+
+
+register_function_search("searchfox_data", FunctionSearchSearchfoxData)
+
+
 if __name__ == "__main__":
     import typing
+
+    import requests
+
+    def get_file(commit_hash, path):
+        r = requests.get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+        )
+        r.raise_for_status()
+        return r.text
 
     caller_function_obj: dict[str, typing.Any] = {}
     caller_function_obj["start"] = 516
@@ -421,7 +583,7 @@ if __name__ == "__main__":
             caller_function_obj,
             "",
             searchfox_path,
-            read_mc_path=lambda path: io.StringIO(utils.get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
         )
     )
     print("\n\nfind_symbol_definition1")
@@ -452,7 +614,7 @@ if __name__ == "__main__":
             definition_path,
             definition["target_line"],
             definition["target_end_line"],
-            read_mc_path=lambda path: io.StringIO(utils.get_file("tip", path)),
+            read_mc_path=lambda path: io.StringIO(get_file("tip", path)),
         )
         result.append(
             {
