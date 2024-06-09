@@ -431,6 +431,11 @@ class LMDBDict:
     def __setitem__(self, key: bytes, value: Any) -> None:
         self.txn.put(key, value, dupdata=False)
 
+    def keys(self):
+        cursor = self.txn.cursor()
+        for key, value in cursor:
+            yield key.tobytes()
+
 
 def get_free_tcp_port() -> int:
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
