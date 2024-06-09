@@ -93,6 +93,17 @@ class DictExtractor(BaseEstimator, TransformerMixin):
         return np.array([elem[self.key] for elem in data]).reshape(-1, 1)
 
 
+class MergeText(BaseEstimator, TransformerMixin):
+    def __init__(self, cols):
+        self.cols = cols
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return X[self.cols].apply(lambda row: " ".join(row), axis=1)
+
+
 class MissingOrdinalEncoder(OrdinalEncoder):
     """Ordinal encoder that ignores missing values encountered after training.
 
