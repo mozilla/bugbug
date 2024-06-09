@@ -64,24 +64,8 @@ PROMPT_TEMPLATE_REVIEW = """You will be given a task for generate a code review 
 
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, not related to the patch under analysis now, consider some below:
-[
-    {{
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
-    }},
-    {{
-        "file": "com/pt/main/atp/Texture.cpp",
-        "code_line": 620,
-        "comment" : "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation."
-    }},
-    {{
-        "file": "drs/control/Statistics.cpp",
-        "code_line": 25,
-        "comment" : "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`."
-    }}
-]
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, consider the examples below:
+{comment_examples}
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
 5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples."""
 
@@ -114,6 +98,25 @@ As examples of not expected comments, not related to the current patch, please, 
     - There are no complex code changes in this patch, so there's no potential for major readability regressions or bugs introduced by the changes.
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
+
+
+STATIC_COMMENT_EXAMPLES = [
+    {
+        "file": "com/br/main/Pressure.java",
+        "code_line": 458,
+        "comment": "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size.",
+    },
+    {
+        "file": "com/pt/main/atp/Texture.cpp",
+        "code_line": 620,
+        "comment": "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation.",
+    },
+    {
+        "file": "drs/control/Statistics.cpp",
+        "code_line": 25,
+        "comment": "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`.",
+    },
+]
 
 
 class ReviewRequest:
@@ -515,7 +518,12 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        review_comments_db: "ReviewCommentsDB" | None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
 
         self.summarization_chain = LLMChain(
@@ -526,6 +534,8 @@ class CodeReviewTool(GenerativeModelTool):
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
             llm=self.llm,
         )
+
+        self.review_comments_db = review_comments_db
 
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
@@ -558,8 +568,31 @@ class CodeReviewTool(GenerativeModelTool):
             {"output": output_summarization},
         )
 
+        comment_examples = []
+
+        if self.review_comments_db:
+            comment_examples = [
+                {
+                    "file": comment["filename"],
+                    "code_line": comment["start_line"],
+                    "comment": comment["content"],
+                }
+                # TODO: use a smarter search to limit the number of comments and
+                # diversify the examples (from different hunks, files, etc.).
+                for comment in self.review_comments_db.find_similar_patch_comments(
+                    patch
+                )
+            ]
+            comment_examples = comment_examples[:10]
+
+        if not comment_examples:
+            comment_examples = STATIC_COMMENT_EXAMPLES
+
         output = conversation_chain.predict(
-            input=PROMPT_TEMPLATE_REVIEW.format(patch=formatted_patch)
+            input=PROMPT_TEMPLATE_REVIEW.format(
+                patch=formatted_patch,
+                comment_examples=json.dumps(comment_examples, indent=2),
+            )
         )
 
         memory.clear()
@@ -600,3 +633,13 @@ class ReviewCommentsDB:
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
+
+    def find_similar_patch_comments(self, patch: Patch):
+        patch_set = PatchSet.from_string(patch.raw_diff)
+
+        for patched_file in patch_set:
+            if not patched_file.is_modified_file:
+                continue
+
+            for hunk in patched_file:
+                yield from self.find_similar_hunk_comments(hunk)
