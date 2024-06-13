@@ -1,79 +1,3 @@
-# import logging
-# import json
-# import os
-# from bugbug.tools.code_review import PhabricatorReviewData
-
-# # Initialize the Phabricator review data
-# review_data = PhabricatorReviewData()
-
-# # Configure logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# # Create necessary directories if they do not exist
-# os.makedirs("patches", exist_ok=True)
-# os.makedirs("comments", exist_ok=True)
-
-# # Save comments to a JSON file
-# def save_comments_to_file(patch_id, comments):
-#     file_path = f"comments/{patch_id}.json"
-#     if os.path.exists(file_path):
-#         #logger.info(f"Comments file for patch ID {patch_id} already exists.")
-#         return
-
-#     with open(file_path, 'w') as f:
-#         json.dump([comment.__dict__ for comment in comments], f, indent=4)
-#     #logger.info(f"Saved comments for patch ID {patch_id} to {file_path}")
-
-# # Download all patches and retrieve inline comments for the first patch
-# def download_and_retrieve_comments():
-#     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
-#         try:
-#             review_data.load_patch_by_id(patch_id)
-#         except Exception as e:
-#             logger.error(f"Failed to load patch {patch_id}: {e}")
-#             continue
-#         save_comments_to_file(patch_id, comments)
-
-#     return patch_id, comments
-
-# # Get the inline comments
-# patch_id, comments = download_and_retrieve_comments()
-
-# --------------------------------------------------------- #
-# import json
-# from libmozdata.phabricator import PhabricatorAPI
-
-# class PhabricatorClient:
-#     def __init__(self, api_key):
-#         self.api = PhabricatorAPI(api_key)
-
-#     def find_bug_from_patch(self, patch_id):
-#         diffs = self.api.search_diffs(diff_id=patch_id)
-#         if not diffs:
-#             raise Exception("No diffs found for the given patch ID")
-#         revision_phid = diffs[0]['revisionPHID']
-#         return self.api.load_revision(rev_phid=revision_phid)
-
-#     def get_transactions_for_revision(self, revision_phid):
-#         transactions = self.api.request("transaction.search", objectIdentifier=revision_phid)
-#         return transactions['data']
-
-#     def get_full_details(self, patch_id):
-#         revision = self.find_bug_from_patch(patch_id)
-#         revision_phid = revision['phid']
-
-#         # Fetch all transactions for the revision
-#         transactions = self.get_transactions_for_revision(revision_phid)
-
-#         return {
-#             'transactions': transactions,
-#         }
-
-#     # TODO: 1. given a patch and its inline comments 2. find when the comments were last modified and if it was resolved 3. go through commit history, find the most recent patch 4. apply the original patch to parent of fix, get diff
-
-# --------------------------------------------------------- #
-
 # 1. Retrieve and store all inline comments that have been resolved locally for each patch X
 #    make changes to code_review.py to store extra metadata
 
@@ -152,18 +76,43 @@ def save_comments_to_file(patch_id, comments):
         json.dump([comment.__dict__ for comment in resolved_comments], f, indent=4)
 
 
-# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the patch
+# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the most recent patch before the comment was resolved
+def find_recent_update(transactions, comment_date_modified):
+    updates = [
+        transaction
+        for transaction in transactions
+        if transaction["type"] == "update"
+        and transaction["dateModified"] <= comment_date_modified
+    ]
+    if not updates:
+        return None
+    most_recent_update = max(
+        updates, key=lambda transaction: transaction["dateModified"]
+    )
+    return most_recent_update
+
+
+# TODO: skip cases where the most recent patch is the original patch itself, so there were no changes made to address the comments
+# could be because of accidental comment
+
+
 def process_comments():
     client = PhabricatorClient()
     comments_dir = "comments"
 
     for file_name in os.listdir(comments_dir):
         file_path = os.path.join(comments_dir, file_name)
-        with open(file_path, "r"):
+        with open(file_path, "r") as f:
             patch_id = int(file_name.replace(".json", ""))
             transactions = client.find_transactions_from_patch(patch_id)
-            print(json.dumps(transactions, indent=4))
-        break
+
+            comments = json.load(f)
+            for comment in comments:
+                comment_date_modified = comment["date_modified"]
+                most_recent_update = find_recent_update(
+                    transactions, comment_date_modified
+                )
+                print(json.dumps(most_recent_update, indent=4))
 
 
 # Example usage
