@@ -7,6 +7,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from logging import INFO, basicConfig, getLogger
 from typing import Iterable
 
@@ -19,7 +20,7 @@ from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
 
-from bugbug import db, phabricator
+from bugbug import db, phabricator, utils
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
@@ -115,6 +116,24 @@ As examples of not expected comments, not related to the current patch, please, 
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
 
 
+PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for
+reviewing the patch.
+List the names of these functions, providing only the function names, with each name on a separate line.
+Avoid using list indicators such as hyphens or numbers.
+If no function declaration is required, just return "".
+{patch}
+{summarization}"""
+
+PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES = """Based on the patch provided below and its related summarization, report the code lines more context is required.
+For that, list the lines with the their associated line numbers, grouping each one on a separated line.
+Avoid using list indicators such as hyphens or numbers. If no code line is required, just return "".
+Examples of valid code lines:
+- '152    const selector = notification.getDescription();'
+- '56        file.getElement(this.targetElement());'
+{patch}
+{summarization}"""
+
+
 class ReviewRequest:
     patch_id: int
 
@@ -124,10 +143,12 @@ class ReviewRequest:
 
 
 class Patch:
+    base_commit_hash: str
     raw_diff: str
 
-    def __init__(self, raw_diff) -> None:
+    def __init__(self, base_commit_hash, raw_diff) -> None:
         super().__init__()
+        self.base_commit_hash = base_commit_hash
         self.raw_diff = raw_diff
 
 
@@ -148,7 +169,7 @@ class ReviewData(ABC):
     ) -> Iterable[tuple[int, list[InlineComment]]]:
         raise NotImplementedError
 
-    def load_patch_by_id(self, diff_id) -> Patch:
+    def load_raw_diff_by_id(self, diff_id) -> str:
         """Load a patch from local cache if it exists.
 
         If the patch is not in the local cache it will be requested from the
@@ -162,13 +183,14 @@ class ReviewData(ABC):
         """
         try:
             with open(f"patches/{diff_id}.patch", "r") as f:
-                patch = Patch(f.read())
+                raw_diff = f.read()
         except FileNotFoundError:
             with open(f"patches/{diff_id}.patch", "w") as f:
                 patch = self.get_patch_by_id(diff_id)
-                f.write(patch.raw_diff)
+                raw_diff = patch.raw_diff
+                f.write(raw_diff)
 
-        return patch
+        return raw_diff
 
     def get_matching_hunk(
         self, patched_file: PatchedFile, comment: InlineComment
@@ -258,9 +280,7 @@ class ReviewData(ABC):
 
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
-                patch_set = PatchSet.from_string(
-                    self.load_patch_by_id(diff_id).raw_diff
-                )
+                patch_set = PatchSet.from_string(self.load_raw_diff_by_id(diff_id))
             except UnidiffParseError:
                 # TODO: use log instead of print
                 print(f"Failed to parse {diff_id}")
@@ -303,7 +323,51 @@ class PhabricatorReviewData(ReviewData):
     def get_patch_by_id(self, patch_id: int) -> Patch:
         assert phabricator.PHABRICATOR_API is not None
         raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(int(patch_id))
-        return Patch(raw_diff)
+
+        diffs = phabricator.PHABRICATOR_API.search_diffs(diff_id=int(patch_id))
+        assert len(diffs) == 1
+        diff = diffs[0]
+
+        return Patch(PhabricatorReviewData.get_base_commit_hash(diff), raw_diff)
+
+    @staticmethod
+    def commit_available(commit_hash: str) -> bool:
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}"
+        )
+        return r.ok
+
+    @staticmethod
+    def get_base_commit_hash(diff: dict) -> str:
+        try:
+            base_commit_hash = diff["refs"]["base"]["identifier"]
+            if PhabricatorReviewData.commit_available(base_commit_hash):
+                return base_commit_hash
+        except KeyError:
+            pass
+
+        end_date = datetime.fromtimestamp(diff["dateCreated"])
+        start_date = datetime.fromtimestamp(diff["dateCreated"] - 86400)
+        end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
+        start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1"
+        )
+        pushes = r.json()["pushes"]
+        closest_push = None
+        for push_id, push in pushes.items():
+            if diff["dateCreated"] - push["date"] < 0:
+                continue
+
+            if (
+                closest_push is None
+                or diff["dateCreated"] - push["date"]
+                < diff["dateCreated"] - closest_push["date"]
+            ):
+                closest_push = push
+
+        assert closest_push is not None
+        return closest_push["changesets"][0]
 
     def get_all_inline_comments(
         self, comment_filter
@@ -431,21 +495,196 @@ def find_mixed_lines_range(hunk: Hunk):
     return first_line, last_line
 
 
+def get_hunk_with_associated_lines(hunk):
+    hunk_with_lines = ""
+    for line in hunk:
+        if line.is_added:
+            hunk_with_lines += f"{line.target_line_no} + {line.value}"
+        elif line.is_removed:
+            hunk_with_lines += f"{line.source_line_no} - {line.value}"
+        elif line.is_context:
+            hunk_with_lines += f"{line.target_line_no}   {line.value}"
+
+    return hunk_with_lines
+
+
 def format_patch_set(patch_set):
     output = ""
     for patch in patch_set:
         for hunk in patch:
-            output += f"Hunk Line Number: {hunk.target_start}\n"
             output += f"Filename: {patch.target_file}\n"
-            output += f"Hunk: {hunk}\n"
+            output += f"{get_hunk_with_associated_lines(hunk)}\n"
 
     return output
+
+
+def get_associated_file_to_function(function_name, patch):
+    for patch_by_file in patch:
+        for one_patch in patch_by_file:
+            if function_name in str(one_patch.source):
+                return patch_by_file.path
+    return None
+
+
+def get_associated_file_to_line_context(context_line, patch):
+    for key, value in patch.items():
+        if context_line in str(value):
+            return key
+    return None
+
+
+def parse_text_for_dict(text):
+    file_content = {}
+    current_filename = None
+    current_lines = []
+
+    lines = text.split("\n")
+    for line in lines:
+        if line.startswith("Filename:"):
+            filename = line.split(":", 1)[1].strip()
+            # Remove the first letter and the '/' character from the filename
+            filename = filename[2:]
+            current_filename = filename
+            current_lines = []
+        else:
+            current_lines.append(line)
+
+        # If we have content and filename, store it
+        if current_filename is not None and len(current_lines) > 0:
+            if file_content.get(current_filename) is not None:
+                file_content[current_filename] = (
+                    file_content[current_filename] + "\n" + str(line)
+                )
+            else:
+                file_content[current_filename] = "\n".join(current_lines)
+
+    return file_content
+
+
+def request_for_function_declarations(
+    function_search, commit_hash, functions_list, patch_set
+):
+    functions_declarations = []
+
+    if functions_list is not None:
+        for function_name in functions_list:
+            if (
+                function_name != "Not found"
+                and function_name != "N/A"
+                and function_name != "None"
+                and function_name != ""
+                and len(function_name) < 50
+            ):
+                target_path = get_associated_file_to_line_context(
+                    function_name, parse_text_for_dict(format_patch_set(patch_set))
+                )
+
+                if target_path:
+                    definitions = function_search.get_function_by_name(
+                        commit_hash,
+                        path=target_path,
+                        function_name=function_name,
+                    )
+                    collect_function_definitions(
+                        functions_declarations, function_name, definitions
+                    )
+
+    return functions_declarations
+
+
+def is_code_line_already_covered(code_line, target_file, function_declarations):
+    for function_declaration in function_declarations:
+        if (
+            function_declaration[1] == target_file
+            and code_line in function_declaration[2]
+        ):
+            return True
+    return False
+
+
+def collect_function_definitions(function_declarations, target_element, definitions):
+    for definition in definitions:
+        if "file" not in definition or "source" not in definition:
+            print("Unexpected JSON format for reported content")
+            continue
+        function_declarations.append(
+            [
+                target_element,
+                definition["file"],
+                definition["source"],
+            ]
+        )
+
+
+def request_for_context_lines(function_search, commit_hash, context_line_codes, patch):
+    functions_declarations = []
+
+    if context_line_codes is not None:
+        for context_line in context_line_codes:
+            try:
+                line_number = int(re.search(r"\b(\d+)\b", context_line).group(1))
+            except (AttributeError, ValueError):
+                print("Unexpected Line Number Format")
+                continue
+
+            try:
+                content_line = str(context_line.split(str(line_number))[1]).lstrip()[1:]
+            except (IndexError, TypeError):
+                print("Unexpected content line")
+                continue
+
+            target_path = get_associated_file_to_line_context(
+                content_line, parse_text_for_dict(patch)
+            )
+            if (
+                target_path
+                and content_line
+                and not is_code_line_already_covered(
+                    content_line, target_path, functions_declarations
+                )
+            ):
+                definitions = function_search.get_function_by_line(
+                    commit_hash=commit_hash,
+                    path=target_path,
+                    line=line_number,
+                )
+                collect_function_definitions(
+                    functions_declarations, context_line, definitions
+                )
+
+    return functions_declarations
+
+
+def get_structured_functions(target, functions_declaration):
+    function_declaration_text = "\n"
+    for function in functions_declaration:
+        try:
+            current_function_info = ""
+            current_function_info += target + ": " + function[0] + "\n"
+            current_function_info += "File: " + function[1] + "\n"
+            if isinstance(function[2], list):
+                current_function = ""
+                for line in function[2]:
+                    current_function += "\n" + line
+                current_function_info += (
+                    "Function Declaration: " + current_function + "\n\n"
+                )
+            else:
+                current_function_info += (
+                    "Function Declaration: \n" + function[2] + "\n\n"
+                )
+            function_declaration_text += current_function_info
+        except IndexError:
+            print("Function does not present all required information")
+            continue
+
+    return function_declaration_text
 
 
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, function_search, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.summarization_chain = LLMChain(
@@ -456,6 +695,16 @@ class CodeReviewTool(GenerativeModelTool):
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
             llm=self.llm,
         )
+        self.further_context_chain = LLMChain(
+            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES),
+            llm=self.llm,
+        )
+        self.further_info_chain = LLMChain(
+            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_INFO),
+            llm=self.llm,
+        )
+
+        self.function_search = function_search
 
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
@@ -469,6 +718,29 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
 
         print(output_summarization)
+
+        if self.function_search is not None:
+            line_code_list = self.further_context_chain.run(
+                patch=formatted_patch, summarization=output_summarization
+            ).split("\n")
+
+            requested_context_lines = request_for_context_lines(
+                self.function_search,
+                patch.base_commit_hash,
+                line_code_list,
+                formatted_patch,
+            )
+
+            function_list = self.further_info_chain.run(
+                patch=patch, summarization=output_summarization
+            ).split("\n")
+
+            requested_functions = request_for_function_declarations(
+                self.function_search,
+                patch.base_commit_hash,
+                function_list,
+                patch_set,
+            )
 
         memory = ConversationBufferMemory()
         conversation_chain = ConversationChain(
@@ -489,6 +761,36 @@ class CodeReviewTool(GenerativeModelTool):
             },
             {"output": output_summarization},
         )
+
+        if self.function_search is not None and len(requested_functions) > 0:
+            function_declaration_text = get_structured_functions(
+                "Required Function", requested_functions
+            )
+
+            memory.save_context(
+                {
+                    "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you, by giving more context about the code under analysis. "
+                    + function_declaration_text
+                },
+                {
+                    "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
+                },
+            )
+
+        if self.function_search is not None and len(requested_context_lines) > 0:
+            context_text = get_structured_functions(
+                "Requested Context for Line", requested_functions
+            )
+
+            memory.save_context(
+                {
+                    "input": "Attached, you can also have more context of the target code under analysis."
+                    + context_text
+                },
+                {
+                    "output": "Okay, I will also consider the code as additional context to the given patch."
+                },
+            )
 
         output = conversation_chain.predict(
             input=PROMPT_TEMPLATE_REVIEW.format(patch=formatted_patch)
