@@ -42,6 +42,8 @@ class InlineComment:
     on_removed_code: bool | None
     id: int | None = None
     date_created: int | None = None
+    date_modified: int | None = None
+    is_done: bool | None = None
 
 
 class ModelResultError(Exception):
@@ -560,6 +562,10 @@ class PhabricatorReviewData(ReviewData):
                     # in Phabricator's API.
                     on_removed_code = None
 
+                    # store the last modified date and if the comments have been marked as done
+                    date_modified = transaction_comment["dateModified"]
+                    is_done = transaction["fields"]["isDone"]
+
                     # TODO: we could create an extended dataclass for this
                     # instead of adding optional fields.
                     comment = InlineComment(
@@ -570,6 +576,8 @@ class PhabricatorReviewData(ReviewData):
                         on_removed_code,
                         comment_id,
                         date_created,
+                        date_modified,
+                        is_done,
                     )
                     continue
 
