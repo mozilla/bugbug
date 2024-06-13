@@ -74,9 +74,10 @@
 
 # --------------------------------------------------------- #
 
-# 1. Retrieve and store all inline comments locally for each patch X
+# 1. Retrieve and store all inline comments that have been resolved locally for each patch X
+#    make changes to code_review.py to store extra metadata
 
-# 2. If the comments are marked as done, get the last time it was modified and go through transaction history
+# 2. Iterate through comments, get the last time it was modified and go through transaction history
 
 # 3. Identify the patch that was landed most recent before the comment was marked as is done, get the diff and store that, also store diff of original patch
 
@@ -89,7 +90,10 @@ import json
 import logging
 import os
 
+from libmozdata.phabricator import PhabricatorAPI
+
 from bugbug.tools.code_review import PhabricatorReviewData
+from bugbug.utils import get_secret
 
 review_data = PhabricatorReviewData()
 
@@ -100,7 +104,34 @@ logger = logging.getLogger(__name__)
 os.makedirs("patches", exist_ok=True)
 os.makedirs("comments", exist_ok=True)
 
-# 1. Retrieve and store all inline comments locally for each patch X
+
+# Define Phabricator client
+class PhabricatorClient:
+    def __init__(self):
+        self.api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
+
+    def find_revision_from_patch(self, patch_id):
+        diffs = self.api.search_diffs(diff_id=patch_id)
+
+        if not diffs:
+            raise Exception(f"No diffs found for the given patch ID: {patch_id}")
+
+        revision_phid = diffs[0]["revisionPHID"]
+        return revision_phid
+
+    def find_transactions_from_patch(self, patch_id):
+        revision_phid = self.find_revision_from_patch(patch_id)
+        transactions = self.api.request(
+            "transaction.search", objectIdentifier=revision_phid
+        )["data"]
+
+        if not transactions:
+            raise Exception(f"No transactions found for the given patch ID: {patch_id}")
+
+        return transactions
+
+
+# 1. Retrieve and store all inline comments that have been resolved locally for each patch X
 #    make changes to code_review.py to store extra metadata
 
 
@@ -111,16 +142,31 @@ def download_inline_comments():
 
 
 def save_comments_to_file(patch_id, comments):
+    resolved_comments = [comment for comment in comments if comment.is_done]
+
     file_path = f"comments/{patch_id}.json"
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) or not resolved_comments:
         return
 
     with open(file_path, "w") as f:
-        json.dump([comment.__dict__ for comment in comments], f, indent=4)
+        json.dump([comment.__dict__ for comment in resolved_comments], f, indent=4)
 
 
-# 2. If the comments are marked as done, get the last time it was modified and go through transaction history
+# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the patch
+def process_comments():
+    client = PhabricatorClient()
+    comments_dir = "comments"
+
+    for file_name in os.listdir(comments_dir):
+        file_path = os.path.join(comments_dir, file_name)
+        with open(file_path, "r"):
+            patch_id = int(file_name.replace(".json", ""))
+            transactions = client.find_transactions_from_patch(patch_id)
+            print(json.dumps(transactions, indent=4))
+        break
+
 
 # Example usage
 if __name__ == "__main__":
     download_inline_comments()
+    process_comments()
