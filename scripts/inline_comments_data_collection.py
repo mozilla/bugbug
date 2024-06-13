@@ -115,7 +115,6 @@ def process_comments():
                 print(json.dumps(most_recent_update, indent=4))
 
 
-# Example usage
 if __name__ == "__main__":
     download_inline_comments()
     process_comments()
