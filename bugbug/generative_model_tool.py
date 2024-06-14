@@ -13,14 +13,14 @@ from bugbug.utils import get_secret
 
 
 def create_llm(llm):
-    temperature = 0.2
+    openai_temperature = 0.2
     if llm == "human":
         return HumanInputLLM()
     elif llm == "openai":
         return ChatOpenAI(
             model_name="gpt-4-0125-preview",
             api_key=get_secret("OPENAI_API_KEY"),
-            temperature=temperature,
+            temperature=openai_temperature,
         )
     elif llm == "azureopenai":
         return AzureChatOpenAI(
@@ -28,7 +28,7 @@ def create_llm(llm):
             azure_deployment=get_secret("OPENAI_API_DEPLOY"),
             api_key=get_secret("OPENAI_API_KEY"),
             api_version=get_secret("OPENAI_API_VERSION"),
-            temperature=temperature,
+            temperature=openai_temperature,
         )
     else:
         raise NotImplementedError
