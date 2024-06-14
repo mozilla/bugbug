@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from langchain_community.llms import HumanInputLLM
-from langchain_openai import ChatOpenAI, AzureChatOpenAI
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from bugbug.utils import get_secret
 
@@ -25,7 +25,7 @@ def create_llm(llm):
     elif llm == "azureopenai":
         return AzureChatOpenAI(
             azure_endpoint=get_secret("OPENAI_API_ENDPOINT"),
-            azure_deployment=get_secret("OPENAI_API_DEPLOY"), 
+            azure_deployment=get_secret("OPENAI_API_DEPLOY"),
             api_key=get_secret("OPENAI_API_KEY"),
             api_version=get_secret("OPENAI_API_VERSION"),
             temperature=temperature,
