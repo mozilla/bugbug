@@ -54,6 +54,12 @@ class PhabricatorClient:
 
         return transactions
 
+    def get_diff_id_from_phid(self, phid):
+        diffs = self.api.search_diffs(diff_phid=phid)
+        if not diffs:
+            raise Exception(f"No diff found for PHID {phid}")
+        return diffs[0]["id"]
+
 
 # 1. Retrieve and store all inline comments that have been resolved locally for each patch X
 #    make changes to code_review.py to store extra metadata
@@ -99,7 +105,7 @@ def find_recent_update(transactions, comment_date_modified):
 def process_comments():
     client = PhabricatorClient()
     comments_dir = "comments"
-
+    count = 0
     for file_name in os.listdir(comments_dir):
         file_path = os.path.join(comments_dir, file_name)
         with open(file_path, "r") as f:
@@ -112,7 +118,22 @@ def process_comments():
                 most_recent_update = find_recent_update(
                     transactions, comment_date_modified
                 )
-                print(json.dumps(most_recent_update, indent=4))
+                if not most_recent_update:
+                    continue
+                # If the most recent patch is the original patch itself, skip it
+                if (
+                    client.get_diff_id_from_phid(most_recent_update["fields"]["new"])
+                    == patch_id
+                ):
+                    continue
+                print(f"ORIGINAL PATCH >> {patch_id}")
+                print(
+                    f"FIX PATCH >> {client.get_diff_id_from_phid(most_recent_update['fields']['new'])}"
+                )
+
+        count += 1
+        if count >= 100:
+            break
 
 
 if __name__ == "__main__":
