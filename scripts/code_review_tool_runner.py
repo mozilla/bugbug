@@ -17,17 +17,8 @@ def run(args) -> None:
 
     review_data = code_review.review_data_classes[args.review_platform]()
 
-    if args.review_platform == "swarm" and hasattr(
-        review_data, "get_patch_by_version_fromto"
-    ):
-        patch = review_data.get_patch_by_version_fromto(
-            args.review_request_id,
-            version_before=args.version_before,
-            version_num=args.version_num,
-        )
-    else:
-        revision = review_data.get_review_request_by_id(args.review_request_id)
-        patch = review_data.get_patch_by_id(revision.patch_id)
+    revision = review_data.get_review_request_by_id(args.review_request_id)
+    patch = review_data.get_patch_by_id(revision.patch_id)
 
     print(patch)
     print(code_review_tool.run(patch))
@@ -49,18 +40,6 @@ def parse_args(args):
         "--llm",
         help="LLM",
         choices=["human", "openai", "llama2"],
-    )
-    parser.add_argument(
-        "--version_before",
-        help="Version of the review to compare to (swarm specific argument)",
-        default=0,
-        required=False,
-    )
-    parser.add_argument(
-        "--version_num",
-        help="Current version of the review (swarm specific argument)",
-        default=1,
-        required=False,
     )
     return parser.parse_args(args)
 

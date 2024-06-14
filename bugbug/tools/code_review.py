@@ -386,30 +386,6 @@ class SwarmReviewData(ReviewData):
         assert len(revisions) == 1
         return Patch(revisions[0]["fields"]["diff"])
 
-    def get_patch_by_version_fromto(
-        self, revision_id: int, version_before: int = 0, version_num: int = 1
-    ) -> Patch:
-        """Return Patch object with specific versioning (specific to Swarm).
-
-        Args:
-             patch_id: Id of the revision on swarm.
-             version_before: number of version revision to compare to.
-             version_num: number of the current revision
-
-        Returns:
-             Patch object with the specific version comparison (compare
-             version_num to version_before) of the review.
-        """
-        revisions = swarm.get(
-            self.auth,
-            rev_ids=[int(revision_id)],
-            version_l=[version_before, version_num],
-        )
-
-        assert len(revisions) == 1
-
-        return Patch(revisions[0]["fields"]["diff"])
-
     def get_all_inline_comments(
         self, comment_filter
     ) -> Iterable[tuple[int, list[InlineComment]]]:
