@@ -19,7 +19,7 @@ from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
 
-from bugbug import db, phabricator
+from bugbug import db, phabricator, swarm
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
@@ -369,8 +369,33 @@ class PhabricatorReviewData(ReviewData):
                 yield diff_id, comments
 
 
+class SwarmReviewData(ReviewData):
+    def __init__(self):
+        self.auth = {
+            "user": get_secret("SWARM_USER"),
+            "password": get_secret("SWARM_PASS"),
+            "port": get_secret("SWARM_PORT"),
+            "instance": get_secret("SWARM_INSTANCE"),
+        }
+
+    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
+        return ReviewRequest(revision_id)
+
+    def get_patch_by_id(self, patch_id: int) -> Patch:
+        revisions = swarm.get(self.auth, rev_ids=[int(patch_id)], version_l=[0, 1])
+        assert len(revisions) == 1
+        return Patch(revisions[0]["fields"]["diff"])
+
+    def get_all_inline_comments(
+        self, comment_filter
+    ) -> Iterable[tuple[int, list[InlineComment]]]:
+        # Todo
+        raise NotImplementedError
+
+
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
+    "swarm": SwarmReviewData,
 }
 
 
