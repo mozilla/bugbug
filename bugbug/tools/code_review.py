@@ -378,30 +378,37 @@ class SwarmReviewData(ReviewData):
             "instance": get_secret("SWARM_INSTANCE"),
         }
 
-    # return ReviewRequest object with patch_id = revision_id
     def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
         return ReviewRequest(revision_id)
 
-    # return rawdiff from the initial version of the revision with id patch_id
     def get_patch_by_id(self, patch_id: int) -> Patch:
         revisions = swarm.get(self.auth, rev_ids=[int(patch_id)], version_l=[0, 1])
         assert len(revisions) == 1
         return Patch(revisions[0]["fields"]["diff"])
 
-    # return rawdiff from the initial version of a specific version of the revision_id
     def get_patch_by_version_fromto(
         self, revision_id: int, version_before: int = 0, version_num: int = 1
     ) -> Patch:
+        """Return Patch object with specific versioning (specific to Swarm).
+
+        Args:
+             patch_id: Id of the revision on swarm.
+             version_before: number of version revision to compare to.
+             version_num: number of the current revision
+
+        Returns:
+             Patch object with the specific version comparison (compare
+             version_num to version_before) of the review.
+        """
         revisions = swarm.get(
             self.auth,
             rev_ids=[int(revision_id)],
             version_l=[version_before, version_num],
         )
+
         assert len(revisions) == 1
 
-        return Patch(
-            revisions[0]["fields"]["diff"]
-        )
+        return Patch(revisions[0]["fields"]["diff"])
 
     def get_all_inline_comments(
         self, comment_filter

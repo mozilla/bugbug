@@ -6,11 +6,9 @@
 import json
 import subprocess
 from datetime import datetime
-from typing import Collection, NewType
+from typing import Collection
 
 from P4 import P4  # from pip p4python
-
-RevisionDict = NewType("RevisionDict", dict)
 
 
 def api_revinfo(instance, rev_id):
