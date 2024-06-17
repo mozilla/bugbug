@@ -89,15 +89,8 @@ def find_recent_update(transactions, comment_date_modified):
 
 def save_to_dataset(data):
     dataset_file = "dataset/inline_comment_dataset.json"
-    if os.path.exists(dataset_file):
-        with open(dataset_file, "r") as f:
-            dataset = json.load(f)
-    else:
-        dataset = []
-
-    dataset.append(data)
-    with open(dataset_file, "w") as f:
-        json.dump(dataset, f, indent=4)
+    with open(dataset_file, "a") as f:
+        f.write(json.dumps(data) + "\n")
 
 
 def to_int(value):
