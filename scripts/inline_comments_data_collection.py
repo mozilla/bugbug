@@ -101,6 +101,8 @@ def save_to_dataset(data):
 
 
 def to_int(value):
+    if not value:
+        return None
     if not isinstance(value, int):
         return int(value)
     return value
