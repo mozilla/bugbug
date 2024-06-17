@@ -39,7 +39,7 @@ def parse_args(args):
     parser.add_argument(
         "--llm",
         help="LLM",
-        choices=["human", "openai", "llama2"],
+        choices=["human", "openai", "azureopenai", "llama2"],
     )
     return parser.parse_args(args)
 
