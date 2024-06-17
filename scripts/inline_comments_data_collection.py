@@ -1,11 +1,3 @@
-# 1. Retrieve and store all inline comments that have been resolved locally for each patch X
-#    make changes to code_review.py to store extra metadata
-
-# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the most recent patch before the comment was resolved
-
-# 3. Load diff of fix patch and store the following in dataset: revision ID, bug ID, initial patch ID, comments, fix patch ID, diff of the fix patch
-
-
 import json
 import logging
 import os
@@ -63,10 +55,6 @@ class PhabricatorClient:
         return revision["fields"]["bugzilla.bug-id"]
 
 
-# 1. Retrieve and store all inline comments that have been resolved locally for each patch X
-#    make changes to code_review.py to store extra metadata
-
-
 def download_inline_comments():
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
         save_comments_to_file(patch_id, comments)
@@ -84,7 +72,6 @@ def save_comments_to_file(patch_id, comments):
         json.dump([comment.__dict__ for comment in resolved_comments], f, indent=4)
 
 
-# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the most recent patch before the comment was resolved
 def find_recent_update(transactions, comment_date_modified):
     updates = [
         transaction
