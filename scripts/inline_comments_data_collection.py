@@ -115,10 +115,8 @@ def save_to_dataset(data):
 
 def to_int(value):
     if not isinstance(value, int):
-        try:
-            return int(value)
-        except ValueError:
-            return None
+        return int(value)
+    return value
 
 
 def process_comments(patch_threshold):
@@ -171,4 +169,4 @@ def process_comments(patch_threshold):
 
 if __name__ == "__main__":
     download_inline_comments()
-    process_comments(patch_threshold=500)
+    process_comments(patch_threshold=250)
