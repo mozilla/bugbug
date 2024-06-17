@@ -1,13 +1,9 @@
 # 1. Retrieve and store all inline comments that have been resolved locally for each patch X
 #    make changes to code_review.py to store extra metadata
 
-# 2. Iterate through comments, get the last time it was modified and go through transaction history
+# 2. Iterate through comments, get the last time it was modified and go through transaction history and find the most recent patch before the comment was resolved
 
-# 3. Identify the patch that was landed most recent before the comment was marked as is done, get the diff and store that, also store diff of original patch
-
-# 4. apply cherry picking technique
-
-# 5. store the following in dataset: revision ID, bug ID, initial patch ID, comments, fix patch ID, diff between original and fix patch
+# 3. Load diff of fix patch and store the following in dataset: revision ID, bug ID, initial patch ID, comments, fix patch ID, diff of the fix patch
 
 
 import json
@@ -24,12 +20,11 @@ review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create necessary directories if they do not exist
 os.makedirs("patches", exist_ok=True)
 os.makedirs("comments", exist_ok=True)
+os.makedirs("dataset", exist_ok=True)
 
 
-# Define Phabricator client
 class PhabricatorClient:
     def __init__(self):
         self.api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
@@ -54,11 +49,18 @@ class PhabricatorClient:
 
         return transactions
 
-    def get_diff_id_from_phid(self, phid):
+    def get_diff_info_from_phid(self, phid):
         diffs = self.api.search_diffs(diff_phid=phid)
         if not diffs:
             raise Exception(f"No diff found for PHID {phid}")
-        return diffs[0]["id"]
+        return diffs[0]["id"], diffs[0]["revisionPHID"]
+
+    def find_bugid_from_revision_phid(self, phid):
+        revision = self.api.load_revision(rev_phid=phid)
+        if not revision:
+            raise Exception(f"No revision found for the given revision PHID: {phid}")
+
+        return revision["fields"]["bugzilla.bug-id"]
 
 
 # 1. Retrieve and store all inline comments that have been resolved locally for each patch X
@@ -98,14 +100,31 @@ def find_recent_update(transactions, comment_date_modified):
     return most_recent_update
 
 
-# TODO: skip cases where the most recent patch is the original patch itself, so there were no changes made to address the comments
-# could be because of accidental comment
+def save_to_dataset(data):
+    dataset_file = "dataset/inline_comment_dataset.json"
+    if os.path.exists(dataset_file):
+        with open(dataset_file, "r") as f:
+            dataset = json.load(f)
+    else:
+        dataset = []
+
+    dataset.append(data)
+    with open(dataset_file, "w") as f:
+        json.dump(dataset, f, indent=4)
 
 
-def process_comments():
+def to_int(value):
+    if not isinstance(value, int):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
+
+def process_comments(patch_threshold):
     client = PhabricatorClient()
     comments_dir = "comments"
-    count = 0
+    patch_count = 0
     for file_name in os.listdir(comments_dir):
         file_path = os.path.join(comments_dir, file_name)
         with open(file_path, "r") as f:
@@ -120,22 +139,36 @@ def process_comments():
                 )
                 if not most_recent_update:
                     continue
-                # If the most recent patch is the original patch itself, skip it
-                if (
-                    client.get_diff_id_from_phid(most_recent_update["fields"]["new"])
-                    == patch_id
-                ):
-                    continue
-                print(f"ORIGINAL PATCH >> {patch_id}")
-                print(
-                    f"FIX PATCH >> {client.get_diff_id_from_phid(most_recent_update['fields']['new'])}"
+
+                fix_patch_id, revision_phid = client.get_diff_info_from_phid(
+                    most_recent_update["fields"]["new"]
                 )
 
-        count += 1
-        if count >= 100:
+                # If the most recent patch is the original patch itself, skip it
+                if fix_patch_id == patch_id:
+                    continue
+
+                bug_id = client.find_bugid_from_revision_phid(phid=revision_phid)
+                review_data.load_patch_by_id(fix_patch_id)
+
+                with open(f"patches/{fix_patch_id}.patch", "r") as f:
+                    patch_diff = f.read()
+
+                data = {
+                    "bug_id": to_int(bug_id),
+                    "revision_phid": revision_phid,
+                    "initial_patch_id": to_int(patch_id),
+                    "fix_patch_id": to_int(fix_patch_id),
+                    "comment": comment,
+                    "fix_patch_diff": patch_diff,
+                }
+                save_to_dataset(data)
+
+        patch_count += 1
+        if patch_count >= patch_threshold:
             break
 
 
 if __name__ == "__main__":
     download_inline_comments()
-    process_comments()
+    process_comments(patch_threshold=500)
