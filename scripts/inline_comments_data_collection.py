@@ -101,7 +101,7 @@ def to_int(value):
     return value
 
 
-def process_comments(patch_threshold):
+def process_comments(patch_threshold, diff_length_threshold):
     client = PhabricatorClient()
     comments_dir = "comments"
     patch_count = 0
@@ -134,6 +134,9 @@ def process_comments(patch_threshold):
                 with open(f"patches/{fix_patch_id}.patch", "r") as f:
                     patch_diff = f.read()
 
+                if len(patch_diff) > diff_length_threshold:
+                    continue
+
                 data = {
                     "bug_id": to_int(bug_id),
                     "revision_phid": revision_phid,
@@ -151,4 +154,4 @@ def process_comments(patch_threshold):
 
 if __name__ == "__main__":
     download_inline_comments()
-    process_comments(patch_threshold=250)
+    process_comments(patch_threshold=250, diff_length_threshold=1000)
