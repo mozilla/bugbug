@@ -17,6 +17,30 @@ os.makedirs("comments", exist_ok=True)
 os.makedirs("dataset", exist_ok=True)
 
 
+class NoDiffsFoundException(Exception):
+    def __init__(self, patch_id):
+        super().__init__(f"No diffs found for the given patch ID: {patch_id}")
+        self.patch_id = patch_id
+
+
+class NoTransactionsFoundException(Exception):
+    def __init__(self, patch_id):
+        super().__init__(f"No transactions found for the given patch ID: {patch_id}")
+        self.patch_id = patch_id
+
+
+class NoDiffFoundForPHIDException(Exception):
+    def __init__(self, phid):
+        super().__init__(f"No diff found for PHID {phid}")
+        self.phid = phid
+
+
+class NoRevisionFoundException(Exception):
+    def __init__(self, phid):
+        super().__init__(f"No revision found for the given revision PHID: {phid}")
+        self.phid = phid
+
+
 class PhabricatorClient:
     def __init__(self):
         self.api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
@@ -25,7 +49,7 @@ class PhabricatorClient:
         diffs = self.api.search_diffs(diff_id=patch_id)
 
         if not diffs:
-            raise Exception(f"No diffs found for the given patch ID: {patch_id}")
+            raise NoDiffsFoundException(patch_id)
 
         revision_phid = diffs[0]["revisionPHID"]
         return revision_phid
@@ -37,20 +61,20 @@ class PhabricatorClient:
         )["data"]
 
         if not transactions:
-            raise Exception(f"No transactions found for the given patch ID: {patch_id}")
+            raise NoTransactionsFoundException(patch_id)
 
         return transactions
 
     def get_diff_info_from_phid(self, phid):
         diffs = self.api.search_diffs(diff_phid=phid)
         if not diffs:
-            raise Exception(f"No diff found for PHID {phid}")
+            raise NoDiffFoundForPHIDException(phid)
         return diffs[0]["id"], diffs[0]["revisionPHID"]
 
     def find_bugid_from_revision_phid(self, phid):
         revision = self.api.load_revision(rev_phid=phid)
         if not revision:
-            raise Exception(f"No revision found for the given revision PHID: {phid}")
+            raise NoRevisionFoundException(phid)
 
         return revision["fields"]["bugzilla.bug-id"]
 
