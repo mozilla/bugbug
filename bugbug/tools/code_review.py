@@ -537,10 +537,6 @@ class PhabricatorReviewData(ReviewData):
                 if transaction["authorPHID"] == "PHID-USER-cje4weq32o3xyuegalpj":
                     continue
 
-                # No comments
-                if not transaction["comments"]:
-                    continue
-
                 if len(transaction["comments"]) != 1:
                     # Follow up: https://github.com/mozilla/bugbug/issues/4218
                     logger.warning(
