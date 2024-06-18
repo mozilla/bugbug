@@ -525,70 +525,64 @@ class PhabricatorReviewData(ReviewData):
         for revision in tqdm(phabricator.get_revisions(), total=revision_count):
             diff_comments: dict[int, list[InlineComment]] = defaultdict(list)
 
-            try:
-                for transaction in revision["transactions"]:
-                    if transaction["type"] != "inline":
-                        continue
+            for transaction in revision["transactions"]:
+                if transaction["type"] != "inline":
+                    continue
 
-                    # Ignore replies
-                    if transaction["fields"]["replyToCommentPHID"] is not None:
-                        continue
+                # Ignore replies
+                if transaction["fields"]["replyToCommentPHID"] is not None:
+                    continue
 
-                    # Ignore bot comments
-                    if transaction["authorPHID"] == "PHID-USER-cje4weq32o3xyuegalpj":
-                        continue
+                # Ignore bot comments
+                if transaction["authorPHID"] == "PHID-USER-cje4weq32o3xyuegalpj":
+                    continue
 
-                    if len(transaction["comments"]) != 1:
-                        # Follow up: https://github.com/mozilla/bugbug/issues/4218
-                        logger.warning(
-                            "Unexpected number of comments in transaction %s",
-                            transaction["id"],
-                        )
-
-                    transaction_comment = transaction["comments"][0]
-                    comment_id = transaction_comment["id"]
-                    date_created = transaction_comment["dateCreated"]
-                    comment_content = transaction_comment["content"]["raw"]
-
-                    diff_id = transaction["fields"]["diff"]["id"]
-                    filename = transaction["fields"]["path"]
-                    start_line = transaction["fields"]["line"]
-                    end_line = (
-                        transaction["fields"]["line"]
-                        + transaction["fields"]["length"]
-                        - 1
-                    )
-                    # Unfortunately, we do not have this information for a limitation
-                    # in Phabricator's API.
-                    on_removed_code = None
-
-                    # store the last modified date and if the comments have been marked as done
-                    date_modified = transaction_comment["dateModified"]
-                    is_done = transaction["fields"]["isDone"]
-
-                    # TODO: we could create an extended dataclass for this
-                    # instead of adding optional fields.
-                    comment = InlineComment(
-                        filename,
-                        start_line,
-                        end_line,
-                        comment_content,
-                        on_removed_code,
-                        comment_id,
-                        date_created,
-                        date_modified,
-                        is_done,
+                if len(transaction["comments"]) != 1:
+                    # Follow up: https://github.com/mozilla/bugbug/issues/4218
+                    logger.warning(
+                        "Unexpected number of comments in transaction %s",
+                        transaction["id"],
                     )
                     continue
 
-                    if not comment_filter(comment):
-                        continue
+                transaction_comment = transaction["comments"][0]
+                comment_id = transaction_comment["id"]
+                date_created = transaction_comment["dateCreated"]
+                comment_content = transaction_comment["content"]["raw"]
 
-                    diff_comments[diff_id].append(comment)
+                diff_id = transaction["fields"]["diff"]["id"]
+                filename = transaction["fields"]["path"]
+                start_line = transaction["fields"]["line"]
+                end_line = (
+                    transaction["fields"]["line"] + transaction["fields"]["length"] - 1
+                )
+                # Unfortunately, we do not have this information for a limitation
+                # in Phabricator's API.
+                on_removed_code = None
 
-            except Exception as e:
-                logger.error(f"Error processing revision {revision['id']}: {e}")
-                continue
+                # store the last modified date and if the comments have been marked as done
+                date_modified = transaction_comment["dateModified"]
+                is_done = transaction["fields"]["isDone"]
+
+                # TODO: we could create an extended dataclass for this
+                # instead of adding optional fields.
+                comment = InlineComment(
+                    filename,
+                    start_line,
+                    end_line,
+                    comment_content,
+                    on_removed_code,
+                    comment_id,
+                    date_created,
+                    date_modified,
+                    is_done,
+                )
+
+                if not comment_filter(comment):
+                    continue
+
+                diff_comments[diff_id].append(comment)
+
             for diff_id, comments in diff_comments.items():
                 yield diff_id, comments
 
