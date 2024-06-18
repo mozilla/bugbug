@@ -332,6 +332,7 @@ class PhabricatorReviewData(ReviewData):
                         "Unexpected number of comments in transaction %s",
                         transaction["id"],
                     )
+                    continue
 
                 transaction_comment = transaction["comments"][0]
                 comment_id = transaction_comment["id"]
