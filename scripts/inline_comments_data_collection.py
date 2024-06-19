@@ -35,12 +35,6 @@ class NoDiffFoundForPHIDException(Exception):
         self.phid = phid
 
 
-class NoRevisionFoundException(Exception):
-    def __init__(self, phid):
-        super().__init__(f"No revision found for the given revision PHID: {phid}")
-        self.phid = phid
-
-
 class PhabricatorClient:
     def __init__(self):
         self.api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
@@ -73,9 +67,6 @@ class PhabricatorClient:
 
     def find_bugid_from_revision_phid(self, phid):
         revision = self.api.load_revision(rev_phid=phid)
-        if not revision:
-            raise NoRevisionFoundException(phid)
-
         return revision["fields"]["bugzilla.bug-id"]
 
 
@@ -178,4 +169,4 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 if __name__ == "__main__":
     download_inline_comments()
-    process_comments(patch_threshold=250, diff_length_threshold=1000)
+    process_comments(patch_threshold=250, diff_length_threshold=5000)
