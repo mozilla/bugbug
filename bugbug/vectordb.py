@@ -75,3 +75,43 @@ class QdrantVectorDB(VectorDB):
 
     def search(self, query: list[float]):
         return self.client.search(self.collection_name, query)
+
+
+class LocalQdrantVectorDB(VectorDB):
+    def __init__(
+        self, collection_name: str, embedding_size: int = 3072, *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.collection_name = collection_name
+        self.client = QdrantClient(":memory:")
+        self.embedding_size = embedding_size
+
+    def setup(self):
+        config = VectorParams(
+            size=self.embedding_size,
+            distance=Distance.COSINE,
+        )
+        try:
+            self.client.create_collection(
+                collection_name=self.collection_name, vectors_config=config
+            )
+        except UnexpectedResponse as e:
+            # We only allow 409 (collection already exists) to pass through
+            if e.status_code != 409:
+                raise Exception("Failed to create collection") from e
+
+    def insert(self, points: Iterable[VectorPoint]):
+        self.client.upload_points(
+            self.collection_name,
+            (
+                PointStruct(
+                    id=point.id,
+                    vector=point.vector,
+                    payload=point.payload,
+                )
+                for point in points
+            ),
+        )
+
+    def search(self, query: list[float], num: int = 3):
+        return self.client.search(self.collection_name, query, limit=num)

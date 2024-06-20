@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -14,12 +15,12 @@ import tenacity
 from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
-from langchain_openai import OpenAIEmbeddings
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
 
 from bugbug import db, phabricator, swarm
+from bugbug.embedding_model_tool import EmbeddingModelTool
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
@@ -37,6 +38,7 @@ class InlineComment:
     on_removed_code: bool | None
     id: int | None = None
     date_created: int | None = None
+    hunk: str | None = None
 
 
 class ModelResultError(Exception):
@@ -113,6 +115,24 @@ As examples of not expected comments, not related to the current patch, please, 
     - There are no complex code changes in this patch, so there's no potential for major readability regressions or bugs introduced by the changes.
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
+
+PROMPT_TEMPLATE_SIMPLE_REVIEW = """ Review the following patch:
+
+{patch}
+"""
+
+PROMPT_TEMPLATE_REVIEW_DYNA_COM = """You will be given a task for generate a code review for the patch below. Use the following steps to solve it.
+
+{patch}
+
+1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
+2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, not related to the patch under analysis now, consider some below:
+[
+    {examples}
+]
+4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
+5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples."""
 
 
 class ReviewRequest:
@@ -483,7 +503,7 @@ class CodeReviewTool(GenerativeModelTool):
             llm=self.llm,
         )
 
-    def run(self, patch: Patch) -> list[InlineComment] | None:
+    def run_default(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
         formatted_patch = format_patch_set(patch_set)
         if formatted_patch == "":
@@ -531,14 +551,166 @@ class CodeReviewTool(GenerativeModelTool):
 
         return raw_output
 
+    def run_rag_diff_com(self, patch: Patch, examples) -> list[InlineComment] | None:
+        patch_set = PatchSet.from_string(patch.raw_diff)
+        formatted_patch = format_patch_set(patch_set)
+        if formatted_patch == "":
+            return None
+
+        output_summarization = self.summarization_chain.invoke(
+            {"patch": formatted_patch},
+            return_only_outputs=True,
+        )["text"]
+
+        print(output_summarization)
+
+        memory = ConversationBufferMemory()
+        conversation_chain = ConversationChain(
+            llm=self.llm,
+            memory=memory,
+        )
+
+        memory.save_context(
+            {
+                "input": "You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews."
+            },
+            {"output": "Sure, I'm aware of source code practices in Firefox."},
+        )
+        memory.save_context(
+            {
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". '
+                + patch.raw_diff
+            },
+            {"output": output_summarization},
+        )
+
+        memory.save_context(
+            {"input": PROMPT_TEMPLATE_REVIEW.format(patch="")},
+            {"output": "No, problem, I will apply those rules."},
+        )
+
+        com_info = ",\n".join(
+            [
+                json.dumps(
+                    {
+                        "file": ex[1]["filename"],
+                        "code_line": ex[1]["end_line"],
+                        "comment": ex[1]["content"],
+                    }
+                )
+                for ex in examples
+            ]
+        )
+        print(com_info)
+        memory.save_context(
+            {
+                "input": PROMPT_TEMPLATE_SIMPLE_REVIEW.format(
+                    patch="\n\n".join([ex[1]["hunk"] for ex in examples])
+                )
+            },
+            {"output": f"[{com_info}]"},
+        )
+
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_SIMPLE_REVIEW.format(patch=formatted_patch)
+        )
+
+        print(output)
+
+        memory.clear()
+
+        raw_output = self.filtering_chain.invoke(
+            {"review": output, "patch": patch.raw_diff},
+            return_only_outputs=True,
+        )["text"]
+
+        return raw_output
+
+    def run_rag_com(self, patch: Patch, examples) -> list[InlineComment] | None:
+        patch_set = PatchSet.from_string(patch.raw_diff)
+        formatted_patch = format_patch_set(patch_set)
+        if formatted_patch == "":
+            return None
+
+        output_summarization = self.summarization_chain.invoke(
+            {"patch": formatted_patch},
+            return_only_outputs=True,
+        )["text"]
+
+        print(output_summarization)
+
+        memory = ConversationBufferMemory()
+        conversation_chain = ConversationChain(
+            llm=self.llm,
+            memory=memory,
+        )
+
+        memory.save_context(
+            {
+                "input": "You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews."
+            },
+            {"output": "Sure, I'm aware of source code practices in Firefox."},
+        )
+        memory.save_context(
+            {
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". '
+                + patch.raw_diff
+            },
+            {"output": output_summarization},
+        )
+
+        com_info = ",\n".join(
+            [
+                json.dumps(
+                    {
+                        "file": ex[1]["filename"],
+                        "code_line": ex[1]["end_line"],
+                        "comment": ex[1]["content"],
+                    }
+                )
+                for ex in examples
+            ]
+        )
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_REVIEW.format(
+                patch=formatted_patch, examples=com_info
+            )
+        )
+
+        print(output)
+
+        memory.clear()
+
+        raw_output = self.filtering_chain.invoke(
+            {"review": output, "patch": patch.raw_diff},
+            return_only_outputs=True,
+        )["text"]
+
+        return raw_output
+
+    def run(
+        self,
+        patch: Patch,
+        examples: list[InlineComment] | None = None,
+        approach: str = "default",
+    ) -> list[InlineComment] | None:
+        if approach == "default":
+            return self.run_default(patch)
+        elif approach == "rag_com":
+            return self.run_rag_com(patch, examples)
+        elif approach == "rag_diff_com":
+            return self.run_rag_diff_com(patch, examples)
+        else:
+            raise NotImplementedError
+
 
 class ReviewCommentsDB:
     NAV_PATTERN = re.compile(r"\{nav, [^}]+\}")
     WHITESPACE_PATTERN = re.compile(r"[\n\s]+")
 
-    def __init__(self, vector_db: VectorDB) -> None:
+    def __init__(self, vector_db: VectorDB, embedding: EmbeddingModelTool) -> None:
         self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        self.embeddings = embedding
 
     def clean_comment(self, comment):
         # TODO: use the nav info instead of removing it
