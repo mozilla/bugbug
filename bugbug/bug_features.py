@@ -905,3 +905,19 @@ class BugType(SingleBugFeature):
 
     def __call__(self, bug, **kwargs):
         return bug["type"]
+
+class ExtractFilePaths(SingleBugFeature):
+    """Extract file paths (partial and full) from bug data."""
+
+    name = "Extract File Paths"
+
+    def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
+        text = (
+            bug.get("summary", "")
+            + " "
+            + " ".join(comment["text"] for comment in bug.get("comments", []))
+        )
+
+        paths = re.findall(r"\b[\w/\\]+/\w+\.\w+\b", text)
+
+        return sorted(set(paths))
