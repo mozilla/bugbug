@@ -369,7 +369,6 @@ class LandingsRiskReportGenerator(object):
             {
                 "keywords": "feature-testing-meta",
                 "keywords_type": "allwords",
-                "resolution": "---",
                 "f1": "anything",
                 "o1": "changedafter",
                 "v1": "-90d",
