@@ -930,10 +930,9 @@ class ExtractFilePaths(SingleBugFeature):
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
         text = bug.get("summary", "") + " " + bug["comments"][0]["text"]
 
-        regex = r"\b[a-zA-Z0-9_/.\-]+(?:\.(?!com|org|net|edu|gov)[a-zA-Z]{2,4})\b"
+        regex = r"\b[a-zA-Z0-9_/.\-]+(?:/[a-zA-Z0-9_/.\-]+)*\.(?!com|org|net|edu|gov)[a-zA-Z]{2,4}\b"
 
         file_paths = re.findall(regex, text)
-        file_paths = [path for path in file_paths if "/" in path or "." in path]
 
         all_sub_paths = []
         for path in file_paths:
@@ -943,4 +942,4 @@ class ExtractFilePaths(SingleBugFeature):
             all_sub_paths.extend(sub_paths)
             all_sub_paths.extend(parts)
 
-        return sorted(set(all_sub_paths))
+        return all_sub_paths
