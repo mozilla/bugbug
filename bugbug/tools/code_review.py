@@ -538,8 +538,6 @@ class CodeReviewTool(GenerativeModelTool):
             return_only_outputs=True,
         )["text"]
 
-        print(output_summarization)
-
         memory = ConversationBufferMemory()
         conversation_chain = ConversationChain(
             llm=self.llm,
@@ -563,8 +561,6 @@ class CodeReviewTool(GenerativeModelTool):
         output = conversation_chain.predict(
             input=PROMPT_TEMPLATE_REVIEW.format(patch=formatted_patch)
         )
-
-        print(output)
 
         memory.clear()
 
