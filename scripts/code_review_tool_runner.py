@@ -6,7 +6,9 @@
 import argparse
 import sys
 
+import scripts.review_comments_retriever as review_comments_retriever
 from bugbug import generative_model_tool
+from bugbug.embedding_model_tool import embedding_class
 from bugbug.tools import code_review
 
 
@@ -20,8 +22,16 @@ def run(args) -> None:
     revision = review_data.get_review_request_by_id(args.review_request_id)
     patch = review_data.get_patch_by_id(revision.patch_id)
 
+    if args.prompt == "default":
+        examples = None
+    else:
+        embedding = embedding_class[args.llm]()
+        examples = review_comments_retriever.retrieve_examples(
+            review_data, embedding, patch
+        )
+
     print(patch)
-    print(code_review_tool.run(patch))
+    print(code_review_tool.run(patch, examples, args.prompt))
     input()
 
 
@@ -40,6 +50,11 @@ def parse_args(args):
         "--llm",
         help="LLM",
         choices=["human", "openai", "azureopenai", "llama2"],
+    )
+    parser.add_argument(
+        "--prompt",
+        help="Prompt approach to use",
+        choices=["default", "rag_com", "rag_diff_com"],
     )
     return parser.parse_args(args)
 
