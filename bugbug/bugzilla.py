@@ -32,6 +32,8 @@ db.register(
 )
 
 PRODUCTS = (
+    "Calendar",
+    "Chat Core",
     "Cloud Services",
     "Core",
     "Data Platform and Tools",
@@ -45,12 +47,14 @@ PRODUCTS = (
     "GeckoView",
     "Invalid Bugs",
     "JSS",
+    "MailNews Core",
     "NSPR",
     "NSS",
     "Release Engineering",
     "Remote Protocol",
     "Shield",
     "Testing",
+    "Thunderbird",
     "Toolkit",
     "Web Compatibility",
     "WebExtensions",
@@ -89,12 +93,20 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 
 INCLUDE_FIELDS = ["_default", "filed_via"]
 
+PRODUCTS_TO_EXCLUDE = [
+    "Calendar",
+    "Chat Core",
+    "Invalid Bugs",
+    "MailNews Core",
+    "Thunderbird",
+]
+
 
 def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
     yield from (
         bug
         for bug in db.read(BUGS_DB)
-        if include_invalid or bug["product"] != "Invalid Bugs"
+        if include_invalid or bug["product"] not in PRODUCTS_TO_EXCLUDE
     )
 
 
