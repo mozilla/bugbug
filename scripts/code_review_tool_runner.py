@@ -8,12 +8,15 @@ import sys
 
 from bugbug import generative_model_tool
 from bugbug.tools import code_review
+from bugbug.vectordb import QdrantVectorDB
 
 
 def run(args) -> None:
     llm = generative_model_tool.create_llm(args.llm)
 
-    code_review_tool = code_review.CodeReviewTool(llm)
+    vector_db = QdrantVectorDB("diff_comments")
+    review_comments_db = code_review.ReviewCommentsDB(vector_db)
+    code_review_tool = code_review.CodeReviewTool(review_comments_db, llm)
 
     review_data = code_review.review_data_classes[args.review_platform]()
 
