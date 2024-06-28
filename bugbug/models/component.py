@@ -12,7 +12,6 @@ import xgboost
 from dateutil.relativedelta import relativedelta
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -122,8 +121,7 @@ class ComponentModel(BugModel):
                         ]
                     ),
                 ),
-                ("smote", SMOTE(random_state=42)),
-                ("undersample", RandomUnderSampler(random_state=42)),
+                ("sampler", SMOTE(random_state=1, sampling_strategy="all")),
                 (
                     "estimator",
                     xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
