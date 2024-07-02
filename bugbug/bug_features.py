@@ -896,3 +896,29 @@ class BugTypes(SingleBugFeature):
             for is_type in self.bug_type_extractors
             if is_type(bug, bug_map)
         ]
+
+
+class ExtractFilePaths(SingleBugFeature):
+    """Extract file paths (partial and full) from bug data."""
+
+    name = "Extract File Paths"
+
+    def __init__(self):
+        self.regex = re.compile(
+            r"\b[a-zA-Z0-9_/.\-]+(?:/[a-zA-Z0-9_/.\-]+)*\.(?!com|org|net|edu|gov)[a-zA-Z]{2,4}\b"
+        )
+
+    def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
+        text = bug.get("summary", "") + " " + bug["comments"][0]["text"]
+
+        file_paths = self.regex.findall(text)
+
+        all_sub_paths = []
+        for path in file_paths:
+            parts = path.split("/")
+            sub_paths = ["/".join(parts[: i + 1]) for i in range(len(parts))]
+
+            all_sub_paths.extend(sub_paths)
+            all_sub_paths.extend(parts)
+
+        return all_sub_paths
