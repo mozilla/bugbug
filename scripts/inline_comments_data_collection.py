@@ -16,6 +16,8 @@ os.makedirs("patches", exist_ok=True)
 os.makedirs("comments", exist_ok=True)
 os.makedirs("dataset", exist_ok=True)
 
+api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
+
 
 class NoDiffsFoundException(Exception):
     def __init__(self, patch_id):
@@ -35,39 +37,38 @@ class NoDiffFoundForPHIDException(Exception):
         self.phid = phid
 
 
-class PhabricatorClient:
-    def __init__(self):
-        self.api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
+def find_revision_from_patch(patch_id):
+    diffs = api.search_diffs(diff_id=patch_id)
 
-    def find_revision_from_patch(self, patch_id):
-        diffs = self.api.search_diffs(diff_id=patch_id)
+    if not diffs:
+        raise NoDiffsFoundException(patch_id)
 
-        if not diffs:
-            raise NoDiffsFoundException(patch_id)
+    revision_phid = diffs[0]["revisionPHID"]
+    return revision_phid
 
-        revision_phid = diffs[0]["revisionPHID"]
-        return revision_phid
 
-    def find_transactions_from_patch(self, patch_id):
-        revision_phid = self.find_revision_from_patch(patch_id)
-        transactions = self.api.request(
-            "transaction.search", objectIdentifier=revision_phid
-        )["data"]
+def find_transactions_from_patch(patch_id):
+    revision_phid = find_revision_from_patch(patch_id)
+    transactions = api.request("transaction.search", objectIdentifier=revision_phid)[
+        "data"
+    ]
 
-        if not transactions:
-            raise NoTransactionsFoundException(patch_id)
+    if not transactions:
+        raise NoTransactionsFoundException(patch_id)
 
-        return transactions
+    return transactions
 
-    def get_diff_info_from_phid(self, phid):
-        diffs = self.api.search_diffs(diff_phid=phid)
-        if not diffs:
-            raise NoDiffFoundForPHIDException(phid)
-        return diffs[0]["id"], diffs[0]["revisionPHID"]
 
-    def find_bugid_from_revision_phid(self, phid):
-        revision = self.api.load_revision(rev_phid=phid)
-        return revision["fields"]["bugzilla.bug-id"]
+def get_diff_info_from_phid(phid):
+    diffs = api.search_diffs(diff_phid=phid)
+    if not diffs:
+        raise NoDiffFoundForPHIDException(phid)
+    return diffs[0]["id"], diffs[0]["revisionPHID"]
+
+
+def find_bugid_from_revision_phid(phid):
+    revision = api.load_revision(rev_phid=phid)
+    return revision["fields"]["bugzilla.bug-id"]
 
 
 def download_inline_comments():
@@ -117,14 +118,13 @@ def to_int(value):
 
 
 def process_comments(patch_threshold, diff_length_threshold):
-    client = PhabricatorClient()
     comments_dir = "comments"
     patch_count = 0
     for file_name in os.listdir(comments_dir):
         file_path = os.path.join(comments_dir, file_name)
         with open(file_path, "r") as f:
             patch_id = int(file_name.replace(".json", ""))
-            transactions = client.find_transactions_from_patch(patch_id)
+            transactions = find_transactions_from_patch(patch_id)
 
             comments = json.load(f)
             for comment in comments:
@@ -135,7 +135,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 if not most_recent_update:
                     continue
 
-                fix_patch_id, revision_phid = client.get_diff_info_from_phid(
+                fix_patch_id, revision_phid = get_diff_info_from_phid(
                     most_recent_update["fields"]["new"]
                 )
 
@@ -143,7 +143,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 if fix_patch_id == patch_id:
                     continue
 
-                bug_id = client.find_bugid_from_revision_phid(phid=revision_phid)
+                bug_id = find_bugid_from_revision_phid(phid=revision_phid)
                 review_data.load_patch_by_id(fix_patch_id)
 
                 with open(f"patches/{fix_patch_id}.patch", "r") as f:
