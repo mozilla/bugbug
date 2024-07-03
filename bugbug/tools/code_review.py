@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable
+from typing import Iterable, Optional
 
 import tenacity
 from langchain.chains import ConversationChain, LLMChain
@@ -521,7 +521,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     def __init__(
         self,
-        review_comments_db: "ReviewCommentsDB" | None,
+        review_comments_db: Optional["ReviewCommentsDB"],
         *args,
         **kwargs,
     ) -> None:
