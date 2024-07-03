@@ -629,7 +629,7 @@ class ReviewCommentsDB:
         def vector_points():
             for hunk, comment in items:
                 str_hunk = str(hunk)
-                vector = self.embeddings.embed_query(self.clean_comment(str_hunk))
+                vector = self.embeddings.embed_query(str_hunk)
                 payload = {
                     hunk: str_hunk,
                     comment: asdict(comment),
