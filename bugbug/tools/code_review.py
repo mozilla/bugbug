@@ -631,8 +631,8 @@ class ReviewCommentsDB:
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
                 payload = {
-                    hunk: str_hunk,
-                    comment: asdict(comment),
+                    "hunk": str_hunk,
+                    "comment": asdict(comment),
                 }
 
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
