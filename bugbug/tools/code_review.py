@@ -575,13 +575,13 @@ class CodeReviewTool(GenerativeModelTool):
         if self.review_comments_db:
             comment_examples = [
                 {
-                    "file": comment["filename"],
-                    "code_line": comment["start_line"],
-                    "comment": comment["content"],
+                    "file": payload["comment"]["filename"],
+                    "code_line": payload["comment"]["start_line"],
+                    "comment": payload["comment"]["content"],
                 }
                 # TODO: use a smarter search to limit the number of comments and
                 # diversify the examples (from different hunks, files, etc.).
-                for comment in self.review_comments_db.find_similar_patch_comments(
+                for payload in self.review_comments_db.find_similar_patch_comments(
                     patch
                 )
             ]
@@ -624,14 +624,18 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        self.vector_db.insert(
-            VectorPoint(
-                id=comment.id,
-                vector=self.embeddings.embed_query(str(hunk)),
-                payload=asdict(comment),
-            )
-            for comment, hunk in items
-        )
+        def vector_points():
+            for comment, hunk in items:
+                str_hunk = str(hunk)
+                vector = self.embeddings.embed_query(self.clean_comment(str_hunk))
+                payload = {
+                    hunk: str_hunk,
+                    comment: asdict(comment),
+                }
+
+                yield VectorPoint(id=comment.id, vector=vector, payload=payload)
+
+        self.vector_db.insert(vector_points())
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
