@@ -613,7 +613,9 @@ class ReviewCommentsDB:
 
     def __init__(self, vector_db: VectorDB) -> None:
         self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
+        )
 
     def clean_comment(self, comment):
         # TODO: use the nav info instead of removing it
