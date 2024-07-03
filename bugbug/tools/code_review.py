@@ -16,6 +16,7 @@ from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain_openai import OpenAIEmbeddings
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
@@ -537,6 +538,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.review_comments_db = review_comments_db
 
+    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
         formatted_patch = format_patch_set(patch_set)
