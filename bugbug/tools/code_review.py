@@ -285,7 +285,7 @@ class ReviewData(ABC):
                 if not hunk:
                     continue
 
-                yield comment, hunk
+                yield hunk, comment
 
 
 class PhabricatorReviewData(ReviewData):
@@ -627,7 +627,7 @@ class ReviewCommentsDB:
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
         def vector_points():
-            for comment, hunk in items:
+            for hunk, comment in items:
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(self.clean_comment(str_hunk))
                 payload = {
