@@ -8,8 +8,6 @@ import subprocess
 from datetime import datetime
 from typing import Collection
 
-from P4 import P4  # from pip p4python
-
 
 def api_revinfo(instance, rev_id):
     u = f"https://{instance}api/v10/reviews/{rev_id}"
@@ -28,6 +26,8 @@ def call(auth, g):
 
 
 def p4_connect(auth):
+    from P4 import P4  # from pip p4python
+
     p4 = P4()
     p4.port = auth["port"]
     p4.user = auth["user"]
