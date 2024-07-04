@@ -905,3 +905,24 @@ class BugType(SingleBugFeature):
 
     def __call__(self, bug, **kwargs):
         return bug["type"]
+
+class InitialProduct(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        history = bug.get("history", [])
+        if history:
+            for entry in history:
+                for change in entry["changes"]:
+                    if change["field_name"] == "product":
+                        return change["removed"]
+        return bug["product"]
+
+
+class InitialComponent(SingleBugFeature):
+    def __call__(self, bug, **kwargs):
+        history = bug.get("history", [])
+        if history:
+            for entry in history:
+                for change in entry["changes"]:
+                    if change["field_name"] == "component":
+                        return change["removed"]
+        return bug["component"]

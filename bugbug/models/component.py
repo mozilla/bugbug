@@ -84,8 +84,8 @@ class ComponentModel(BugModel):
             bug_features.Whiteboard(),
             bug_features.Patches(),
             bug_features.Landings(),
-            bug_features.Product(),
-            bug_features.Component(),
+            bug_features.InitialProduct(),
+            bug_features.InitialComponent(),
         ]
 
         cleanup_functions = [
