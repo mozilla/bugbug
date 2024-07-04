@@ -779,7 +779,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         if self.function_search is not None and len(requested_context_lines) > 0:
             context_text = get_structured_functions(
-                "Requested Context for Line", requested_functions
+                "Requested Context for Line", requested_context_lines
             )
 
             memory.save_context(
