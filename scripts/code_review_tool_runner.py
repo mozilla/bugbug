@@ -9,6 +9,7 @@ import sys
 from bugbug import generative_model_tool
 from bugbug.code_search.function_search import function_search_classes
 from bugbug.tools import code_review
+from bugbug.vectordb import QdrantVectorDB
 
 
 def run(args) -> None:
@@ -19,8 +20,11 @@ def run(args) -> None:
         if args.function_search_type is not None
         else None
     )
-
-    code_review_tool = code_review.CodeReviewTool(function_search, llm)
+    vector_db = QdrantVectorDB("diff_comments")
+    review_comments_db = code_review.ReviewCommentsDB(vector_db)
+    code_review_tool = code_review.CodeReviewTool(
+        function_search, review_comments_db, llm
+    )
 
     review_data = code_review.review_data_classes[args.review_platform]()
 
@@ -46,7 +50,7 @@ def parse_args(args):
     parser.add_argument(
         "--llm",
         help="LLM",
-        choices=["human", "openai", "llama2"],
+        choices=["human", "openai", "azureopenai", "llama2"],
     )
     parser.add_argument(
         "--function_search_type",

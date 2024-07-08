@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import json
 import re
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -10,18 +11,20 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import cached_property
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable
+from typing import Iterable, Optional
 
 import tenacity
 from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain_openai import OpenAIEmbeddings
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
 
 from bugbug import db, phabricator, utils
+from bugbug.code_search.function_search import FunctionSearch
 from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
@@ -65,24 +68,8 @@ PROMPT_TEMPLATE_REVIEW = """You will be given a task for generate a code review 
 
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, not related to the patch under analysis now, consider some below:
-[
-    {{
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
-    }},
-    {{
-        "file": "com/pt/main/atp/Texture.cpp",
-        "code_line": 620,
-        "comment" : "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation."
-    }},
-    {{
-        "file": "drs/control/Statistics.cpp",
-        "code_line": 25,
-        "comment" : "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`."
-    }}
-]
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, consider the examples below:
+{comment_examples}
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
 5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples."""
 
@@ -134,9 +121,27 @@ Examples of valid code lines:
 {patch}
 {summarization}"""
 
+STATIC_COMMENT_EXAMPLES = [
+    {
+        "file": "com/br/main/Pressure.java",
+        "code_line": 458,
+        "comment": "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size.",
+    },
+    {
+        "file": "com/pt/main/atp/Texture.cpp",
+        "code_line": 620,
+        "comment": "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation.",
+    },
+    {
+        "file": "drs/control/Statistics.cpp",
+        "code_line": 25,
+        "comment": "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`.",
+    },
+]
+
 
 class ReviewRequest:
-    patch_id: int
+    patch_id: str
 
     def __init__(self, patch_id) -> None:
         super().__init__()
@@ -364,7 +369,7 @@ class ReviewData(ABC):
                 if not hunk:
                     continue
 
-                yield comment, hunk
+                yield hunk, comment
 
 
 class PhabricatorReviewData(ReviewData):
@@ -414,6 +419,7 @@ class PhabricatorReviewData(ReviewData):
                         "Unexpected number of comments in transaction %s",
                         transaction["id"],
                     )
+                    continue
 
                 transaction_comment = transaction["comments"][0]
                 comment_id = transaction_comment["id"]
@@ -451,8 +457,51 @@ class PhabricatorReviewData(ReviewData):
                 yield diff_id, comments
 
 
+class SwarmPatch(Patch):
+    def __init__(self, patch_id: str, auth: dict) -> None:
+        super().__init__(patch_id)
+        self.auth = auth
+        self.rev_id = int(patch_id)
+
+    @cached_property
+    def raw_diff(self) -> str:
+        import swarm
+
+        revisions = swarm.get(self.auth, rev_ids=[self.rev_id], version_l=[0, 1])
+        assert len(revisions) == 1
+
+        return revisions[0]["fields"]["diff"]
+
+    @cached_property
+    def base_commit_hash(self) -> str:
+        raise NotImplementedError
+
+
+class SwarmReviewData(ReviewData):
+    def __init__(self):
+        self.auth = {
+            "user": get_secret("SWARM_USER"),
+            "password": get_secret("SWARM_PASS"),
+            "port": get_secret("SWARM_PORT"),
+            "instance": get_secret("SWARM_INSTANCE"),
+        }
+
+    def get_review_request_by_id(self, revision_id: int) -> ReviewRequest:
+        return ReviewRequest(revision_id)
+
+    def get_patch_by_id(self, patch_id: str) -> Patch:
+        return SwarmPatch(patch_id, self.auth)
+
+    def get_all_inline_comments(
+        self, comment_filter
+    ) -> Iterable[tuple[int, list[InlineComment]]]:
+        # Todo
+        raise NotImplementedError
+
+
 review_data_classes = {
     "phabricator": PhabricatorReviewData,
+    "swarm": SwarmReviewData,
 }
 
 
@@ -699,10 +748,59 @@ def get_structured_functions(target, functions_declaration):
     return function_declaration_text
 
 
+def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
+    output = output.strip()
+    if output.startswith("```json") and output.endswith("```"):
+        output = output[7:-3]
+
+    comments = json.loads(output)
+
+    patched_files_map = {
+        patched_file.target_file: patched_file for patched_file in patch
+    }
+
+    for comment in comments:
+        file_path = comment["file"]
+        if not file_path.startswith("b/") and not file_path.startswith("a/"):
+            file_path = "b/" + file_path
+
+        # FIXME: currently, we do not handle renamed files
+
+        patched_file = patched_files_map.get(file_path)
+        if patched_file is None:
+            raise FileNotInPatchError(
+                f"The file `{file_path}` is not part of the patch: {list(patched_files_map)}"
+            )
+
+        line_number = comment["code_line"]
+        if not isinstance(line_number, int):
+            raise ModelResultError("Line number must be an integer")
+
+        scope = find_comment_scope(patched_file, line_number)
+
+        yield InlineComment(
+            filename=(
+                patched_file.target_file[2:]
+                if scope["has_added_lines"]
+                else patched_file.source_file[2:]
+            ),
+            start_line=scope["line_start"],
+            end_line=scope["line_end"],
+            content=comment["comment"],
+            on_removed_code=not scope["has_added_lines"],
+        )
+
+
 class CodeReviewTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, function_search, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        function_search: Optional[FunctionSearch],
+        review_comments_db: Optional["ReviewCommentsDB"],
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
 
         self.summarization_chain = LLMChain(
@@ -724,6 +822,9 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.function_search = function_search
 
+        self.review_comments_db = review_comments_db
+
+    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
         patch_set = PatchSet.from_string(patch.raw_diff)
         formatted_patch = format_patch_set(patch_set)
@@ -734,8 +835,6 @@ class CodeReviewTool(GenerativeModelTool):
             {"patch": formatted_patch},
             return_only_outputs=True,
         )["text"]
-
-        print(output_summarization)
 
         if self.function_search is not None:
             line_code_list = self.further_context_chain.run(
@@ -810,11 +909,32 @@ class CodeReviewTool(GenerativeModelTool):
                 },
             )
 
-        output = conversation_chain.predict(
-            input=PROMPT_TEMPLATE_REVIEW.format(patch=formatted_patch)
-        )
+        comment_examples = []
 
-        print(output)
+        if self.review_comments_db:
+            comment_examples = [
+                {
+                    "file": payload["comment"]["filename"],
+                    "code_line": payload["comment"]["start_line"],
+                    "comment": payload["comment"]["content"],
+                }
+                # TODO: use a smarter search to limit the number of comments and
+                # diversify the examples (from different hunks, files, etc.).
+                for payload in self.review_comments_db.find_similar_patch_comments(
+                    patch
+                )
+            ]
+            comment_examples = comment_examples[:10]
+
+        if not comment_examples:
+            comment_examples = STATIC_COMMENT_EXAMPLES
+
+        output = conversation_chain.predict(
+            input=PROMPT_TEMPLATE_REVIEW.format(
+                patch=formatted_patch,
+                comment_examples=json.dumps(comment_examples, indent=2),
+            )
+        )
 
         memory.clear()
 
@@ -823,7 +943,7 @@ class CodeReviewTool(GenerativeModelTool):
             return_only_outputs=True,
         )["text"]
 
-        return raw_output
+        return list(generate_processed_output(raw_output, patch_set))
 
 
 class ReviewCommentsDB:
@@ -832,7 +952,9 @@ class ReviewCommentsDB:
 
     def __init__(self, vector_db: VectorDB) -> None:
         self.vector_db = vector_db
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
+        )
 
     def clean_comment(self, comment):
         # TODO: use the nav info instead of removing it
@@ -843,14 +965,28 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        self.vector_db.insert(
-            VectorPoint(
-                id=comment.id,
-                vector=self.embeddings.embed_query(str(hunk)),
-                payload=asdict(comment),
-            )
-            for comment, hunk in items
-        )
+        def vector_points():
+            for hunk, comment in items:
+                str_hunk = str(hunk)
+                vector = self.embeddings.embed_query(str_hunk)
+                payload = {
+                    "hunk": str_hunk,
+                    "comment": asdict(comment),
+                }
+
+                yield VectorPoint(id=comment.id, vector=vector, payload=payload)
+
+        self.vector_db.insert(vector_points())
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
+
+    def find_similar_patch_comments(self, patch: Patch):
+        patch_set = PatchSet.from_string(patch.raw_diff)
+
+        for patched_file in patch_set:
+            if not patched_file.is_modified_file:
+                continue
+
+            for hunk in patched_file:
+                yield from self.find_similar_hunk_comments(hunk)
