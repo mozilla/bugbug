@@ -7,9 +7,9 @@ import os
 import subprocess
 import sys
 
-import config
-
 from bugbug.utils import get_session
+
+SEARCHFOX_STORAGE_DATA = "searchfox_data"
 
 
 class SearchfoxDataNotAvailable(Exception):
@@ -17,10 +17,10 @@ class SearchfoxDataNotAvailable(Exception):
 
 
 def fetch(commit_hash: str) -> str:
-    folders = os.listdir(config.SEARCHFOX_STORAGE_DATA)
+    folders = os.listdir(SEARCHFOX_STORAGE_DATA)
     for folder in folders:
         if folder.startswith(commit_hash):
-            return os.path.join(config.SEARCHFOX_STORAGE_DATA, folder)
+            return os.path.join(SEARCHFOX_STORAGE_DATA, folder)
 
     # https://firefox-ci-tc.services.mozilla.com/tasks/index/gecko.v2.mozilla-central.pushdate.2023.06.01.20230601042516.firefox/linux64-searchfox-debug
 
@@ -62,14 +62,12 @@ def fetch(commit_hash: str) -> str:
         if not targetZipRequest.ok:
             raise SearchfoxDataNotAvailable("Searchfox data no longer available")
 
-        zip_path = os.path.join(config.SEARCHFOX_STORAGE_DATA, targetZipBasename)
+        zip_path = os.path.join(SEARCHFOX_STORAGE_DATA, targetZipBasename)
 
         os.makedirs(zip_path)
 
         with open(
-            os.path.join(
-                config.SEARCHFOX_STORAGE_DATA, targetZipBasename, "searchfox.zip"
-            ),
+            os.path.join(SEARCHFOX_STORAGE_DATA, targetZipBasename, "searchfox.zip"),
             "wb",
         ) as f:
             for chunk in targetZipRequest.iter_content(chunk_size=1024):
@@ -83,7 +81,7 @@ def fetch(commit_hash: str) -> str:
         # TODO: When using only specific parts of searchfox data, such as syntax data,
         # it can be beneficial to filter the remaining data out just once.
 
-        # for (path, dirs, files) in os.walk(config.SEARCHFOX_STORAGE_DATA):
+        # for (path, dirs, files) in os.walk(SEARCHFOX_STORAGE_DATA):
         #    for file in files:
         #        fp_file = os.path.join(path, file)
         #        with open(fp_file, 'r') as fd:
@@ -92,10 +90,10 @@ def fetch(commit_hash: str) -> str:
         #        with open(fp_file, 'w') as fd:
         #            fd.writelines(lines)
 
-    folders = os.listdir(config.SEARCHFOX_STORAGE_DATA)
+    folders = os.listdir(SEARCHFOX_STORAGE_DATA)
     for folder in folders:
         if folder.startswith(commit_hash):
-            return os.path.join(config.SEARCHFOX_STORAGE_DATA, folder)
+            return os.path.join(SEARCHFOX_STORAGE_DATA, folder)
 
     assert False
 
