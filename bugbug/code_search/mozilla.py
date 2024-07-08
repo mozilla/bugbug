@@ -6,6 +6,7 @@ from bugbug.code_search.function_search import (
 from bugbug.code_search.parser import FunctionSearchParser
 from bugbug.code_search.searchfox_api import FunctionSearchSearchfoxAPI
 from bugbug.code_search.searchfox_data import FunctionSearchSearchfoxData
+from bugbug.tools.code_review import PhabricatorPatch
 
 
 class FunctionSearchMozilla(FunctionSearch):
@@ -96,7 +97,6 @@ if __name__ == "__main__":
     import requests
     from libmozdata.phabricator import PhabricatorAPI
 
-    from bugbug.tools.code_review import PhabricatorReviewData
     from bugbug.utils import get_secret
 
     phabricator = PhabricatorAPI(
@@ -115,14 +115,12 @@ if __name__ == "__main__":
     function_search_mozilla = FunctionSearchMozilla(repo_dir, get_file, False)
 
     # https://phabricator.services.mozilla.com/D199272?id=811858
-    diffs = phabricator.search_diffs(diff_id=811858)
-    assert len(diffs) == 1
-    diff1 = diffs[0]
+    patch1 = PhabricatorPatch("811858")
 
     # In this case, the function was not used before the patch.
     print(
         function_search_mozilla.get_function_by_name(
-            PhabricatorReviewData.get_base_commit_hash(diff1),
+            patch1.base_commit_hash,
             "dom/base/nsObjectLoadingContent.cpp",
             "LowerCaseEqualsASCII",
         )
@@ -131,44 +129,38 @@ if __name__ == "__main__":
     # In this case, the function was used before the patch.
     print(
         function_search_mozilla.get_function_by_name(
-            PhabricatorReviewData.get_base_commit_hash(diff1),
+            patch1.base_commit_hash,
             "dom/base/nsObjectLoadingContent.cpp",
             "HtmlObjectContentTypeForMIMEType",
         )
     )
 
     # https://phabricator.services.mozilla.com/D199248?id=811740
-    diffs = phabricator.search_diffs(diff_id=811740)
-    assert len(diffs) == 1
-    diff2 = diffs[0]
+    patch2 = PhabricatorPatch("811740")
 
     # In this case, it is a JS file.
     print(
         function_search_mozilla.get_function_by_name(
-            PhabricatorReviewData.get_base_commit_hash(diff2),
+            patch2.base_commit_hash,
             "testing/modules/XPCShellContentUtils.sys.mjs",
             "registerPathHandler",
         )
     )
 
-    diffs = phabricator.search_diffs(diff_id=721783)
-    assert len(diffs) == 1
-    diff3 = diffs[0]
+    patch3 = PhabricatorPatch("721783")
 
     print(
         function_search_mozilla.get_function_by_name(
-            PhabricatorReviewData.get_base_commit_hash(diff3),
+            patch3.base_commit_hash,
             "dom/performance/Performance.cpp",
             "Performance::MemoryPressure",
         )
     )
 
-    diffs = phabricator.search_diffs(diff_id=736446)
-    assert len(diffs) == 1
-    diff4 = diffs[0]
+    patch4 = PhabricatorPatch("736446")
 
     function_search_mozilla.get_function_by_line(
-        PhabricatorReviewData.get_base_commit_hash(diff4),
+        patch4.base_commit_hash,
         "browser/base/content/test/webrtc/browser_devices_select_audio_output.js",
         180,
     )

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from functools import cached_property
 from logging import INFO, basicConfig, getLogger
 from typing import Iterable
 
@@ -142,14 +143,77 @@ class ReviewRequest:
         self.patch_id = patch_id
 
 
-class Patch:
-    base_commit_hash: str
-    raw_diff: str
+class Patch(ABC):
+    def __init__(self, patch_id: str) -> None:
+        self.patch_id = patch_id
 
-    def __init__(self, base_commit_hash, raw_diff) -> None:
-        super().__init__()
-        self.base_commit_hash = base_commit_hash
-        self.raw_diff = raw_diff
+    @property
+    @abstractmethod
+    def base_commit_hash(self) -> str:
+        ...
+
+    @property
+    @abstractmethod
+    def raw_diff(self) -> str:
+        ...
+
+
+class PhabricatorPatch(Patch):
+    def __init__(self, patch_id: str) -> None:
+        super().__init__(patch_id)
+
+        self.diff_id = int(patch_id)
+
+    @cached_property
+    def raw_diff(self) -> str:
+        assert phabricator.PHABRICATOR_API is not None
+        raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(self.diff_id)
+
+        return raw_diff
+
+    @staticmethod
+    def _commit_available(commit_hash: str) -> bool:
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}"
+        )
+        return r.ok
+
+    @cached_property
+    def base_commit_hash(self) -> str:
+        assert phabricator.PHABRICATOR_API is not None
+        diffs = phabricator.PHABRICATOR_API.search_diffs(diff_id=self.diff_id)
+        assert len(diffs) == 1
+        diff = diffs[0]
+
+        try:
+            base_commit_hash = diff["refs"]["base"]["identifier"]
+            if self._commit_available(base_commit_hash):
+                return base_commit_hash
+        except KeyError:
+            pass
+
+        end_date = datetime.fromtimestamp(diff["dateCreated"])
+        start_date = datetime.fromtimestamp(diff["dateCreated"] - 86400)
+        end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
+        start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1"
+        )
+        pushes = r.json()["pushes"]
+        closest_push = None
+        for push_id, push in pushes.items():
+            if diff["dateCreated"] - push["date"] < 0:
+                continue
+
+            if (
+                closest_push is None
+                or diff["dateCreated"] - push["date"]
+                < diff["dateCreated"] - closest_push["date"]
+            ):
+                closest_push = push
+
+        assert closest_push is not None
+        return closest_push["changesets"][0]
 
 
 class ReviewData(ABC):
@@ -160,7 +224,7 @@ class ReviewData(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_patch_by_id(self, patch_id: int) -> Patch:
+    def get_patch_by_id(self, patch_id: str) -> Patch:
         raise NotImplementedError
 
     @abstractmethod
@@ -320,54 +384,8 @@ class PhabricatorReviewData(ReviewData):
         wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
         reraise=True,
     )
-    def get_patch_by_id(self, patch_id: int) -> Patch:
-        assert phabricator.PHABRICATOR_API is not None
-        raw_diff = phabricator.PHABRICATOR_API.load_raw_diff(int(patch_id))
-
-        diffs = phabricator.PHABRICATOR_API.search_diffs(diff_id=int(patch_id))
-        assert len(diffs) == 1
-        diff = diffs[0]
-
-        return Patch(PhabricatorReviewData.get_base_commit_hash(diff), raw_diff)
-
-    @staticmethod
-    def commit_available(commit_hash: str) -> bool:
-        r = utils.get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}"
-        )
-        return r.ok
-
-    @staticmethod
-    def get_base_commit_hash(diff: dict) -> str:
-        try:
-            base_commit_hash = diff["refs"]["base"]["identifier"]
-            if PhabricatorReviewData.commit_available(base_commit_hash):
-                return base_commit_hash
-        except KeyError:
-            pass
-
-        end_date = datetime.fromtimestamp(diff["dateCreated"])
-        start_date = datetime.fromtimestamp(diff["dateCreated"] - 86400)
-        end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-        start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-        r = utils.get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1"
-        )
-        pushes = r.json()["pushes"]
-        closest_push = None
-        for push_id, push in pushes.items():
-            if diff["dateCreated"] - push["date"] < 0:
-                continue
-
-            if (
-                closest_push is None
-                or diff["dateCreated"] - push["date"]
-                < diff["dateCreated"] - closest_push["date"]
-            ):
-                closest_push = push
-
-        assert closest_push is not None
-        return closest_push["changesets"][0]
+    def get_patch_by_id(self, patch_id: str) -> Patch:
+        return PhabricatorPatch(patch_id)
 
     def get_all_inline_comments(
         self, comment_filter
