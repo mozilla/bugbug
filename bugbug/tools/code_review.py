@@ -671,14 +671,11 @@ def is_code_line_already_covered(code_line, target_file, function_declarations):
 
 def collect_function_definitions(function_declarations, target_element, definitions):
     for definition in definitions:
-        if "file" not in definition or "source" not in definition:
-            print("Unexpected JSON format for reported content")
-            continue
         function_declarations.append(
             [
                 target_element,
-                definition["file"],
-                definition["source"],
+                definition.file,
+                definition.source,
             ]
         )
 

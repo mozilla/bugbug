@@ -66,7 +66,7 @@ class FunctionSearchMozilla(FunctionSearch):
 
         found_perfect = None
         for func in result:
-            if func["name"] == function_name:
+            if func.name == function_name:
                 assert found_perfect is None, "Found two functions with the same name"
                 found_perfect = func
 
