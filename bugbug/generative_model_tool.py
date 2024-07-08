@@ -18,7 +18,7 @@ def create_llm(llm):
         return HumanInputLLM()
     elif llm == "openai":
         return ChatOpenAI(
-            model_name="gpt-4-0125-preview",
+            model_name="gpt-4o-2024-05-13",
             api_key=get_secret("OPENAI_API_KEY"),
             temperature=openai_temperature,
         )
