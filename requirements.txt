@@ -7,6 +7,7 @@ langchain-community==0.2.5
 langchain-openai==0.1.8
 libmozdata==0.2.4
 lmdb==1.4.1
+lxml-html-clean==0.1.1
 markdown2==2.4.13
 matplotlib==3.9.0
 mercurial==6.5.3
@@ -24,6 +25,7 @@ python-hglib==2.6.2
 qdrant-client==1.9.1
 ratelimit==2.2.1
 requests==2.32.3
+requests-html==0.10.0
 rs_parsepatch==0.4.0
 scikit-learn==1.5.0
 scipy==1.13.1
