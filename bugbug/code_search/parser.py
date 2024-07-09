@@ -17,6 +17,39 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("function_search_parser")
 
 
+# Find length of the common path
+def len_common_path(f1, f2):
+    f1_subsystems = f1.split("/")
+    f2_subsystems = f2.split("/")
+
+    idx_diff = [
+        idx
+        for idx, (sub1, sub2) in enumerate(zip(f1_subsystems, f2_subsystems))
+        if sub1 != sub2
+    ]
+    max_common_path_length = idx_diff[0]
+    return max_common_path_length
+
+
+def solve_conflict_functions(repo, functions):
+    functions_common_path = [
+        (len_common_path(repo, fun.file), fun) for fun in functions
+    ]
+    max_common_path_length = max(
+        [common_path_length for (common_path_length, _) in functions_common_path]
+    )
+    functions = [
+        fun
+        for (common_path_length, fun) in functions_common_path
+        if common_path_length == max_common_path_length
+    ]
+
+    if len(functions) == 1:
+        return functions
+    else:
+        return []  # could not solve conflict
+
+
 def search(repo_dir, commit_hash, symbol_name):
     code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
 
@@ -88,6 +121,9 @@ def search(repo_dir, commit_hash, symbol_name):
                 )
 
     code_analysis_server.terminate()
+
+    if len(found_functions) > 1:
+        found_functions = solve_conflict_functions(repo_dir, found_functions)
 
     return found_functions
 

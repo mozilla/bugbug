@@ -680,6 +680,24 @@ def collect_function_definitions(function_declarations, target_element, definiti
         )
 
 
+def gather_line_context(line_context):
+    file_dir = {}
+
+    for line, file, func in line_context:
+        if file not in file_dir:
+            file_dir[file] = {}
+        if func not in file_dir[line[1]]:
+            file_dir[file][func] = []
+        file_dir[file][func].append(line)
+
+    gathered_context = []
+    for file in file_dir:
+        for func in file_dir[file]:
+            gathered_requested_lines = "\n".join(file_dir[file][func])
+            gathered_context += [[gathered_requested_lines, file, func]]
+    return gathered_context
+
+
 def request_for_context_lines(function_search, commit_hash, context_line_codes, patch):
     functions_declarations = []
 
@@ -716,6 +734,7 @@ def request_for_context_lines(function_search, commit_hash, context_line_codes, 
                     functions_declarations, context_line, definitions
                 )
 
+    functions_declarations = gather_line_context(functions_declarations)
     return functions_declarations
 
 
