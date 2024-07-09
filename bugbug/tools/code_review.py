@@ -62,16 +62,29 @@ Please, analyze the code provided and report a summarization about the new chang
 
 {patch}"""
 
-PROMPT_TEMPLATE_REVIEW = """You will be given a task for generate a code review for the patch below. Use the following steps to solve it.
+PROMPT_TEMPLATE_REVIEW = """You will be given a task for generate a code review for the patch below. Use the following steps to solve it:
+1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
+2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox.
+4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
+5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+
+As valid comments, consider the examples below:
+{comment_examples}
+
+
+Here is the patch that we need you to review:
+{patch}"""
+
+
+TEMPLATE_COMMENT_EXAMPLE = """Patch example {example_number}:
 
 {patch}
 
-1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
-2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox. As valid comments, consider the examples below:
-{comment_examples}
-4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples."""
+Review comments for example {example_number}:
+
+{comments}"""
+
 
 PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Please, double check the code review provided for the patch below.
 Just report the comments that are:
@@ -121,23 +134,108 @@ Examples of valid code lines:
 {patch}
 {summarization}"""
 
+
 STATIC_COMMENT_EXAMPLES = [
     {
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment": "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size.",
+        "comment": {
+            "filename": "netwerk/streamconv/converters/mozTXTToHTMLConv.cpp",
+            "start_line": 1211,
+            "content": "You are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size.",
+        },
+        "raw_hunk": """@@ -1206,11 +1206,11 @@
+     } else {
+       uint32_t start = uint32_t(i);
+       i = aInString.FindChar('<', i);
+       if (i == kNotFound) i = lengthOfInString;
+
+-      nsString tempString;
++      nsAutoStringN<256> tempString;
+       tempString.SetCapacity(uint32_t((uint32_t(i) - start) * growthRate));
+       UnescapeStr(uniBuffer, start, uint32_t(i) - start, tempString);
+       ScanTXT(tempString, whattodo, aOutString);
+     }
+   }""",
     },
     {
-        "file": "com/pt/main/atp/Texture.cpp",
-        "code_line": 620,
-        "comment": "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation.",
+        "comment": {
+            "filename": "toolkit/components/extensions/ExtensionDNR.sys.mjs",
+            "start_line": 1837,
+            "content": "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation.",
+        },
+        "raw_hunk": """@@ -1812,18 +1821,27 @@
+       rulesets.push(
+         this.makeRuleset(id, idx + PRECEDENCE_STATIC_RULESETS_BASE, rules)
+       );
+     }
+     this.enabledStaticRules = rulesets;
++    this.#updateAllowAllRequestRules();
+   }
+
+   getSessionRules() {
+     return this.sessionRules.rules;
+   }
+
+   getDynamicRules() {
+     return this.dynamicRules.rules;
++  }
++
++  #updateAllowAllRequestRules() {
++    const filterAAR = rule => rule.action.type === "allowAllRequests";
++    this.hasRulesWithAllowAllRequests =
++      this.sessionRules.rules.some(filterAAR) ||
++      this.dynamicRules.rules.some(filterAAR) ||
++      this.enabledStaticRules.some(ruleset => ruleset.rules.some(filterAAR));
+   }
+ }
+
+ function getRuleManager(extension, createIfMissing = true) {
+   let ruleManager = gRuleManagers.find(rm => rm.extension === extension);""",
     },
     {
-        "file": "drs/control/Statistics.cpp",
-        "code_line": 25,
-        "comment": "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`.",
+        "comment": {
+            "filename": "devtools/shared/network-observer/NetworkUtils.sys.mjs",
+            "start_line": 496,
+            "content": "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`.",
+        },
+        "raw_hunk": """@@ -481,26 +481,21 @@
+     }
+   } catch (err) {
+     // "cancelledByExtension" doesn't have to be available.
+   }
+
+-  const ignoreList = [
+-    // This is emitted when the request is already in the cache.
+-    "NS_ERROR_PARSED_DATA_CACHED",
+-    // This is emitted when there is some issues around imgages e.g When the img.src
+-    // links to a non existent url. This is typically shown as a 404 request.
+-    "NS_IMAGELIB_ERROR_FAILURE",
+-    // This is emitted when there is a redirect. They are shown as 301 requests.
+-    "NS_BINDING_REDIRECTED",
++  const blockList = [
++    // When a host is not found (NS_ERROR_UNKNOWN_HOST)
++    "NS_ERROR_UNKNOWN_HOST",
+   ];
+
+   // If the request has not failed or is not blocked by a web extension, check for
+   // any errors not on the ignore list. e.g When a host is not found (NS_ERROR_UNKNOWN_HOST).
+   if (
+     blockedReason == 0 &&
+     !Components.isSuccessCode(status) &&
+-    !ignoreList.includes(ChromeUtils.getXPCOMErrorName(status))
++    blockList.includes(ChromeUtils.getXPCOMErrorName(status))
+   ) {
+     blockedReason = ChromeUtils.getXPCOMErrorName(status);
+   }
+
+   return { blockingExtension, blockedReason };""",
     },
 ]
+
+TEMPLATE_PATCH_FROM_HUNK = """diff --git a/{filename} b/{filename}
+--- a/{filename}
++++ b/{filename}
+{raw_hunk}
+"""
 
 
 class ReviewRequest:
@@ -795,6 +893,7 @@ class CodeReviewTool(GenerativeModelTool):
         self,
         function_search: Optional[FunctionSearch],
         review_comments_db: Optional["ReviewCommentsDB"],
+        show_patch_example: bool = False,
         *args,
         **kwargs,
     ) -> None:
@@ -820,6 +919,8 @@ class CodeReviewTool(GenerativeModelTool):
         self.function_search = function_search
 
         self.review_comments_db = review_comments_db
+
+        self.show_patch_example = show_patch_example
 
     @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
@@ -906,30 +1007,10 @@ class CodeReviewTool(GenerativeModelTool):
                 },
             )
 
-        comment_examples = []
-
-        if self.review_comments_db:
-            comment_examples = [
-                {
-                    "file": payload["comment"]["filename"],
-                    "code_line": payload["comment"]["start_line"],
-                    "comment": payload["comment"]["content"],
-                }
-                # TODO: use a smarter search to limit the number of comments and
-                # diversify the examples (from different hunks, files, etc.).
-                for payload in self.review_comments_db.find_similar_patch_comments(
-                    patch
-                )
-            ]
-            comment_examples = comment_examples[:10]
-
-        if not comment_examples:
-            comment_examples = STATIC_COMMENT_EXAMPLES
-
         output = conversation_chain.predict(
             input=PROMPT_TEMPLATE_REVIEW.format(
                 patch=formatted_patch,
-                comment_examples=json.dumps(comment_examples, indent=2),
+                comment_examples=self._get_comment_examples(patch),
             )
         )
 
@@ -941,6 +1022,55 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
 
         return list(generate_processed_output(raw_output, patch_set))
+
+    def _get_comment_examples(self, patch):
+        comment_examples = []
+
+        if self.review_comments_db:
+            # TODO: use a smarter search to limit the number of comments and
+            # diversify the examples (from different hunks, files, etc.).
+            comment_examples = self.review_comments_db.find_similar_patch_comments(
+                patch, limit=10
+            )
+
+        if not comment_examples:
+            comment_examples = STATIC_COMMENT_EXAMPLES
+
+        def format_comment(comment):
+            # TODO: change the schema that we expect the model to return so we
+            # can remove this function.
+            return {
+                "file": comment["filename"],
+                "code_line": comment["start_line"],
+                "comment": comment["content"],
+            }
+
+        def generate_formatted_patch_from_raw_hunk(raw_hunk, filename):
+            patch = TEMPLATE_PATCH_FROM_HUNK.format(
+                filename=filename, raw_hunk=raw_hunk
+            )
+            patch_set = PatchSet.from_string(patch)
+            return format_patch_set(patch_set)
+
+        if not self.show_patch_example:
+            return json.dumps(
+                [format_comment(example["comment"]) for example in comment_examples],
+                indent=2,
+            )
+
+        return "\n\n".join(
+            TEMPLATE_COMMENT_EXAMPLE.format(
+                example_number=num + 1,
+                patch=generate_formatted_patch_from_raw_hunk(
+                    example["raw_hunk"], example["comment"]["filename"]
+                ),
+                comments=json.dumps(
+                    [format_comment(example["comment"])],
+                    indent=2,
+                ),
+            )
+            for num, example in enumerate(comment_examples)
+        )
 
 
 class ReviewCommentsDB:
@@ -978,12 +1108,20 @@ class ReviewCommentsDB:
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
 
-    def find_similar_patch_comments(self, patch: Patch):
+    def find_similar_patch_comments(self, patch: Patch, limit: int):
+        assert limit > 0, "Limit must be greater than 0"
+
         patch_set = PatchSet.from_string(patch.raw_diff)
 
+        yielded = 0
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
 
             for hunk in patched_file:
-                yield from self.find_similar_hunk_comments(hunk)
+                for result in self.find_similar_hunk_comments(hunk):
+                    yield result
+
+                    yielded += 1
+                    if yielded >= limit:
+                        return
