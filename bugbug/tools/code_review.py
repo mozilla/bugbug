@@ -62,7 +62,7 @@ Please, analyze the code provided and report a summarization about the new chang
 
 {patch}"""
 
-PROMPT_TEMPLATE_REVIEW = """You will be given a task for generate a code review for the patch below. Use the following steps to solve it:
+PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
 3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox.
