@@ -17,7 +17,7 @@ numpy==1.26.4
 orjson==3.10.6
 ortools==9.10.4067
 pandas==2.2.2
-psutil==5.9.8
+psutil==6.0.0
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.9.0.post0
