@@ -724,7 +724,7 @@ def gather_line_context(line_context):
     for line, file, func in line_context:
         if file not in file_dir:
             file_dir[file] = {}
-        if func not in file_dir[line[1]]:
+        if func not in file_dir[file]:
             file_dir[file][func] = []
         file_dir[file][func].append(line)
 
