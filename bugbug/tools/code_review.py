@@ -628,6 +628,39 @@ def parse_text_for_dict(text):
     return file_content
 
 
+# Find length of the common path
+def len_common_path(f1, f2):
+    f1_subsystems = f1.split("/")
+    f2_subsystems = f2.split("/")
+
+    idx_diff = [
+        idx
+        for idx, (sub1, sub2) in enumerate(zip(f1_subsystems, f2_subsystems))
+        if sub1 != sub2
+    ]
+    max_common_path_length = idx_diff[0]
+    return max_common_path_length
+
+
+def solve_conflict_definitions(repo, functions):
+    functions_common_path = [
+        (len_common_path(repo, fun.file), fun) for fun in functions
+    ]
+    max_common_path_length = max(
+        [common_path_length for (common_path_length, _) in functions_common_path]
+    )
+    functions = [
+        fun
+        for (common_path_length, fun) in functions_common_path
+        if common_path_length == max_common_path_length
+    ]
+
+    if len(functions) == 1:
+        return functions
+    else:
+        return []  # could not solve conflict
+
+
 def request_for_function_declarations(
     function_search, commit_hash, functions_list, patch_set
 ):
@@ -652,6 +685,11 @@ def request_for_function_declarations(
                         path=target_path,
                         function_name=function_name,
                     )
+                    if len(definitions) > 1:
+                        definitions = solve_conflict_definitions(
+                            function_search.repo_dir, definitions
+                        )
+
                     collect_function_definitions(
                         functions_declarations, function_name, definitions
                     )
