@@ -896,3 +896,10 @@ class BugTypes(SingleBugFeature):
             for is_type in self.bug_type_extractors
             if is_type(bug, bug_map)
         ]
+
+
+class BugType(SingleBugFeature):
+    """Extracts the type of the bug."""
+
+    def __call__(self, bug, **kwargs):
+        return bug["type"]
