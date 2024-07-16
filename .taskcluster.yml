@@ -102,7 +102,7 @@ tasks:
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-                    hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     python -m pytest --cov=./ tests/test_*.py &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
@@ -129,7 +129,7 @@ tasks:
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
-                    hg clone -r 7436689a409528730ee6a7a2a5e763c9fb821a8f https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     pytest --cov=http_service http_service/tests/ -vvv &&
                     bash <(curl -s https://codecov.io/bash)"
               metadata:
