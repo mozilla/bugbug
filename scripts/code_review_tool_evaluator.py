@@ -138,6 +138,10 @@ def main():
         patch = review_data.get_patch_by_id(review_request.patch_id)
         print("---------------------------------------------------------")
 
+        if len(patch.raw_diff) > 20_000:
+            print("Skipping the patch because it is too large.")
+            continue
+
         all_variants_results = []
         for variant_name, tool in tool_variants:
             print(f"\n\nVariant: {variant_name}\n")
