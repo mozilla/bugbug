@@ -19,6 +19,7 @@ function.
 
 from datetime import datetime, timedelta
 
+import pandas as pd
 import requests
 from tabulate import tabulate
 
@@ -121,7 +122,15 @@ def main():
         review_platform
     ]()
 
-    for review_request_id in get_review_requests_sample(timedelta(days=30), 3):
+    tool_variants = get_tool_variants()
+
+    is_first_result = True
+    result_file = "code_review_tool_evaluator.csv"
+    result_columns = ["Review Request ID", "File", "Line"] + [
+        f"Comment ({variant_name})" for variant_name, _ in tool_variants
+    ]
+
+    for review_request_id in get_review_requests_sample(timedelta(days=60), 3):
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
         review_request = review_data.get_review_request_by_id(review_request_id)
@@ -129,10 +138,33 @@ def main():
         patch = review_data.get_patch_by_id(review_request.patch_id)
         print("---------------------------------------------------------")
 
-        for variant_name, tool in get_tool_variants():
+        all_variants_results = []
+        for variant_name, tool in tool_variants:
             print(f"\n\nVariant: {variant_name}\n")
             comments = tool.run(patch)
             print_prettified_comments(comments)
+
+            all_variants_results.extend(
+                {
+                    "Review Request ID": review_request_id,
+                    "File": comment.filename,
+                    "Line": comment.end_line,
+                    f"Comment ({variant_name})": comment.content,
+                }
+                for comment in comments
+            )
+
+        df = pd.DataFrame(all_variants_results, columns=result_columns).groupby(
+            ["Review Request ID", "File", "Line"]
+        )
+        df.to_csv(
+            result_file,
+            header=is_first_result,
+            mode="w" if is_first_result else "a",
+        )
+        if is_first_result:
+            is_first_result = False
+            print("You can find the results in the file:", result_file)
 
         print("\n\n\n")
 
