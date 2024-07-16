@@ -8,7 +8,7 @@ langchain-openai==0.1.14
 libmozdata==0.2.4
 lmdb==1.5.1
 lxml-html-clean==0.1.1
-markdown2==2.4.13
+markdown2==2.5.0
 matplotlib==3.9.1
 mercurial==6.5.3
 microannotate==0.0.24
