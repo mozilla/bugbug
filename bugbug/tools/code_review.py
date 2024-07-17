@@ -67,7 +67,7 @@ PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review f
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
 3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+5. Final answer: Write down the comments and report them using the JSON format provided below as valid comment examples (return only a JSON array).
 
 As valid comments, consider the examples below:
 {comment_examples}
@@ -845,6 +845,9 @@ def get_structured_functions(target, functions_declaration):
 
 def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
     output = output.strip()
+    if output.startswith("Review:"):
+        output = output[len("Review:") :].strip()
+
     if output.startswith("```json") and output.endswith("```"):
         output = output[7:-3]
 
