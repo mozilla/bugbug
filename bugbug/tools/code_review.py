@@ -628,8 +628,8 @@ def parse_text_for_dict(text):
     return file_content
 
 
-# Find length of the common path
 def len_common_path(f1, f2):
+    """Find length of the common path."""
     f1_subsystems = f1.split("/")
     f2_subsystems = f2.split("/")
 
@@ -641,9 +641,9 @@ def len_common_path(f1, f2):
     return max_common_path_length
 
 
-def solve_conflict_definitions(repo, functions):
+def solve_conflict_definitions(target_path, functions):
     functions_common_path = [
-        (len_common_path(repo, fun.file), fun) for fun in functions
+        (len_common_path(target_path, fun.file), fun) for fun in functions
     ]
     max_common_path_length = max(
         [common_path_length for (common_path_length, _) in functions_common_path]
@@ -686,7 +686,7 @@ def request_for_function_declarations(
                     )
                     if len(definitions) > 1:
                         definitions = solve_conflict_definitions(
-                            function_search.repo_dir, definitions
+                            target_path, definitions
                         )
 
                     collect_function_definitions(
