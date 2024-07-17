@@ -633,12 +633,11 @@ def len_common_path(f1, f2):
     f1_subsystems = f1.split("/")
     f2_subsystems = f2.split("/")
 
-    idx_diff = [
+    max_common_path_length = next(
         idx
         for idx, (sub1, sub2) in enumerate(zip(f1_subsystems, f2_subsystems))
         if sub1 != sub2
-    ]
-    max_common_path_length = idx_diff[0]
+    )
     return max_common_path_length
 
 
