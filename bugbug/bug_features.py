@@ -922,7 +922,7 @@ class BugType(SingleBugFeature):
 #         return sorted(set(paths))
 
 
-class ExtractFilePaths(SingleBugFeature):
+class FilePaths(SingleBugFeature):
     """Extract file paths (partial and full) from bug data."""
 
     name = "Extract File Paths"
