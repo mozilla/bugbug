@@ -898,7 +898,7 @@ class BugTypes(SingleBugFeature):
         ]
 
 
-class ExtractFilePaths(SingleBugFeature):
+class FilePaths(SingleBugFeature):
     """Extract file paths (partial and full) from bug data."""
 
     name = "Extract File Paths"

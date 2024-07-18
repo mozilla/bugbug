@@ -84,7 +84,7 @@ class ComponentModel(BugModel):
             bug_features.Whiteboard(),
             bug_features.Patches(),
             bug_features.Landings(),
-            bug_features.ExtractFilePaths(),
+            bug_features.FilePaths(),
         ]
 
         cleanup_functions = [
