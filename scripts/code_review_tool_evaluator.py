@@ -130,7 +130,8 @@ def main():
 
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
-    result_columns = ["Review Request ID", "File", "Line"] + [
+    result_unique_columns = ["Review Request ID", "File", "Line", "Comment Number"]
+    result_all_columns = result_unique_columns + [
         f"Comment ({variant_name})" for variant_name, _ in tool_variants
     ]
 
@@ -157,13 +158,16 @@ def main():
                     "Review Request ID": review_request_id,
                     "File": comment.filename,
                     "Line": comment.end_line,
+                    "Comment Number": i + 1,
                     f"Comment ({variant_name})": comment.content,
                 }
-                for comment in comments
+                for i, comment in enumerate(comments)
             )
 
-        df = pd.DataFrame(all_variants_results, columns=result_columns).groupby(
-            ["Review Request ID", "File", "Line"]
+        df = (
+            pd.DataFrame(all_variants_results, columns=result_all_columns)
+            .groupby(result_unique_columns)
+            .first()
         )
         df.to_csv(
             result_file,
