@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import mimetypes
 import re
 import sys
 from collections import defaultdict
@@ -928,20 +929,212 @@ class FilePaths(SingleBugFeature):
     name = "Extract File Paths"
 
     def __init__(self):
-        self.regex = re.compile(
-            r"\b[a-zA-Z0-9_/.\-]+(?:/[a-zA-Z0-9_/.\-]+)*\.(?!com|org|net|edu|gov)[a-zA-Z]{2,4}\b"
+        self.non_file_path_keywords = [
+            "http://",
+            "https://",
+            "www.",
+            ".com",
+            ".org",
+            ".net",
+            ".edu",
+            ".gov",
+            "@",
+        ]
+
+        self.valid_extensions = set(
+            ext.lstrip(".") for ext in mimetypes.types_map.keys()
         )
+        common_extensions = {
+            "cpp",
+            "c",
+            "h",
+            "hpp",
+            "py",
+            "java",
+            "class",
+            "js",
+            "jsx",
+            "ts",
+            "tsx",
+            "html",
+            "css",
+            "scss",
+            "rb",
+            "php",
+            "swift",
+            "kt",
+            "kts",
+            "go",
+            "rs",
+            "lua",
+            "sh",
+            "bat",
+            "ps1",
+            "pl",
+            "pm",
+            "r",
+            "m",
+            "mm",
+            "h",
+            "cs",
+            "vb",
+            "fs",
+            "fsharp",
+            "sln",
+            "vbproj",
+            "csproj",
+            "xaml",
+            "xml",
+            "json",
+            "yaml",
+            "yml",
+            "ini",
+            "cfg",
+            "conf",
+            "toml",
+            "md",
+            "txt",
+            "log",
+            "sql",
+            "db",
+            "sqlite",
+            "db3",
+            "csv",
+            "tsv",
+            "xlsx",
+            "xls",
+            "doc",
+            "docx",
+            "ppt",
+            "pptx",
+            "pdf",
+            "tex",
+            "bib",
+            "dvi",
+            "epub",
+            "mobi",
+            "azw3",
+            "rtf",
+            "odt",
+            "ods",
+            "odp",
+            "key",
+            "numbers",
+            "pages",
+            "gpx",
+            "kml",
+            "kmz",
+            "svg",
+            "ai",
+            "psd",
+            "xcf",
+            "png",
+            "jpg",
+            "jpeg",
+            "gif",
+            "bmp",
+            "tiff",
+            "ico",
+            "webp",
+            "mp3",
+            "wav",
+            "flac",
+            "ogg",
+            "m4a",
+            "wma",
+            "aac",
+            "mp4",
+            "mkv",
+            "avi",
+            "mov",
+            "flv",
+            "wmv",
+            "webm",
+            "3gp",
+            "m4v",
+            "mpg",
+            "mpeg",
+            "swf",
+            "fla",
+            "iso",
+            "img",
+            "dmg",
+            "zip",
+            "rar",
+            "tar",
+            "gz",
+            "bz2",
+            "xz",
+            "7z",
+            "s7z",
+            "rpm",
+            "deb",
+            "pkg",
+            "bin",
+            "exe",
+            "dll",
+            "so",
+            "o",
+            "a",
+            "lib",
+            "out",
+            "class",
+            "jar",
+            "war",
+            "ear",
+            "apk",
+            "ipa",
+            "plist",
+            "cfg",
+            "ini",
+            "conf",
+            "properties",
+            "yaml",
+            "yml",
+            "env",
+            "rc",
+            "htaccess",
+            "gitignore",
+            "dockerfile",
+            "makefile",
+            "gradle",
+            "pom",
+            "bat",
+            "cmd",
+            "vbs",
+        }
+        self.valid_extensions.update(common_extensions)
+        self.valid_extensions = sorted(self.valid_extensions, key=len, reverse=True)
+
+    def remove_urls(self, text: str) -> str:
+        """Remove URLs and strings containing specific domain extensions from the given text."""
+        for keyword in self.non_file_path_keywords:
+            if keyword in text:
+                text = re.sub(r"\S*" + re.escape(keyword) + r"\S*", "", text)
+        return text
+
+    def extract_valid_file_path(self, word: str) -> str:
+        """Extract the valid file path from the word if it contains a valid extension."""
+        for ext in self.valid_extensions:
+            if f".{ext}" in word:
+                ext_index = word.find(f".{ext}")
+                prefix = word[:ext_index]
+                prefix = re.sub(r"[^a-zA-Z0-9_\-./]", "", prefix)
+                return prefix + f".{ext}"
+        return ""
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
         text = bug.get("summary", "") + " " + bug["comments"][0]["text"]
+        text = self.remove_urls(text)
 
-        file_paths = self.regex.findall(text)
+        words = text.split()
+        file_paths = [self.extract_valid_file_path(word) for word in words]
+        file_paths = [path for path in file_paths if path]
 
         all_sub_paths: list[str] = []
 
         for path in file_paths:
             parts = path.split("/")
             all_sub_paths.extend("/".join(parts[: i + 1]) for i in range(len(parts)))
-            all_sub_paths.extend(parts)
 
         return all_sub_paths
