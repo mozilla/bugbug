@@ -937,12 +937,11 @@ class FilePaths(SingleBugFeature):
 
         file_paths = self.regex.findall(text)
 
-        all_sub_paths = []
+        all_sub_paths: list[str] = []
+
         for path in file_paths:
             parts = path.split("/")
-            sub_paths = ["/".join(parts[: i + 1]) for i in range(len(parts))]
-
-            all_sub_paths.extend(sub_paths)
+            all_sub_paths.extend("/".join(parts[: i + 1]) for i in range(len(parts)))
             all_sub_paths.extend(parts)
 
         return all_sub_paths
