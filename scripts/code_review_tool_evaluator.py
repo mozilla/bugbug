@@ -74,10 +74,14 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
 
 def get_review_requests_sample(since: timedelta, limit: int):
     start_date = (datetime.now() - since).timestamp()
+    MOZILLA_CENTRAL_PHID = "PHID-REPO-saax4qdxlbbhahhp2kg5"
 
     n = 0
     for review_request in phabricator.get_revisions():
-        if review_request["fields"]["dateCreated"] <= start_date:
+        if (
+            review_request["fields"]["repositoryPHID"] != MOZILLA_CENTRAL_PHID
+            or review_request["fields"]["dateCreated"] <= start_date
+        ):
             continue
 
         if n >= limit >= 0:
