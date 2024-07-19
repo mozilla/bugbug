@@ -1116,11 +1116,14 @@ class FilePaths(SingleBugFeature):
     def extract_valid_file_path(self, word: str) -> str:
         """Extract the valid file path from the word if it contains a valid extension."""
         for ext in self.valid_extensions:
-            if f".{ext}" in word:
-                ext_index = word.find(f".{ext}")
+            ext_pattern = re.compile(rf"\.{ext}(?![a-zA-Z])")
+            match = ext_pattern.search(word)
+            if match:
+                ext_index = match.start()
                 prefix = word[:ext_index]
-                prefix = re.sub(r"[^a-zA-Z0-9_\-./]", "", prefix)
-                return prefix + f".{ext}"
+                alphanumeric_sequence = re.findall(r"[a-zA-Z0-9/_]+", prefix)
+                if alphanumeric_sequence:
+                    return alphanumeric_sequence[-1] + f".{ext}"
         return ""
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
@@ -1131,10 +1134,12 @@ class FilePaths(SingleBugFeature):
         file_paths = [self.extract_valid_file_path(word) for word in words]
         file_paths = [path for path in file_paths if path]
 
-        all_sub_paths: list[str] = []
+        all_paths: list[str] = []
 
         for path in file_paths:
             parts = path.split("/")
-            all_sub_paths.extend("/".join(parts[: i + 1]) for i in range(len(parts)))
-
-        return all_sub_paths
+            all_paths.extend(part for part in parts if part)
+            all_paths.extend(
+                subpath for i in range(len(parts)) if (subpath := "/".join(parts[i:]))
+            )
+        return all_paths
