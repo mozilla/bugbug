@@ -1105,25 +1105,28 @@ class FilePaths(SingleBugFeature):
         }
         self.valid_extensions.update(common_extensions)
         self.valid_extensions = sorted(self.valid_extensions, key=len, reverse=True)
+        extension_pattern_string = "|".join(
+            re.escape(ext) for ext in self.valid_extensions
+        )
+        self.extension_pattern = re.compile(
+            rf"\.({extension_pattern_string})(?![a-zA-Z])"
+        )
 
     def remove_urls(self, text: str) -> str:
-        """Remove URLs and strings containing specific domain extensions from the given text."""
         for keyword in self.non_file_path_keywords:
             if keyword in text:
                 text = re.sub(r"\S*" + re.escape(keyword) + r"\S*", "", text)
         return text
 
     def extract_valid_file_path(self, word: str) -> str:
-        """Extract the valid file path from the word if it contains a valid extension."""
-        for ext in self.valid_extensions:
-            ext_pattern = re.compile(rf"\.{ext}(?![a-zA-Z])")
-            match = ext_pattern.search(word)
-            if match:
-                ext_index = match.start()
-                prefix = word[:ext_index]
-                alphanumeric_sequence = re.findall(r"[a-zA-Z0-9/_]+", prefix)
-                if alphanumeric_sequence:
-                    return alphanumeric_sequence[-1] + f".{ext}"
+        match = self.extension_pattern.search(word)
+        if match:
+            ext = match.group(1)
+            ext_index = match.start()
+            prefix = word[:ext_index]
+            alphanumeric_sequence = re.findall(r"[a-zA-Z0-9/_]+", prefix)
+            if alphanumeric_sequence:
+                return f"{alphanumeric_sequence[-1]}.{ext}"
         return ""
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
