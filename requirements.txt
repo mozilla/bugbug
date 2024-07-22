@@ -5,7 +5,7 @@ imbalanced-learn==0.12.3
 langchain==0.2.7
 langchain-community==0.2.7
 langchain-openai==0.1.16
-libmozdata==0.2.4
+libmozdata==0.2.6
 lmdb==1.5.1
 lxml-html-clean==0.1.1
 markdown2==2.5.0
