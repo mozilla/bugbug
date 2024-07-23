@@ -920,7 +920,7 @@ def notification(days: int) -> None:
     all_intermittent_failure_bugs: Set[int] = set()
     component_team_mapping = get_component_team_mapping()
     for product_component, day_to_data in component_test_stats.items():
-        product, component = product_component.split("::")
+        product, component = product_component.split("::", 1)
         cur_team = component_team_mapping.get(product, {}).get(component)
         if cur_team is None or cur_team in ("Other", "Mozilla"):
             continue
