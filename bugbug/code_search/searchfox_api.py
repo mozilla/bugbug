@@ -19,7 +19,6 @@ from bugbug.code_search.function_search import (
 )
 
 
-# TODO: we should use commit_hash...
 def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", "end"]):
     if position == "start":
         element = next(iter(elements))
@@ -32,6 +31,7 @@ def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", 
     return int(element.get("id")[len("line-") :])
 
 
+# TODO: we should use commit_hash...
 def get_functions(commit_hash, path, symbol_name=None):
     html_session = HTMLSession()
 
