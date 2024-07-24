@@ -5,8 +5,10 @@
 
 import io
 import json
+from typing import Iterable
 
 import requests
+from lxml.html import HtmlElement
 from requests_html import HTMLSession
 
 from bugbug.code_search import searchfox_data
@@ -18,6 +20,20 @@ from bugbug.code_search.function_search import (
 
 
 # TODO: we should use commit_hash...
+def get_line_number(elements: Iterable[HtmlElement], position):
+    assert position in ("first", "end")
+
+    if position == "first":
+        element = next(iter(elements))
+    else:
+        *_, element = iter(elements)
+
+    if "data-nesting-sym" in element.attrib:
+        return get_line_number(element.iterdescendants(), position)
+
+    return int(element.get("id")[len("line-") :])
+
+
 def get_functions(commit_hash, path, symbol_name=None):
     html_session = HTMLSession()
 
@@ -38,18 +54,12 @@ def get_functions(commit_hash, path, symbol_name=None):
     functions = []
 
     for sym_wrap in sym_wraps:
-        start_line_elem_id = sym_wrap.getchildren()[0].get("id")
-        start_line = int(start_line_elem_id[len("line-") :])
-
-        end_line_elem_id = sym_wrap.getchildren()[-1].get("id")
-        end_line = int(end_line_elem_id[len("line-") :])
-
         functions.append(
             {
                 "name": sym_wrap.attrib["data-nesting-sym"][1:],
                 "path": path,
-                "start": start_line,
-                "end": end_line,
+                "start": get_line_number(sym_wrap, "start"),
+                "end": get_line_number(sym_wrap, "end"),
             }
         )
 
