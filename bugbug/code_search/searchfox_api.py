@@ -5,7 +5,7 @@
 
 import io
 import json
-from typing import Iterable
+from typing import Iterable, Literal
 
 import requests
 from lxml.html import HtmlElement
@@ -20,10 +20,8 @@ from bugbug.code_search.function_search import (
 
 
 # TODO: we should use commit_hash...
-def get_line_number(elements: Iterable[HtmlElement], position):
-    assert position in ("first", "end")
-
-    if position == "first":
+def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", "end"]):
+    if position == "start":
         element = next(iter(elements))
     else:
         *_, element = iter(elements)
