@@ -1106,19 +1106,26 @@ class FilePaths(SingleBugFeature):
         return ""
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
-        text = bug.get("summary", "") + " " + bug["comments"][0]["text"]
-        text = self.remove_urls(text)
+        text = self.remove_urls(
+            bug.get("summary", "") + " " + bug["comments"][0]["text"]
+        )
 
-        words = text.split()
-        file_paths = [self.extract_valid_file_path(word) for word in words]
-        file_paths = [path for path in file_paths if path]
+        file_paths = [
+            path
+            for word in text.split()
+            if (path := self.extract_valid_file_path(word))
+        ]
 
         all_paths: list[str] = []
 
         for path in file_paths:
             parts = path.split("/")
             all_paths.extend(part for part in parts if part)
-            all_paths.extend(
-                subpath for i in range(len(parts)) if (subpath := "/".join(parts[i:]))
-            )
+            if len(parts) > 1:
+                all_paths.extend(
+                    subpath
+                    for i in range(len(parts))
+                    if (subpath := "/".join(parts[i:]))
+                )
+
         return all_paths
