@@ -11,7 +11,7 @@ import re
 import subprocess
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Optional, cast
+from typing import cast
 
 import dateutil.parser
 import hglib
@@ -26,7 +26,7 @@ from libmozdata.phabricator import PhabricatorAPI
 from scipy.stats import spearmanr
 
 from bugbug import db, repository, test_scheduling
-from bugbug.model import Model
+from bugbug.model import Model, get_transformer_pipeline
 from bugbug.models.regressor import RegressorModel
 from bugbug.models.testfailure import TestFailureModel
 from bugbug.utils import (
@@ -136,8 +136,8 @@ class CommitClassifier(object):
         method_defect_predictor_dir: str,
         use_single_process: bool,
         skip_feature_importance: bool,
-        phabricator_deployment: Optional[str] = None,
-        diff_id: Optional[int] = None,
+        phabricator_deployment: str | None = None,
+        diff_id: int | None = None,
     ):
         self.model_name = model_name
         self.repo_dir = repo_dir
@@ -294,7 +294,7 @@ class CommitClassifier(object):
             # Stop as soon as a base revision is available
             if self.has_revision(hg, patch.base_revision):
                 logger.info(
-                    f"Stopping at diff {patch.id} and revision {patch.base_revision}"
+                    "Stopping at diff %s and revision %s", patch.id, patch.base_revision
                 )
                 break
 
@@ -383,7 +383,7 @@ class CommitClassifier(object):
                 message = replace_reviewers(message, reviewers)
 
             logger.info(
-                f"Applying {patch.phid} from revision {revision['id']}: {message}"
+                "Applying %s from revision %s: %s", patch.phid, revision["id"], message
             )
 
             hg.import_(
@@ -392,32 +392,20 @@ class CommitClassifier(object):
                 user=f"{author_name} <{author_email}>".encode("utf-8"),
             )
 
-            if self.git_repo_dir:
-                patch_proc = subprocess.Popen(
-                    ["patch", "-p1", "--no-backup-if-mismatch", "--force"],
-                    stdin=subprocess.PIPE,
-                    cwd=self.git_repo_dir,
-                )
-                patch_proc.communicate(patch.patch.encode("utf-8"))
-                assert patch_proc.returncode == 0, "Failed to apply patch"
+        latest_rev = repository.get_revs(hg, -1)[0]
 
-                subprocess.run(
-                    [
-                        "git",
-                        "-c",
-                        f"user.name={author_name}",
-                        "-c",
-                        f"user.email={author_email}",
-                        "commit",
-                        "-am",
-                        message,
-                    ],
-                    check=True,
-                    cwd=self.git_repo_dir,
-                )
+        if self.git_repo_dir:
+            subprocess.run(
+                ["git", "cinnabar", "fetch", f"hg::{self.repo_dir}", latest_rev],
+                check=True,
+                cwd=self.git_repo_dir,
+            )
 
     def generate_feature_importance_data(self, probs, importance):
-        X_shap_values = shap.TreeExplainer(self.model.clf).shap_values(self.X)
+        _X = get_transformer_pipeline(self.clf).transform(self.X)
+        X_shap_values = shap.TreeExplainer(
+            self.clf.named_steps["estimator"]
+        ).shap_values(_X)
 
         pred_class = self.model.le.inverse_transform([probs[0].argmax()])[0]
 
@@ -429,8 +417,8 @@ class CommitClassifier(object):
             value = importance["importances"]["values"][0, int(feature_index)]
 
             shap.summary_plot(
-                X_shap_values[:, int(feature_index)].reshape(self.X.shape[0], 1),
-                self.X[:, int(feature_index)].reshape(self.X.shape[0], 1),
+                X_shap_values[:, int(feature_index)].reshape(_X.shape[0], 1),
+                _X[:, int(feature_index)].reshape(_X.shape[0], 1),
                 feature_names=[""],
                 plot_type="layered_violin",
                 show=False,
@@ -442,7 +430,7 @@ class CommitClassifier(object):
             img.seek(0)
             base64_img = base64.b64encode(img.read()).decode("ascii")
 
-            X = self.X[:, int(feature_index)]
+            X = _X[:, int(feature_index)]
             y = self.y[X != 0]
             X = X[X != 0]
             spearman = spearmanr(X, y)
@@ -594,8 +582,8 @@ class CommitClassifier(object):
 
     def classify(
         self,
-        revision: Optional[str] = None,
-        runnable_jobs_path: Optional[str] = None,
+        revision: str | None = None,
+        runnable_jobs_path: str | None = None,
     ) -> None:
         self.update_commit_db()
 

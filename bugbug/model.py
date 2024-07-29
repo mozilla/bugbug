@@ -6,6 +6,7 @@
 import logging
 import pickle
 from collections import defaultdict
+from os import makedirs, path
 from typing import Any
 
 import matplotlib
@@ -17,13 +18,14 @@ from imblearn.metrics import (
     make_index_balanced_accuracy,
     specificity_score,
 )
-from imblearn.pipeline import make_pipeline
 from sklearn import metrics
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import cross_validate, train_test_split
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 from tabulate import tabulate
+from xgboost import XGBModel
 
 from bugbug import bugzilla, db, repository
 from bugbug.github import Github
@@ -32,6 +34,27 @@ from bugbug.utils import split_tuple_generator, to_array
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_transformer_pipeline(pipeline: Pipeline) -> Pipeline:
+    """Create a pipeline that contains only the transformers.
+
+    This will exclude any steps that do not have a transform method, such as a
+    sampler or estimator.
+
+    Args:
+        pipeline: the pipeline to extract the transformers from.
+
+    Returns:
+        a pipeline that contains only the transformers.
+    """
+    return Pipeline(
+        [
+            (name, transformer)
+            for name, transformer in pipeline.steps
+            if hasattr(transformer, "transform")
+        ]
+    )
 
 
 def classification_report_imbalanced_values(
@@ -146,7 +169,6 @@ class Model:
             self.text_vectorizer = TfidfVectorizer
 
         self.cross_validation_enabled = True
-        self.sampler = None
 
         self.calculate_importance = True
 
@@ -194,6 +216,8 @@ class Model:
                 feature_name = f"Comments contain '{feature_name}'"
             elif type_ == "text":
                 feature_name = f"Combined text contains '{feature_name}'"
+            elif type_ == "files":
+                feature_name = f"File '{feature_name}'"
             elif type_ not in ("data", "couple_data"):
                 raise ValueError(f"Unexpected feature type for: {full_feature_name}")
 
@@ -333,11 +357,10 @@ class Model:
 
     def evaluation(self):
         """Subclasses can implement their own additional evaluation."""
-        pass
 
     def get_labels(self) -> tuple[dict[Any, Any], list[Any]]:
         """Subclasses implement their own function to gather labels."""
-        pass
+        raise NotImplementedError("The model must implement this method")
 
     def train(self, importance_cutoff=0.15, limit=None):
         classes, self.class_names = self.get_labels()
@@ -347,7 +370,7 @@ class Model:
         X_gen, y = split_tuple_generator(lambda: self.items_gen(classes))
 
         # Extract features from the items.
-        X = self.extraction_pipeline.fit_transform(X_gen)
+        X = self.extraction_pipeline.transform(X_gen)
 
         # Calculate labels.
         y = np.array(y)
@@ -364,10 +387,6 @@ class Model:
 
         # Split dataset in training and test.
         X_train, X_test, y_train, y_test = self.train_test_split(X, y)
-        if self.sampler is not None:
-            pipeline = make_pipeline(self.sampler, self.clf)
-        else:
-            pipeline = self.clf
 
         tracking_metrics = {}
 
@@ -378,7 +397,7 @@ class Model:
                 scorings += ["precision", "recall"]
 
             scores = cross_validate(
-                pipeline, X_train, self.le.transform(y_train), scoring=scorings, cv=5
+                self.clf, X_train, self.le.transform(y_train), scoring=scorings, cv=5
             )
 
             logger.info("Cross Validation scores:")
@@ -393,23 +412,18 @@ class Model:
                 )
 
         logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
-
-        # Training on the resampled dataset if sampler is provided.
-        if self.sampler is not None:
-            X_train, y_train = self.sampler.fit_resample(X_train, y_train)
-
-            logger.info(f"resampled X_train: {X_train.shape}, y_train: {y_train.shape}")
-
         logger.info(f"X_test: {X_test.shape}, y_test: {y_test.shape}")
 
         self.clf.fit(X_train, self.le.transform(y_train))
+        logger.info("Number of features: %d", self.clf.steps[-1][1].n_features_in_)
 
         logger.info("Model trained")
 
         feature_names = self.get_human_readable_feature_names()
         if self.calculate_importance and len(feature_names):
-            explainer = shap.TreeExplainer(self.clf)
-            shap_values = explainer.shap_values(X_train)
+            explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
+            _X_train = get_transformer_pipeline(self.clf).transform(X_train)
+            shap_values = explainer.shap_values(_X_train)
 
             # In the binary case, sometimes shap returns a single shap values matrix.
             if is_binary and not isinstance(shap_values, list):
@@ -422,7 +436,7 @@ class Model:
 
             shap.summary_plot(
                 summary_plot_value,
-                to_array(X_train),
+                to_array(_X_train),
                 feature_names=feature_names,
                 class_names=self.class_names,
                 plot_type=summary_plot_type,
@@ -526,7 +540,12 @@ class Model:
                     np.array(y_pred_filter[classified_indices], dtype=int)
                 )
 
-            classified_num = sum(1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__")
+            if is_multilabel:
+                classified_num = len(classified_indices)
+            else:
+                classified_num = sum(
+                    1 for v in y_pred_filter if v != "__NOT_CLASSIFIED__"
+                )
 
             logger.info(
                 f"\nConfidence threshold > {confidence_threshold} - {classified_num} classified"
@@ -557,17 +576,29 @@ class Model:
         if self.entire_dataset_training:
             logger.info("Retraining on the entire dataset...")
 
-            if self.sampler is not None:
-                X_train, y_train = self.sampler.fit_resample(X, y)
-            else:
-                X_train = X
-                y_train = y
+            X_train = X
+            y_train = y
 
             logger.info(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
 
             self.clf.fit(X_train, self.le.transform(y_train))
 
-        with open(self.__class__.__name__.lower(), "wb") as f:
+        model_directory = self.__class__.__name__.lower()
+        makedirs(model_directory, exist_ok=True)
+
+        step_name, estimator = self.clf.steps.pop()
+        if issubclass(type(estimator), XGBModel):
+            xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+            estimator.save_model(xgboost_model_path)
+
+            # Since we save the estimator separately, we need to reset it to
+            # prevent its data from being pickled with the pipeline.
+            hyperparameters = estimator.get_params()
+            estimator = estimator.__class__(**hyperparameters)
+        self.clf.steps.append((step_name, estimator))
+
+        model_path = path.join(model_directory, "model.pkl")
+        with open(model_path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
         if self.store_dataset:
@@ -580,9 +611,16 @@ class Model:
         return tracking_metrics
 
     @staticmethod
-    def load(model_file_name: str) -> "Model":
-        with open(model_file_name, "rb") as f:
-            return pickle.load(f)
+    def load(model_directory: str) -> "Model":
+        model_path = path.join(model_directory, "model.pkl")
+        with open(model_path, "rb") as f:
+            model = pickle.load(f)
+
+        xgboost_model_path = path.join(model_directory, "xgboost.ubj")
+        if path.exists(xgboost_model_path):
+            model.clf.named_steps["estimator"].load_model(xgboost_model_path)
+
+        return model
 
     def overwrite_classes(self, items, classes, probabilities):
         return classes
@@ -618,15 +656,16 @@ class Model:
             pred_class = self.le.inverse_transform([pred_class_index])[0]
 
             if background_dataset is None:
-                explainer = shap.TreeExplainer(self.clf)
+                explainer = shap.TreeExplainer(self.clf.named_steps["estimator"])
             else:
                 explainer = shap.TreeExplainer(
-                    self.clf,
+                    self.clf.named_steps["estimator"],
                     to_array(background_dataset(pred_class)),
                     feature_perturbation="interventional",
                 )
 
-            shap_values = explainer.shap_values(to_array(X))
+            _X = get_transformer_pipeline(self.clf).transform(X)
+            shap_values = explainer.shap_values(to_array(_X))
 
             # In the binary case, sometimes shap returns a single shap values matrix.
             if len(classes[0]) == 2 and not isinstance(shap_values, list):
@@ -635,7 +674,7 @@ class Model:
             important_features = self.get_important_features(
                 importance_cutoff, shap_values
             )
-            important_features["values"] = X
+            important_features["values"] = _X
 
             top_indexes = [
                 int(index)
@@ -748,20 +787,6 @@ class CommitModel(Model):
                     commit["bug"] = {}
 
             yield commit, classes[commit["node"]]
-
-
-class BugCoupleModel(Model):
-    def __init__(self, lemmatization=False):
-        Model.__init__(self, lemmatization)
-        self.training_dbs = [bugzilla.BUGS_DB]
-
-    def items_gen(self, classes):
-        bugs = {}
-        for bug in bugzilla.get_bugs():
-            bugs[bug["id"]] = bug
-
-        for (bug_id1, bug_id2), label in classes.items():
-            yield (bugs[bug_id1], bugs[bug_id2]), label
 
 
 class IssueModel(Model):

@@ -18,7 +18,7 @@ logger = getLogger(__name__)
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("team", help="Bugzilla team", type=str)
+    parser.add_argument("teams", help="Bugzilla team", type=str, nargs="+")
     parser.add_argument(
         "start_date",
         help="Start date of the period (YYYY-MM-DD)",
@@ -47,14 +47,17 @@ def main() -> None:
         )
 
     result = bugzilla.calculate_maintenance_effectiveness_indicator(
-        args.team,
+        args.teams,
         dateutil.parser.parse(args.start_date),
         dateutil.parser.parse(args.end_date),
         args.components,
     )
 
-    for factor, value in result.items():
-        logger.info(f"{factor}: {round(value, 2) if value != math.inf else value}")
+    for factor, value in result["stats"].items():
+        print("%s: %d" % (factor, round(value, 2) if value != math.inf else value))
+
+    for query, link in result["queries"].items():
+        print(f"{query}: {link}")
 
 
 if __name__ == "__main__":

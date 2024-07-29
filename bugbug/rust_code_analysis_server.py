@@ -6,7 +6,6 @@
 import logging
 import subprocess
 import time
-from typing import Optional
 
 import requests
 
@@ -20,7 +19,7 @@ HEADERS = {"Content-type": "application/octet-stream"}
 
 
 class RustCodeAnalysisServer:
-    def __init__(self, thread_num: Optional[int] = None):
+    def __init__(self, thread_num: int | None = None):
         for _ in range(START_RETRIES):
             self.start_process(thread_num)
 
@@ -41,7 +40,7 @@ class RustCodeAnalysisServer:
     def base_url(self):
         return f"http://127.0.0.1:{self.port}"
 
-    def start_process(self, thread_num: Optional[int] = None):
+    def start_process(self, thread_num: int | None = None):
         self.port = utils.get_free_tcp_port()
 
         try:

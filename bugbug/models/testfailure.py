@@ -6,9 +6,11 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import commit_features, repository, test_scheduling, utils
@@ -24,33 +26,31 @@ class TestFailureModel(CommitModel):
 
         self.training_dbs.append(test_scheduling.TEST_LABEL_SCHEDULING_DB)
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
+            commit_features.SourceCodeFileSize(),
+            commit_features.OtherFileSize(),
+            commit_features.TestFileSize(),
+            commit_features.SourceCodeAdded(),
+            commit_features.OtherAdded(),
+            commit_features.TestAdded(),
+            commit_features.SourceCodeDeleted(),
+            commit_features.OtherDeleted(),
+            commit_features.TestDeleted(),
             # commit_features.author_experience(),
             # commit_features.reviewer_experience(),
-            commit_features.reviewers_num(),
+            commit_features.ReviewersNum(),
             # commit_features.component_touched_prev(),
             # commit_features.directory_touched_prev(),
             # commit_features.file_touched_prev(),
-            commit_features.types(),
-            commit_features.files(),
-            commit_features.components(),
-            commit_features.components_modified_num(),
-            commit_features.directories(),
-            commit_features.directories_modified_num(),
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
+            commit_features.Types(),
+            commit_features.Files(),
+            commit_features.Components(),
+            commit_features.ComponentsModifiedNum(),
+            commit_features.Directories(),
+            commit_features.DirectoriesModifiedNum(),
+            commit_features.SourceCodeFilesModifiedNum(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
         ]
 
         self.extraction_pipeline = Pipeline(
@@ -59,11 +59,35 @@ class TestFailureModel(CommitModel):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        self.clf = ImblearnPipeline(
+            [
+                (
+                    "union",
+                    ColumnTransformer(
+                        [
+                            ("data", DictVectorizer(), "data"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
+                        ]
+                    ),
+                ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
+            ]
+        )
 
     def items_gen(self, classes):
         commit_map = {}
@@ -100,15 +124,13 @@ class TestFailureModel(CommitModel):
             else:
                 classes[rev] = 0
 
-        logger.info(
-            "%d commits failed", sum(1 for label in classes.values() if label == 1)
-        )
+        logger.info("%d commits failed", sum(label == 1 for label in classes.values()))
         logger.info(
             "%d commits did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

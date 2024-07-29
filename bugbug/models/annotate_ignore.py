@@ -6,9 +6,11 @@
 import logging
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, feature_cleanup, labels, repository, utils
@@ -23,34 +25,33 @@ class AnnotateIgnoreModel(CommitModel):
         CommitModel.__init__(self, lemmatization)
 
         self.calculate_importance = False
+        self.cross_validation_enabled = False
 
         self.training_dbs += [bugzilla.BUGS_DB]
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
-            commit_features.reviewers_num(),
-            commit_features.types(),
-            commit_features.files(),
-            commit_features.components(),
-            commit_features.components_modified_num(),
-            commit_features.directories(),
-            commit_features.directories_modified_num(),
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
-            commit_features.functions_touched_num(),
-            commit_features.functions_touched_size(),
-            commit_features.source_code_file_metrics(),
+            commit_features.SourceCodeFileSize(),
+            commit_features.OtherFileSize(),
+            commit_features.TestFileSize(),
+            commit_features.SourceCodeAdded(),
+            commit_features.OtherAdded(),
+            commit_features.TestAdded(),
+            commit_features.SourceCodeDeleted(),
+            commit_features.OtherDeleted(),
+            commit_features.TestDeleted(),
+            commit_features.ReviewersNum(),
+            commit_features.Types(),
+            commit_features.Files(),
+            commit_features.Components(),
+            commit_features.ComponentsModifiedNum(),
+            commit_features.Directories(),
+            commit_features.DirectoriesModifiedNum(),
+            commit_features.SourceCodeFilesModifiedNum(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
+            commit_features.FunctionsTouchedNum(),
+            commit_features.FunctionsTouchedSize(),
+            commit_features.SourceCodeFileMetrics(),
         ]
 
         cleanup_functions = [
@@ -67,19 +68,36 @@ class AnnotateIgnoreModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
                             ("desc", self.text_vectorizer(min_df=0.0001), "desc"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
 
     def get_labels(self):
         classes = {}
@@ -111,15 +129,15 @@ class AnnotateIgnoreModel(CommitModel):
 
         logger.info(
             "%d commits that can be ignored",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         logger.info(
             "%d commits that cannot be ignored",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

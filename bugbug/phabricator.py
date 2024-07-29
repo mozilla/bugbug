@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Collection, Iterator, NewType, Optional
+from typing import Collection, Iterator, NewType
 
 import tenacity
 from libmozdata.phabricator import PhabricatorAPI
@@ -69,8 +69,8 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
 
 def get(
-    rev_ids: Optional[Collection[int]] = None, modified_start: Optional[datetime] = None
-) -> Collection[RevisionDict]:
+    rev_ids: Collection[int] | None = None, modified_start: datetime | None = None
+) -> list[RevisionDict]:
     assert PHABRICATOR_API is not None
 
     assert (rev_ids is not None) ^ (modified_start is not None)
@@ -159,7 +159,7 @@ def download_modified_revisions():
     db.append(REVISIONS_DB, modified_revisions)
 
 
-def get_testing_project(rev: RevisionDict) -> Optional[str]:
+def get_testing_project(rev: RevisionDict) -> str | None:
     testing_projects = [
         TESTING_PROJECTS[projectPHID]
         for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
@@ -177,7 +177,7 @@ def get_testing_project(rev: RevisionDict) -> Optional[str]:
 
 def get_review_dates(
     rev: RevisionDict,
-) -> tuple[Optional[datetime], list[datetime], list[datetime], list[datetime]]:
+) -> tuple[datetime | None, list[datetime], list[datetime], list[datetime]]:
     creation_date = None
     review_dates = []
 
@@ -208,7 +208,7 @@ def get_review_dates(
     return creation_date, review_dates, exclusion_start_dates, exclusion_end_dates
 
 
-def get_first_review_time(rev: RevisionDict) -> Optional[timedelta]:
+def get_first_review_time(rev: RevisionDict) -> timedelta | None:
     (
         creation_date,
         review_dates,
@@ -257,7 +257,7 @@ def get_first_review_time(rev: RevisionDict) -> Optional[timedelta]:
         )
 
 
-def get_pending_review_time(rev: RevisionDict) -> Optional[timedelta]:
+def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
     if rev["fields"]["status"]["value"] != "needs-review":
         return None
 

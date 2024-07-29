@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 class Retriever(object):
-    def retrieve_bugs(self, limit: int = None) -> None:
+    def retrieve_bugs(self, limit: int | None = None) -> None:
         bugzilla.set_token(get_secret("BUGZILLA_TOKEN"))
 
         last_modified = None
@@ -28,7 +28,8 @@ class Retriever(object):
 
         if last_modified is not None:
             logger.info(
-                f"Retrieving IDs of bugs modified since the last run on {last_modified}"
+                "Retrieving IDs of bugs modified since the last run on %s",
+                last_modified,
             )
             changed_ids = set(
                 bugzilla.get_ids(
@@ -44,15 +45,15 @@ class Retriever(object):
 
         logger.info("Retrieved %d IDs.", len(changed_ids))
 
-        all_components = bugzilla.get_product_component_count(9999)
+        all_components = set(bugzilla.fetch_components_list())
 
         deleted_component_ids = set(
             bug["id"]
             for bug in bugzilla.get_bugs()
-            if "{}::{}".format(bug["product"], bug["component"]) not in all_components
+            if (bug["product"], bug["component"]) not in all_components
         )
         logger.info(
-            f"{len(deleted_component_ids)} bugs belonging to deleted components"
+            "%d bugs belonging to deleted components", len(deleted_component_ids)
         )
         changed_ids |= deleted_component_ids
 
@@ -107,7 +108,8 @@ class Retriever(object):
         if limit:
             regression_related_ids = regression_related_ids[-limit:]
         logger.info(
-            f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
+            "%d bugs which caused regressions fixed by commits.",
+            len(regression_related_ids),
         )
 
         # Get IDs of bugs linked to intermittent failures.
@@ -152,7 +154,8 @@ class Retriever(object):
                 )
             )
             logger.info(
-                f"{len(regression_related_ids)} bugs which caused regressions fixed by commits."
+                "%d bugs which caused regressions fixed by commits.",
+                len(regression_related_ids),
             )
             if limit:
                 regression_related_ids = regression_related_ids[-limit:]
@@ -175,7 +178,8 @@ class Retriever(object):
                 break
 
             logger.info(
-                f"Re-downloading {len(inconsistent_bug_ids)} bugs, as they were inconsistent"
+                "Re-downloading %d bugs, as they were inconsistent",
+                len(inconsistent_bug_ids),
             )
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
@@ -186,7 +190,8 @@ class Retriever(object):
         }
         bugzilla.delete_bugs(lambda bug: bug["id"] in missing_history_bug_ids)
         logger.info(
-            f"Deleted {len(missing_history_bug_ids)} bugs as we couldn't retrieve their history"
+            "Deleted %d bugs as we couldn't retrieve their history",
+            len(missing_history_bug_ids),
         )
 
         zstd_compress(bugzilla.BUGS_DB)

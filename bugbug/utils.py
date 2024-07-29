@@ -17,7 +17,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 import boto3
 import dateutil.parser
@@ -71,15 +71,15 @@ def to_array(val):
 
 
 class StructuredColumnTransformer(ColumnTransformer):
-    def _hstack(self, Xs):
-        result = super()._hstack(Xs)
+    def _hstack(self, Xs, n_samples):
+        result = super()._hstack(Xs, n_samples=n_samples)
 
         transformer_names = (name for name, transformer, column in self.transformers_)
         types = []
         for i, (f, transformer_name) in enumerate(zip(Xs, transformer_names)):
             types.append((transformer_name, result.dtype, (f.shape[1],)))
 
-        return result.todense().view(np.dtype(types))
+        return result.view(np.dtype(types))
 
 
 class DictExtractor(BaseEstimator, TransformerMixin):
@@ -91,6 +91,17 @@ class DictExtractor(BaseEstimator, TransformerMixin):
 
     def transform(self, data):
         return np.array([elem[self.key] for elem in data]).reshape(-1, 1)
+
+
+class MergeText(BaseEstimator, TransformerMixin):
+    def __init__(self, cols):
+        self.cols = cols
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        return X[self.cols].apply(lambda row: " ".join(row), axis=1)
 
 
 class MissingOrdinalEncoder(OrdinalEncoder):
@@ -207,7 +218,7 @@ def download_check_etag(url, path=None):
     return True
 
 
-def get_last_modified(url: str) -> Optional[datetime]:
+def get_last_modified(url: str) -> datetime | None:
     session = get_session(urllib.parse.urlparse(url).netloc)
     r = session.head(url, allow_redirects=True)
 
@@ -231,13 +242,13 @@ def download_model(model_name: str) -> str:
             version = "latest"
 
     path = f"{model_name}model"
-    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.zst"
+    url = f"https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.train_{model_name}.{version}/artifacts/public/{path}.tar.zst"
     logger.info("Downloading %s...", url)
     updated = download_check_etag(url)
     if updated:
-        zstd_decompress(path)
-        os.remove(f"{path}.zst")
-    assert os.path.exists(path), "Decompressed file exists"
+        extract_tar_zst(f"{path}.tar.zst")
+        os.remove(f"{path}.tar.zst")
+    assert os.path.exists(path), "Decompressed directory exists"
     return path
 
 
@@ -245,14 +256,32 @@ def zstd_compress(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-f", path], check=True)
+    try:
+        subprocess.run(["zstdmt", "-f", path], check=True)
+    except FileNotFoundError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        cctx = zstandard.ZstdCompressor()
+        with open(path, "rb") as input_f:
+            with open(f"{path}.zst", "wb") as output_f:
+                cctx.copy_stream(input_f, output_f)
 
 
 def zstd_decompress(path: str) -> None:
     if not os.path.exists(f"{path}.zst"):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    try:
+        subprocess.run(["zstdmt", "-df", f"{path}.zst"], check=True)
+    except FileNotFoundError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        dctx = zstandard.ZstdDecompressor()
+        with open(f"{path}.zst", "rb") as input_f:
+            with open(path, "wb") as output_f:
+                dctx.copy_stream(input_f, output_f)
 
 
 @contextmanager
@@ -280,14 +309,28 @@ def create_tar_zst(path: str) -> None:
     if not os.path.exists(inner_path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), inner_path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
+    try:
+        subprocess.run(["tar", "-I", "zstdmt", "-cf", path, inner_path], check=True)
+    except subprocess.CalledProcessError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        with open_tar_zst(path, "w") as tar:
+            tar.add(inner_path)
 
 
 def extract_tar_zst(path: str) -> None:
     if not os.path.exists(path):
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
 
-    subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
+    try:
+        subprocess.run(["tar", "-I", "zstdmt", "-xf", path], check=True)
+    except subprocess.CalledProcessError as error:
+        logger.warning(
+            "%s. Falling back to zstandard API, which could be slower.", error
+        )
+        with open_tar_zst(path, "r") as tar:
+            tar.extractall()
 
 
 def extract_file(path: str) -> None:
@@ -306,7 +349,7 @@ class CustomJsonEncoder(json.JSONEncoder):
 
     def default(self, obj):
         try:
-            return np.asscalar(obj)
+            return obj.item()
         except (ValueError, IndexError, AttributeError, TypeError):
             pass
 
@@ -398,6 +441,11 @@ class LMDBDict:
 
     def __setitem__(self, key: bytes, value: Any) -> None:
         self.txn.put(key, value, dupdata=False)
+
+    def keys(self):
+        cursor = self.txn.cursor()
+        for key, value in cursor:
+            yield key.tobytes()
 
 
 def get_free_tcp_port() -> int:
@@ -492,7 +540,7 @@ def extract_metadata(body: str) -> dict:
     return dict(match_list)
 
 
-def extract_private(issue_body: str) -> Optional[tuple]:
+def extract_private(issue_body: str) -> tuple | None:
     """Extract private issue information from public issue body.
 
     Parse public issue body and extract private issue number and
@@ -521,3 +569,8 @@ def escape_markdown(text: str) -> str:
         .replace(")", "\\)")
         .replace("|", "\\|")
     )
+
+
+def keep_as_is(x):
+    """A tokenizer that does nothing."""
+    return x

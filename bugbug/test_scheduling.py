@@ -21,7 +21,6 @@ from typing import (
     Iterable,
     Iterator,
     NewType,
-    Optional,
     Set,
     Union,
     cast,
@@ -415,7 +414,7 @@ def generate_failing_together_probabilities(
     granularity: str,
     push_data: Iterator[PushResult],
     push_data_count: int,
-    up_to: str = None,
+    up_to: str | None = None,
 ) -> None:
     # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
     # `task2 failure -> task1 failure` separately, as they could be different.
@@ -646,7 +645,7 @@ def set_touched_together(f1: str, f2: str) -> None:
         )
 
 
-def update_touched_together() -> Generator[None, Optional[Revision], None]:
+def update_touched_together() -> Generator[None, Revision | None, None]:
     touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]

@@ -3,7 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 import sys
-from collections import defaultdict
 from typing import Sequence
 
 import pandas as pd
@@ -15,28 +14,28 @@ EXPERIENCE_TIMESPAN = 90
 EXPERIENCE_TIMESPAN_TEXT = f"{EXPERIENCE_TIMESPAN}_days"
 
 
-class source_code_files_modified_num(object):
+class SourceCodeFilesModifiedNum(object):
     name = "# of modified code files"
 
     def __call__(self, commit, **kwargs):
         return commit["source_code_files_modified_num"]
 
 
-class other_files_modified_num(object):
+class OtherFilesModifiedNum(object):
     name = "# of modified non-code files"
 
     def __call__(self, commit, **kwargs):
         return commit["other_files_modified_num"]
 
 
-class test_files_modified_num(object):
+class TestFilesModifiedNum(object):
     name = "# of modified test files"
 
     def __call__(self, commit, **kwargs):
         return commit["test_files_modified_num"]
 
 
-class source_code_file_size(object):
+class SourceCodeFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total code files size": commit["total_source_code_file_size"],
@@ -46,7 +45,7 @@ class source_code_file_size(object):
         }
 
 
-class other_file_size(object):
+class OtherFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total non-code files size": commit["total_other_file_size"],
@@ -56,7 +55,7 @@ class other_file_size(object):
         }
 
 
-class test_file_size(object):
+class TestFileSize(object):
     def __call__(self, commit, **kwargs):
         return {
             "Total test files size": commit["total_test_file_size"],
@@ -66,56 +65,56 @@ class test_file_size(object):
         }
 
 
-class source_code_added(object):
+class SourceCodeAdded(object):
     name = "# of code lines added"
 
     def __call__(self, commit, **kwargs):
         return commit["source_code_added"]
 
 
-class other_added(object):
+class OtherAdded(object):
     name = "# of non-code lines added"
 
     def __call__(self, commit, **kwargs):
         return commit["other_added"]
 
 
-class test_added(object):
+class TestAdded(object):
     name = "# of lines added in tests"
 
     def __call__(self, commit, **kwargs):
         return commit["test_added"]
 
 
-class source_code_deleted(object):
+class SourceCodeDeleted(object):
     name = "# of code lines deleted"
 
     def __call__(self, commit, **kwargs):
         return commit["source_code_deleted"]
 
 
-class other_deleted(object):
+class OtherDeleted(object):
     name = "# of non-code lines deleted"
 
     def __call__(self, commit, **kwargs):
         return commit["other_deleted"]
 
 
-class test_deleted(object):
+class TestDeleted(object):
     name = "# of lines deleted in tests"
 
     def __call__(self, commit, **kwargs):
         return commit["test_deleted"]
 
 
-class functions_touched_num(object):
+class FunctionsTouchedNum(object):
     name = "# of functions touched"
 
     def __call__(self, commit, **kwargs):
         return sum(1 for f_group in commit["functions"].values() for f in f_group)
 
 
-class functions_touched_size(object):
+class FunctionsTouchedSize(object):
     def __call__(self, commit, **kwargs):
         function_sizes = [
             f["end"] - f["start"] + 1
@@ -133,7 +132,7 @@ class functions_touched_size(object):
         }
 
 
-class source_code_file_metrics(object):
+class SourceCodeFileMetrics(object):
     name = "metrics on source code file"
 
     def __call__(self, commit, **kwargs):
@@ -336,7 +335,7 @@ def merge_function_metrics(objects):
     return metrics
 
 
-class source_code_function_metrics(object):
+class SourceCodeFunctionMetrics(object):
     name = "metrics on source code functions"
 
     def __call__(self, commit, **kwargs):
@@ -532,7 +531,7 @@ class source_code_function_metrics(object):
         }
 
 
-class source_code_metrics_diff(object):
+class SourceCodeMetricsDiff(object):
     name = "diff in metrics on source code"
 
     def __call__(self, commit, **kwargs):
@@ -638,7 +637,7 @@ def get_exps(exp_type, commit):
     }
 
 
-class author_experience(object):
+class AuthorExperience(object):
     name = "Author experience"
 
     def __call__(self, commit, **kwargs):
@@ -655,7 +654,7 @@ class author_experience(object):
         }
 
 
-class reviewer_experience(object):
+class ReviewerExperience(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("reviewer", commit)
         return {
@@ -692,26 +691,26 @@ class reviewer_experience(object):
         }
 
 
-class reviewers_num(object):
+class ReviewersNum(object):
     name = "# of reviewers"
 
     def __call__(self, commit, **kwargs):
         return len(commit["reviewers"])
 
 
-class components(object):
+class Components(object):
     def __call__(self, commit, **kwargs):
         return commit["components"]
 
 
-class components_modified_num(object):
+class ComponentsModifiedNum(object):
     name = "# of components modified"
 
     def __call__(self, commit, **kwargs):
         return len(commit["components"])
 
 
-class component_touched_prev(object):
+class ComponentTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("component", commit)
         return {
@@ -750,19 +749,19 @@ class component_touched_prev(object):
         }
 
 
-class directories(object):
+class Directories(object):
     def __call__(self, commit, **kwargs):
         return commit["directories"]
 
 
-class directories_modified_num(object):
+class DirectoriesModifiedNum(object):
     name = "# of directories modified"
 
     def __call__(self, commit, **kwargs):
         return len(commit["directories"])
 
 
-class directory_touched_prev(object):
+class DirectoryTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("directory", commit)
         return {
@@ -807,38 +806,18 @@ class directory_touched_prev(object):
         }
 
 
-class files(object):
-    def __init__(self, min_freq=0.0014):
-        self.min_freq = min_freq
-
-    def fit(self, commits):
-        self.count = defaultdict(int)
-
-        self.total_commits = 0
-
-        for commit in commits:
-            self.total_commits += 1
-
-            for f in commit["files"]:
-                self.count[f] += 1
-
-        # We no longer need to store counts for files which have low frequency.
-        to_del = set(
-            f for f, c in self.count.items() if c / self.total_commits < self.min_freq
-        )
-
-        for f in to_del:
-            del self.count[f]
+class Files(object):
+    name = "files"
 
     def __call__(self, commit, **kwargs):
-        return [
-            f
-            for f in commit["files"]
-            if (self.count[f] / self.total_commits) > self.min_freq
-        ]
+        return commit["files"]
 
 
-class file_touched_prev(object):
+def _pass_through_tokenizer(doc):
+    return doc
+
+
+class FileTouchedPrev(object):
     def __call__(self, commit, **kwargs):
         exps = get_exps("file", commit)
         return {
@@ -877,7 +856,7 @@ class file_touched_prev(object):
         }
 
 
-class types(object):
+class Types(object):
     name = "file types"
 
     def __call__(self, commit, **kwargs):
@@ -1008,6 +987,7 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
         for commit in commits():
             data = {}
+            result = {"data": data}
 
             for feature_extractor in self.feature_extractors:
                 if "bug_features" in feature_extractor.__module__:
@@ -1028,6 +1008,13 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
                 else:
                     feature_extractor_name = feature_extractor.__class__.__name__
 
+                # FIXME: This is a workaround to pass the value to the
+                # union transformer independently. This will be dropped when we
+                # resolve https://github.com/mozilla/bugbug/issues/3876
+                if isinstance(feature_extractor, Files):
+                    result[sys.intern(feature_extractor_name)] = res
+                    continue
+
                 if isinstance(res, dict):
                     for key, value in res.items():
                         data[sys.intern(key)] = value
@@ -1040,7 +1027,6 @@ class CommitExtractor(BaseEstimator, TransformerMixin):
 
                 data[sys.intern(feature_extractor_name)] = res
 
-            result = {"data": data}
             if "desc" in commit:
                 for cleanup_function in self.cleanup_functions:
                     result["desc"] = cleanup_function(commit["desc"])

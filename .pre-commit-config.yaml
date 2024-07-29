@@ -1,25 +1,15 @@
 repos:
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.12.0
-    hooks:
-      - id: isort
-  - repo: https://github.com/psf/black
-    rev: 23.9.1
-    hooks:
-      - id: black
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.0.3
+    rev: v3.1.0
     hooks:
       - id: prettier
         exclude: ^tests/fixtures/
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.1.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.2.1
     hooks:
-      - id: flake8
-        additional_dependencies:
-          - flake8-coding==1.3.2
-          - flake8-copyright==0.2.4
-          - flake8-debugger==4.1.2
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
   - repo: https://github.com/pycqa/pydocstyle
     rev: 6.3.0
     hooks:
@@ -54,7 +44,7 @@ repos:
       - id: codespell
         exclude_types: [json]
   - repo: https://github.com/marco-c/taskcluster_yml_validator
-    rev: v0.0.10
+    rev: v0.0.11
     hooks:
       - id: taskcluster_yml
   - repo: https://github.com/asottile/yesqa
@@ -62,7 +52,7 @@ repos:
     hooks:
       - id: yesqa
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.950
+    rev: v1.7.1
     hooks:
       - id: mypy
         name: mypy-bugbug
@@ -74,7 +64,7 @@ repos:
           - types-python-dateutil==0.1.3
           - types-PyYAML==5.4.0
           - types-orjson==0.1.0
-          - types-tabulate==0.1.0
+          - types-tabulate==0.9.0.20240106
           - types-requests==0.1.11
       - id: mypy
         name: mypy-bugbug-http
@@ -88,9 +78,9 @@ repos:
           - types-redis==3.5.1
           - types-python-dateutil==0.1.3
           - types-orjson==0.1.0
-          - types-tabulate==0.1.0
+          - types-tabulate==0.9.0.20240106
   - repo: meta
     hooks:
       - id: check-useless-excludes
 default_language_version:
-  python: python3
+  python: python3.12

@@ -8,17 +8,23 @@ import os
 from bugbug import repository
 
 
-class name(object):
+class Name(object):
     def __call__(self, test_job, **kwargs):
         return test_job["name"]
 
 
-class platform(object):
+class Platform(object):
     def __call__(self, test_job, **kwargs):
         platforms = []
-        for ps in (("linux",), ("windows", "win"), ("android",), ("macosx",)):
+        for ps in (
+            ("linux",),
+            ("windows", "win"),
+            ("android", "apk", "fenix", "components", "focus", "klar", "samples"),
+            ("macosx",),
+            ("ios",),
+        ):
             for p in ps:
-                if p in test_job["name"][: test_job["name"].index("/")]:
+                if p in test_job["name"].split("/")[0]:
                     platforms.append(ps[0])
                     break
         assert len(platforms) == 1, "Wrong platforms ({}) in {}".format(
@@ -38,34 +44,34 @@ def get_chunk(name):
 
     assert name.startswith("test-"), f"{name} should start with test-"
 
-    name = name.split("/")[1]
+    name = name.split("/")[1] if "/" in name else name
 
     return "-".join([p for p in name.split("-") if p not in NAME_PARTS_TO_SKIP])
 
 
-class chunk(object):
+class Chunk(object):
     def __call__(self, test_job, **kwargs):
         return get_chunk(test_job["name"])
 
 
-class suite(object):
+class Suite(object):
     def __call__(self, test_job, **kwargs):
         return "-".join(
             p for p in get_chunk(test_job["name"]).split("-") if not p.isdigit()
         )
 
 
-class is_test(object):
+class IsTest(object):
     def __call__(self, test_job, **kwargs):
         return test_job["name"].startswith("test-")
 
 
-class is_build(object):
+class IsBuild(object):
     def __call__(self, test_job, **kwargs):
         return test_job["name"].startswith("build-")
 
 
-class prev_failures(object):
+class PrevFailures(object):
     def __call__(self, test_job, **kwargs):
         return {
             "total": test_job["failures"],
@@ -112,7 +118,7 @@ class prev_failures(object):
         }
 
 
-class touched_together(object):
+class TouchedTogether(object):
     def __call__(self, test_job, **kwargs):
         return {
             "touched_together_files": test_job["touched_together_files"],
@@ -120,7 +126,7 @@ class touched_together(object):
         }
 
 
-class arch(object):
+class Arch(object):
     def __call__(self, test_job, **kwargs):
         if "build-" in test_job["name"]:
             return []
@@ -158,7 +164,7 @@ def commonprefix(path1, path2):
     return path1
 
 
-class path_distance(object):
+class PathDistance(object):
     def __call__(self, test_job, commit, **kwargs):
         min_distance = None
 
@@ -174,7 +180,7 @@ class path_distance(object):
         return min_distance
 
 
-class common_path_components(object):
+class CommonPathComponents(object):
     def __call__(self, test_job, commit, **kwargs):
         manifest = get_manifest(test_job["name"])
         test_components = set(manifest.split("/"))
@@ -184,7 +190,7 @@ class common_path_components(object):
         return max(common_components_numbers, default=None)
 
 
-class first_common_parent_distance(object):
+class FirstCommonParentDistance(object):
     def __call__(self, test_job, commit, **kwargs):
         min_distance = None
 
@@ -202,7 +208,7 @@ class first_common_parent_distance(object):
         return min_distance
 
 
-class same_component(object):
+class SameComponent(object):
     def __call__(self, test_job, commit, **kwargs):
         manifest = get_manifest(test_job["name"])
 
@@ -220,7 +226,7 @@ class same_component(object):
         return touches_same_component
 
 
-class manifest_suite(object):
+class ManifestSuite(object):
     def __call__(self, test_job, commit, **kwargs):
         manifest = get_manifest(test_job["name"])
 

@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelBinarizer
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
@@ -61,6 +62,8 @@ class RCATypeModel(BugModel):
         self.calculate_importance = False
         self.rca_subcategories_enabled = rca_subcategories_enabled
 
+        self.le = LabelBinarizer()
+
         # should we consider only the main category or all sub categories
         self.RCA_TYPES = (
             RCA_SUBCATEGORIES + RCA_CATEGORIES
@@ -71,22 +74,22 @@ class RCATypeModel(BugModel):
         self.RCA_LIST = sorted(set(self.RCA_TYPES))
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
+            bug_features.HasSTR(),
+            bug_features.Severity(),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
             # Ignore whiteboards that would make the ML completely skewed
             # bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
-            bug_features.blocked_bugs_number(),
-            bug_features.ever_affected(),
-            bug_features.affected_then_unaffected(),
-            bug_features.product(),
-            bug_features.component(),
+            bug_features.Patches(),
+            bug_features.Landings(),
+            bug_features.BlockedBugsNumber(),
+            bug_features.EverAffected(),
+            bug_features.AffectedThenUnaffected(),
+            bug_features.Product(),
+            bug_features.Component(),
         ]
 
         cleanup_functions = [
@@ -101,6 +104,11 @@ class RCATypeModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -120,11 +128,13 @@ class RCATypeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    OneVsRestClassifier(
+                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+                    ),
+                ),
             ]
-        )
-
-        self.clf = OneVsRestClassifier(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
     # return rca from a whiteboard string
@@ -162,7 +172,7 @@ class RCATypeModel(BugModel):
         return classes, self.RCA_LIST
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         rca_values = self.get_rca(bugs)

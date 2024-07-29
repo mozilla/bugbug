@@ -9,11 +9,12 @@ import math
 import re
 from datetime import datetime
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable, Iterator, NewType, Optional
+from typing import Iterable, Iterator, NewType
+from urllib.parse import urlencode
 
 import tenacity
 from dateutil.relativedelta import relativedelta
-from libmozdata.bugzilla import Bugzilla, BugzillaProduct
+from libmozdata.bugzilla import Bugzilla, BugzillaProduct, Query
 from tqdm import tqdm
 
 from bugbug import db, utils
@@ -27,7 +28,7 @@ BUGS_DB = "data/bugs.json"
 db.register(
     BUGS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_bugs.latest/artifacts/public/bugs.json.zst",
-    9,
+    10,
 )
 
 PRODUCTS = (
@@ -68,7 +69,14 @@ ATTACHMENT_INCLUDE_FIELDS = [
     "file_name",
 ]
 
-COMMENT_INCLUDE_FIELDS = ["id", "count", "text", "creation_time"]
+COMMENT_INCLUDE_FIELDS = [
+    "id",
+    "count",
+    "text",
+    "creation_time",
+    "tags",
+    "creator",
+]
 
 PRODUCT_COMPONENT_CSV_REPORT_URL = "https://bugzilla.mozilla.org/report.cgi"
 
@@ -94,7 +102,7 @@ PRODUCTS_TO_EXCLUDE = [
 ]
 
 
-def get_bugs(include_invalid: Optional[bool] = False) -> Iterator[BugDict]:
+def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
     yield from (
         bug
         for bug in db.read(BUGS_DB)
@@ -295,13 +303,41 @@ def delete_bugs(match):
 def count_bugs(bug_query_params):
     bug_query_params["count_only"] = 1
 
-    r = utils.get_session("bugzilla").get(
-        "https://bugzilla.mozilla.org/rest/bug", params=bug_query_params
-    )
-    r.raise_for_status()
-    count = r.json()["bug_count"]
+    data = {}
 
-    return count
+    def handler(bug):
+        data["bug_count"] = bug["bug_count"]
+
+    Bugzilla(queries=Query(Bugzilla.API_URL, bug_query_params, handler)).wait()
+
+    return data["bug_count"]
+
+
+def fetch_components_list(product_types="accessible") -> list[tuple]:
+    """Fetch all components from all products.
+
+    Args:
+        product_types: The types of products to fetch components from. Defaults
+            to "accessible".
+
+    Returns:
+        A list of tuples where the first element is the product name and the
+        second element is the component name.
+    """
+    components: list[tuple] = []
+
+    def handler(product):
+        components.extend(
+            (product["name"], component["name"]) for component in product["components"]
+        )
+
+    BugzillaProduct(
+        product_types=product_types,
+        include_fields=["name", "components.name"],
+        product_handler=handler,
+    ).wait()
+
+    return components
 
 
 def get_product_component_count(months: int = 12) -> dict[str, int]:
@@ -443,11 +479,11 @@ def get_last_activity_excluding_bots(bug: BugDict) -> str:
 
 
 def calculate_maintenance_effectiveness_indicator(
-    team: str,
+    teams: list[str],
     from_date: datetime,
     to_date: datetime,
-    components: list[str] = None,
-) -> dict[str, float]:
+    components: list[str] | None = None,
+) -> dict[str, dict]:
     data: dict[str, dict[str, int]] = {
         "open": {},
         "opened": {},
@@ -455,57 +491,61 @@ def calculate_maintenance_effectiveness_indicator(
     }
 
     logger.info(
-        "Calculating maintenance effectiveness indicator for the %s team from %s to %s",
-        team,
+        "Calculating maintenance effectiveness indicator for the %s teams from %s to %s",
+        ", ".join(teams),
         from_date,
         to_date,
     )
 
-    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
+    def build_query(severity: str | None, query_type: str):
         params: dict[str, int | str | list[str]] = {
-            "count_only": 1,
-            "type": "defect",
-            "team_name": team,
+            "bug_type": "defect",
+            "team_name": teams,
         }
 
-        if severity != "--":
+        if severity is not None and severity != "--":
             params["bug_severity"] = severity
 
         if components is not None:
             params["component"] = components
 
-        for query_type in data.keys():
-            if query_type in ("opened", "closed"):
-                params.update(
-                    {
-                        "chfieldfrom": from_date.strftime("%Y-%m-%d"),
-                        "chfieldto": to_date.strftime("%Y-%m-%d"),
-                    }
-                )
+        if query_type in ("opened", "closed"):
+            params.update(
+                {
+                    "chfieldfrom": from_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    "chfieldto": to_date.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
 
-            if query_type == "open":
-                params.update(
-                    {
-                        "f1": "resolution",
-                        "o1": "equals",
-                        "v1": "---",
-                    }
-                )
-            elif query_type == "opened":
-                params["chfield"] = "[Bug creation]"
-            elif query_type == "closed":
-                params.update(
-                    {
-                        "chfield": "cf_last_resolved",
-                        "f1": "resolution",
-                        "o1": "notequals",
-                        "v1": "---",
-                    }
-                )
+        if query_type == "open":
+            params.update(
+                {
+                    "f1": "resolution",
+                    "o1": "equals",
+                    "v1": "---",
+                }
+            )
+        elif query_type == "opened":
+            params["chfield"] = "[Bug creation]"
+        elif query_type == "closed":
+            params.update(
+                {
+                    "chfield": "cf_last_resolved",
+                    "f1": "resolution",
+                    "o1": "notequals",
+                    "v1": "---",
+                }
+            )
+
+        return params
+
+    for severity in MAINTENANCE_EFFECTIVENESS_SEVERITY_WEIGHTS.keys():
+        for query_type in data.keys():
+            params = build_query(severity, query_type)
 
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
-                params=params,
+                params={**params, "count_only": 1},
                 headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
             )
             r.raise_for_status()
@@ -569,10 +609,19 @@ def calculate_maintenance_effectiveness_indicator(
         incoming = math.inf
         closed = math.inf
 
+    opened_query = build_query(None, "opened")
+    closed_query = build_query(None, "closed")
+
     return {
-        "ME%": mei,
-        "BDTime": bdtime,
-        "WBDTime": wbdtime,
-        "Incoming%": incoming,
-        "Closed%": closed,
+        "stats": {
+            "ME": mei,
+            "BDTime": bdtime,
+            "WBDTime": wbdtime,
+            "Incoming vs total open": incoming,
+            "Closed vs total open": closed,
+        },
+        "queries": {
+            "Opened": f"https://bugzilla.mozilla.org/buglist.cgi?query_format=advanced&{urlencode(opened_query, doseq=True)}",
+            "Closed": f"https://bugzilla.mozilla.org/buglist.cgi?query_format=advanced&{urlencode(closed_query, doseq=True)}",
+        },
     }
