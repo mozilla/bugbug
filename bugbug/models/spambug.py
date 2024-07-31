@@ -130,10 +130,12 @@ class SpamBugModel(BugModel):
 
     def items_gen(self, classes):
         # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs.
+        # include spam bugs and mail products
         return (
             (bug, classes[bug["id"]])
-            for bug in bugzilla.get_bugs(include_invalid=True)
+            for bug in bugzilla.get_bugs(
+                include_invalid=True, include_mail_products=True
+            )
             if bug["id"] in classes
         )
 

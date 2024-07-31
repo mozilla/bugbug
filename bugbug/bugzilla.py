@@ -60,6 +60,13 @@ PRODUCTS = (
     "WebExtensions",
 )
 
+MAIL_PRODUCTS = (
+    "Calendar",
+    "Chat Core",
+    "MailNews Core",
+    "Thunderbird",
+)
+
 ATTACHMENT_INCLUDE_FIELDS = [
     "id",
     "flags",
@@ -93,20 +100,16 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 
 INCLUDE_FIELDS = ["_default", "filed_via"]
 
-PRODUCTS_TO_EXCLUDE = [
-    "Calendar",
-    "Chat Core",
-    "Invalid Bugs",
-    "MailNews Core",
-    "Thunderbird",
-]
 
-
-def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
+def get_bugs(
+    include_invalid: bool | None = False, include_mail_products: bool = False
+) -> Iterator[BugDict]:
+    products = PRODUCTS if include_mail_products else set(PRODUCTS) - set(MAIL_PRODUCTS)
     yield from (
         bug
         for bug in db.read(BUGS_DB)
-        if include_invalid or bug["product"] not in PRODUCTS_TO_EXCLUDE
+        if bug["product"] in products
+        and (include_invalid or bug["product"] != "Invalid Bugs")
     )
 
 
