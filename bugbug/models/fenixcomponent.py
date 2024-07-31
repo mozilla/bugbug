@@ -85,7 +85,7 @@ class FenixComponentModel(BugModel):
         date_limit = datetime.now(timezone.utc) - relativedelta(years=2)
 
         for bug_data in bugzilla.get_bugs():
-            if bug_data["product"] != "Fenix":
+            if bug_data["product"] != "Fenix" and bug_data["product"] != "GeckoView":
                 continue
 
             # Exclude 'General' because it contains bugs that may belong to other components, thus introducing noise.
