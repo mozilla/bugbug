@@ -160,7 +160,7 @@ tasks:
       deadline: { $fromNow: "2 days" }
       expires: { $fromNow: "1 month" }
       provisionerId: proj-bugbug
-      workerType: batch
+      workerType: compute-small
       dependencies:
         - commit-retrieval
       payload:
