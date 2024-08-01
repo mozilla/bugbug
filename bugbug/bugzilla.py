@@ -32,8 +32,6 @@ db.register(
 )
 
 PRODUCTS = (
-    "Calendar",
-    "Chat Core",
     "Cloud Services",
     "Core",
     "Data Platform and Tools",
@@ -47,23 +45,24 @@ PRODUCTS = (
     "GeckoView",
     "Invalid Bugs",
     "JSS",
-    "MailNews Core",
     "NSPR",
     "NSS",
     "Release Engineering",
     "Remote Protocol",
     "Shield",
     "Testing",
-    "Thunderbird",
     "Toolkit",
     "Web Compatibility",
     "WebExtensions",
 )
 
-MAIL_PRODUCTS = (
+ADDITIONAL_PRODUCTS = (
+    "bugzilla.mozilla.org",
+    "CA Program",
     "Calendar",
     "Chat Core",
     "MailNews Core",
+    "SeaMonkey",
     "Thunderbird",
 )
 
@@ -102,9 +101,14 @@ INCLUDE_FIELDS = ["_default", "filed_via"]
 
 
 def get_bugs(
-    include_invalid: bool | None = False, include_mail_products: bool = False
+    include_invalid: bool | None = False,
+    include_additional_products: tuple[str, ...] = (),
 ) -> Iterator[BugDict]:
-    products = PRODUCTS if include_mail_products else set(PRODUCTS) - set(MAIL_PRODUCTS)
+    products = (
+        PRODUCTS + include_additional_products
+        if include_additional_products
+        else PRODUCTS
+    )
     yield from (
         bug
         for bug in db.read(BUGS_DB)
@@ -192,7 +196,7 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": date_from.strftime("%Y-%m-%d"),
-        "product": PRODUCTS,
+        "product": PRODUCTS + ADDITIONAL_PRODUCTS,
     }
 
     if date_to is not None:
