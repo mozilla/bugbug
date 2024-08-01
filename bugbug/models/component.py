@@ -131,11 +131,8 @@ class ComponentModel(BugModel):
         }
 
     def filter_component(self, product, component):
-        if product == "Fenix":
+        if product == "Fenix" or product == "GeckoView":
             return "Fenix"
-
-        if product == "GeckoView":
-            return "GeckoView::General"
 
         full_comp = f"{product}::{component}"
 
