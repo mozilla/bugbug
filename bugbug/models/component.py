@@ -134,6 +134,9 @@ class ComponentModel(BugModel):
     def filter_component(self, product, component):
         if product == "Fenix":
             return "Fenix"
+
+        if product == "GeckoView":
+            return "GeckoView"
         full_comp = f"{product}::{component}"
 
         if full_comp in self.CONFLATED_COMPONENTS_INVERSE_MAPPING:
