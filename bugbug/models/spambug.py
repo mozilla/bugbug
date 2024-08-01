@@ -129,11 +129,14 @@ class SpamBugModel(BugModel):
         return classes, [0, 1]
 
     def items_gen(self, classes):
-        # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs.
+        # Overwriting this method to add include_invalid=True and include_additional_products=ADDITIONAL_PRODUCTS
+        # for get_bugs to include spam bugs and all additional products
         return (
             (bug, classes[bug["id"]])
-            for bug in bugzilla.get_bugs(include_invalid=True)
+            for bug in bugzilla.get_bugs(
+                include_invalid=True,
+                include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+            )
             if bug["id"] in classes
         )
 

@@ -56,6 +56,16 @@ PRODUCTS = (
     "WebExtensions",
 )
 
+ADDITIONAL_PRODUCTS = (
+    "bugzilla.mozilla.org",
+    "CA Program",
+    "Calendar",
+    "Chat Core",
+    "MailNews Core",
+    "SeaMonkey",
+    "Thunderbird",
+)
+
 ATTACHMENT_INCLUDE_FIELDS = [
     "id",
     "flags",
@@ -90,11 +100,20 @@ MAINTENANCE_EFFECTIVENESS_SEVERITY_DEFAULT_WEIGHT = 3
 INCLUDE_FIELDS = ["_default", "filed_via"]
 
 
-def get_bugs(include_invalid: bool | None = False) -> Iterator[BugDict]:
+def get_bugs(
+    include_invalid: bool | None = False,
+    include_additional_products: tuple[str, ...] = (),
+) -> Iterator[BugDict]:
+    products = (
+        PRODUCTS + include_additional_products
+        if include_additional_products
+        else PRODUCTS
+    )
     yield from (
         bug
         for bug in db.read(BUGS_DB)
-        if include_invalid or bug["product"] != "Invalid Bugs"
+        if bug["product"] in products
+        and (include_invalid or bug["product"] != "Invalid Bugs")
     )
 
 
@@ -177,7 +196,7 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": date_from.strftime("%Y-%m-%d"),
-        "product": PRODUCTS,
+        "product": PRODUCTS + ADDITIONAL_PRODUCTS,
     }
 
     if date_to is not None:
