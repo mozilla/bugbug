@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import argparse
+import math
 from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
@@ -15,9 +16,9 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("team", help="Bugzilla team", type=str)
+    parser.add_argument("teams", help="Bugzilla team", type=str, nargs="+")
     parser.add_argument(
         "start_date",
         help="Start date of the period (YYYY-MM-DD)",
@@ -45,17 +46,18 @@ def main():
             "If you want to include security bugs too, please set the BUGBUG_BUGZILLA_TOKEN environment variable to your Bugzilla API key."
         )
 
-    logger.info(
-        round(
-            bugzilla.calculate_maintenance_effectiveness_indicator(
-                args.team,
-                dateutil.parser.parse(args.start_date),
-                dateutil.parser.parse(args.end_date),
-                args.components,
-            ),
-            2,
-        )
+    result = bugzilla.calculate_maintenance_effectiveness_indicator(
+        args.teams,
+        dateutil.parser.parse(args.start_date),
+        dateutil.parser.parse(args.end_date),
+        args.components,
     )
+
+    for factor, value in result["stats"].items():
+        print("%s: %d" % (factor, round(value, 2) if value != math.inf else value))
+
+    for query, link in result["queries"].items():
+        print(f"{query}: {link}")
 
 
 if __name__ == "__main__":

@@ -159,6 +159,91 @@ def test_model_predict_batch(client, jobs, add_result, add_change_time, response
     }
 
 
+def test_model_predict_batch_broken_site_reports(client, jobs, add_result):
+    reports = [
+        {
+            "uuid": "954dbc23-91e6-4d6f-a10a-405f46663e31",
+            "title": "https://example.com",
+            "body": "Loads blank page.",
+        },
+        {
+            "uuid": "af7e27b5-3ce3-46e1-8294-5baea36782cc",
+            "title": "https://test.com",
+            "body": "Will not load",
+        },
+    ]
+    result = {
+        "prob": [0.11845558881759644, 0.8815444111824036],
+        "index": 1,
+        "class": 1,
+        "extra_data": {},
+    }
+
+    def do_request():
+        return client.post(
+            "/invalidcompatibilityreport/predict/broken_site_report/batch",
+            data=json.dumps({"reports": reports}),
+            headers={API_TOKEN: "test"},
+        )
+
+    rv = do_request()
+    assert rv.status_code == 202
+    assert retrieve_compressed_reponse(rv) == {
+        "reports": {report["uuid"]: {"ready": False} for report in reports}
+    }
+    assert len(jobs) == 1
+
+    # set one of the reports as ready
+    keys = next(iter(jobs.values()))
+    add_result(keys[0], result)
+
+    rv = do_request()
+    assert rv.status_code == 202
+    assert retrieve_compressed_reponse(rv) == {
+        "reports": {reports[0]["uuid"]: result, reports[1]["uuid"]: {"ready": False}}
+    }
+
+    # set both reports as ready
+    add_result(keys[1], result)
+
+    rv = do_request()
+    assert rv.status_code == 200
+    assert retrieve_compressed_reponse(rv) == {
+        "reports": {report["uuid"]: result for report in reports}
+    }
+
+
+def test_for_missing_bugs(client, responses):
+    existed_bug_ids = [1602463, 1619699]
+    missing_bug_ids = [1598744, 1615281, 1566486]
+    all_bug_ids = [*existed_bug_ids, *missing_bug_ids]
+
+    change_time = str(time.time())
+
+    responses.add(
+        responses.GET,
+        "https://bugzilla.mozilla.org/rest/bug?id=1566486,1598744,1602463,1615281,1619699&include_fields=id&include_fields=last_change_time",
+        status=200,
+        json={
+            "bugs": [
+                {"id": bug_id, "last_change_time": change_time}
+                for bug_id in existed_bug_ids
+            ],
+        },
+    )
+
+    rv = client.post(
+        "/component/predict/batch",
+        data=json.dumps({"bugs": all_bug_ids}),
+        headers={API_TOKEN: "test"},
+    )
+    assert rv.status_code == 202
+    bugs = retrieve_compressed_reponse(rv)["bugs"]
+    assert bugs.keys() == set(
+        map(str, all_bug_ids)
+    ), "All the queried bug IDs must be returned"
+
+
 def test_empty_batch(client):
     """Start with a blank database."""
 

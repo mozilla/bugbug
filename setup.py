@@ -48,7 +48,6 @@ setup(
             "bugbug-data-test-scheduling-history = scripts.test_scheduling_history_retriever:main",
             "bugbug-data-revisions = scripts.revision_retriever:main",
             "bugbug-train = scripts.trainer:main",
-            "bugbug-train-similarity = scripts.similarity_trainer:main",
             "bugbug-check = scripts.check:main",
             "bugbug-maintenance-effectiveness-indicator = scripts.maintenance_effectiveness_indicator:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
@@ -66,6 +65,7 @@ setup(
         ]
     },
     classifiers=[
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3 :: Only",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",

@@ -23,8 +23,8 @@
     },
     "payload": {
       "artifacts": {
-        "public/probs.json": {
-          "path": "/probs.json",
+        "public/results.json": {
+          "path": "/results.json",
           "type": "file"
         },
         "public/importances.json": {

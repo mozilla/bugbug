@@ -21,9 +21,7 @@ class url(object):
 
 class fileref(object):
     def __init__(self):
-        self.pattern = re.compile(
-            r"\w+\.py\b|\w+\.json\b|\w+\.js\b|\w+\.jsm\b|\w+\.mjs\b|\w+\.jsx\b|\w+\.html\b|\w+\.css\b|\w+\.c\b|\w+\.cpp\b|\w+\.h\b"
-        )
+        self.pattern = re.compile(r"\w+\.(py|json|js|jsm|mjs|jsx|html|css|c|cpp|h)\b")
 
     def __call__(self, text):
         return self.pattern.sub("__FILE_REFERENCE__", text)
@@ -154,7 +152,7 @@ class dll(object):
 
 class synonyms(object):
     def __init__(self):
-        synonyms = [
+        synonyms = (
             ("safemode", ["safemode", "safe mode"]),
             ("str", ["str", "steps to reproduce", "repro steps"]),
             ("uaf", ["uaf", "use after free", "use-after-free"]),
@@ -174,18 +172,22 @@ class synonyms(object):
                 ],
             ),
             ("spec", ["spec", "specification"]),
-        ]
-        self.pattern = {}
-        for synonym_group, synonym_list in synonyms:
-            self.pattern[synonym_group] = re.compile(
-                "|".join(rf"\b{synonym}\b" for synonym in synonym_list),
-                flags=re.IGNORECASE,
-            )
+        )
+        self.synonyms_dict = {
+            synonym: synonym_group
+            for synonym_group, synonym_list in synonyms
+            for synonym in synonym_list
+        }
+        self.pattern = re.compile(
+            r"|".join(rf"\b{synonym}\b" for synonym in self.synonyms_dict.keys()),
+            flags=re.IGNORECASE,
+        )
+
+    def _replace(self, match):
+        return self.synonyms_dict[match.group(0).lower()]
 
     def __call__(self, text):
-        for synonym_group in self.pattern:
-            text = self.pattern[synonym_group].sub(synonym_group, text)
-        return text
+        return self.pattern.sub(self._replace, text)
 
 
 class crash(object):
@@ -196,3 +198,66 @@ class crash(object):
 
     def __call__(self, text):
         return self.pattern.sub("__CRASH_STATS_LINK__", text)
+
+
+class CleanCompatibilityReportDescription(object):
+    def __init__(self):
+        self.sub_patterns = {
+            "details": re.compile(r"<details>.*?</details>", re.DOTALL),
+            "footer": re.compile(
+                r"_From \[webcompat\.com\]\(https://webcompat\.com/\) with ❤️_"
+            ),
+            "link": re.compile(
+                r"\[View console log messages\]\(https://webcompat\.com/console_logs/.*?\)"
+            ),
+            "screenshot": re.compile(r"\[\!\[Screenshot Description\]\(.*?\)\]\(.*?\)"),
+            "screenshot_md": re.compile(
+                r'\*\*Screenshot\*\*\s*\r?\n\<img width="[\d]+" alt="[^"]*" src="https?://[^"]+"[^>]*>'
+            ),
+            "watchers": re.compile(r"\*\*Watchers:\*\*(?:\r?\n@[\w-]+)+"),
+        }
+        self.extract_patterns = {
+            "description": re.compile(r"\*\*Description\*\*: (.*?)\n", re.DOTALL),
+            "problem_type": re.compile(r"\*\*Problem type\*\*: (.*?)\n", re.DOTALL),
+            "steps": re.compile(r"\*\*Steps to Reproduce\*\*:?(.*)", re.DOTALL),
+        }
+
+        self.default_problems = {
+            "Desktop site instead of mobile site",
+            "Browser unsupported",
+            "Page not loading correctly",
+            "Missing items",
+            "Buttons or links not working",
+            "Unable to type",
+            "Unable to login",
+            "Problems with Captcha",
+            "Images not loaded",
+            "Items are overlapped",
+            "Items are misaligned",
+            "Items not fully visible",
+            "There is no video",
+            "There is no audio",
+            "Media controls are broken or missing",
+            "The video or audio does not play",
+        }
+
+    def _extract_and_strip(self, pattern, text):
+        match = pattern.search(text)
+        return match.group(1).strip() if match else ""
+
+    def __call__(self, text):
+        for pattern in self.sub_patterns.values():
+            text = pattern.sub("", text)
+
+        problem_type = self._extract_and_strip(
+            self.extract_patterns["problem_type"], text
+        )
+        description = self._extract_and_strip(
+            self.extract_patterns["description"], text
+        )
+        steps = self._extract_and_strip(self.extract_patterns["steps"], text)
+
+        if problem_type == "Something else" or description not in self.default_problems:
+            return f"{description}\n {steps}" if steps else description
+        else:
+            return steps

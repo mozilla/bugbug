@@ -20,7 +20,7 @@ import sys
 import threading
 from datetime import datetime
 from functools import lru_cache
-from typing import Collection, Iterable, Iterator, NewType, Optional, Set, Union
+from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
 import hglib
 import lmdb
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 CommitDict = NewType("CommitDict", dict)
 
-code_analysis_server: Optional[rust_code_analysis_server.RustCodeAnalysisServer] = None
+code_analysis_server: rust_code_analysis_server.RustCodeAnalysisServer | None = None
 
 hg_servers = list()
 hg_servers_lock = threading.Lock()
@@ -173,7 +173,7 @@ class Commit:
         author: str,
         desc: str,
         pushdate: datetime,
-        bug_id: Optional[int],
+        bug_id: int | None,
         backsout: list[str],
         backedoutby: str,
         author_email: str,
@@ -312,7 +312,7 @@ def get_commits(
     )
 
 
-def get_revision_id(commit: CommitDict) -> Optional[int]:
+def get_revision_id(commit: CommitDict) -> int | None:
     match = PHABRICATOR_REVISION_REGEX.search(commit["desc"])
     if not match:
         return None
@@ -871,7 +871,7 @@ def _transform(commit):
 
 
 def hg_log(
-    hg: hglib.client, revs: list[bytes], branch: Optional[str] = "tip"
+    hg: hglib.client, revs: list[bytes], branch: str | None = "tip"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1303,7 +1303,7 @@ def close_component_mapping():
 
 
 def hg_log_multi(
-    repo_dir: str, revs: list[bytes], branch: Optional[str] = "tip"
+    repo_dir: str, revs: list[bytes], branch: str | None = "tip"
 ) -> tuple[Commit, ...]:
     if len(revs) == 0:
         return tuple()
@@ -1336,9 +1336,9 @@ def get_first_pushdate(repo_dir):
 
 def download_commits(
     repo_dir: str,
-    rev_start: str = None,
-    revs: list[bytes] = None,
-    branch: Optional[str] = "tip",
+    rev_start: str | None = None,
+    revs: list[bytes] | None = None,
+    branch: str | None = "tip",
     save: bool = True,
     use_single_process: bool = False,
     include_no_bug: bool = False,

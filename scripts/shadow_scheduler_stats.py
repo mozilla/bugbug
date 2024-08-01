@@ -9,7 +9,7 @@ import logging
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import matplotlib.pyplot as plt
 import mozci.push
@@ -63,7 +63,7 @@ def go(months: int) -> None:
         scheduler_stat["id"] for scheduler_stat in db.read(SHADOW_SCHEDULER_STATS_DB)
     }
     logger.info(
-        f"Already gathered statistics for {len(known_scheduler_stats)} pushes..."
+        "Already gathered statistics for %d pushes...", len(known_scheduler_stats)
     )
 
     to_date = datetime.utcnow() - relativedelta(days=3)
@@ -254,7 +254,7 @@ def plot_graphs(granularity: str) -> None:
 
 
 def print_uncaught(
-    granularity: str, scheduler1: str, scheduler2: Optional[str] = None
+    granularity: str, scheduler1: str, scheduler2: str | None = None
 ) -> None:
     push_data_db = (
         test_scheduling.PUSH_DATA_GROUP_DB

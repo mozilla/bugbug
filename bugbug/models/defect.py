@@ -4,11 +4,12 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
-from logging import INFO, basicConfig, getLogger
+import logging
 from typing import Any
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -16,40 +17,38 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, labels, utils
 from bugbug.model import BugModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class DefectModel(BugModel):
     def __init__(self, lemmatization=False, historical=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
-
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
+            bug_features.HasSTR(),
+            bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords({"regression", "talos-regression", "feature"}),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.blocked_bugs_number(),
-            bug_features.ever_affected(),
-            bug_features.affected_then_unaffected(),
-            bug_features.product(),
-            bug_features.component(),
+            bug_features.Keywords({"regression", "talos-regression", "feature"}),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.BlockedBugsNumber(),
+            bug_features.EverAffected(),
+            bug_features.AffectedThenUnaffected(),
+            bug_features.Product(),
+            bug_features.Component(),
         ]
 
         if historical:
             feature_extractors += [
-                bug_features.had_severity_enhancement(),
-                bug_features.patches(),
-                bug_features.landings(),
+                bug_features.HadSeverityEnhancement(),
+                bug_features.Patches(),
+                bug_features.Landings(),
             ]
 
         cleanup_functions = [
@@ -64,6 +63,11 @@ class DefectModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -83,11 +87,13 @@ class DefectModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", BorderlineSMOTE(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_bugbug_labels(self, kind="bug") -> dict[int, Any]:
         assert kind in ["bug", "regression", "defect_enhancement_task"]
@@ -258,13 +264,13 @@ class DefectModel(BugModel):
     def get_labels(self) -> tuple[dict[int, Any], list[Any]]:
         classes = self.get_bugbug_labels("bug")
 
-        logger.info("%d bugs", (sum(1 for label in classes.values() if label == 1)))
-        logger.info("%d non-bugs", (sum(1 for label in classes.values() if label == 0)))
+        logger.info("%d bugs", (sum(label == 1 for label in classes.values())))
+        logger.info("%d non-bugs", (sum(label == 0 for label in classes.values())))
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

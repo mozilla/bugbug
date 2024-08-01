@@ -1,10 +1,10 @@
 cff-version: 1.1.0
 message: "If you use this software, please cite it as below."
 authors:
-- family-names: Castelluccio
-  given-names: Marco
-  orcid: https://orcid.org/0000-0002-3285-5121
-  affiliation: Mozilla
+  - family-names: Castelluccio
+    given-names: Marco
+    orcid: https://orcid.org/0000-0002-3285-5121
+    affiliation: Mozilla
 title: bugbug
 version: 0.0.436
 doi: 10.5281/zenodo.4911345

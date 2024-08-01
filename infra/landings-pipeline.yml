@@ -41,6 +41,7 @@ tasks:
           bugbug-mercurial-repository: /cache
       scopes:
         - docker-worker:cache:bugbug-mercurial-repository
+        - generic-worker:cache:bugbug-mercurial-repository
         - secrets:get:project/bugbug/production
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
@@ -54,7 +55,7 @@ tasks:
 
     - ID: frontend-build
       created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
+      deadline: { $fromNow: "3 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
@@ -62,7 +63,7 @@ tasks:
         - landings-risk-report-generator
       payload:
         maxRunTime: 3600
-        image: node
+        image: node:lts
         command:
           - "/bin/sh"
           - "-lcxe"
@@ -88,7 +89,7 @@ tasks:
 
     - ID: frontend-deploy
       created: { $fromNow: "" }
-      deadline: { $fromNow: "1 hour" }
+      deadline: { $fromNow: "3 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: batch
@@ -98,7 +99,7 @@ tasks:
         features:
           taskclusterProxy: true
         maxRunTime: 3600
-        image: mozilla/taskboot:0.3.6
+        image: mozilla/taskboot:0.4.2
         env:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:

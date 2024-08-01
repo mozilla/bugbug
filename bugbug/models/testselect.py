@@ -11,10 +11,11 @@ import multiprocessing as mp
 import pickle
 import statistics
 from functools import reduce
-from typing import Any, Callable, Collection, Iterable, Optional, Sequence, Set
+from typing import Any, Callable, Collection, Iterable, Sequence, Set
 
 import numpy as np
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from ortools.linear_solver import pywraplp
 from sklearn.compose import ColumnTransformer
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_commit_map(
-    revs: Optional[Set[test_scheduling.Revision]] = None,
+    revs: Set[test_scheduling.Revision] | None = None,
 ) -> dict[test_scheduling.Revision, repository.CommitDict]:
     commit_map = {}
 
@@ -57,14 +58,14 @@ def _get_cost(config: str) -> int:
         (("build", "plain"), 3),
         (("linux1804-64", "opt"), 2),
         (("linux1804-64", "debug"), 3),
-        (("windows11", "opt"), 4),
-        (("windows11", "debug"), 5),
-        (("windows10", "opt"), 6),
-        (("windows10", "debug"), 7),
-        (("android-em", "opt"), 8),
-        (("android-em", "debug"), 9),
-        (("windows7", "opt"), 10),
-        (("windows7", "debug"), 11),
+        (("linux2204-64", "opt"), 4),
+        (("linux2204-64", "debug"), 5),
+        (("windows11", "opt"), 6),
+        (("windows11", "debug"), 7),
+        (("windows10", "opt"), 8),
+        (("windows10", "debug"), 9),
+        (("android-em", "opt"), 10),
+        (("android-em", "debug"), 11),
         (("mac", "opt"), 12),
         (("mac", "debug"), 13),
         (("asan", "opt"), 14),
@@ -75,14 +76,15 @@ def _get_cost(config: str) -> int:
         (("android-hw", "debug"), 19),
         (("tsan", "opt"), 20),
         (("tsan", "debug"), 21),
-        (("test-linux1804-64/opt-*-e10s",), 1),
+        (("test-linux1804-64-qr/opt-*",), 1),
     ]
 
     for substrings, cost in reversed(costs):
         if all(s in config for s in substrings):
             return cost
 
-    raise ValueError(f"Couldn't find cost for {config}")
+    logger.warning(f"Couldn't find cost for {config}")
+    return max(cost for _, cost in costs)
 
 
 def _generate_equivalence_sets(
@@ -174,14 +176,13 @@ def _get_equivalence_sets(min_redundancy_confidence: float):
         with open(f"equivalence_sets_{min_redundancy_confidence}.pickle", "rb") as fr:
             return pickle.load(fr)
     except FileNotFoundError:
-        past_failures_data = test_scheduling.get_past_failures("group", True)
-        all_runnables = past_failures_data["all_runnables"]
+        past_failures_data = test_scheduling.PastFailures("group", True)
 
         equivalence_sets = {}
         failing_together = test_scheduling.get_failing_together_db("config_group", True)
         all_configs = pickle.loads(failing_together[b"$ALL_CONFIGS$"])
         configs_by_group = pickle.loads(failing_together[b"$CONFIGS_BY_GROUP$"])
-        for group in all_runnables:
+        for group in past_failures_data.all_runnables:
             key = test_scheduling.failing_together_key(group)
             try:
                 failing_together_stats = pickle.loads(failing_together[key])
@@ -423,23 +424,21 @@ class TestSelectModel(Model):
 
         self.entire_dataset_training = True
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            test_scheduling_features.prev_failures(),
+            test_scheduling_features.PrevFailures(),
         ]
 
         if granularity == "label":
             feature_extractors += [
-                test_scheduling_features.platform(),
+                test_scheduling_features.Platform(),
                 # test_scheduling_features.chunk(),
-                test_scheduling_features.suite(),
+                test_scheduling_features.Suite(),
             ]
         elif granularity in ("group", "config_group"):
             feature_extractors += [
-                test_scheduling_features.path_distance(),
-                test_scheduling_features.common_path_components(),
-                test_scheduling_features.touched_together(),
+                test_scheduling_features.PathDistance(),
+                test_scheduling_features.CommonPathComponents(),
+                test_scheduling_features.TouchedTogether(),
             ]
 
         self.extraction_pipeline = Pipeline(
@@ -448,12 +447,19 @@ class TestSelectModel(Model):
                     "commit_extractor",
                     commit_features.CommitExtractor(feature_extractors, []),
                 ),
-                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
             ]
         )
 
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
+        self.clf = ImblearnPipeline(
+            [
+                ("union", ColumnTransformer([("data", DictVectorizer(), "data")])),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
+            ]
+        )
 
     def get_pushes(
         self, apply_filters: bool = False
@@ -540,14 +546,14 @@ class TestSelectModel(Model):
         logger.info("%d pushes considered", len(pushes))
         logger.info(
             "%d pushes with at least one failure",
-            sum(1 for push in pushes if len(push["failures"]) > 0),
+            sum(len(push["failures"]) > 0 for push in pushes),
         )
         logger.info(
-            "%d push/jobs failed", sum(1 for label in classes.values() if label == 1)
+            "%d push/jobs failed", sum(label == 1 for label in classes.values())
         )
         logger.info(
             "%d push/jobs did not fail",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
@@ -556,15 +562,14 @@ class TestSelectModel(Model):
         self,
         commits: Sequence[repository.CommitDict],
         confidence: float = 0.5,
-        push_num: Optional[int] = None,
+        push_num: int | None = None,
     ) -> dict[str, float]:
         commit_data = commit_features.merge_commits(commits)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
+        past_failures_data = test_scheduling.PastFailures(self.granularity, False)
 
         if push_num is None:
-            push_num = past_failures_data["push_num"] + 1
-        all_runnables = past_failures_data["all_runnables"]
+            push_num = past_failures_data.push_num + 1
 
         commit_tests = []
         for data in test_scheduling.generate_data(
@@ -572,7 +577,7 @@ class TestSelectModel(Model):
             past_failures_data,
             commit_data,
             push_num,
-            all_runnables,
+            past_failures_data.all_runnables,
             tuple(),
             tuple(),
         ):
@@ -659,8 +664,8 @@ class TestSelectModel(Model):
 
         commit_map = get_commit_map(all_revs)
 
-        past_failures_data = test_scheduling.get_past_failures(self.granularity, True)
-        last_push_num = past_failures_data["push_num"]
+        past_failures_data = test_scheduling.PastFailures(self.granularity, True)
+        last_push_num = past_failures_data.push_num
         past_failures_data.close()
 
         # Select tests for all the pushes in the test set.
@@ -687,9 +692,9 @@ class TestSelectModel(Model):
         def do_eval(
             executor: concurrent.futures.ProcessPoolExecutor,
             confidence_threshold: float,
-            reduction: Optional[float],
-            cap: Optional[int],
-            minimum: Optional[int],
+            reduction: float | None,
+            cap: int | None,
+            minimum: int | None,
         ) -> None:
             futures: dict[concurrent.futures.Future, dict[str, Any]] = {}
             for push in test_pushes.values():
@@ -834,11 +839,9 @@ class TestSelectModel(Model):
                     and result["caught_percentage_config_group"] is not None
                 )
 
-            logger.info(
-                "In %d%% of pushes we caught at least one config/group failure. On average, we caught %f%% of all seen config/group failures.",
-                percentage_caught_one_config_group,
-                average_caught_percentage_config_group,
-            )
+                message += f" In {percentage_caught_one_config_group}% of pushes we caught at least one config/group failure. On average, we caught {average_caught_percentage_config_group}% of all seen config/group failures."
+
+            logger.info(message)
 
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=utils.get_physical_cpu_count(),
@@ -862,7 +865,7 @@ class TestSelectModel(Model):
                     do_eval(executor, confidence_threshold, reduction, cap, minimum)
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
 
 class TestLabelSelectModel(TestSelectModel):

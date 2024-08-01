@@ -3,8 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from collections import Counter
-from logging import INFO, basicConfig, getLogger
 
 import xgboost
 from sklearn.compose import ColumnTransformer
@@ -25,8 +25,8 @@ ADDRESSES_TO_EXCLUDE = [
     "nobody@t4b.me",
 ]
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class AssigneeModel(BugModel):
@@ -37,17 +37,17 @@ class AssigneeModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
-            bug_features.keywords(),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
+            bug_features.HasSTR(),
+            bug_features.Severity(),
+            bug_features.Keywords(),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
         ]
 
         cleanup_functions = [
@@ -67,6 +67,11 @@ class AssigneeModel(BugModel):
                         rollback_when=self.rollback,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -81,11 +86,12 @@ class AssigneeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         classes = {}
@@ -117,7 +123,7 @@ class AssigneeModel(BugModel):
         return classes, set(classes.values())
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def rollback(self, change):
         return change["field_name"].startswith("assigned_to")

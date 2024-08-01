@@ -21,7 +21,6 @@ from typing import (
     Iterable,
     Iterator,
     NewType,
-    Optional,
     Set,
     Union,
     cast,
@@ -310,21 +309,62 @@ def get_test_scheduling_history(granularity):
         yield obj["revs"], obj["data"]
 
 
-def get_past_failures(granularity, readonly):
-    if granularity == "label":
-        past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
-    elif granularity == "group":
-        past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
-    elif granularity == "config_group":
-        past_failures_db = os.path.join("data", PAST_FAILURES_CONFIG_GROUP_DB)
-    else:
-        raise UnexpectedGranularityError(granularity)
+class PastFailures:
+    def __init__(self, granularity, readonly):
+        if granularity == "label":
+            past_failures_db = os.path.join("data", PAST_FAILURES_LABEL_DB)
+        elif granularity == "group":
+            past_failures_db = os.path.join("data", PAST_FAILURES_GROUP_DB)
+        elif granularity == "config_group":
+            assert False, "config_group granularity not supported for past failures"
+        else:
+            raise UnexpectedGranularityError(granularity)
+        self.granularity = granularity
 
-    return shelve.Shelf(
-        LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
-        protocol=pickle.DEFAULT_PROTOCOL,
-        writeback=not readonly,
-    )
+        self.db = shelve.Shelf(
+            LMDBDict(past_failures_db[: -len(".tar.zst")], readonly=readonly),
+            protocol=pickle.DEFAULT_PROTOCOL,
+            writeback=not readonly,
+        )
+
+    @property
+    def push_num(self) -> int:
+        return self.db["push_num"]
+
+    @push_num.setter
+    def push_num(self, value: int) -> None:
+        self.db["push_num"] = value
+
+    @property
+    def all_runnables(self):
+        return self.db["all_runnables"]
+
+    @all_runnables.setter
+    def all_runnables(self, value) -> None:
+        self.db["all_runnables"] = value
+
+    def get(self, key: str) -> ExpQueue | None:
+        value = self.db.get(key, None)
+
+        # Fallback on INI if the group is now TOML.
+        if value is None and self.granularity == "group" and key.endswith(".toml"):
+            ini_key = f"{key[:-4]}ini"
+            try:
+                value = self.db[ini_key]
+                self.db[key] = value
+            except KeyError:
+                return None
+
+        return value
+
+    def set(self, key: str, value: ExpQueue) -> None:
+        self.db[key] = value
+
+    def sync(self) -> None:
+        self.db.sync()
+
+    def close(self) -> None:
+        self.db.close()
 
 
 def get_failing_together_db_path(granularity: str) -> str:
@@ -374,7 +414,7 @@ def generate_failing_together_probabilities(
     granularity: str,
     push_data: Iterator[PushResult],
     push_data_count: int,
-    up_to: str = None,
+    up_to: str | None = None,
 ) -> None:
     # TODO: we should consider the probabilities of `task1 failure -> task2 failure` and
     # `task2 failure -> task1 failure` separately, as they could be different.
@@ -535,7 +575,7 @@ def generate_failing_together_probabilities(
             failing_together[couple[0]][couple[1]] = (support, confidence)
 
     for percentage, count in count_redundancies.most_common():
-        logger.info("%d with %f%% confidence", count, percentage)
+        logger.info("%d with %s confidence", count, percentage)
 
     failing_together_db = get_failing_together_db(granularity, False)
 
@@ -605,7 +645,7 @@ def set_touched_together(f1: str, f2: str) -> None:
         )
 
 
-def update_touched_together() -> Generator[None, Optional[Revision], None]:
+def update_touched_together() -> Generator[None, Revision | None, None]:
     touched_together = get_touched_together_db(False)
     last_analyzed = (
         touched_together[b"last_analyzed"]
@@ -670,15 +710,14 @@ def _read_and_update_past_failures(
     for item in items:
         full_key = key + item
 
-        is_new = full_key not in past_failures
+        cur = past_failures.get(full_key)
+        is_new = cur is None
 
         if is_new:
             if not is_regression:
                 continue
 
             cur = ExpQueue(round(push_num / 100), int(HISTORICAL_TIMESPAN / 100) + 1, 0)
-        else:
-            cur = past_failures[full_key]
 
         value = cur[round(push_num / 100)]
 
@@ -690,7 +729,7 @@ def _read_and_update_past_failures(
         if is_regression:
             cur[round(push_num / 100)] = value + 1
             if is_new:
-                past_failures[full_key] = cur
+                past_failures.set(full_key, cur)
 
     return (
         sum(values_total),
@@ -702,7 +741,7 @@ def _read_and_update_past_failures(
 
 def generate_data(
     granularity: str,
-    past_failures: int,
+    past_failures: PastFailures,
     commit: repository.CommitDict,
     push_num: int,
     runnables: Iterable[str],

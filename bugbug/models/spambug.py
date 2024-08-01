@@ -3,10 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from logging import INFO, basicConfig, getLogger
+import logging
 
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from requests import HTTPError
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -15,39 +16,38 @@ from sklearn.pipeline import Pipeline
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class SpamBugModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = BorderlineSMOTE(random_state=0)
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.whiteboard(),
-            bug_features.product(),
+            bug_features.HasSTR(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.Whiteboard(),
+            bug_features.Product(),
             # TODO: We would like to use the component at the time of filing too,
             # but we can't because the rollback script doesn't support changes to
             # components yet.
             # bug_features.component(),
-            bug_features.num_words_title(),
-            bug_features.num_words_comments(),
-            bug_features.keywords(),
-            bug_features.priority(),
-            bug_features.version(),
-            bug_features.target_milestone(),
-            bug_features.has_attachment(),
-            bug_features.platform(),
-            bug_features.op_sys(),
-            bug_features.filed_via(),
+            bug_features.NumWordsTitle(),
+            bug_features.NumWordsComments(),
+            bug_features.Keywords(),
+            bug_features.Priority(),
+            bug_features.Version(),
+            bug_features.TargetMilestone(),
+            bug_features.HasAttachment(),
+            bug_features.Platform(),
+            bug_features.OpSys(),
+            bug_features.FiledVia(),
         ]
 
         cleanup_functions = [
@@ -64,6 +64,11 @@ class SpamBugModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -78,11 +83,13 @@ class SpamBugModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", BorderlineSMOTE(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         classes = {}
@@ -124,26 +131,29 @@ class SpamBugModel(BugModel):
 
         logger.info(
             "%d bugs are classified as non-spam",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
         logger.info(
             "%d bugs are classified as spam",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def items_gen(self, classes):
-        # Overwriting this method to add include_invalid=True to get_bugs to
-        # include spam bugs.
+        # Overwriting this method to add include_invalid=True and include_additional_products=ADDITIONAL_PRODUCTS
+        # for get_bugs to include spam bugs and all additional products
         return (
             (bug, classes[bug["id"]])
-            for bug in bugzilla.get_bugs(include_invalid=True)
+            for bug in bugzilla.get_bugs(
+                include_invalid=True,
+                include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+            )
             if bug["id"] in classes
         )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

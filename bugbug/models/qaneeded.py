@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -17,21 +18,19 @@ class QANeededModel(BugModel):
     def __init__(self, lemmatization=False):
         BugModel.__init__(self, lemmatization)
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.keywords({"qawanted"}),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
+            bug_features.HasSTR(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.Keywords({"qawanted"}),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
         ]
 
         cleanup_functions = [
@@ -51,6 +50,11 @@ class QANeededModel(BugModel):
                         rollback_when=self.rollback,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -61,11 +65,13 @@ class QANeededModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
         return any(
@@ -109,4 +115,4 @@ class QANeededModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

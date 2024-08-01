@@ -39,6 +39,11 @@ class NeedsDiagnosisModel(IssueModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -52,11 +57,12 @@ class NeedsDiagnosisModel(IssueModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         classes = {}
@@ -81,13 +87,15 @@ class NeedsDiagnosisModel(IssueModel):
                 classes[issue["number"]] = 1
 
         logger.info(
-            f"{sum(1 for label in classes.values() if label == 1)} issues have not been moved to needsdiagnosis"
+            "%d issues have not been moved to needsdiagnosis",
+            sum(label == 1 for label in classes.values()),
         )
         logger.info(
-            f"{sum(1 for label in classes.values() if label == 0)} issues have been moved to needsdiagnosis"
+            "%d issues have been moved to needsdiagnosis",
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

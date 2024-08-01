@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import InstanceHardnessThreshold
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -19,32 +20,30 @@ class TrackingModel(BugModel):
 
         self.calculate_importance = False
 
-        self.sampler = InstanceHardnessThreshold(random_state=0)
-
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.keywords(),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
-            bug_features.product(),
-            bug_features.component(),
-            bug_features.is_mozillian(),
-            bug_features.bug_reporter(),
-            bug_features.blocked_bugs_number(),
-            bug_features.priority(),
-            bug_features.has_cve_in_alias(),
-            bug_features.comment_count(),
-            bug_features.comment_length(),
-            bug_features.reporter_experience(),
-            bug_features.number_of_bug_dependencies(),
+            bug_features.HasSTR(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.Keywords(),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
+            bug_features.Product(),
+            bug_features.Component(),
+            bug_features.IsMozillian(),
+            bug_features.BugReporter(),
+            bug_features.BlockedBugsNumber(),
+            bug_features.Priority(),
+            bug_features.HasCVEInAlias(),
+            bug_features.CommentCount(),
+            bug_features.CommentLength(),
+            bug_features.ReporterExperience(),
+            bug_features.NumberOfBugDependencies(),
         ]
 
         cleanup_functions = [
@@ -67,6 +66,11 @@ class TrackingModel(BugModel):
                         rollback_when=self.rollback,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -81,11 +85,13 @@ class TrackingModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", InstanceHardnessThreshold(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
         return change["field_name"].startswith("cf_tracking_firefox")
@@ -132,7 +138,7 @@ class TrackingModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, bugs, classes, probabilities):
         for i, bug in enumerate(bugs):

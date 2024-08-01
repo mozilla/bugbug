@@ -1,6 +1,2 @@
-elasticsearch==8.6.2
-gensim==4.3.1
-nltk==3.8.1
-pyemd==1.0.0
-spacy==3.5.1
-wmd==1.3.2
+gensim==4.3.2
+spacy==3.7.5

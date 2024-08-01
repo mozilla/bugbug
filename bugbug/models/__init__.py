@@ -9,20 +9,20 @@ LOGGER = logging.getLogger()
 
 
 MODELS = {
+    "accessibility": "bugbug.models.accessibility.AccessibilityModel",
     "annotateignore": "bugbug.models.annotate_ignore.AnnotateIgnoreModel",
     "assignee": "bugbug.models.assignee.AssigneeModel",
     "backout": "bugbug.models.backout.BackoutModel",
     "browsername": "bugbug.models.browsername.BrowserNameModel",
-    "bug": "bugbug.model.BugModel",
     "bugtype": "bugbug.models.bugtype.BugTypeModel",
     "component": "bugbug.models.component.ComponentModel",
-    "component_nn": "bugbug.models.component_nn.ComponentNNModel",
     "defect": "bugbug.models.defect.DefectModel",
     "defectenhancementtask": "bugbug.models.defect_enhancement_task.DefectEnhancementTaskModel",
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
-    "duplicate": "bugbug.models.duplicate.DuplicateModel",
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
+    "invalidcompatibilityreport": "bugbug.models.invalid_compatibility_report.InvalidCompatibilityReportModel",
     "needsdiagnosis": "bugbug.models.needsdiagnosis.NeedsDiagnosisModel",
+    "performancebug": "bugbug.models.performancebug.PerformanceBugModel",
     "qaneeded": "bugbug.models.qaneeded.QANeededModel",
     "rcatype": "bugbug.models.rcatype.RCATypeModel",
     "regression": "bugbug.models.regression.RegressionModel",
@@ -36,6 +36,8 @@ MODELS = {
     "testfailure": "bugbug.models.testfailure.TestFailureModel",
     "tracking": "bugbug.models.tracking.TrackingModel",
     "uplift": "bugbug.models.uplift.UpliftModel",
+    "worksforme": "bugbug.models.worksforme.WorksForMeModel",
+    "fenixcomponent": "bugbug.models.fenixcomponent.FenixComponentModel",
 }
 
 

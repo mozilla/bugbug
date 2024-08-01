@@ -26,18 +26,18 @@ class FixTimeModel(BugModel):
         BugModel.__init__(self, lemmatization)
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.whiteboard(),
-            bug_features.product(),
+            bug_features.HasSTR(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.Whiteboard(),
+            bug_features.Product(),
             # TODO: We would like to use the component at the time of filing too,
             # but we can't because the rollback script doesn't support changes to
             # components yet.
             # bug_features.component(),
-            bug_features.keywords(),
+            bug_features.Keywords(),
         ]
 
         cleanup_functions = [
@@ -54,6 +54,11 @@ class FixTimeModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -68,11 +73,12 @@ class FixTimeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         bug_fix_times = []
@@ -111,11 +117,11 @@ class FixTimeModel(BugModel):
         for i in range(len(quantiles) + 1):
             logger.info(
                 "%d bugs are in the %dth quantile",
-                sum(1 for label in classes.values() if label == i),
+                sum(label == i for label in classes.values()),
                 i,
             )
 
         return classes, list(range(len(quantiles) + 1))
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

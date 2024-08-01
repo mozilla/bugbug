@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import xgboost
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
@@ -19,26 +20,24 @@ class DevDocNeededModel(BugModel):
 
         self.cross_validation_enabled = False
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.has_regression_range(),
-            bug_features.severity(),
-            bug_features.keywords({"dev-doc-needed", "dev-doc-complete"}),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
-            bug_features.product(),
-            bug_features.component(),
-            bug_features.commit_added(),
-            bug_features.commit_deleted(),
-            bug_features.commit_types(),
+            bug_features.HasSTR(),
+            bug_features.HasRegressionRange(),
+            bug_features.Severity(),
+            bug_features.Keywords({"dev-doc-needed", "dev-doc-complete"}),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
+            bug_features.Product(),
+            bug_features.Component(),
+            bug_features.CommitAdded(),
+            bug_features.CommitDeleted(),
+            bug_features.CommitTypes(),
         ]
 
         cleanup_functions = [
@@ -59,6 +58,11 @@ class DevDocNeededModel(BugModel):
                         commit_data=True,
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -69,11 +73,13 @@ class DevDocNeededModel(BugModel):
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def rollback(self, change):
         return change["field_name"] == "keywords" and any(
@@ -121,4 +127,4 @@ class DevDocNeededModel(BugModel):
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()

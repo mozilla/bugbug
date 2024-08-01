@@ -320,9 +320,9 @@ def mock_get_config_specific_groups(
         f.write("prova")
 
     # Initialize a mock past failures DB.
-    past_failures_data = test_scheduling.get_past_failures("group", False)
-    past_failures_data["push_num"] = 1
-    past_failures_data["all_runnables"] = [
+    past_failures_data = test_scheduling.PastFailures("group", False)
+    past_failures_data.push_num = 1
+    past_failures_data.all_runnables = [
         "test-group1",
         "test-group2",
     ]
@@ -375,9 +375,9 @@ def mock_schedule_tests_classify(
 
     # Initialize a mock past failures DB.
     for granularity in ("label", "group"):
-        past_failures_data = test_scheduling.get_past_failures(granularity, False)
-        past_failures_data["push_num"] = 1
-        past_failures_data["all_runnables"] = [
+        past_failures_data = test_scheduling.PastFailures(granularity, False)
+        past_failures_data.push_num = 1
+        past_failures_data.all_runnables = [
             "test-linux1804-64-opt-label1",
             "test-linux1804-64-opt-label2",
             "test-group1",

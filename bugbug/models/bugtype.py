@@ -4,7 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
-from typing import Iterable, Optional
+from typing import Iterable
 
 import numpy as np
 import xgboost
@@ -12,72 +12,12 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelBinarizer
 
 from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.model import BugModel
 
 logger = logging.getLogger(__name__)
-
-KEYWORD_DICT = {
-    "sec-": "security",
-    "csectype-": "security",
-    "memory-": "memory",
-    "crash": "crash",
-    "crashreportid": "crash",
-    "perf": "performance",
-    "topperf": "performance",
-    "main-thread-io": "performance",
-    "power": "power",
-}
-TYPE_LIST = sorted(set(KEYWORD_DICT.values()))
-
-
-def bug_to_types(
-    bug: bugzilla.BugDict, bug_map: Optional[dict[int, bugzilla.BugDict]] = None
-) -> list[str]:
-    types = set()
-
-    if any(
-        f"{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in ("overhead", "memshrink")
-    ):
-        types.add("memory")
-
-    if "[power" in bug["whiteboard"].lower():
-        types.add("power")
-
-    if any(
-        f"[{whiteboard_text}" in bug["whiteboard"].lower()
-        for whiteboard_text in (
-            "fxperf",
-            "fxperfsize",
-            "snappy",
-            "pdfjs-c-performance",
-            "pdfjs-performance",
-        )
-    ):
-        types.add("performance")
-
-    if "cf_performance" in bug and bug["cf_performance"] not in ("---", "?"):
-        types.add("performance")
-
-    if "cf_crash_signature" in bug and bug["cf_crash_signature"] not in ("", "---"):
-        types.add("crash")
-
-    if bug_map is not None:
-        for bug_id in bug["blocks"]:
-            if bug_id not in bug_map:
-                continue
-
-            alias = bug_map[bug_id]["alias"]
-            if alias and alias.startswith("memshrink"):
-                types.add("memory")
-
-    for keyword_start, type in KEYWORD_DICT.items():
-        if any(keyword.startswith(keyword_start) for keyword in bug["keywords"]):
-            types.add(type)
-
-    return list(types)
 
 
 class BugTypeModel(BugModel):
@@ -86,25 +26,35 @@ class BugTypeModel(BugModel):
 
         self.calculate_importance = False
 
+        self.le = LabelBinarizer()
+
+        self.bug_type_extractors = bug_features.BugTypes.bug_type_extractors
+
+        label_keyword_prefixes = {
+            keyword
+            for extractor in self.bug_type_extractors
+            for keyword in extractor.keyword_prefixes
+        }
+
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
+            bug_features.HasSTR(),
+            bug_features.Severity(),
             # Ignore keywords that would make the ML completely skewed
             # (we are going to use them as 100% rules in the evaluation phase).
-            bug_features.keywords(set(KEYWORD_DICT.keys())),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
-            bug_features.blocked_bugs_number(),
-            bug_features.ever_affected(),
-            bug_features.affected_then_unaffected(),
-            bug_features.product(),
-            bug_features.component(),
+            bug_features.Keywords(prefixes_to_ignore=label_keyword_prefixes),
+            bug_features.IsCoverityIssue(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
+            bug_features.BlockedBugsNumber(),
+            bug_features.EverAffected(),
+            bug_features.AffectedThenUnaffected(),
+            bug_features.Product(),
+            bug_features.Component(),
         ]
 
         cleanup_functions = [
@@ -119,6 +69,11 @@ class BugTypeModel(BugModel):
                     "bug_extractor",
                     bug_features.BugExtractor(feature_extractors, cleanup_functions),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -138,11 +93,13 @@ class BugTypeModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    OneVsRestClassifier(
+                        xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+                    ),
+                ),
             ]
-        )
-
-        self.clf = OneVsRestClassifier(
-            xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
         )
 
     def get_labels(self) -> tuple[dict[int, np.ndarray], list[str]]:
@@ -151,21 +108,26 @@ class BugTypeModel(BugModel):
         bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
 
         for bug_data in bug_map.values():
-            target = np.zeros(len(TYPE_LIST))
-            for type_ in bug_to_types(bug_data, bug_map):
-                target[TYPE_LIST.index(type_)] = 1
+            target = np.zeros(len(self.bug_type_extractors))
+            for i, is_type in enumerate(self.bug_type_extractors):
+                if is_type(bug_data, bug_map):
+                    target[i] = 1
 
             classes[int(bug_data["id"])] = target
 
-        for type_ in TYPE_LIST:
+        bug_types = [extractor.type_name for extractor in self.bug_type_extractors]
+
+        for i, bug_type in enumerate(bug_types):
             logger.info(
-                f"{sum(1 for target in classes.values() if target[TYPE_LIST.index(type_)] == 1)} {type_} bugs"
+                "%d %s bugs",
+                sum(target[i] for target in classes.values()),
+                bug_type,
             )
 
-        return classes, TYPE_LIST
+        return classes, bug_types
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(
         self,
@@ -173,11 +135,14 @@ class BugTypeModel(BugModel):
         classes: dict[int, np.ndarray],
         probabilities: bool,
     ):
+        bug_map = {bug["id"]: bug for bug in bugs}
+
         for i, bug in enumerate(bugs):
-            for type_ in bug_to_types(bug):
-                if probabilities:
-                    classes[i][TYPE_LIST.index(type_)] = 1.0
-                else:
-                    classes[i][TYPE_LIST.index(type_)] = 1
+            for j, is_type_applicable in enumerate(self.bug_type_extractors):
+                if is_type_applicable(bug, bug_map):
+                    if probabilities:
+                        classes[i][j] = 1.0
+                    else:
+                        classes[i][j] = 1
 
         return classes

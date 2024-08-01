@@ -4,23 +4,26 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import itertools
+import logging
 from datetime import datetime
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import numpy as np
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bugzilla, commit_features, db, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
+from bugbug.model_calibration import IsotonicRegressionCalibrator
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BUG_FIXING_COMMITS_DB = "data/bug_fixing_commits.json"
 db.register(
@@ -47,8 +50,11 @@ EVALUATION_MONTHS = 3
 
 
 class RegressorModel(CommitModel):
+    RISK_BANDS = None
+
     def __init__(
         self,
+        calibration: bool = True,
         lemmatization: bool = False,
         interpretable: bool = True,
         use_finder: bool = False,
@@ -62,7 +68,6 @@ class RegressorModel(CommitModel):
             self.training_dbs.append(BUG_FIXING_COMMITS_DB)
 
         self.store_dataset = True
-        self.sampler = RandomUnderSampler(random_state=0)
 
         self.use_finder = use_finder
         self.exclude_finder = exclude_finder
@@ -72,33 +77,33 @@ class RegressorModel(CommitModel):
         self.finder_regressions_only = finder_regressions_only
 
         feature_extractors = [
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
-            commit_features.author_experience(),
-            commit_features.reviewer_experience(),
-            commit_features.reviewers_num(),
-            commit_features.component_touched_prev(),
-            commit_features.directory_touched_prev(),
-            commit_features.file_touched_prev(),
-            commit_features.types(),
-            commit_features.files(),
-            commit_features.components(),
-            commit_features.components_modified_num(),
-            commit_features.directories(),
-            commit_features.directories_modified_num(),
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
-            commit_features.functions_touched_num(),
-            commit_features.functions_touched_size(),
-            commit_features.source_code_file_metrics(),
+            commit_features.SourceCodeFileSize(),
+            commit_features.OtherFileSize(),
+            commit_features.TestFileSize(),
+            commit_features.SourceCodeAdded(),
+            commit_features.OtherAdded(),
+            commit_features.TestAdded(),
+            commit_features.SourceCodeDeleted(),
+            commit_features.OtherDeleted(),
+            commit_features.TestDeleted(),
+            commit_features.AuthorExperience(),
+            commit_features.ReviewerExperience(),
+            commit_features.ReviewersNum(),
+            commit_features.ComponentTouchedPrev(),
+            commit_features.DirectoryTouchedPrev(),
+            commit_features.FileTouchedPrev(),
+            commit_features.Types(),
+            commit_features.Files(),
+            commit_features.Components(),
+            commit_features.ComponentsModifiedNum(),
+            commit_features.Directories(),
+            commit_features.DirectoriesModifiedNum(),
+            commit_features.SourceCodeFilesModifiedNum(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
+            commit_features.FunctionsTouchedNum(),
+            commit_features.FunctionsTouchedSize(),
+            commit_features.SourceCodeFileMetrics(),
         ]
 
         cleanup_functions = [
@@ -107,7 +112,18 @@ class RegressorModel(CommitModel):
             feature_cleanup.synonyms(),
         ]
 
-        column_transformers = [("data", DictVectorizer(), "data")]
+        column_transformers = [
+            ("data", DictVectorizer(), "data"),
+            (
+                "files",
+                CountVectorizer(
+                    analyzer=utils.keep_as_is,
+                    lowercase=False,
+                    min_df=0.0014,
+                ),
+                "files",
+            ),
+        ]
 
         if not interpretable:
             column_transformers.append(
@@ -122,12 +138,20 @@ class RegressorModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
-                ("union", ColumnTransformer(column_transformers)),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
+        estimator = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
+        if calibration:
+            estimator = IsotonicRegressionCalibrator(estimator)
+            # This is a temporary workaround for the error : "Model type not yet supported by TreeExplainer"
+            self.calculate_importance = False
+        self.clf = ImblearnPipeline(
+            [
+                ("union", ColumnTransformer(column_transformers)),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                ("estimator", estimator),
+            ]
+        )
 
     def get_labels(self):
         classes = {}
@@ -194,15 +218,37 @@ class RegressorModel(CommitModel):
 
         logger.info(
             "%d commits caused regressions",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
 
         logger.info(
             "%d commits did not cause regressions",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
+
+    @staticmethod
+    def find_risk_band(risk: float) -> str:
+        if RegressorModel.RISK_BANDS is None:
+
+            def _parse_risk_band(risk_band: str) -> tuple[str, float, float]:
+                name, start, end = risk_band.split("-")
+                return (name, float(start), float(end))
+
+            RegressorModel.RISK_BANDS = sorted(
+                (
+                    _parse_risk_band(risk_band)
+                    for risk_band in utils.get_secret("REGRESSOR_RISK_BANDS").split(";")
+                ),
+                key=lambda x: x[1],
+            )
+
+        for name, start, end in RegressorModel.RISK_BANDS:
+            if start <= risk <= end:
+                return name
+
+        assert False
 
     def evaluation(self) -> None:
         bug_regressors = set(
@@ -246,10 +292,10 @@ class RegressorModel(CommitModel):
 
         # Step 1. Calculate % of patches which cause regressions.
         total_landings = len(results)
-        total_regressions = sum(1 for _, is_reg in results if is_reg)
+        total_regressions = sum(is_reg for _, is_reg in results)
         average_regression_rate = total_regressions / total_landings
 
-        logger.info("Average risk is %d", average_regression_rate)
+        logger.info("Average risk is %0.2f", average_regression_rate)
 
         MIN_SAMPLE = 200
 
@@ -336,7 +382,7 @@ class RegressorModel(CommitModel):
                 )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def overwrite_classes(self, commits, classes, probabilities):
         for i, commit in enumerate(commits):

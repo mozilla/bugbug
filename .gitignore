@@ -12,7 +12,6 @@ importance.html
 importances.json
 metrics.json
 probs.json
-*similaritymodel
 http_service/models/*model*
 
 data/

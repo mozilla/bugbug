@@ -3,9 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from collections import Counter
 from datetime import datetime, timezone
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
@@ -18,8 +18,8 @@ from bugbug import bug_features, bugzilla, feature_cleanup, utils
 from bugbug.bugzilla import get_product_component_count
 from bugbug.model import BugModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ComponentModel(BugModel):
@@ -27,6 +27,7 @@ class ComponentModel(BugModel):
         "Core",
         "External Software Affecting Firefox",
         "DevTools",
+        "Fenix",
         "Firefox",
         "Toolkit",
         "WebExtensions",
@@ -52,6 +53,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox",
         "WebExtensions",
         "Firefox Build System",
+        "Fenix",
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
@@ -62,6 +64,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
         "WebExtensions": "WebExtensions::Untriaged",
         "Firefox Build System": "Firefox Build System::General",
+        "Fenix": "Fenix::General",
     }
 
     def __init__(self, lemmatization=False):
@@ -71,17 +74,16 @@ class ComponentModel(BugModel):
         self.calculate_importance = False
 
         feature_extractors = [
-            bug_features.has_str(),
-            bug_features.severity(),
-            bug_features.keywords(),
-            bug_features.is_coverity_issue(),
-            bug_features.has_crash_signature(),
-            bug_features.has_url(),
-            bug_features.has_w3c_url(),
-            bug_features.has_github_url(),
-            bug_features.whiteboard(),
-            bug_features.patches(),
-            bug_features.landings(),
+            bug_features.HasSTR(),
+            bug_features.Severity(),
+            bug_features.Keywords(),
+            bug_features.HasCrashSignature(),
+            bug_features.HasURL(),
+            bug_features.HasW3CURL(),
+            bug_features.HasGithubURL(),
+            bug_features.Whiteboard(),
+            bug_features.Patches(),
+            bug_features.Landings(),
         ]
 
         cleanup_functions = [
@@ -98,6 +100,11 @@ class ComponentModel(BugModel):
                         feature_extractors, cleanup_functions, rollback=True
                     ),
                 ),
+            ]
+        )
+
+        self.clf = Pipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
@@ -112,17 +119,20 @@ class ComponentModel(BugModel):
                         ]
                     ),
                 ),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
         self.CONFLATED_COMPONENTS_INVERSE_MAPPING = {
             v: k for k, v in self.CONFLATED_COMPONENTS_MAPPING.items()
         }
 
     def filter_component(self, product, component):
+        if product == "Fenix":
+            return "Fenix"
         full_comp = f"{product}::{component}"
 
         if full_comp in self.CONFLATED_COMPONENTS_INVERSE_MAPPING:
@@ -221,14 +231,18 @@ class ComponentModel(BugModel):
         max_count = product_component_counts[0][1]
         threshold = max_count / threshold_ratio
 
+        active_product_components = bugzilla.get_active_product_components(
+            list(self.PRODUCTS) + list(self.PRODUCT_COMPONENTS)
+        )
+
         return set(
             product_component
             for product_component, count in product_component_counts
-            if count > threshold
+            if count > threshold and product_component in active_product_components
         )
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
 
     def check(self):
         success = super().check()

@@ -2345,7 +2345,9 @@ async function populateVersions() {
     });
   }
   var versions = [...allVersions];
-  versions.sort();
+  versions.sort(function (v1, v2) {
+    return v1 - v2;
+  });
 
   for (let version of versions) {
     let el = document.createElement("option");

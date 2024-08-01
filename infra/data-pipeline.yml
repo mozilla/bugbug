@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.3.6
+    taskboot_image: mozilla/taskboot:0.4.2
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -32,6 +32,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -67,6 +68,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -103,6 +105,7 @@ tasks:
           taskclusterProxy: true
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
         - "secrets:get:project/bugbug/production"
         - "auth:aws-s3:read-write:communitytc-bugbug/*"
       routes:
@@ -140,6 +143,7 @@ tasks:
           bugbug-mercurial-repository: /cache
       scopes:
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
@@ -156,7 +160,7 @@ tasks:
       deadline: { $fromNow: "2 days" }
       expires: { $fromNow: "1 month" }
       provisionerId: proj-bugbug
-      workerType: batch
+      workerType: compute-small
       dependencies:
         - commit-retrieval
       payload:
@@ -509,9 +513,6 @@ tasks:
           public/test_config_group_scheduling_history.pickle.version:
             path: /data/test_config_group_scheduling_history.pickle.version
             type: file
-          public/past_failures_config_group.lmdb.tar.zst:
-            path: /data/past_failures_config_group.lmdb.tar.zst
-            type: file
           public/failing_together_config_group.lmdb.tar.zst:
             path: /data/failing_together_config_group.lmdb.tar.zst
             type: file
@@ -572,9 +573,9 @@ tasks:
           - component
 
         artifacts:
-          public/componentmodel.zst:
+          public/componentmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /componentmodel.zst
+            path: /componentmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -610,9 +611,9 @@ tasks:
           - defectenhancementtask
 
         artifacts:
-          public/defectenhancementtaskmodel.zst:
+          public/defectenhancementtaskmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /defectenhancementtaskmodel.zst
+            path: /defectenhancementtaskmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -648,17 +649,13 @@ tasks:
           - regression
 
         artifacts:
-          public/regressionmodel.zst:
+          public/regressionmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /regressionmodel.zst
+            path: /regressionmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -884,7 +881,7 @@ tasks:
       deadline: { $fromNow: "5 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-small
+      workerType: compute-large
       dependencies:
         - commit-retrieval
         - regressor-finder-bug-introducing
@@ -896,9 +893,9 @@ tasks:
           - regressor
 
         artifacts:
-          public/regressormodel.zst:
+          public/regressormodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /regressormodel.zst
+            path: /regressormodel.tar.zst
             type: file
           public/regressormodel_data_X.zst:
             expires: { $fromNow: "1 month" }
@@ -911,10 +908,6 @@ tasks:
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -935,7 +928,7 @@ tasks:
       deadline: { $fromNow: "3 days" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-smaller
+      workerType: compute-small
       dependencies:
         - bugs-retrieval
       payload:
@@ -946,9 +939,9 @@ tasks:
           - stepstoreproduce
 
         artifacts:
-          public/stepstoreproducemodel.zst:
+          public/stepstoreproducemodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /stepstoreproducemodel.zst
+            path: /stepstoreproducemodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -988,17 +981,13 @@ tasks:
           - spambug
 
         artifacts:
-          public/spambugmodel.zst:
+          public/spambugmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /spambugmodel.zst
+            path: /spambugmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -1014,43 +1003,43 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    #    - ID: train-duplicate
-    #      created: {$fromNow: ''}
-    #      deadline: {$fromNow: '3 days'}
-    #      expires: {$fromNow: '1 year'}
-    #      provisionerId: proj-bugbug
-    #      workerType: compute-smaller
-    #      dependencies:
-    #        - bugs-retrieval
-    #      payload:
-    #        maxRunTime: 25200
-    #        image: mozilla/bugbug-base:${version}
-    #        command:
-    #          - bugbug-train
-    #          - duplicate
+    - ID: train-accessibility
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - accessibility
 
-    #        artifacts:
-    #          public/duplicatemodel.zst:
-    #            expires: {$fromNow: '1 month'}
-    #            path: /duplicatemodel.zst
-    #            type: file
-    #          public/metrics.json:
-    #            expires: {$fromNow: '1 year'}
-    #            path: /metrics.json
-    #            type: file
+        artifacts:
+          public/accessibilitymodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /accessibilitymodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
 
-    #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
-    #        - index.project.bugbug.train_duplicate.${version}
-    #        - index.project.bugbug.train_duplicate.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-    #        - index.project.bugbug.train_duplicate.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-    #        - index.project.bugbug.train_duplicate.latest
-    #      metadata:
-    #        name: bugbug train duplicate model
-    #        description: bugbug train duplicate model
-    #        owner: release-mgmt-analysis@mozilla.com
-    #        source: ${repository}/raw/master/data-pipeline.yml
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_accessibility.${version}
+        - index.project.bugbug.train_accessibility.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_accessibility.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_accessibility.latest
+      metadata:
+        name: bugbug train accessibility model
+        description: bugbug train accessibility model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
 
     - ID: train-test-label-select
       created: { $fromNow: "" }
@@ -1070,9 +1059,9 @@ tasks:
           - --download-eval
 
         artifacts:
-          public/testlabelselectmodel.zst:
+          public/testlabelselectmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /testlabelselectmodel.zst
+            path: /testlabelselectmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -1111,9 +1100,9 @@ tasks:
           - --download-eval
 
         artifacts:
-          public/testgroupselectmodel.zst:
+          public/testgroupselectmodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /testgroupselectmodel.zst
+            path: /testgroupselectmodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -1150,9 +1139,9 @@ tasks:
           - testfailure
 
         artifacts:
-          public/testfailuremodel.zst:
+          public/testfailuremodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /testfailuremodel.zst
+            path: /testfailuremodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
@@ -1172,45 +1161,6 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
-    #    - ID: train-similarity
-    #      created: {$fromNow: ''}
-    #      deadline: {$fromNow: '3 days'}
-    #      expires: {$fromNow: '1 year'}
-    #      provisionerId: proj-bugbug
-    #      workerType: compute-smaller
-    #      dependencies:
-    #        - bugs-retrieval
-    #      payload:
-    #        maxRunTime: 25200
-    #        image: mozilla/bugbug-base-nlp:${version}
-    #        command:
-    #          - bugbug-train-similarity
-    #          - --algorithm
-    #          - bm25
-
-    #        artifacts:
-    #          public/bm25similarity.similaritymodel.zst:
-    #            expires: {$fromNow: '1 month'}
-    #            path: /bm25similarity.similaritymodel.zst
-    #            type: file
-    #          public/metrics.json:
-    #            expires: {$fromNow: '1 year'}
-    #            path: /metrics.json
-    #            type: file
-
-    #      routes:
-    #        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
-    #        - notify.irc-channel.#bugbug.on-failed
-    #        - index.project.bugbug.train_similarity.${version}
-    #        - index.project.bugbug.train_similarity.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
-    #        - index.project.bugbug.train_similarity.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
-    #        - index.project.bugbug.train_similarity.latest
-    #      metadata:
-    #        name: bugbug train similarity model
-    #        description: bugbug train similarity model
-    #        owner: release-mgmt-analysis@mozilla.com
-    #        source: ${repository}/raw/master/data-pipeline.yml
-
     - ID: train-needsdiagnosis
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
@@ -1227,17 +1177,13 @@ tasks:
           - needsdiagnosis
 
         artifacts:
-          public/needsdiagnosismodel.zst:
+          public/needsdiagnosismodel.tar.zst:
             expires: { $fromNow: "1 month" }
-            path: /needsdiagnosismodel.zst
+            path: /needsdiagnosismodel.tar.zst
             type: file
           public/metrics.json:
             expires: { $fromNow: "1 year" }
             path: /metrics.json
-            type: file
-          public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
-            path: /feature_importance.png
             type: file
 
       routes:
@@ -1250,6 +1196,158 @@ tasks:
       metadata:
         name: bugbug train needsdiagnosis model
         description: bugbug train needsdiagnosis model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-invalidcompatibilityreport
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - issues-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - invalidcompatibilityreport
+
+        artifacts:
+          public/invalidcompatibilityreportmodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /invalidcompatibilityreportmodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_invalidcompatibilityreport.${version}
+        - index.project.bugbug.train_invalidcompatibilityreport.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_invalidcompatibilityreport.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_invalidcompatibilityreport.latest
+      metadata:
+        name: bugbug train invalidcompatibilityreport model
+        description: bugbug train invalidcompatibilityreport model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-performancebug
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - performancebug
+
+        artifacts:
+          public/performancebugmodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /performancebugmodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_performancebug.${version}
+        - index.project.bugbug.train_performancebug.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_performancebug.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_performancebug.latest
+      metadata:
+        name: bugbug train performancebug model
+        description: bugbug train performancebug model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-worksforme
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - worksforme
+
+        artifacts:
+          public/worksformemodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /worksformemodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_worksforme.${version}
+        - index.project.bugbug.train_worksforme.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_worksforme.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_worksforme.latest
+      metadata:
+        name: bugbug train worksforme model
+        description: bugbug train worksforme model
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
+    - ID: train-fenixcomponent
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "3 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-large
+      dependencies:
+        - bugs-retrieval
+      payload:
+        maxRunTime: 25200
+        image: mozilla/bugbug-base:${version}
+        command:
+          - bugbug-train
+          - fenixcomponent
+
+        artifacts:
+          public/fenixcomponentmodel.tar.zst:
+            expires: { $fromNow: "1 month" }
+            path: /fenixcomponentmodel.tar.zst
+            type: file
+          public/metrics.json:
+            expires: { $fromNow: "1 year" }
+            path: /metrics.json
+            type: file
+
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.train_fenixcomponent.${version}
+        - index.project.bugbug.train_fenixcomponent.per_version.${version}.${year}.${month}.${day}.${hour}.${minute}.${second}
+        - index.project.bugbug.train_fenixcomponent.per_date.${year}.${month}.${day}.${hour}.${minute}.${second}.${version}
+        - index.project.bugbug.train_fenixcomponent.latest
+      metadata:
+        name: bugbug train fenixcomponent model
+        description: bugbug train fenixcomponent model
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
@@ -1269,6 +1367,10 @@ tasks:
         - train-test-group-select
         - train-test-failure
         - train-needsdiagnosis
+        - train-accessibility
+        - train-performancebug
+        - train-worksforme
+        - train-fenixcomponent
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
@@ -1304,10 +1406,14 @@ tasks:
         - train-test-label-select
         - train-test-group-select
         - train-needsdiagnosis
+        - train-accessibility
+        - train-performancebug
+        - train-worksforme
+        - train-fenixcomponent
       payload:
         capabilities:
           privileged: true
-        maxRunTime: 3600
+        maxRunTime: 7200
         image: ${taskboot_image}
         command:
           - "/bin/sh"
@@ -1315,8 +1421,8 @@ tasks:
           - "git clone --quiet ${repository} /code &&
             cd /code &&
             git -c advice.detachedHead=false checkout ${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
-            taskboot --cache /cache --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version} &&
+            taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
         artifacts:
           public/bugbug:
             expires: { $fromNow: "2 weeks" }
@@ -1346,6 +1452,7 @@ tasks:
       scopes:
         - secrets:get:project/bugbug/integration
         - "docker-worker:cache:bugbug-mercurial-repository"
+        - "generic-worker:cache:bugbug-mercurial-repository"
       payload:
         features:
           taskclusterProxy: true

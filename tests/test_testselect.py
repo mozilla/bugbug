@@ -617,8 +617,8 @@ def test_all(g: Graph) -> None:
 
 
 def test_select_configs(failing_together_config_group: LMDBDict) -> None:
-    past_failures_data = test_scheduling.get_past_failures("group", False)
-    past_failures_data["all_runnables"] = ["group1", "group2", "group3"]
+    past_failures_data = test_scheduling.PastFailures("group", False)
+    past_failures_data.all_runnables = ["group1", "group2", "group3"]
     past_failures_data.close()
 
     failing_together_config_group[b"group1"] = pickle.dumps(
@@ -766,8 +766,8 @@ def test_select_configs(failing_together_config_group: LMDBDict) -> None:
         1.0,
     )
     assert len(result) == 2
-    assert set(result["group1"]) == {"windows10/debug", "linux1804-64-asan/debug"}
-    assert set(result["group3"]) == {"windows10/debug", "linux1804-64-asan/debug"}
+    assert set(result["group1"]) == {"linux1804-64/opt", "linux1804-64-asan/debug"}
+    assert set(result["group3"]) == {"windows10/debug", "linux1804-64/opt"}
 
     result = testselect.select_configs(
         {

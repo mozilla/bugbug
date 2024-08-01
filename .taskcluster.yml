@@ -1,4 +1,5 @@
 version: 1
+reporting: checks-v1
 policy:
   pullRequests: public
 tasks:
@@ -26,352 +27,347 @@ tasks:
       then: ${event.pull_request.head.repo.html_url}
       else: ${event.repository.html_url}
 
-    taskboot_image: "mozilla/taskboot:0.3.6"
+    pr_description:
+      $if: 'tasks_for == "github-pull-request"'
+      then: ${event.pull_request.body}
+
+    taskboot_image: "mozilla/taskboot:0.4.2"
   in:
-    $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
-    then:
-      - taskId: { $eval: as_slugid("lint_task") }
+    $let:
+      default_task_definition:
         created: { $fromNow: "" }
         deadline: { $fromNow: "1 hour" }
         provisionerId: proj-bugbug
         workerType: batch
         payload:
           maxRunTime: 3600
-          image: python:3.9
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "git clone --quiet ${repository} &&
-              cd bugbug &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              pre-commit run -a --show-diff-on-failure"
+          image: python:3.12.3
         metadata:
-          name: bugbug lint
-          description: bugbug lint
           owner: mcastelluccio@mozilla.com
           source: ${repository}/raw/${head_rev}/.taskcluster.yml
+    in:
+      $if: 'tasks_for == "github-push" || (tasks_for == "github-pull-request" && event["action"] in ["opened", "reopened", "synchronize"])'
+      then:
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("lint_task") }
+              payload:
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    pre-commit run -a --show-diff-on-failure"
+              metadata:
+                name: bugbug lint
+                description: bugbug lint
 
-      - $if: 'tasks_for == "github-push"'
-        then:
-          taskId: { $eval: as_slugid("version_check_task") }
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "1 hour" }
-          provisionerId: proj-bugbug
-          workerType: batch
-          payload:
-            maxRunTime: 3600
-            image: python:3.9
-            command:
-              - "/bin/bash"
-              - "-lcx"
-              - "git clone --quiet ${repository} &&
-                cd bugbug &&
-                git -c advice.detachedHead=false checkout ${head_rev} &&
-                python infra/version_check.py"
-          metadata:
-            name: bugbug tag version check
-            description: bugbug tag version check
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $if: 'tasks_for == "github-push"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("version_check_task") }
+                payload:
+                  command:
+                    - "/bin/bash"
+                    - "-lcx"
+                    - "git clone --quiet ${repository} &&
+                      cd bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      python infra/version_check.py"
+                metadata:
+                  name: bugbug tag version check
+                  description: bugbug tag version check
 
-      - taskId: { $eval: as_slugid("tests_task") }
-        created: { $fromNow: "" }
-        deadline: { $fromNow: "1 hour" }
-        provisionerId: proj-bugbug
-        workerType: compute-smaller
-        payload:
-          maxRunTime: 3600
-          image: python:3.9
-          env:
-            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "apt-get -qq update &&
-              apt-get -qq install -y libhdf5-dev zstd &&
-              git clone --quiet ${repository} &&
-              curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-              cd bugbug &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              hg clone -r c2afc715ea911e137c87e3bcda7563f6a90a6f9e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-              python -m pytest --cov=./ tests/test_*.py &&
-              bash <(curl -s https://codecov.io/bash)"
-        metadata:
-          name: bugbug tests
-          description: bugbug tests
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "apt-get -qq update &&
+                    apt-get -qq install -y libhdf5-dev zstd &&
+                    git clone --quiet ${repository} &&
+                    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r extra-nlp-requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r infra/spawn_pipeline_requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    python -m pytest --cov=./ tests/test_*.py &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug tests
+                description: bugbug tests
 
-      - taskId: { $eval: as_slugid("http_tests_task") }
-        created: { $fromNow: "" }
-        deadline: { $fromNow: "1 hour" }
-        provisionerId: proj-bugbug
-        workerType: compute-smaller
-        payload:
-          maxRunTime: 3600
-          image: python:3.9
-          env:
-            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "git clone --quiet ${repository} &&
-              curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
-              cd bugbug &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
-              hg clone -r c2afc715ea911e137c87e3bcda7563f6a90a6f9e https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
-              pytest --cov=http_service http_service/tests/ -vvv &&
-              bash <(curl -s https://codecov.io/bash)"
-        metadata:
-          name: bugbug http service tests
-          description: bugbug http service tests
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("http_tests_task") }
+              workerType: compute-smaller
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "apt-get -qq update &&
+                    apt-get -qq install -y zstd &&
+                    git clone --quiet ${repository} &&
+                    curl -L https://github.com/mozilla/rust-code-analysis/releases/download/v0.0.23/rust-code-analysis-linux-web-x86_64.tar.gz | tar -C /usr/bin -xzv &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
+                    hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
+                    pytest --cov=http_service http_service/tests/ -vvv &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug http service tests
+                description: bugbug http service tests
 
-      - taskId: { $eval: as_slugid("packaging_test_task") }
-        created: { $fromNow: "" }
-        deadline: { $fromNow: "1 hour" }
-        provisionerId: proj-bugbug
-        workerType: batch
-        payload:
-          maxRunTime: 3600
-          image: python:3.9
-          env:
-            CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
-          command:
-            - "/bin/bash"
-            - "-lcx"
-            - "apt-get -qq update &&
-              apt-get -qq install -y libhdf5-dev &&
-              git clone --quiet ${repository} &&
-              cd bugbug &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
-              python -m coverage run setup.py sdist &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz &&
-              pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
-              bash <(curl -s https://codecov.io/bash)"
-        metadata:
-          name: bugbug packaging test
-          description: bugbug packaging test
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("packaging_test_task") }
+              payload:
+                env:
+                  CODECOV_TOKEN: 66162f89-a4d9-420c-84bd-d10f12a428d9
+                command:
+                  - "/bin/bash"
+                  - "-lcx"
+                  - "apt-get -qq update &&
+                    apt-get -qq install -y libhdf5-dev &&
+                    git clone --quiet ${repository} &&
+                    cd bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    python -m coverage run setup.py sdist &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz &&
+                    pip install --disable-pip-version-check --no-cache-dir --progress-bar off dist/bugbug-$(cat VERSION).tar.gz[nlp] &&
+                    bash <(curl -s https://codecov.io/bash)"
+              metadata:
+                name: bugbug packaging test
+                description: bugbug packaging test
 
-      - taskId: { $eval: as_slugid("docker_build") }
-        created: { $fromNow: "" }
-        deadline: { $fromNow: "3 hours" }
-        provisionerId: proj-bugbug
-        workerType: ci
-        payload:
-          capabilities:
-            privileged: true
-          maxRunTime: 10800
-          image: "${taskboot_image}"
-          env:
-            REGISTRY: registry.hub.docker.com
-            VERSION:
-              $if: 'head_branch[:10] == "refs/tags/"'
-              then: { $eval: "head_branch[10:]" }
-              else: "latest"
-          command:
-            - "/bin/sh"
-            - "-lcxe"
-            - "git clone --quiet ${repository} /code &&
-              cd /code &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              taskboot --cache /cache --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
-          artifacts:
-            public/bugbug:
-              expires: { $fromNow: "2 weeks" }
-              path: /images
-              type: directory
-          cache:
-            bugbug-build: /cache
-        scopes:
-          - docker-worker:capability:privileged
-          - docker-worker:cache:bugbug-build
-        metadata:
-          name: bugbug docker build
-          description: bugbug docker build
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("docker_build") }
+              deadline: { $fromNow: "3 hours" }
+              workerType: ci
+              payload:
+                capabilities:
+                  privileged: true
+                maxRunTime: 10800
+                image: "${taskboot_image}"
+                env:
+                  REGISTRY: registry.hub.docker.com
+                  VERSION:
+                    $if: 'head_branch[:10] == "refs/tags/"'
+                    then: { $eval: "head_branch[10:]" }
+                    else: "latest"
+                command:
+                  - "/bin/sh"
+                  - "-lcxe"
+                  - "git clone --quiet ${repository} /code &&
+                    cd /code &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    taskboot --target /code build-compose --write /images --build-arg CHECK_MODELS=0 --tag $VERSION --tag latest"
+                artifacts:
+                  public/bugbug:
+                    expires: { $fromNow: "2 weeks" }
+                    path: /images
+                    type: directory
+              scopes:
+                - docker-worker:capability:privileged
+              metadata:
+                name: bugbug docker build
+                description: bugbug docker build
 
-      - taskId: { $eval: as_slugid("frontend_build") }
-        created: { $fromNow: "" }
-        deadline: { $fromNow: "1 hour" }
-        provisionerId: proj-bugbug
-        workerType: batch
-        payload:
-          maxRunTime: 3600
-          image: node
-          command:
-            - "/bin/sh"
-            - "-lcxe"
-            - "git clone --quiet ${repository} /bugbug &&
-              cd /bugbug &&
-              git -c advice.detachedHead=false checkout ${head_rev} &&
-              cd ui/changes &&
-              npm install --no-progress &&
-              npm run release"
-          artifacts:
-            public/frontend:
-              expires: { $fromNow: "2 weeks" }
-              path: /bugbug/ui/changes/dist
-              type: directory
-        metadata:
-          name: bugbug ui build
-          description: bugbug ui build
-          owner: mcastelluccio@mozilla.com
-          source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $if: 'tasks_for == "github-pull-request" && "Train on Taskcluster: " in pr_description'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - dependencies:
+                  - { $eval: as_slugid("docker_build") }
+                taskId: { $eval: as_slugid("train_on_taskcluster") }
+                deadline: { $fromNow: "1 day" }
+                workerType: compute-large
+                payload:
+                  maxRunTime:
+                    $switch:
+                      '"Train on Taskcluster: regression" in pr_description': 2700
+                      $default: 10800
+                  image:
+                    type: task-image
+                    path: public/bugbug/bugbug-base.tar.zst
+                    taskId: { $eval: as_slugid("docker_build") }
+                  env:
+                    PR_DESCRIPTION: "${pr_description}"
+                  command:
+                    - "/bin/sh"
+                    - "-lcx"
+                    - "python -m scripts.trainer $(python -m scripts.trainer_extract_args)"
+                metadata:
+                  name: bugbug train on TC
+                  description: Train a BugBug model on Taskcluster
 
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
-          dependencies:
-            - { $eval: as_slugid("lint_task") }
-            - { $eval: as_slugid("tests_task") }
-            - { $eval: as_slugid("http_tests_task") }
-            - { $eval: as_slugid("frontend_build") }
-            - { $eval: as_slugid("packaging_test_task") }
-            - { $eval: as_slugid("version_check_task") }
-            - { $eval: as_slugid("integration_test") }
-          scopes:
-            - secrets:get:project/bugbug/deploy
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "1 hour" }
-          provisionerId: proj-bugbug
-          workerType: batch
-          payload:
-            features:
-              taskclusterProxy: true
-            maxRunTime: 3600
-            image: "${taskboot_image}"
-            command:
-              - taskboot
-              - deploy-pypi
-            env:
-              TASKCLUSTER_SECRET: project/bugbug/deploy
-              GIT_REPOSITORY: "${repository}"
-              GIT_REVISION: "${head_rev}"
-          metadata:
-            name: bugbug PyPI release
-            description: bugbug PyPI release
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $mergeDeep:
+            - { $eval: default_task_definition }
+            - taskId: { $eval: as_slugid("frontend_build") }
+              payload:
+                image: node:lts
+                command:
+                  - "/bin/sh"
+                  - "-lcxe"
+                  - "git clone --quiet ${repository} /bugbug &&
+                    cd /bugbug &&
+                    git -c advice.detachedHead=false checkout ${head_rev} &&
+                    cd ui/changes &&
+                    npm install --no-progress &&
+                    npm run release"
+                artifacts:
+                  public/frontend:
+                    expires: { $fromNow: "2 weeks" }
+                    path: /bugbug/ui/changes/dist
+                    type: directory
+              metadata:
+                name: bugbug ui build
+                description: bugbug ui build
 
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
-          dependencies:
-            - { $eval: as_slugid("docker_build") }
-            - { $eval: as_slugid("lint_task") }
-            - { $eval: as_slugid("version_check_task") }
-            - { $eval: as_slugid("tests_task") }
-            - { $eval: as_slugid("http_tests_task") }
-            - { $eval: as_slugid("frontend_build") }
-            - { $eval: as_slugid("packaging_test_task") }
-          scopes:
-            - secrets:get:project/bugbug/deploy
-          taskId: { $eval: as_slugid("docker_push") }
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "4 hours" }
-          provisionerId: proj-bugbug
-          workerType: batch
-          payload:
-            features:
-              taskclusterProxy: true
-            maxRunTime: 3600
-            image: "${taskboot_image}"
-            env:
-              TASKCLUSTER_SECRET: project/bugbug/deploy
-            command:
-              - taskboot
-              - push-artifact
-              - --exclude-filter
-              - "*http-service*"
-          metadata:
-            name: bugbug docker push
-            description: bugbug docker push
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - dependencies:
+                  - { $eval: as_slugid("lint_task") }
+                  - { $eval: as_slugid("tests_task") }
+                  - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("packaging_test_task") }
+                  - { $eval: as_slugid("version_check_task") }
+                  - { $eval: as_slugid("integration_test") }
+                scopes:
+                  - secrets:get:project/bugbug/deploy
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  image: "${taskboot_image}"
+                  command:
+                    - taskboot
+                    - deploy-pypi
+                  env:
+                    TASKCLUSTER_SECRET: project/bugbug/deploy
+                    GIT_REPOSITORY: "${repository}"
+                    GIT_REVISION: "${head_rev}"
+                metadata:
+                  name: bugbug PyPI release
+                  description: bugbug PyPI release
 
-      # It's the same task integration_test as in data-pipeline.yml
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
-          taskId: { $eval: as_slugid("integration_test") }
-          dependencies:
-            - { $eval: as_slugid("docker_push") }
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "1 hour" }
-          provisionerId: proj-bugbug
-          workerType: compute-small
-          scopes:
-            - secrets:get:project/bugbug/integration
-            - "docker-worker:cache:bugbug-mercurial-repository"
-          payload:
-            features:
-              taskclusterProxy: true
-            maxRunTime: 10800
-            image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
-            env:
-              TC_SECRET_ID: project/bugbug/integration
-              CACHE_DIR: "/cache"
-            command:
-              - "/bin/bash"
-              - "-lcx"
-              - "apt-get -qq update &&
-                apt-get -qq install -y redis-server &&
-                git clone --quiet ${repository} &&
-                cd bugbug &&
-                git -c advice.detachedHead=false checkout ${head_rev} &&
-                python -c 'import os; print(os.environ.keys())' &&
-                bash ./scripts/integration_test.sh"
-            cache:
-              bugbug-mercurial-repository: /cache
-          metadata:
-            name: bugbug integration test
-            description: bugbug integration test
-            owner: ${user}@users.noreply.github.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - dependencies:
+                  - { $eval: as_slugid("docker_build") }
+                  - { $eval: as_slugid("lint_task") }
+                  - { $eval: as_slugid("version_check_task") }
+                  - { $eval: as_slugid("tests_task") }
+                  - { $eval: as_slugid("http_tests_task") }
+                  - { $eval: as_slugid("frontend_build") }
+                  - { $eval: as_slugid("packaging_test_task") }
+                scopes:
+                  - secrets:get:project/bugbug/deploy
+                taskId: { $eval: as_slugid("docker_push") }
+                deadline: { $fromNow: "4 hours" }
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  image: "${taskboot_image}"
+                  env:
+                    TASKCLUSTER_SECRET: project/bugbug/deploy
+                  command:
+                    - taskboot
+                    - push-artifact
+                    - --exclude-filter
+                    - "*http-service*"
+                metadata:
+                  name: bugbug docker push
+                  description: bugbug docker push
 
-      - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
-        then:
-          taskId: { $eval: as_slugid("update_hook_data_pipeline") }
-          dependencies:
-            - { $eval: as_slugid("integration_test") }
-          scopes:
-            - hooks:modify-hook:project-bugbug/bugbug
-            - assume:hook-id:project-bugbug/bugbug
-            - queue:route:project.bugbug.deploy_ending.*
-          created: { $fromNow: "" }
-          deadline: { $fromNow: "5 hours" }
-          provisionerId: proj-bugbug
-          workerType: batch
-          payload:
-            features:
-              taskclusterProxy: true
-            maxRunTime: 3600
-            image: "${taskboot_image}"
-            command:
-              - "/bin/sh"
-              - "-lcxe"
-              - "git clone --quiet ${repository} &&
-                cd bugbug &&
-                git -c advice.detachedHead=false checkout ${head_rev} &&
-                python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
-                taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"
-          routes:
-            - project.bugbug.deploy_ending
-          metadata:
-            name: bugbug update data hook
-            description: bugbug update data hook
-            owner: mcastelluccio@mozilla.com
-            source: ${repository}/raw/${head_rev}/.taskcluster.yml
+        # It's the same task integration_test as in data-pipeline.yml
+        - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("integration_test") }
+                dependencies:
+                  - { $eval: as_slugid("docker_push") }
+                workerType: compute-small
+                scopes:
+                  - secrets:get:project/bugbug/integration
+                  - "docker-worker:cache:bugbug-mercurial-repository"
+                  - "generic-worker:cache:bugbug-mercurial-repository"
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  maxRunTime: 10800
+                  image: mozilla/bugbug-commit-retrieval:${head_branch[10:]}
+                  env:
+                    TC_SECRET_ID: project/bugbug/integration
+                    CACHE_DIR: "/cache"
+                  command:
+                    - "/bin/bash"
+                    - "-lcx"
+                    - "apt-get -qq update &&
+                      apt-get -qq install -y redis-server &&
+                      git clone --quiet ${repository} &&
+                      cd bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      python -c 'import os; print(os.environ.keys())' &&
+                      bash ./scripts/integration_test.sh"
+                  cache:
+                    bugbug-mercurial-repository: /cache
+                metadata:
+                  name: bugbug integration test
+                  description: bugbug integration test
+                  owner: ${user}@users.noreply.github.com
+
+        - $if: 'tasks_for == "github-push" && head_branch[:10] == "refs/tags/"'
+          then:
+            $mergeDeep:
+              - { $eval: default_task_definition }
+              - taskId: { $eval: as_slugid("update_hook_data_pipeline") }
+                dependencies:
+                  - { $eval: as_slugid("integration_test") }
+                scopes:
+                  - hooks:modify-hook:project-bugbug/bugbug
+                  - assume:hook-id:project-bugbug/bugbug
+                  - queue:route:project.bugbug.deploy_ending.*
+                deadline: { $fromNow: "5 hours" }
+                payload:
+                  features:
+                    taskclusterProxy: true
+                  image: "${taskboot_image}"
+                  command:
+                    - "/bin/sh"
+                    - "-lcxe"
+                    - "git clone --quiet ${repository} &&
+                      cd bugbug &&
+                      git -c advice.detachedHead=false checkout ${head_rev} &&
+                      python infra/set_hook_version.py ${head_branch[10:]} infra/taskcluster-hook-data-pipeline.json &&
+                      taskboot --target . build-hook infra/taskcluster-hook-data-pipeline.json project-bugbug bugbug"
+                routes:
+                  - project.bugbug.deploy_ending
+                metadata:
+                  name: bugbug update data hook
+                  description: bugbug update data hook

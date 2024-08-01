@@ -18,7 +18,7 @@ import textwrap
 import traceback
 import urllib.parse
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Set, cast
+from typing import Any, Set, cast
 
 import bs4
 import dateutil.parser
@@ -30,7 +30,6 @@ from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
 from bugbug import bug_features, bugzilla, db, phabricator, repository, test_scheduling
-from bugbug.models.bugtype import bug_to_types
 from bugbug.models.regressor import BUG_FIXING_COMMITS_DB, RegressorModel
 from bugbug.utils import (
     download_check_etag,
@@ -83,11 +82,6 @@ def _download_past_bugs(url: str) -> dict:
         return json.load(f)
 
 
-def parse_risk_band(risk_band: str) -> tuple[str, float, float]:
-    name, start, end = risk_band.split("-")
-    return (name, float(start), float(end))
-
-
 def is_fuzzblocker(bug: bugzilla.BugDict) -> bool:
     return "fuzzblocker" in bug["whiteboard"].lower()
 
@@ -138,14 +132,6 @@ def get_crash_bugs(signatures: dict) -> list[int]:
 
 class LandingsRiskReportGenerator(object):
     def __init__(self, repo_dir: str) -> None:
-        self.risk_bands = sorted(
-            (
-                parse_risk_band(risk_band)
-                for risk_band in get_secret("REGRESSOR_RISK_BANDS").split(";")
-            ),
-            key=lambda x: x[1],
-        )
-
         repository.clone(repo_dir)
 
         logger.info("Downloading commits database...")
@@ -207,7 +193,7 @@ class LandingsRiskReportGenerator(object):
         self,
         past_bugs_by: dict,
         commit: repository.CommitDict,
-        component: str = None,
+        component: str | None = None,
     ) -> list[dict]:
         paths = [
             path
@@ -271,7 +257,7 @@ class LandingsRiskReportGenerator(object):
         self,
         commit_group: dict,
         commit_list: list[repository.CommitDict],
-        component: str = None,
+        component: str | None = None,
     ) -> None:
         # Find previous regressions occurred in the same files as those touched by these commits.
         # And find previous bugs that were fixed by touching the same files as these commits.
@@ -383,7 +369,6 @@ class LandingsRiskReportGenerator(object):
             {
                 "keywords": "feature-testing-meta",
                 "keywords_type": "allwords",
-                "resolution": "---",
                 "f1": "anything",
                 "o1": "changedafter",
                 "v1": "-90d",
@@ -527,13 +512,6 @@ class LandingsRiskReportGenerator(object):
             for blocker_bug_id in blocker_bug_ids:
                 blocker_to_meta[blocker_bug_id].add(meta_bug)
 
-        def find_risk_band(risk: float) -> str:
-            for name, start, end in self.risk_bands:
-                if start <= risk <= end:
-                    return name
-
-            assert False
-
         def get_commit_data(commit_list: list[repository.CommitDict]) -> list[dict]:
             if len(commit_list) == 0:
                 return []
@@ -574,6 +552,8 @@ class LandingsRiskReportGenerator(object):
             return commits_data
 
         component_team_mapping = get_component_team_mapping()
+
+        bug_to_types = bug_features.BugTypes()
 
         bug_summaries = []
         for bug_id in bugs:
@@ -701,7 +681,9 @@ class LandingsRiskReportGenerator(object):
                 "commits": commit_data,
                 "meta_ids": list(blocker_to_meta[bug_id]),
                 "risk": max_risk,
-                "risk_band": find_risk_band(max_risk) if max_risk is not None else None,
+                "risk_band": RegressorModel.find_risk_band(max_risk)
+                if max_risk is not None
+                else None,
                 "fuzz": "b"
                 if bug["id"] in fuzzblocker_bugs
                 else "y"
@@ -938,7 +920,7 @@ def notification(days: int) -> None:
     all_intermittent_failure_bugs: Set[int] = set()
     component_team_mapping = get_component_team_mapping()
     for product_component, day_to_data in component_test_stats.items():
-        product, component = product_component.split("::")
+        product, component = product_component.split("::", 1)
         cur_team = component_team_mapping.get(product, {}).get(component)
         if cur_team is None or cur_team in ("Other", "Mozilla"):
             continue
@@ -1180,7 +1162,7 @@ def notification(days: int) -> None:
     for product_component, day_to_data in component_test_stats.items():
         product, component = product_component.split("::")
         team = component_team_mapping.get(product, {}).get(component)
-        if team is None or team in ("Other", "Mozilla"):
+        if team is None or team in ("Other", "Mozilla") or team not in team_data:
             continue
         cur_team_data = team_data[team]
 
@@ -1383,7 +1365,7 @@ def notification(days: int) -> None:
             )
         )
 
-    def get_top_crashes(team: str, channel: str) -> Optional[str]:
+    def get_top_crashes(team: str, channel: str) -> str | None:
         top_crashes = []
 
         if team in super_teams:
@@ -1563,6 +1545,9 @@ table {
                     fix_time_diff = f"This is {verb} when compared to two weeks ago (median was {prev_median_fix_time} days)."
                 else:
                     fix_time_diff = ""
+            else:
+                median_fix_time_text = ""
+                fix_time_diff = ""
 
             top_intermittent_failures = "\n".join(
                 "{} failures ({}#{} globally{}){}".format(
@@ -1795,21 +1780,35 @@ List of revisions that have been waiting for a review for longer than 3 days:
 
 {slow_review_patches}"""
 
-            def calculate_maintenance_effectiveness(period):
+            def calculate_maintenance_effectiveness(
+                period: relativedelta,
+            ) -> dict[str, dict]:
                 start_date = datetime.utcnow() - period
-                return round(
-                    bugzilla.calculate_maintenance_effectiveness_indicator(
-                        team, start_date, datetime.utcnow()
-                    ),
-                    2,
+                if team in super_teams:
+                    me_teams = super_teams[team]
+                else:
+                    me_teams = [team]
+                return bugzilla.calculate_maintenance_effectiveness_indicator(
+                    me_teams, start_date, datetime.utcnow()
                 )
 
-            maintenance_effectiveness_section = f"""<b>MAINTENANCE EFFECTIVENESS</b>
+            def format_maintenance_effectiveness(period: relativedelta) -> str:
+                me = calculate_maintenance_effectiveness(period)
+                return "ME: {}%, WeightedBurnDownTime: {} y\n[Opened bugs]({})\n[Closed bugs]({})".format(
+                    round(me["stats"]["ME"], 2),
+                    round(me["stats"]["WBDTime"], 2),
+                    me["queries"]["Opened"],
+                    me["queries"]["Closed"],
+                )
+
+            maintenance_effectiveness_section = f"""<b>[MAINTENANCE EFFECTIVENESS](https://docs.google.com/document/d/1y2dUDZI5U3xvY0jMY1LfIDARc5b_QB9mS2DV7MWrfa0)</b>
 <br />
 
-Last week: {calculate_maintenance_effectiveness(relativedelta(weeks=1))}
-Last month: {calculate_maintenance_effectiveness(relativedelta(months=1))}
-Last year: {calculate_maintenance_effectiveness(relativedelta(years=1))}
+Last week: {format_maintenance_effectiveness(relativedelta(weeks=1))}
+
+Last month: {format_maintenance_effectiveness(relativedelta(months=1))}
+
+Last 3 months: {format_maintenance_effectiveness(relativedelta(months=3))}
 """
 
             sections = [

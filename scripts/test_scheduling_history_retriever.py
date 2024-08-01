@@ -157,6 +157,10 @@ class Retriever(object):
                     if next_from_date > to_date:
                         next_from_date = to_date
 
+                    logger.info(
+                        "Retrieving pushes from %s to %s...", from_date, next_from_date
+                    )
+
                     pushes = mozci.push.make_push_objects(
                         from_date=from_date.strftime("%Y-%m-%d"),
                         to_date=next_from_date.strftime("%Y-%m-%d"),
@@ -223,16 +227,19 @@ class Retriever(object):
             )
 
         def generate_all_data() -> Generator[dict[str, Any], None, None]:
-            past_failures = test_scheduling.get_past_failures(granularity, False)
+            past_failures = test_scheduling.PastFailures(granularity, False)
 
-            push_num = past_failures["push_num"] if "push_num" in past_failures else 0
+            try:
+                push_num = past_failures.push_num
+            except KeyError:
+                push_num = 0
 
             commit_map = {}
             for commit_data in tqdm(repository.get_commits()):
                 commit_map[commit_data["node"]] = commit_data
 
             # Store all runnables in the past_failures DB so it can be used in the evaluation phase.
-            past_failures["all_runnables"] = all_runnables
+            past_failures.all_runnables = all_runnables
             # XXX: Should we recreate the DB from scratch if the previous all_runnables are not the
             # same as the current ones?
 
@@ -334,7 +341,7 @@ class Retriever(object):
             logger.info("skipped %d (too big commits)", skipped_too_big_commits)
             logger.info("skipped %d (no interesting runnables)", skipped_no_runnables)
 
-            past_failures["push_num"] = push_num
+            past_failures.push_num = push_num
             past_failures.close()
 
         # For the config/group granularity, we are only interested in the failing together DB.

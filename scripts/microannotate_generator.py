@@ -64,7 +64,7 @@ class MicroannotateGenerator(object):
             ["git", "config", "--global", "http.postBuffer", "12M"], check=True
         )
 
-        push_args = ["git", "push", self.repo_url, "master"]
+        push_args = ["git", "push", "origin", "master"]
         if is_different_version:
             push_args.append("--force")
 
@@ -106,13 +106,18 @@ class MicroannotateGenerator(object):
             )
         )()
 
+        subprocess.run(
+            ["git", "checkout", "master"], cwd=self.git_repo_path, check=True
+        )
+
         try:
             tenacity.retry(
                 wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
                 stop=tenacity.stop_after_attempt(5),
+                reraise=True,
             )(
                 lambda: subprocess.run(
-                    ["git", "pull", self.repo_url, "master"],
+                    ["git", "pull", "origin", "master"],
                     cwd=self.git_repo_path,
                     capture_output=True,
                     check=True,

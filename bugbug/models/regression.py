@@ -3,13 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from logging import INFO, basicConfig, getLogger
+import logging
 from typing import Any
 
 from bugbug.models.defect import DefectModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class RegressionModel(DefectModel):
@@ -20,11 +20,9 @@ class RegressionModel(DefectModel):
     def get_labels(self) -> tuple[dict[int, Any], list[int]]:
         classes = self.get_bugbug_labels("regression")
 
+        logger.info("%d regression bugs", sum(label == 1 for label in classes.values()))
         logger.info(
-            "%d regression bugs", sum(1 for label in classes.values() if label == 1)
-        )
-        logger.info(
-            "%d non-regression bugs", sum(1 for label in classes.values() if label == 0)
+            "%d non-regression bugs", sum(label == 0 for label in classes.values())
         )
 
         return classes, [0, 1]

@@ -3,22 +3,24 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
 from datetime import datetime
-from logging import INFO, basicConfig, getLogger
 
 import dateutil.parser
 import xgboost
 from dateutil.relativedelta import relativedelta
+from imblearn.pipeline import Pipeline as ImblearnPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import Pipeline
 
 from bugbug import bug_features, commit_features, feature_cleanup, repository, utils
 from bugbug.model import CommitModel
 
-basicConfig(level=INFO)
-logger = getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class BackoutModel(CommitModel):
@@ -27,45 +29,43 @@ class BackoutModel(CommitModel):
 
         self.calculate_importance = False
 
-        self.sampler = RandomUnderSampler(random_state=0)
-
         feature_extractors = [
-            commit_features.source_code_files_modified_num(),
-            commit_features.other_files_modified_num(),
-            commit_features.test_files_modified_num(),
-            commit_features.source_code_file_size(),
-            commit_features.other_file_size(),
-            commit_features.test_file_size(),
-            commit_features.source_code_added(),
-            commit_features.other_added(),
-            commit_features.test_added(),
-            commit_features.source_code_deleted(),
-            commit_features.other_deleted(),
-            commit_features.test_deleted(),
-            commit_features.author_experience(),
-            commit_features.reviewer_experience(),
-            commit_features.reviewers_num(),
-            commit_features.component_touched_prev(),
-            commit_features.directory_touched_prev(),
-            commit_features.file_touched_prev(),
-            commit_features.types(),
-            commit_features.components(),
-            commit_features.directories(),
-            commit_features.files(),
+            commit_features.SourceCodeFilesModifiedNum(),
+            commit_features.OtherFilesModifiedNum(),
+            commit_features.TestFilesModifiedNum(),
+            commit_features.SourceCodeFileSize(),
+            commit_features.OtherFileSize(),
+            commit_features.TestFileSize(),
+            commit_features.SourceCodeAdded(),
+            commit_features.OtherAdded(),
+            commit_features.TestAdded(),
+            commit_features.SourceCodeDeleted(),
+            commit_features.OtherDeleted(),
+            commit_features.TestDeleted(),
+            commit_features.AuthorExperience(),
+            commit_features.ReviewerExperience(),
+            commit_features.ReviewersNum(),
+            commit_features.ComponentTouchedPrev(),
+            commit_features.DirectoryTouchedPrev(),
+            commit_features.FileTouchedPrev(),
+            commit_features.Types(),
+            commit_features.Components(),
+            commit_features.Directories(),
+            commit_features.Files(),
         ]
 
         if bug_data:
             feature_extractors += [
-                bug_features.product(),
-                bug_features.component(),
-                bug_features.severity(),
-                bug_features.priority(),
-                bug_features.has_crash_signature(),
-                bug_features.has_regression_range(),
-                bug_features.whiteboard(),
-                bug_features.keywords(),
-                bug_features.number_of_bug_dependencies(),
-                bug_features.blocked_bugs_number(),
+                bug_features.Product(),
+                bug_features.Component(),
+                bug_features.Severity(),
+                bug_features.Priority(),
+                bug_features.HasCrashSignature(),
+                bug_features.HasRegressionRange(),
+                bug_features.Whiteboard(),
+                bug_features.Keywords(),
+                bug_features.NumberOfBugDependencies(),
+                bug_features.BlockedBugsNumber(),
             ]
 
         cleanup_functions = [
@@ -82,20 +82,36 @@ class BackoutModel(CommitModel):
                         feature_extractors, cleanup_functions
                     ),
                 ),
+            ]
+        )
+
+        self.clf = ImblearnPipeline(
+            [
                 (
                     "union",
                     ColumnTransformer(
                         [
                             ("data", DictVectorizer(), "data"),
                             ("desc", self.text_vectorizer(), "desc"),
+                            (
+                                "files",
+                                CountVectorizer(
+                                    analyzer=utils.keep_as_is,
+                                    lowercase=False,
+                                    min_df=0.0014,
+                                ),
+                                "files",
+                            ),
                         ]
                     ),
                 ),
+                ("sampler", RandomUnderSampler(random_state=0)),
+                (
+                    "estimator",
+                    xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count()),
+                ),
             ]
         )
-
-        self.clf = xgboost.XGBClassifier(n_jobs=utils.get_physical_cpu_count())
-        self.clf.set_params(predictor="cpu_predictor")
 
     def get_labels(self):
         classes = {}
@@ -113,14 +129,14 @@ class BackoutModel(CommitModel):
 
         logger.info(
             "%d commits were backed out",
-            sum(1 for label in classes.values() if label == 1),
+            sum(label == 1 for label in classes.values()),
         )
         logger.info(
             "%d commits were not backed out",
-            sum(1 for label in classes.values() if label == 0),
+            sum(label == 0 for label in classes.values()),
         )
 
         return classes, [0, 1]
 
     def get_feature_names(self):
-        return self.extraction_pipeline.named_steps["union"].get_feature_names_out()
+        return self.clf.named_steps["union"].get_feature_names_out()
