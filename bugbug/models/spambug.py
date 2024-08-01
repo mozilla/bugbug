@@ -94,22 +94,23 @@ class SpamBugModel(BugModel):
     def get_labels(self):
         classes = {}
 
+        try:
+            users_with_edit_bugs = bugzilla.get_groups_users(
+                ["editbugs", "editbugs-team"]
+            )
+        except HTTPError:
+            users_with_edit_bugs = set()
+
         for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
             creator = bug_data["creator"]
 
-            try:
-                userswitheditbugs = bugzilla.get_groups_users(
-                    ["editbugs", "editbugs-team"]
-                )
-            except HTTPError:
-                userswitheditbugs = set()
-
-            if creator in userswitheditbugs:
-                continue
-
             # Skip bugs filed by Mozillians, since we are sure they are not spam.
-            if "@mozilla" in creator or "@softvision" in creator:
+            if any(
+                "@mozilla" in creator,
+                "softvision" in creator,
+                creator in users_with_edit_bugs,
+            ):
                 continue
 
             # A bug that was moved out of 'Invalid Bugs' is definitely a legitimate bug.
