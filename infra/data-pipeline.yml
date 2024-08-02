@@ -13,7 +13,7 @@ tasks:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -49,7 +49,7 @@ tasks:
     - ID: microannotate-generate-remove-comments
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -85,7 +85,7 @@ tasks:
     - ID: microannotate-generate-tokenize-and-remove-comments
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -122,7 +122,7 @@ tasks:
     - ID: commit-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-large
       payload:
@@ -158,7 +158,7 @@ tasks:
     - ID: bugs-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -197,7 +197,7 @@ tasks:
     - ID: revisions-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -237,7 +237,7 @@ tasks:
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -278,7 +278,7 @@ tasks:
     - ID: test-label-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -317,7 +317,7 @@ tasks:
     - ID: test-group-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -356,7 +356,7 @@ tasks:
     - ID: test-config_group-scheduling-history-push_data-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       payload:
@@ -395,7 +395,7 @@ tasks:
     - ID: test-label-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-large
       dependencies:
@@ -444,7 +444,7 @@ tasks:
     - ID: test-group-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-large
       dependencies:
@@ -493,7 +493,7 @@ tasks:
     - ID: test-config_group-scheduling-history-generator
       created: { $fromNow: "" }
       deadline: { $fromNow: "4 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -535,7 +535,7 @@ tasks:
     - ID: rollback-test-task
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -574,11 +574,9 @@ tasks:
 
         artifacts:
           public/componentmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /componentmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -612,11 +610,9 @@ tasks:
 
         artifacts:
           public/defectenhancementtaskmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /defectenhancementtaskmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -650,11 +646,9 @@ tasks:
 
         artifacts:
           public/regressionmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressionmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -674,7 +668,7 @@ tasks:
     - ID: regressor-finder-commits-to-ignore
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -702,7 +696,7 @@ tasks:
     - ID: regressor-finder-bug-fixing-commits
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: batch
       dependencies:
@@ -733,7 +727,7 @@ tasks:
     #    - ID: regressor-finder-tokenized-bug-introducing
     #      created: {$fromNow: ''}
     #      deadline: {$fromNow: '5 days'}
-    #      expires: {$fromNow: '1 month'}
+    #      expires: {$fromNow: '1 year'}
     #      provisionerId: proj-bugbug
     #      workerType: compute-large
     #      dependencies:
@@ -770,7 +764,7 @@ tasks:
     - ID: regressor-finder-bug-introducing
       created: { $fromNow: "" }
       deadline: { $fromNow: "5 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -803,7 +797,7 @@ tasks:
     - ID: past-bugs-by-unit
       created: { $fromNow: "" }
       deadline: { $fromNow: "1 day" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -894,19 +888,15 @@ tasks:
 
         artifacts:
           public/regressormodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel.tar.zst
             type: file
           public/regressormodel_data_X.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel_data_X.zst
             type: file
           public/regressormodel_data_y.zst:
-            expires: { $fromNow: "1 month" }
             path: /regressormodel_data_y.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -940,15 +930,12 @@ tasks:
 
         artifacts:
           public/stepstoreproducemodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /stepstoreproducemodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
           public/feature_importance.png:
-            expires: { $fromNow: "1 year" }
             path: /feature_importance.png
             type: file
 
@@ -982,11 +969,9 @@ tasks:
 
         artifacts:
           public/spambugmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /spambugmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1020,11 +1005,9 @@ tasks:
 
         artifacts:
           public/accessibilitymodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /accessibilitymodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1060,11 +1043,9 @@ tasks:
 
         artifacts:
           public/testlabelselectmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testlabelselectmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1101,11 +1082,9 @@ tasks:
 
         artifacts:
           public/testgroupselectmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testgroupselectmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1140,11 +1119,9 @@ tasks:
 
         artifacts:
           public/testfailuremodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /testfailuremodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1178,11 +1155,9 @@ tasks:
 
         artifacts:
           public/needsdiagnosismodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /needsdiagnosismodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1216,11 +1191,9 @@ tasks:
 
         artifacts:
           public/invalidcompatibilityreportmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /invalidcompatibilityreportmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1254,11 +1227,9 @@ tasks:
 
         artifacts:
           public/performancebugmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /performancebugmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1292,11 +1263,9 @@ tasks:
 
         artifacts:
           public/worksformemodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /worksformemodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1330,11 +1299,9 @@ tasks:
 
         artifacts:
           public/fenixcomponentmodel.tar.zst:
-            expires: { $fromNow: "1 month" }
             path: /fenixcomponentmodel.tar.zst
             type: file
           public/metrics.json:
-            expires: { $fromNow: "1 year" }
             path: /metrics.json
             type: file
 
@@ -1382,7 +1349,6 @@ tasks:
             bugbug-check-all-metrics /metrics /metrics-output"
         artifacts:
           public/bugbug:
-            expires: { $fromNow: "2 weeks" }
             path: /metrics-output
             type: directory
       metadata:
@@ -1394,7 +1360,7 @@ tasks:
     - ID: docker-build
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: ci
       dependencies:
@@ -1425,7 +1391,6 @@ tasks:
             taskboot --target /code build-compose --registry=registry.hub.docker.com --write /images --service bugbug-http-service-bg-worker --tag ${version} --tag latest --build-arg BUGBUG_VERSION=${version}"
         artifacts:
           public/bugbug:
-            expires: { $fromNow: "2 weeks" }
             path: /images
             type: directory
       scopes:
@@ -1444,7 +1409,7 @@ tasks:
     - ID: integration-test
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-small
       dependencies:
@@ -1482,7 +1447,7 @@ tasks:
     - ID: update_hook_check_pipeline
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - integration-test
       scopes:
@@ -1512,7 +1477,7 @@ tasks:
     - ID: update_hook_classify_patch
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - past-bugs-by-unit
         - train-regressor
@@ -1543,7 +1508,7 @@ tasks:
     - ID: update_hook_test_select
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - train-test-failure
         - train-test-label-select
@@ -1574,7 +1539,7 @@ tasks:
     - ID: update_hook_landings_risk_report
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       dependencies:
         - past-bugs-by-unit
         - revisions-retrieval
@@ -1612,7 +1577,7 @@ tasks:
         - secrets:get:project/bugbug/deploy
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-smaller
       payload:
@@ -1643,7 +1608,7 @@ tasks:
         - secrets:get:project/bugbug/deploy
       created: { $fromNow: "" }
       deadline: { $fromNow: "3 days" }
-      expires: { $fromNow: "1 month" }
+      expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
       workerType: compute-smaller
       payload:

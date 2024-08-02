@@ -13,7 +13,7 @@
       "$fromNow": "2 hours"
     },
     "expires": {
-      "$fromNow": "1 month"
+      "$fromNow": "1 year"
     },
     "extra": {},
     "metadata": {
