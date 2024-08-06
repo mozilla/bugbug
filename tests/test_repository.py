@@ -2859,3 +2859,101 @@ void main() {
             }
         ]
     }
+
+
+def test_transform(fake_hg_repo):
+    def create_commit_obj(node, desc, bug_id, backsout, backedoutby):
+        return repository.Commit(
+            node=node,
+            author="author",
+            desc=desc,
+            pushdate=datetime(2019, 1, 1),
+            bug_id=bug_id,
+            backsout=backsout,
+            backedoutby=backedoutby,
+            author_email="author@mozilla.org",
+            reviewers=["reviewer1", "reviewer2"],
+        )
+
+    hg, local, remote = fake_hg_repo
+
+    # Save the previous value of globals, and set with new values.
+    prev_path_to_component = repository.path_to_component
+    prev_code_analysis_server = repository.code_analysis_server
+    repository.path_to_component = {}
+    responses.add_passthru("http://127.0.0.1")
+    repository.code_analysis_server = rust_code_analysis_server.RustCodeAnalysisServer()
+
+    # create some dummy files to test
+    dummy_files = []
+    for i in range(10):
+        name_of_file = "dummy_file" + str(i)
+        # add 10 files with 7 lines in each one
+        add_file(hg, local, name_of_file, "1\n2\n3\n4\n5\n6\n7\n")
+        dummy_files.append(name_of_file)
+
+    revision1 = commit(hg)
+    commit1 = create_commit_obj(revision1, "", 123, [], "")
+    commit1.set_files(dummy_files, {})
+
+    repository.transform(hg, local, commit1)
+    assert commit1.source_code_files_modified_num == 0
+    assert commit1.other_files_modified_num == 10
+    assert commit1.source_code_added == 0
+    assert commit1.other_added == 70
+
+    # Set up and add a test .py code file
+    test_dir = os.path.join(local, "tests")
+    test_dir = os.path.join(test_dir, "gtest")
+    os.makedirs(test_dir)
+    py_file_code = (
+        "print(Hello, Mozilla!)\n" "print(Hello, Mozilla!)\n" "print(Hello, Mozilla!)\n"
+    )
+    py_file_name = "tests/gtest/test_hello_mozilla.py"
+    add_file(hg, local, py_file_name, py_file_code)
+    revision2 = commit(hg)
+    commit2 = create_commit_obj(revision2, "", 123, [], "")
+    commit2.set_files(["./tests/gtest/test_hello_mozilla.py"], {})
+
+    repository.transform(hg, local, commit2)
+    assert commit2.test_files_modified_num == 1
+    assert commit2.test_added == 3
+
+    # Create another .py test file in a different directory.
+    py_file_name_2 = "tests/test_hello_mozilla.py"
+    add_file(hg, local, py_file_name_2, py_file_code)
+    revision3 = commit(hg)
+    commit3 = create_commit_obj(revision3, "", 123, [], "")
+    commit3.set_files([py_file_name_2], {})
+
+    # The test currently fails here with an error - might indicate an issue with
+    # the is_test function in bugbug/repository.py.
+    repository.transform(hg, local, commit3)
+    assert commit3.test_files_modified_num == 1
+    assert commit3.test_added == 3
+
+    # Set up and add a .c code file
+    c_file_code = r"""
+    #include <stdlib.h>
+    #include <stdio.h>
+
+    int main(void) {
+        printf("Hello, Mozilla!\n);
+        return EXIT_SUCCESS;
+    }
+    """
+    c_file_name = "hello_mozilla.c"
+    add_file(hg, local, c_file_name, c_file_code)
+    revision4 = commit(hg)
+    commit4 = create_commit_obj(revision4, "", 123, [], "")
+    commit4.set_files([c_file_name], {})
+
+    # The test also currently fails here with an error - might indicate an issue
+    # with the get_space_metrics function in bugbug/repository.py
+    repository.transform(hg, local, commit4)
+    assert commit4.source_code_files_modified_num == 1
+    assert commit4.other_files_modified_num == 0
+
+    # reset globals to their original values
+    repository.path_to_component = prev_path_to_component
+    repository.code_analysis_server = prev_code_analysis_server
