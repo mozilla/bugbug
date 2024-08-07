@@ -1003,7 +1003,7 @@ class CodeReviewTool(GenerativeModelTool):
         )
         memory.save_context(
             {
-                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". \n'
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
                 + patch.raw_diff
             },
             {"output": output_summarization},
