@@ -1131,7 +1131,7 @@ class ReviewCommentsDB:
                     ):
                         max_score_per_found[result.id] = result
 
-        list_found_with_score = [
+        results_with_score = [
             (result.score, result)
             for result in max_score_per_found.values()
         ]
