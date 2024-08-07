@@ -1137,5 +1137,5 @@ class ReviewCommentsDB:
         results_with_score = sorted(
             (result.score, result) for result in max_score_per_comment.values()
         )
-        list_found = [e[1] for e in results_with_score[-limit:]]
-        return list_found
+
+        return [e[1] for e in results_with_score[-limit:]]
