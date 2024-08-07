@@ -1116,15 +1116,24 @@ class ReviewCommentsDB:
 
         patch_set = PatchSet.from_string(patch.raw_diff)
 
-        yielded = 0
+        max_score_per_found = {}  # to avoid repetition of same found
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
 
             for hunk in patched_file:
                 for result in self.find_similar_hunk_comments(hunk):
-                    yield result
+                    if (
+                        result.id not in max_score_per_found
+                        or result.score > max_score_per_found[result.id]
+                    ):
+                        max_score_per_found[result.id] = result
 
-                    yielded += 1
-                    if yielded >= limit:
-                        return
+        list_found_with_score = [
+            (max_score_per_found[e].score, max_score_per_found[e])
+            for e in max_score_per_found
+        ]
+        list_found_with_score.sort()  # order based on score
+        list_found = [e[1] for e in list_found_with_score[-limit:]]
+
+        return list_found
