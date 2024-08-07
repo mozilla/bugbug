@@ -56,7 +56,7 @@ class HunkNotInPatchError(ModelResultError):
     """Occurs when the hunk in the model result is not part of the patch."""
 
 
-COND_MENTION_MOZILLA = False
+TARGET_SOFTWARE= None
 
 PROMPT_TEMPLATE_SUMMARIZATION = (
     """You are an expert reviewer for"""
