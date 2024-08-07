@@ -56,7 +56,9 @@ class HunkNotInPatchError(ModelResultError):
     """Occurs when the hunk in the model result is not part of the patch."""
 
 
-PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews.
+COND_MENTION_MOZILLA = False
+
+PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for""" + (' the Mozilla Firefox' if COND_MENTION_MOZILLA else '') + """ source code, with experience on source code reviews.
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
 
@@ -65,9 +67,11 @@ Please, analyze the code provided and report a summarization about the new chang
 PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code in Firefox.
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code""" + (' in Firefox' if COND_MENTION_MOZILLA else '') + """.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Final answer: Write down the comments and report them using the JSON format provided below as valid comment examples (return only a JSON array).
+5. Filter out comments that are descriptive and filter out comments that are praising (example: "This is a good addition to the code.").
+6. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
+7. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
 
 As valid comments, consider the examples below:
 {comment_examples}
@@ -89,11 +93,14 @@ Review comments for example {example_number}:
 PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Please, double check the code review provided for the patch below.
 Just report the comments that are:
 - applicable for the patch;
-- consistent with the source code in Firefox;
-- focusing on reporting possible bugs, major readability regressions, or similar concerns.
+- consistent with the source code""" + (' in Firefox' if COND_MENTION_MOZILLA else '') + """;
+- focusing on reporting possible bugs, major readability regressions, or similar concerns;
+- filter out any descriptive comments;
+- filter out any praising comments;
+- filter out any comments that do not suggest code changes.
 
 Do not change the contents of the comments and the report format.
-Adopt the template below:
+Adopt the template below as the report format:
 [
     {{
         "file": "com/br/main/Pressure.java",
@@ -101,6 +108,7 @@ Adopt the template below:
         "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
     }}
 ]
+Do not report any explaination about your choice.
 
 Review:
 {review}
@@ -114,11 +122,11 @@ As examples of not expected comments, not related to the current patch, please, 
     - Overall, the patch seems to be well implemented with no major concerns. The developers have made a conscious decision to align with Chrome's behavior, and the reasoning is well documented.
     - There are no complex code changes in this patch, so there's no potential for major readability regressions or bugs introduced by the changes.
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
-    - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct."""
+    - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
+    - This is a good addition to the code."""
 
 
-PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for
-reviewing the patch.
+PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for reviewing the patch.
 List the names of these functions, providing only the function names, with each name on a separate line.
 Avoid using list indicators such as hyphens or numbers.
 If no function declaration is required, just return "".
@@ -968,13 +976,13 @@ class CodeReviewTool(GenerativeModelTool):
 
         memory.save_context(
             {
-                "input": "You are an expert reviewer for the Mozilla Firefox source code, with experience on source code reviews."
+                "input": "You are an expert reviewer for" + (' the Mozilla Firefox' if COND_MENTION_MOZILLA else '') + " source code, with experience on source code reviews."
             },
-            {"output": "Sure, I'm aware of source code practices in Firefox."},
+            {"output": "Sure, I'm aware of source code practices" + (' in Firefox' if COND_MENTION_MOZILLA else ' in the development community') + "."},
         )
         memory.save_context(
             {
-                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". '
+                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+". \n'
                 + patch.raw_diff
             },
             {"output": output_summarization},
