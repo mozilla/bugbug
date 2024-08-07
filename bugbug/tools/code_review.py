@@ -76,9 +76,10 @@ PROMPT_TEMPLATE_REVIEW = (
     + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
     + """.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Filter out comments that are descriptive and filter out comments that are praising (example: "This is a good addition to the code.").
-6. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
-7. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+5. Filter out comments that are descriptive.
+6. Filter out comments that are praising (example: "This is a good addition to the code.").
+7. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
+8. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
 
 As valid comments, consider the examples below:
 {comment_examples}
