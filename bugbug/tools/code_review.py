@@ -1116,7 +1116,9 @@ class ReviewCommentsDB:
 
         patch_set = PatchSet.from_string(patch.raw_diff)
 
-        max_score_per_found = {}  # to avoid repetition of same found
+        # We want to avoid returning the same comment multiple times. Thus, if
+        # a comment matches multiple hunks, we will only consider it once.
+        max_score_per_found = {}
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
