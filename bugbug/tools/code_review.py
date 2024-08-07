@@ -741,7 +741,7 @@ def gather_line_context(line_context):
     for file, funcs in file_dir.items():
         for func, lines in funcs.items():
             gathered_requested_lines = "\n".join(lines)
-            gathered_context += [(gathered_requested_lines, file, func)]
+            gathered_context.append((gathered_requested_lines, file, func))
     return gathered_context
 
 
