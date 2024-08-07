@@ -8,6 +8,7 @@ import logging
 import xgboost
 from imblearn.over_sampling import BorderlineSMOTE
 from imblearn.pipeline import Pipeline as ImblearnPipeline
+from requests import HTTPError
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.pipeline import Pipeline
@@ -93,11 +94,23 @@ class SpamBugModel(BugModel):
     def get_labels(self):
         classes = {}
 
+        try:
+            users_with_edit_bugs = bugzilla.get_groups_users(
+                ["editbugs", "editbugs-team"]
+            )
+        except HTTPError:
+            users_with_edit_bugs = set()
+
         for bug_data in bugzilla.get_bugs(include_invalid=True):
             bug_id = bug_data["id"]
+            creator = bug_data["creator"]
 
             # Skip bugs filed by Mozillians, since we are sure they are not spam.
-            if "@mozilla" in bug_data["creator"]:
+            if any(
+                "@mozilla" in creator,
+                "softvision" in creator,
+                creator in users_with_edit_bugs,
+            ):
                 continue
 
             # A bug that was moved out of 'Invalid Bugs' is definitely a legitimate bug.
