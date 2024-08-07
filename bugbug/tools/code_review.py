@@ -1130,8 +1130,8 @@ class ReviewCommentsDB:
                         max_score_per_found[result.id] = result
 
         list_found_with_score = [
-            (max_score_per_found[e].score, max_score_per_found[e])
-            for e in max_score_per_found
+            (result.score, result)
+            for result in max_score_per_found.values()
         ]
         list_found_with_score.sort()  # order based on score
         list_found = [e[1] for e in list_found_with_score[-limit:]]
