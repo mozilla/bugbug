@@ -718,7 +718,7 @@ def collect_function_definitions(function_declarations, target_element, definiti
 
 
 def gather_line_context(line_context):
-    r"""Reformat the line_context list.
+    """Reformat the line context list and remove duplicates.
 
     From [[line, file, function],...] to [[gathered_line, file, function],...]
     to avoid repetitions of the same tuple (file, function) in the list.
