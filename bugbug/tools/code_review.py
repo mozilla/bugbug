@@ -58,16 +58,23 @@ class HunkNotInPatchError(ModelResultError):
 
 COND_MENTION_MOZILLA = False
 
-PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for""" + (' the Mozilla Firefox' if COND_MENTION_MOZILLA else '') + """ source code, with experience on source code reviews.
+PROMPT_TEMPLATE_SUMMARIZATION = (
+    """You are an expert reviewer for"""
+    + (" the Mozilla Firefox" if COND_MENTION_MOZILLA else "")
+    + """ source code, with experience on source code reviews.
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
 
 {patch}"""
+)
 
-PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
+PROMPT_TEMPLATE_REVIEW = (
+    """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code""" + (' in Firefox' if COND_MENTION_MOZILLA else '') + """.
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code"""
+    + (" in Firefox" if COND_MENTION_MOZILLA else "")
+    + """.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
 5. Filter out comments that are descriptive and filter out comments that are praising (example: "This is a good addition to the code.").
 6. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
@@ -79,6 +86,7 @@ As valid comments, consider the examples below:
 
 Here is the patch that we need you to review:
 {patch}"""
+)
 
 
 TEMPLATE_COMMENT_EXAMPLE = """Patch example {example_number}:
@@ -90,10 +98,13 @@ Review comments for example {example_number}:
 {comments}"""
 
 
-PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Please, double check the code review provided for the patch below.
+PROMPT_TEMPLATE_FILTERING_ANALYSIS = (
+    """Please, double check the code review provided for the patch below.
 Just report the comments that are:
 - applicable for the patch;
-- consistent with the source code""" + (' in Firefox' if COND_MENTION_MOZILLA else '') + """;
+- consistent with the source code"""
+    + (" in Firefox" if COND_MENTION_MOZILLA else "")
+    + """;
 - focusing on reporting possible bugs, major readability regressions, or similar concerns;
 - filter out any descriptive comments;
 - filter out any praising comments;
@@ -108,7 +119,7 @@ Adopt the template below as the report format:
         "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
     }}
 ]
-Do not report any explaination about your choice.
+Do not report any explanation about your choice.
 
 Review:
 {review}
@@ -124,6 +135,7 @@ As examples of not expected comments, not related to the current patch, please, 
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
+)
 
 
 PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for reviewing the patch.
@@ -976,9 +988,19 @@ class CodeReviewTool(GenerativeModelTool):
 
         memory.save_context(
             {
-                "input": "You are an expert reviewer for" + (' the Mozilla Firefox' if COND_MENTION_MOZILLA else '') + " source code, with experience on source code reviews."
+                "input": "You are an expert reviewer for"
+                + (" the Mozilla Firefox" if COND_MENTION_MOZILLA else "")
+                + " source code, with experience on source code reviews."
             },
-            {"output": "Sure, I'm aware of source code practices" + (' in Firefox' if COND_MENTION_MOZILLA else ' in the development community') + "."},
+            {
+                "output": "Sure, I'm aware of source code practices"
+                + (
+                    " in Firefox"
+                    if COND_MENTION_MOZILLA
+                    else " in the development community"
+                )
+                + "."
+            },
         )
         memory.save_context(
             {
