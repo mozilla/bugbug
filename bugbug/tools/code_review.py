@@ -738,9 +738,9 @@ def gather_line_context(line_context):
         file_dir[file][func].append(line)
 
     gathered_context = []
-    for file in file_dir:
-        for func in file_dir[file]:
-            gathered_requested_lines = "\n".join(file_dir[file][func])
+    for file, funcs in file_dir.items():
+        for func, lines in funcs.items():
+            gathered_requested_lines = "\n".join(lines)
             gathered_context += [[gathered_requested_lines, file, func]]
     return gathered_context
 
