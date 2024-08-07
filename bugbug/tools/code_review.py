@@ -718,6 +718,13 @@ def collect_function_definitions(function_declarations, target_element, definiti
 
 
 def gather_line_context(line_context):
+    r"""Reformat the line_context list.
+
+    From [[line, file, function],...] to [[gathered_line, file, function],...]
+    to avoid repetitions of the same tuple (file, function) in the list.
+    'gathered_line' is a str that concatenates the 'line' (with separator '\n')
+    that required the same function.
+    """
     file_dir = {}
 
     for line, file, func in line_context:
