@@ -1009,11 +1009,13 @@ class CodeReviewTool(GenerativeModelTool):
                     "output": "Okay, I will also consider the code as additional context to the given patch."
                 },
             )
-
+        comment_examples, comment_examples_with_score = self._get_comment_examples(
+            patch
+        )
         output = conversation_chain.predict(
             input=PROMPT_TEMPLATE_REVIEW.format(
                 patch=formatted_patch,
-                comment_examples=self._get_comment_examples(patch),
+                comment_examples=comment_examples,
             )
         )
 
@@ -1028,13 +1030,14 @@ class CodeReviewTool(GenerativeModelTool):
 
     def _get_comment_examples(self, patch):
         comment_examples = []
-
+        comment_examples_score = None
         if self.review_comments_db:
             # TODO: use a smarter search to limit the number of comments and
             # diversify the examples (from different hunks, files, etc.).
-            comment_examples = self.review_comments_db.find_similar_patch_comments(
-                patch, limit=10
+            comment_examples_score = (
+                self.review_comments_db.find_similar_patch_comments(patch, limit=10)
             )
+            comment_examples = [e.payload for e in comment_examples_score]
 
         if not comment_examples:
             comment_examples = STATIC_COMMENT_EXAMPLES
@@ -1059,7 +1062,7 @@ class CodeReviewTool(GenerativeModelTool):
             return json.dumps(
                 [format_comment(example["comment"]) for example in comment_examples],
                 indent=2,
-            )
+            ), comment_examples_score
 
         return "\n\n".join(
             TEMPLATE_COMMENT_EXAMPLE.format(
@@ -1073,7 +1076,7 @@ class CodeReviewTool(GenerativeModelTool):
                 ),
             )
             for num, example in enumerate(comment_examples)
-        )
+        ), comment_examples_score
 
 
 class ReviewCommentsDB:
@@ -1118,23 +1121,21 @@ class ReviewCommentsDB:
 
         # We want to avoid returning the same comment multiple times. Thus, if
         # a comment matches multiple hunks, we will only consider it once.
-        max_score_per_comment = {}
+        max_score_per_comment: dict = {}
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
 
             for hunk in patched_file:
                 for result in self.find_similar_hunk_comments(hunk):
-                    if (
+                    if result is not None and (
                         result.id not in max_score_per_comment
                         or result.score > max_score_per_comment[result.id]
                     ):
                         max_score_per_comment[result.id] = result
 
         results_with_score = sorted(
-            (result.score, result)
-            for result in max_score_per_comment.values()
+            (result.score, result) for result in max_score_per_comment.values()
         )
         list_found = [e[1] for e in results_with_score[-limit:]]
-
         return list_found

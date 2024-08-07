@@ -73,6 +73,6 @@ class QdrantVectorDB(VectorDB):
             ),
         )
 
-    def search(self, query: list[float]) -> Iterable[dict]:
+    def search(self, query: list[float]):  # -> Iterable[dict]:
         for item in self.client.search(self.collection_name, query):
-            yield item.payload
+            yield item
