@@ -1118,7 +1118,7 @@ class ReviewCommentsDB:
 
         # We want to avoid returning the same comment multiple times. Thus, if
         # a comment matches multiple hunks, we will only consider it once.
-        max_score_per_found = {}
+        max_score_per_comment = {}
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
@@ -1126,16 +1126,15 @@ class ReviewCommentsDB:
             for hunk in patched_file:
                 for result in self.find_similar_hunk_comments(hunk):
                     if (
-                        result.id not in max_score_per_found
-                        or result.score > max_score_per_found[result.id]
+                        result.id not in max_score_per_comment
+                        or result.score > max_score_per_comment[result.id]
                     ):
-                        max_score_per_found[result.id] = result
+                        max_score_per_comment[result.id] = result
 
-        results_with_score = [
+        results_with_score = sorted(
             (result.score, result)
-            for result in max_score_per_found.values()
-        ]
-        list_found_with_score.sort()  # order based on score
+            for result in max_score_per_comment.values()
+        )
         list_found = [e[1] for e in list_found_with_score[-limit:]]
 
         return list_found
