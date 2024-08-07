@@ -56,11 +56,11 @@ class HunkNotInPatchError(ModelResultError):
     """Occurs when the hunk in the model result is not part of the patch."""
 
 
-TARGET_SOFTWARE= None
+TARGET_SOFTWARE = None
 
 PROMPT_TEMPLATE_SUMMARIZATION = (
     """You are an expert reviewer for"""
-    + (" the Mozilla Firefox" if COND_MENTION_MOZILLA else "")
+    + (f" the {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
     + """ source code, with experience on source code reviews.
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
@@ -73,7 +73,7 @@ PROMPT_TEMPLATE_REVIEW = (
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
 3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code"""
-    + (" in Firefox" if COND_MENTION_MOZILLA else "")
+    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
     + """.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
 5. Filter out comments that are descriptive and filter out comments that are praising (example: "This is a good addition to the code.").
@@ -103,7 +103,7 @@ PROMPT_TEMPLATE_FILTERING_ANALYSIS = (
 Just report the comments that are:
 - applicable for the patch;
 - consistent with the source code"""
-    + (" in Firefox" if COND_MENTION_MOZILLA else "")
+    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
     + """;
 - focusing on reporting possible bugs, major readability regressions, or similar concerns;
 - filter out any descriptive comments;
@@ -989,14 +989,14 @@ class CodeReviewTool(GenerativeModelTool):
         memory.save_context(
             {
                 "input": "You are an expert reviewer for"
-                + (" the Mozilla Firefox" if COND_MENTION_MOZILLA else "")
+                + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
                 + " source code, with experience on source code reviews."
             },
             {
                 "output": "Sure, I'm aware of source code practices"
                 + (
-                    " in Firefox"
-                    if COND_MENTION_MOZILLA
+                    f" in {TARGET_SOFTWARE}"
+                    if TARGET_SOFTWARE is not None
                     else " in the development community"
                 )
                 + "."
