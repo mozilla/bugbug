@@ -107,8 +107,7 @@ Just report the comments that are:
     + """;
 - focusing on reporting possible bugs, major readability regressions, or similar concerns;
 - filter out any descriptive comments;
-- filter out any praising comments;
-- filter out any comments that do not suggest code changes.
+- filter out any praising comments.
 
 Do not change the contents of the comments and the report format.
 Adopt the template below as the report format:
