@@ -19,7 +19,8 @@ class VectorPoint:
     id: int
     vector: list[float]
     payload: dict
-    
+
+
 @dataclass
 class PayloadScore:
     id: int
