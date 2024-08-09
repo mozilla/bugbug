@@ -19,6 +19,12 @@ class VectorPoint:
     id: int
     vector: list[float]
     payload: dict
+    
+@dataclass
+class PayloadScore:
+    id: int
+    score: int
+    payload: dict
 
 
 class VectorDB(ABC):
@@ -75,4 +81,4 @@ class QdrantVectorDB(VectorDB):
 
     def search(self, query: list[float]):  # -> Iterable[dict]:
         for item in self.client.search(self.collection_name, query):
-            yield item
+            yield PayloadScore(item.id, item.score, item.payload)

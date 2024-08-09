@@ -1130,7 +1130,7 @@ class ReviewCommentsDB:
                 for result in self.find_similar_hunk_comments(hunk):
                     if result is not None and (
                         result.id not in max_score_per_comment
-                        or result.score > max_score_per_comment[result.id]
+                        or result.score > max_score_per_comment[result.id].score
                     ):
                         max_score_per_comment[result.id] = result
 
