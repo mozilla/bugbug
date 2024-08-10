@@ -1009,13 +1009,11 @@ class CodeReviewTool(GenerativeModelTool):
                     "output": "Okay, I will also consider the code as additional context to the given patch."
                 },
             )
-        comment_examples, comment_examples_with_score = self._get_comment_examples(
-            patch
-        )
+
         output = conversation_chain.predict(
             input=PROMPT_TEMPLATE_REVIEW.format(
                 patch=formatted_patch,
-                comment_examples=comment_examples,
+                comment_examples=self._get_comment_examples(patch),
             )
         )
 
@@ -1030,14 +1028,14 @@ class CodeReviewTool(GenerativeModelTool):
 
     def _get_comment_examples(self, patch):
         comment_examples = []
-        comment_examples_score = None
+
         if self.review_comments_db:
-            # TODO: use a smarter search to limit the number of comments and
-            # diversify the examples (from different hunks, files, etc.).
-            comment_examples_score = (
-                self.review_comments_db.find_similar_patch_comments(patch, limit=10)
-            )
-            comment_examples = [e.payload for e in comment_examples_score]
+            comment_examples = [
+                result.payload
+                for result in self.review_comments_db.find_similar_patch_comments(
+                    patch, limit=10
+                )
+            ]
 
         if not comment_examples:
             comment_examples = STATIC_COMMENT_EXAMPLES
@@ -1062,7 +1060,7 @@ class CodeReviewTool(GenerativeModelTool):
             return json.dumps(
                 [format_comment(example["comment"]) for example in comment_examples],
                 indent=2,
-            ), comment_examples_score
+            )
 
         return "\n\n".join(
             TEMPLATE_COMMENT_EXAMPLE.format(
@@ -1076,7 +1074,7 @@ class CodeReviewTool(GenerativeModelTool):
                 ),
             )
             for num, example in enumerate(comment_examples)
-        ), comment_examples_score
+        )
 
 
 class ReviewCommentsDB:
