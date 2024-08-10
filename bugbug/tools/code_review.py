@@ -1060,11 +1060,12 @@ class CodeReviewTool(GenerativeModelTool):
         comment_examples = []
 
         if self.review_comments_db:
-            # TODO: use a smarter search to limit the number of comments and
-            # diversify the examples (from different hunks, files, etc.).
-            comment_examples = self.review_comments_db.find_similar_patch_comments(
-                patch, limit=10
-            )
+            comment_examples = [
+                result.payload
+                for result in self.review_comments_db.find_similar_patch_comments(
+                    patch, limit=10
+                )
+            ]
 
         if not comment_examples:
             comment_examples = STATIC_COMMENT_EXAMPLES
@@ -1146,15 +1147,19 @@ class ReviewCommentsDB:
 
         patch_set = PatchSet.from_string(patch.raw_diff)
 
-        yielded = 0
+        # We want to avoid returning the same comment multiple times. Thus, if
+        # a comment matches multiple hunks, we will only consider it once.
+        max_score_per_comment: dict = {}
         for patched_file in patch_set:
             if not patched_file.is_modified_file:
                 continue
 
             for hunk in patched_file:
                 for result in self.find_similar_hunk_comments(hunk):
-                    yield result
+                    if result is not None and (
+                        result.id not in max_score_per_comment
+                        or result.score > max_score_per_comment[result.id].score
+                    ):
+                        max_score_per_comment[result.id] = result
 
-                    yielded += 1
-                    if yielded >= limit:
-                        return
+        return sorted(max_score_per_comment.values())[-limit:]
