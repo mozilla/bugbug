@@ -4,12 +4,16 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 from abc import ABC, abstractmethod
+from logging import INFO, basicConfig, getLogger
 from typing import Any
 
 from langchain_community.llms import HumanInputLLM
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from bugbug.utils import get_secret
+
+basicConfig(level=INFO)
+logger = getLogger(__name__)
 
 
 def create_llm(llm):
@@ -44,6 +48,24 @@ class GenerativeModelTool(ABC):
         super().__init__(*args, **kwargs)
 
         self.llm = llm
+        self._set_tokenizer(llm.model_name)
+
+    def _set_tokenizer(self, model_name: str) -> None:
+        import tiktoken
+
+        try:
+            self._tokenizer = tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            FALLBACK_ENCODING = "cl100k_base"
+            logger.info(
+                "Tokenizer couldn't be found for %s, falling back to %s",
+                model_name,
+                FALLBACK_ENCODING,
+            )
+            self._tokenizer = tiktoken.get_encoding(FALLBACK_ENCODING)
+
+    def count_tokens(self, text):
+        return len(self._tokenizer.encode(text))
 
     @abstractmethod
     def run(self, *args, **kwargs) -> Any:
