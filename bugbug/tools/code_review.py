@@ -56,6 +56,10 @@ class HunkNotInPatchError(ModelResultError):
     """Occurs when the hunk in the model result is not part of the patch."""
 
 
+class LargeDiffError(Exception):
+    """Occurs when the diff is too large to be processed."""
+
+
 TARGET_SOFTWARE = None
 
 PROMPT_TEMPLATE_SUMMARIZATION = (
@@ -947,6 +951,9 @@ class CodeReviewTool(GenerativeModelTool):
 
     @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
+        if self.count_tokens(patch.raw_diff) > 5000:
+            raise LargeDiffError("The diff is too large")
+
         patch_set = PatchSet.from_string(patch.raw_diff)
         formatted_patch = format_patch_set(patch_set)
         if formatted_patch == "":
