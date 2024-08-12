@@ -718,13 +718,13 @@ def collect_function_definitions(function_declarations, target_element, definiti
 
 
 def gather_line_context(line_context):
-    """Reformat the line context list and remove duplicates.
+    r"""Reformat the line context list and remove duplicates.
 
     Args:
         line_context: List of lists, where each list is [line, file, function].
 
     Returns:
-        List of lists, where each list is [gathered_line, file, function]. The
+        List of tuples, where each tuple is (gathered_line, file, function). The
         'gathered_line' is a str that concatenates the 'line' with a separator
         (i.e., `\n`) that required the same function.
     """
