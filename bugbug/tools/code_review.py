@@ -750,6 +750,38 @@ def parse_text_for_dict(text):
     return file_content
 
 
+def len_common_path(f1, f2):
+    """Find length of the common path."""
+    f1_subsystems = f1.split("/")
+    f2_subsystems = f2.split("/")
+
+    max_common_path_length = next(
+        idx
+        for idx, (sub1, sub2) in enumerate(zip(f1_subsystems, f2_subsystems))
+        if sub1 != sub2
+    )
+    return max_common_path_length
+
+
+def solve_conflict_definitions(target_path, functions):
+    functions_common_path = [
+        (len_common_path(target_path, fun.file), fun) for fun in functions
+    ]
+    max_common_path_length = max(
+        [common_path_length for (common_path_length, _) in functions_common_path]
+    )
+    functions = [
+        fun
+        for (common_path_length, fun) in functions_common_path
+        if common_path_length == max_common_path_length
+    ]
+
+    if len(functions) == 1:
+        return functions
+    else:
+        return []  # could not solve conflict
+
+
 def request_for_function_declarations(
     function_search, commit_hash, functions_list, patch_set
 ):
@@ -774,6 +806,11 @@ def request_for_function_declarations(
                         path=target_path,
                         function_name=function_name,
                     )
+                    if len(definitions) > 1:
+                        definitions = solve_conflict_definitions(
+                            target_path, definitions
+                        )
+
                     collect_function_definitions(
                         functions_declarations, function_name, definitions
                     )
@@ -800,6 +837,34 @@ def collect_function_definitions(function_declarations, target_element, definiti
                 definition.source,
             ]
         )
+
+
+def gather_line_context(line_context):
+    r"""Reformat the line context list and remove duplicates.
+
+    Args:
+        line_context: List of lists, where each list is [line, file, function].
+
+    Returns:
+        List of tuples, where each tuple is (gathered_line, file, function). The
+        'gathered_line' is a str that concatenates the 'line' with a separator
+        (i.e., `\n`) that required the same function.
+    """
+    file_dir = {}
+
+    for line, file, func in line_context:
+        if file not in file_dir:
+            file_dir[file] = {}
+        if func not in file_dir[file]:
+            file_dir[file][func] = []
+        file_dir[file][func].append(line)
+
+    gathered_context = []
+    for file, funcs in file_dir.items():
+        for func, lines in funcs.items():
+            gathered_requested_lines = "\n".join(lines)
+            gathered_context.append((gathered_requested_lines, file, func))
+    return gathered_context
 
 
 def request_for_context_lines(function_search, commit_hash, context_line_codes, patch):
@@ -838,6 +903,7 @@ def request_for_context_lines(function_search, commit_hash, context_line_codes, 
                     functions_declarations, context_line, definitions
                 )
 
+    functions_declarations = gather_line_context(functions_declarations)
     return functions_declarations
 
 
