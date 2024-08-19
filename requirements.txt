@@ -4,7 +4,7 @@ boto3==1.34.158
 imbalanced-learn==0.12.3
 langchain==0.2.12
 langchain-community==0.2.11
-langchain-openai==0.1.21
+langchain-openai==0.1.22
 libmozdata==0.2.6
 lmdb==1.5.1
 lxml-html-clean==0.2.0
