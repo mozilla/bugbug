@@ -9,7 +9,7 @@ libmozdata==0.2.6
 lmdb==1.5.1
 lxml-html-clean==0.2.0
 markdown2==2.5.0
-matplotlib==3.9.1.post1
+matplotlib==3.9.2
 mercurial==6.8.1
 microannotate==0.0.24
 mozci==2.4.1
