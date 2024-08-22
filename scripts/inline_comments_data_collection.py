@@ -13,7 +13,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 os.makedirs("patches", exist_ok=True)
-os.makedirs("comments", exist_ok=True)
 os.makedirs("dataset", exist_ok=True)
 
 api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
@@ -69,23 +68,6 @@ def get_diff_info_from_phid(phid):
 def find_bugid_from_revision_phid(phid):
     revision = api.load_revision(rev_phid=phid)
     return revision["fields"]["bugzilla.bug-id"]
-
-
-def download_inline_comments():
-    for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
-        save_comments_to_file(patch_id, comments)
-    return
-
-
-def save_comments_to_file(patch_id, comments):
-    resolved_comments = [comment for comment in comments if comment.is_done]
-
-    file_path = f"comments/{patch_id}.json"
-    if os.path.exists(file_path) or not resolved_comments:
-        return
-
-    with open(file_path, "w") as f:
-        json.dump([comment.__dict__ for comment in resolved_comments], f, indent=4)
 
 
 def find_recent_update(transactions, comment_date_modified):
