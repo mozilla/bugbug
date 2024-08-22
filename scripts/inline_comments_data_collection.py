@@ -116,49 +116,48 @@ def to_int(value):
 
 
 def process_comments(patch_threshold, diff_length_threshold, dataset_file_handle):
-    comments_dir = "comments"
     patch_count = 0
-    for file_name in os.listdir(comments_dir):
-        file_path = os.path.join(comments_dir, file_name)
-        with open(file_path, "r") as f:
-            patch_id = int(file_name.replace(".json", ""))
-            transactions = find_transactions_from_patch(patch_id)
 
-            comments = json.load(f)
-            for comment in comments:
-                comment_date_modified = comment["date_modified"]
-                most_recent_update = find_recent_update(
-                    transactions, comment_date_modified
-                )
-                if not most_recent_update:
-                    continue
+    for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
+        transactions = find_transactions_from_patch(patch_id)
 
-                fix_patch_id, revision_phid = get_diff_info_from_phid(
-                    most_recent_update["fields"]["new"]
-                )
+        resolved_comments = [comment for comment in comments if comment.is_done]
 
-                # If the most recent patch is the original patch itself, skip it
-                if fix_patch_id == patch_id:
-                    continue
+        if not resolved_comments:
+            continue
 
-                bug_id = find_bugid_from_revision_phid(phid=revision_phid)
-                review_data.load_patch_by_id(fix_patch_id)
+        for comment in comments:
+            comment_date_modified = comment.date_modified
+            most_recent_update = find_recent_update(transactions, comment_date_modified)
+            if not most_recent_update:
+                continue
 
-                with open(f"patches/{fix_patch_id}.patch", "r") as f:
-                    patch_diff = f.read()
+            fix_patch_id, revision_phid = get_diff_info_from_phid(
+                most_recent_update["fields"]["new"]
+            )
 
-                if len(patch_diff) > diff_length_threshold:
-                    continue
+            # If the most recent patch is the original patch itself, skip it
+            if fix_patch_id == patch_id:
+                continue
 
-                data = {
-                    "bug_id": to_int(bug_id),
-                    "revision_phid": revision_phid,
-                    "initial_patch_id": to_int(patch_id),
-                    "fix_patch_id": to_int(fix_patch_id),
-                    "comment": comment,
-                    "fix_patch_diff": patch_diff,
-                }
-                save_to_dataset(data, dataset_file_handle)
+            bug_id = find_bugid_from_revision_phid(phid=revision_phid)
+            review_data.load_patch_by_id(fix_patch_id)
+
+            with open(f"patches/{fix_patch_id}.patch", "r") as f:
+                patch_diff = f.read()
+
+            if len(patch_diff) > diff_length_threshold:
+                continue
+
+            data = {
+                "bug_id": to_int(bug_id),
+                "revision_phid": revision_phid,
+                "initial_patch_id": to_int(patch_id),
+                "fix_patch_id": to_int(fix_patch_id),
+                "comment": comment.__dict__,
+                "fix_patch_diff": patch_diff,
+            }
+            save_to_dataset(data, dataset_file_handle)
 
         patch_count += 1
         if patch_count >= patch_threshold:
@@ -166,8 +165,6 @@ def process_comments(patch_threshold, diff_length_threshold, dataset_file_handle
 
 
 if __name__ == "__main__":
-    download_inline_comments()
-
     dataset_file_path = "dataset/inline_comment_dataset.json"
     with open(dataset_file_path, "a") as dataset_file_handle:
         process_comments(
