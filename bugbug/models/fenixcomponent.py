@@ -90,8 +90,10 @@ class FenixComponentModel(BugModel):
             if bug_data["product"] != "Fenix" and bug_data["product"] != "GeckoView":
                 continue
 
-            # Exclude 'Fenix::General' because it contains bugs that may belong to other components, thus introducing unwanted noise.
-            # Include 'GeckoView::General' because the model is intended to either predict Fenix components or reclassify Fenix bugs to GeckoView.
+            # Exclude 'General' because it contains bugs that may belong to
+            # other components, thus introducing noise. However, include
+            # 'GeckoView::General' because the model should be able to move
+            # bugs to GeckoView.
             if (
                 bug_data["component"] == "General"
                 and bug_data["product"] != "GeckoView"
