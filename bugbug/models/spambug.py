@@ -93,7 +93,10 @@ class SpamBugModel(BugModel):
     def get_labels(self):
         classes = {}
 
-        for bug_data in bugzilla.get_bugs(include_invalid=True):
+        for bug_data in bugzilla.get_bugs(
+            include_invalid=True,
+            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+        ):
             bug_id = bug_data["id"]
 
             # Skip bugs filed by Mozillians, since we are sure they are not spam.
