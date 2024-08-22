@@ -85,11 +85,19 @@ class FenixComponentModel(BugModel):
         date_limit = datetime.now(timezone.utc) - relativedelta(years=2)
 
         for bug_data in bugzilla.get_bugs():
-            if bug_data["product"] != "Fenix":
+            # We want the model to be aware of GeckoView bugs, as it is common
+            # for bugs filed under Fenix to end up in GeckoView.
+            if bug_data["product"] != "Fenix" and bug_data["product"] != "GeckoView":
                 continue
 
-            # Exclude 'General' because it contains bugs that may belong to other components, thus introducing noise.
-            if bug_data["component"] == "General":
+            # Exclude 'General' because it contains bugs that may belong to
+            # other components, thus introducing noise. However, include
+            # 'GeckoView::General' because the model should be able to move
+            # bugs to GeckoView.
+            if (
+                bug_data["component"] == "General"
+                and bug_data["product"] != "GeckoView"
+            ):
                 continue
 
             if dateutil.parser.parse(bug_data["creation_time"]) < date_limit:
