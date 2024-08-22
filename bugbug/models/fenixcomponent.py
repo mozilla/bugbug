@@ -85,7 +85,8 @@ class FenixComponentModel(BugModel):
         date_limit = datetime.now(timezone.utc) - relativedelta(years=2)
 
         for bug_data in bugzilla.get_bugs():
-            # Include GeckoView bugs as they are closely related to Fenix.
+            # We want the model to be aware of GeckoView bugs, as it is common
+            # for bugs filed under Fenix to end up in GeckoView.
             if bug_data["product"] != "Fenix" and bug_data["product"] != "GeckoView":
                 continue
 
