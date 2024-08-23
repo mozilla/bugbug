@@ -85,10 +85,6 @@ def find_recent_update(transactions, comment_date_modified):
     return most_recent_update
 
 
-def save_to_dataset(data, dataset_file_handle):
-    dataset_file_handle.write(json.dumps(data) + "\n")
-
-
 def to_int(value):
     if not value:
         return None
@@ -97,7 +93,7 @@ def to_int(value):
     return value
 
 
-def process_comments(patch_threshold, diff_length_threshold, dataset_file_handle):
+def process_comments(patch_threshold, diff_length_threshold):
     patch_count = 0
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
@@ -139,18 +135,19 @@ def process_comments(patch_threshold, diff_length_threshold, dataset_file_handle
                 "comment": comment.__dict__,
                 "fix_patch_diff": patch_diff,
             }
-            save_to_dataset(data, dataset_file_handle)
+            yield data
 
         patch_count += 1
         if patch_count >= patch_threshold:
             break
 
 
-if __name__ == "__main__":
+def main():
     dataset_file_path = "dataset/inline_comment_dataset.json"
     with open(dataset_file_path, "a") as dataset_file_handle:
-        process_comments(
-            patch_threshold=250,
-            diff_length_threshold=5000,
-            dataset_file_handle=dataset_file_handle,
-        )
+        for data in process_comments(patch_threshold=250, diff_length_threshold=5000):
+            dataset_file_handle.write(json.dumps(data) + "\n")
+
+
+if __name__ == "__main__":
+    main()
