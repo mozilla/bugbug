@@ -119,7 +119,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 continue
 
             bug_id = find_bugid_from_revision_phid(phid=revision_phid)
-            review_data.load_patch_by_id(fix_patch_id)
+            review_data.load_raw_diff_by_id(fix_patch_id)
 
             with open(f"patches/{fix_patch_id}.patch", "r") as f:
                 patch_diff = f.read()
