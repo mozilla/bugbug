@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import re
 
+import requests
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug.tools.code_review import PhabricatorReviewData
@@ -65,9 +67,29 @@ def get_diff_info_from_phid(phid):
     return diffs[0]["id"], diffs[0]["revisionPHID"]
 
 
-def find_bugid_from_revision_phid(phid):
+def find_details_from_revision_phid(phid):
     revision = api.load_revision(rev_phid=phid)
-    return revision["fields"]["bugzilla.bug-id"]
+    return revision["id"], revision["fields"]["bugzilla.bug-id"]
+
+
+def find_previous_patch_id(revision_phid, current_patch_id):
+    # Retrieve all diffs associated with the revision
+    diffs = api.search_diffs(revision_phid=revision_phid)
+
+    # Sort the diffs by ID to ensure they are in the correct order
+    sorted_diffs = sorted(diffs, key=lambda x: x["id"])
+
+    # Find the patch right before the current patch
+    previous_patch_id = None
+    for i, diff in enumerate(sorted_diffs):
+        if diff["id"] == current_patch_id and i > 0:
+            previous_patch_id = sorted_diffs[i - 1]["id"]
+            break
+
+    if not previous_patch_id:
+        raise NoDiffsFoundException(current_patch_id)
+
+    return previous_patch_id
 
 
 def find_recent_update(transactions, comment_date_modified):
@@ -91,6 +113,26 @@ def to_int(value):
     if not isinstance(value, int):
         return int(value)
     return value
+
+
+def fetch_diff_from_url(revision_id, vs_diff_id, fix_patch_id):
+    url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={vs_diff_id}&id={fix_patch_id}&download=true"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.text
+    else:
+        raise Exception(f"Failed to download diff from URL: {url}")
+
+
+def extract_relevant_diff(patch_diff, filename):
+    # Regular expression to capture the file diff section that matches the filename
+    file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
+    match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
+
+    if match:
+        return match.group(0)
+    else:
+        return None
 
 
 def process_comments(patch_threshold, diff_length_threshold):
@@ -118,24 +160,39 @@ def process_comments(patch_threshold, diff_length_threshold):
             if fix_patch_id == patch_id:
                 continue
 
-            bug_id = find_bugid_from_revision_phid(phid=revision_phid)
-            review_data.load_raw_diff_by_id(fix_patch_id)
+            revision_id, bug_id = find_details_from_revision_phid(phid=revision_phid)
 
-            with open(f"patches/{fix_patch_id}.patch", "r") as f:
-                patch_diff = f.read()
+            try:
+                previous_patch_id = find_previous_patch_id(revision_phid, fix_patch_id)
+            except Exception as e:
+                logger.error(f"Failed to find previous patch: {e}")
+                continue
+
+            try:
+                patch_diff = fetch_diff_from_url(
+                    revision_id, previous_patch_id, fix_patch_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to fetch diff: {e}")
+                continue
 
             if len(patch_diff) > diff_length_threshold:
                 continue
 
-            data = {
-                "bug_id": to_int(bug_id),
-                "revision_phid": revision_phid,
-                "initial_patch_id": to_int(patch_id),
-                "fix_patch_id": to_int(fix_patch_id),
-                "comment": comment.__dict__,
-                "fix_patch_diff": patch_diff,
-            }
-            yield data
+            relevant_diff = extract_relevant_diff(patch_diff, comment.filename)
+
+            if relevant_diff:
+                data = {
+                    "bug_id": to_int(bug_id),
+                    "revision_id": to_int(revision_id),
+                    "revision_phid": revision_phid,
+                    "initial_patch_id": to_int(patch_id),
+                    "fix_patch_id": to_int(fix_patch_id),
+                    "previous_patch_id": to_int(previous_patch_id),
+                    "comment": comment.__dict__,
+                    "fix_patch_diff": relevant_diff,
+                }
+                yield data
 
         patch_count += 1
         if patch_count >= patch_threshold:
@@ -143,9 +200,9 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 
 def main():
-    dataset_file_path = "dataset/inline_comment_dataset.json"
+    dataset_file_path = "dataset/inline_comment_dataset2.json"
     with open(dataset_file_path, "a") as dataset_file_handle:
-        for data in process_comments(patch_threshold=250, diff_length_threshold=5000):
+        for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
             dataset_file_handle.write(json.dumps(data) + "\n")
 
 
