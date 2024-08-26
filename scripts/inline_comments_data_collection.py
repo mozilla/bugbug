@@ -73,13 +73,10 @@ def find_details_from_revision_phid(phid):
 
 
 def find_previous_patch_id(revision_phid, current_patch_id):
-    # Retrieve all diffs associated with the revision
     diffs = api.search_diffs(revision_phid=revision_phid)
 
-    # Sort the diffs by ID to ensure they are in the correct order
     sorted_diffs = sorted(diffs, key=lambda x: x["id"])
 
-    # Find the patch right before the current patch
     previous_patch_id = None
     for i, diff in enumerate(sorted_diffs):
         if diff["id"] == current_patch_id and i > 0:
