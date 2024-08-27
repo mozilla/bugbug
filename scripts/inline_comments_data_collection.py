@@ -93,12 +93,9 @@ def find_recent_update(transactions, comment_date_modified):
         if transaction["type"] == "update"
         and transaction["dateModified"] <= comment_date_modified
     ]
-    if not updates:
-        return None
-    most_recent_update = max(
-        updates, key=lambda transaction: transaction["dateModified"]
+    return max(
+        updates, key=lambda transaction: transaction["dateModified"], default=None
     )
-    return most_recent_update
 
 
 def fetch_diff_from_url(revision_id, vs_diff_id, fix_patch_id):
