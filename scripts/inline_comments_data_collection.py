@@ -14,9 +14,6 @@ review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-os.makedirs("patches", exist_ok=True)
-os.makedirs("dataset", exist_ok=True)
-
 api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
 
 
@@ -104,14 +101,6 @@ def find_recent_update(transactions, comment_date_modified):
     return most_recent_update
 
 
-def to_int(value):
-    if not value:
-        return None
-    if not isinstance(value, int):
-        return int(value)
-    return value
-
-
 def fetch_diff_from_url(revision_id, vs_diff_id, fix_patch_id):
     url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={vs_diff_id}&id={fix_patch_id}&download=true"
     response = requests.get(url)
@@ -179,12 +168,12 @@ def process_comments(patch_threshold, diff_length_threshold):
 
             if relevant_diff:
                 data = {
-                    "bug_id": to_int(bug_id),
-                    "revision_id": to_int(revision_id),
+                    "bug_id": bug_id,
+                    "revision_id": revision_id,
                     "revision_phid": revision_phid,
-                    "initial_patch_id": to_int(patch_id),
-                    "fix_patch_id": to_int(fix_patch_id),
-                    "previous_patch_id": to_int(previous_patch_id),
+                    "initial_patch_id": patch_id,
+                    "fix_patch_id": fix_patch_id,
+                    "previous_patch_id": previous_patch_id,
                     "comment": comment.__dict__,
                     "fix_patch_diff": relevant_diff,
                 }
@@ -196,6 +185,8 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 
 def main():
+    os.makedirs("patches", exist_ok=True)
+    os.makedirs("dataset", exist_ok=True)
     dataset_file_path = "dataset/inline_comment_dataset2.json"
     with open(dataset_file_path, "a") as dataset_file_handle:
         for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
