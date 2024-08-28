@@ -753,6 +753,9 @@ def parse_text_for_dict(text):
 def len_common_path(f1, f2):
     """Find length of the common path."""
     f1_subsystems = f1.split("/")
+    if f1 == f2:
+        return len(f1_subsystems)
+
     f2_subsystems = f2.split("/")
 
     max_common_path_length = next(
