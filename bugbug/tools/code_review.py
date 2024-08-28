@@ -856,7 +856,6 @@ def gather_line_context(line_context):
     file_dir = {}
 
     for line, file, func in line_context:
-        func = "\n".join(func) if isinstance(func, list) else func
         if file not in file_dir:
             file_dir[file] = {}
         if func not in file_dir[file]:
