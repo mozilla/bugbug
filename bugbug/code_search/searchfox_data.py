@@ -408,7 +408,7 @@ class FunctionSearchSearchfoxData(FunctionSearch):
                     definition["name"],
                     definition["target_line"],
                     definition_path,
-                    source,
+                    "\n".join(source),
                 )
             )
 

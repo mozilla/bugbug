@@ -134,7 +134,7 @@ class FunctionSearchSearchfoxAPI(FunctionSearch):
                     definition["name"],
                     definition["start"],
                     definition["path"],
-                    source,
+                    "\n".join(source),
                 )
             )
 
