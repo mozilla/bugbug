@@ -64,16 +64,9 @@ class FunctionSearchMozilla(FunctionSearch):
         # TODO: If the function is in a JS file and we found its definition in both JS and C++ files, use the definition in JS file.
         # TODO: If the function is in a non-test file and we found its definition in both test and non-test files, use the definition in the non-test file (and the opposite for functions in test files)
 
-        found_perfect = None
-        for func in result:
-            if func.name == function_name:
-                assert found_perfect is None, "Found two functions with the same name"
-                found_perfect = func
+        perfect_match = [func for func in result if func.name == function_name]
 
-        if found_perfect is not None:
-            return [found_perfect]
-        else:
-            return result
+        return perfect_match if perfect_match else result
 
     def get_function_by_line(
         self, commit_hash: str, path: str, line: int

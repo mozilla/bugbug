@@ -29,7 +29,9 @@ from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 
-def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
+def get_tool_variants(
+    variants: list[str] | None = None,
+) -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
 
     Returns:
@@ -38,38 +40,70 @@ def get_tool_variants() -> list[tuple[str, code_review.CodeReviewTool]]:
     """
     llm = generative_model_tool.create_llm("openai")
 
-    def get_file(commit_hash, path):
-        r = requests.get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+    def is_variant_selected(*target_variants):
+        return variants is None or any(
+            target_variant in variants for target_variant in target_variants
         )
-        r.raise_for_status()
-        return r.text
 
-    repo_dir = "../mozilla-unified"
+    # Step 1: we start with instantiating the dependencies based on the selected
+    # variants.
 
-    function_search = FunctionSearchMozilla(repo_dir, get_file, True)
+    if is_variant_selected("CONTEXT", "RAG and CONTEXT"):
 
-    vector_db = QdrantVectorDB("diff_comments")
-    review_comments_db = code_review.ReviewCommentsDB(vector_db)
+        def get_file(commit_hash, path):
+            r = requests.get(
+                f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+            )
+            r.raise_for_status()
+            return r.text
 
-    return [
-        (
-            "With related comments",
-            code_review.CodeReviewTool(
-                llm=llm,
-                function_search=function_search,
-                review_comments_db=review_comments_db,
-            ),
-        ),
-        (
-            "With static list of comments",
-            code_review.CodeReviewTool(
-                llm=llm,
-                function_search=function_search,
-                review_comments_db=None,
-            ),
-        ),
-    ]
+        repo_dir = "../mozilla-unified"
+        function_search = FunctionSearchMozilla(repo_dir, get_file, True)
+
+    if is_variant_selected("RAG", "RAG and CONTEXT"):
+        vector_db = QdrantVectorDB("diff_comments")
+        review_comments_db = code_review.ReviewCommentsDB(vector_db)
+
+    # Step 2: we create the selected tool variants.
+
+    tool_variants = []
+    if is_variant_selected("RAG"):
+        tool_variants.append(
+            (
+                "RAG",
+                code_review.CodeReviewTool(
+                    llm=llm,
+                    function_search=None,
+                    review_comments_db=review_comments_db,
+                ),
+            )
+        )
+
+    if is_variant_selected("CONTEXT"):
+        tool_variants.append(
+            (
+                "CONTEXT",
+                code_review.CodeReviewTool(
+                    llm=llm,
+                    function_search=function_search,
+                    review_comments_db=None,
+                ),
+            )
+        )
+
+    if is_variant_selected("RAG and CONTEXT"):
+        tool_variants.append(
+            (
+                "RAG and CONTEXT",
+                code_review.CodeReviewTool(
+                    llm=llm,
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                ),
+            )
+        )
+
+    return tool_variants
 
 
 def get_review_requests_sample(since: timedelta, limit: int):
@@ -120,13 +154,13 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def main():
+def main(variants=None, review_request_ids=None):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
     ]()
 
-    tool_variants = get_tool_variants()
+    tool_variants = get_tool_variants(variants)
 
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
@@ -135,7 +169,13 @@ def main():
         f"Comment ({variant_name})" for variant_name, _ in tool_variants
     ]
 
-    for review_request_id in get_review_requests_sample(timedelta(days=60), 3):
+    sample_ids = (
+        review_request_ids
+        if review_request_ids
+        else get_review_requests_sample(timedelta(days=60), 3)
+    )
+
+    for review_request_id in sample_ids:
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
         review_request = review_data.get_review_request_by_id(review_request_id)
@@ -150,7 +190,12 @@ def main():
         all_variants_results = []
         for variant_name, tool in tool_variants:
             print(f"\n\nVariant: {variant_name}\n")
-            comments = tool.run(patch)
+            try:
+                comments = tool.run(patch)
+            except code_review.FileNotInPatchError as e:
+                print("Error while running the tool:", e)
+                continue
+
             print_prettified_comments(comments)
 
             all_variants_results.extend(
@@ -182,4 +227,27 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-v",
+        "--variant",
+        dest="variants",
+        action="append",
+        help="if specified, run only the selected variant(s)",
+        metavar="VARIANT",
+    )
+    parser.add_argument(
+        "-r",
+        "--revision-id",
+        dest="review_request_ids",
+        action="append",
+        help="if specified, run only the selected Revision ID(s)",
+        metavar="REVISION_ID",
+        type=int,
+    )
+
+    args = parser.parse_args()
+
+    main(args.variants, args.review_request_ids)
