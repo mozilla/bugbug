@@ -184,7 +184,12 @@ def main(variants=None):
         all_variants_results = []
         for variant_name, tool in tool_variants:
             print(f"\n\nVariant: {variant_name}\n")
-            comments = tool.run(patch)
+            try:
+                comments = tool.run(patch)
+            except code_review.FileNotInPatchError as e:
+                print("Error while running the tool:", e)
+                continue
+
             print_prettified_comments(comments)
 
             all_variants_results.extend(
