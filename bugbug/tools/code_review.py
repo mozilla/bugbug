@@ -123,7 +123,7 @@ Adopt the template below as the report format:
         "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
     }}
 ]
-Do not report any explanation about your choice.
+Do not report any explanation about your choice. Only return a valid JSON list.
 
 Review:
 {review}
