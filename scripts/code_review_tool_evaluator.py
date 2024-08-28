@@ -154,7 +154,7 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def main(variants=None):
+def main(variants=None, review_request_ids=None):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
@@ -169,7 +169,13 @@ def main(variants=None):
         f"Comment ({variant_name})" for variant_name, _ in tool_variants
     ]
 
-    for review_request_id in get_review_requests_sample(timedelta(days=60), 3):
+    sample_ids = (
+        review_request_ids
+        if review_request_ids
+        else get_review_requests_sample(timedelta(days=60), 3)
+    )
+
+    for review_request_id in sample_ids:
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
         review_request = review_data.get_review_request_by_id(review_request_id)
@@ -232,7 +238,16 @@ if __name__ == "__main__":
         help="if specified, run only the selected variant(s)",
         metavar="VARIANT",
     )
+    parser.add_argument(
+        "-r",
+        "--revision-id",
+        dest="review_request_ids",
+        action="append",
+        help="if specified, run only the selected Revision ID(s)",
+        metavar="REVISION_ID",
+        type=int,
+    )
 
     args = parser.parse_args()
 
-    main(args.variants)
+    main(args.variants, args.review_request_ids)
