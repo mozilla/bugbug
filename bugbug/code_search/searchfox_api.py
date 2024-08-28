@@ -88,8 +88,15 @@ def find_function_for_line(commit_hash, path, line):
 def search(commit_hash, symbol_name):
     r = requests.get(f"https://searchfox.org/mozilla-central/search?q={symbol_name}")
     r.raise_for_status()
-    after_results = r.text[r.text.index("var results = ") + len("var results = ") :]
-    results = json.loads(after_results[: after_results.index(";\n")])
+
+    results = r.text
+    results = results.split("var results = ", 1)[1]
+    results = results.split(";\n", 1)[0]
+
+    # A workaround to fix: https://github.com/mozilla/bugbug/issues/4448
+    results = results.replace(r"<\s", r"<\\s")
+
+    results = json.loads(results)
 
     definitions = []
     for type_ in ["normal", "thirdparty", "test"]:
