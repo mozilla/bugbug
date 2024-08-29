@@ -6,9 +6,9 @@ import re
 import requests
 from libmozdata.phabricator import PhabricatorAPI
 
-from bugbug.db import register, upload
+from bugbug import phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret
+from bugbug.utils import get_secret, zstd_compress
 
 review_data = PhabricatorReviewData()
 
@@ -159,7 +159,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 logger.error(f"Failed to fetch diff: {e}")
                 continue
 
-            if len(patch_diff) > diff_length_threshold:
+            if len(patch_diff) > diff_length_threshold and diff_length_threshold != 0:
                 continue
 
             relevant_diff = extract_relevant_diff(patch_diff, comment.filename)
@@ -187,24 +187,13 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 def main():
     os.makedirs("patches", exist_ok=True)
-    os.makedirs("dataset", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
 
-    dataset_file_path = "dataset/inline_comment_dataset.json"
-    dataset_url = "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_comments.latest/artifacts/public/inline_comment_dataset.json.zst"
-    dataset_version = 1
-
-    with open(dataset_file_path, "a") as dataset_file_handle:
-        for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
+    with open(phabricator.FIXED_COMMENTS_DB, "a") as dataset_file_handle:
+        for data in process_comments(patch_threshold=0, diff_length_threshold=0):
             dataset_file_handle.write(json.dumps(data) + "\n")
 
-    register(
-        path=dataset_file_path,
-        url=dataset_url,
-        version=dataset_version,
-        support_files=[],
-    )
-
-    upload(path=dataset_file_path)
+    zstd_compress(phabricator.FIXED_COMMENTS_DB)
 
 
 if __name__ == "__main__":
