@@ -1,8 +1,8 @@
-import json
 import logging
 import os
 import re
 
+import orjson
 import requests
 from libmozdata.phabricator import PhabricatorAPI
 
@@ -186,9 +186,9 @@ def main():
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
-    with open(phabricator.FIXED_COMMENTS_DB, "a") as dataset_file_handle:
+    with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
-            dataset_file_handle.write(json.dumps(data) + "\n")
+            dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
 
