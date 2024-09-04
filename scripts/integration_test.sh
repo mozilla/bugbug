@@ -28,11 +28,6 @@ test -d ${CACHE_DIR:-cache}/mozilla-central
 ls -lh
 ls -lh data
 
-# Then generate a sample fixed comment dataset
-bugbug-fixed-comments
-ls -lh
-ls -lh data
-
 # Then train a bug model
 bugbug-train defectenhancementtask --limit 500 --no-download
 
