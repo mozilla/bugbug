@@ -15,6 +15,7 @@ import pandas as pd
 from dateutil import parser
 from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
+from publicsuffix2 import PublicSuffixList
 from pygments.lexers import get_all_lexers
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -934,11 +935,6 @@ class FilePaths(SingleBugFeature):
             "http://",
             "https://",
             "www.",
-            ".com",
-            ".org",
-            ".net",
-            ".edu",
-            ".gov",
             "@",
         ]
 
@@ -955,9 +951,19 @@ class FilePaths(SingleBugFeature):
         extension_pattern_string = "|".join(
             re.escape(ext) for ext in self.valid_extensions
         )
+
         self.extension_pattern = re.compile(
             rf"\.({extension_pattern_string})(?![a-zA-Z])"
         )
+
+        psl = PublicSuffixList()
+        tlds = set()
+        for entry in psl.tlds:
+            if "." not in entry:
+                tlds.add("." + entry)
+
+        filtered_tlds = [tld for tld in tlds if tld[1:] not in self.valid_extensions]
+        self.non_file_path_keywords.extend(filtered_tlds)
 
     def remove_urls(self, text: str) -> str:
         for keyword in self.non_file_path_keywords:
