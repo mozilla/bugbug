@@ -159,7 +159,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 logger.error(f"Failed to fetch diff: {e}")
                 continue
 
-            if len(patch_diff) > diff_length_threshold and diff_length_threshold != 0:
+            if len(patch_diff) > diff_length_threshold:
                 continue
 
             relevant_diff = extract_relevant_diff(patch_diff, comment.filename)
@@ -177,9 +177,6 @@ def process_comments(patch_threshold, diff_length_threshold):
                 }
                 yield data
 
-        if patch_threshold == 0:
-            continue
-
         patch_count += 1
         if patch_count >= patch_threshold:
             break
@@ -190,7 +187,7 @@ def main():
     os.makedirs("data", exist_ok=True)
 
     with open(phabricator.FIXED_COMMENTS_DB, "a") as dataset_file_handle:
-        for data in process_comments(patch_threshold=0, diff_length_threshold=0):
+        for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
             dataset_file_handle.write(json.dumps(data) + "\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
