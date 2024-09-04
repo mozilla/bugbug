@@ -62,7 +62,6 @@ setup(
             "bugbug-generate-landings-risk-report = scripts.generate_landings_risk_report:main",
             "bugbug-shadow-scheduler-stats = scripts.shadow_scheduler_stats:main",
             "bugbug-data-github = scripts.github_issue_retriever:main",
-            "bugbug-fixed-comments = scripts.inline_comments_data_collection:main",
         ]
     },
     classifiers=[
