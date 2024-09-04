@@ -248,7 +248,7 @@ tasks:
         maxRunTime: 86400
         image: mozilla/bugbug-base:${version}
         command:
-          - "bugbug-data-bugzilla"
+          - "bugbug-fixed-comments"
 
         artifacts:
           public/bugs.json.zst:
