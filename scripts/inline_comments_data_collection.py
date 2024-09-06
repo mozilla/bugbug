@@ -202,18 +202,14 @@ def main():
 
     limit = args.limit if args.limit is not None else float("inf")
     diff_length_limit = (
-        args.diff_length_limit
-        if args.diff_length_threshold is not None
-        else float("inf")
+        args.diff_length_limit if args.diff_length_limit is not None else float("inf")
     )
 
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(
-            patch_threshold=limit, diff_length_threshold=diff_length_limit
-        ):
+        for data in process_comments(limit=limit, diff_length_limit=diff_length_limit):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
