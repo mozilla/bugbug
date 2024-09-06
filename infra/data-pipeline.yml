@@ -234,6 +234,45 @@ tasks:
         owner: release-mgmt-analysis@mozilla.com
         source: ${repository}/raw/master/data-pipeline.yml
 
+    - ID: fixed-comments-retrieval
+      created: { $fromNow: "" }
+      deadline: { $fromNow: "2 days" }
+      expires: { $fromNow: "1 year" }
+      provisionerId: proj-bugbug
+      workerType: compute-small
+      dependencies:
+        - revisions-retrieval
+      payload:
+        env:
+          TC_SECRET_ID: project/bugbug/production
+        maxRunTime: 86400
+        image: mozilla/bugbug-base:${version}
+        command:
+          - "bugbug-fixed-comments"
+
+        artifacts:
+          public/bugs.json.zst:
+            path: /data/fixed_comments.json.zst
+            type: file
+          public/bugs.json.version:
+            path: /data/fixed_comments.json.version
+            type: file
+
+        features:
+          taskclusterProxy: true
+      scopes:
+        - "secrets:get:project/bugbug/production"
+      routes:
+        - notify.email.release-mgmt-analysis@mozilla.com.on-failed
+        - notify.irc-channel.#bugbug.on-failed
+        - index.project.bugbug.fixed_comments.${version}
+        - index.project.bugbug.fixed_comments.latest
+      metadata:
+        name: bugbug fixed comments retrieval
+        description: bugbug fixed comments retrieval
+        owner: release-mgmt-analysis@mozilla.com
+        source: ${repository}/raw/master/data-pipeline.yml
+
     - ID: issues-retrieval
       created: { $fromNow: "" }
       deadline: { $fromNow: "2 days" }

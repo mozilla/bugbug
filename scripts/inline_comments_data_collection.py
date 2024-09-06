@@ -1,13 +1,14 @@
-import json
 import logging
 import os
 import re
 
+import orjson
 import requests
 from libmozdata.phabricator import PhabricatorAPI
 
+from bugbug import phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret
+from bugbug.utils import get_secret, zstd_compress
 
 review_data = PhabricatorReviewData()
 
@@ -183,11 +184,13 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 def main():
     os.makedirs("patches", exist_ok=True)
-    os.makedirs("dataset", exist_ok=True)
-    dataset_file_path = "dataset/inline_comment_dataset2.json"
-    with open(dataset_file_path, "a") as dataset_file_handle:
+    os.makedirs("data", exist_ok=True)
+
+    with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
-            dataset_file_handle.write(json.dumps(data) + "\n")
+            dataset_file_handle.write(orjson.dumps(data) + b"\n")
+
+    zstd_compress(phabricator.FIXED_COMMENTS_DB)
 
 
 if __name__ == "__main__":
