@@ -119,7 +119,7 @@ def extract_relevant_diff(patch_diff, filename):
         return None
 
 
-def process_comments(patch_threshold, diff_length_threshold):
+def process_comments(limit, diff_length_limit):
     patch_count = 0
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
@@ -160,7 +160,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 logger.error(f"Failed to fetch diff: {e}")
                 continue
 
-            if len(patch_diff) > diff_length_threshold:
+            if len(patch_diff) > diff_length_limit:
                 continue
 
             relevant_diff = extract_relevant_diff(patch_diff, comment.filename)
@@ -179,20 +179,20 @@ def process_comments(patch_threshold, diff_length_threshold):
                 yield data
 
         patch_count += 1
-        if patch_count >= patch_threshold:
+        if patch_count >= limit:
             break
 
 
 def main():
     parser = argparse.ArgumentParser(description="Process patch reviews.")
     parser.add_argument(
-        "--patch-threshold",
+        "--limit",
         type=int,
         default=None,
         help="Limit the number of patches to process. No limit if not specified.",
     )
     parser.add_argument(
-        "--diff-length-threshold",
+        "--diff-length-limit",
         type=int,
         default=None,
         help="Limit the maximum allowed diff length. No limit if not specified.",
@@ -200,11 +200,9 @@ def main():
 
     args = parser.parse_args()
 
-    patch_threshold = (
-        args.patch_threshold if args.patch_threshold is not None else float("inf")
-    )
-    diff_length_threshold = (
-        args.diff_length_threshold
+    limit = args.limit if args.limit is not None else float("inf")
+    diff_length_limit = (
+        args.diff_length_limit
         if args.diff_length_threshold is not None
         else float("inf")
     )
@@ -214,7 +212,7 @@ def main():
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(
-            patch_threshold=patch_threshold, diff_length_threshold=diff_length_threshold
+            patch_threshold=limit, diff_length_threshold=diff_length_limit
         ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 

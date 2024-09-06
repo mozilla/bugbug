@@ -23,7 +23,7 @@ ls -lh data
 rm data/commit*
 
 # Then generate a test dataset of fixed inline comments
-bugbug-fixed-comments --patch-threshold 150 --diff-length-threshold 1000
+bugbug-fixed-comments --limit 150 --diff-length-limit 1000
 ls -lh
 ls -lh data
 
