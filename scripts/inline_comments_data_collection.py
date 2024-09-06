@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import re
@@ -183,11 +184,38 @@ def process_comments(patch_threshold, diff_length_threshold):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Process patch reviews.")
+    parser.add_argument(
+        "--patch-threshold",
+        type=int,
+        default=None,
+        help="Limit the number of patches to process. No limit if not specified.",
+    )
+    parser.add_argument(
+        "--diff-length-threshold",
+        type=int,
+        default=None,
+        help="Limit the maximum allowed diff length. No limit if not specified.",
+    )
+
+    args = parser.parse_args()
+
+    patch_threshold = (
+        args.patch_threshold if args.patch_threshold is not None else float("inf")
+    )
+    diff_length_threshold = (
+        args.diff_length_threshold
+        if args.diff_length_threshold is not None
+        else float("inf")
+    )
+
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
+        for data in process_comments(
+            patch_threshold=patch_threshold, diff_length_threshold=diff_length_threshold
+        ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)

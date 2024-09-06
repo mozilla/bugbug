@@ -22,6 +22,14 @@ ls -lh data
 # Removes it to ensure the commit retrieval work as expected
 rm data/commit*
 
+# Then generate a test dataset of fixed inline comments
+bugbug-fixed-comments --patch-threshold 150 --diff-length-threshold 1000
+ls -lh
+ls -lh data
+
+# Remove DB to ensure it works as expected
+rm data/fixed_comments.json
+
 # Then retrieve a subset of commit data
 bugbug-data-commits --limit 500 "${CACHE_DIR:-cache}"
 test -d ${CACHE_DIR:-cache}/mozilla-central
