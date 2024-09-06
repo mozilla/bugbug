@@ -194,16 +194,14 @@ def main():
     parser.add_argument(
         "--diff-length-limit",
         type=int,
-        default=None,
+        default=1000,
         help="Limit the maximum allowed diff length. No limit if not specified.",
     )
 
     args = parser.parse_args()
 
-    limit = args.limit if args.limit is not None else float("inf")
-    diff_length_limit = (
-        args.diff_length_limit if args.diff_length_limit is not None else float("inf")
-    )
+    limit = args.limit or float("inf")
+    diff_length_limit = args.diff_length_limit or float("inf")
 
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
