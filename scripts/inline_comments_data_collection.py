@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import re
@@ -118,7 +119,7 @@ def extract_relevant_diff(patch_diff, filename):
         return None
 
 
-def process_comments(patch_threshold, diff_length_threshold):
+def process_comments(limit, diff_length_limit):
     patch_count = 0
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
@@ -159,7 +160,7 @@ def process_comments(patch_threshold, diff_length_threshold):
                 logger.error(f"Failed to fetch diff: {e}")
                 continue
 
-            if len(patch_diff) > diff_length_threshold:
+            if len(patch_diff) > diff_length_limit:
                 continue
 
             relevant_diff = extract_relevant_diff(patch_diff, comment.filename)
@@ -178,16 +179,35 @@ def process_comments(patch_threshold, diff_length_threshold):
                 yield data
 
         patch_count += 1
-        if patch_count >= patch_threshold:
+        if patch_count >= limit:
             break
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Process patch reviews.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit the number of patches to process. No limit if not specified.",
+    )
+    parser.add_argument(
+        "--diff-length-limit",
+        type=int,
+        default=1000,
+        help="Limit the maximum allowed diff length. No limit if not specified.",
+    )
+
+    args = parser.parse_args()
+
+    limit = args.limit or float("inf")
+    diff_length_limit = args.diff_length_limit or float("inf")
+
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(patch_threshold=1000, diff_length_threshold=5000):
+        for data in process_comments(limit=limit, diff_length_limit=diff_length_limit):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
