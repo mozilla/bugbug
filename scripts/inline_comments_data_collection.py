@@ -121,6 +121,7 @@ def extract_relevant_diff(patch_diff, filename):
 
 def process_comments(limit, diff_length_limit):
     patch_count = 0
+
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
         transactions = find_transactions_from_patch(patch_id)
 
