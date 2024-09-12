@@ -121,7 +121,6 @@ def extract_relevant_diff(patch_diff, filename):
 
 def process_comments(limit, diff_length_limit):
     patch_count = 0
-
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
         transactions = find_transactions_from_patch(patch_id)
 
@@ -194,8 +193,8 @@ def main():
     parser.add_argument(
         "--diff-length-limit",
         type=int,
-        default=1000,
-        help="Limit the maximum allowed diff length. No limit if not specified.",
+        default=10000,
+        help="Limit the maximum allowed diff length. Default 10000 if not specified.",
     )
 
     args = parser.parse_args()
