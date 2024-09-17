@@ -14,4 +14,4 @@ ENV LD_PRELOAD="libjemalloc.so.2"
 COPY infra/mozci_config.toml /root/.config/mozci/config.toml
 
 RUN --mount=type=bind,target=/tmp/bugbug,rw \
-	pip install --disable-pip-version-check --quiet --no-cache-dir /tmp/bugbug
+	pip install --disable-pip-version-check --no-cache-dir /tmp/bugbug
