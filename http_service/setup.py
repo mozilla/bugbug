@@ -18,6 +18,21 @@ def read_requirements(file_):
 
 install_requires = read_requirements("requirements.txt")
 
+installed_packages = [distribution.project_name for distribution in pkg_resources.working_set]
+
+print("pkg_resources.working_set")
+for package_info in pkg_resources.working_set:
+    print(package_info)
+
+print("pkg_resources.working_set.entries")
+for entry in pkg_resources.working_set.entries:
+    print(entry)
+
+import sys
+print("sys.path")
+for path in sys.path:
+    print(path)
+
 # Use same version as bugbug
 version = pkg_resources.get_distribution("bugbug").version
 
