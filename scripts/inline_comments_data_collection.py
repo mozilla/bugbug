@@ -194,8 +194,8 @@ def main():
     parser.add_argument(
         "--diff-length-limit",
         type=int,
-        default=1000,
-        help="Limit the maximum allowed diff length. No limit if not specified.",
+        default=10000,
+        help="Limit the maximum allowed diff length. Default 10000 if not specified.",
     )
 
     args = parser.parse_args()
