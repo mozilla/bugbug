@@ -8,6 +8,8 @@ RUN pip install --disable-pip-version-check --quiet --no-cache-dir -r /requireme
 
 # Setup http service as package
 COPY . /code/http_service
+# Use same version as bugbug
+RUN python -c "import importlib.metadata; print(importlib.metadata.version('bugbug'))" > /code/http_service/VERSION
 RUN pip install --disable-pip-version-check --quiet --no-cache-dir /code/http_service
 
 # Load the models

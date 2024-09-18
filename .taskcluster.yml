@@ -128,6 +128,7 @@ tasks:
                     cp infra/hgrc /etc/mercurial/hgrc.d/bugbug.rc &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off . &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off -r test-requirements.txt &&
+                    cp VERSION http_service/VERSION &&
                     pip install --disable-pip-version-check --no-cache-dir --progress-bar off ./http_service &&
                     hg clone -r 90302f015ac8dd8877ef3ee24b5a62541142378b https://hg.mozilla.org/hgcustom/version-control-tools /version-control-tools/ &&
                     pytest --cov=http_service http_service/tests/ -vvv &&
