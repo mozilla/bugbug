@@ -17,6 +17,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
+from importlib.metadata import PackageNotFoundError
 from typing import Any, Iterator
 
 import boto3
@@ -28,7 +29,6 @@ import requests
 import scipy
 import taskcluster
 import zstandard
-from pkg_resources import DistributionNotFound
 from requests.packages.urllib3.util.retry import Retry
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -238,7 +238,7 @@ def download_model(model_name: str) -> str:
     if not version:
         try:
             version = f"v{get_bugbug_version()}"
-        except DistributionNotFound:
+        except PackageNotFoundError:
             version = "latest"
 
     path = f"{model_name}model"

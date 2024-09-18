@@ -3,9 +3,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import importlib.metadata
 import os
 
-import pkg_resources
 from setuptools import find_packages, setup
 
 here = os.path.dirname(__file__)
@@ -19,7 +19,7 @@ def read_requirements(file_):
 install_requires = read_requirements("requirements.txt")
 
 # Use same version as bugbug
-version = pkg_resources.get_distribution("bugbug").version
+version = importlib.metadata.version("bugbug")
 
 setup(
     name="bugbug-http-service",
