@@ -7,7 +7,7 @@ langchain-community==0.2.12
 langchain-openai==0.1.22
 libmozdata==0.2.7
 lmdb==1.5.1
-lxml-html-clean==0.2.0
+lxml-html-clean==0.2.2
 markdown2==2.5.0
 matplotlib==3.9.2
 mercurial==6.8.1
