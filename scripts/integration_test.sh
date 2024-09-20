@@ -46,7 +46,7 @@ bugbug-train backout --limit 30000 --no-download
 # Then spin the http service up
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
 # up on Taskcluster
-cp VERSION http_service/VERSION &&
+cp VERSION http_service/VERSION
 pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service
 
 export REDIS_URL=redis://localhost:6379/4
