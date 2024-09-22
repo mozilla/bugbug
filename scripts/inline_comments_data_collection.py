@@ -7,7 +7,7 @@ import orjson
 import requests
 from libmozdata.phabricator import PhabricatorAPI
 
-from bugbug import db, phabricator
+from bugbug import phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret, zstd_compress
 
@@ -17,12 +17,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
-
-db.register(
-    phabricator.REVISIONS_DB,
-    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
-    4,
-)
 
 
 class NoDiffsFoundException(Exception):
