@@ -29,7 +29,7 @@ db.register(
 
 FIXED_COMMENTS_DB = "data/fixed_comments.json"
 db.register(
-    REVISIONS_DB,
+    FIXED_COMMENTS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.fixed_comments.latest/artifacts/public/fixed_comments.json.zst",
     1,
 )
