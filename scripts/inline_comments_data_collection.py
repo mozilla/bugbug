@@ -5,18 +5,15 @@ import re
 
 import orjson
 import requests
-from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret, zstd_compress
+from bugbug.utils import zstd_compress
 
 review_data = PhabricatorReviewData()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
 
 
 class NoDiffsFoundException(Exception):
