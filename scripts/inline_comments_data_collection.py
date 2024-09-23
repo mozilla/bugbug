@@ -84,8 +84,8 @@ def get_diff_info_from_phid(phid):
     return diffs[0]["id"], diffs[0]["revisionPHID"]
 
 
-def find_details_from_revision_phid(phid):
-    revision = api.load_revision(rev_phid=phid)
+def find_details_from_revision_phid(phid, revisions_map):
+    revision = revisions_map[phid]
     return revision["id"], revision["fields"]["bugzilla.bug-id"]
 
 
@@ -162,7 +162,9 @@ def process_comments(limit, diff_length_limit, revisions_map):
             if fix_patch_id == patch_id:
                 continue
 
-            revision_id, bug_id = find_details_from_revision_phid(phid=revision_phid)
+            revision_id, bug_id = find_details_from_revision_phid(
+                phid=revision_phid, revisions_map=revisions_map
+            )
 
             try:
                 previous_patch_id = find_previous_patch_id(revision_phid, fix_patch_id)
