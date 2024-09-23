@@ -47,16 +47,43 @@ def find_revision_from_patch(patch_id):
     return revision_phid
 
 
-def find_transactions_from_patch(patch_id):
-    revision_phid = find_revision_from_patch(patch_id)
-    transactions = api.request("transaction.search", objectIdentifier=revision_phid)[
-        "data"
-    ]
+def create_index(file_path, index_path):
+    index = {}
+    offset = 0
 
-    if not transactions:
+    with open(file_path, "rb") as file:
+        for line in file:
+            try:
+                entry = orjson.loads(line)
+                phid = entry.get("phid")
+                if phid:
+                    index[phid] = offset
+            except orjson.JSONDecodeError:
+                print(f"Error decoding JSON: {line}")
+            offset = file.tell()
+
+    with open(index_path, "wb") as index_file:
+        index_file.write(orjson.dumps(index))
+
+
+def find_transactions_from_patch(patch_id, revisions_index):
+    revision_phid = find_revision_from_patch(patch_id)
+    offset = revisions_index.get(revision_phid)
+
+    if offset is None:
         raise NoTransactionsFoundException(patch_id)
 
-    return transactions
+    with open(phabricator.REVISIONS_DB, "rb") as file:
+        file.seek(offset)
+        line = file.readline()
+
+        try:
+            entry = orjson.loads(line)
+            return entry.get("transactions")
+        except orjson.JSONDecodeError:
+            logger.error(f"Failed to decode JSON {line}")
+
+    raise NoTransactionsFoundException(patch_id)
 
 
 def get_diff_info_from_phid(phid):
@@ -119,11 +146,11 @@ def extract_relevant_diff(patch_diff, filename):
         return None
 
 
-def process_comments(limit, diff_length_limit):
+def process_comments(limit, diff_length_limit, revisions_index):
     patch_count = 0
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
-        transactions = find_transactions_from_patch(patch_id)
+        transactions = find_transactions_from_patch(patch_id, revisions_index)
 
         resolved_comments = [comment for comment in comments if comment.is_done]
 
@@ -206,8 +233,17 @@ def main():
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
+    create_index(phabricator.REVISIONS_DB, "data/revisions_index.json")
+
+    with open("data/revisions_index.json", "rb") as index_file:
+        revisions_index = orjson.loads(index_file.read())
+
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(limit=limit, diff_length_limit=diff_length_limit):
+        for data in process_comments(
+            limit=limit,
+            diff_length_limit=diff_length_limit,
+            revisions_index=revisions_index,
+        ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
