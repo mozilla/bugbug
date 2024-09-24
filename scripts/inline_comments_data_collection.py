@@ -36,7 +36,7 @@ class NoDiffFoundForPHIDException(Exception):
 
 def load_revisions_maps():
     diff_id_to_revision = {}
-    diff_phid_to_revision = {}
+    diff_phid_to_id = {}
 
     for revision in phabricator.get_revisions():
         for transaction in revision["transactions"]:
@@ -44,12 +44,11 @@ def load_revisions_maps():
                 continue
 
             diff_id_to_revision[transaction["fields"]["diff"]["id"]] = revision
-            diff_phid_to_revision[transaction["fields"]["diff"]["phid"]] = (
-                transaction["fields"]["diff"]["id"],
-                revision,
-            )
+            diff_phid_to_id[transaction["fields"]["diff"]["phid"]] = transaction[
+                "fields"
+            ]["diff"]["id"]
 
-    return diff_id_to_revision, diff_phid_to_revision
+    return diff_id_to_revision, diff_phid_to_id
 
 
 def find_details_from_revision_phid(phid, revisions_map):
@@ -89,12 +88,13 @@ def extract_relevant_diff(patch_diff, filename):
 
 
 def process_comments(
-    limit, diff_length_limit, diff_id_to_revisions_map, diff_phid_to_revisions_map
+    limit, diff_length_limit, diff_id_to_revisions_map, diff_phid_to_id
 ):
     patch_count = 0
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
-        transactions = diff_id_to_revisions_map[patch_id]["transactions"]
+        revision_info = diff_id_to_revisions_map[patch_id]
+        transactions = revision_info["transactions"]
 
         resolved_comments = [comment for comment in comments if comment.is_done]
 
@@ -107,25 +107,18 @@ def process_comments(
             if not most_recent_update:
                 continue
 
-            fix_patch_id = diff_phid_to_revisions_map.get(
-                most_recent_update["fields"].get("new"), [None]
-            )[0]
+            fix_patch_id = diff_phid_to_id.get(most_recent_update["fields"].get("new"))
 
             # If the  most recent patch doesn't exist or is the original patch itself, skip it
             if not fix_patch_id or fix_patch_id == patch_id:
                 continue
 
-            revision_info = diff_phid_to_revisions_map.get(
-                most_recent_update["fields"].get("new"), [None, {}]
-            )[1]
             revision_phid = revision_info.get("phid")
             revision_id = revision_info.get("id")
             bug_id = revision_info.get("fields", {}).get("bugzilla.bug-id")
 
             try:
-                previous_patch_id = diff_phid_to_revisions_map[
-                    most_recent_update["fields"]["old"]
-                ][0]
+                previous_patch_id = diff_phid_to_id[most_recent_update["fields"]["old"]]
             except Exception as e:
                 logger.error(f"Failed to find previous patch: {e}")
                 continue
@@ -184,14 +177,14 @@ def main():
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
-    diff_id_to_revisions_map, diff_phid_to_revisions_map = load_revisions_maps()
+    diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(
             limit=limit,
             diff_length_limit=diff_length_limit,
             diff_id_to_revisions_map=diff_id_to_revisions_map,
-            diff_phid_to_revisions_map=diff_phid_to_revisions_map,
+            diff_phid_to_id=diff_phid_to_id,
         ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
