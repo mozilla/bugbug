@@ -51,11 +51,6 @@ def load_revisions_maps():
     return diff_id_to_revision, diff_phid_to_id
 
 
-def find_details_from_revision_phid(phid, revisions_map):
-    revision = revisions_map[phid]
-    return revision["id"], revision["fields"]["bugzilla.bug-id"]
-
-
 def find_recent_update(transactions, comment_date_modified):
     updates = [
         transaction
@@ -87,10 +82,9 @@ def extract_relevant_diff(patch_diff, filename):
         return None
 
 
-def process_comments(
-    limit, diff_length_limit, diff_id_to_revisions_map, diff_phid_to_id
-):
+def process_comments(limit, diff_length_limit):
     patch_count = 0
+    diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
         revision_info = diff_id_to_revisions_map[patch_id]
@@ -109,13 +103,13 @@ def process_comments(
 
             fix_patch_id = diff_phid_to_id.get(most_recent_update["fields"].get("new"))
 
-            # If the  most recent patch doesn't exist or is the original patch itself, skip it
+            # If the most recent patch doesn't exist or is the original patch itself, skip it
             if not fix_patch_id or fix_patch_id == patch_id:
                 continue
 
-            revision_phid = revision_info.get("phid")
-            revision_id = revision_info.get("id")
-            bug_id = revision_info.get("fields", {}).get("bugzilla.bug-id")
+            revision_phid = revision_info["phid"]
+            revision_id = revision_info["id"]
+            bug_id = revision_info["fields"]["bugzilla.bug-id"]
 
             try:
                 previous_patch_id = diff_phid_to_id[most_recent_update["fields"]["old"]]
@@ -177,14 +171,10 @@ def main():
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
-    diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
-
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(
             limit=limit,
             diff_length_limit=diff_length_limit,
-            diff_id_to_revisions_map=diff_id_to_revisions_map,
-            diff_phid_to_id=diff_phid_to_id,
         ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
