@@ -101,7 +101,15 @@ def process_comments(limit, diff_length_limit):
             if not most_recent_update:
                 continue
 
-            fix_patch_id = diff_phid_to_id.get(most_recent_update["fields"].get("new"))
+            try:
+                fix_patch_id = diff_phid_to_id[most_recent_update["fields"]["new"]]
+            except KeyError as ke:
+                logger.error(
+                    f"Failed to find fix patch for PHID {most_recent_update['fields']['new']}: {ke}"
+                )
+                continue
+
+            fix_patch_id = diff_phid_to_id.get(most_recent_update["fields"]["new"])
 
             # If the most recent patch doesn't exist or is the original patch itself, skip it
             if not fix_patch_id or fix_patch_id == patch_id:
