@@ -5,15 +5,18 @@ import re
 
 import orjson
 import requests
+from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import zstd_compress
+from bugbug.utils import get_secret, zstd_compress
 
 review_data = PhabricatorReviewData()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
 
 
 class NoDiffsFoundException(Exception):
@@ -103,13 +106,13 @@ def process_comments(limit, diff_length_limit):
 
             try:
                 fix_patch_id = diff_phid_to_id[most_recent_update["fields"]["new"]]
-            except KeyError as ke:
-                logger.error(
-                    f"Failed to find fix patch for PHID {most_recent_update['fields']['new']}: {ke}"
-                )
-                continue
-
-            fix_patch_id = diff_phid_to_id.get(most_recent_update["fields"]["new"])
+            except KeyError:
+                diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["new"])
+                if not diffs:
+                    raise NoDiffFoundForPHIDException(
+                        most_recent_update["fields"]["new"]
+                    )
+                fix_patch_id = diffs[0]["id"]
 
             # If the most recent patch doesn't exist or is the original patch itself, skip it
             if not fix_patch_id or fix_patch_id == patch_id:
@@ -121,9 +124,13 @@ def process_comments(limit, diff_length_limit):
 
             try:
                 previous_patch_id = diff_phid_to_id[most_recent_update["fields"]["old"]]
-            except Exception as e:
-                logger.error(f"Failed to find previous patch: {e}")
-                continue
+            except Exception:
+                diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["old"])
+                if not diffs:
+                    raise NoDiffFoundForPHIDException(
+                        most_recent_update["fields"]["old"]
+                    )
+                previous_patch_id = diffs[0]["id"]
 
             try:
                 patch_diff = fetch_diff_from_url(
