@@ -184,7 +184,6 @@ def main():
     diff_length_limit = args.diff_length_limit or float("inf")
 
     os.makedirs("patches", exist_ok=True)
-    os.makedirs("data", exist_ok=True)
 
     db.download(phabricator.REVISIONS_DB)
 
