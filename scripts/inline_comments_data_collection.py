@@ -37,55 +37,21 @@ class NoDiffFoundForPHIDException(Exception):
         self.phid = phid
 
 
-def find_revision_from_patch(patch_id):
-    diffs = api.search_diffs(diff_id=patch_id)
+def load_revisions_maps():
+    diff_id_to_revision = {}
+    diff_phid_to_id = {}
 
-    if not diffs:
-        raise NoDiffsFoundException(patch_id)
+    for revision in phabricator.get_revisions():
+        for transaction in revision["transactions"]:
+            if transaction.get("fields", {}).get("diff") is None:
+                continue
 
-    revision_phid = diffs[0]["revisionPHID"]
-    return revision_phid
+            diff_id_to_revision[transaction["fields"]["diff"]["id"]] = revision
+            diff_phid_to_id[transaction["fields"]["diff"]["phid"]] = transaction[
+                "fields"
+            ]["diff"]["id"]
 
-
-def find_transactions_from_patch(patch_id):
-    revision_phid = find_revision_from_patch(patch_id)
-    transactions = api.request("transaction.search", objectIdentifier=revision_phid)[
-        "data"
-    ]
-
-    if not transactions:
-        raise NoTransactionsFoundException(patch_id)
-
-    return transactions
-
-
-def get_diff_info_from_phid(phid):
-    diffs = api.search_diffs(diff_phid=phid)
-    if not diffs:
-        raise NoDiffFoundForPHIDException(phid)
-    return diffs[0]["id"], diffs[0]["revisionPHID"]
-
-
-def find_details_from_revision_phid(phid):
-    revision = api.load_revision(rev_phid=phid)
-    return revision["id"], revision["fields"]["bugzilla.bug-id"]
-
-
-def find_previous_patch_id(revision_phid, current_patch_id):
-    diffs = api.search_diffs(revision_phid=revision_phid)
-
-    sorted_diffs = sorted(diffs, key=lambda x: x["id"])
-
-    previous_patch_id = None
-    for i, diff in enumerate(sorted_diffs):
-        if diff["id"] == current_patch_id and i > 0:
-            previous_patch_id = sorted_diffs[i - 1]["id"]
-            break
-
-    if not previous_patch_id:
-        raise NoDiffsFoundException(current_patch_id)
-
-    return previous_patch_id
+    return diff_id_to_revision, diff_phid_to_id
 
 
 def find_recent_update(transactions, comment_date_modified):
@@ -121,9 +87,11 @@ def extract_relevant_diff(patch_diff, filename):
 
 def process_comments(limit, diff_length_limit):
     patch_count = 0
+    diff_id_to_revisions_map, diff_phid_to_id = load_revisions_maps()
 
     for patch_id, comments in review_data.get_all_inline_comments(lambda c: True):
-        transactions = find_transactions_from_patch(patch_id)
+        revision_info = diff_id_to_revisions_map[patch_id]
+        transactions = revision_info["transactions"]
 
         resolved_comments = [comment for comment in comments if comment.is_done]
 
@@ -136,21 +104,33 @@ def process_comments(limit, diff_length_limit):
             if not most_recent_update:
                 continue
 
-            fix_patch_id, revision_phid = get_diff_info_from_phid(
-                most_recent_update["fields"]["new"]
-            )
+            try:
+                fix_patch_id = diff_phid_to_id[most_recent_update["fields"]["new"]]
+            except KeyError:
+                diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["new"])
+                if not diffs:
+                    raise NoDiffFoundForPHIDException(
+                        most_recent_update["fields"]["new"]
+                    )
+                fix_patch_id = diffs[0]["id"]
 
             # If the most recent patch is the original patch itself, skip it
             if fix_patch_id == patch_id:
                 continue
 
-            revision_id, bug_id = find_details_from_revision_phid(phid=revision_phid)
+            revision_phid = revision_info["phid"]
+            revision_id = revision_info["id"]
+            bug_id = revision_info["fields"]["bugzilla.bug-id"]
 
             try:
-                previous_patch_id = find_previous_patch_id(revision_phid, fix_patch_id)
-            except Exception as e:
-                logger.error(f"Failed to find previous patch: {e}")
-                continue
+                previous_patch_id = diff_phid_to_id[most_recent_update["fields"]["old"]]
+            except Exception:
+                diffs = api.search_diffs(diff_phid=most_recent_update["fields"]["old"])
+                if not diffs:
+                    raise NoDiffFoundForPHIDException(
+                        most_recent_update["fields"]["old"]
+                    )
+                previous_patch_id = diffs[0]["id"]
 
             try:
                 patch_diff = fetch_diff_from_url(
@@ -207,7 +187,10 @@ def main():
     os.makedirs("data", exist_ok=True)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
-        for data in process_comments(limit=limit, diff_length_limit=diff_length_limit):
+        for data in process_comments(
+            limit=limit,
+            diff_length_limit=diff_length_limit,
+        ):
             dataset_file_handle.write(orjson.dumps(data) + b"\n")
 
     zstd_compress(phabricator.FIXED_COMMENTS_DB)
