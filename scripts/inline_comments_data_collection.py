@@ -114,8 +114,8 @@ def process_comments(limit, diff_length_limit):
                     )
                 fix_patch_id = diffs[0]["id"]
 
-            # If the most recent patch doesn't exist or is the original patch itself, skip it
-            if not fix_patch_id or fix_patch_id == patch_id:
+            # If the most recent patch is the original patch itself, skip it
+            if fix_patch_id == patch_id:
                 continue
 
             revision_phid = revision_info["phid"]
