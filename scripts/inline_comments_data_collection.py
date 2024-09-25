@@ -7,7 +7,7 @@ import orjson
 import requests
 from libmozdata.phabricator import PhabricatorAPI
 
-from bugbug import phabricator
+from bugbug import db, phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret, zstd_compress
 
@@ -185,6 +185,8 @@ def main():
 
     os.makedirs("patches", exist_ok=True)
     os.makedirs("data", exist_ok=True)
+
+    db.download(phabricator.REVISIONS_DB)
 
     with open(phabricator.FIXED_COMMENTS_DB, "wb") as dataset_file_handle:
         for data in process_comments(
