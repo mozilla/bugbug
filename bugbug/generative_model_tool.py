@@ -7,7 +7,9 @@ from abc import ABC, abstractmethod
 from logging import INFO, basicConfig, getLogger
 from typing import Any
 
+from langchain_anthropic import ChatAnthropic
 from langchain_community.llms import HumanInputLLM
+from langchain_mistralai import ChatMistralAI
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from bugbug.utils import get_secret
@@ -25,6 +27,16 @@ def create_llm(llm):
             model_name="gpt-4o-2024-05-13",
             api_key=get_secret("OPENAI_API_KEY"),
             temperature=openai_temperature,
+        )
+    elif llm == "anthropic":
+        return ChatAnthropic(
+            model_name="claude-3-5-sonnet-20240620",
+            api_key=get_secret("ANTHROPIC_API_KEY"),
+        )
+    elif llm == "mistral":
+        llm = ChatMistralAI(
+            model_name="mistral-large-latest",
+            api_key=get_secret("MISTRAL_API_KEY"),
         )
     elif llm == "azureopenai":
         return AzureChatOpenAI(
