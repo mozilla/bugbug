@@ -23,7 +23,7 @@ def run(args) -> None:
     vector_db = QdrantVectorDB("diff_comments")
     review_comments_db = code_review.ReviewCommentsDB(vector_db)
     code_review_tool = code_review.CodeReviewTool(
-        function_search, review_comments_db, llm
+        function_search, review_comments_db, False, llm
     )
 
     review_data = code_review.review_data_classes[args.review_platform]()
