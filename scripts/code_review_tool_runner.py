@@ -50,7 +50,7 @@ def parse_args(args):
     parser.add_argument(
         "--llm",
         help="LLM",
-        choices=["human", "openai", "anthropic", "mistral", "azureopenai"],
+        choices=generative_model_tool.AVAILABLE_LLMS,
     )
     parser.add_argument(
         "--function_search_type",

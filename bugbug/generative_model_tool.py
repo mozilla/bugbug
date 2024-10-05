@@ -3,14 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import re
 from abc import ABC, abstractmethod
 from logging import INFO, basicConfig, getLogger
 from typing import Any
-
-from langchain_anthropic import ChatAnthropic
-from langchain_community.llms import HumanInputLLM
-from langchain_mistralai import ChatMistralAI
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from bugbug.utils import get_secret
 
@@ -18,36 +14,64 @@ basicConfig(level=INFO)
 logger = getLogger(__name__)
 
 
+def create_human_llm():
+    from langchain_community.llms import HumanInputLLM
+
+    return HumanInputLLM()
+
+
+def create_openai_llm():
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model_name="gpt-4o-2024-05-13",
+        api_key=get_secret("OPENAI_API_KEY"),
+        temperature=0.2,
+    )
+
+
+def create_azureopenai_llm():
+    from langchain_openai import AzureChatOpenAI
+
+    return AzureChatOpenAI(
+        azure_endpoint=get_secret("OPENAI_API_ENDPOINT"),
+        azure_deployment=get_secret("OPENAI_API_DEPLOY"),
+        api_key=get_secret("OPENAI_API_KEY"),
+        api_version=get_secret("OPENAI_API_VERSION"),
+        temperature=0.2,
+    )
+
+
+def create_anthropic_llm():
+    from langchain_anthropic import ChatAnthropic
+
+    return ChatAnthropic(
+        model_name="claude-3-5-sonnet-20240620",
+        api_key=get_secret("ANTHROPIC_API_KEY"),
+    )
+
+
+def create_mistral_llm():
+    from langchain_mistralai import ChatMistralAI
+
+    return ChatMistralAI(
+        model_name="mistral-large-latest",
+        api_key=get_secret("MISTRAL_API_KEY"),
+    )
+
+
+AVAILABLE_LLMS = [
+    match.group(1)
+    for name in list(globals())
+    if (match := re.search(r"create_(.*?)_llm", name))
+]
+
+
 def create_llm(llm):
-    openai_temperature = 0.2
-    if llm == "human":
-        return HumanInputLLM()
-    elif llm == "openai":
-        return ChatOpenAI(
-            model_name="gpt-4o-2024-05-13",
-            api_key=get_secret("OPENAI_API_KEY"),
-            temperature=openai_temperature,
-        )
-    elif llm == "anthropic":
-        return ChatAnthropic(
-            model_name="claude-3-5-sonnet-20240620",
-            api_key=get_secret("ANTHROPIC_API_KEY"),
-        )
-    elif llm == "mistral":
-        llm = ChatMistralAI(
-            model_name="mistral-large-latest",
-            api_key=get_secret("MISTRAL_API_KEY"),
-        )
-    elif llm == "azureopenai":
-        return AzureChatOpenAI(
-            azure_endpoint=get_secret("OPENAI_API_ENDPOINT"),
-            azure_deployment=get_secret("OPENAI_API_DEPLOY"),
-            api_key=get_secret("OPENAI_API_KEY"),
-            api_version=get_secret("OPENAI_API_VERSION"),
-            temperature=openai_temperature,
-        )
-    else:
+    if llm not in AVAILABLE_LLMS:
         raise NotImplementedError
+
+    return globals()[f"create_{llm}_llm"]()
 
 
 class GenerativeModelTool(ABC):
