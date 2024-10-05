@@ -60,7 +60,7 @@ class GenerativeModelTool(ABC):
         super().__init__(*args, **kwargs)
 
         self.llm = llm
-        self._set_tokenizer(llm.model_name)
+        self._set_tokenizer(llm.model_name if hasattr(llm, "model_name") else "")
 
     def _set_tokenizer(self, model_name: str) -> None:
         import tiktoken
