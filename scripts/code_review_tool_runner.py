@@ -50,7 +50,7 @@ def parse_args(args):
     parser.add_argument(
         "--llm",
         help="LLM",
-        choices=["human", "openai", "azureopenai", "llama2"],
+        choices=["human", "openai", "anthropic", "mistral", "azureopenai"],
     )
     parser.add_argument(
         "--function_search_type",
