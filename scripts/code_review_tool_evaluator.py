@@ -9,7 +9,7 @@ Before running this script, you may need to set the following environment
 variables:
     - BUGBUG_PHABRICATOR_URL
     - BUGBUG_PHABRICATOR_TOKEN
-    - BUGBUG_OPENAI_API_KEY
+    - BUGBUG_*_API_KEY (replace * with your LLM provider)
     - BUGBUG_QDRANT_API_KEY
     - BUGBUG_QDRANT_LOCATION
 
@@ -30,6 +30,7 @@ from bugbug.vectordb import QdrantVectorDB
 
 
 def get_tool_variants(
+    llm,
     variants: list[str] | None = None,
 ) -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
@@ -38,7 +39,6 @@ def get_tool_variants(
         List of tuples, where each tuple contains the name of the variant and
         and instance of the code review tool to evaluate.
     """
-    llm = generative_model_tool.create_llm("openai")
 
     def is_variant_selected(*target_variants):
         return variants is None or any(
@@ -154,13 +154,13 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def main(variants=None, review_request_ids=None):
+def main(llm, variants=None, review_request_ids=None):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
     ]()
 
-    tool_variants = get_tool_variants(variants)
+    tool_variants = get_tool_variants(generative_model_tool.create_llm(llm), variants)
 
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
@@ -231,6 +231,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--llm",
+        help="LLM",
+        choices=["human", "openai", "anthropic", "mistral", "azureopenai"],
+    )
+    parser.add_argument(
         "-v",
         "--variant",
         dest="variants",
@@ -250,4 +255,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(args.variants, args.review_request_ids)
+    main(args.llm, args.variants, args.review_request_ids)
