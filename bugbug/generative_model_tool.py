@@ -63,6 +63,28 @@ def create_mistral_llm(temperature=0.2):
     )
 
 
+def create_local_llm(
+    model_path,
+    n_gpu_layers=0,
+    n_batch=512,
+    n_ctx=4096,
+    max_tokens=0,
+    temperature=0.2,
+    top_p=1.0,
+):
+    from langchain_community.chat_models import ChatLlamaCpp
+
+    return ChatLlamaCpp(
+        model_path=model_path,
+        n_gpu_layers=n_gpu_layers,
+        n_batch=n_batch,
+        n_ctx=n_ctx,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        top_p=top_p,
+    )
+
+
 AVAILABLE_LLMS = {}
 
 for name in list(globals()):
