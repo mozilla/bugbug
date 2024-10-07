@@ -13,7 +13,7 @@ from bugbug.vectordb import QdrantVectorDB
 
 
 def run(args) -> None:
-    llm = generative_model_tool.create_llm(args.llm)
+    llm = generative_model_tool.create_llm_from_args(args)
 
     function_search = (
         function_search_classes[args.function_search_type]()
@@ -47,11 +47,7 @@ def parse_args(args):
         "--review_request_id",
         help="Review request ID",
     )
-    parser.add_argument(
-        "--llm",
-        help="LLM",
-        choices=generative_model_tool.AVAILABLE_LLMS,
-    )
+    generative_model_tool.create_llm_to_args(parser)
     parser.add_argument(
         "--function_search_type",
         help="Function search tool",

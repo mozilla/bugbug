@@ -154,13 +154,15 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def main(llm, variants=None, review_request_ids=None):
+def main(args):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
     ]()
 
-    tool_variants = get_tool_variants(generative_model_tool.create_llm(llm), variants)
+    tool_variants = get_tool_variants(
+        generative_model_tool.create_llm_from_args(args), args.variants
+    )
 
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
@@ -170,8 +172,8 @@ def main(llm, variants=None, review_request_ids=None):
     ]
 
     sample_ids = (
-        review_request_ids
-        if review_request_ids
+        args.review_request_ids
+        if args.review_request_ids
         else get_review_requests_sample(timedelta(days=60), 3)
     )
 
@@ -230,11 +232,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--llm",
-        help="LLM",
-        choices=generative_model_tool.AVAILABLE_LLMS,
-    )
+    generative_model_tool.create_llm_to_args(parser)
     parser.add_argument(
         "-v",
         "--variant",
@@ -255,4 +253,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(args.llm, args.variants, args.review_request_ids)
+    main(args)
