@@ -231,7 +231,9 @@ def main(args):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     generative_model_tool.create_llm_to_args(parser)
     parser.add_argument(
         "-v",
