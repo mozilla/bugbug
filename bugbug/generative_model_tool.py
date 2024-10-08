@@ -85,16 +85,21 @@ def create_local_llm(
     )
 
 
-AVAILABLE_LLMS = {}
+def _get_llms_with_create_funcs():
+    llm_to_create_map = {}
+    for name in list(globals()):
+        match = re.search(r"create_(.*?)_llm", name)
+        if match is None:
+            continue
 
-for name in list(globals()):
-    match = re.search(r"create_(.*?)_llm", name)
-    if match is None:
-        continue
+        llm_name = match.group(1)
+        create_llm_function = globals()[f"create_{llm_name}_llm"]
+        llm_to_create_map[llm_name] = inspect.signature(create_llm_function).parameters
 
-    llm_name = match.group(1)
-    create_llm_function = globals()[f"create_{llm_name}_llm"]
-    AVAILABLE_LLMS[llm_name] = inspect.signature(create_llm_function).parameters
+    return llm_to_create_map
+
+
+AVAILABLE_LLMS = _get_llms_with_create_funcs()
 
 
 def create_llm_to_args(parser):
