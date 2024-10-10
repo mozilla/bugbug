@@ -25,7 +25,7 @@ from unidiff.errors import UnidiffParseError
 
 from bugbug import db, phabricator, utils
 from bugbug.code_search.function_search import FunctionSearch
-from bugbug.generative_model_tool import GenerativeModelTool
+from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
 from bugbug.utils import get_secret
 from bugbug.vectordb import VectorDB, VectorPoint
 
@@ -142,6 +142,24 @@ As examples of not expected comments, not related to the current patch, please, 
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
 )
+
+
+PROMPT_TEMPLATE_DEDUPLICATE = """Please, double check the code review comments below.
+Just report the comments that are not redundant and not duplicating each other.
+
+Do not change the contents of the comments and the report format.
+Adopt the template below as the report format:
+[
+    {{
+        "file": "com/br/main/Pressure.java",
+        "code_line": 458,
+        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
+    }}
+]
+Do not report any explanation about your choice. Only return a valid JSON list.
+
+Review:
+{review}"""
 
 
 PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for reviewing the patch.
@@ -995,13 +1013,21 @@ class CodeReviewTool(GenerativeModelTool):
 
     def __init__(
         self,
-        function_search: Optional[FunctionSearch],
-        review_comments_db: Optional["ReviewCommentsDB"],
+        comment_gen_llms,
+        llm=None,
+        function_search: Optional[FunctionSearch] = None,
+        review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
-        *args,
-        **kwargs,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__()
+
+        self.comment_gen_llms = comment_gen_llms
+        self.llm = llm if llm is not None else comment_gen_llms[0]
+        self._tokenizer = get_tokenizer(
+            comment_gen_llms[0].model_name
+            if hasattr(comment_gen_llms[0], "model_name")
+            else ""
+        )
 
         self.summarization_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_SUMMARIZATION),
@@ -1009,6 +1035,10 @@ class CodeReviewTool(GenerativeModelTool):
         )
         self.filtering_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
+            llm=self.llm,
+        )
+        self.deduplicating_chain = LLMChain(
+            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_DEDUPLICATE),
             llm=self.llm,
         )
         self.further_context_chain = LLMChain(
@@ -1025,6 +1055,9 @@ class CodeReviewTool(GenerativeModelTool):
         self.review_comments_db = review_comments_db
 
         self.show_patch_example = show_patch_example
+
+    def count_tokens(self, text):
+        return len(self._tokenizer.encode(text))
 
     @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
@@ -1064,74 +1097,83 @@ class CodeReviewTool(GenerativeModelTool):
                 patch_set,
             )
 
-        memory = ConversationBufferMemory()
-        conversation_chain = ConversationChain(
-            llm=self.llm,
-            memory=memory,
-        )
+        output = ""
+        for comment_gen_llm in self.comment_gen_llms:
+            memory = ConversationBufferMemory()
+            conversation_chain = ConversationChain(
+                llm=comment_gen_llm,
+                memory=memory,
+            )
 
-        memory.save_context(
-            {
-                "input": "You are an expert reviewer for"
-                + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-                + " source code, with experience on source code reviews."
-            },
-            {
-                "output": "Sure, I'm aware of source code practices"
-                + (
-                    f" in {TARGET_SOFTWARE}"
-                    if TARGET_SOFTWARE is not None
-                    else " in the development community"
+            memory.save_context(
+                {
+                    "input": "You are an expert reviewer for"
+                    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
+                    + " source code, with experience on source code reviews."
+                },
+                {
+                    "output": "Sure, I'm aware of source code practices"
+                    + (
+                        f" in {TARGET_SOFTWARE}"
+                        if TARGET_SOFTWARE is not None
+                        else " in the development community"
+                    )
+                    + "."
+                },
+            )
+            memory.save_context(
+                {
+                    "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
+                    + patch.raw_diff
+                },
+                {"output": output_summarization},
+            )
+
+            if self.function_search is not None and len(requested_functions) > 0:
+                function_declaration_text = get_structured_functions(
+                    "Required Function", requested_functions
                 )
-                + "."
-            },
-        )
-        memory.save_context(
-            {
-                "input": 'Please, analyze the code provided and report a summarization about the new changes; for that, focus on the code added represented by lines that start with "+".\n'
-                + patch.raw_diff
-            },
-            {"output": output_summarization},
-        )
 
-        if self.function_search is not None and len(requested_functions) > 0:
-            function_declaration_text = get_structured_functions(
-                "Required Function", requested_functions
+                memory.save_context(
+                    {
+                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you, by giving more context about the code under analysis. "
+                        + function_declaration_text
+                    },
+                    {
+                        "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
+                    },
+                )
+
+            if self.function_search is not None and len(requested_context_lines) > 0:
+                context_text = get_structured_functions(
+                    "Requested Context for Line", requested_context_lines
+                )
+
+                memory.save_context(
+                    {
+                        "input": "Attached, you can also have more context of the target code under analysis."
+                        + context_text
+                    },
+                    {
+                        "output": "Okay, I will also consider the code as additional context to the given patch."
+                    },
+                )
+
+            cur_output = conversation_chain.predict(
+                input=PROMPT_TEMPLATE_REVIEW.format(
+                    patch=formatted_patch,
+                    comment_examples=self._get_comment_examples(patch),
+                )
             )
+            output += cur_output
 
-            memory.save_context(
-                {
-                    "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you, by giving more context about the code under analysis. "
-                    + function_declaration_text
-                },
-                {
-                    "output": "Okay, I will consider the provided function definitions as additional context to the given patch."
-                },
-            )
+            memory.clear()
 
-        if self.function_search is not None and len(requested_context_lines) > 0:
-            context_text = get_structured_functions(
-                "Requested Context for Line", requested_context_lines
-            )
-
-            memory.save_context(
-                {
-                    "input": "Attached, you can also have more context of the target code under analysis."
-                    + context_text
-                },
-                {
-                    "output": "Okay, I will also consider the code as additional context to the given patch."
-                },
-            )
-
-        output = conversation_chain.predict(
-            input=PROMPT_TEMPLATE_REVIEW.format(
-                patch=formatted_patch,
-                comment_examples=self._get_comment_examples(patch),
-            )
-        )
-
-        memory.clear()
+        if len(self.comment_gen_llms) > 1:
+            output = self.deduplicating_chain.invoke(
+                {"review": output},
+                return_only_outputs=True,
+            )["text"]
 
         raw_output = self.filtering_chain.invoke(
             {"review": output, "patch": patch.raw_diff},

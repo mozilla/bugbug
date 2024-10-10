@@ -72,7 +72,7 @@ def get_tool_variants(
             (
                 "RAG",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=None,
                     review_comments_db=review_comments_db,
                 ),
@@ -84,7 +84,7 @@ def get_tool_variants(
             (
                 "CONTEXT",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=None,
                 ),
@@ -96,7 +96,7 @@ def get_tool_variants(
             (
                 "RAG and CONTEXT",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                 ),
