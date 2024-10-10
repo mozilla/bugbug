@@ -729,9 +729,7 @@ def main():
     print(openai_client)
     print(anthropic_client)
 
-    prompt_types = [
-        "study-modified",
-    ]
+    prompt_types = ["multi-shot"]
     diff_length_limits = [1000]
     hunk_sizes = [20]
     output_csv = "metrics_results.csv"
