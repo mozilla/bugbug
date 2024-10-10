@@ -136,34 +136,26 @@ def create_llm_from_args(args):
     return globals()[f"create_{args.llm}_llm"](**llm_creation_args)
 
 
+def get_tokenizer(model_name):
+    import tiktoken
+
+    try:
+        return tiktoken.encoding_for_model(model_name)
+    except KeyError:
+        FALLBACK_ENCODING = "cl100k_base"
+        logger.info(
+            "Tokenizer couldn't be found for %s, falling back to %s",
+            model_name,
+            FALLBACK_ENCODING,
+        )
+        return tiktoken.get_encoding(FALLBACK_ENCODING)
+
+
 class GenerativeModelTool(ABC):
     @property
     @abstractmethod
     def version(self) -> str:
         ...
-
-    def __init__(self, llm, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        self.llm = llm
-        self._set_tokenizer(llm.model_name if hasattr(llm, "model_name") else "")
-
-    def _set_tokenizer(self, model_name: str) -> None:
-        import tiktoken
-
-        try:
-            self._tokenizer = tiktoken.encoding_for_model(model_name)
-        except KeyError:
-            FALLBACK_ENCODING = "cl100k_base"
-            logger.info(
-                "Tokenizer couldn't be found for %s, falling back to %s",
-                model_name,
-                FALLBACK_ENCODING,
-            )
-            self._tokenizer = tiktoken.get_encoding(FALLBACK_ENCODING)
-
-    def count_tokens(self, text):
-        return len(self._tokenizer.encode(text))
 
     @abstractmethod
     def run(self, *args, **kwargs) -> Any:
