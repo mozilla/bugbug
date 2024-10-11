@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Collection, Iterator, NewType
 
+import requests
 import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
@@ -291,3 +292,17 @@ def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
         return datetime.utcnow() - last_exclusion_end_date
     else:
         return datetime.utcnow() - creation_date
+
+
+def fetch_diff(revision_id, patch_id):
+    try:
+        url = f"https://phabricator.services.mozilla.com/D{revision_id}?id={patch_id}&download=true"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text
+    except requests.HTTPError as e:
+        logger.error(f"HTTP error fetching diff: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return None

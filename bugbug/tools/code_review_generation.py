@@ -3,12 +3,12 @@ import json
 import logging
 import re
 
-import requests
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
 from qdrant_client import QdrantClient
 
 from bugbug.generative_model_tool import GenerativeModelTool
+from bugbug.phabricator import fetch_diff
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret
 from bugbug.vectordb import QdrantVectorDB, VectorPoint
@@ -250,20 +250,6 @@ def get_revision_id_from_patch(patch_id):
         return revision["id"]
     else:
         logger.error(f"No diffs found for patch ID: {patch_id}")
-        return None
-
-
-def fetch_diff(revision_id, patch_id):
-    try:
-        url = f"https://phabricator.services.mozilla.com/D{revision_id}?id={patch_id}&download=true"
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.text
-    except requests.HTTPError as e:
-        logger.error(f"HTTP error fetching diff: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
         return None
 
 
