@@ -160,3 +160,7 @@ class GenerativeModelTool(ABC):
     @abstractmethod
     def run(self, *args, **kwargs) -> Any:
         ...
+
+    @staticmethod
+    def _print_answer(answer):
+        print(f"\u001b[33;1m\033[1;3m{answer}\u001b[0m")

@@ -1018,6 +1018,7 @@ class CodeReviewTool(GenerativeModelTool):
         function_search: Optional[FunctionSearch] = None,
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
+        verbose: bool = True,
     ) -> None:
         super().__init__()
 
@@ -1032,22 +1033,27 @@ class CodeReviewTool(GenerativeModelTool):
         self.summarization_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_SUMMARIZATION),
             llm=self.llm,
+            verbose=verbose,
         )
         self.filtering_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
             llm=self.llm,
+            verbose=verbose,
         )
         self.deduplicating_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_DEDUPLICATE),
             llm=self.llm,
+            verbose=verbose,
         )
         self.further_context_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_CONTEXT_LINES),
             llm=self.llm,
+            verbose=verbose,
         )
         self.further_info_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FURTHER_INFO),
             llm=self.llm,
+            verbose=verbose,
         )
 
         self.function_search = function_search
@@ -1055,6 +1061,8 @@ class CodeReviewTool(GenerativeModelTool):
         self.review_comments_db = review_comments_db
 
         self.show_patch_example = show_patch_example
+
+        self.verbose = verbose
 
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
@@ -1074,10 +1082,16 @@ class CodeReviewTool(GenerativeModelTool):
             return_only_outputs=True,
         )["text"]
 
+        if self.verbose:
+            GenerativeModelTool._print_answer(output_summarization)
+
         if self.function_search is not None:
             line_code_list = self.further_context_chain.run(
                 patch=formatted_patch, summarization=output_summarization
             ).split("\n")
+
+            if self.verbose:
+                GenerativeModelTool._print_answer(line_code_list)
 
             requested_context_lines = request_for_context_lines(
                 self.function_search,
@@ -1089,6 +1103,9 @@ class CodeReviewTool(GenerativeModelTool):
             function_list = self.further_info_chain.run(
                 patch=patch, summarization=output_summarization
             ).split("\n")
+
+            if self.verbose:
+                GenerativeModelTool._print_answer(function_list)
 
             requested_functions = request_for_function_declarations(
                 self.function_search,
@@ -1103,6 +1120,7 @@ class CodeReviewTool(GenerativeModelTool):
             conversation_chain = ConversationChain(
                 llm=comment_gen_llm,
                 memory=memory,
+                verbose=self.verbose,
             )
 
             memory.save_context(
@@ -1167,6 +1185,9 @@ class CodeReviewTool(GenerativeModelTool):
             )
             output += cur_output
 
+            if self.verbose:
+                GenerativeModelTool._print_answer(cur_output)
+
             memory.clear()
 
         if len(self.comment_gen_llms) > 1:
@@ -1175,10 +1196,16 @@ class CodeReviewTool(GenerativeModelTool):
                 return_only_outputs=True,
             )["text"]
 
+            if self.verbose:
+                GenerativeModelTool._print_answer(output)
+
         raw_output = self.filtering_chain.invoke(
             {"review": output, "patch": patch.raw_diff},
             return_only_outputs=True,
         )["text"]
+
+        if self.verbose:
+            GenerativeModelTool._print_answer(raw_output)
 
         return list(generate_processed_output(raw_output, patch_set))
 
