@@ -4,12 +4,11 @@ import logging
 import re
 
 import requests
-from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
 from qdrant_client import QdrantClient
 
-from bugbug.generative_model_tool import GenerativeModelTool, create_llm
+from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret
 from bugbug.vectordb import QdrantVectorDB, VectorPoint
@@ -612,40 +611,3 @@ def extract_revision_id_list_from_dataset(dataset_file):
             revision_ids.append(data["revision_id"])
 
     return revision_ids
-
-
-def main():
-    CREATE_DB = False
-
-    db = FixCommentDB(LocalQdrantVectorDB(collection_name="fix_comments"))
-
-    if CREATE_DB:
-        db.db.delete_collection()
-        db.db.setup()
-        db.upload_dataset("data/fixed_comments.json")
-
-    llm = create_llm("openai")
-    llm_tool = CodeGeneratorTool(llm=llm, db=db)
-
-    prompt_types = ["multi-shot"]
-    diff_length_limits = [1000]
-    hunk_sizes = [20]
-    output_csv = "metrics_results.csv"
-    generation_limit = (
-        len(prompt_types) * len(diff_length_limits) * len(hunk_sizes) + 400
-    )
-
-    generate_fixes(
-        llm_tool=llm_tool,
-        db=db,
-        generation_limit=generation_limit,
-        prompt_types=prompt_types,
-        hunk_sizes=hunk_sizes,
-        diff_length_limits=diff_length_limits,
-        output_csv=output_csv,
-    )
-
-
-if __name__ == "__main__":
-    load_dotenv()
-    main()
