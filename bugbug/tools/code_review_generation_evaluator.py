@@ -4,9 +4,8 @@ import logging
 
 from libmozdata.phabricator import PhabricatorAPI
 
-from bugbug.generative_model_tool import GenerativeModelTool, create_llm
+from bugbug.generative_model_tool import GenerativeModelTool
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.tools.code_review_generation import FixCommentDB, LocalQdrantVectorDB
 from bugbug.utils import get_secret
 
 review_data = PhabricatorReviewData()
@@ -150,18 +149,3 @@ def conduct_evaluation(input_csv, output_csv, llm_tool):
                         "Qualitative Feedback": qualitative_feedback,
                     }
                 )
-
-
-def main():
-    db = FixCommentDB(LocalQdrantVectorDB(collection_name="fix_comments"))
-    llm = create_llm("openai")
-    llm_tool = CodeGeneratorEvaluatorTool(llm=llm, db=db)
-
-    input_csv = "metrics_results.csv"
-    output_csv = "metrics_results_evaluated.csv"
-
-    conduct_evaluation(input_csv, output_csv, llm_tool)
-
-
-if __name__ == "__main__":
-    main()
