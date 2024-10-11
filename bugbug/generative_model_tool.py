@@ -56,6 +56,17 @@ def create_anthropic_llm(temperature=0.2, top_p=None):
     )
 
 
+def create_gemini_llm(temperature=0.2, top_p=None):
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    return ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        api_key=get_secret("GOOGLE_API_KEY"),
+        temperature=temperature,
+        top_p=top_p,
+    )
+
+
 def create_mistral_llm(temperature=0.2, top_p=None):
     from langchain_mistralai import ChatMistralAI
 
