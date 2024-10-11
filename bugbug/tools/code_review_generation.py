@@ -3,14 +3,13 @@ import json
 import logging
 import re
 
-import anthropic
-import openai
 import requests
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
 from qdrant_client import QdrantClient
 
+from bugbug.generative_model_tool import GenerativeModelTool, create_llm
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret
 from bugbug.vectordb import QdrantVectorDB, VectorPoint
@@ -82,6 +81,57 @@ class FixCommentDB:
                     break
 
         return similar_comments if similar_comments else None
+
+
+class CodeGeneratorTool(GenerativeModelTool):
+    version = "0.0.1"
+
+    def __init__(
+        self,
+        llm,
+        db: FixCommentDB,
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(llm, *args, **kwargs)
+        self.db = db
+
+    def run(self, prompt: str):
+        messages = [("system", "You are a code review bot."), ("user", prompt)]
+        response = self.llm.invoke(messages)
+        return response.content
+
+    def generate_fix(
+        self,
+        comment,
+        relevant_diff,
+        prompt_type,
+        hunk_size,
+        similar_comments_and_fix_infos,
+        evaluation,
+        generated_fix,
+    ):
+        if not evaluation:
+            prompt = generate_prompt(
+                comment.content,
+                relevant_diff,
+                comment.start_line,
+                comment.end_line,
+                similar_comments_and_fix_infos,
+                prompt_type,
+                hunk_size,
+            )
+        else:
+            prompt = f"""
+            Comment: {comment.content}
+            Diff (before fix): {relevant_diff}
+            Generated Fix: {generated_fix}
+
+            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
+            """
+
+        generated_fix = self.run(prompt=prompt)
+        return generated_fix
 
 
 def fetch_patch_diff(patch_id):
@@ -426,14 +476,13 @@ def generate_prompt(
 
 
 def generate_fixes(
-    client,
+    llm_tool,
     db,
     generation_limit,
     diff_length_limits,
     prompt_types,
     hunk_sizes,
     output_csv,
-    model,
 ):
     counter = 0
     revision_ids = extract_revision_id_list_from_dataset("data/fixed_comments.json")
@@ -522,50 +571,15 @@ def generate_fixes(
                                     )
                                     continue
 
-                                prompt = generate_prompt(
-                                    comment.content,
+                                generated_fix = llm_tool.generate_fix(
+                                    comment,
                                     relevant_diff,
-                                    comment.start_line,
-                                    comment.end_line,
-                                    similar_comments_and_fix_infos,
                                     prompt_type,
                                     hunk_size,
+                                    similar_comments_and_fix_infos,
+                                    False,
+                                    None,
                                 )
-
-                                if model == "gpt-4o":
-                                    stream = client.chat.completions.create(
-                                        model="gpt-4o",
-                                        messages=[{"role": "user", "content": prompt}],
-                                        stream=True,
-                                        temperature=0.2,
-                                        top_p=0.1,
-                                    )
-
-                                    generated_fix = ""
-                                    for chunk in stream:
-                                        if chunk.choices[0].delta.content is not None:
-                                            generated_fix += chunk.choices[
-                                                0
-                                            ].delta.content
-
-                                if model == "claude-3-5-sonnet":
-                                    generated_fix = client.messages.create(
-                                        model="claude-3-5-sonnet-20240620",
-                                        temperature=0.2,
-                                        max_tokens=10000,
-                                        system="You are a code review bot that generates code based on review comments.",
-                                        messages=[
-                                            {
-                                                "role": "user",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": prompt,
-                                                    }
-                                                ],
-                                            }
-                                        ],
-                                    )
 
                                 reference_fix = find_fix_in_dataset(
                                     revision_id,
@@ -584,50 +598,15 @@ def generate_fixes(
                                 generated_code_length = len(generated_fix)
                                 file_path = filename
 
-                                feedback_prompt = f"""
-                                Comment: {comment.content}
-                                Diff (before fix): {relevant_diff}
-                                Generated Fix: {generated_fix}
-
-                                Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-                                """
-
-                                if model == "gpt-4o":
-                                    stream2 = client.chat.completions.create(
-                                        model="gpt-4o",
-                                        messages=[
-                                            {"role": "user", "content": feedback_prompt}
-                                        ],
-                                        stream=True,
-                                        temperature=0,
-                                        top_p=0,
-                                    )
-
-                                    qualitative_feedback = ""
-                                    for chunk in stream2:
-                                        if chunk.choices[0].delta.content is not None:
-                                            qualitative_feedback += chunk.choices[
-                                                0
-                                            ].delta.content
-
-                                if model == "claude-3-5-sonnet":
-                                    qualitative_feedback = client.messages.create(
-                                        model="claude-3-5-sonnet-20240620",
-                                        temperature=0.2,
-                                        max_tokens=10000,
-                                        system="You are a bot that provides qualitative feedback for a generated fix for a code review comment.",
-                                        messages=[
-                                            {
-                                                "role": "user",
-                                                "content": [
-                                                    {
-                                                        "type": "text",
-                                                        "text": feedback_prompt,
-                                                    }
-                                                ],
-                                            }
-                                        ],
-                                    )
+                                qualitative_feedback = llm_tool.generate_fix(
+                                    comment,
+                                    relevant_diff,
+                                    prompt_type,
+                                    hunk_size,
+                                    similar_comments_and_fix_infos,
+                                    True,
+                                    generated_fix,
+                                )
 
                                 if metrics is not None:
                                     writer.writerow(
@@ -723,11 +702,8 @@ def main():
         db.db.setup()
         db.upload_dataset("data/fixed_comments.json")
 
-    openai_client = openai.OpenAI(api_key=get_secret("OPENAI_API_KEY"))
-    anthropic_client = anthropic.Anthropic(api_key=get_secret("ANTHROPIC_API_KEY"))
-
-    print(openai_client)
-    print(anthropic_client)
+    llm = create_llm("openai")
+    llm_tool = CodeGeneratorTool(llm=llm, db=db)
 
     prompt_types = ["multi-shot"]
     diff_length_limits = [1000]
@@ -738,14 +714,13 @@ def main():
     )
 
     generate_fixes(
-        client=openai_client,
+        llm_tool=llm_tool,
         db=db,
         generation_limit=generation_limit,
         prompt_types=prompt_types,
         hunk_sizes=hunk_sizes,
         diff_length_limits=diff_length_limits,
         output_csv=output_csv,
-        model="gpt-4o",
     )
 
 
