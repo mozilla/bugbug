@@ -498,17 +498,12 @@ def generate_fixes(
                 "Hunk Size",
                 "Comment Length",
                 "Generated Code Length",
-                "Precision",
-                "Recall",
-                "F1",
-                "Qualitative Feedback",
                 "File Path",
                 "Comment",
                 "Start Line",
                 "End Line",
                 "Relevant Diff",
                 "Generated Fix",
-                "Actual Fix",
             ]
         )
 
@@ -552,7 +547,6 @@ def generate_fixes(
                                 break
 
                             for diff_length_limit in diff_length_limits:
-                                # try:
                                 if counter >= generation_limit:
                                     break
 
@@ -581,56 +575,27 @@ def generate_fixes(
                                     None,
                                 )
 
-                                reference_fix = find_fix_in_dataset(
-                                    revision_id,
-                                    patch_id,
-                                    "data/fixed_comments.json",
-                                )
-
-                                metrics = compare_fixes(
-                                    revision_id,
-                                    patch_id,
-                                    generated_fix,
-                                    reference_fix,
-                                )
-
                                 comment_length = len(comment.content)
                                 generated_code_length = len(generated_fix)
                                 file_path = filename
 
-                                qualitative_feedback = llm_tool.generate_fix(
-                                    comment,
-                                    relevant_diff,
-                                    prompt_type,
-                                    hunk_size,
-                                    similar_comments_and_fix_infos,
-                                    True,
-                                    generated_fix,
+                                writer.writerow(
+                                    [
+                                        revision_id,
+                                        patch_id,
+                                        prompt_type,
+                                        diff_length_limit,
+                                        hunk_size,
+                                        comment_length,
+                                        generated_code_length,
+                                        file_path,
+                                        comment.content,
+                                        comment.start_line,
+                                        comment.end_line,
+                                        relevant_diff,
+                                        generated_fix,
+                                    ]
                                 )
-
-                                if metrics is not None:
-                                    writer.writerow(
-                                        [
-                                            revision_id,
-                                            patch_id,
-                                            prompt_type,
-                                            diff_length_limit,
-                                            hunk_size,
-                                            comment_length,
-                                            generated_code_length,
-                                            metrics["precision"],
-                                            metrics["recall"],
-                                            metrics["f1"],
-                                            qualitative_feedback,
-                                            file_path,
-                                            comment.content,
-                                            comment.start_line,
-                                            comment.end_line,
-                                            relevant_diff,
-                                            generated_fix,
-                                            reference_fix,
-                                        ]
-                                    )
 
                                 counter += 1
 
@@ -647,49 +612,6 @@ def extract_revision_id_list_from_dataset(dataset_file):
             revision_ids.append(data["revision_id"])
 
     return revision_ids
-
-
-def calculate_metrics(reference_fix, generated_fix):
-    reference_tokens = reference_fix.split()
-    generated_tokens = generated_fix.split()
-
-    common_tokens = set(reference_tokens) & set(generated_tokens)
-    precision = len(common_tokens) / len(generated_tokens) if generated_tokens else 0
-    recall = len(common_tokens) / len(reference_tokens) if reference_tokens else 0
-    f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0
-
-    return {
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-    }
-
-
-def find_fix_in_dataset(
-    revision_id,
-    initial_patch_id,
-    dataset_file,
-):
-    with open(dataset_file, "r") as f:
-        for line in f:
-            data = json.loads(line)
-            if (
-                data["revision_id"] == revision_id
-                and data["initial_patch_id"] == initial_patch_id
-            ):
-                return data["fix_patch_diff"]
-    return None
-
-
-def compare_fixes(revision_id, initial_patch_id, generated_fix, reference_fix):
-    if reference_fix:
-        metrics = calculate_metrics(reference_fix, generated_fix)
-        return metrics
-    else:
-        print(
-            f"No matching fix found in the dataset for Revision {revision_id} and Patch {initial_patch_id}."
-        )
-        return None
 
 
 def main():
