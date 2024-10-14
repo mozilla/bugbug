@@ -528,7 +528,7 @@ class PhabricatorReviewData(ReviewData):
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
-        wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+        wait=tenacity.wait_exponential(multiplier=2, min=2),
         reraise=True,
     )
     def get_patch_by_id(self, patch_id: str) -> Patch:

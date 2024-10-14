@@ -79,8 +79,8 @@ class MicroannotateGenerator(object):
             )
 
             tenacity.retry(
-                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=2, min=2),
+                stop=tenacity.stop_after_attempt(7),
             )(lambda: subprocess.run(push_args, cwd=self.git_repo_path, check=True))()
 
             # We are not using db.upload as we don't need to upload the git repo.
@@ -97,8 +97,8 @@ class MicroannotateGenerator(object):
 
     def clone_git_repo(self):
         tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(7),
         )(
             lambda: subprocess.run(
                 ["git", "clone", self.repo_url, self.git_repo_path],
@@ -112,8 +112,8 @@ class MicroannotateGenerator(object):
 
         try:
             tenacity.retry(
-                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=2, min=2),
+                stop=tenacity.stop_after_attempt(7),
                 reraise=True,
             )(
                 lambda: subprocess.run(

@@ -232,7 +232,7 @@ def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDic
 
     @tenacity.retry(
         stop=tenacity.stop_after_attempt(7),
-        wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
+        wait=tenacity.wait_exponential(multiplier=2, min=2),
     )
     def get_chunk(chunk: list[int]) -> list[BugDict]:
         new_bugs = get(chunk)

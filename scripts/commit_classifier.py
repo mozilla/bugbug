@@ -222,8 +222,8 @@ class CommitClassifier(object):
 
         if not os.path.exists(repo_dir):
             tenacity.retry(
-                wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-                stop=tenacity.stop_after_attempt(5),
+                wait=tenacity.wait_exponential(multiplier=2, min=2),
+                stop=tenacity.stop_after_attempt(7),
             )(
                 lambda: subprocess.run(
                     ["git", "clone", "--quiet", repo_url, repo_dir], check=True
@@ -231,8 +231,8 @@ class CommitClassifier(object):
             )()
 
         tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=16, max=64),
-            stop=tenacity.stop_after_attempt(5),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(7),
         )(
             lambda: subprocess.run(
                 ["git", "fetch"],
