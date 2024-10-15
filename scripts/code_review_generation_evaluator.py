@@ -1,29 +1,19 @@
+import argparse
 import csv
 import json
 import logging
+import sys
 
-from libmozdata.phabricator import PhabricatorAPI
+from dotenv import load_dotenv
 
-from bugbug.generative_model_tool import GenerativeModelTool
-from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret
-
-review_data = PhabricatorReviewData()
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
+from bugbug.generative_model_tool import GenerativeModelTool, create_llm
+from bugbug.tools.code_review_generation import FixCommentDB, LocalQdrantVectorDB
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(
-        self,
-        llm,
-        db,
-        *args,
-        **kwargs,
-    ) -> None:
+    def __init__(self, llm, db, *args, **kwargs) -> None:
         super().__init__(llm, *args, **kwargs)
         self.db = db
 
@@ -38,12 +28,7 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         response = self.llm.invoke(messages)
         return response.content
 
-    def generate_fix(
-        self,
-        comment,
-        relevant_diff,
-        generated_fix,
-    ):
+    def generate_fix(self, comment, relevant_diff, generated_fix):
         prompt = f"""
         Comment: {comment}
         Diff (before fix): {relevant_diff}
@@ -51,16 +36,11 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
 
         Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
         """
-
         qualitative_feedback = self.run(prompt=prompt)
         return qualitative_feedback
 
 
-def find_fix_in_dataset(
-    revision_id,
-    initial_patch_id,
-    dataset_file,
-):
+def find_fix_in_dataset(revision_id, initial_patch_id, dataset_file):
     with open(dataset_file, "r") as f:
         for line in f:
             data = json.loads(line)
@@ -80,11 +60,7 @@ def calculate_metrics(reference_fix, generated_fix):
     recall = len(common_tokens) / len(reference_tokens) if reference_tokens else 0
     f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0
 
-    return {
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-    }
+    return {"precision": precision, "recall": recall, "f1": f1}
 
 
 def compare_fixes(revision_id, initial_patch_id, generated_fix, reference_fix):
@@ -92,7 +68,7 @@ def compare_fixes(revision_id, initial_patch_id, generated_fix, reference_fix):
         metrics = calculate_metrics(reference_fix, generated_fix)
         return metrics
     else:
-        print(
+        logging.info(
             f"No matching fix found in the dataset for Revision {revision_id} and Patch {initial_patch_id}."
         )
         return None
@@ -149,3 +125,40 @@ def conduct_evaluation(input_csv, output_csv, llm_tool):
                         "Qualitative Feedback": qualitative_feedback,
                     }
                 )
+
+
+def run(args) -> None:
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO)
+
+    db = FixCommentDB(LocalQdrantVectorDB(collection_name="fix_comments"))
+    llm = create_llm(args.llm)
+    llm_tool = CodeGeneratorEvaluatorTool(llm=llm, db=db)
+
+    input_csv = args.input_csv
+    output_csv = args.output_csv
+
+    conduct_evaluation(input_csv, output_csv, llm_tool)
+
+
+def parse_args(args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--llm", help="LLM", choices=["openai"], default="openai")
+    parser.add_argument(
+        "--input-csv",
+        type=str,
+        default="code_generations.csv",
+        help="Input CSV file from the generation script.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=str,
+        default="evaluated_code_generations.csv",
+        help="Output CSV file for results.",
+    )
+    return parser.parse_args(args)
+
+
+if __name__ == "__main__":
+    args = parse_args(sys.argv[1:])
+    run(args)

@@ -8,7 +8,7 @@ from libmozdata.phabricator import PhabricatorAPI
 from qdrant_client import QdrantClient
 
 from bugbug.generative_model_tool import GenerativeModelTool
-from bugbug.phabricator import fetch_diff
+from bugbug.phabricator import fetch_diff_from_url
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret
 from bugbug.vectordb import QdrantVectorDB, VectorPoint
@@ -290,8 +290,8 @@ def generate_prompt(
     if prompt_type == "single-shot":
         similar_comment, fix_info = similar_comments_and_fix_infos[0]
 
-        example_initial_diff = fetch_diff(
-            fix_info["revision_id"], fix_info["initial_patch_id"]
+        example_initial_diff = fetch_diff_from_url(
+            fix_info["revision_id"], fix_info["initial_patch_id"], single_patch=True
         )
         example_relevant_initial_diff = extract_relevant_diff(
             example_initial_diff,
@@ -392,8 +392,8 @@ def generate_prompt(
     if prompt_type == "multi-shot":
         examples = ""
         for similar_comment, fix_info in similar_comments_and_fix_infos:
-            example_initial_diff = fetch_diff(
-                fix_info["revision_id"], fix_info["initial_patch_id"]
+            example_initial_diff = fetch_diff_from_url(
+                fix_info["revision_id"], fix_info["initial_patch_id"], single_patch=True
             )
             example_relevant_initial_diff = extract_relevant_diff(
                 example_initial_diff,
@@ -507,7 +507,7 @@ def generate_fixes(
                 )
                 continue
 
-            diff = fetch_diff(revision_id, patch_id)
+            diff = fetch_diff_from_url(revision_id, patch_id, single_patch=True)
 
             if not diff:
                 logger.error(f"Skipping Patch ID {patch_id} as no diff found.")
