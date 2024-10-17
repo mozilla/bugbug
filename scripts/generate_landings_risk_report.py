@@ -380,7 +380,8 @@ class LandingsRiskReportGenerator(object):
         db.download(TEST_INFOS_DB)
 
         dates = [
-            datetime.utcnow() - timedelta(days=day) for day in reversed(range(days))
+            datetime.utcnow() - timedelta(days=day)
+            for day in reversed(range(min(days, 90)))
         ]
 
         logger.info("Get previously gathered test info...")
