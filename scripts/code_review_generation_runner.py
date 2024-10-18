@@ -28,15 +28,20 @@ def run(args) -> None:
     llm = create_llm(args.llm)
     llm_tool = CodeGeneratorTool(llm=llm, db=db)
 
-    generate_fixes(
-        llm_tool=llm_tool,
-        db=db,
-        generation_limit=args.generation_limit,
-        prompt_types=args.prompt_types,
-        hunk_sizes=args.hunk_sizes,
-        diff_length_limits=args.diff_length_limits,
-        output_csv=args.output_csv,
-    )
+    if args.revision_id and args.comment_id and args.patch_id:
+        pass
+        # TODO: Create this function
+        # generate_individual_fix(llm_tool=llm_tool, db=db, revision_id=args.revision_id, patch_id=args.patch_id, comment_id=args.comment_id)
+    else:
+        generate_fixes(
+            llm_tool=llm_tool,
+            db=db,
+            generation_limit=args.generation_limit,
+            prompt_types=args.prompt_types,
+            hunk_sizes=args.hunk_sizes,
+            diff_length_limits=args.diff_length_limits,
+            output_csv=args.output_csv,
+        )
 
 
 def parse_args(args):
@@ -83,6 +88,21 @@ def parse_args(args):
         type=int,
         default=100,
         help="Maximum number of generations.",
+    )
+    parser.add_argument(
+        "--revision-id",
+        type=str,
+        help="Revision ID for individual fix generation.",
+    )
+    parser.add_argument(
+        "--patch-id",
+        type=str,
+        help="Patch ID for individual fix generation.",
+    )
+    parser.add_argument(
+        "--comment-id",
+        type=str,
+        help="Comment ID for individual fix generation.",
     )
 
     return parser.parse_args(args)
