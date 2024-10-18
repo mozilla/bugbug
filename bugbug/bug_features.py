@@ -962,11 +962,13 @@ class FilePaths(SingleBugFeature):
         filtered_tlds = [tld for tld in tlds if tld[1:] not in self.valid_extensions]
         self.non_file_path_keywords.extend(filtered_tlds)
 
+        keyword_pattern_string = "|".join(
+            re.escape(keyword) for keyword in self.non_file_path_keywords
+        )
+        self.keyword_pattern = re.compile(rf"\S*({keyword_pattern_string})\S*")
+
     def remove_urls(self, text: str) -> str:
-        for keyword in self.non_file_path_keywords:
-            if keyword in text:
-                text = re.sub(rf"\S*{re.escape(keyword)}\S*", "", text)
-        return text
+        return self.keyword_pattern.sub("", text)
 
     def extract_valid_file_path(self, word: str) -> str:
         match = self.extension_pattern.search(word)
