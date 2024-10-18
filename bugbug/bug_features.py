@@ -957,7 +957,7 @@ class FilePaths(SingleBugFeature):
         )
 
         psl = PublicSuffixList()
-        tlds = set(tlds=set(f".{entry}" for entry in psl.tlds if "." not in entry))
+        tlds = set(f".{entry}" for entry in psl.tlds if "." not in entry)
 
         filtered_tlds = [tld for tld in tlds if tld[1:] not in self.valid_extensions]
         self.non_file_path_keywords.extend(filtered_tlds)
