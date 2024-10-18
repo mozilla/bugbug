@@ -2,6 +2,7 @@ import csv
 import json
 import logging
 import re
+from types import SimpleNamespace
 
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
@@ -597,3 +598,51 @@ def extract_revision_id_list_from_dataset(dataset_file):
             revision_ids.append(data["revision_id"])
 
     return revision_ids
+
+
+def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
+    revision_details = api.load_revision(rev_id=revision_id)
+    revision_phid = revision_details["phid"]
+    transactions = api.request("transaction.search", objectIdentifier=revision_phid)
+
+    target_comment = {}
+
+    found = False
+
+    for transaction in transactions["data"]:
+        if transaction["type"] == "inline":
+            for comment in transaction["comments"]:
+                if comment["id"] == comment_id:
+                    target_comment["filepath"] = transaction["fields"]["path"]
+                    target_comment["content"] = comment["content"]
+                    target_comment["start_line"] = transaction["fields"]["line"]
+                    target_comment["end_line"] = (
+                        transaction["fields"]["line"] + transaction["fields"]["length"]
+                    )
+                    found = True
+                    break
+        if found:
+            break
+
+    target_comment = SimpleNamespace(**target_comment)
+
+    diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
+    relevant_diff = extract_relevant_diff(
+        diff,
+        target_comment.filepath,
+        target_comment.start_line,
+        target_comment.end_line,
+        hunk_size=100,
+    )
+
+    generated_fix = llm_tool.generate_fix(
+        target_comment,
+        relevant_diff,
+        prompt_type="zero-shot",
+        hunk_size=100,
+        similar_comments_and_fix_infos=None,
+        evaluation=False,
+        generated_fix=None,
+    )
+
+    print(generated_fix)

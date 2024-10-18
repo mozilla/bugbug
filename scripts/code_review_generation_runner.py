@@ -10,6 +10,7 @@ from bugbug.tools.code_review_generation import (
     FixCommentDB,
     LocalQdrantVectorDB,
     generate_fixes,
+    generate_individual_fix,
 )
 
 
@@ -28,10 +29,16 @@ def run(args) -> None:
     llm = create_llm(args.llm)
     llm_tool = CodeGeneratorTool(llm=llm, db=db)
 
-    if args.revision_id and args.comment_id and args.patch_id:
+    if args.revision_id and args.diff_id and args.comment_id:
         pass
         # TODO: Create this function
-        # generate_individual_fix(llm_tool=llm_tool, db=db, revision_id=args.revision_id, patch_id=args.patch_id, comment_id=args.comment_id)
+        generate_individual_fix(
+            llm_tool=llm_tool,
+            db=db,
+            revision_id=args.revision_id,
+            diff_id=args.diff_id,
+            comment_id=args.comment_id,
+        )
     else:
         generate_fixes(
             llm_tool=llm_tool,
@@ -91,17 +98,17 @@ def parse_args(args):
     )
     parser.add_argument(
         "--revision-id",
-        type=str,
+        type=int,
         help="Revision ID for individual fix generation.",
     )
     parser.add_argument(
-        "--patch-id",
-        type=str,
-        help="Patch ID for individual fix generation.",
+        "--diff-id",
+        type=int,
+        help="Diff ID for individual fix generation.",
     )
     parser.add_argument(
         "--comment-id",
-        type=str,
+        type=int,
         help="Comment ID for individual fix generation.",
     )
 
