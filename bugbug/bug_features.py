@@ -955,10 +955,7 @@ class FilePaths(SingleBugFeature):
         )
 
         psl = PublicSuffixList()
-        tlds = set()
-        for entry in psl.tlds:
-            if "." not in entry:
-                tlds.add("." + entry)
+        tlds = set(tlds=set(f".{entry}" for entry in psl.tlds if "." not in entry))
 
         filtered_tlds = [tld for tld in tlds if tld[1:] not in self.valid_extensions]
         self.non_file_path_keywords.extend(filtered_tlds)
@@ -966,7 +963,7 @@ class FilePaths(SingleBugFeature):
     def remove_urls(self, text: str) -> str:
         for keyword in self.non_file_path_keywords:
             if keyword in text:
-                text = re.sub(r"\S*" + re.escape(keyword) + r"\S*", "", text)
+                text = re.sub(rf"\S*{re.escape(keyword)}\S*", "", text)
         return text
 
     def extract_valid_file_path(self, word: str) -> str:
@@ -982,7 +979,7 @@ class FilePaths(SingleBugFeature):
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
         text = self.remove_urls(
-            bug.get("summary", "") + " " + bug["comments"][0]["text"]
+            f"{bug.get('summary', '')} {bug['comments'][0]['text']}"
         )
 
         file_paths = [
