@@ -55,7 +55,9 @@ def read(get_fixture_path):
         else:
             path = get_fixture_path(os.path.join("bug_features", path))
             with open(path, "r") as f:
-                results = (feature_extractor(json.loads(line)) for line in f)
+                lines = f.readlines()
+
+            results = (feature_extractor(json.loads(line)) for line in lines)
 
         for result, expected_result in zip(results, expected_results):
             assert result == expected_result
