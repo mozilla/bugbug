@@ -391,7 +391,6 @@ def test_FilePaths(read):
         ],
     ]
 
-    results = (FilePaths(item) for item in inline_data)
-
-    for result, expected_result in zip(results, expected_results):
-        assert result == expected_result
+    feature_extractor = FilePaths()
+    results = [feature_extractor(item) for item in inline_data]
+    assert results == expected_results
