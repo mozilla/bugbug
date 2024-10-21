@@ -43,12 +43,11 @@ def read(get_fixture_path):
         path,
         feature_extractor_class,
         expected_results,
-        use_inline_data=False,
         inline_data=None,
     ):
         feature_extractor = feature_extractor_class()
 
-        if use_inline_data:
+        if inline_data:
             results = (feature_extractor(item) for item in inline_data)
         else:
             path = get_fixture_path(os.path.join("bug_features", path))
@@ -402,4 +401,4 @@ def test_FilePaths(read):
         ],
     ]
 
-    read("", FilePaths, expected_results, use_inline_data=True, inline_data=inline_data)
+    read("", FilePaths, expected_results, inline_data=inline_data)
