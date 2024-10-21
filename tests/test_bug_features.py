@@ -49,7 +49,7 @@ def read(get_fixture_path):
             for result, expected_result in zip(results, expected_results):
                 assert result == expected_result
 
-        return _read
+    return _read
 
 
 def test_has_str(read):
