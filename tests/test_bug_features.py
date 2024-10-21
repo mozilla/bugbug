@@ -39,25 +39,17 @@ from bugbug.feature_cleanup import fileref, url
 
 @pytest.fixture
 def read(get_fixture_path):
-    def _read(
-        path,
-        feature_extractor_class,
-        expected_results,
-        inline_data=None,
-    ):
+    def _read(path, feature_extractor_class, expected_results):
         feature_extractor = feature_extractor_class()
 
-        if inline_data:
-            results = (feature_extractor(item) for item in inline_data)
-        else:
-            path = get_fixture_path(os.path.join("bug_features", path))
-            with open(path, "r") as f:
-                results = list(feature_extractor(json.loads(line)) for line in f)
+        path = get_fixture_path(os.path.join("bug_features", path))
 
-        for result, expected_result in zip(results, expected_results):
-            assert result == expected_result
+        with open(path, "r") as f:
+            results = (feature_extractor(json.loads(line)) for line in f)
+            for result, expected_result in zip(results, expected_results):
+                assert result == expected_result
 
-    return _read
+        return _read
 
 
 def test_has_str(read):
@@ -399,4 +391,7 @@ def test_FilePaths(read):
         ],
     ]
 
-    read("", FilePaths, expected_results, inline_data=inline_data)
+    results = (FilePaths(item) for item in inline_data)
+
+    for result, expected_result in zip(results, expected_results):
+        assert result == expected_result
