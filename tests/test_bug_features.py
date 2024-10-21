@@ -44,7 +44,7 @@ def read(get_fixture_path):
         feature_extractor_class,
         expected_results,
         use_inline_data=False,
-        inline_data="",
+        inline_data=None,
     ):
         feature_extractor = feature_extractor_class()
 
