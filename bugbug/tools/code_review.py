@@ -321,7 +321,10 @@ class PhabricatorPatch(Patch):
     @staticmethod
     def _commit_available(commit_hash: str) -> bool:
         r = utils.get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}"
+            f"https://hg.mozilla.org/mozilla-unified/json-rev/{commit_hash}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
         )
         return r.ok
 
@@ -344,7 +347,10 @@ class PhabricatorPatch(Patch):
         end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
         start_date_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
         r = utils.get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1"
+            f"https://hg.mozilla.org/mozilla-central/json-pushes?startdate={start_date_str}&enddate={end_date_str}&version=2&tipsonly=1",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
         )
         pushes = r.json()["pushes"]
         closest_push = None

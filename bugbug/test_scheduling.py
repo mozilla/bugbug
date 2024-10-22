@@ -886,7 +886,10 @@ def get_test_info(date: datetime) -> dict[str, Any]:
     r = get_session("firefox-ci-tc").get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")
-        )
+        ),
+        headers={
+            "User-Agent": get_user_agent(),
+        },
     )
     r.raise_for_status()
     return r.json()

@@ -515,7 +515,10 @@ if __name__ == "__main__":
 
     def get_file(commit_hash, path):
         r = utils.get_session("hgmo").get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
         )
         r.raise_for_status()
         return r.text

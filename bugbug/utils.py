@@ -207,7 +207,13 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = session.get(url, stream=True)
+    r = session.get(
+        url,
+        stream=True,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     with open(path, "wb") as f:
@@ -511,7 +517,12 @@ def setup_libmozdata():
 def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
     """Load descriptions of patches in the stack for a given revision."""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
-    r = get_session("hgmo").get(url)
+    r = get_session("hgmo").get(
+        url,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     def should_skip(changeset):

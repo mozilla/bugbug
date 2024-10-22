@@ -9,7 +9,7 @@ from typing import Callable, Iterator, NewType
 from ratelimit import limits, sleep_and_retry
 
 from bugbug import db
-from bugbug.utils import get_secret, get_session
+from bugbug.utils import get_secret, get_session, get_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,10 @@ class Github:
     def fetch_events(self, events_url: str) -> list:
         self.api_limit()
         logger.info("Fetching %s", events_url)
-        headers = {"Authorization": "token {}".format(self.get_token())}
+        headers = {
+            "Authorization": "token {}".format(self.get_token()),
+            "User-Agent": get_user_agent(),
+        }
         response = get_session("github").get(events_url, headers=headers)
         response.raise_for_status()
         events_raw = response.json()
@@ -69,7 +72,10 @@ class Github:
         self, url: str, retrieve_events: bool, params: dict | None = None
     ) -> tuple[list[IssueDict], dict]:
         self.api_limit()
-        headers = {"Authorization": "token {}".format(self.get_token())}
+        headers = {
+            "Authorization": "token {}".format(self.get_token()),
+            "User-Agent": get_user_agent(),
+        }
         response = get_session("github").get(url, params=params, headers=headers)
         response.raise_for_status()
         data = response.json()

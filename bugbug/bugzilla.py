@@ -372,7 +372,11 @@ def get_product_component_count(months: int = 12) -> dict[str, int]:
     }
 
     csv_file = utils.get_session("bugzilla").get(
-        PRODUCT_COMPONENT_CSV_REPORT_URL, params=params
+        PRODUCT_COMPONENT_CSV_REPORT_URL,
+        params=params,
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
     )
     csv_file.raise_for_status()
     content = csv_file.text
