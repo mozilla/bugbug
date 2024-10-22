@@ -157,7 +157,7 @@ def get_secret(secret_id: str, default_value: str | None = None) -> Any:
         secrets = taskcluster.Secrets(get_taskcluster_options())
         secret_bucket = secrets.get(tc_secret_id)
 
-        return secret_bucket["secret"][secret_id]
+        return secret_bucket["secret"].get(secret_id, default_value)
 
     elif default_value is not None:
         return default_value
