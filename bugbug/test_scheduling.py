@@ -26,11 +26,10 @@ from typing import (
     cast,
 )
 
-import requests
 from tqdm import tqdm
 
 from bugbug import db, repository
-from bugbug.utils import ExpQueue, LMDBDict, get_user_agent
+from bugbug.utils import ExpQueue, LMDBDict, get_session, get_user_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -873,7 +872,7 @@ def generate_data(
 
 
 def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
-    r = requests.get(
+    r = get_session("treeherder").get(
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
         ),
@@ -884,7 +883,7 @@ def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
 
 
 def get_test_info(date: datetime) -> dict[str, Any]:
-    r = requests.get(
+    r = get_session("firefox-ci-tc").get(
         "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.pushdate.{}.latest.source.test-info-all/artifacts/public/test-info-all-tests.json".format(
             date.strftime("%Y.%m.%d")
         )

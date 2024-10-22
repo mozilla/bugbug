@@ -145,10 +145,10 @@ if __name__ == "__main__":
     import os
     import sys
 
-    import requests
+    from bugbug import utils
 
     def get_file(commit_hash, path):
-        r = requests.get(
+        r = utils.get_session("hgmo").get(
             f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
         )
         r.raise_for_status()

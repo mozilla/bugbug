@@ -7,10 +7,10 @@ import io
 import json
 from typing import Iterable, Literal
 
-import requests
 from lxml.html import HtmlElement
 from requests_html import HTMLSession
 
+from bugbug import utils
 from bugbug.code_search import searchfox_data
 from bugbug.code_search.function_search import (
     Function,
@@ -86,7 +86,9 @@ def find_function_for_line(commit_hash, path, line):
 
 # TODO: we should use commit_hash...
 def search(commit_hash, symbol_name):
-    r = requests.get(f"https://searchfox.org/mozilla-central/search?q={symbol_name}")
+    r = utils.get_session("searchfox").get(
+        f"https://searchfox.org/mozilla-central/search?q={symbol_name}"
+    )
     r.raise_for_status()
 
     results = r.text
@@ -181,10 +183,8 @@ if __name__ == "__main__":
 
     import io
 
-    import requests
-
     def get_file(commit_hash, path):
-        r = requests.get(
+        r = utils.get_session("hgmo").get(
             f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
         )
         r.raise_for_status()

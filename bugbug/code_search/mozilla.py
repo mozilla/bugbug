@@ -92,10 +92,9 @@ register_function_search("mozilla", FunctionSearchMozilla)
 if __name__ == "__main__":
     import sys
 
-    import requests
     from libmozdata.phabricator import PhabricatorAPI
 
-    from bugbug.utils import get_secret, setup_libmozdata
+    from bugbug.utils import get_secret, get_session, setup_libmozdata
 
     setup_libmozdata()
 
@@ -104,7 +103,7 @@ if __name__ == "__main__":
     )
 
     def get_file(commit_hash, path):
-        r = requests.get(
+        r = get_session("hgmo").get(
             f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
         )
         r.raise_for_status()

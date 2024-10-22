@@ -4,12 +4,11 @@ import os
 import re
 
 import orjson
-import requests
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, phabricator
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret, setup_libmozdata, zstd_compress
+from bugbug.utils import get_secret, get_session, setup_libmozdata, zstd_compress
 
 review_data = PhabricatorReviewData()
 
@@ -69,7 +68,7 @@ def find_recent_update(transactions, comment_date_modified):
 
 def fetch_diff_from_url(revision_id, vs_diff_id, fix_patch_id):
     url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={vs_diff_id}&id={fix_patch_id}&download=true"
-    response = requests.get(url)
+    response = get_session("phabricator").get(url)
     if response.status_code == 200:
         return response.text
     else:
