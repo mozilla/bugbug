@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 
-from bugbug.utils import get_session
+from bugbug.utils import get_session, get_user_agent
 
 SEARCHFOX_STORAGE_DATA = "searchfox_data"
 
@@ -36,7 +36,12 @@ def fetch(commit_hash: str) -> str:
         indexUrl = baseUrl % (commit_hash, index_os)
         if len(sys.argv) > 2:
             indexUrl = sys.argv[2]
-        indexRequest = session.get(indexUrl)
+        indexRequest = session.get(
+            indexUrl,
+            headers={
+                "User-Agent": get_user_agent(),
+            },
+        )
         if not indexRequest.ok:
             raise SearchfoxDataNotAvailable("Searchfox task not indexed")
 
@@ -44,7 +49,12 @@ def fetch(commit_hash: str) -> str:
         taskId = indexEntry["taskId"]
 
         targetJsonUrl = artifactBaseUrl % (taskId, "public/build/target.json")
-        targetJsonRequest = session.get(targetJsonUrl)
+        targetJsonRequest = session.get(
+            targetJsonUrl,
+            headers={
+                "User-Agent": get_user_agent(),
+            },
+        )
         if not targetJsonRequest.ok:
             raise SearchfoxDataNotAvailable("Searchfox artifact not present")
 
