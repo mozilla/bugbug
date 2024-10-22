@@ -30,7 +30,7 @@ import requests
 from tqdm import tqdm
 
 from bugbug import db, repository
-from bugbug.utils import ExpQueue, LMDBDict
+from bugbug.utils import ExpQueue, LMDBDict, get_user_agent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -877,7 +877,7 @@ def get_failure_bugs(since: datetime, until: datetime) -> list[dict[str, int]]:
         "https://treeherder.mozilla.org/api/failures/?startday={}&endday={}&tree=trunk".format(
             since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d")
         ),
-        headers={"Accept": "application/json", "User-Agent": "bugbug"},
+        headers={"Accept": "application/json", "User-Agent": get_user_agent()},
     )
     r.raise_for_status()
     return r.json()

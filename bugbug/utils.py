@@ -22,6 +22,7 @@ from typing import Any, Iterator
 
 import boto3
 import dateutil.parser
+import libmozdata
 import lmdb
 import numpy as np
 import psutil
@@ -139,7 +140,7 @@ def get_taskcluster_options() -> dict:
     return options
 
 
-def get_secret(secret_id: str) -> Any:
+def get_secret(secret_id: str, default_value: str | None = None) -> Any:
     """Return the secret value."""
     env_variable_name = f"BUGBUG_{secret_id}"
 
@@ -157,6 +158,9 @@ def get_secret(secret_id: str) -> Any:
         secret_bucket = secrets.get(tc_secret_id)
 
         return secret_bucket["secret"][secret_id]
+
+    elif default_value is not None:
+        return default_value
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
@@ -493,6 +497,15 @@ def get_session(name: str) -> requests.Session:
     session.mount("http://", http_adapter)
 
     return session
+
+
+def get_user_agent():
+    return get_secret("USER_AGENT", "bugbug")
+
+
+def setup_libmozdata():
+    libmozdata.config.set_config(libmozdata.config.ConfigEnv())
+    os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
 
 
 def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:

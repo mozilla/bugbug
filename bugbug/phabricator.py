@@ -11,11 +11,13 @@ import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 from bugbug.db import LastModifiedNotAvailable
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+utils.setup_libmozdata()
 
 RevisionDict = NewType("RevisionDict", dict)
 TransactionDict = NewType("TransactionDict", dict)

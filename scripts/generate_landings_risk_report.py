@@ -36,6 +36,7 @@ from bugbug.utils import (
     download_model,
     escape_markdown,
     get_secret,
+    setup_libmozdata,
     zstd_compress,
     zstd_decompress,
 )
@@ -43,6 +44,7 @@ from bugbug.utils import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+setup_libmozdata()
 
 TEST_INFOS_DB = "data/test_info.json"
 db.register(
