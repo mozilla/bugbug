@@ -16,7 +16,9 @@ from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from bugbug import bug_snapshot, bugzilla, repository
+from bugbug import bug_snapshot, bugzilla, repository, utils
+
+utils.setup_libmozdata()
 
 
 def field(bug, field):

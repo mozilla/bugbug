@@ -95,7 +95,9 @@ if __name__ == "__main__":
     import requests
     from libmozdata.phabricator import PhabricatorAPI
 
-    from bugbug.utils import get_secret
+    from bugbug.utils import get_secret, setup_libmozdata
+
+    setup_libmozdata()
 
     phabricator = PhabricatorAPI(
         get_secret("PHABRICATOR_TOKEN"), get_secret("PHABRICATOR_URL")

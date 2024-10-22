@@ -22,6 +22,8 @@ from bugbug import db, utils
 basicConfig(level=INFO)
 logger = getLogger(__name__)
 
+utils.setup_libmozdata()
+
 BugDict = NewType("BugDict", dict)
 
 BUGS_DB = "data/bugs.json"
@@ -444,7 +446,10 @@ def get_groups_users(group_names: list[str]) -> list[str]:
             "names": group_names,
             "membership": "1",
         },
-        headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+        headers={
+            "X-Bugzilla-API-Key": Bugzilla.TOKEN,
+            "User-Agent": utils.get_user_agent(),
+        },
     )
     r.raise_for_status()
 
@@ -553,7 +558,10 @@ def calculate_maintenance_effectiveness_indicator(
             r = utils.get_session("bugzilla").get(
                 "https://bugzilla.mozilla.org/rest/bug",
                 params={**params, "count_only": 1},
-                headers={"X-Bugzilla-API-Key": Bugzilla.TOKEN, "User-Agent": "bugbug"},
+                headers={
+                    "X-Bugzilla-API-Key": Bugzilla.TOKEN,
+                    "User-Agent": utils.get_user_agent(),
+                },
             )
             r.raise_for_status()
 
