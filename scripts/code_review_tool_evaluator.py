@@ -20,10 +20,9 @@ function.
 from datetime import datetime, timedelta
 
 import pandas as pd
-import requests
 from tabulate import tabulate
 
-from bugbug import generative_model_tool, phabricator
+from bugbug import generative_model_tool, phabricator, utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
@@ -51,7 +50,7 @@ def get_tool_variants(
     if is_variant_selected("CONTEXT", "RAG and CONTEXT"):
 
         def get_file(commit_hash, path):
-            r = requests.get(
+            r = utils.get_session("hgmo").get(
                 f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
             )
             r.raise_for_status()
