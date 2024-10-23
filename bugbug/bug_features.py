@@ -923,19 +923,15 @@ class FilePaths(SingleBugFeature):
             "@",
         ]
 
-        self.valid_extensions = set(
-            ext.lstrip(".") for ext in mimetypes.types_map.keys()
-        )
+        valid_extensions = set(ext.lstrip(".") for ext in mimetypes.types_map.keys())
 
         lexers = get_all_lexers()
         lexer_extensions = set(ext[2:] for lexer in lexers for ext in lexer[2])
 
-        self.valid_extensions.update(lexer_extensions)
-        self.valid_extensions = sorted(self.valid_extensions, key=len, reverse=True)
+        valid_extensions.update(lexer_extensions)
+        valid_extensions = sorted(valid_extensions, key=len, reverse=True)
 
-        extension_pattern_string = "|".join(
-            re.escape(ext) for ext in self.valid_extensions
-        )
+        extension_pattern_string = "|".join(re.escape(ext) for ext in valid_extensions)
 
         self.extension_pattern = re.compile(
             rf"\.({extension_pattern_string})(?![a-zA-Z])"
@@ -944,7 +940,7 @@ class FilePaths(SingleBugFeature):
         psl = PublicSuffixList()
         tlds = set(f".{entry}" for entry in psl.tlds if "." not in entry)
 
-        filtered_tlds = [tld for tld in tlds if tld[1:] not in self.valid_extensions]
+        filtered_tlds = [tld for tld in tlds if tld[1:] not in valid_extensions]
         self.non_file_path_keywords.extend(filtered_tlds)
 
         keyword_pattern_string = "|".join(
