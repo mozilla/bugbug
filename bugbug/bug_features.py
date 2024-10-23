@@ -929,6 +929,8 @@ class FilePaths(SingleBugFeature):
         lexer_extensions = set(ext[2:] for lexer in lexers for ext in lexer[2])
 
         valid_extensions.update(lexer_extensions)
+
+        # Sorted from longest to shortest length to avoid partial matches (e.g. ".css" over ".c")
         valid_extensions = sorted(valid_extensions, key=len, reverse=True)
 
         extension_pattern_string = "|".join(re.escape(ext) for ext in valid_extensions)
