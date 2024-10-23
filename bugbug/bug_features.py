@@ -950,10 +950,13 @@ class FilePaths(SingleBugFeature):
         )
         self.keyword_pattern = re.compile(rf"\S*({keyword_pattern_string})\S*")
 
-    def remove_urls(self, text: str) -> str:
-        return self.keyword_pattern.sub("", text)
+    def is_valid_file_path_candidate(self, word: str) -> bool:
+        return not self.keyword_pattern.search(word)
 
     def extract_valid_file_path(self, word: str) -> str:
+        if not self.is_valid_file_path_candidate(word):
+            return ""
+
         match = self.extension_pattern.search(word)
         if match:
             ext = match.group(1)
@@ -965,9 +968,7 @@ class FilePaths(SingleBugFeature):
         return ""
 
     def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
-        text = self.remove_urls(
-            f"{bug.get('summary', '')} {bug['comments'][0]['text']}"
-        )
+        text = f"{bug.get('summary', '')} {bug['comments'][0]['text']}"
 
         file_paths = [
             path
