@@ -916,7 +916,7 @@ class FilePaths(SingleBugFeature):
     name = "Extract File Paths"
 
     def __init__(self):
-        self.non_file_path_keywords = [
+        non_file_path_keywords = [
             "http://",
             "https://",
             "www.",
@@ -941,10 +941,10 @@ class FilePaths(SingleBugFeature):
         tlds = set(f".{entry}" for entry in psl.tlds if "." not in entry)
 
         filtered_tlds = [tld for tld in tlds if tld[1:] not in valid_extensions]
-        self.non_file_path_keywords.extend(filtered_tlds)
+        non_file_path_keywords.extend(filtered_tlds)
 
         keyword_pattern_string = "|".join(
-            re.escape(keyword) for keyword in self.non_file_path_keywords
+            re.escape(keyword) for keyword in non_file_path_keywords
         )
         self.keyword_pattern = re.compile(rf"\S*({keyword_pattern_string})\S*")
 
