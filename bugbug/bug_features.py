@@ -925,7 +925,7 @@ class FilePaths(SingleBugFeature):
 
         valid_extensions = set(ext.lstrip(".") for ext in mimetypes.types_map.keys())
 
-        valid_extensions = set(
+        valid_extensions.update(
             ext[2:] for (_, _, exts, *_) in get_all_lexers() for ext in exts
         )
 
