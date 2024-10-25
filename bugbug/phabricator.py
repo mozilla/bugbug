@@ -303,7 +303,6 @@ def fetch_diff_from_url(
         url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={first_patch}&id={second_patch}&download=true"
 
     response = requests.get(url)
-    if response.status_code == 200:
-        return response.text
-    else:
-        raise Exception(f"Failed to download diff from URL: {url}")
+    response.raise_for_status()
+
+    return response.text
