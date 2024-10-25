@@ -92,18 +92,22 @@ register_function_search("mozilla", FunctionSearchMozilla)
 if __name__ == "__main__":
     import sys
 
-    import requests
     from libmozdata.phabricator import PhabricatorAPI
 
-    from bugbug.utils import get_secret
+    from bugbug.utils import get_secret, get_session, get_user_agent, setup_libmozdata
+
+    setup_libmozdata()
 
     phabricator = PhabricatorAPI(
         get_secret("PHABRICATOR_TOKEN"), get_secret("PHABRICATOR_URL")
     )
 
     def get_file(commit_hash, path):
-        r = requests.get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+        r = get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+            headers={
+                "User-Agent": get_user_agent(),
+            },
         )
         r.raise_for_status()
         return r.text

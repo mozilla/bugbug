@@ -47,7 +47,12 @@ def exists(path):
 
 def is_different_schema(path):
     url = urljoin(DATABASES[path]["url"], f"{os.path.basename(path)}.version")
-    r = requests.get(url)
+    r = utils.get_session("community-tc").get(
+        url,
+        headers={
+            "User-Agent": utils.get_user_agent(),
+        },
+    )
 
     if not r.ok:
         logger.info("Version file is not yet available to download for %s", path)

@@ -36,6 +36,7 @@ from bugbug.utils import (
     download_model,
     escape_markdown,
     get_secret,
+    setup_libmozdata,
     zstd_compress,
     zstd_decompress,
 )
@@ -43,6 +44,7 @@ from bugbug.utils import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+setup_libmozdata()
 
 TEST_INFOS_DB = "data/test_info.json"
 db.register(
@@ -380,7 +382,8 @@ class LandingsRiskReportGenerator(object):
         db.download(TEST_INFOS_DB)
 
         dates = [
-            datetime.utcnow() - timedelta(days=day) for day in reversed(range(days))
+            datetime.utcnow() - timedelta(days=day)
+            for day in reversed(range(min(days, 90)))
         ]
 
         logger.info("Get previously gathered test info...")

@@ -12,11 +12,13 @@ import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 from bugbug.db import LastModifiedNotAvailable
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+utils.setup_libmozdata()
 
 RevisionDict = NewType("RevisionDict", dict)
 TransactionDict = NewType("TransactionDict", dict)
@@ -63,8 +65,8 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
@@ -95,8 +97,8 @@ def get(
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "differential.revision.search",

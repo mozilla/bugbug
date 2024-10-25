@@ -42,6 +42,8 @@ from bugbug_http.sentry import setup_sentry
 if os.environ.get("SENTRY_DSN"):
     setup_sentry(dsn=os.environ.get("SENTRY_DSN"), integrations=[FlaskIntegration()])
 
+utils.setup_libmozdata()
+
 API_TOKEN = "X-Api-Key"
 
 API_DESCRIPTION = """
