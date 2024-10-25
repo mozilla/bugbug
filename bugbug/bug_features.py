@@ -925,10 +925,9 @@ class FilePaths(SingleBugFeature):
 
         valid_extensions = set(ext.lstrip(".") for ext in mimetypes.types_map.keys())
 
-        lexers = get_all_lexers()
-        lexer_extensions = set(ext[2:] for lexer in lexers for ext in lexer[2])
-
-        valid_extensions.update(lexer_extensions)
+        valid_extensions.update(
+            ext[2:] for (_, _, exts) in get_all_lexers() for ext in exts
+        )
 
         extension_pattern_string = "|".join(re.escape(ext) for ext in valid_extensions)
 
