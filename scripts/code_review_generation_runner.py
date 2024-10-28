@@ -4,7 +4,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from bugbug.generative_model_tool import create_llm
+from bugbug.generative_model_tool import create_llm_from_args
 from bugbug.tools.code_review_generation import (
     CodeGeneratorTool,
     FixCommentDB,
@@ -26,7 +26,7 @@ def run(args) -> None:
         db.db.setup()
         db.upload_dataset(args.dataset_file)
 
-    llm = create_llm(args.llm)
+    llm = create_llm_from_args(args)
     llm_tool = CodeGeneratorTool(llm=llm, db=db)
 
     if args.revision_id and args.diff_id and args.comment_id:

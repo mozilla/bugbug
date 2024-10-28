@@ -90,11 +90,9 @@ class CodeGeneratorTool(GenerativeModelTool):
         self,
         llm,
         db: FixCommentDB,
-        *args,
-        **kwargs,
     ) -> None:
-        super().__init__(llm, *args, **kwargs)
         self.db = db
+        self.llm = llm
 
     def run(self, prompt: str):
         messages = [("system", "You are a code review bot."), ("user", prompt)]

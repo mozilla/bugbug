@@ -6,16 +6,16 @@ import sys
 
 from dotenv import load_dotenv
 
-from bugbug.generative_model_tool import GenerativeModelTool, create_llm
+from bugbug.generative_model_tool import GenerativeModelTool, create_llm_from_args
 from bugbug.tools.code_review_generation import FixCommentDB, LocalQdrantVectorDB
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
     version = "0.0.1"
 
-    def __init__(self, llm, db, *args, **kwargs) -> None:
-        super().__init__(llm, *args, **kwargs)
+    def __init__(self, llm, db) -> None:
         self.db = db
+        self.llm = llm
 
     def run(self, prompt: str):
         messages = [
@@ -132,7 +132,7 @@ def run(args) -> None:
     logging.basicConfig(level=logging.INFO)
 
     db = FixCommentDB(LocalQdrantVectorDB(collection_name="fix_comments"))
-    llm = create_llm(args.llm)
+    llm = create_llm_from_args(args)
     llm_tool = CodeGeneratorEvaluatorTool(llm=llm, db=db)
 
     input_csv = args.input_csv
