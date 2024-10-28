@@ -21,10 +21,8 @@ numpy==1.26.4
 orjson==3.10.9
 ortools==9.11.4210
 pandas==2.2.3
-<<<<<<< HEAD
 psutil==6.1.0
 publicsuffix2==2.20191221
->>>>>>> 0f27b3cb (Added `publicsuffix2` to generate list of tlds)
 pydriller==1.12
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.9.0.post0
