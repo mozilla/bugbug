@@ -11,6 +11,7 @@ from bugbug.phabricator import fetch_diff_from_url
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import get_secret, zstd_compress
 
+# test
 review_data = PhabricatorReviewData()
 
 logging.basicConfig(level=logging.INFO)
