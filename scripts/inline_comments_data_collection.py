@@ -9,7 +9,13 @@ from libmozdata.phabricator import PhabricatorAPI
 from bugbug import db, phabricator
 from bugbug.phabricator import fetch_diff_from_url
 from bugbug.tools.code_review import PhabricatorReviewData
-from bugbug.utils import get_secret, zstd_compress
+from bugbug.utils import (
+    get_secret,
+    get_session,
+    get_user_agent,
+    setup_libmozdata,
+    zstd_compress,
+)
 
 # test
 review_data = PhabricatorReviewData()
@@ -17,6 +23,7 @@ review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+setup_libmozdata()
 api = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
 
 

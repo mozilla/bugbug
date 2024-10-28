@@ -511,11 +511,14 @@ register_function_search("searchfox_data", FunctionSearchSearchfoxData)
 if __name__ == "__main__":
     import typing
 
-    import requests
+    from bugbug import utils
 
     def get_file(commit_hash, path):
-        r = requests.get(
-            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+        r = utils.get_session("hgmo").get(
+            f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+            headers={
+                "User-Agent": utils.get_user_agent(),
+            },
         )
         r.raise_for_status()
         return r.text

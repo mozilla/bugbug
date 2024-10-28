@@ -13,7 +13,7 @@ from bugbug.vectordb import QdrantVectorDB
 
 
 def run(args) -> None:
-    llm = generative_model_tool.create_llm(args.llm)
+    llm = generative_model_tool.create_llm_from_args(args)
 
     function_search = (
         function_search_classes[args.function_search_type]()
@@ -23,7 +23,11 @@ def run(args) -> None:
     vector_db = QdrantVectorDB("diff_comments")
     review_comments_db = code_review.ReviewCommentsDB(vector_db)
     code_review_tool = code_review.CodeReviewTool(
-        function_search, review_comments_db, llm
+        [llm],
+        llm,
+        function_search=function_search,
+        review_comments_db=review_comments_db,
+        show_patch_example=False,
     )
 
     review_data = code_review.review_data_classes[args.review_platform]()
@@ -37,7 +41,9 @@ def run(args) -> None:
 
 
 def parse_args(args):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--review_platform",
         help="Review platform",
@@ -47,11 +53,7 @@ def parse_args(args):
         "--review_request_id",
         help="Review request ID",
     )
-    parser.add_argument(
-        "--llm",
-        help="LLM",
-        choices=["human", "openai", "azureopenai", "llama2"],
-    )
+    generative_model_tool.create_llm_to_args(parser)
     parser.add_argument(
         "--function_search_type",
         help="Function search tool",

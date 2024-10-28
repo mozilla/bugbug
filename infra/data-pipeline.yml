@@ -251,10 +251,10 @@ tasks:
           - "bugbug-fixed-comments"
 
         artifacts:
-          public/bugs.json.zst:
+          public/fixed_comments.json.zst:
             path: /data/fixed_comments.json.zst
             type: file
-          public/bugs.json.version:
+          public/fixed_comments.json.version:
             path: /data/fixed_comments.json.version
             type: file
 

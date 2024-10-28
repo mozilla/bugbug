@@ -22,6 +22,7 @@ from typing import Any, Iterator
 
 import boto3
 import dateutil.parser
+import libmozdata
 import lmdb
 import numpy as np
 import psutil
@@ -139,7 +140,7 @@ def get_taskcluster_options() -> dict:
     return options
 
 
-def get_secret(secret_id: str) -> Any:
+def get_secret(secret_id: str, default_value: str | None = None) -> Any:
     """Return the secret value."""
     env_variable_name = f"BUGBUG_{secret_id}"
 
@@ -156,7 +157,10 @@ def get_secret(secret_id: str) -> Any:
         secrets = taskcluster.Secrets(get_taskcluster_options())
         secret_bucket = secrets.get(tc_secret_id)
 
-        return secret_bucket["secret"][secret_id]
+        return secret_bucket["secret"].get(secret_id, default_value)
+
+    elif default_value is not None:
+        return default_value
 
     else:
         raise ValueError("Failed to find secret {}".format(secret_id))
@@ -203,7 +207,13 @@ def download_check_etag(url, path=None):
     if old_etag == new_etag:
         return False
 
-    r = session.get(url, stream=True)
+    r = session.get(
+        url,
+        stream=True,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     with open(path, "wb") as f:
@@ -495,10 +505,24 @@ def get_session(name: str) -> requests.Session:
     return session
 
 
+def get_user_agent():
+    return get_secret("USER_AGENT", "bugbug")
+
+
+def setup_libmozdata():
+    libmozdata.config.set_config(libmozdata.config.ConfigEnv())
+    os.environ["LIBMOZDATA_CFG_USER-AGENT_NAME"] = get_user_agent()
+
+
 def get_hgmo_stack(branch: str, revision: str) -> list[bytes]:
     """Load descriptions of patches in the stack for a given revision."""
     url = f"https://hg.mozilla.org/{branch}/json-automationrelevance/{revision}"
-    r = get_session("hgmo").get(url)
+    r = get_session("hgmo").get(
+        url,
+        headers={
+            "User-Agent": get_user_agent(),
+        },
+    )
     r.raise_for_status()
 
     def should_skip(changeset):

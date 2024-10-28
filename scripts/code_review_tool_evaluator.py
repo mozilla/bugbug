@@ -9,7 +9,7 @@ Before running this script, you may need to set the following environment
 variables:
     - BUGBUG_PHABRICATOR_URL
     - BUGBUG_PHABRICATOR_TOKEN
-    - BUGBUG_OPENAI_API_KEY
+    - BUGBUG_*_API_KEY (replace * with your LLM provider)
     - BUGBUG_QDRANT_API_KEY
     - BUGBUG_QDRANT_LOCATION
 
@@ -20,16 +20,16 @@ function.
 from datetime import datetime, timedelta
 
 import pandas as pd
-import requests
 from tabulate import tabulate
 
-from bugbug import generative_model_tool, phabricator
+from bugbug import generative_model_tool, phabricator, utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 
 def get_tool_variants(
+    llm,
     variants: list[str] | None = None,
 ) -> list[tuple[str, code_review.CodeReviewTool]]:
     """Returns a list of tool variants to evaluate.
@@ -38,7 +38,6 @@ def get_tool_variants(
         List of tuples, where each tuple contains the name of the variant and
         and instance of the code review tool to evaluate.
     """
-    llm = generative_model_tool.create_llm("openai")
 
     def is_variant_selected(*target_variants):
         return variants is None or any(
@@ -51,8 +50,11 @@ def get_tool_variants(
     if is_variant_selected("CONTEXT", "RAG and CONTEXT"):
 
         def get_file(commit_hash, path):
-            r = requests.get(
-                f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}"
+            r = utils.get_session("hgmo").get(
+                f"https://hg.mozilla.org/mozilla-unified/raw-file/{commit_hash}/{path}",
+                headers={
+                    "User-Agent": utils.get_user_agent(),
+                },
             )
             r.raise_for_status()
             return r.text
@@ -72,7 +74,7 @@ def get_tool_variants(
             (
                 "RAG",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=None,
                     review_comments_db=review_comments_db,
                 ),
@@ -84,7 +86,7 @@ def get_tool_variants(
             (
                 "CONTEXT",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=None,
                 ),
@@ -96,7 +98,7 @@ def get_tool_variants(
             (
                 "RAG and CONTEXT",
                 code_review.CodeReviewTool(
-                    llm=llm,
+                    comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                 ),
@@ -154,13 +156,15 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def main(variants=None, review_request_ids=None):
+def main(args):
     review_platform = "phabricator"
     review_data: code_review.ReviewData = code_review.review_data_classes[
         review_platform
     ]()
 
-    tool_variants = get_tool_variants(variants)
+    tool_variants = get_tool_variants(
+        generative_model_tool.create_llm_from_args(args), args.variants
+    )
 
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
@@ -170,8 +174,8 @@ def main(variants=None, review_request_ids=None):
     ]
 
     sample_ids = (
-        review_request_ids
-        if review_request_ids
+        args.review_request_ids
+        if args.review_request_ids
         else get_review_requests_sample(timedelta(days=60), 3)
     )
 
@@ -229,7 +233,10 @@ def main(variants=None, review_request_ids=None):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    generative_model_tool.create_llm_to_args(parser)
     parser.add_argument(
         "-v",
         "--variant",
@@ -250,4 +257,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(args.variants, args.review_request_ids)
+    main(args)
