@@ -4,6 +4,8 @@ import sys
 
 from dotenv import load_dotenv
 
+import bugbug.db as db
+import bugbug.phabricator as phabricator
 from bugbug.generative_model_tool import create_llm_from_args
 from bugbug.tools.code_review_generation import (
     CodeGeneratorTool,
@@ -65,6 +67,12 @@ def parse_args(args):
         help="If set, the local Qdrant database will be created and populated.",
     )
     parser.add_argument(
+        "--dataset-file",
+        type=str,
+        default="data/fixed_comments.json",
+        help="Dataset file to upload as Qdrant database.",
+    )
+    parser.add_argument(
         "--output-csv",
         type=str,
         default="metrics_results.csv",
@@ -116,5 +124,6 @@ def parse_args(args):
 
 
 if __name__ == "__main__":
+    db.download(phabricator.FIXED_COMMENTS_DB)
     args = parse_args(sys.argv[1:])
     run(args)
