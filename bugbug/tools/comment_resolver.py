@@ -132,6 +132,36 @@ class CodeGeneratorTool(GenerativeModelTool):
         return generated_fix
 
 
+class CodeGeneratorEvaluatorTool(GenerativeModelTool):
+    version = "0.0.1"
+
+    def __init__(self, llm, db) -> None:
+        self.db = db
+        self.llm = llm
+
+    def run(self, prompt: str):
+        messages = [
+            (
+                "system",
+                "You are an evaluator of code generation to address review comments.",
+            ),
+            ("user", prompt),
+        ]
+        response = self.llm.invoke(messages)
+        return response.content
+
+    def generate_fix(self, comment, relevant_diff, generated_fix):
+        prompt = f"""
+        Comment: {comment}
+        Diff (before fix): {relevant_diff}
+        Generated Fix: {generated_fix}
+
+        Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
+        """
+        qualitative_feedback = self.run(prompt=prompt)
+        return qualitative_feedback
+
+
 def fetch_patch_diff(patch_id):
     diffs = api.search_diffs(diff_id=patch_id)
     if diffs:

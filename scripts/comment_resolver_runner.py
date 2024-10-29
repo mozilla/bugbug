@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import bugbug.db as db
 import bugbug.phabricator as phabricator
 from bugbug.generative_model_tool import create_llm_from_args
-from bugbug.tools.code_review_generation import (
+from bugbug.tools.comment_resolver import (
     CodeGeneratorTool,
     FixCommentDB,
     LocalQdrantVectorDB,

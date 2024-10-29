@@ -6,38 +6,12 @@ import sys
 
 from dotenv import load_dotenv
 
-from bugbug.generative_model_tool import GenerativeModelTool, create_llm_from_args
-from bugbug.tools.code_review_generation import FixCommentDB, LocalQdrantVectorDB
-
-
-class CodeGeneratorEvaluatorTool(GenerativeModelTool):
-    version = "0.0.1"
-
-    def __init__(self, llm, db) -> None:
-        self.db = db
-        self.llm = llm
-
-    def run(self, prompt: str):
-        messages = [
-            (
-                "system",
-                "You are an evaluator of code generation to address review comments.",
-            ),
-            ("user", prompt),
-        ]
-        response = self.llm.invoke(messages)
-        return response.content
-
-    def generate_fix(self, comment, relevant_diff, generated_fix):
-        prompt = f"""
-        Comment: {comment}
-        Diff (before fix): {relevant_diff}
-        Generated Fix: {generated_fix}
-
-        Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-        """
-        qualitative_feedback = self.run(prompt=prompt)
-        return qualitative_feedback
+from bugbug.generative_model_tool import create_llm_from_args
+from bugbug.tools.comment_resolver import (
+    CodeGeneratorEvaluatorTool,
+    FixCommentDB,
+    LocalQdrantVectorDB,
+)
 
 
 def find_fix_in_dataset(revision_id, initial_patch_id, dataset_file):
