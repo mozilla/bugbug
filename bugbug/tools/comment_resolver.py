@@ -106,27 +106,17 @@ class CodeGeneratorTool(GenerativeModelTool):
         prompt_type,
         hunk_size,
         similar_comments_and_fix_infos,
-        evaluation,
         generated_fix,
     ):
-        if not evaluation:
-            prompt = generate_prompt(
-                comment.content,
-                relevant_diff,
-                comment.start_line,
-                comment.end_line,
-                similar_comments_and_fix_infos,
-                prompt_type,
-                hunk_size,
-            )
-        else:
-            prompt = f"""
-            Comment: {comment.content}
-            Diff (before fix): {relevant_diff}
-            Generated Fix: {generated_fix}
-
-            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-            """
+        prompt = generate_prompt(
+            comment.content,
+            relevant_diff,
+            comment.start_line,
+            comment.end_line,
+            similar_comments_and_fix_infos,
+            prompt_type,
+            hunk_size,
+        )
 
         generated_fix = self.run(prompt=prompt)
         return generated_fix
@@ -150,14 +140,25 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         response = self.llm.invoke(messages)
         return response.content
 
-    def generate_fix(self, comment, relevant_diff, generated_fix):
-        prompt = f"""
-        Comment: {comment}
-        Diff (before fix): {relevant_diff}
-        Generated Fix: {generated_fix}
+    def generate_fix(
+        self, comment, relevant_diff, generated_fix, actual_fix, comparison_evaluation
+    ):
+        if comparison_evaluation:
+            prompt = f"""
+            Comment: {comment}
+            Generated Fix: {generated_fix}
+            Actual Fix: {actual_fix}
 
-        Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-        """
+            Is the Generated Fix equivalent to the Actual Fix? (i.e. is the logic of the code between the two fixes the same?) Answer YES or NO, followed by a very short and succinct explanation.
+            """
+        else:
+            prompt = f"""
+            Comment: {comment}
+            Diff (before fix): {relevant_diff}
+            Generated Fix: {generated_fix}
+
+            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
+            """
         qualitative_feedback = self.run(prompt=prompt)
         return qualitative_feedback
 
@@ -669,7 +670,6 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
         prompt_type="zero-shot",
         hunk_size=100,
         similar_comments_and_fix_infos=None,
-        evaluation=False,
         generated_fix=None,
     )
 

@@ -85,7 +85,7 @@ def conduct_evaluation(input_csv, output_csv, llm_tool):
             )
 
             qualitative_feedback = llm_tool.generate_fix(
-                comment, relevant_diff, generated_fix
+                comment, relevant_diff, generated_fix, reference_fix, True
             )
 
             if metrics is not None:
