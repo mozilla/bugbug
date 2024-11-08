@@ -106,7 +106,6 @@ class CodeGeneratorTool(GenerativeModelTool):
         prompt_type,
         hunk_size,
         similar_comments_and_fix_infos,
-        generated_fix,
     ):
         prompt = generate_prompt(
             comment.content,
@@ -525,6 +524,7 @@ def generate_fixes(
     prompt_types,
     hunk_sizes,
     output_csv,
+    single_comment,
 ):
     counter = 0
     revision_ids = extract_revision_id_list_from_dataset("data/fixed_comments.json")
@@ -563,6 +563,13 @@ def generate_fixes(
                     f"Skipping Patch ID {patch_id} as revision ID {revision_id} not in dataset."
                 )
                 continue
+
+            if single_comment:
+                if len(comments) > 1:
+                    logger.error(
+                        f"Skipping Patch ID {patch_id} as more than one comment found."
+                    )
+                    continue
 
             diff = fetch_diff_from_url(revision_id, patch_id, single_patch=True)
 
@@ -613,8 +620,6 @@ def generate_fixes(
                                     prompt_type,
                                     hunk_size,
                                     similar_comments_and_fix_infos,
-                                    False,
-                                    None,
                                 )
 
                                 comment_length = len(comment.content)

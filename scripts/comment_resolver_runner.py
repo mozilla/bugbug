@@ -33,7 +33,6 @@ def run(args) -> None:
 
     if args.revision_id and args.diff_id and args.comment_id:
         pass
-        # TODO: Create this function
         generate_individual_fix(
             llm_tool=llm_tool,
             db=db,
@@ -50,6 +49,7 @@ def run(args) -> None:
             hunk_sizes=args.hunk_sizes,
             diff_length_limits=args.diff_length_limits,
             output_csv=args.output_csv,
+            single_comment=args.single_comment,
         )
 
 
@@ -75,7 +75,7 @@ def parse_args(args):
     parser.add_argument(
         "--output-csv",
         type=str,
-        default="metrics_results.csv",
+        default="code_generations.csv",
         help="Output CSV file for results.",
     )
     parser.add_argument(
@@ -103,6 +103,11 @@ def parse_args(args):
         type=int,
         default=100,
         help="Maximum number of generations.",
+    )
+    parser.add_argument(
+        "--single-comment",
+        action="store_true",
+        help="If set, only patches with single comments will be included.",
     )
     parser.add_argument(
         "--revision-id",
