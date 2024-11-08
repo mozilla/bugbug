@@ -140,15 +140,39 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         return response.content
 
     def generate_fix(
-        self, comment, relevant_diff, generated_fix, actual_fix, comparison_evaluation
+        self,
+        comment,
+        relevant_diff,
+        generated_fix,
+        actual_fix,
+        comparison_evaluation,
+        equivalent_fix=False,
     ):
-        if comparison_evaluation:
+        if comparison_evaluation and equivalent_fix:
             prompt = f"""
-            Comment: {comment}
-            Generated Fix: {generated_fix}
-            Actual Fix: {actual_fix}
+            Comment: ```{comment}```
+
+
+            Generated Fix: ```{generated_fix}```
+
+
+            Actual Fix: ```{actual_fix}```
+
 
             Is the Generated Fix equivalent to the Actual Fix? (i.e. is the logic of the code between the two fixes the same?) Answer YES or NO, followed by a very short and succinct explanation.
+            """
+        elif comparison_evaluation and not equivalent_fix:
+            prompt = f"""
+            Comment: ```{comment}```
+
+
+            Generated Fix: ```{generated_fix}```
+
+
+            Actual Fix: ```{actual_fix}```
+
+
+            Does the generated fix appear at all in the actual fix? (i.e. is the generated fix a subset of the actual fix?) Answer YES or NO, followed by a very short and succinct explanation.
             """
         else:
             prompt = f"""

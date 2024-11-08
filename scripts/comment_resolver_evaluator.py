@@ -48,7 +48,7 @@ def compare_fixes(revision_id, initial_patch_id, generated_fix, reference_fix):
         return None
 
 
-def conduct_evaluation(input_csv, output_csv, llm_tool):
+def conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix):
     with open(input_csv, "r") as infile, open(
         output_csv, mode="w", newline=""
     ) as outfile:
@@ -85,7 +85,12 @@ def conduct_evaluation(input_csv, output_csv, llm_tool):
             )
 
             qualitative_feedback = llm_tool.generate_fix(
-                comment, relevant_diff, generated_fix, reference_fix, True
+                comment,
+                relevant_diff,
+                generated_fix,
+                reference_fix,
+                True,
+                equivalent_fix,
             )
 
             if metrics is not None:
@@ -111,8 +116,9 @@ def run(args) -> None:
 
     input_csv = args.input_csv
     output_csv = args.output_csv
+    equivalent_fix = args.equivalent_fix
 
-    conduct_evaluation(input_csv, output_csv, llm_tool)
+    conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix)
 
 
 def parse_args(args):
@@ -129,6 +135,11 @@ def parse_args(args):
         type=str,
         default="evaluated_code_generations.csv",
         help="Output CSV file for results.",
+    )
+    parser.add_argument(
+        "--equivalent-fix",
+        action="store_true",
+        help="If set, the prompt will check if both the generated and reference fixes are strictly equivalent, otherwise if it is a subset.",
     )
     return parser.parse_args(args)
 
