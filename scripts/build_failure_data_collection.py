@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 def download_databases():
+    logger.info("Cloning Mercurial database...")
+    repository.clone(repo_dir="hg_dir")
+
     logger.info("Downloading bugs database...")
     assert db.download(bugzilla.BUGS_DB)
 
@@ -144,7 +147,15 @@ def main():
             revisions_to_commits[revision_id].append(commit["node"])
 
     for revision_id, commits in revisions_to_commits.items():
-        print(f"Revision: {revision_id}: {commits}")
+        commit_diff = repository.get_diff(
+            repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
+        )
+        if not commit_diff:
+            continue
+
+        commit_diff_encoded = commit_diff.decode("utf-8")
+
+        print(commit_diff_encoded)
 
 
 if __name__ == "__main__":
