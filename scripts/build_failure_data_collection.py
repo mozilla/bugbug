@@ -1,8 +1,6 @@
 import logging
-import os
-import re
+from collections import defaultdict
 
-from libmozdata.hgmozilla import Revision
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository
@@ -17,6 +15,9 @@ def download_databases():
 
     logger.info("Downloading commits database...")
     assert db.download(repository.COMMITS_DB, support_files_too=True)
+
+    logger.info("Downloading revisions database...")
+    assert db.download(phabricator.REVISIONS_DB, support_files_too=True)
 
 
 def preprocess_commits_and_bugs():
@@ -59,11 +60,13 @@ def find_bugs(bug_commits, hg_client):
             if not backing_out_commit:
                 continue
 
-            desc = hg_client.get_revision("nightly", backing_out_commit["backsout"])[
-                "desc"
-            ]
+            commit = {}
 
-            revision_id = extract_revision_id(desc)
+            commit["desc"] = hg_client.get_revision(
+                "nightly", backing_out_commit["backsout"]
+            )["desc"]
+
+            revision_id = repository.get_revision_id(commit)
 
             backed_out_bugs.append((bug, backing_out_commit, revision_id))
 
@@ -91,39 +94,68 @@ def find_backing_out_commit(commits, hg_client):
     return None
 
 
-def extract_revision_id(desc):
-    match = re.search(r"https://phabricator\.services\.mozilla\.com/(D\d+)", desc)
-    if match:
-        return match.group(1)
-    return None
-
-
 def main():
     download_databases()
 
-    bug_commits = preprocess_commits_and_bugs()
-    # rev_id_to_phid = preprocess_revisions()
+    # bug_commits = preprocess_commits_and_bugs()
 
-    hg_client = Revision()
+    # hg_client = Revision()
 
-    bugs = find_bugs(bug_commits, hg_client)
+    # bugs = find_bugs(bug_commits, hg_client)
 
-    for bug in bugs:
-        print(bug[2])
+    # # for bug in bugs:
+    # #     print(bug[2])
+
+    backout_revisions = [
+        27904,
+        30744,
+        128537,
+        127218,
+        153067,
+        157855,
+        161229,
+        164203,
+        173115,
+        174921,
+        174086,
+        175742,
+        20409,
+        58102,
+        91663,
+        205936,
+        178686,
+        208953,
+        211415,
+        211106,
+        89590,
+        214412,
+        216163,
+        26390,
+        219250,
+        215371,
+    ]
+
+    revisions_to_commits = defaultdict(list)
+
+    for commit in repository.get_commits():
+        revision_id = repository.get_revision_id(commit)
+
+        if revision_id in backout_revisions:
+            revisions_to_commits[revision_id].append(commit["node"])
+
+    for revision_id, commits in revisions_to_commits.items():
+        print(f"Revision: {revision_id}: {commits}")
 
 
 if __name__ == "__main__":
-    # main()
-    phabricator.set_api_key(
-        os.getenv("PHABRICATOR_URL", "default_url"),
-        os.getenv("PHABRICATOR_API_KEY", "default_key"),
-    )
-    print(phabricator.get_transactions("D128537"))
-
+    main()
 # collect bugs with build failures, along with a list of their revisions X
 # identify commit that backs out another commit due to build failure X
 # from above, we can also get the node of the commit that caused the backout X
 # extract the revision ID from initial commit description X
+
+# ---- Find another commit with the same revision mentioned in the commit description
+
 # use this to associate the commit nodes to the diff IDS --> find the commit before and after the backout -- check diff description?
 # or alternatively, check when the reverting change was made (specifically for the build failure backout) --> get the diff before and after this timestamp with a desc with a commit to MOZILLACENTRAL
 
