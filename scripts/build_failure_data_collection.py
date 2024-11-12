@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 from libmozdata.hgmozilla import Revision
@@ -48,6 +49,8 @@ def preprocess_revisions():
 
 
 def find_bugs(bug_commits, hg_client):
+    backed_out_bugs = []
+
     for bug in bugzilla.get_bugs(include_invalid=True):
         if caused_build_failure(bug["comments"]):
             backing_out_commit = find_backing_out_commit(
@@ -56,18 +59,15 @@ def find_bugs(bug_commits, hg_client):
             if not backing_out_commit:
                 continue
 
-            print(f"BUG: {bug["id"]}")
-            print(f"BACKING OUT COMMIT: {backing_out_commit['node']}")
-            print(f"BACKED OUT COMMIT: {backing_out_commit['backsout']}")
-
             desc = hg_client.get_revision("nightly", backing_out_commit["backsout"])[
                 "desc"
             ]
-            # print(f"DESCRIPTION OF BACKED OUT COMMIT: {desc}")
 
-            print(f"PHABRICATOR REVISION ID: {extract_revision_id(desc)}")
+            revision_id = extract_revision_id(desc)
 
-            # backed_out_bugs.append(bug, backing_out_commit, )
+            backed_out_bugs.append((bug, backing_out_commit, revision_id))
+
+    return backed_out_bugs
 
 
 def caused_build_failure(comments):
@@ -106,24 +106,26 @@ def main():
 
     hg_client = Revision()
 
-    find_bugs(bug_commits, hg_client)
+    bugs = find_bugs(bug_commits, hg_client)
 
-    # test = Revision()
-    # rev = (test.get_revision("nightly", "2e49f991daa3e6b8fb0c1f3ff803ab06b4ec45d6"))
-    # if "backed out" in rev["desc"].lower() and "build" in rev["desc"].lower():
-    #     print("yes")
+    for bug in bugs:
+        print(bug[2])
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    phabricator.set_api_key(
+        os.getenv("PHABRICATOR_URL", "default_url"),
+        os.getenv("PHABRICATOR_API_KEY", "default_key"),
+    )
+    print(phabricator.get_transactions("D128537"))
 
 # collect bugs with build failures, along with a list of their revisions X
 # identify commit that backs out another commit due to build failure X
 # from above, we can also get the node of the commit that caused the backout X
-# extract the revision ID from initial commit description
-# use this to associate the commit nodes to the diff IDS
-# figure out a way to find the fix patch
-
+# extract the revision ID from initial commit description X
+# use this to associate the commit nodes to the diff IDS --> find the commit before and after the backout -- check diff description?
+# or alternatively, check when the reverting change was made (specifically for the build failure backout) --> get the diff before and after this timestamp with a desc with a commit to MOZILLACENTRAL
 
 # once we have the initial and fix patch IDs, we can get the interdiff between them
 # we can also get the error message from the initial patch, to find the exact lines ....
