@@ -1,3 +1,4 @@
+import csv
 import logging
 from collections import defaultdict
 
@@ -146,16 +147,33 @@ def main():
         if revision_id in backout_revisions:
             revisions_to_commits[revision_id].append(commit["node"])
 
-    for revision_id, commits in revisions_to_commits.items():
-        commit_diff = repository.get_diff(
-            repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
-        )
-        if not commit_diff:
-            continue
+    with open("revisions.csv", mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
 
-        commit_diff_encoded = commit_diff.decode("utf-8")
+        writer.writerow(["Revision ID", "Initial Commit", "Fix Commit", "Interdiff"])
 
-        print(commit_diff_encoded)
+        for revision_id, commits in revisions_to_commits.items():
+            commit_diff = repository.get_diff(
+                repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
+            )
+            if not commit_diff:
+                continue
+
+            commit_diff_encoded = commit_diff.decode("utf-8")
+
+            writer.writerow([revision_id, commits[0], commits[1], commit_diff_encoded])
+
+    # for revision_id, commits in revisions_to_commits.items():
+    #     commit_diff = repository.get_diff(
+    #         repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
+    #     )
+    #     if not commit_diff:
+    #         continue
+
+    #     commit_diff_encoded = commit_diff.decode("utf-8")
+    #     print(f"Revision ID: {revision_id}")
+    #     print(commit_diff_encoded)
+    #     print("=====================================")
 
 
 if __name__ == "__main__":
