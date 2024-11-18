@@ -192,7 +192,8 @@ if __name__ == "__main__":
 # or alternatively, check when the reverting change was made (specifically for the build failure backout) --> get the diff before and after this timestamp with a desc with a commit to MOZILLACENTRAL
 
 # once we have the initial and fix patch IDs, we can get the interdiff between them
-# we can also get the error message from the initial patch, to find the exact lines ....
+# we can also get the error message from the initial patch, to find the exact lines
+# take a look here https://matrix.to/#/!whDRjjSmICCgrhFHsQ:mozilla.org/$H93f5S5LisVMCEeM2-oB97mHXz6usNAJjWAMUSqQEQc?via=mozilla.org&via=matrix.org&via=braak.pro
 
 
 # find the commit that happened most recently after the backout --> this is a fix commit
