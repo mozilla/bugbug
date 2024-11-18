@@ -156,10 +156,10 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
             Generated Fix: ```{generated_fix}```
 
 
-            Actual Fix: ```{actual_fix}```
+            Actual Fix (provided as a reference to show how the comment was resolved by a human): ```{actual_fix}```
 
 
-            Is the Generated Fix equivalent to the Actual Fix? (i.e. is the logic of the code between the two fixes the same?) Answer YES or NO, followed by a very short and succinct explanation.
+            Does the Generated Fix resolve the comment? (i.e., does it address the feedback or concern raised, even if it is not identical to the Actual Fix?) Answer YES or NO, followed by a very short and succinct explanation.
             """
         elif comparison_evaluation and not equivalent_fix:
             prompt = f"""
@@ -195,6 +195,102 @@ def fetch_patch_diff(patch_id):
         return None
 
 
+# def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size):
+#     file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
+#     match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
+
+#     if match:
+#         hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
+#         match2 = re.finditer(hunk_header_pattern, match.group(0))
+#         first_index = None
+#         last_index = None
+
+#         for m in match2:
+#             diff_lines = match.group(0).split("\n")
+
+#             deletion_start_line = int(m.group(1))
+#             deletion_num_lines = int(m.group(2))
+#             addition_start_line = int(m.group(3))
+#             addition_num_lines = int(m.group(4))
+
+#             if (
+#                 start_line < deletion_start_line and start_line < addition_start_line
+#             ) or (
+#                 start_line > (deletion_start_line + deletion_num_lines)
+#                 and start_line > (addition_start_line + addition_num_lines)
+#             ):
+#                 continue
+
+#             added_lines = []
+#             deleted_lines = []
+
+#             for line in diff_lines[diff_lines.index(m.group()) + 1 :]:
+#                 if line.startswith("-"):
+#                     deleted_lines.append(line)
+#                 elif line.startswith("+"):
+#                     added_lines.append(line)
+
+#             if not deleted_lines or not added_lines:
+#                 logger.error(f"No deleted or added lines found for file: {filename}")
+#                 return None
+
+#             deletion_start_diff_line = deleted_lines[
+#                 min(
+#                     len(deleted_lines) - 1,
+#                     max(0, start_line - deletion_start_line - hunk_size),
+#                 )
+#             ]
+#             deletion_end_diff_line = deleted_lines[
+#                 max(
+#                     0,
+#                     min(
+#                         len(deleted_lines) - 1,
+#                         end_line - deletion_start_line + hunk_size,
+#                     ),
+#                 )
+#             ]
+
+#             addition_start_diff_line = added_lines[
+#                 min(
+#                     len(added_lines) - 1,
+#                     max(0, start_line - addition_start_line - hunk_size),
+#                 )
+#             ]
+#             addition_end_diff_line = added_lines[
+#                 max(
+#                     0,
+#                     min(
+#                         len(added_lines) - 1, end_line - addition_start_line + hunk_size
+#                     ),
+#                 )
+#             ]
+
+#             first_index = None
+#             last_index = None
+
+#             diff_lines = match.group(0).split("\n")
+
+#             for i, line in enumerate(diff_lines):
+#                 if line in [
+#                     deletion_start_diff_line,
+#                     deletion_end_diff_line,
+#                     addition_start_diff_line,
+#                     addition_end_diff_line,
+#                 ]:
+#                     if first_index is None:
+#                         first_index = i
+#                     last_index = i
+
+
+#         if first_index is not None and last_index is not None:
+#             relevant_diff = "\n".join(diff_lines[first_index : last_index + 1])
+#             return relevant_diff
+#         else:
+#             logger.error(f"No relevant diff found for lines: {start_line}-{end_line}")
+#             return None
+#     else:
+#         logger.error(f"No diff found for file: {filename}")
+#         return None
 def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size):
     file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
     match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
@@ -223,12 +319,15 @@ def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size)
 
             added_lines = []
             deleted_lines = []
+            context_lines = []
 
             for line in diff_lines[diff_lines.index(m.group()) + 1 :]:
                 if line.startswith("-"):
                     deleted_lines.append(line)
                 elif line.startswith("+"):
                     added_lines.append(line)
+                else:
+                    context_lines.append(line)
 
             if not deleted_lines or not added_lines:
                 logger.error(f"No deleted or added lines found for file: {filename}")
@@ -276,7 +375,7 @@ def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size)
                     deletion_end_diff_line,
                     addition_start_diff_line,
                     addition_end_diff_line,
-                ]:
+                ] or line not in ("+", "-"):  # Include context lines
                     if first_index is None:
                         first_index = i
                     last_index = i
