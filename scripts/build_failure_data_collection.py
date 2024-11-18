@@ -6,13 +6,15 @@ from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository
 
+# from libmozdata.hgmozilla import Revision
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def download_databases():
     logger.info("Cloning Mercurial database...")
-    repository.clone(repo_dir="hg_dir")
+    assert repository.clone(repo_dir="hg_dir")
 
     logger.info("Downloading bugs database...")
     assert db.download(bugzilla.BUGS_DB)
@@ -79,7 +81,11 @@ def find_bugs(bug_commits, hg_client):
 
 def caused_build_failure(comments):
     for comment in comments:
-        if "backed out" in comment["text"] and "build" in comment["text"]:
+        if (
+            "backed out" in comment["text"]
+            and "for causing" in comment["text"]
+            and "build" in comment["text"]
+        ):
             return True
     return False
 
@@ -107,38 +113,47 @@ def main():
 
     # bugs = find_bugs(bug_commits, hg_client)
 
-    # # for bug in bugs:
-    # #     print(bug[2])
+    # for bug in bugs:
+    #     print(bug[2])
+
+    # backout_revisions = [
+    #     27904,
+    #     30744,
+    #     128537,
+    #     127218,
+    #     153067,
+    #     157855,
+    #     161229,
+    #     164203,
+    #     173115,
+    #     174921,
+    #     174086,
+    #     175742,
+    #     20409,
+    #     58102,
+    #     91663,
+    #     205936,
+    #     178686,
+    #     208953,
+    #     211415,
+    #     211106,
+    #     89590,
+    #     214412,
+    #     216163,
+    #     26390,
+    #     219250,
+    #     215371,
+    # ]
 
     backout_revisions = [
-        27904,
-        30744,
-        128537,
-        127218,
         153067,
         157855,
-        161229,
         164203,
-        173115,
-        174921,
-        174086,
-        175742,
-        20409,
-        58102,
-        91663,
-        205936,
         178686,
         208953,
-        211415,
-        211106,
-        89590,
-        214412,
         216163,
-        26390,
-        219250,
         215371,
     ]
-
     revisions_to_commits = defaultdict(list)
 
     for commit in repository.get_commits():
@@ -162,18 +177,6 @@ def main():
             commit_diff_encoded = commit_diff.decode("utf-8")
 
             writer.writerow([revision_id, commits[0], commits[1], commit_diff_encoded])
-
-    # for revision_id, commits in revisions_to_commits.items():
-    #     commit_diff = repository.get_diff(
-    #         repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
-    #     )
-    #     if not commit_diff:
-    #         continue
-
-    #     commit_diff_encoded = commit_diff.decode("utf-8")
-    #     print(f"Revision ID: {revision_id}")
-    #     print(commit_diff_encoded)
-    #     print("=====================================")
 
 
 if __name__ == "__main__":
