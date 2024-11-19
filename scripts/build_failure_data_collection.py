@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def download_databases():
     logger.info("Cloning Mercurial database...")
-    assert repository.clone(repo_dir="hg_dir")
+    repository.clone(repo_dir="hg_dir")
 
     logger.info("Downloading bugs database...")
     assert db.download(bugzilla.BUGS_DB)
