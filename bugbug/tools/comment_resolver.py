@@ -118,7 +118,7 @@ class CodeGeneratorTool(GenerativeModelTool):
         )
 
         generated_fix = self.run(prompt=prompt)
-        return generated_fix
+        return generated_fix, prompt
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
@@ -659,6 +659,7 @@ def generate_fixes(
                 "Revision ID",
                 "Patch ID",
                 "Prompt Type",
+                "Prompt",
                 "Length Limit",
                 "Hunk Size",
                 "Comment Length",
@@ -737,7 +738,7 @@ def generate_fixes(
                                     )
                                     continue
 
-                                generated_fix = llm_tool.generate_fix(
+                                generated_fix, prompt = llm_tool.generate_fix(
                                     comment,
                                     relevant_diff,
                                     prompt_type,
@@ -754,6 +755,7 @@ def generate_fixes(
                                         revision_id,
                                         patch_id,
                                         prompt_type,
+                                        prompt,
                                         diff_length_limit,
                                         hunk_size,
                                         comment_length,
