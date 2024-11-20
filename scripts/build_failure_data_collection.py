@@ -1,5 +1,6 @@
 import csv
 import logging
+import os
 from collections import defaultdict
 
 import requests
@@ -201,10 +202,12 @@ def main():
     #     215371,
     # ]
 
+    client_id = os.getenv("TC_CLIENT_ID")
+
     index = taskcluster.Index(
         {
             "rootUrl": "https://firefox-ci-tc.services.mozilla.com",
-            "credentials": {"clientId": "mozilla-auth0/ad|Mozilla-LDAP|bmah"},
+            "credentials": {"clientId": client_id},
         }
     )
 
