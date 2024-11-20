@@ -120,7 +120,7 @@ def find_error_lines(index_client, queue_client, commit_node):
         if label[:5] == "build":
             build_tasks.add(taskId)
 
-    # 5 get failed tasks
+    # 5. get failed tasks
     failed_tasks = set()
 
     for task in queue_client.listTaskGroup(task_group_id)["tasks"]:
@@ -173,34 +173,34 @@ def main():
     # for bug in bugs:
     #     print(bug[2])
 
-    # backout_revisions = [
-    #     27904,
-    #     30744,
-    #     128537,
-    #     127218,
-    #     153067,
-    #     157855,
-    #     161229,
-    #     164203,
-    #     173115,
-    #     174921,
-    #     174086,
-    #     175742,
-    #     20409,
-    #     58102,
-    #     91663,
-    #     205936,
-    #     178686,
-    #     208953,
-    #     211415,
-    #     211106,
-    #     89590,
-    #     214412,
-    #     216163,
-    #     26390,
-    #     219250,
-    #     215371,
-    # ]
+    backout_revisions = [
+        27904,
+        30744,
+        128537,
+        127218,
+        153067,
+        157855,
+        161229,
+        164203,
+        173115,
+        174921,
+        174086,
+        175742,
+        20409,
+        58102,
+        91663,
+        205936,
+        178686,
+        208953,
+        211415,
+        211106,
+        89590,
+        214412,
+        216163,
+        26390,
+        219250,
+        215371,
+    ]
 
     client_id = os.getenv("TC_CLIENT_ID")
 
@@ -217,15 +217,15 @@ def main():
         }
     )
 
-    backout_revisions = [
-        153067,
-        157855,
-        164203,
-        178686,
-        208953,
-        216163,
-        215371,
-    ]
+    # backout_revisions = [
+    #     153067,
+    #     157855,
+    #     164203,
+    #     178686,
+    #     208953,
+    #     216163,
+    #     215371,
+    # ]
     revisions_to_commits = defaultdict(list)
 
     for commit in repository.get_commits():
