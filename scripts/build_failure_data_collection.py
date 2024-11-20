@@ -2,6 +2,8 @@ import csv
 import logging
 from collections import defaultdict
 
+import requests
+import taskcluster
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository
@@ -180,7 +182,85 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+
+    tc_test = True
+
+    if tc_test:
+        import taskcluster
+
+        index = taskcluster.Index(
+            {
+                "rootUrl": "https://firefox-ci-tc.services.mozilla.com",
+                "credentials": {"clientId": "mozilla-auth0/ad|Mozilla-LDAP|bmah"},
+            }
+        )
+
+        queue = taskcluster.Queue(
+            {
+                "rootUrl": "https://firefox-ci-tc.services.mozilla.com",
+            }
+        )
+
+        # FINAL STEPS
+        # 1. list the tasks
+        # tasks = index.listTasks('gecko.v2.autoland.revision.04d0c38e624dc5fe830b67c0526aafa87d3a63ed.firefox')
+        commit_node = "448597bce69d9e173e0b6818a513b8dfd86f1765"
+        commit_node = "04d0c38e624dc5fe830b67c0526aafa87d3a63ed"
+        tasks = index.listTasks(f"gecko.v2.autoland.revision.{commit_node}.firefox")
+        print(tasks)
+
+        # 2. get the task ID from one of the tasks (I think any is fine)
+        first_task_id = tasks["tasks"][0]["taskId"]
+        print(first_task_id)
+
+        # 3. get the task group ID from the task ID
+        first_task = queue.task(first_task_id)
+        task_group_id = first_task["taskGroupId"]
+        print(task_group_id)
+
+        # 4. extract the build task IDs from the task group ID
+        # "https://firefoxci.taskcluster-artifacts.net/YHg9SxOFQiKgWd4Cr9TuRw/0/public/label-to-taskid.json"
+        url = f"https://firefoxci.taskcluster-artifacts.net/{task_group_id}/0/public/label-to-taskid.json"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        build_tasks = set()
+
+        for label, taskId in data.items():
+            if label[:5] == "build":
+                build_tasks.add(taskId)
+
+        # 5 get failed tasks
+        failed_tasks = set()
+
+        for task in queue.listTaskGroup(task_group_id)["tasks"]:
+            if task["status"]["state"] == "failed":
+                failed_tasks.add(task["status"]["taskId"])
+
+        # 6. find intersection between build tasks and failed tasks
+        failed_build_tasks = list(build_tasks & failed_tasks)
+        print(failed_build_tasks)
+
+        # 7. get the url to access the log, load it, and extract the ERROR lines
+        for failed_build_task in failed_build_tasks:
+            artifact = queue.getArtifact(
+                taskId=failed_build_task, runId="0", name="public/logs/live.log"
+            )
+            print(artifact)
+            url = artifact["url"]
+            break
+
+        response = requests.get(url)
+        error_lines = [line for line in response.text.split("\n") if "ERROR - " in line]
+
+        for error_line in error_lines:
+            print(error_line)
+
+    # print(queue.listTaskGroup('04d0c38e624dc5fe830b67c0526aafa87d3a63ed'))
+    # print(queue.listTaskGroup('eNsrB5djSb6UZipZi3BPAQ'))
+
 # collect bugs with build failures, along with a list of their revisions X
 # identify commit that backs out another commit due to build failure X
 # from above, we can also get the node of the commit that caused the backout X
