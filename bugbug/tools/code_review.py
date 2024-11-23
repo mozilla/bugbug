@@ -1107,7 +1107,7 @@ class CodeReviewTool(GenerativeModelTool):
             )
 
             function_list = self.further_info_chain.run(
-                patch=patch, summarization=output_summarization
+                patch=formatted_patch, summarization=output_summarization
             ).split("\n")
 
             if self.verbose:
