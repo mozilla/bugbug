@@ -162,7 +162,7 @@ Review:
 {review}"""
 
 
-PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for reviewing the patch.
+PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you don't know and need to look up for reviewing the patch.
 List the names of these functions, providing only the function names, with each name on a separate line.
 Avoid using list indicators such as hyphens or numbers.
 If no function declaration is required, just return "".
