@@ -1160,7 +1160,7 @@ class CodeReviewTool(GenerativeModelTool):
 
                 memory.save_context(
                     {
-                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you, by giving more context about the code under analysis. "
+                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you to have more context about the code under analysis. These functions already exist in the codebase before the patch, and can't be modified. "
                         + function_declaration_text
                     },
                     {
