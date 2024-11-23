@@ -1155,7 +1155,7 @@ class CodeReviewTool(GenerativeModelTool):
 
             if self.function_search is not None and len(requested_functions) > 0:
                 function_declaration_text = get_structured_functions(
-                    "Required Function", requested_functions
+                    "Function Name", requested_functions
                 )
 
                 memory.save_context(
