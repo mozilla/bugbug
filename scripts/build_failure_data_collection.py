@@ -5,6 +5,7 @@ from collections import defaultdict
 
 import requests
 import taskcluster
+from libmozdata.hgmozilla import Revision
 from tqdm import tqdm
 
 from bugbug import bugzilla, db, phabricator, repository
@@ -86,8 +87,9 @@ def caused_build_failure(comments):
     for comment in comments:
         if (
             "backed out" in comment["text"]
-            and "for causing" in comment["text"]
+            # and "for causing" in comment["text"]
             and "build" in comment["text"]
+            and "bustages" in comment["text"]
         ):
             return True
     return False
@@ -164,43 +166,44 @@ def find_backing_out_commit(commits, hg_client):
 def main():
     download_databases()
 
-    # bug_commits = preprocess_commits_and_bugs()
+    bug_commits = preprocess_commits_and_bugs()
 
-    # hg_client = Revision()
+    hg_client = Revision()
 
-    # bugs = find_bugs(bug_commits, hg_client)
+    bugs = find_bugs(bug_commits, hg_client)
 
-    # for bug in bugs:
-    #     print(bug[2])
+    backout_revisions = []
+    for bug in bugs:
+        backout_revisions.append(bug[2])
 
-    backout_revisions = [
-        27904,
-        30744,
-        128537,
-        127218,
-        153067,
-        157855,
-        161229,
-        164203,
-        173115,
-        174921,
-        174086,
-        175742,
-        20409,
-        58102,
-        91663,
-        205936,
-        178686,
-        208953,
-        211415,
-        211106,
-        89590,
-        214412,
-        216163,
-        26390,
-        219250,
-        215371,
-    ]
+    # backout_revisions = [
+    #     27904,
+    #     30744,
+    #     128537,
+    #     127218,
+    #     153067,
+    #     157855,
+    #     161229,
+    #     164203,
+    #     173115,
+    #     174921,
+    #     174086,
+    #     175742,
+    #     20409,
+    #     58102,
+    #     91663,
+    #     205936,
+    #     178686,
+    #     208953,
+    #     211415,
+    #     211106,
+    #     89590,
+    #     214412,
+    #     216163,
+    #     26390,
+    #     219250,
+    #     215371,
+    # ]
 
     client_id = os.getenv("TC_CLIENT_ID")
 
