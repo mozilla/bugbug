@@ -120,6 +120,11 @@ class CodeGeneratorTool(GenerativeModelTool):
         generated_fix = self.run(prompt=prompt)
         return generated_fix, prompt
 
+    def is_actionable_comment(self, comment):
+        prompt = f"Does the following comment provide a clear and specific suggestion for improvement? Note: Suggestions relying on links for context are not considered actionable, as the LLM cannot access them. Respond with 'YES' or 'NO' only. \n\nComment: {comment.content}"
+        response = self.run(prompt=prompt)
+        return response
+
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
     version = "0.0.1"
@@ -702,6 +707,10 @@ def generate_fixes(
                 continue
 
             for comment in comments:
+                is_actionable = llm_tool.is_actionable_comment(comment)
+                if is_actionable.lower() == "no":
+                    continue
+
                 if counter >= generation_limit:
                     return
 
