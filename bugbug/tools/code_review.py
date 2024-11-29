@@ -495,6 +495,9 @@ class ReviewData(ABC):
 
             return True
 
+        iteration_counter = 0
+        max_iterations = 200
+
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
                 patch_set = PatchSet.from_string(self.load_raw_diff_by_id(diff_id))
@@ -509,6 +512,9 @@ class ReviewData(ABC):
                 if patched_file.is_modified_file
             }
             for comment in comments:
+                if iteration_counter >= max_iterations:
+                    return
+
                 patched_file = file_map.get(comment.filename)
                 if not patched_file:
                     continue
@@ -518,6 +524,7 @@ class ReviewData(ABC):
                     continue
 
                 yield hunk, comment
+                iteration_counter += 1
 
 
 class PhabricatorReviewData(ReviewData):
@@ -1285,8 +1292,16 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
+        largest_comment_id = self.vector_db.get_largest_comment_id()
+        print(largest_comment_id)
+
         def vector_points():
+            nonlocal largest_comment_id
+
             for hunk, comment in items:
+                if comment.id <= largest_comment_id:
+                    continue
+
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
                 payload = {
@@ -1294,9 +1309,13 @@ class ReviewCommentsDB:
                     "comment": asdict(comment),
                 }
 
+                if comment.id > largest_comment_id:
+                    largest_comment_id = comment.id
+
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
 
         self.vector_db.insert(vector_points())
+        self.vector_db.update_largest_comment_id(largest_comment_id)
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
@@ -1322,3 +1341,6 @@ class ReviewCommentsDB:
                         max_score_per_comment[result.id] = result
 
         return sorted(max_score_per_comment.values())[-limit:]
+
+    def delete_largest_comment_id(self):
+        self.vector_db.delete_largest_comment_id()

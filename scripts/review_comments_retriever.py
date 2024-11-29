@@ -13,6 +13,9 @@ def main():
     vector_db = QdrantVectorDB("diff_comments")
     vector_db.setup()
     comments_db = ReviewCommentsDB(vector_db)
+
+    # comments_db.delete_largest_comment_id()
+
     # TODO: support resuming from where last run left off. We should run it from
     # scratch only once. Following runs should add only new comments.
     comments_db.add_comments_by_hunk(review_data.retrieve_comments_with_hunks())

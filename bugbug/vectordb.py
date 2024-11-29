@@ -7,11 +7,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable
 
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
-
-from bugbug.utils import get_secret
 
 
 @dataclass
@@ -46,13 +44,24 @@ class VectorDB(ABC):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         ...
 
+    @abstractmethod
+    def get_largest_comment_id(self):
+        ...
+
+    @abstractmethod
+    def update_largest_comment_id(self, largest_comment_id):
+        ...
+
 
 class QdrantVectorDB(VectorDB):
+    LARGEST_COMMENT_ID_ID = 9999999999
+
     def __init__(self, collection_name: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.collection_name = collection_name
         self.client = QdrantClient(
-            location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
+            location="http://localhost:6333"
+            # location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
         )
 
     def setup(self):
@@ -83,3 +92,25 @@ class QdrantVectorDB(VectorDB):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
+
+    def get_largest_comment_id(self):
+        result = self.client.retrieve(
+            self.collection_name, [self.LARGEST_COMMENT_ID_ID]
+        )
+        if result:
+            return result[0].payload.get("largest_comment_id", 0)
+        return 0
+
+    def update_largest_comment_id(self, largest_comment_id):
+        largest_comment_id_point = VectorPoint(
+            id=self.LARGEST_COMMENT_ID_ID,
+            vector=[],
+            payload={"largest_comment_id": largest_comment_id},
+        )
+        self.insert([largest_comment_id_point])
+
+    def delete_largest_comment_id(self):
+        self.client.delete(
+            self.collection_name,
+            models.PointIdsList(points=[self.LARGEST_COMMENT_ID_ID]),
+        )
