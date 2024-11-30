@@ -101,7 +101,6 @@ class QdrantVectorDB(VectorDB):
     #         return result[0].payload.get("largest_comment_id", 0)
     #     return 0
     def get_largest_comment_id(self):
-        """Retrieve the largest comment ID from the database."""
         offset = None
         largest_id = 0
 
@@ -114,13 +113,11 @@ class QdrantVectorDB(VectorDB):
                 offset=offset,
             )
 
-            if points:
-                largest_id = max(largest_id, max(record.id for record in points))
-
-            offset = next_page_offset
-
-            if offset is None:
+            if next_page_offset is None:
+                largest_id = max(record.id for record in points)
                 break
+            else:
+                offset = next_page_offset
 
         return largest_id
 
