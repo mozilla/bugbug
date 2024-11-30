@@ -93,13 +93,36 @@ class QdrantVectorDB(VectorDB):
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
 
+    # def get_largest_comment_id(self):
+    #     result = self.client.retrieve(
+    #         self.collection_name, [self.LARGEST_COMMENT_ID_ID]
+    #     )
+    #     if result:
+    #         return result[0].payload.get("largest_comment_id", 0)
+    #     return 0
     def get_largest_comment_id(self):
-        result = self.client.retrieve(
-            self.collection_name, [self.LARGEST_COMMENT_ID_ID]
-        )
-        if result:
-            return result[0].payload.get("largest_comment_id", 0)
-        return 0
+        """Retrieve the largest comment ID from the database."""
+        offset = None
+        largest_id = 0
+
+        while True:
+            points, next_page_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+                with_payload=False,
+                with_vectors=False,
+                offset=offset,
+            )
+
+            if points:
+                largest_id = max(largest_id, max(record.id for record in points))
+
+            offset = next_page_offset
+
+            if offset is None:
+                break
+
+        return largest_id
 
     def update_largest_comment_id(self, largest_comment_id):
         largest_comment_id_point = VectorPoint(

@@ -496,7 +496,7 @@ class ReviewData(ABC):
             return True
 
         iteration_counter = 0
-        max_iterations = 200
+        max_iterations = 1000
 
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
@@ -1315,7 +1315,7 @@ class ReviewCommentsDB:
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
 
         self.vector_db.insert(vector_points())
-        self.vector_db.update_largest_comment_id(largest_comment_id)
+        # self.vector_db.update_largest_comment_id(largest_comment_id)
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
