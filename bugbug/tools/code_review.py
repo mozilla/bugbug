@@ -1291,16 +1291,30 @@ class ReviewCommentsDB:
 
         return comment
 
-    def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        largest_comment_id = self.vector_db.get_largest_comment_id()
-        print(largest_comment_id)
+    def add_comments_by_hunk(
+        self, items: Iterable[tuple[Hunk, InlineComment]], success_run
+    ):
+        if success_run:
+            largest_comment_id = self.vector_db.get_largest_comment_id()
+            print(largest_comment_id)
+        else:
+            most_recent_comment_id = self.vector_db.get_most_recent_comment_id()
+            print(most_recent_comment_id)
+            seen_comment = False
 
         def vector_points():
-            nonlocal largest_comment_id
+            nonlocal largest_comment_id, seen_comment, most_recent_comment_id
 
             for hunk, comment in items:
-                if comment.id <= largest_comment_id:
-                    continue
+                if success_run:
+                    if comment.id <= largest_comment_id:
+                        continue
+                else:
+                    if comment.id == most_recent_comment_id:
+                        seen_comment = True
+                        continue
+                    if not seen_comment and most_recent_comment_id != 0:
+                        continue
 
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
@@ -1309,13 +1323,15 @@ class ReviewCommentsDB:
                     "comment": asdict(comment),
                 }
 
-                if comment.id > largest_comment_id:
-                    largest_comment_id = comment.id
+                if success_run:
+                    if comment.id > largest_comment_id:
+                        largest_comment_id = comment.id
+                else:
+                    self.vector_db.update_most_recent_comment_id(comment.id)
 
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
 
         self.vector_db.insert(vector_points())
-        # self.vector_db.update_largest_comment_id(largest_comment_id)
 
     def find_similar_hunk_comments(self, hunk: Hunk):
         return self.vector_db.search(self.embeddings.embed_query(str(hunk)))
