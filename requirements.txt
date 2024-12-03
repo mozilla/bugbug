@@ -9,7 +9,7 @@ langchain-google-genai==2.0.1
 langchain-mistralai==0.2.0
 langchain-openai==0.2.10
 libmozdata==0.2.9
-llama-cpp-python==0.3.1
+llama-cpp-python==0.3.2
 lmdb==1.5.1
 lxml-html-clean==0.3.1
 markdown2==2.5.1
