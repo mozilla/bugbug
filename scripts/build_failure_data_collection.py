@@ -98,25 +98,39 @@ def find_bugs(hg_client, bug_ids, bug_commits):
 
         logger.info("Backing out commit found!")
 
-        commit = {}
+        # commit = {}
 
-        commit["desc"] = next(
-            (
-                c["desc"]
-                for c in bug_id_commits
-                if any(
-                    c["node"].startswith(node)
-                    for node in backing_out_commit["backsout"]
-                )
-            ),
-            None,
-        )
-        if commit["desc"] is None:
+        # commit["desc"] = next(
+        #     (
+        #         c["desc"]
+        #         for c in bug_id_commits
+        #         if any(
+        #             c["node"].startswith(node)
+        #             for node in backing_out_commit["backsout"]
+        #         )
+        #     ),
+        #     None,
+        # )
+
+        # if commit["desc"] is None:
+        #     continue
+
+        commits = [
+            {
+                "desc": c["desc"],
+            }
+            for c in bug_id_commits
+            if any(
+                c["node"].startswith(node) for node in backing_out_commit["backsout"]
+            )
+        ]
+
+        if commits is None:
             continue
 
-        revision_id = repository.get_revision_id(commit)
-
-        backed_out_revisions.append(revision_id)
+        for commit in commits:
+            revision_id = repository.get_revision_id(commit)
+            backed_out_revisions.append(revision_id)
 
     return backed_out_revisions
 
@@ -246,15 +260,22 @@ def main():
             if len(commits) < 2:
                 continue
 
+            for commit in commits:
+                error_lines = find_error_lines(index, queue, commit)
+
+                if error_lines:
+                    break
+
+            # if not error_lines:
+            #     continue
+
             commit_diff = repository.get_diff(
                 repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
             )
-            if not commit_diff:
-                continue
+            # if not commit_diff:
+            #     continue
 
-            commit_diff_encoded = commit_diff.decode("utf-8")
-
-            error_lines = find_error_lines(index, queue, commits[0])
+            commit_diff_encoded = commit_diff.decode("utf-8", errors="replace")
 
             writer.writerow(
                 [revision_id, commits[0], commits[1], commit_diff_encoded, error_lines]
