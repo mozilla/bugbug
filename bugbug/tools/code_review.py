@@ -495,9 +495,6 @@ class ReviewData(ABC):
 
             return True
 
-        iteration_counter = 0
-        max_iterations = 2000
-
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
                 patch_set = PatchSet.from_string(self.load_raw_diff_by_id(diff_id))
@@ -512,9 +509,6 @@ class ReviewData(ABC):
                 if patched_file.is_modified_file
             }
             for comment in comments:
-                if iteration_counter >= max_iterations:
-                    return
-
                 patched_file = file_map.get(comment.filename)
                 if not patched_file:
                     continue
@@ -524,7 +518,6 @@ class ReviewData(ABC):
                     continue
 
                 yield hunk, comment
-                iteration_counter += 1
 
 
 class PhabricatorReviewData(ReviewData):
