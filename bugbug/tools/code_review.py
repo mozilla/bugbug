@@ -1292,14 +1292,6 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        # if success_run:
-        #     largest_comment_id = self.vector_db.get_largest_comment_id()
-        #     print(largest_comment_id)
-        # else:
-        #     most_recent_comment_id = self.vector_db.get_most_recent_comment_id()
-        #     print(most_recent_comment_id)
-        #     seen_comment = False
-
         point_ids = self.vector_db.get_existing_ids()
 
         def vector_points():
@@ -1344,6 +1336,3 @@ class ReviewCommentsDB:
                         max_score_per_comment[result.id] = result
 
         return sorted(max_score_per_comment.values())[-limit:]
-
-    def delete_largest_comment_id(self):
-        self.vector_db.delete_largest_comment_id()

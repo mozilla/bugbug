@@ -11,6 +11,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from bugbug.utils import get_secret
+
 
 @dataclass
 class VectorPoint:
@@ -50,14 +52,11 @@ class VectorDB(ABC):
 
 
 class QdrantVectorDB(VectorDB):
-    MOST_RECENT_COMMENT_ID = 9999999999
-
     def __init__(self, collection_name: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.collection_name = collection_name
         self.client = QdrantClient(
-            location="http://localhost:6333"
-            # location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
+            location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
         )
 
     def setup(self):
