@@ -496,7 +496,7 @@ class ReviewData(ABC):
             return True
 
         iteration_counter = 0
-        max_iterations = 1000
+        max_iterations = 2000
 
         for diff_id, comments in self.get_all_inline_comments(comment_filter):
             try:
@@ -1291,30 +1291,23 @@ class ReviewCommentsDB:
 
         return comment
 
-    def add_comments_by_hunk(
-        self, items: Iterable[tuple[Hunk, InlineComment]], success_run
-    ):
-        if success_run:
-            largest_comment_id = self.vector_db.get_largest_comment_id()
-            print(largest_comment_id)
-        else:
-            most_recent_comment_id = self.vector_db.get_most_recent_comment_id()
-            print(most_recent_comment_id)
-            seen_comment = False
+    def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
+        # if success_run:
+        #     largest_comment_id = self.vector_db.get_largest_comment_id()
+        #     print(largest_comment_id)
+        # else:
+        #     most_recent_comment_id = self.vector_db.get_most_recent_comment_id()
+        #     print(most_recent_comment_id)
+        #     seen_comment = False
+
+        point_ids = self.vector_db.get_existing_ids()
 
         def vector_points():
-            nonlocal largest_comment_id, seen_comment, most_recent_comment_id
+            nonlocal point_ids
 
             for hunk, comment in items:
-                if success_run:
-                    if comment.id <= largest_comment_id:
-                        continue
-                else:
-                    if comment.id == most_recent_comment_id:
-                        seen_comment = True
-                        continue
-                    if not seen_comment and most_recent_comment_id != 0:
-                        continue
+                if comment.id in point_ids:
+                    continue
 
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
@@ -1322,12 +1315,6 @@ class ReviewCommentsDB:
                     "hunk": str_hunk,
                     "comment": asdict(comment),
                 }
-
-                if success_run:
-                    if comment.id > largest_comment_id:
-                        largest_comment_id = comment.id
-                else:
-                    self.vector_db.update_most_recent_comment_id(comment.id)
 
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
 

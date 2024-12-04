@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable
 
-from qdrant_client import QdrantClient, models
+from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -45,19 +45,7 @@ class VectorDB(ABC):
         ...
 
     @abstractmethod
-    def get_largest_comment_id(self):
-        ...
-
-    @abstractmethod
-    def update_most_recent_comment_id(self, largest_comment_id):
-        ...
-
-    @abstractmethod
-    def get_most_recent_comment_id(self):
-        ...
-
-    @abstractmethod
-    def delete_most_recent_comment_id(self):
+    def get_existing_ids(self):
         ...
 
 
@@ -101,9 +89,9 @@ class QdrantVectorDB(VectorDB):
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
 
-    def get_largest_comment_id(self):
+    def get_existing_ids(self):
+        point_ids = set()
         offset = None
-        largest_id = 0
 
         while True:
             points, next_page_offset = self.client.scroll(
@@ -114,35 +102,11 @@ class QdrantVectorDB(VectorDB):
                 offset=offset,
             )
 
-            if next_page_offset is None:
-                largest_id = max(record.id for record in points)
+            point_ids.update(point.id for point in points)
+
+            if not next_page_offset:
                 break
-            else:
-                offset = next_page_offset
 
-        return largest_id
+            offset = next_page_offset
 
-    def get_most_recent_comment_id(self):
-        most_recent_comment_id = self.client.retrieve(
-            collection_name=self.collection_name,
-            ids=[self.MOST_RECENT_COMMENT_ID],
-            with_payload=True,
-        )
-        if not most_recent_comment_id:
-            return 0
-
-        return most_recent_comment_id[0].payload["most_recent_comment_id"]
-
-    def update_most_recent_comment_id(self, comment_id):
-        most_recent_comment_id_point = VectorPoint(
-            id=self.MOST_RECENT_COMMENT_ID,
-            vector=[],
-            payload={"most_recent_comment_id": comment_id},
-        )
-        self.insert([most_recent_comment_id_point])
-
-    def delete_most_recent_comment_id(self):
-        self.client.delete(
-            self.collection_name,
-            models.PointIdsList(points=[self.MOST_RECENT_COMMENT_ID]),
-        )
+        return point_ids
