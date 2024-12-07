@@ -49,7 +49,10 @@ class Retriever(object):
 
         deleted_component_ids = set(
             bug["id"]
-            for bug in bugzilla.get_bugs()
+            for bug in bugzilla.get_bugs(
+                include_invalid=True,
+                include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+            )
             if (bug["product"], bug["component"]) not in all_components
         )
         logger.info(
@@ -99,7 +102,9 @@ class Retriever(object):
                 sum(
                     (
                         bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                        for bug in bugzilla.get_bugs()
+                        for bug in bugzilla.get_bugs(
+                            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS
+                        )
                     ),
                     [],
                 )
@@ -167,7 +172,10 @@ class Retriever(object):
             new_bugs = bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to twice.
-        inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
+        inconsistent_bugs = bugzilla.get_bugs(
+            include_invalid=True,
+            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+        )
         for i in range(2):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
