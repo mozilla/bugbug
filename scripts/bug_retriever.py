@@ -186,7 +186,12 @@ class Retriever(object):
 
         # TODO: Figure out why.
         missing_history_bug_ids = {
-            bug["id"] for bug in bugzilla.get_bugs() if "history" not in bug
+            bug["id"]
+            for bug in bugzilla.get_bugs(
+                include_invalid=True,
+                include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+            )
+            if "history" not in bug
         }
         bugzilla.delete_bugs(lambda bug: bug["id"] in missing_history_bug_ids)
         logger.info(
