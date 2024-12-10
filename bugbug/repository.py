@@ -1543,6 +1543,69 @@ def pull(repo_dir: str, branch: str, revision: str) -> None:
     trigger_pull()
 
 
+def get_diff(repo_path, original_hash, fix_hash) -> bytes:
+    client = hglib.open(repo_path)
+
+    current_rev = client.identify(id=True)
+
+    try:
+        client.rawcommand([b"shelve"])
+    except hglib.error.CommandError as e:
+        if b"nothing changed" in e.out:
+            logger.info(f"Nothing to shelve: {e}")
+        else:
+            raise RuntimeError("Error occurred while shelving") from e
+
+    parents = client.parents(rev=fix_hash)
+    parent_of_fix = parents[0][1]
+    client.update(rev=parent_of_fix, clean=True)
+
+    graft_result = graft(
+        client, revs=[original_hash], no_commit=True, force=True, tool=":merge"
+    )
+
+    if not graft_result:
+        return b""
+
+    final_diff = client.diff(
+        revs=[fix_hash], ignoreallspace=True, ignorespacechange=True, reverse=True
+    )
+
+    client.update(rev=current_rev, clean=True)
+
+    return final_diff
+
+
+def graft(client, revs, no_commit=False, force=False, tool=":merge") -> bool:
+    """Graft changesets specified by revs into the current repository state.
+
+    Args:
+        client: The hglib client.
+        revs: A list of the hashes of the commits to be applied to the current repository state.
+        no_commit: If True, does not commit and just applies changes in working directory.
+        force: If True, forces the grafts even if the revs are ancestors of the current repository state.
+        tool: A string representing a merge tool (see `hg help merge-tools`).
+
+    Returns:
+        Boolean of graft operation result (True for success, False for failure).
+    """
+    args = hglib.util.cmdbuilder(
+        str.encode("graft"), r=revs, no_commit=no_commit, f=force, tool=tool
+    )
+
+    eh = hglib.util.reterrorhandler(args)
+
+    client.rawcommand(args, eh=eh, prompt=auto_resolve_conflict_prompt)
+
+    return True
+
+
+def auto_resolve_conflict_prompt(max_bytes, current_output):
+    if b"was deleted in" in current_output:
+        return b"c\n"  # Return 'c' to use the changed version
+    return b"\n"  # Default to doing nothing, just proceed
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("repository_dir", help="Path to the repository", action="store")
