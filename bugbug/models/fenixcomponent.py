@@ -4,6 +4,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 
 import dateutil.parser
@@ -104,6 +105,21 @@ class FenixComponentModel(BugModel):
                 continue
 
             classes[int(bug_data["id"])] = bug_data["component"]
+
+        # Components with less than 100 bugs are not not be very useful, so we
+        # we ignore them.
+        low_count_components = {
+            component: count
+            for component, count in Counter(classes.values()).items()
+            if count < 100
+        }
+        bugs_to_remove = [
+            bug_id
+            for bug_id, component in classes.items()
+            if component in low_count_components
+        ]
+        for bug_id in bugs_to_remove:
+            del classes[bug_id]
 
         return classes, set(classes.values())
 
