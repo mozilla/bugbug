@@ -46,6 +46,10 @@ class VectorDB(ABC):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         ...
 
+    @abstractmethod
+    def get_existing_ids(self):
+        ...
+
 
 class QdrantVectorDB(VectorDB):
     def __init__(self, collection_name: str, *args, **kwargs):
@@ -83,3 +87,25 @@ class QdrantVectorDB(VectorDB):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
+
+    def get_existing_ids(self):
+        point_ids = set()
+        offset = None
+
+        while True:
+            points, next_page_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+                with_payload=False,
+                with_vectors=False,
+                offset=offset,
+            )
+
+            point_ids.update(point.id for point in points)
+
+            if not next_page_offset:
+                break
+
+            offset = next_page_offset
+
+        return point_ids
