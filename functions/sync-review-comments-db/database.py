@@ -11,7 +11,7 @@ import sqlalchemy
 from google.cloud.sql.connector import Connector, IPTypes
 
 
-def init_connection_poole_engine() -> sqlalchemy.engine.base.Engine:
+def init_connection_pool_engine() -> sqlalchemy.engine.base.Engine:
     """Initializes a connection pool for a Cloud SQL instance of Postgres.
 
     Uses the Cloud SQL Python Connector package.

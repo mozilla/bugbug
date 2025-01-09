@@ -1,7 +1,7 @@
 import logging
 
 import functions_framework
-from database import init_connection_poole_engine
+from database import init_connection_pool_engine
 from models import (
     Evaluation,
     Suggestion,
@@ -17,7 +17,7 @@ from bugbug.vectordb import QdrantVectorDB
 logging.basicConfig()
 logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
-pg_engine = init_connection_poole_engine()
+pg_engine = init_connection_pool_engine()
 qdrant_client = QdrantClient(
     location=get_secret("QDRANT_LOCATION"), api_key=get_secret("QDRANT_API_KEY")
 )
