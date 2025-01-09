@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import enum
 import json
 import re
 from abc import ABC, abstractmethod
@@ -11,7 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import cached_property
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
 import tenacity
 from langchain.chains import ConversationChain, LLMChain
@@ -1322,3 +1323,53 @@ class ReviewCommentsDB:
                         max_score_per_comment[result.id] = result
 
         return sorted(max_score_per_comment.values())[-limit:]
+
+
+class EvaluationAction(enum.Enum):
+    APPROVE = 1
+    REJECT = 2
+    IGNORE = 3
+
+
+@dataclass
+class SuggestionFeedback:
+    id: int
+    comment: str
+    file_path: str
+    action: Literal["APPROVE", "REJECT", "IGNORE"]
+    user: str
+
+
+class SuggestionsFeedbackDB:
+    def __init__(self, vector_db: VectorDB) -> None:
+        self.vector_db = vector_db
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
+        )
+
+    def add_suggestions_feedback(self, suggestions: Iterable[SuggestionFeedback]):
+        def vector_points():
+            for suggestion in suggestions:
+                vector = self.embeddings.embed_query(suggestion.comment)
+                payload = {
+                    "comment": suggestion.comment,
+                    "file_path": suggestion.file_path,
+                    "action": suggestion.action,
+                    "user": suggestion.user,
+                }
+
+                yield VectorPoint(id=suggestion.id, vector=vector, payload=payload)
+
+        self.vector_db.insert(vector_points())
+
+    def find_similar_suggestions(self, comment: str):
+        return (
+            SuggestionFeedback(
+                id=point.id,
+                comment=point.payload["comment"],
+                file_path=point.payload["file_path"],
+                action=point.payload["action"],
+                user=point.payload["user"],
+            )
+            for point in self.vector_db.search(self.embeddings.embed_query(comment))
+        )
