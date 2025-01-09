@@ -46,6 +46,10 @@ class VectorDB(ABC):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         ...
 
+    @abstractmethod
+    def get_largest_id(self) -> int:
+        ...
+
 
 class QdrantVectorDB(VectorDB):
     def __init__(self, collection_name: str, *args, **kwargs):
@@ -83,3 +87,15 @@ class QdrantVectorDB(VectorDB):
     def search(self, query: list[float]) -> Iterable[PayloadScore]:
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
+
+    def get_largest_id(self) -> int:
+        offset = 0
+        while offset is not None:
+            points, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                with_payload=False,
+                with_vectors=False,
+                offset=offset,
+            )
+
+        return points[-1].id if points else 0
