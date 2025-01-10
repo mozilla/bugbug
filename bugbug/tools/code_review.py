@@ -28,7 +28,7 @@ from bugbug import db, phabricator, utils
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
 from bugbug.utils import get_secret
-from bugbug.vectordb import VectorDB, VectorPoint
+from bugbug.vectordb import PayloadScore, QueryFilter, VectorDB, VectorPoint
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -93,7 +93,10 @@ As valid comments, consider the examples below:
 
 
 Here is the patch that we need you to review:
-{patch}"""
+{patch}
+
+Do not report any explanation about your choice. Only return a valid JSON list.
+"""
 )
 
 
@@ -135,14 +138,18 @@ Patch:
 {patch}
 
 As examples of not expected comments, not related to the current patch, please, check some below:
-    - Please note that these are minor improvements and the overall quality of the patch is good. The documentation is being expanded in a clear and structured way, which will likely be beneficial for future development.
+    - {rejected_examples}
+"""
+)
+
+
+DEFAULT_REJECTED_EXAMPLES = """Please note that these are minor improvements and the overall quality of the patch is good. The documentation is being expanded in a clear and structured way, which will likely be beneficial for future development.
     - Please note that these are just suggestions and the code might work perfectly fine as it is. It's always a good idea to test all changes thoroughly to ensure they work as expected.
     - Overall, the patch seems to be well implemented with no major concerns. The developers have made a conscious decision to align with Chrome's behavior, and the reasoning is well documented.
     - There are no complex code changes in this patch, so there's no potential for major readability regressions or bugs introduced by the changes.
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
-)
 
 
 PROMPT_TEMPLATE_DEDUPLICATE = """Please, double check the code review comments below.
@@ -969,7 +976,7 @@ def get_structured_functions(target, functions_declaration):
     return function_declaration_text
 
 
-def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
+def parse_model_output(output: str) -> list[dict]:
     output = output.strip()
     if output.startswith("Review:"):
         output = output[len("Review:") :].strip()
@@ -978,6 +985,12 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
         output = output[7:-3]
 
     comments = json.loads(output)
+
+    return comments
+
+
+def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
+    comments = parse_model_output(output)
 
     patched_files_map = {
         patched_file.target_file: patched_file for patched_file in patch
@@ -1026,6 +1039,7 @@ class CodeReviewTool(GenerativeModelTool):
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
+        suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
     ) -> None:
         super().__init__()
 
@@ -1070,6 +1084,8 @@ class CodeReviewTool(GenerativeModelTool):
         self.show_patch_example = show_patch_example
 
         self.verbose = verbose
+
+        self.suggestions_feedback_db = suggestions_feedback_db
 
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
@@ -1206,8 +1222,20 @@ class CodeReviewTool(GenerativeModelTool):
             if self.verbose:
                 GenerativeModelTool._print_answer(output)
 
+        rejected_examples = (
+            "\n    - ".join(
+                self.get_similar_rejected_comments(parse_model_output(output))
+            )
+            if self.suggestions_feedback_db
+            else DEFAULT_REJECTED_EXAMPLES
+        )
+
         raw_output = self.filtering_chain.invoke(
-            {"review": output, "patch": patch.raw_diff},
+            {
+                "review": output,
+                "patch": patch.raw_diff,
+                "rejected_examples": rejected_examples,
+            },
             return_only_outputs=True,
         )["text"]
 
@@ -1265,6 +1293,19 @@ class CodeReviewTool(GenerativeModelTool):
             )
             for num, example in enumerate(comment_examples)
         )
+
+    def get_similar_rejected_comments(self, suggestions) -> Iterable[str]:
+        if not self.suggestions_feedback_db:
+            raise Exception("Suggestions feedback database is not available")
+
+        for suggestion in suggestions:
+            similar_rejected_suggestions = (
+                self.suggestions_feedback_db.find_similar_rejected_suggestions(
+                    suggestion["comment"], limit=2
+                )
+            )
+            for rejected_suggestion in similar_rejected_suggestions:
+                yield rejected_suggestion.comment
 
 
 class ReviewCommentsDB:
@@ -1339,6 +1380,16 @@ class SuggestionFeedback:
     action: Literal["APPROVE", "REJECT", "IGNORE"]
     user: str
 
+    @staticmethod
+    def from_payload_score(point: PayloadScore):
+        return SuggestionFeedback(
+            id=point.id,
+            comment=point.payload["comment"],
+            file_path=point.payload["file_path"],
+            action=point.payload["action"],
+            user=point.payload["user"],
+        )
+
 
 class SuggestionsFeedbackDB:
     def __init__(self, vector_db: VectorDB) -> None:
@@ -1364,12 +1415,18 @@ class SuggestionsFeedbackDB:
 
     def find_similar_suggestions(self, comment: str):
         return (
-            SuggestionFeedback(
-                id=point.id,
-                comment=point.payload["comment"],
-                file_path=point.payload["file_path"],
-                action=point.payload["action"],
-                user=point.payload["user"],
-            )
+            SuggestionFeedback.from_payload_score(point)
             for point in self.vector_db.search(self.embeddings.embed_query(comment))
+        )
+
+    def find_similar_rejected_suggestions(self, comment: str, limit: int):
+        return (
+            SuggestionFeedback.from_payload_score(point)
+            for point in self.vector_db.search(
+                self.embeddings.embed_query(comment),
+                filter=QueryFilter(
+                    must_match={"action": "REJECT"},
+                ),
+                limit=limit,
+            )
         )
