@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from qdrant_client import QdrantClient
+from qdrant_client.conversions import common_types as qdrant_types
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -28,6 +29,25 @@ class PayloadScore:
     payload: dict
 
 
+@dataclass
+class QueryFilter:
+    """A filter for a vector DB query.
+
+    Attributes:
+        must_match: The key is the field name and the value that must be matched.
+    """
+
+    must_match: dict[str, str | int]
+
+    def to_qdrant_filter(self) -> qdrant_types.Filter:
+        return {
+            "must": [
+                {"key": key, "match": {"value": value}}
+                for key, value in self.must_match.items()
+            ]
+        }
+
+
 class VectorDB(ABC):
     """Abstract class for a vector database.
 
@@ -43,7 +63,9 @@ class VectorDB(ABC):
         ...
 
     @abstractmethod
-    def search(self, query: list[float]) -> Iterable[PayloadScore]:
+    def search(
+        self, query: list[float], filter: QueryFilter | None = None, limit: int = 10
+    ) -> Iterable[PayloadScore]:
         ...
 
     @abstractmethod
@@ -84,8 +106,14 @@ class QdrantVectorDB(VectorDB):
             ),
         )
 
-    def search(self, query: list[float]) -> Iterable[PayloadScore]:
-        for item in self.client.search(self.collection_name, query):
+    def search(
+        self, query: list[float], filter: QueryFilter | None = None, limit: int = 10
+    ) -> Iterable[PayloadScore]:
+        qdrant_filter = filter.to_qdrant_filter() if filter else None
+
+        for item in self.client.search(
+            self.collection_name, query, qdrant_filter, limit=limit
+        ):
             yield PayloadScore(item.score, item.id, item.payload)
 
     def get_largest_id(self) -> int:
