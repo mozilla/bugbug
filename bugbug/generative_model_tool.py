@@ -71,7 +71,7 @@ def create_mistral_llm(temperature=0.2, top_p=None):
     from langchain_mistralai import ChatMistralAI
 
     return ChatMistralAI(
-        model_name="mistral-large-latest",
+        model_name="codestral-latest",
         api_key=get_secret("MISTRAL_API_KEY"),
         temperature=temperature,
         top_p=top_p,
