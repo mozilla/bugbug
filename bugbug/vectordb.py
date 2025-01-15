@@ -40,12 +40,12 @@ class QueryFilter:
     must_match: dict[str, str | int]
 
     def to_qdrant_filter(self) -> qdrant_types.Filter:
-        return qdrant_types.Filter(
-            must=[
+        return {
+            "must": [
                 {"key": key, "match": {"value": value}}
                 for key, value in self.must_match.items()
             ]
-        )
+        }
 
 
 class VectorDB(ABC):
