@@ -93,7 +93,10 @@ As valid comments, consider the examples below:
 
 
 Here is the patch that we need you to review:
-{patch}"""
+{patch}
+
+Do not report any explanation about your choice. Only return a valid JSON list.
+"""
 )
 
 
