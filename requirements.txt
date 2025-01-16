@@ -13,7 +13,7 @@ llama-cpp-python==0.3.5
 lmdb==1.5.1
 lxml-html-clean==0.4.1
 markdown2==2.5.2
-matplotlib==3.9.3
+matplotlib==3.10.0
 mercurial==6.9
 microannotate==0.0.24
 mozci==2.4.1
