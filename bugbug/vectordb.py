@@ -5,7 +5,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.conversions import common_types as qdrant_types
@@ -34,18 +34,26 @@ class QueryFilter:
     """A filter for a vector DB query.
 
     Attributes:
-        must_match: The key is the field name and the value that must be matched.
+        must_match: The key is the field name and the value what must be matched.
+        must_not_has_id: A list of IDs to exclude from the search results.
     """
 
-    must_match: dict[str, str | int]
+    must_match: Optional[dict[str, str | int]] = None
+    must_not_has_id: Optional[list[int]] = None
 
     def to_qdrant_filter(self) -> qdrant_types.Filter:
-        return {
-            "must": [
+        qdrant_filter: qdrant_types.Filter = {}
+
+        if self.must_match:
+            qdrant_filter["must"] = [
                 {"key": key, "match": {"value": value}}
                 for key, value in self.must_match.items()
             ]
-        }
+
+        if self.must_not_has_id:
+            qdrant_filter["must_not"] = [{"has_id": self.must_not_has_id}]
+
+        return qdrant_filter or None
 
 
 class VectorDB(ABC):
