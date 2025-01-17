@@ -1222,10 +1222,13 @@ class CodeReviewTool(GenerativeModelTool):
             if self.verbose:
                 GenerativeModelTool._print_answer(output)
 
+        unfiltered_suggestions = parse_model_output(output)
+        if not unfiltered_suggestions:
+            logger.info("No suggestions were generated")
+            return []
+
         rejected_examples = (
-            "\n    - ".join(
-                self.get_similar_rejected_comments(parse_model_output(output))
-            )
+            "\n    - ".join(self.get_similar_rejected_comments(unfiltered_suggestions))
             if self.suggestions_feedback_db
             else DEFAULT_REJECTED_EXAMPLES
         )
