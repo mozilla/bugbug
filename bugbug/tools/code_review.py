@@ -1301,13 +1301,19 @@ class CodeReviewTool(GenerativeModelTool):
         if not self.suggestions_feedback_db:
             raise Exception("Suggestions feedback database is not available")
 
+        num_examples_per_suggestion = 10 // len(suggestions) or 1
+        seen_ids: set[int] = set()
+
         for suggestion in suggestions:
             similar_rejected_suggestions = (
                 self.suggestions_feedback_db.find_similar_rejected_suggestions(
-                    suggestion["comment"], limit=2
+                    suggestion["comment"],
+                    limit=num_examples_per_suggestion,
+                    excluded_ids=seen_ids,
                 )
             )
             for rejected_suggestion in similar_rejected_suggestions:
+                seen_ids.add(rejected_suggestion.id)
                 yield rejected_suggestion.comment
 
 
@@ -1422,13 +1428,16 @@ class SuggestionsFeedbackDB:
             for point in self.vector_db.search(self.embeddings.embed_query(comment))
         )
 
-    def find_similar_rejected_suggestions(self, comment: str, limit: int):
+    def find_similar_rejected_suggestions(
+        self, comment: str, limit: int, excluded_ids: Iterable[int] = ()
+    ):
         return (
             SuggestionFeedback.from_payload_score(point)
             for point in self.vector_db.search(
                 self.embeddings.embed_query(comment),
                 filter=QueryFilter(
                     must_match={"action": "REJECT"},
+                    must_not_has_id=list(excluded_ids),
                 ),
                 limit=limit,
             )
