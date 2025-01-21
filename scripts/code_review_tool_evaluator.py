@@ -17,12 +17,13 @@ To specify different variants to evaluate, please modify the get_tool_variants
 function.
 """
 
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pandas as pd
 from tabulate import tabulate
 
-from bugbug import generative_model_tool, phabricator, utils
+from bugbug import db, generative_model_tool, phabricator, utils
 from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
@@ -47,7 +48,9 @@ def get_tool_variants(
     # Step 1: we start with instantiating the dependencies based on the selected
     # variants.
 
-    if is_variant_selected("CONTEXT", "RAG and CONTEXT"):
+    if is_variant_selected(
+        "CONTEXT", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS"
+    ):
 
         def get_file(commit_hash, path):
             r = utils.get_session("hgmo").get(
@@ -62,9 +65,17 @@ def get_tool_variants(
         repo_dir = "../mozilla-unified"
         function_search = FunctionSearchMozilla(repo_dir, get_file, True)
 
-    if is_variant_selected("RAG", "RAG and CONTEXT"):
-        vector_db = QdrantVectorDB("diff_comments")
-        review_comments_db = code_review.ReviewCommentsDB(vector_db)
+    if is_variant_selected(
+        "RAG", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS"
+    ):
+        review_comments_db = code_review.ReviewCommentsDB(
+            QdrantVectorDB("diff_comments")
+        )
+
+    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS"):
+        suggestions_feedback_db = code_review.SuggestionsFeedbackDB(
+            QdrantVectorDB("suggestions_feedback")
+        )
 
     # Step 2: we create the selected tool variants.
 
@@ -105,10 +116,24 @@ def get_tool_variants(
             )
         )
 
+    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS"):
+        tool_variants.append(
+            (
+                "RAG and CONTEXT and REJECTED_COMMENTS",
+                code_review.CodeReviewTool(
+                    comment_gen_llms=[llm],
+                    function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                ),
+            ),
+        )
     return tool_variants
 
 
 def get_review_requests_sample(since: timedelta, limit: int):
+    assert db.download(phabricator.REVISIONS_DB)
+
     start_date = (datetime.now() - since).timestamp()
     MOZILLA_CENTRAL_PHID = "PHID-REPO-saax4qdxlbbhahhp2kg5"
 
@@ -199,19 +224,26 @@ def main(args):
             except code_review.FileNotInPatchError as e:
                 print("Error while running the tool:", e)
                 continue
+            except code_review.LargeDiffError:
+                print("Skipping the patch because it is too large.")
+                continue
 
             print_prettified_comments(comments)
+            comment_per_line_counter = defaultdict(int)
 
-            all_variants_results.extend(
-                {
-                    "Review Request ID": review_request_id,
-                    "File": comment.filename,
-                    "Line": comment.end_line,
-                    "Comment Number": i + 1,
-                    f"Comment ({variant_name})": comment.content,
-                }
-                for i, comment in enumerate(comments)
-            )
+            for comment in comments:
+                key = (review_request_id, comment.filename, comment.end_line)
+                comment_per_line_counter[key] += 1
+
+                all_variants_results.append(
+                    {
+                        "Review Request ID": review_request_id,
+                        "File": comment.filename,
+                        "Line": comment.end_line,
+                        "Comment Number": comment_per_line_counter[key],
+                        f"Comment ({variant_name})": comment.content,
+                    }
+                )
 
         df = (
             pd.DataFrame(all_variants_results, columns=result_all_columns)
