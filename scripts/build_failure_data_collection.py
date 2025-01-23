@@ -96,7 +96,7 @@ def find_bugs(hg_client, bug_ids, bug_commits):
         if not backing_out_commit:
             continue
 
-        logger.info("Backing out commit found!")
+        logger.info(f"Backing out commit found for bug {bug_id}: {backing_out_commit}")
 
         # commit = {}
 
