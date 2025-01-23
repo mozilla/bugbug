@@ -63,25 +63,18 @@ class LargeDiffError(Exception):
     """Occurs when the diff is too large to be processed."""
 
 
-TARGET_SOFTWARE = None
+TARGET_SOFTWARE: str | None = None
 
-PROMPT_TEMPLATE_SUMMARIZATION = (
-    """You are an expert reviewer for"""
-    + (f" the {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """ source code, with experience on source code reviews.
+PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for {experience_scope}, with experience on source code reviews.
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
 
 {patch}"""
-)
 
-PROMPT_TEMPLATE_REVIEW = (
-    """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
+PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code"""
-    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """.
+3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the {target_code_consistency} source code.
 4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
 5. Filter out comments that are descriptive.
 6. Filter out comments that are praising (example: "This is a good addition to the code.").
@@ -97,7 +90,6 @@ Here is the patch that we need you to review:
 
 Do not report any explanation about your choice. Only return a valid JSON list.
 """
-)
 
 
 TEMPLATE_COMMENT_EXAMPLE = """Patch example {example_number}:
@@ -109,13 +101,10 @@ Review comments for example {example_number}:
 {comments}"""
 
 
-PROMPT_TEMPLATE_FILTERING_ANALYSIS = (
-    """Please, double check the code review provided for the patch below.
+PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Please, double check the code review provided for the patch below.
 Just report the comments that are:
 - applicable for the patch;
-- consistent with the source code"""
-    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """;
+- consistent with the {target_code_consistency} source code;
 - focusing on reporting possible bugs, major readability regressions, or similar concerns;
 - filter out any descriptive comments;
 - filter out any praising comments.
@@ -140,7 +129,6 @@ Patch:
 As examples of not expected comments, not related to the current patch, please, check some below:
     - {rejected_examples}
 """
-)
 
 
 DEFAULT_REJECTED_EXAMPLES = """Please note that these are minor improvements and the overall quality of the patch is good. The documentation is being expanded in a clear and structured way, which will likely be beneficial for future development.
@@ -1040,9 +1028,11 @@ class CodeReviewTool(GenerativeModelTool):
         show_patch_example: bool = False,
         verbose: bool = True,
         suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
+        target_software: Optional[str] = None,
     ) -> None:
         super().__init__()
 
+        self.target_software = target_software or TARGET_SOFTWARE
         self.comment_gen_llms = comment_gen_llms
         self.llm = llm if llm is not None else comment_gen_llms[0]
         self._tokenizer = get_tokenizer(
@@ -1052,12 +1042,26 @@ class CodeReviewTool(GenerativeModelTool):
         )
 
         self.summarization_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_SUMMARIZATION),
+            prompt=PromptTemplate.from_template(
+                PROMPT_TEMPLATE_SUMMARIZATION,
+                partial_variables={
+                    "experience_scope": (
+                        f"the {self.target_software} source code"
+                        if self.target_software
+                        else "a software project"
+                    )
+                },
+            ),
             llm=self.llm,
             verbose=verbose,
         )
         self.filtering_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
+            prompt=PromptTemplate.from_template(
+                PROMPT_TEMPLATE_FILTERING_ANALYSIS,
+                partial_variables={
+                    "target_code_consistency": self.target_software or "rest of the"
+                },
+            ),
             llm=self.llm,
             verbose=verbose,
         )
@@ -1146,20 +1150,17 @@ class CodeReviewTool(GenerativeModelTool):
                 verbose=self.verbose,
             )
 
+            experience_scope = (
+                f"the {self.target_software} source code"
+                if self.target_software
+                else "a software project"
+            )
             memory.save_context(
                 {
-                    "input": "You are an expert reviewer for"
-                    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-                    + " source code, with experience on source code reviews."
+                    "input": f"You are an expert reviewer for {experience_scope}, with experience on source code reviews."
                 },
                 {
-                    "output": "Sure, I'm aware of source code practices"
-                    + (
-                        f" in {TARGET_SOFTWARE}"
-                        if TARGET_SOFTWARE is not None
-                        else " in the development community"
-                    )
-                    + "."
+                    "output": f"Sure, I'm aware of source code practices in {self.target_software or 'the development community'}."
                 },
             )
             memory.save_context(
@@ -1204,6 +1205,7 @@ class CodeReviewTool(GenerativeModelTool):
                 input=PROMPT_TEMPLATE_REVIEW.format(
                     patch=formatted_patch,
                     comment_examples=self._get_comment_examples(patch),
+                    target_code_consistency=self.target_software or "rest of the",
                 )
             )
             output += cur_output
