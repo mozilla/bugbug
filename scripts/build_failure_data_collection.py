@@ -2,11 +2,9 @@ import csv
 import logging
 import os
 from collections import defaultdict
-from datetime import datetime
 
 import requests
 import taskcluster
-from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from libmozdata.hgmozilla import Revision
 from tqdm import tqdm
@@ -33,16 +31,16 @@ def download_databases():
 
 def get_bz_params():
     fields = ["id"]
-    one_year_ago = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
+    # one_year_ago = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
     params = {
         "include_fields": fields,
         "resolution": "---",
-        "f1": "creation_ts",
-        "o1": "greaterthan",
-        "v1": one_year_ago,
-        "f2": "longdesc",
-        "o2": "allwordssubstr",
-        "v2": "backed out for causing build",
+        # "f1": "creation_ts",
+        # "o1": "greaterthan",
+        # "v1": one_year_ago,
+        "f1": "longdesc",
+        "o1": "allwordssubstr",
+        "v1": "backed out for causing build",
     }
     return params
 
@@ -138,6 +136,11 @@ def find_bugs(hg_client, bug_ids, bug_commits):
 def find_backing_out_commit(commits, hg_client):
     logger.info("Finding backing out commit...")
     if not commits:
+        return None
+
+    backout_commits = [commit for commit in commits if commit["backsout"]]
+    if len(backout_commits) > 1:
+        logger.info("Multiple backouts detected, skipping this bug.")
         return None
 
     for commit in commits:
