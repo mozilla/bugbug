@@ -75,11 +75,13 @@ PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review f
 1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
 2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
 3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the {target_code_consistency} source code.
-4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Filter out comments that are descriptive.
-6. Filter out comments that are praising (example: "This is a good addition to the code.").
-7. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
-8. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+4. Generate review comments that are short, to the point and focused on the changed code. Don't form the suggestions as questions.
+5. Avoid comments that focus on documentation, tests, or confirmation whether something exists.
+6. Avoid comments that ask the author to ensure that the change is correct (using words like Ensure, Verify, or Check).
+7. Avoid comments that are descriptive.
+8. Avoid comments that are praising (example: "This is a good addition to the code.").
+9. Avoid comments that are not about added lines (have '+' symbol at the start of the line).
+10. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
 
 As valid comments, consider the examples below:
 {comment_examples}
