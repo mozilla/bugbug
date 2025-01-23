@@ -4,7 +4,7 @@ boto3==1.35.94
 imbalanced-learn==0.13.0
 langchain==0.3.14
 langchain-anthropic==0.3.1
-langchain-community==0.3.9
+langchain-community==0.3.14
 langchain-google-genai==2.0.7
 langchain-mistralai==0.2.3
 langchain-openai==0.2.14
