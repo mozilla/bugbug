@@ -28,6 +28,8 @@ from bugbug.code_search.mozilla import FunctionSearchMozilla
 from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
+code_review.TARGET_SOFTWARE = "Mozilla Firefox"
+
 
 def get_tool_variants(
     llm,
