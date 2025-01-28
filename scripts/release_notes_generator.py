@@ -131,7 +131,7 @@ def remove_duplicates(input_text):
     Here is the list:
     {input_text}
 
-    The output should just be the list with the duplicates removed. Nothing more, nothing less.
+    The output should just be the list with the duplicates removed. Nothing more, nothing less. Do not add any text before or after the list.
     """
 
     try:
@@ -149,6 +149,31 @@ def remove_duplicates(input_text):
     except Exception as e:
         logger.error(f"Error while calling OpenAI API: {e}")
         return "Error: Unable to remove duplicates."
+
+
+def remove_unworthy_commits(input_text):
+    prompt = f"""Review the following list of release notes and remove anything that is not worthy or necessary for inclusion in official release notes. Focus on keeping only changes that are meaningful, impactful, and directly relevant to end users, such as new features, significant fixes, performance improvements, accessibility enhancements, or critical security updates. Remove anything minor, overly technical, or irrelevant.
+
+Here is the list:
+{input_text}
+
+Return the cleaned-up list in the same format. Do not add any text before or after the list."""
+
+    try:
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=MODEL,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Error while calling OpenAI API: {e}")
+        return "Error: Unable to remove unworthy commits."
 
 
 def generate_summaries(commit_log):
@@ -219,6 +244,9 @@ def generate_worthy_commits():
 
     logger.info("Removing duplicates from the list...")
     combined_list = remove_duplicates(combined_list)
+
+    logger.info("Removing unworthy commits from the list...")
+    combined_list = remove_unworthy_commits(combined_list)
 
     with open(OUTPUT_FILE, "w") as file:
         file.write(combined_list)
