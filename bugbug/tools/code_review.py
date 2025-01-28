@@ -71,26 +71,57 @@ Please, analyze the code provided and report a summarization about the new chang
 
 {patch}"""
 
-PROMPT_TEMPLATE_REVIEW = """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
-1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
-2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the {target_code_consistency} source code.
-4. Generate review comments that are short, to the point and focused on the changed code. Don't form the suggestions as questions.
-5. Avoid comments that focus on documentation, tests, or confirmation whether something exists.
-6. Avoid comments that ask the author to ensure that the change is correct (using words like Ensure, Verify, or Check).
-7. Avoid comments that are descriptive.
-8. Avoid comments that are praising (example: "This is a good addition to the code.").
-9. Avoid comments that are not about added lines (have '+' symbol at the start of the line).
-10. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+PROMPT_TEMPLATE_REVIEW = """**Task**:
 
-As valid comments, consider the examples below:
+Generate code review comments for the patch provided below.
+
+**Instructions**:
+
+1. **Understand the Changes**:
+
+   - Analyze the changes made in the patch.
+   - Use the previously reported summarization as context.
+
+2. **Identify Potential Issues**:
+
+   - Look for code that might result in possible bugs.
+   - Identify major regressions, issues, or similar concerns.
+
+3. **Validate Each Issue**:
+
+   - Ensure each identified problem is valid.
+   - Confirm consistency with the {target_code_consistency} source code standards.
+
+**Guidelines for Writing Comments**:
+
+- **Style**:
+
+  - **Clarity**: Comments should be short and to the point.
+  - **Focus**: Concentrate on the changed code only.
+  - **Tone**: Do not form suggestions as questions.
+
+- **Avoid Comments That**:
+
+  - Focus on documentation or tests.
+  - Ask for confirmation of existence (e.g., "Does this function exist?").
+  - Instruct the author to ensure correctness (avoid "Ensure", "Verify", "Check").
+  - Merely describe the code without providing constructive feedback.
+  - Offer praise (e.g., "This is a good addition to the code.").
+  - Refer to code not added in this patch (lines without a '+' at the start).
+
+**Output Format**:
+
+- Write down the comments in a JSON list as shown in the valid comment examples.
+- Do **not** include any explanations about your choices.
+- Only return the JSON list.
+
+**Valid Comment Examples**:
+
 {comment_examples}
 
+**Patch to Review**:
 
-Here is the patch that we need you to review:
 {patch}
-
-Do not report any explanation about your choice. Only return a valid JSON list.
 """
 
 
