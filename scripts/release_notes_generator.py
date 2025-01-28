@@ -82,7 +82,7 @@ You are an expert in analyzing commit logs. Your task is to analyze a chunk of c
    - If a commit lacks sufficient information (e.g., vague descriptions or unexplained references to functions), break the process into two steps:
      - Step 1: Explain why the commit's description is insufficient for end users (e.g., the function's purpose is unclear or its relevance is ambiguous).
      - Step 2: Perform a reasoning step where you hypothesize or research the broader context, including the potential impact on security, performance, or user experience.
-   - Use your analysis to enhance clarity and add relevant context to the description.
+   - Use your analysis to enhance clarity and add relevant context to the description. This ensures that whatever you are adding to the list is actually worthy of being in the release notes, rather than you adding it with no understanding of it.
 
 3. **Output Format**:
    - Use simple, non-technical language suitable for release notes.
@@ -117,12 +117,38 @@ You are an expert in analyzing commit logs. Your task is to analyze a chunk of c
                 }
             ],
             model=MODEL,
-            temperature=0.2,
+            temperature=0.1,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         logger.error(f"Error while calling OpenAI API: {e}")
         return "Error: Unable to generate summary."
+
+
+def remove_duplicates(input_text):
+    prompt = f"""Given the following list, remove any duplicate entries. That is, if two or more entries talk abou the same change (does not have to be identical wording), remove the less descriptive one. Do not alter anything else.
+
+    Here is the list:
+    {input_text}
+
+    The output should just be the list with the duplicates removed. Nothing more, nothing less.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=MODEL,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Error while calling OpenAI API: {e}")
+        return "Error: Unable to remove duplicates."
 
 
 def generate_summaries(commit_log):
@@ -190,6 +216,9 @@ def generate_worthy_commits():
     summaries = generate_summaries(cleaned_commits)
 
     combined_list = "\n".join(summaries)
+
+    logger.info("Removing duplicates from the list...")
+    combined_list = remove_duplicates(combined_list)
 
     with open(OUTPUT_FILE, "w") as file:
         file.write(combined_list)
