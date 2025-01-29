@@ -147,46 +147,64 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
     def generate_fix(
         self,
         comment,
-        relevant_diff,
-        generated_fix,
-        actual_fix,
-        comparison_evaluation,
+        relevant_diff=None,
+        generated_fix=None,
+        actual_fix=None,
+        comparison_evaluation=False,
         equivalent_fix=False,
+        new_prompt=False,
     ):
-        if comparison_evaluation and equivalent_fix:
-            prompt = f"""
-            Comment: ```{comment}```
+        if new_prompt:
+            prompt = f"""You are an expert programmer with experience on source code. You are given the task to evaluate the quality of generated code edits for the patch and its corresponding comment as provided below by comparing it to actual code edits.
+
+            Does the generated code edits resolve the comment? (i.e., does it address the feedback or concern raised by the comment, even if it is not identical to the actual code edits?) Answer YES or NO, followed by a very short and succinct explanation.
+
+            The comment of interest:
+            {comment}
 
 
-            Generated Fix: ```{generated_fix}```
+            Generated code edits:
+            {generated_fix}
 
 
-            Actual Fix (provided as a reference to show how the comment was resolved by a human): ```{actual_fix}```
-
-
-            Does the Generated Fix resolve the comment? (i.e., does it address the feedback or concern raised, even if it is not identical to the Actual Fix?) Answer YES or NO, followed by a very short and succinct explanation.
-            """
-        elif comparison_evaluation and not equivalent_fix:
-            prompt = f"""
-            Comment: ```{comment}```
-
-
-            Generated Fix: ```{generated_fix}```
-
-
-            Actual Fix: ```{actual_fix}```
-
-
-            Does the generated fix appear at all in the actual fix? (i.e. is the generated fix a subset of the actual fix?) Answer YES or NO, followed by a very short and succinct explanation.
+            Actual code edits (provided as a reference to show how the comment was resolved by a human):
+            {actual_fix}
             """
         else:
-            prompt = f"""
-            Comment: {comment}
-            Diff (before fix): {relevant_diff}
-            Generated Fix: {generated_fix}
+            if comparison_evaluation and equivalent_fix:
+                prompt = f"""
+                Comment: ```{comment}```
 
-            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-            """
+
+                Generated Fix: ```{generated_fix}```
+
+
+                Actual Fix (provided as a reference to show how the comment was resolved by a human): ```{actual_fix}```
+
+
+                Does the Generated Fix resolve the comment? (i.e., does it address the feedback or concern raised, even if it is not identical to the Actual Fix?) Answer YES or NO, followed by a very short and succinct explanation.
+                """
+            elif comparison_evaluation and not equivalent_fix:
+                prompt = f"""
+                Comment: ```{comment}```
+
+
+                Generated Fix: ```{generated_fix}```
+
+
+                Actual Fix: ```{actual_fix}```
+
+
+                Does the generated fix appear at all in the actual fix? (i.e. is the generated fix a subset of the actual fix?) Answer YES or NO, followed by a very short and succinct explanation.
+                """
+            else:
+                prompt = f"""
+                Comment: {comment}
+                Diff (before fix): {relevant_diff}
+                Generated Fix: {generated_fix}
+
+                Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
+                """
         qualitative_feedback = self.run(prompt=prompt)
         return qualitative_feedback
 
@@ -833,10 +851,9 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
     generated_fix = llm_tool.generate_fix(
         target_comment,
         relevant_diff,
-        prompt_type="zero-shot",
+        prompt_type="study-modified",
         hunk_size=100,
         similar_comments_and_fix_infos=None,
-        generated_fix=None,
     )
 
-    print(generated_fix)
+    return generated_fix

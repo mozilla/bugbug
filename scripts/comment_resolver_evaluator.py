@@ -106,6 +106,12 @@ def conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix):
                 )
 
 
+def validate_fix_with_llm(comment, generated_fix, fix_patch_diff, llm_tool, patch=None):
+    return llm_tool.generate_fix(
+        comment=comment, generated_fix=generated_fix, actual_fix=fix_patch_diff
+    )
+
+
 def run(args) -> None:
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
@@ -114,11 +120,39 @@ def run(args) -> None:
     llm = create_llm_from_args(args)
     llm_tool = CodeGeneratorEvaluatorTool(llm=llm, db=db)
 
-    input_csv = args.input_csv
-    output_csv = args.output_csv
-    equivalent_fix = args.equivalent_fix
+    if args.llm_compare_method:
+        with open("output.csv", "r", encoding="utf-8") as input_csv_file, open(
+            "output2.csv", "w", newline="", encoding="utf-8"
+        ) as output_csv_file:
+            csv_reader = csv.reader(input_csv_file)
+            csv_writer = csv.writer(output_csv_file)
 
-    conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix)
+            header = next(csv_reader)
+            header.append("llm_comparison_output")
+            csv_writer.writerow(header)
+
+            for row in csv_reader:
+                (
+                    bug_id,
+                    revision_id,
+                    comment_id,
+                    comment_content,
+                    initial_patch_id,
+                    final_patch_id,
+                    fix_patch_diff,
+                    generated_fix,
+                ) = row
+                result = validate_fix_with_llm(
+                    comment_content, generated_fix, fix_patch_diff, llm_tool
+                )
+                row.append(result)
+                csv_writer.writerow(row)
+    else:
+        input_csv = args.input_csv
+        output_csv = args.output_csv
+        equivalent_fix = args.equivalent_fix
+
+        conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix)
 
 
 def parse_args(args):
@@ -140,6 +174,11 @@ def parse_args(args):
         "--equivalent-fix",
         action="store_true",
         help="If set, the prompt will check if both the generated and reference fixes are strictly equivalent, otherwise if it is a subset.",
+    )
+    parser.add_argument(
+        "--llm-compare-method",
+        action="store_true",
+        help="If set, the prompt will compare the generated fix with the reference fix using the LLM.",
     )
     return parser.parse_args(args)
 

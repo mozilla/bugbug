@@ -1,4 +1,6 @@
 import argparse
+import csv
+import json
 import logging
 import sys
 
@@ -31,8 +33,12 @@ def run(args) -> None:
     llm = create_llm_from_args(args)
     llm_tool = CodeGeneratorTool(llm=llm, db=db)
 
-    if args.revision_id and args.diff_id and args.comment_id:
-        pass
+    if (
+        args.revision_id
+        and args.diff_id
+        and args.comment_id
+        and not args.use_db_examples
+    ):
         generate_individual_fix(
             llm_tool=llm_tool,
             db=db,
@@ -40,7 +46,7 @@ def run(args) -> None:
             diff_id=args.diff_id,
             comment_id=args.comment_id,
         )
-    else:
+    elif not args.use_db_examples:
         generate_fixes(
             llm_tool=llm_tool,
             db=db,
@@ -51,6 +57,58 @@ def run(args) -> None:
             output_csv=args.output_csv,
             single_comment=args.single_comment,
         )
+    else:
+        with open(
+            "data/fixed_comments4.json", "r", encoding="utf-8"
+        ) as json_file, open(
+            "output.csv", "w", newline="", encoding="utf-8"
+        ) as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(
+                [
+                    "bug_id",
+                    "revision_id",
+                    "comment_id",
+                    "initial_patch_id",
+                    "final_patch_id",
+                    "fix_patch_diff",
+                    "generated_fix",
+                ]
+            )
+
+            for line in json_file:
+                try:
+                    data = json.loads(line.strip())
+                    bug_id = data.get("bug_id")
+                    revision_id = data.get("revision_id")
+                    comment_id = data.get("comment", {}).get("id")
+                    comment_content = data.get("comment", {}).get("content")
+                    initial_patch_id = data.get("initial_patch_id")
+                    final_patch_id = data.get("fix_patch_id")
+                    fix_patch_diff = data.get("fix_patch_diff")
+                    generated_fix = generate_individual_fix(
+                        llm_tool=llm_tool,
+                        db=db,
+                        revision_id=revision_id,
+                        diff_id=initial_patch_id,
+                        comment_id=comment_id,
+                    )
+
+                    csv_writer.writerow(
+                        [
+                            bug_id,
+                            revision_id,
+                            comment_id,
+                            comment_content,
+                            initial_patch_id,
+                            final_patch_id,
+                            fix_patch_diff,
+                            generated_fix,
+                        ]
+                    )
+
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing JSON: {e}")
 
 
 def parse_args(args):
@@ -123,6 +181,11 @@ def parse_args(args):
         "--comment-id",
         type=int,
         help="Comment ID for individual fix generation.",
+    )
+    parser.add_argument(
+        "--use-db-examples",
+        action="store_true",
+        help="If set, the database examples will be used for generation.",
     )
 
     return parser.parse_args(args)
