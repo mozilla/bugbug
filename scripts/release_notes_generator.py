@@ -19,7 +19,7 @@ FIREFOX_VERSION_1 = "FIREFOX_BETA_132_BASE"
 FIREFOX_VERSION_2 = "FIREFOX_BETA_133_BASE"
 REPO_DIRECTORY = "hg_dir"
 OUTPUT_FILE = f"version_summary_{FIREFOX_VERSION_2}.txt"
-CHUNK_SIZE = 4000
+CHUNK_SIZE = 5000
 
 
 def run_hg_log(query, repo_dir):
@@ -52,7 +52,6 @@ def split_into_chunks(commit_log, chunk_size, model="gpt-4"):
         block_token_count = get_token_count(block, model=model)
 
         if current_token_count + block_token_count > chunk_size:
-            # Add the current chunk to the chunks list and start a new chunk
             chunks.append("\n\n".join(current_chunk))
             current_chunk = []
             current_token_count = 0
@@ -60,7 +59,6 @@ def split_into_chunks(commit_log, chunk_size, model="gpt-4"):
         current_chunk.append(block)
         current_token_count += block_token_count
 
-    # Add the last chunk if any content remains
     if current_chunk:
         chunks.append("\n\n".join(current_chunk))
 
@@ -87,7 +85,7 @@ You are an expert in analyzing commit logs. Your task is to analyze a chunk of c
 3. **Output Format**:
    - Use simple, non-technical language suitable for release notes.
    - Use the following strict format for each relevant commit:
-     - [Type of Change] Description of the change (bug XXXXX)
+     - [Type of Change] Description of the change (bug XXXXX) (reasoning: <reasoning for why this change was picked to be worthy>)
    - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
 
 4. **Example Commit Logs**:
@@ -152,12 +150,12 @@ def remove_duplicates(input_text):
 
 
 def remove_unworthy_commits(input_text):
-    prompt = f"""Review the following list of release notes and remove anything that is not worthy or necessary for inclusion in official release notes. Focus on keeping only changes that are meaningful, impactful, and directly relevant to end users, such as new features, significant fixes, performance improvements, accessibility enhancements, or critical security updates. Remove anything minor, overly technical, or irrelevant.
+    prompt = f"""Review the following list of release notes and remove anything list entry that is not worthy or necessary for inclusion in official release notes. Focus on keeping only changes that are meaningful, impactful, and directly relevant to end users, such as new features, significant fixes, performance improvements, accessibility enhancements, or critical security updates. Remove anything minor, overly technical, or irrelevant.
 
 Here is the list:
 {input_text}
 
-Return the cleaned-up list in the same format. Do not add any text before or after the list."""
+Return the cleaned-up list in the same format. Only remove the list entries you do not deem worthy of being included in the release notes. KEEP THE SAME FORMAT, DO NOT ALTER THE ENTRIES THEMSELVES. Do not add any text before or after the list."""
 
     try:
         response = client.chat.completions.create(
@@ -178,6 +176,8 @@ Return the cleaned-up list in the same format. Do not add any text before or aft
 
 def generate_summaries(commit_log):
     chunks = split_into_chunks(commit_log, CHUNK_SIZE)
+    print(f"LENGTH OF CHUNKS: {len(chunks)}")
+    print(f"LENGTH OF FIRST CHUNK: {len(chunks[0])}")
     summaries = [summarize_with_gpt(chunk) for chunk in chunks]
     return summaries
 
@@ -196,62 +196,72 @@ def clean_commits(commit_log, keywords):
             and not re.search(r"release\+treescript@mozilla\.org", block, re.IGNORECASE)
             and not re.search(r"nightly", block, re.IGNORECASE)
         ):
-            cleaned_commits.append(block)
+            match = re.search(r"summary:\s+(.+)", block)
+            commit_summary = match.group(1) if match else None
+            cleaned_commits.append(commit_summary)
 
     return "\n\n".join(cleaned_commits)
 
 
 def generate_worthy_commits():
-    logger.info(f"Generating list of commits for version: {FIREFOX_VERSION_2}")
+    # logger.info(f"Generating list of commits for version: {FIREFOX_VERSION_2}")
 
-    logger.info("Finding the branching point commit...")
-    branching_commit_query = f"ancestor({FIREFOX_VERSION_1}, {FIREFOX_VERSION_2})"
-    branching_commit_output = run_hg_log(branching_commit_query, REPO_DIRECTORY)
+    # logger.info("Finding the branching point commit...")
+    # branching_commit_query = f"ancestor({FIREFOX_VERSION_1}, {FIREFOX_VERSION_2})"
+    # branching_commit_output = run_hg_log(branching_commit_query, REPO_DIRECTORY)
 
-    if not branching_commit_output:
-        logger.error("Failed to find the branching point commit. Exiting.")
-        exit(1)
+    # if not branching_commit_output:
+    #     logger.error("Failed to find the branching point commit. Exiting.")
+    #     exit(1)
 
-    branching_commit_hash = branching_commit_output.split(":")[1].split()[0]
-    logger.info(f"Branching point commit: {branching_commit_hash}")
+    # branching_commit_hash = branching_commit_output.split(":")[1].split()[0]
+    # logger.info(f"Branching point commit: {branching_commit_hash}")
 
-    logger.info("Fetching the list of changes...")
-    changes_query = (
-        f"descendants({branching_commit_hash}) and ancestors({FIREFOX_VERSION_2})"
-    )
-    changes_output = run_hg_log(changes_query, REPO_DIRECTORY)
+    # logger.info("Fetching the list of changes...")
+    # changes_query = (
+    #     f"descendants({branching_commit_hash}) and ancestors({FIREFOX_VERSION_2})"
+    # )
+    # changes_output = run_hg_log(changes_query, REPO_DIRECTORY)
 
-    if not changes_output:
-        logger.error("Failed to fetch the list of changes. Exiting.")
-        exit(1)
+    # if not changes_output:
+    #     logger.error("Failed to fetch the list of changes. Exiting.")
+    #     exit(1)
 
-    logger.info("Cleaning commit log...")
-    keywords_to_remove = [
-        "Backed out",
-        "a=testonly",
-        "a=release",
-        "DONTBUILD",
-        "add tests",
-        "disable test",
-    ]
-    cleaned_commits = clean_commits(changes_output, keywords_to_remove)
-    cleaned_commits = cleaned_commits[0:40000]
+    # logger.info("Cleaning commit log...")
+    # keywords_to_remove = [
+    #     "Backed out",
+    #     "a=testonly",
+    #     "a=release",
+    #     "DONTBUILD",
+    #     "add tests",
+    #     "disable test",
+    # ]
+    # cleaned_commits = clean_commits(changes_output, keywords_to_remove)
+    # # cleaned_commits = cleaned_commits[0:40000]
 
-    logger.info("Generating summaries for cleaned commits...")
-    summaries = generate_summaries(cleaned_commits)
+    # logger.info("Generating summaries for cleaned commits...")
+    # summaries = generate_summaries(cleaned_commits)
 
-    combined_list = "\n".join(summaries)
+    # combined_list = "\n".join(summaries)
 
-    logger.info("Removing duplicates from the list...")
-    combined_list = remove_duplicates(combined_list)
+    # # logger.info("Removing duplicates from the list...")
+    # # combined_list = remove_duplicates(combined_list)
 
-    logger.info("Removing unworthy commits from the list...")
-    combined_list = remove_unworthy_commits(combined_list)
+    # # logger.info("Removing unworthy commits from the list...")
+    # # combined_list = remove_unworthy_commits(combined_list)
 
-    with open(OUTPUT_FILE, "w") as file:
-        file.write(combined_list)
+    # with open(OUTPUT_FILE, "w") as file:
+    #     file.write(combined_list)
 
-    logger.info(f"Worthy commits saved to {OUTPUT_FILE}")
+    # logger.info(f"Worthy commits saved to {OUTPUT_FILE}")
+    with open(OUTPUT_FILE, "r", encoding="utf-8") as file:
+        file_contents = file.read()
+
+    cleaned_commits = remove_duplicates(file_contents)
+    cleaned_commits = remove_unworthy_commits(cleaned_commits)
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as file:
+        file.write(cleaned_commits)
 
 
 if __name__ == "__main__":
