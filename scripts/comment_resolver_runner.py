@@ -69,6 +69,7 @@ def run(args) -> None:
                     "bug_id",
                     "revision_id",
                     "comment_id",
+                    "comment_content",
                     "initial_patch_id",
                     "final_patch_id",
                     "fix_patch_diff",
@@ -84,7 +85,7 @@ def run(args) -> None:
                     comment_id = data.get("comment", {}).get("id")
                     comment_content = data.get("comment", {}).get("content")
                     initial_patch_id = data.get("initial_patch_id")
-                    final_patch_id = data.get("fix_patch_id")
+                    final_patch_id = data.get("final_patch_id")
                     fix_patch_diff = data.get("fix_patch_diff")
                     generated_fix = generate_individual_fix(
                         llm_tool=llm_tool,
