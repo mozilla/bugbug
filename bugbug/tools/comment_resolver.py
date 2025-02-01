@@ -1,11 +1,13 @@
 import csv
 import json
 import logging
+import os
 import re
 from types import SimpleNamespace
 
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
+from openai import OpenAI
 from qdrant_client import QdrantClient
 
 from bugbug.generative_model_tool import GenerativeModelTool
@@ -83,9 +85,70 @@ class FixCommentDB:
         return similar_comments if similar_comments else None
 
 
-class CodeGeneratorTool(GenerativeModelTool):
-    version = "0.0.1"
+# class CodeGeneratorTool(GenerativeModelTool):
+#     version = "0.0.1"
 
+#     def __init__(
+#         self,
+#         llm,
+#         db: FixCommentDB,
+#     ) -> None:
+#         self.db = db
+#         self.llm = llm
+
+#     def run(self, prompt: str):
+#         messages = [("system", "You are a code review bot."), ("user", prompt)]
+#         response = self.llm.invoke(messages)
+#         return response.content
+
+#     def generate_fix(
+#         self,
+#         comment,
+#         relevant_diff,
+#         prompt_type,
+#         hunk_size,
+#         similar_comments_and_fix_infos,
+#     ):
+#         prompt = generate_prompt(
+#             comment.content,
+#             relevant_diff,
+#             comment.start_line,
+#             comment.end_line,
+#             similar_comments_and_fix_infos,
+#             prompt_type,
+#             hunk_size,
+#         )
+
+#         print(f"PROMPT: {prompt}")
+
+#         generated_fix = self.run(prompt=prompt)
+#         return generated_fix, prompt
+
+#     def is_actionable_comment(self, comment):
+#         prompt = f"Does the following comment provide a clear and specific suggestion for improvement? Note: Suggestions relying on links for context are not considered actionable, as the LLM cannot access them. Respond with 'YES' or 'NO' only. \n\nComment: {comment.content}"
+#         response = self.run(prompt=prompt)
+#         return response
+
+MODEL = "gpt-4o"
+
+client = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
+
+#         response = client.chat.completions.create(
+#             messages=[
+#                 {
+#                     "role": "user",
+#                     "content": prompt,
+#                 }
+#             ],
+#             model=MODEL,
+#             temperature=0.1,
+#         )
+#         return response.choices[0].message.content.strip()
+
+
+class CodeGeneratorTool:
     def __init__(
         self,
         llm,
@@ -95,9 +158,17 @@ class CodeGeneratorTool(GenerativeModelTool):
         self.llm = llm
 
     def run(self, prompt: str):
-        messages = [("system", "You are a code review bot."), ("user", prompt)]
-        response = self.llm.invoke(messages)
-        return response.content
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=MODEL,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
 
     def generate_fix(
         self,
@@ -119,11 +190,6 @@ class CodeGeneratorTool(GenerativeModelTool):
 
         generated_fix = self.run(prompt=prompt)
         return generated_fix, prompt
-
-    def is_actionable_comment(self, comment):
-        prompt = f"Does the following comment provide a clear and specific suggestion for improvement? Note: Suggestions relying on links for context are not considered actionable, as the LLM cannot access them. Respond with 'YES' or 'NO' only. \n\nComment: {comment.content}"
-        response = self.run(prompt=prompt)
-        return response
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
@@ -633,31 +699,54 @@ def generate_prompt(
         """
 
     if prompt_type == "study-modified":
+        # prompt = f"""
+        # You are a software developer who has to change the code below by following a given Code Review.
+        # The Code Review is attached to the line of code starting with the line number Start_Line and
+        # ending with the line number End_Line. There are also characters (- and +) showing where a line
+        # of code in the diff hunk has been removed (marked with a - at the beginning of the line) or added
+        # (marked with a + at the beginning of the line). The New Code Diff should be in the correct Git diff
+        # format, where added lines (on top of the diff hunk) are denoted with the + character. Lines removed
+        # from the Diff Hunk should be denoted with the - character. Your output must not contain any trailing
+        # tokens/characters. Your output must adhere to the following format: "Short Explanation: [...] \n
+        # New Code Diff: [...]"
+
+        # Start_Line:
+        # {start_line}
+
+        # End_Line:
+        # {end_line}
+
+        # Code Review:
+        # {comment_content}
+
+        # Diff Hunk:
+        # ```
+        # {relevant_diff}
+        # ```
+        # """
         prompt = f"""
-        You are a software developer who has to change the code below by following a given Code Review.
-        The Code Review is attached to the line of code starting with the line number Start_Line and
-        ending with the line number End_Line. There are also characters (- and +) showing where a line
-        of code in the diff hunk has been removed (marked with a - at the beginning of the line) or added
-        (marked with a + at the beginning of the line). The New Code Diff should be in the correct Git diff
-        format, where added lines (on top of the diff hunk) are denoted with the + character. Lines removed
-        from the Diff Hunk should be denoted with the - character. Your output must not contain any trailing
-        tokens/characters. Your output must adhere to the following format: "Short Explanation: [...] \n
-        New Code Diff: [...]"
+You are a software developer who has to change the code below by following a given Code Review.
+The Code Review is attached to the line of code starting with the line number Start_Line and
+ending with the line number End_Line.
 
-        Start_Line:
-        {start_line}
+### Instructions:
+- The New Code Diff should be in the correct Git diff format.
+- Added lines (on top of the diff hunk) are denoted with the `+` character.
+- Removed lines are denoted with the `-` character.
+- Do NOT repeat the prompt or any additional text.
 
-        End_Line:
-        {end_line}
+### Input Details:
+Start Line: {start_line}
+End Line: {end_line}
+Code Review: {comment_content}
 
-        Code Review:
-        {comment_content}
+### Diff Hunk:
+{relevant_diff}
 
-        Diff Hunk:
-        ```
-        {relevant_diff}
-        ```
-        """
+### Expected Output Format:
+Your response must **only** contain the following, with no extra text:
+(diff output here)
+"""
 
     return prompt
 
@@ -856,4 +945,4 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
         similar_comments_and_fix_infos=None,
     )
 
-    return generated_fix
+    return generated_fix[0]
