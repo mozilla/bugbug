@@ -108,7 +108,10 @@ def conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix):
 
 def validate_fix_with_llm(comment, generated_fix, fix_patch_diff, llm_tool, patch=None):
     return llm_tool.generate_fix(
-        comment=comment, generated_fix=generated_fix, actual_fix=fix_patch_diff
+        comment=comment,
+        generated_fix=generated_fix,
+        actual_fix=fix_patch_diff,
+        new_prompt=True,
     )
 
 
