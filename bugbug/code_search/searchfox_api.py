@@ -92,7 +92,7 @@ def find_function_for_line(commit_hash, path, line):
 # TODO: we should use commit_hash...
 def search(commit_hash, symbol_name):
     r = utils.get_session("searchfox").get(
-        f"https://searchfox.org/mozilla-central/search?q={symbol_name}",
+        f"https://searchfox.org/mozilla-central/search?q=symbol:{symbol_name}",
         headers={
             "User-Agent": utils.get_user_agent(),
         },
