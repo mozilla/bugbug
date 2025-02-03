@@ -59,7 +59,7 @@ def run(args) -> None:
         )
     else:
         with open(
-            "data/fixed_comments4.json", "r", encoding="utf-8"
+            "data/fixed_comments3.json", "r", encoding="utf-8"
         ) as json_file, open(
             "output.csv", "w", newline="", encoding="utf-8"
         ) as csv_file:
@@ -70,6 +70,7 @@ def run(args) -> None:
                     "revision_id",
                     "comment_id",
                     "comment_content",
+                    "relevant_diff",
                     "initial_patch_id",
                     "final_patch_id",
                     "fix_patch_diff",
@@ -87,7 +88,7 @@ def run(args) -> None:
                     initial_patch_id = data.get("initial_patch_id")
                     final_patch_id = data.get("final_patch_id")
                     fix_patch_diff = data.get("fix_patch_diff")
-                    generated_fix = generate_individual_fix(
+                    generated_fix, relevant_diff = generate_individual_fix(
                         llm_tool=llm_tool,
                         db=db,
                         revision_id=revision_id,
@@ -95,12 +96,16 @@ def run(args) -> None:
                         comment_id=comment_id,
                     )
 
+                    if not generated_fix and not relevant_diff:
+                        continue
+
                     csv_writer.writerow(
                         [
                             bug_id,
                             revision_id,
                             comment_id,
                             comment_content,
+                            relevant_diff,
                             initial_patch_id,
                             final_patch_id,
                             fix_patch_diff,

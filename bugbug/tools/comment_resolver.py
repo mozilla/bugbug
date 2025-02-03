@@ -221,21 +221,47 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         new_prompt=False,
     ):
         if new_prompt:
-            prompt = f"""You are an expert programmer with experience on source code. You are given the task to evaluate the quality of generated code edits for the patch and its corresponding comment as provided below by comparing it to actual code edits.
+            # prompt = f"""You are an expert programmer with experience on source code. You are given the task to evaluate the quality of generated code edits for the patch and its corresponding comment as provided below by comparing it to actual code edits.
 
-            Does the generated code edits resolve the comment? (i.e., does it address the feedback or concern raised by the comment, even if it is not identical to the actual code edits?) Answer YES or NO, followed by a very short and succinct explanation.
+            # Does the generated code edits resolve the comment? (i.e., does it address the feedback or concern raised by the comment, even if it is not identical to the actual code edits?) Answer YES or NO, followed by a very short and succinct explanation.
 
-            The comment of interest:
-            {comment}
+            # The comment of interest:
+            # {comment}
 
+            # Generated code edits:
+            # {generated_fix}
 
-            Generated code edits:
-            {generated_fix}
+            # Actual code edits (provided as a reference to show how the comment was resolved by a human):
+            # {actual_fix}
+            # """
 
+            prompt = f"""You are an expert programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment, to determine if the generated edit effectively resolves the issue.
 
-            Actual code edits (provided as a reference to show how the comment was resolved by a human):
-            {actual_fix}
-            """
+### Task:
+- Compare the **Generated Code Edit** against the **Actual Code Edit**.
+- Determine if the generated edit successfully addresses the concern raised by the comment, even if it is not identical.
+- Ensure that the **relevant diff (the diff where the comment was originally applied)** is considered.
+- Answer **YES or NO**, followed by a concise explanation.
+
+### Inputs:
+**Comment of Interest:**
+{comment}
+
+**Relevant Diff (where the comment was originally applied):**
+{relevant_diff}
+
+**Generated Code Edit:**
+{generated_fix}
+
+**Actual Code Edit (Human Fix):**
+{actual_fix}
+
+### Question:
+Does the **Generated Code Edit** fully resolve the comment based on the **functionality and intent** of the fix?
+Use the Actual Code Edit (Human Fix) as a baseline on what should be done to fix. While not all solutions will match this, it's good as a baseline of determining if it's on the right track.
+Respond with STRICTLY EITHER YES or NO, followed by a brief explanation after the comma.
+"""
+
         else:
             if comparison_evaluation and equivalent_fix:
                 prompt = f"""
@@ -936,6 +962,8 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
         target_comment.end_line,
         hunk_size=100,
     )
+    if not relevant_diff:
+        return None, None
 
     generated_fix = llm_tool.generate_fix(
         target_comment,
@@ -945,4 +973,4 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
         similar_comments_and_fix_infos=None,
     )
 
-    return generated_fix[0]
+    return generated_fix[0], relevant_diff

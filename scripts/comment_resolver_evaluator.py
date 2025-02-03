@@ -106,9 +106,12 @@ def conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix):
                 )
 
 
-def validate_fix_with_llm(comment, generated_fix, fix_patch_diff, llm_tool, patch=None):
+def validate_fix_with_llm(
+    comment_content, relevant_diff, generated_fix, fix_patch_diff, llm_tool, patch=None
+):
     return llm_tool.generate_fix(
-        comment=comment,
+        comment=comment_content,
+        relevant_diff=relevant_diff,
         generated_fix=generated_fix,
         actual_fix=fix_patch_diff,
         new_prompt=True,
@@ -140,13 +143,18 @@ def run(args) -> None:
                     revision_id,
                     comment_id,
                     comment_content,
+                    relevant_diff,
                     initial_patch_id,
                     final_patch_id,
                     fix_patch_diff,
                     generated_fix,
                 ) = row
                 result = validate_fix_with_llm(
-                    comment_content, generated_fix, fix_patch_diff, llm_tool
+                    comment_content,
+                    relevant_diff,
+                    generated_fix,
+                    fix_patch_diff,
+                    llm_tool,
                 )
                 row.append(result)
                 csv_writer.writerow(row)
