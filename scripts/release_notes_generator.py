@@ -100,7 +100,7 @@ def summarize_with_gpt(input_text):
     #    The output should just be the list. Nothing more and nothing less.
     # """
     prompt = f"""
-You are an expert in analyzing commit logs. Your task is to analyze a chunk of commit logs and produce a summary in a clear and user-friendly format. Follow these steps:
+You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
 
 1. **Analyze Commit Logs**:
    - Identify commits or groups of commits relevant for potential release notes. Focus on changes that:
@@ -199,7 +199,9 @@ def generate_summaries(commit_log):
     chunks = split_into_chunks(commit_log, CHUNK_SIZE)
     print(f"LENGTH OF CHUNKS: {len(chunks)}")
     print(f"LENGTH OF FIRST CHUNK: {len(chunks[0])}")
-    summaries = [summarize_with_gpt(chunk) for chunk in chunks]
+    # summaries = [summarize_with_gpt(chunk) for chunk in chunks]
+
+    summaries = [summarize_with_gpt(chunks[0])]
     return summaries
 
 
