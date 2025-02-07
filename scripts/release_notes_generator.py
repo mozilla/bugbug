@@ -52,6 +52,7 @@ def split_into_chunks(commit_log, chunk_size, model="gpt-4"):
         block_token_count = get_token_count(block, model=model)
 
         if current_token_count + block_token_count > chunk_size:
+            print(f"number of blocks in chunk: {len(current_chunk)}")
             chunks.append("\n\n".join(current_chunk))
             current_chunk = []
             current_token_count = 0
@@ -102,12 +103,18 @@ def summarize_with_gpt(input_text):
     prompt = f"""
 You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
 
-1. **Analyze Commit Logs**:
-   - Identify commits or groups of commits relevant for potential release notes. Focus on changes that:
-     - Are meaningful to **end users**, such as new features, user-facing improvements, or critical updates.
-   - Exclude:
-     - Internal refactorings, test-related updates, or minor low-level changes that are not relevant to end users.
-     - Highly technical details or jargon that might confuse non-developers.
+1. **Must Include Only Meaningful Changes**:
+   - Only keep commits that significantly impact users, such as:
+     - New features
+     - UI changes
+     - Major performance improvements
+     - Security patches
+     - Web platform changes that affect how websites behave
+   - DO NOT include:
+     - Small bug fixes unless critical
+     - Internal code refactoring
+     - Test changes or documentation updates
+     - Developer tooling or CI/CD pipeline changes
 
 2. **Output Format**:
    - Use simple, non-technical language suitable for release notes.
@@ -119,11 +126,15 @@ You are an expert in writing Firefox release notes. Your task is to analyze a li
    - The output must only be the final list, following the specified format.
    - Ensure every description is clear, complete, and directly relevant to end users.
 
-4. **Input**:
+4. **Be Aggressive in Filtering**:
+- If you're unsure whether a commit impacts end users, EXCLUDE it.
+- Do not list developer-focused changes.
+
+5. **Input**:
    Here is the chunk of commit logs you need to focus on:
    {input_text}
 
-5. **Output**:
+6. **Output**:
    The output should just be the list. Nothing more and nothing less.
 """
 
@@ -199,9 +210,9 @@ def generate_summaries(commit_log):
     chunks = split_into_chunks(commit_log, CHUNK_SIZE)
     print(f"LENGTH OF CHUNKS: {len(chunks)}")
     print(f"LENGTH OF FIRST CHUNK: {len(chunks[0])}")
-    # summaries = [summarize_with_gpt(chunk) for chunk in chunks]
+    summaries = [summarize_with_gpt(chunk) for chunk in chunks]
 
-    summaries = [summarize_with_gpt(chunks[0])]
+    # summaries = [summarize_with_gpt(chunks[0])]
     return summaries
 
 
@@ -267,11 +278,11 @@ def generate_worthy_commits():
 
     combined_list = "\n".join(summaries)
 
-    # logger.info("Removing duplicates from the list...")
-    # combined_list = remove_duplicates(combined_list)
+    logger.info("Removing duplicates from the list...")
+    combined_list = remove_duplicates(combined_list)
 
-    # logger.info("Removing unworthy commits from the list...")
-    # combined_list = remove_unworthy_commits(combined_list)
+    logger.info("Removing unworthy commits from the list...")
+    combined_list = remove_unworthy_commits(combined_list)
 
     with open(OUTPUT_FILE, "w") as file:
         file.write(combined_list)
