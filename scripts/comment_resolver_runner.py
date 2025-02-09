@@ -59,7 +59,7 @@ def run(args) -> None:
         )
     else:
         with open(
-            "data/fixed_comments3.json", "r", encoding="utf-8"
+            "data/fixed_comments4.json", "r", encoding="utf-8"
         ) as json_file, open(
             "output.csv", "w", newline="", encoding="utf-8"
         ) as csv_file:
@@ -70,10 +70,11 @@ def run(args) -> None:
                     "revision_id",
                     "comment_id",
                     "comment_content",
-                    "relevant_diff",
+                    "raw_file_content",
                     "initial_patch_id",
                     "final_patch_id",
                     "fix_patch_diff",
+                    "prompt",
                     "generated_fix",
                 ]
             )
@@ -85,15 +86,21 @@ def run(args) -> None:
                     revision_id = data.get("revision_id")
                     comment_id = data.get("comment", {}).get("id")
                     comment_content = data.get("comment", {}).get("content")
+                    raw_file_content = data.get("raw_file_content")
                     initial_patch_id = data.get("initial_patch_id")
                     final_patch_id = data.get("final_patch_id")
                     fix_patch_diff = data.get("fix_patch_diff")
-                    generated_fix, relevant_diff = generate_individual_fix(
+
+                    if not raw_file_content:
+                        continue
+
+                    generated_fix, prompt, relevant_diff = generate_individual_fix(
                         llm_tool=llm_tool,
                         db=db,
                         revision_id=revision_id,
                         diff_id=initial_patch_id,
                         comment_id=comment_id,
+                        raw_file_content=raw_file_content,
                     )
 
                     if not generated_fix and not relevant_diff:
@@ -105,10 +112,11 @@ def run(args) -> None:
                             revision_id,
                             comment_id,
                             comment_content,
-                            relevant_diff,
+                            raw_file_content,
                             initial_patch_id,
                             final_patch_id,
                             fix_patch_diff,
+                            prompt,
                             generated_fix,
                         ]
                     )

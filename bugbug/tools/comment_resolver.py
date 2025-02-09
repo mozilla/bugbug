@@ -191,6 +191,75 @@ class CodeGeneratorTool:
         generated_fix = self.run(prompt=prompt)
         return generated_fix, prompt
 
+    def generate_fix_with_raw_file_content(
+        self,
+        comment,
+        raw_file_content,
+        prompt_type,
+        hunk_size,
+    ):
+        prompt = generate_prompt_from_raw_file_content(
+            comment,
+            raw_file_content,
+            prompt_type,
+            hunk_size,
+        )
+
+        generated_fix = self.run(prompt=prompt)
+        return generated_fix, prompt
+
+
+def generate_prompt_from_raw_file_content(
+    comment, raw_file_content, prompt_type, hunk_size
+):
+    lines = raw_file_content.splitlines()
+    total_lines = len(lines)
+
+    start_line = max(comment.start_line - hunk_size, 1)
+    end_line = min(comment.end_line + hunk_size, total_lines)
+
+    snippet_lines = []
+    for i in range(start_line, end_line + 1):
+        snippet_lines.append(f"{i} {lines[i - 1]}")
+
+    numbered_snippet = "\n".join(snippet_lines)
+
+    if prompt_type == "study-modified":
+        prompt = f"""
+You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment.
+
+
+### Instructions:
+- The new code changes must be presented in **valid Git diff** format.
+- Lines added should have a `+` prefix.
+- Lines removed should have a `-` prefix.
+- Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
+- Do **NOT** repeat the prompt or add any extra text.
+
+### Input Details:
+Comment Start Line: {comment.start_line}
+Comment End Line: {comment.end_line}
+Comment File: {comment.filepath}
+Code Review Comment: {comment.content['raw']}
+
+### Code Snippet (with Line Numbers):
+{numbered_snippet}
+
+### Example Output Format:
+--- a/File.cpp
++++ b/File.cpp
+@@ -10,7 +10,7 @@
+- old line
++ new line
+
+
+### Expected Output Format:
+Your response must **only** contain the following, with no extra text:
+(diff output here)
+"""
+
+    return prompt
+
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
     version = "0.0.1"
@@ -928,7 +997,9 @@ def extract_revision_id_list_from_dataset(dataset_file):
     return revision_ids
 
 
-def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
+def generate_individual_fix(
+    llm_tool, db, revision_id, diff_id, comment_id, raw_file_content=None
+):
     revision_details = api.load_revision(rev_id=revision_id)
     revision_phid = revision_details["phid"]
     transactions = api.request("transaction.search", objectIdentifier=revision_phid)
@@ -954,23 +1025,32 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
 
     target_comment = SimpleNamespace(**target_comment)
 
-    diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
-    relevant_diff = extract_relevant_diff(
-        diff,
-        target_comment.filepath,
-        target_comment.start_line,
-        target_comment.end_line,
-        hunk_size=100,
-    )
-    if not relevant_diff:
-        return None, None
+    if not raw_file_content:
+        diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
+        relevant_diff = extract_relevant_diff(
+            diff,
+            target_comment.filepath,
+            target_comment.start_line,
+            target_comment.end_line,
+            hunk_size=100,
+        )
+        if not relevant_diff:
+            return None, None, None
 
-    generated_fix = llm_tool.generate_fix(
-        target_comment,
-        relevant_diff,
-        prompt_type="study-modified",
-        hunk_size=100,
-        similar_comments_and_fix_infos=None,
-    )
+        generated_fix = llm_tool.generate_fix(
+            target_comment,
+            relevant_diff,
+            prompt_type="study-modified",
+            hunk_size=100,
+            similar_comments_and_fix_infos=None,
+        )
+    else:
+        generated_fix = llm_tool.generate_fix_with_raw_file_content(
+            target_comment,
+            raw_file_content,
+            prompt_type="study-modified",
+            hunk_size=20,
+        )
+        relevant_diff = None
 
-    return generated_fix[0], relevant_diff
+    return generated_fix[0], generated_fix[1], relevant_diff
