@@ -1129,9 +1129,12 @@ class CodeReviewTool(GenerativeModelTool):
                 formatted_patch,
             )
 
-            function_list = self.further_info_chain.run(
-                patch=formatted_patch, summarization=output_summarization
-            ).split("\n")
+            function_list = [
+                function_name.strip()
+                for function_name in self.further_info_chain.run(
+                    patch=formatted_patch, summarization=output_summarization
+                ).split("\n")
+            ]
 
             if self.verbose:
                 GenerativeModelTool._print_answer(function_list)
