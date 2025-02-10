@@ -19,7 +19,7 @@ FIREFOX_VERSION_1 = "FIREFOX_BETA_132_BASE"
 FIREFOX_VERSION_2 = "FIREFOX_BETA_133_BASE"
 REPO_DIRECTORY = "hg_dir"
 OUTPUT_FILE = f"version_summary_{FIREFOX_VERSION_2}.txt"
-CHUNK_SIZE = 5000
+CHUNK_SIZE = 10000
 
 
 def run_hg_log(query, repo_dir):
@@ -122,20 +122,25 @@ You are an expert in writing Firefox release notes. Your task is to analyze a li
 [Type of Change],Description of the change,Bug XXXX,Reason why the change is impactful for end users
    - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
 
-3. **Output Strictness**:
-   - The output must only be the final list, following the specified format.
-   - Ensure every description is clear, complete, and directly relevant to end users.
+3. **Bad Example (DO NOT FOLLOW)**:
+[Feature],Enable async FlushRendering during resizing window if Windows DirectComposition is used,Bug 1922721,Improves performance and responsiveness when resizing windows on systems using Windows DirectComposition.
+We should exclude this change because it contains technical jargon that is unclear to general users, making it difficult to understand. Additionally, the impact is limited to a specific subset of Windows users with DirectComposition enabled, and the improvement is not significant enough to be noteworthy in the release notes.
 
 4. **Be Aggressive in Filtering**:
-- If you're unsure whether a commit impacts end users, EXCLUDE it.
-- Do not list developer-focused changes.
+    - If you're unsure whether a commit impacts end users, **EXCLUDE it**.
+    - Do **not** list developer-focused changes.
 
-5. **Input**:
+5. **Select Only the Top 5 Commits**:
+    - If there are more than 5 relevant commits, choose the **most impactful ones**.
+
+6. **Input**:
    Here is the chunk of commit logs you need to focus on:
    {input_text}
 
-6. **Output**:
-   The output should just be the list. Nothing more and nothing less.
+7. **Output Requirements**:
+   - Output must be raw CSV text—no formatting, no extra text.
+   - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
+   - Do not include the words "CSV" or any headers—just the data.
 """
 
     try:
@@ -182,13 +187,30 @@ def remove_duplicates(input_text):
 
 
 def remove_unworthy_commits(input_text):
-    prompt = f"""Review the following list of release notes and remove anything list entry that is not worthy or necessary for inclusion in official release notes. Focus on keeping only changes that are meaningful, impactful, and directly relevant to end users, such as new features, significant fixes, performance improvements, accessibility enhancements, or critical security updates. Remove anything minor, overly technical, or irrelevant.
+    prompt = f"""Review the following list of release notes and **remove anything that is not worthy** of official release notes. Keep only changes that are **meaningful, impactful, and directly relevant to end users**, such as:
+- **New features** that users will notice and interact with.
+- **Significant fixes** that resolve major user-facing issues.
+- **Performance improvements** that make a clear difference in speed or responsiveness.
+- **Accessibility enhancements** that improve usability for a broad set of users.
+- **Critical security updates** that protect users from vulnerabilities.
 
-Here is the list:
+**Strict Filtering Criteria - REMOVE the following:**
+- **Overly technical web platform changes** (e.g., spec compliance tweaks, behind-the-scenes API adjustments).
+- **Developer-facing features** that have no direct user impact.
+- **Minor UI refinements** (e.g., button width adjustments, small animation tweaks).
+- **Bug fixes that don’t impact most users**.
+- **Obscure web compatibility changes** that apply only to edge-case websites.
+- **Duplicate entries** or similar changes that were already listed.
+
+**Here is the list to filter:**
 {input_text}
 
-Return the cleaned-up list in the same format. Only remove the list entries you do not deem worthy of being included in the release notes. KEEP THE SAME FORMAT, DO NOT ALTER THE ENTRIES THEMSELVES. Do not add any text before or after the list."""
-
+**Instructions:**
+- **KEEP THE SAME FORMAT** (do not change the structure of entries that remain).
+- **REMOVE UNWORTHY ENTRIES ENTIRELY** (do not rewrite them—just delete).
+- **DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.**
+- The output must be **only the cleaned-up list**, formatted exactly the same way.
+"""
     try:
         response = client.chat.completions.create(
             messages=[
@@ -278,8 +300,8 @@ def generate_worthy_commits():
 
     combined_list = "\n".join(summaries)
 
-    logger.info("Removing duplicates from the list...")
-    combined_list = remove_duplicates(combined_list)
+    # logger.info("Removing duplicates from the list...")
+    # combined_list = remove_duplicates(combined_list)
 
     logger.info("Removing unworthy commits from the list...")
     combined_list = remove_unworthy_commits(combined_list)
@@ -300,82 +322,3 @@ def generate_worthy_commits():
 
 if __name__ == "__main__":
     generate_worthy_commits()
-
-
-# import openai
-
-# MODEL = "gpt-4o"
-
-# # Pre-existing conversation
-
-# message1 = """You are a software developer who has to change the code below by following a given Code Review.
-# The Code Review is attached to the line of code starting with the line number Start_Line and
-# ending with the line number End_Line. There are also characters (- and +) showing where a line
-# of code in the diff hunk has been removed (marked with a - at the beginning of the line) or added
-# (marked with a + at the beginning of the line). The New Code Diff should be in the correct Git diff
-# format, where added lines (on top of the diff hunk) are denoted with the + character. Lines removed
-# from the Diff Hunk should be denoted with the - character. Your output must not contain any trailing
-# tokens/characters. Your output must adhere to the following format: "Short Explanation: [...]
-
-# New Code Diff: [...]"
-
-# Start_Line:
-# 1469
-
-# End_Line:
-# 1470
-
-# Code Review:
-# {'raw': 'Please fix this warning while you are here.'}
-
-# Diff Hunk:
-
-# Code Review:
-# {comment_content}
-
-# Diff Hunk:
-# ```
-# diff -u b/xpfe/appshell/AppWindow.cpp b/xpfe/appshell/AppWindow.cpp
-# --- b/xpfe/appshell/AppWindow.cpp
-# +++ b/xpfe/appshell/AppWindow.cpp
-# @@ -1466,8 +1466,9 @@
-#      nsresult errorCode;
-#      int32_t zLevel = stateString.ToInteger(&errorCode);
-#      if (NS_SUCCEEDED(errorCode) && zLevel >= int32_t(lowestZ) &&
-# -        zLevel <= int32_t(highestZ))
-# +        zLevel <= int32_t(highestZ)) {
-#        SetZLevel(zLevel);
-# +    }
-#    }
-
-#    return gotState;
-# ```
-# """
-
-# message2 = """('Short Explanation: The code review suggests fixing a warning related to type conversion by explicitly casting `lowestZ` and `highestZ` to `int32_t`.\n\nNew Code Diff:\n```diff\ndiff --git a/xpfe/appshell/AppWindow.cpp b/xpfe/appshell/AppWindow.cpp\n--- a/xpfe/appshell/AppWindow.cpp\n+++ b/xpfe/appshell/AppWindow.cpp\n@@ -1463,11 +1463,12 @@\n   // zlevel\n   windowElement->GetAttribute(ZLEVEL_ATTRIBUTE, stateString);\n   if (!stateString.IsEmpty()) {\n     nsresult errorCode;\n     int32_t zLevel = stateString.ToInteger(&errorCode);\n-    if (NS_SUCCEEDED(errorCode) && zLevel >= lowestZ && zLevel <= highestZ)\n+    if (NS_SUCCEEDED(errorCode) && zLevel >= int32_t(lowestZ) &&\n+        zLevel <= int32_t(highestZ))\n       SetZLevel(zLevel);\n   }\n \n   return gotState;\n }\n```', '\n        You are a software developer who has to change the code below by following a given Code Review.\n        The Code Review is attached to the line of code starting with the line number Start_Line and\n        ending with the line number End_Line. There are also characters (- and +) showing where a line\n        of code in the diff hunk has been removed (marked with a - at the beginning of the line) or added\n        (marked with a + at the beginning of the line). The New Code Diff should be in the correct Git diff\n        format, where added lines (on top of the diff hunk) are denoted with the + character. Lines removed\n        from the Diff Hunk should be denoted with the - character. Your output must not contain any trailing\n        tokens/characters. Your output must adhere to the following format: "Short Explanation: [...] \n\n        New Code Diff: [...]"\n\n        Start_Line:\n        1469\n\n        End_Line:\n        1470\n\n        Code Review:\n        {\'raw\': \'Please fix this warning while you are here.\'}\n\n        Diff Hunk:\n        ```\n        diff --git a/xpfe/appshell/AppWindow.cpp b/xpfe/appshell/AppWindow.cpp\n--- a/xpfe/appshell/AppWindow.cpp\n+++ b/xpfe/appshell/AppWindow.cpp\n@@ -1463,11 +1463,12 @@\n   // zlevel\n   windowElement->GetAttribute(ZLEVEL_ATTRIBUTE, stateString);\n   if (!stateString.IsEmpty()) {\n     nsresult errorCode;\n     int32_t zLevel = stateString.ToInteger(&errorCode);\n-    if (NS_SUCCEEDED(errorCode) && zLevel >= lowestZ && zLevel <= highestZ)\n+    if (NS_SUCCEEDED(errorCode) && zLevel >= int32_t(lowestZ) &&\n+        zLevel <= int32_t(highestZ))\n       SetZLevel(zLevel);\n   }\n \n   return gotState;\n }\n\n        ```\n        ')
-# """
-
-# messages = [
-#     {"role": "user", "content": message1},
-#     {"role": "assistant", "content": message2}
-# ]
-
-# def chat(prompt):
-#     global messages
-
-#     messages.append({"role": "user", "content": prompt})
-
-#     response = client.chat.completions.create(
-#         messages=messages,
-#         model=MODEL,
-#         temperature=0.1,
-#     )
-#     return response.choices[0].message.content.strip()
-
-#     # assistant_message = response["choices"][0]["message"]["content"].strip()
-
-#     # messages.append({"role": "assistant", "content": assistant_message})
-
-#     # return assistant_message
-
-# print(chat("How did you know that this was the fix?"))
