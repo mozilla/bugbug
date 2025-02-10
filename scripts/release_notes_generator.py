@@ -67,43 +67,10 @@ def split_into_chunks(commit_log, chunk_size, model="gpt-4"):
 
 
 def summarize_with_gpt(input_text):
-    #     prompt = f"""
-    # You are an expert in analyzing commit logs. Your task is to analyze a chunk of commit logs and produce a summary in a clear and user-friendly format. Follow these steps:
-
-    # 1. **Analyze Commit Logs**:
-    #    - Identify commits or groups of commits relevant for potential release notes. Focus on changes that:
-    #      - Are meaningful to **end users**, such as new features, user-facing improvements, or critical updates.
-    #    - Exclude:
-    #      - Internal refactorings, test-related updates, or minor low-level changes that are not relevant to end users.
-    #      - Highly technical details or jargon that might confuse non-developers.
-
-    # 2. **Enhance Context**:
-    #    - If a commit lacks sufficient information (e.g., vague descriptions or unexplained references to functions), break the process into two steps:
-    #      - Step 1: Explain why the commit's description is insufficient for end users (e.g., the function's purpose is unclear or its relevance is ambiguous).
-    #      - Step 2: Perform a reasoning step where you hypothesize or research the broader context, including the potential impact on security, performance, or user experience.
-    #    - Use your analysis to enhance clarity and add relevant context to the description. This ensures that whatever you are adding to the list is actually worthy of being in the release notes, rather than you adding it with no understanding of it.
-
-    # 3. **Output Format**:
-    #    - Use simple, non-technical language suitable for release notes.
-    #    - Use the following strict format for each relevant commit, in CSV FORMAT:
-    # [Type of Change],Description of the change,Bug XXXX,Reasoning behind the change (if necessary)
-    #    - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
-
-    # 4. **Output Strictness**:
-    #    - The output must only be the final list, following the specified format.
-    #    - Ensure every description is clear, complete, and directly relevant to end users.
-
-    # 6. **Input**:
-    #    Here is the chunk of commit logs you need to focus on:
-    #    {input_text}
-
-    # 7. **Output**:
-    #    The output should just be the list. Nothing more and nothing less.
-    # """
     prompt = f"""
 You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
 
-1. **Must Include Only Meaningful Changes**:
+1. Must Include Only Meaningful Changes:
    - Only keep commits that significantly impact users, such as:
      - New features
      - UI changes
@@ -116,28 +83,28 @@ You are an expert in writing Firefox release notes. Your task is to analyze a li
      - Test changes or documentation updates
      - Developer tooling or CI/CD pipeline changes
 
-2. **Output Format**:
+2. Output Format:
    - Use simple, non-technical language suitable for release notes.
    - Use the following strict format for each relevant commit, in CSV FORMAT:
 [Type of Change],Description of the change,Bug XXXX,Reason why the change is impactful for end users
    - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
 
-3. **Bad Example (DO NOT FOLLOW)**:
+3. Bad Example (DO NOT FOLLOW):
 [Feature],Enable async FlushRendering during resizing window if Windows DirectComposition is used,Bug 1922721,Improves performance and responsiveness when resizing windows on systems using Windows DirectComposition.
 We should exclude this change because it contains technical jargon that is unclear to general users, making it difficult to understand. Additionally, the impact is limited to a specific subset of Windows users with DirectComposition enabled, and the improvement is not significant enough to be noteworthy in the release notes.
 
-4. **Be Aggressive in Filtering**:
-    - If you're unsure whether a commit impacts end users, **EXCLUDE it**.
-    - Do **not** list developer-focused changes.
+4. Be Aggressive in Filtering:
+    - If you're unsure whether a commit impacts end users, EXCLUDE it.
+    - Do not list developer-focused changes.
 
-5. **Select Only the Top 5 Commits**:
-    - If there are more than 5 relevant commits, choose the **most impactful ones**.
+5. Select Only the Top 5 Commits:
+    - If there are more than 5 relevant commits, choose the most impactful ones.
 
-6. **Input**:
+6. Input:
    Here is the chunk of commit logs you need to focus on:
    {input_text}
 
-7. **Output Requirements**:
+7. Output Requirements:
    - Output must be raw CSV text—no formatting, no extra text.
    - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
    - Do not include the words "CSV" or any headers—just the data.
@@ -187,29 +154,29 @@ def remove_duplicates(input_text):
 
 
 def remove_unworthy_commits(input_text):
-    prompt = f"""Review the following list of release notes and **remove anything that is not worthy** of official release notes. Keep only changes that are **meaningful, impactful, and directly relevant to end users**, such as:
-- **New features** that users will notice and interact with.
-- **Significant fixes** that resolve major user-facing issues.
-- **Performance improvements** that make a clear difference in speed or responsiveness.
-- **Accessibility enhancements** that improve usability for a broad set of users.
-- **Critical security updates** that protect users from vulnerabilities.
+    prompt = f"""Review the following list of release notes and remove anything that is not worthy of official release notes. Keep only changes that are meaningful, impactful, and directly relevant to end users, such as:
+- New features that users will notice and interact with.
+- Significant fixes that resolve major user-facing issues.
+- Performance improvements that make a clear difference in speed or responsiveness.
+- Accessibility enhancements that improve usability for a broad set of users.
+- Critical security updates that protect users from vulnerabilities.
 
-**Strict Filtering Criteria - REMOVE the following:**
-- **Overly technical web platform changes** (e.g., spec compliance tweaks, behind-the-scenes API adjustments).
-- **Developer-facing features** that have no direct user impact.
-- **Minor UI refinements** (e.g., button width adjustments, small animation tweaks).
-- **Bug fixes that don’t impact most users**.
-- **Obscure web compatibility changes** that apply only to edge-case websites.
-- **Duplicate entries** or similar changes that were already listed.
+Strict Filtering Criteria - REMOVE the following:
+- Overly technical web platform changes (e.g., spec compliance tweaks, behind-the-scenes API adjustments).
+- Developer-facing features that have no direct user impact.
+- Minor UI refinements (e.g., button width adjustments, small animation tweaks).
+- Bug fixes that don’t impact most users.
+- Obscure web compatibility changes that apply only to edge-case websites.
+- Duplicate entries or similar changes that were already listed.
 
-**Here is the list to filter:**
+Here is the list to filter:
 {input_text}
 
-**Instructions:**
-- **KEEP THE SAME FORMAT** (do not change the structure of entries that remain).
-- **REMOVE UNWORTHY ENTRIES ENTIRELY** (do not rewrite them—just delete).
-- **DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.**
-- The output must be **only the cleaned-up list**, formatted exactly the same way.
+Instructions:
+- KEEP THE SAME FORMAT (do not change the structure of entries that remain).
+- REMOVE UNWORTHY ENTRIES ENTIRELY (do not rewrite them—just delete).
+- DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.
+- The output must be only the cleaned-up list, formatted exactly the same way.
 """
     try:
         response = client.chat.completions.create(
