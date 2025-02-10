@@ -10,7 +10,7 @@ langchain-mistralai==0.2.3
 langchain-openai==0.3.4
 libmozdata==0.2.9
 llama-cpp-python==0.3.6
-lmdb==1.5.1
+lmdb==1.6.2
 lxml-html-clean==0.4.1
 markdown2==2.5.3
 matplotlib==3.9.3
