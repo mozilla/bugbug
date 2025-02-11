@@ -15,8 +15,8 @@ client = OpenAI(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-FIREFOX_VERSION_1 = "FIREFOX_BETA_132_BASE"
-FIREFOX_VERSION_2 = "FIREFOX_BETA_133_BASE"
+FIREFOX_VERSION_1 = "FIREFOX_BETA_135_BASE"
+FIREFOX_VERSION_2 = "FIREFOX_BETA_136_BASE"
 REPO_DIRECTORY = "hg_dir"
 OUTPUT_FILE = f"version_summary_{FIREFOX_VERSION_2}.txt"
 CHUNK_SIZE = 10000
@@ -97,8 +97,8 @@ We should exclude this change because it contains technical jargon that is uncle
     - If you're unsure whether a commit impacts end users, EXCLUDE it.
     - Do not list developer-focused changes.
 
-5. Select Only the Top 5 Commits:
-    - If there are more than 5 relevant commits, choose the most impactful ones.
+5. Select Only the Top 10 Commits:
+    - If there are more than 10 relevant commits, choose the most impactful ones.
 
 6. Input:
    Here is the chunk of commit logs you need to focus on:
