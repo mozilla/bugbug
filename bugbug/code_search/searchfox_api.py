@@ -25,11 +25,15 @@ def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", 
     else:
         *_, element = iter(elements)
 
-    if "syn_comment" in element.get("class", ""):
-        return -1
-
     if "data-nesting-sym" in element.attrib:
-        return get_line_number(element.iterdescendants(), position)
+        all_descendants = list(element.iterdescendants())
+        line_number_elements = [
+            e
+            for e in all_descendants
+            if "id" in e.attrib and e.attrib["id"].startswith("line-")
+        ]
+        if line_number_elements:
+            return get_line_number(line_number_elements, position)
 
     return int(element.get("id")[len("line-") :])
 
@@ -60,18 +64,12 @@ def get_functions(commit_hash, path, symbol_name=None):
     functions = []
 
     for sym_wrap in sym_wraps:
-        start_line = get_line_number(sym_wrap, "start")
-        end_line = get_line_number(sym_wrap, "end")
-
-        if start_line == -1 or end_line == -1:
-            continue
-
         functions.append(
             {
                 "name": sym_wrap.attrib["data-nesting-sym"][1:],
                 "path": path,
-                "start": start_line,
-                "end": end_line,
+                "start": get_line_number(sym_wrap, "start"),
+                "end": get_line_number(sym_wrap, "end"),
             }
         )
 
