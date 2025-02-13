@@ -6,6 +6,9 @@ import subprocess
 import tiktoken
 from openai import OpenAI
 
+from bugbug import db
+from bugbug.bugzilla import BUGS_DB
+
 MODEL = "gpt-4o"
 
 client = OpenAI(
@@ -52,7 +55,6 @@ def split_into_chunks(commit_log, chunk_size, model="gpt-4"):
         block_token_count = get_token_count(block, model=model)
 
         if current_token_count + block_token_count > chunk_size:
-            print(f"number of blocks in chunk: {len(current_chunk)}")
             chunks.append("\n\n".join(current_chunk))
             current_chunk = []
             current_token_count = 0
@@ -197,15 +199,11 @@ Instructions:
 
 def generate_summaries(commit_log):
     chunks = split_into_chunks(commit_log, CHUNK_SIZE)
-    print(f"LENGTH OF CHUNKS: {len(chunks)}")
-    print(f"LENGTH OF FIRST CHUNK: {len(chunks[0])}")
     summaries = [summarize_with_gpt(chunk) for chunk in chunks]
-
-    # summaries = [summarize_with_gpt(chunks[0])]
     return summaries
 
 
-def clean_commits(commit_log, keywords):
+def clean_commits(commit_log, keywords, bug_dict):
     cleaned_commits = []
     commit_blocks = commit_log.split("\n\n")
 
@@ -219,6 +217,13 @@ def clean_commits(commit_log, keywords):
             and not re.search(r"release\+treescript@mozilla\.org", block, re.IGNORECASE)
             and not re.search(r"nightly", block, re.IGNORECASE)
         ):
+            bug_id = re.search(r"Bug (\d+)", block, re.IGNORECASE)
+            if (
+                int(bug_id.group(1)) in bug_dict.keys()
+                and bug_dict[int(bug_id.group(1))] == "WebExtensions"
+            ):
+                continue
+
             match = re.search(r"summary:\s+(.+)", block)
             commit_summary = match.group(1) if match else None
             cleaned_commits.append(commit_summary)
@@ -226,7 +231,18 @@ def clean_commits(commit_log, keywords):
     return "\n\n".join(cleaned_commits)
 
 
-def generate_worthy_commits():
+def load_bug_data():
+    return {bug["id"]: bug["product"] for bug in db.read(BUGS_DB)}
+
+
+def is_webextensions_bug(bug_id):
+    for bug in db.read(BUGS_DB):
+        if int(bug["id"]) == bug_id:
+            return bug["product"] == "WebExtensions"
+    return False
+
+
+def generate_worthy_commits(bug_dict):
     logger.info(f"Generating list of commits for version: {FIREFOX_VERSION_2}")
 
     logger.info("Finding the branching point commit...")
@@ -259,16 +275,12 @@ def generate_worthy_commits():
         "add tests",
         "disable test",
     ]
-    cleaned_commits = clean_commits(changes_output, keywords_to_remove)
-    # cleaned_commits = cleaned_commits[0:40000]
+    cleaned_commits = clean_commits(changes_output, keywords_to_remove, bug_dict)
 
     logger.info("Generating summaries for cleaned commits...")
     summaries = generate_summaries(cleaned_commits)
 
     combined_list = "\n".join(summaries)
-
-    # logger.info("Removing duplicates from the list...")
-    # combined_list = remove_duplicates(combined_list)
 
     logger.info("Removing unworthy commits from the list...")
     combined_list = remove_unworthy_commits(combined_list)
@@ -277,15 +289,9 @@ def generate_worthy_commits():
         file.write(combined_list)
 
     logger.info(f"Worthy commits saved to {OUTPUT_FILE}")
-    # with open(OUTPUT_FILE, "r", encoding="utf-8") as file:
-    #     file_contents = file.read()
-
-    # cleaned_commits = remove_duplicates(file_contents)
-    # cleaned_commits = remove_unworthy_commits(cleaned_commits)
-
-    # with open(OUTPUT_FILE, "w", encoding="utf-8") as file:
-    #     file.write(cleaned_commits)
 
 
 if __name__ == "__main__":
-    generate_worthy_commits()
+    db.download(BUGS_DB)
+    bug_dict = load_bug_data()
+    generate_worthy_commits(bug_dict)
