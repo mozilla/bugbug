@@ -304,30 +304,30 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
             # {actual_fix}
             # """
 
-            prompt = f"""You are an expert programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment, to determine if the generated edit effectively resolves the issue.
+            prompt = f"""You are an expert Firefox programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment and file content, to determine if the generated edit effectively resolves the issue.
 
-### Task:
-- Compare the **Generated Code Edit** against the **Actual Code Edit**.
+Task:
+- Compare the Generated Code Edit against the Actual Code Edit.
 - Determine if the generated edit successfully addresses the concern raised by the comment, even if it is not identical.
-- Ensure that the **relevant diff (the diff where the comment was originally applied)** is considered.
-- Answer **YES or NO**, followed by a concise explanation.
+- Ensure that the provided file content (containing the original code before any edits) is considered.
+- Answer YES or NO, followed by a concise explanation.
 
-### Inputs:
-**Comment of Interest:**
+Inputs:
+Comment of Interest:
 {comment}
 
-**Relevant Diff (where the comment was originally applied):**
+Original File Content (where the inline comment was made):
 {relevant_diff}
 
-**Generated Code Edit:**
+Generated Code Edit:
 {generated_fix}
 
-**Actual Code Edit (Human Fix):**
+Actual Code Edit (Human Fix):
 {actual_fix}
 
-### Question:
-Does the **Generated Code Edit** fully resolve the comment based on the **functionality and intent** of the fix?
-Use the Actual Code Edit (Human Fix) as a baseline on what should be done to fix. While not all solutions will match this, it's good as a baseline of determining if it's on the right track.
+Question:
+Does the Generated Code Edit** fully resolve the comment based on the functionality and intent of the fix?
+Use the Actual Code Edit (Human Fix) as a baseline for what should be done to fix the issue. While not all solutions will match this, it serves as a reference to determine if the generated edit is on the right track.
 Respond with STRICTLY EITHER YES or NO, followed by a brief explanation after the comma.
 """
 
