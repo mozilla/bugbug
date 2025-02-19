@@ -13,6 +13,8 @@ from bugbug.tools.comment_resolver import (
     LocalQdrantVectorDB,
 )
 
+csv.field_size_limit(sys.maxsize)
+
 
 def find_fix_in_dataset(revision_id, initial_patch_id, dataset_file):
     with open(dataset_file, "r") as f:
@@ -108,18 +110,21 @@ def conduct_evaluation(input_csv, output_csv, llm_tool, equivalent_fix):
 
 def validate_fix_with_llm(
     comment_content,
-    raw_file_content,
+    numbered_snippet,
     generated_fix,
     fix_patch_diff,
     llm_tool,
-    patch=None,
+    start_line,
+    end_line,
 ):
     return llm_tool.generate_fix(
         comment=comment_content,
-        relevant_diff=raw_file_content,
+        relevant_diff=numbered_snippet,
         generated_fix=generated_fix,
         actual_fix=fix_patch_diff,
         new_prompt=True,
+        start_line=start_line,
+        end_line=end_line,
     )
 
 
@@ -154,13 +159,18 @@ def run(args) -> None:
                     fix_patch_diff,
                     prompt,
                     generated_fix,
+                    numbered_snippet,
+                    start_line,
+                    end_line,
                 ) = row
                 result = validate_fix_with_llm(
                     comment_content,
-                    raw_file_content,
+                    numbered_snippet,
                     generated_fix,
                     fix_patch_diff,
                     llm_tool,
+                    start_line,
+                    end_line,
                 )
                 row.append(result)
                 csv_writer.writerow(row)
