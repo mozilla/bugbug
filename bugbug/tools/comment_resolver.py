@@ -170,6 +170,15 @@ class CodeGeneratorTool:
         )
         return response.choices[0].message.content.strip()
 
+    def determine_if_comment_is_actionable(self, comment):
+        prompt = f"Does the following comment provide a clear and specific suggestion for improvement that an LLM can address? Some examples of non-actionable comments include those that rely on external links, or comments that point something out rather than suggesting a fix. Respond with 'YES' or 'NO' only. Comment: {comment}"
+        response = self.run(prompt=prompt)
+        response_lower = response.lower()
+        if "yes" in response_lower:
+            return True
+        else:
+            return False
+
     def generate_fix(
         self,
         comment,
@@ -198,7 +207,12 @@ class CodeGeneratorTool:
         prompt_type,
         hunk_size,
     ):
-        prompt = generate_prompt_from_raw_file_content(
+        (
+            prompt,
+            numbered_snippet,
+            start_line,
+            end_line,
+        ) = generate_prompt_from_raw_file_content(
             comment,
             raw_file_content,
             prompt_type,
@@ -206,7 +220,7 @@ class CodeGeneratorTool:
         )
 
         generated_fix = self.run(prompt=prompt)
-        return generated_fix, prompt
+        return generated_fix, prompt, numbered_snippet, start_line, end_line
 
 
 def generate_prompt_from_raw_file_content(
@@ -226,39 +240,40 @@ def generate_prompt_from_raw_file_content(
 
     if prompt_type == "study-modified":
         prompt = f"""
-You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment.
+You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment. The Code Snippet is a part of a larger codebase and is provided to you in a numbered format for reference. Your task is to make the necessary changes to the Code Snippet based on the Code Review Comment provided.
 
-
-### Instructions:
-- The new code changes must be presented in **valid Git diff** format.
+Instructions:
+- The new code changes must be presented in valid Git diff format.
 - Lines added should have a `+` prefix.
 - Lines removed should have a `-` prefix.
 - Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
-- Do **NOT** repeat the prompt or add any extra text.
+- You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
+- There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
+- If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
+- Do NOT repeat the prompt or add any extra text.
 
-### Input Details:
+Input Details:
 Comment Start Line: {comment.start_line}
 Comment End Line: {comment.end_line}
 Comment File: {comment.filepath}
 Code Review Comment: {comment.content['raw']}
 
-### Code Snippet (with Line Numbers):
+Code Snippet (with Line Numbers):
 {numbered_snippet}
 
-### Example Output Format:
+Example Output Format:
 --- a/File.cpp
 +++ b/File.cpp
 @@ -10,7 +10,7 @@
 - old line
 + new line
 
-
-### Expected Output Format:
-Your response must **only** contain the following, with no extra text:
+Expected Output Format:
+Your response must only contain the following, with no extra text:
 (diff output here)
 """
 
-    return prompt
+    return prompt, numbered_snippet, comment.start_line, comment.end_line
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
@@ -288,6 +303,8 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         comparison_evaluation=False,
         equivalent_fix=False,
         new_prompt=False,
+        start_line=None,
+        end_line=None,
     ):
         if new_prompt:
             # prompt = f"""You are an expert programmer with experience on source code. You are given the task to evaluate the quality of generated code edits for the patch and its corresponding comment as provided below by comparing it to actual code edits.
@@ -304,20 +321,27 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
             # {actual_fix}
             # """
 
-            prompt = f"""You are an expert Firefox programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment and file content, to determine if the generated edit effectively resolves the issue.
+            prompt = f"""You are an expert Firefox programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment and the code snippet the comment was made on, to determine if the generated edit effectively resolves the issue.
 
 Task:
 - Compare the Generated Code Edit against the Actual Code Edit.
-- Determine if the generated edit successfully addresses the concern raised by the comment, even if it is not identical.
-- Ensure that the provided file content (containing the original code before any edits) is considered.
+- The Actual Code Edit has the changes necessary to address the comment, but it MAY have additional changes that are not relevant to the comment.
+- Determine if the generated edit successfully addresses the concern raised by the comment, even if it is not identical to the Actual Code Edit.
+- Ensure that the provided code snippet (containing the original code before any edits) is considered.
 - Answer YES or NO, followed by a concise explanation.
 
 Inputs:
 Comment of Interest:
 {comment}
 
-Original File Content (where the inline comment was made):
+Original Code Snippet (where the inline comment was made):
 {relevant_diff}
+
+Comment Start Line:
+{start_line}
+
+Comment End Line:
+{end_line}
 
 Generated Code Edit:
 {generated_fix}
@@ -326,8 +350,8 @@ Actual Code Edit (Human Fix):
 {actual_fix}
 
 Question:
-Does the Generated Code Edit** fully resolve the comment based on the functionality and intent of the fix?
-Use the Actual Code Edit (Human Fix) as a baseline for what should be done to fix the issue. While not all solutions will match this, it serves as a reference to determine if the generated edit is on the right track.
+Does the Generated Code Edit fully resolve the comment based on the functionality and intent of the fix?
+Use the Actual Code Edit (Human Fix) as a baseline for what should be done to fix the issue, and may have additional irrelevant changes. While not all solutions will match this, it serves as a reference to determine if the generated edit is on the right track.
 Respond with STRICTLY EITHER YES or NO, followed by a brief explanation after the comma.
 """
 
@@ -1045,12 +1069,26 @@ def generate_individual_fix(
             similar_comments_and_fix_infos=None,
         )
     else:
-        generated_fix = llm_tool.generate_fix_with_raw_file_content(
+        is_actionable_comment = llm_tool.determine_if_comment_is_actionable(
+            target_comment.content["raw"]
+        )
+
+        if not is_actionable_comment:
+            return None, None, None, None, None
+
+        (
+            generated_fix,
+            prompt,
+            numbered_snippet,
+            start_line,
+            end_line,
+        ) = llm_tool.generate_fix_with_raw_file_content(
             target_comment,
             raw_file_content,
             prompt_type="study-modified",
-            hunk_size=20,
+            hunk_size=30,
         )
         relevant_diff = None
+        return generated_fix, prompt, numbered_snippet, start_line, end_line
 
     return generated_fix[0], generated_fix[1], relevant_diff
