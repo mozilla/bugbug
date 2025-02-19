@@ -121,6 +121,14 @@ class FeedbackEvaluator:
         matches = code_review.parse_model_output(output.content)
 
         results = ["NOT_MATCHED"] * len(new_comments)
+        full_results = [
+            {
+                "new_comment": comment.content,
+            }
+            for comment in new_comments
+        ]
+        seen_old_comments = set()
+
         for match in matches:
             old_index = match["old_comment_id"]
             new_index = match["new_comment_id"]
@@ -151,9 +159,62 @@ class FeedbackEvaluator:
             if evaluated_comment["file_path"] != new_comment.filename:
                 evaluation += "__DIFFERENT_FILE"
 
+            seen_old_comments.add(old_index)
             results[new_index] = evaluation
 
+            full_results[new_index]["old_comment"] = evaluated_comment["comment"]
+            full_results[new_index]["evaluation"] = evaluation
+
+        for i, raw in diff_evaluated_comments.iterrows():
+            if i in seen_old_comments:
+                continue
+
+            evaluation = (
+                "NOT_MATCHED_VALID"
+                if raw["evaluation"]
+                in (
+                    "CORRECT",
+                    "VALID_REDUNDANT",
+                )
+                else "NOT_MATCHED_INVALID"
+            )
+
+            full_results.append(
+                {
+                    "old_comment": raw["comment"],
+                    "evaluation": evaluation,
+                }
+            )
+
+        self.print_evaluation_matches(full_results)
+
         return results
+
+    @staticmethod
+    def print_evaluation_matches(matching_results: list[dict]):
+        print(
+            tabulate(
+                [
+                    (
+                        result.get("new_comment", ""),
+                        result.get("old_comment", ""),
+                        result.get("evaluation", ""),
+                    )
+                    for result in matching_results
+                ],
+                tablefmt="mixed_grid",
+                headers=[
+                    "New Comment",
+                    "Old Comment",
+                    "Evaluation",
+                ],
+                maxcolwidths=[
+                    60,
+                    60,
+                    20,
+                ],
+            )
+        )
 
 
 def get_tool_variants(
