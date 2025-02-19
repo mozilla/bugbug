@@ -73,17 +73,18 @@ def summarize_with_gpt(input_text):
 You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
 
 1. Must Include Only Meaningful Changes:
-   - Only keep commits that significantly impact users, such as:
+   - Only keep commits that significantly impact users and are strictly user-facing, such as:
      - New features
      - UI changes
      - Major performance improvements
-     - Security patches
+     - Security patches (if user-facing)
      - Web platform changes that affect how websites behave
    - DO NOT include:
      - Small bug fixes unless critical
      - Internal code refactoring
      - Test changes or documentation updates
      - Developer tooling or CI/CD pipeline changes
+Again, only include changes that are STRICTLY USER-FACING.
 
 2. Output Format:
    - Use simple, non-technical language suitable for release notes.
