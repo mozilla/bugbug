@@ -29,6 +29,7 @@ from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
+VERBOSE_CODE_REVIEW = False
 
 
 def get_tool_variants(
@@ -90,6 +91,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=None,
                     review_comments_db=review_comments_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -102,6 +104,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=None,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -114,6 +117,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=review_comments_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -127,6 +131,7 @@ def get_tool_variants(
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             ),
         )
