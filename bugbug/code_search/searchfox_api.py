@@ -26,7 +26,14 @@ def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", 
         *_, element = iter(elements)
 
     if "data-nesting-sym" in element.attrib:
-        return get_line_number(element.iterdescendants(), position)
+        all_descendants = list(element.iterdescendants())
+        line_number_elements = [
+            e
+            for e in all_descendants
+            if "id" in e.attrib and e.attrib["id"].startswith("line-")
+        ]
+        if line_number_elements:
+            return get_line_number(line_number_elements, position)
 
     return int(element.get("id")[len("line-") :])
 
