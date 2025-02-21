@@ -171,12 +171,14 @@ class CodeGeneratorTool:
         return response.choices[0].message.content.strip()
 
     def determine_if_comment_is_actionable(self, comment):
-        prompt = f"Does the following comment provide a clear and specific suggestion for improvement that an LLM can address? Some examples of non-actionable comments include those that rely on external links, or comments that point something out rather than suggesting a fix. Respond with 'YES' or 'NO' only. Comment: {comment}"
+        prompt = f"Does the following comment provide a clear and specific suggestion for improvement that an LLM can address? Some examples of non-actionable comments include those that rely on external links, or comments that point something out rather than suggesting a fix. NOTE: comments that start with 'nit' or are directly suggesting a change (i.e. no description just showing what they should change it to) are actionable. Respond with 'YES' or 'NO' only. Comment: {comment}"
         response = self.run(prompt=prompt)
         response_lower = response.lower()
         if "yes" in response_lower:
+            print(f"YES: {comment}")
             return True
         else:
+            print(f"NO: {comment}")
             return False
 
     def generate_fix(
@@ -250,6 +252,7 @@ Instructions:
 - You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
 - There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
 - If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
+- You must provide changes. You cannot generate a diff with no changes.
 - Do NOT repeat the prompt or add any extra text.
 
 Input Details:
