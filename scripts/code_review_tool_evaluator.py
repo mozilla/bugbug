@@ -21,6 +21,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pandas as pd
+from langchain_core.prompts import PromptTemplate
 from tabulate import tabulate
 
 from bugbug import db, generative_model_tool, phabricator, utils
@@ -29,6 +30,192 @@ from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
+VERBOSE_CODE_REVIEW = False
+
+
+EVALUATION_TEMPLATE = """Your are an expert in code review at Mozilla Firefox.
+
+**Task**:
+
+Match two sets of code review comments to identify redundant comments.
+
+**Instructions**:
+
+    1. **Consider the following about all comments**:
+        - The comments are related to the same code patch.
+        - The comments may be written in different styles.
+
+    2. **Understand what each comment is addressing**:
+        - Read the comments in both sets.
+        - Understand the issue that each comment is addressing.
+
+    3. **Check for matches**:
+        - If you find a comment in the old set that are addressing the same issue as a comment in the new set, link them as redundant.
+        - The comments may not be identical, but they should be addressing the same issue.
+        - The level of detail in the comments may vary.
+
+    4. **Output format**:
+        - Output a list of matched comments.
+        - Include the comment IDs only in the output.
+        - Each element in the list should be an object with two keys: `old_comment_id` and `new_comment_id`.
+        - No explanation is needed in the output, only the IDs of the matched comments.
+        - The output should be a valid json only.
+
+
+**Output example**:
+
+    [
+        {{"old_comment_id": 1, "new_comment_id": 3}},
+        {{"old_comment_id": 4, "new_comment_id": 2}},
+    ]
+
+**First set of comments (old comments)**:
+
+{old_comments}
+
+**Second set of comments (new comments)**:
+
+{new_comments}
+"""
+
+evaluated_comments = None
+
+
+class FeedbackEvaluator:
+    def __init__(self, evaluation_dataset: str):
+        self.evaluated_comments = pd.read_csv(evaluation_dataset)
+
+        llm = generative_model_tool.create_openai_llm()
+        evaluate_comments_prompt = PromptTemplate.from_template(EVALUATION_TEMPLATE)
+        self.evaluation_chain = evaluate_comments_prompt | llm
+
+    def evaluate_diff_comments(
+        self,
+        diff_id: int,
+        new_comments: list[code_review.InlineComment],
+    ) -> list[str]:
+        diff_evaluated_comments = self.evaluated_comments[
+            self.evaluated_comments["diff_id"] == diff_id
+        ].reset_index()
+
+        output = self.evaluation_chain.invoke(
+            {
+                "old_comments": [
+                    {
+                        "id": i,
+                        "content": raw["comment"],
+                        "file": raw["file_path"],
+                    }
+                    for i, raw in diff_evaluated_comments.iterrows()
+                ],
+                "new_comments": [
+                    {
+                        "id": i,
+                        "content": comment.content,
+                        "file": comment.filename,
+                    }
+                    for i, comment in enumerate(new_comments)
+                ],
+            }
+        )
+
+        matches = code_review.parse_model_output(output.content)
+
+        results = ["NOT_MATCHED"] * len(new_comments)
+        full_results = [
+            {
+                "new_comment": comment.content,
+            }
+            for comment in new_comments
+        ]
+        seen_old_comments = set()
+
+        for match in matches:
+            old_index = match["old_comment_id"]
+            new_index = match["new_comment_id"]
+
+            evaluated_comment = diff_evaluated_comments.iloc[old_index]
+            new_comment = new_comments[new_index]
+
+            evaluation = (
+                "MATCHED_VALID"
+                if evaluated_comment["evaluation"]
+                in (
+                    "CORRECT",
+                    "VALID_REDUNDANT",
+                )
+                else "MATCHED_INVALID"
+            )
+
+            if (
+                results[new_index].split("__", 1)[0]
+                not in (
+                    "NOT_MATCHED",
+                    evaluation,
+                )
+                and "MIXED_EVALUATION" not in evaluation
+            ):
+                evaluation += "__MIXED_EVALUATION"
+
+            if evaluated_comment["file_path"] != new_comment.filename:
+                evaluation += "__DIFFERENT_FILE"
+
+            seen_old_comments.add(old_index)
+            results[new_index] = evaluation
+
+            full_results[new_index]["old_comment"] = evaluated_comment["comment"]
+            full_results[new_index]["evaluation"] = evaluation
+
+        for i, raw in diff_evaluated_comments.iterrows():
+            if i in seen_old_comments:
+                continue
+
+            evaluation = (
+                "NOT_MATCHED_VALID"
+                if raw["evaluation"]
+                in (
+                    "CORRECT",
+                    "VALID_REDUNDANT",
+                )
+                else "NOT_MATCHED_INVALID"
+            )
+
+            full_results.append(
+                {
+                    "old_comment": raw["comment"],
+                    "evaluation": evaluation,
+                }
+            )
+
+        self.print_evaluation_matches(full_results)
+
+        return results
+
+    @staticmethod
+    def print_evaluation_matches(matching_results: list[dict]):
+        print(
+            tabulate(
+                [
+                    (
+                        result.get("new_comment", ""),
+                        result.get("old_comment", ""),
+                        result.get("evaluation", ""),
+                    )
+                    for result in matching_results
+                ],
+                tablefmt="mixed_grid",
+                headers=[
+                    "New Comment",
+                    "Old Comment",
+                    "Evaluation",
+                ],
+                maxcolwidths=[
+                    60,
+                    60,
+                    20,
+                ],
+            )
+        )
 
 
 def get_tool_variants(
@@ -90,6 +277,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=None,
                     review_comments_db=review_comments_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -102,6 +290,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=None,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -114,6 +303,7 @@ def get_tool_variants(
                     comment_gen_llms=[llm],
                     function_search=function_search,
                     review_comments_db=review_comments_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             )
         )
@@ -127,6 +317,7 @@ def get_tool_variants(
                     function_search=function_search,
                     review_comments_db=review_comments_db,
                     suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
                 ),
             ),
         )
@@ -193,23 +384,36 @@ def main(args):
         generative_model_tool.create_llm_from_args(args), args.variants
     )
 
+    evaluator = FeedbackEvaluator(args.evaluation_dataset)
+
     is_first_result = True
     result_file = "code_review_tool_evaluator.csv"
     result_unique_columns = ["Review Request ID", "File", "Line", "Comment Number"]
     result_all_columns = result_unique_columns + [
-        f"Comment ({variant_name})" for variant_name, _ in tool_variants
+        f"{title} ({variant_name})"
+        for variant_name, _ in tool_variants
+        for title in ("Comment", "Evaluation")
     ]
 
-    sample_ids = (
-        args.review_request_ids
-        if args.review_request_ids
-        else get_review_requests_sample(timedelta(days=60), 3)
-    )
+    selected_review_requests = []
+    if args.diff_ids:
+        selected_review_requests = (
+            ("n/a", code_review.ReviewRequest(diff_id)) for diff_id in args.diff_ids
+        )
+    elif args.review_request_ids:
+        selected_review_requests = (
+            (review_request_id, review_data.get_review_request_by_id(review_request_id))
+            for review_request_id in args.review_request_ids
+        )
+    else:
+        selected_review_requests = (
+            (review_request_id, review_data.get_review_request_by_id(review_request_id))
+            for review_request_id in get_review_requests_sample(timedelta(days=60), 3)
+        )
 
-    for review_request_id in sample_ids:
+    for review_request_id, review_request in selected_review_requests:
         print("---------------------------------------------------------")
         print(f"Review Request ID: {review_request_id}")
-        review_request = review_data.get_review_request_by_id(review_request_id)
         print(f"Patch ID: {review_request.patch_id}")
         patch = review_data.get_patch_by_id(review_request.patch_id)
         print("---------------------------------------------------------")
@@ -233,7 +437,11 @@ def main(args):
             print_prettified_comments(comments)
             comment_per_line_counter = defaultdict(int)
 
-            for comment in comments:
+            evaluation = evaluator.evaluate_diff_comments(
+                review_request.patch_id, comments
+            )
+
+            for i, comment in enumerate(comments):
                 key = (review_request_id, comment.filename, comment.end_line)
                 comment_per_line_counter[key] += 1
 
@@ -244,6 +452,7 @@ def main(args):
                         "Line": comment.end_line,
                         "Comment Number": comment_per_line_counter[key],
                         f"Comment ({variant_name})": comment.content,
+                        f"Evaluation ({variant_name})": evaluation[i],
                     }
                 )
 
@@ -288,7 +497,25 @@ if __name__ == "__main__":
         metavar="REVISION_ID",
         type=int,
     )
+    parser.add_argument(
+        "-d",
+        "--diff-id",
+        dest="diff_ids",
+        action="append",
+        help="if specified, run only the selected Diff ID(s)",
+        metavar="DIFF_ID",
+        type=int,
+    )
+    parser.add_argument(
+        "--evaluate-data",
+        dest="evaluation_dataset",
+        action="store",
+        help="the path or the URL to a evaluation dataset in CSV format",
+    )
 
     args = parser.parse_args()
+
+    if args.diff_ids and args.review_request_ids:
+        parser.error("Please specify either --diff-id or --revision-id, not both.")
 
     main(args)
