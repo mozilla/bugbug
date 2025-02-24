@@ -14,8 +14,7 @@ def main():
     parser.add_argument(
         "--repo", default="hg_dir", help="Path to the Mercurial repository"
     )
-    parser.add_argument("--version1", required=True, help="Base version identifier")
-    parser.add_argument("--version2", required=True, help="Target version identifier")
+    parser.add_argument("--version", required=True, help="Target version identifier")
     parser.add_argument(
         "--chunk-size", type=int, default=10000, help="Chunk size for token processing"
     )
@@ -24,8 +23,7 @@ def main():
 
     generator = ReleaseNotesGenerator(
         repo_directory=args.repo,
-        version1=args.version1,
-        version2=args.version2,
+        version=args.version,
         chunk_size=args.chunk_size,
     )
     generator.generate_worthy_commits()

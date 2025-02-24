@@ -18,12 +18,20 @@ logger = logging.getLogger(__name__)
 
 
 class ReleaseNotesGenerator:
-    def __init__(self, repo_directory, version1, version2, chunk_size=10000):
+    def __init__(self, repo_directory, version, chunk_size=10000):
         self.repo_directory = repo_directory
-        self.version1 = version1
-        self.version2 = version2
+        self.version2 = version
+        self.version1 = self.get_previous_version(version)
         self.chunk_size = chunk_size
         self.output_file = f"version_summary_{self.version2}.txt"
+
+    def get_previous_version(self, current_version):
+        match = re.match(r"(FIREFOX_BETA_)(\d+)(_BASE)", current_version)
+        if not match:
+            raise ValueError("Invalid version format")
+        prefix, version_number, suffix = match.groups()
+        previous_version_number = int(version_number) - 1
+        return f"{prefix}{previous_version_number}{suffix}"
 
     def run_hg_log(self, query):
         try:
