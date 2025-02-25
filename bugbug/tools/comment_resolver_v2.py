@@ -1,7 +1,6 @@
 import logging
 
 import requests
-from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug.phabricator import get, set_api_key
 from bugbug.tools.code_review import PhabricatorReviewData
@@ -11,8 +10,7 @@ review_data = PhabricatorReviewData()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 PHABRICATOR_API_URL = "https://phabricator.services.mozilla.com/api/"
-PHABRICATOR_API_TOKEN = PhabricatorAPI(get_secret("PHABRICATOR_TOKEN"))
-PHABRICATOR_API_TOKEN = "api-ysxfixz4dcvdayk3klsfmkom5txe"
+PHABRICATOR_API_TOKEN = get_secret("PHABRICATOR_TOKEN")
 
 
 class CodeGeneratorTool:
