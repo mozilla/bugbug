@@ -20,10 +20,7 @@ logger = logging.getLogger(__name__)
 class ReleaseNotesGenerator:
     def __init__(self, repo_directory, version, chunk_size=10000):
         self.repo_directory = repo_directory
-        self.version2 = version
-        self.version1 = self.get_previous_version(version)
         self.chunk_size = chunk_size
-        self.output_file = f"version_summary_{self.version2}.txt"
 
     def get_previous_version(self, current_version):
         match = re.match(r"(FIREFOX_BETA_)(\d+)(_BASE)", current_version)
@@ -225,8 +222,12 @@ Instructions:
             logger.error(f"Error while calling OpenAI API: {e}")
             return "Error: Unable to remove unworthy commits."
 
-    def generate_worthy_commits(self):
+    def generate_worthy_commits(self, version):
         bug_dict = self.load_bug_data()
+        self.version2 = version
+        self.version1 = self.get_previous_version(version)
+        self.output_file = f"version_summary_{self.version2}.txt"
+
         logger.info(f"Generating list of commits for version: {self.version2}")
 
         logger.info("Finding the branching point commit...")

@@ -26,7 +26,7 @@ def main():
         version=args.version,
         chunk_size=args.chunk_size,
     )
-    generator.generate_worthy_commits()
+    generator.generate_worthy_commits(version=args.version)
 
 
 if __name__ == "__main__":
