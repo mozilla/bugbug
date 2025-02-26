@@ -18,9 +18,11 @@ class CodeGeneratorTool:
         self,
         client,
         model,
+        hunk_size,
     ) -> None:
         self.client = client
         self.model = model
+        self.hunk_size = hunk_size
 
     def run(self, prompt: str):
         response = self.client.chat.completions.create(
@@ -166,7 +168,6 @@ Your response must only contain the following, with no extra text:
         revision_id,
         diff_id,
         comment_id,
-        hunk_size,
     ):
         transaction = self.get_comment_transaction_from_revision(
             revision_id, comment_id
@@ -190,7 +191,7 @@ Your response must only contain the following, with no extra text:
             comment_end_line=comment_end_line,
             filepath=filepath,
             raw_file_content=raw_file_content,
-            hunk_size=hunk_size,
+            hunk_size=self.hunk_size,
         )
 
         generated_fix = self.run(prompt=prompt)

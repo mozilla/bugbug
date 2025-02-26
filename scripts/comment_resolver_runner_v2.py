@@ -17,12 +17,11 @@ model = "gpt-4o"
 def run(args) -> None:
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
-    llm_tool = CodeGeneratorTool(client=client, model=model)
+    llm_tool = CodeGeneratorTool(client=client, model=model, hunk_size=args.hunk_size)
     generated_fix, prompt = llm_tool.generate_fix(
         revision_id=args.revision_id,
         diff_id=args.diff_id,
         comment_id=args.comment_id,
-        hunk_size=args.hunk_size,
     )
 
     print(f"PROMPT: {prompt}")
