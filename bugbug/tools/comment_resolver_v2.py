@@ -100,10 +100,68 @@ class CodeGeneratorTool:
         raise Exception(f"File '{file_path}' not found in Diff {diff_id}")
 
     def fetch_file_content_from_url(self, changeset_id):
-        url = f"https://phabricator.services.mozilla.com/differential/changeset/?view=new&ref={changeset_id}"
+        url = f"https://phabricator.services.mozilla.com/differential/changeset/?view=old&ref={changeset_id}"
         response = requests.get(url)
         response.raise_for_status()
         return response.text
+
+    #     def generate_prompt_from_raw_file_content(
+    #         self,
+    #         comment_content,
+    #         comment_start_line,
+    #         comment_end_line,
+    #         filepath,
+    #         raw_file_content,
+    #         hunk_size,
+    #     ):
+    #         lines = raw_file_content.splitlines()
+    #         total_lines = len(lines)
+
+    #         start_line = max(comment_start_line - hunk_size, 1)
+    #         end_line = min(comment_end_line + hunk_size, total_lines)
+
+    #         snippet_lines = []
+    #         for i in range(start_line, end_line + 1):
+    #             snippet_lines.append(f"{i} {lines[i - 1]}")
+
+    #         numbered_snippet = "\n".join(snippet_lines)
+
+    #         prompt = f"""
+    # You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment. The Code Snippet is a part of a larger codebase and is provided to you in a numbered format for reference. Your task is to make the necessary changes to the Code Snippet based on the Code Review Comment provided.
+
+    # Instructions:
+    # - The new code changes must be presented in valid Git diff format.
+    # - Lines added should have a `+` prefix.
+    # - Lines removed should have a `-` prefix.
+    # - Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
+    # - You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
+    # - There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
+    # - If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
+    # - You must provide changes. You cannot generate a diff with no changes.
+    # - Do NOT repeat the prompt or add any extra text.
+
+    # Input Details:
+    # Comment Start Line: {comment_start_line}
+    # Comment End Line: {comment_end_line}
+    # Comment File: {filepath}
+    # Code Review Comment: {comment_content}
+
+    # Code Snippet (with Line Numbers):
+    # {numbered_snippet}
+
+    # Example Output Format:
+    # --- a/File.cpp
+    # +++ b/File.cpp
+    # @@ -10,7 +10,7 @@
+    # - old line
+    # + new line
+
+    # Expected Output Format:
+    # Your response must only contain the following, with no extra text:
+    # (diff output here)
+    # """
+
+    #         return prompt
 
     def generate_prompt_from_raw_file_content(
         self,
@@ -122,22 +180,31 @@ class CodeGeneratorTool:
 
         snippet_lines = []
         for i in range(start_line, end_line + 1):
-            snippet_lines.append(f"{i} {lines[i - 1]}")
+            prefix = ""
+
+            # Add markers for the commented section
+            if i == comment_start_line:
+                prefix = ">>> START COMMENT <<<\n"
+            if i == comment_end_line:
+                snippet_lines.append(f"{prefix}{i} {lines[i - 1]}\n>>> END COMMENT <<<")
+                continue
+
+            snippet_lines.append(f"{prefix}{i} {lines[i - 1]}")
 
         numbered_snippet = "\n".join(snippet_lines)
 
         prompt = f"""
-You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment. The Code Snippet is a part of a larger codebase and is provided to you in a numbered format for reference. Your task is to make the necessary changes to the Code Snippet based on the Code Review Comment provided.
+You are an expert Firefox software engineer who must modify a Code Snippet based on a given Code Review Comment. The section of the code that the comment refers to is explicitly marked with `>>> START COMMENT <<<` and `>>> END COMMENT <<<` within the snippet.
 
 Instructions:
 - The new code changes must be presented in valid Git diff format.
 - Lines added should have a `+` prefix.
 - Lines removed should have a `-` prefix.
-- Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
-- You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
-- There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
-- If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
-- You must provide changes. You cannot generate a diff with no changes.
+- Remove the line number prefix and the comment markers in your final diff output. They are only there for your reference.
+- You are not limited to modifying only the marked section; make any necessary changes to improve the code according to the review comment.
+- If the comment is suggesting to either delete or modify a code comment, settle with deleting it unless more context suggests modification.
+- Your response must contain changes—do not return an empty diff.
+- If the comment spans a singular line, it is most likely referring to the first line (e.g. line 10 to 11, it is most likely referring to line 10).
 - Do NOT repeat the prompt or add any extra text.
 
 Input Details:
@@ -146,7 +213,7 @@ Comment End Line: {comment_end_line}
 Comment File: {filepath}
 Code Review Comment: {comment_content}
 
-Code Snippet (with Line Numbers):
+Code Snippet (with Inline Comment Markers):
 {numbered_snippet}
 
 Example Output Format:
