@@ -24,10 +24,7 @@ def run(args) -> None:
         comment_id=args.comment_id,
     )
 
-    print(f"PROMPT: {prompt}")
-    print("========================================")
-    print(f"FIX: {generated_fix}")
-
+    print(generated_fix)
     return
 
 
