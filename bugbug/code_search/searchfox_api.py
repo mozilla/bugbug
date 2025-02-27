@@ -113,11 +113,18 @@ def search(commit_hash, symbol_name):
         if type_ not in results:
             continue
 
-        for sub_type, value in results[type_].items():
+        for sub_type, values in results[type_].items():
             if sub_type.startswith("Definitions") and sub_type.endswith(
                 f"{symbol_name})"
             ):
-                definitions.extend(value)
+                for value in values:
+                    # Filter out JS files where the line containing the string doesn't also contain "function", "(", or "=>" as this
+                    # means it probably isn't a function definition.
+                    if not value["path"].endswith("js") or any(
+                        keyword in value["lines"][0]["line"]
+                        for keyword in ("function", "(", "=>")
+                    ):
+                        definitions.append(value)
 
     paths = list(set(definition["path"] for definition in definitions))
 
@@ -238,3 +245,9 @@ if __name__ == "__main__":
             ),
         )
     )
+
+    print("RESULT5")
+    print(search("tip", "ShouldNotProcessUpdatesReasonAsString"))
+
+    print("RESULT6")
+    print(search("tip", "range"))
