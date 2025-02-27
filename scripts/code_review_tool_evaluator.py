@@ -87,7 +87,7 @@ class FeedbackEvaluator:
 
         llm = generative_model_tool.create_openai_llm()
         evaluate_comments_prompt = PromptTemplate.from_template(EVALUATION_TEMPLATE)
-        self.evaluation_chain = RunnableSequence([evaluate_comments_prompt, llm])
+        self.evaluation_chain = RunnableSequence(evaluate_comments_prompt, llm)
 
     def evaluate_diff_comments(
         self,
