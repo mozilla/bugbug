@@ -105,6 +105,7 @@ def search(commit_hash, symbol_name):
 
     # A workaround to fix: https://github.com/mozilla/bugbug/issues/4448
     results = results.replace(r"<\s", r"<\\s")
+    results = results.replace(r"<\!", r"<\\!")
 
     results = json.loads(results)
 
