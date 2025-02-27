@@ -17,6 +17,7 @@ from bugbug.code_search.function_search import (
     FunctionSearch,
     register_function_search,
 )
+from bugbug.repository import SOURCE_CODE_TYPES_TO_EXT
 
 
 def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", "end"]):
@@ -119,12 +120,44 @@ def search(commit_hash, symbol_name):
                 f"{symbol_name})"
             ):
                 for value in values:
-                    # Filter out JS files where the line containing the string doesn't also contain "function", "(", or "=>" as this
+                    # Filter out Rust files where the line containing the string doesn't also contain "fn FUNCTION_NAME" or "|" as this
                     # means it probably isn't a function definition.
-                    if not value["path"].endswith("js") or any(
-                        keyword in value["lines"][0]["line"]
-                        for keyword in ("function", "(", "=>")
+                    if any(
+                        value["path"].endswith(ext)
+                        for ext in SOURCE_CODE_TYPES_TO_EXT["Rust"]
                     ):
+                        if any(
+                            keyword in value["lines"][0]["line"]
+                            for keyword in ("fn {symbol_name}", "|")
+                        ):
+                            definitions.append(value)
+
+                    # Filter out JS files where the line containing the string doesn't also contain "function", "FUNCTION_NAME(", or "=>" as this
+                    # means it probably isn't a function definition.
+                    elif any(
+                        value["path"].endswith(ext)
+                        for ext in SOURCE_CODE_TYPES_TO_EXT["Javascript"]
+                    ):
+                        if any(
+                            keyword in value["lines"][0]["line"]
+                            for keyword in ("function", f"{symbol_name}(", "=>")
+                        ):
+                            definitions.append(value)
+
+                    # Filter out C/C++ files where the line containing the string doesn't also contain "FUNCTION_NAME(" or "->" as this
+                    # means it probably isn't a function definition.
+                    elif any(
+                        value["path"].endswith(ext)
+                        for ext in SOURCE_CODE_TYPES_TO_EXT["C/C++"]
+                        + SOURCE_CODE_TYPES_TO_EXT["Objective-C/C++"]
+                    ):
+                        if any(
+                            keyword in value["lines"][0]["line"]
+                            for keyword in (f"{symbol_name}(", "->")
+                        ):
+                            definitions.append(value)
+
+                    else:
                         definitions.append(value)
 
     paths = list(set(definition["path"] for definition in definitions))
