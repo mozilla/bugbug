@@ -406,6 +406,16 @@ def main(args):
         for variant_name, _ in tool_variants
         for title in ("Comment", "Evaluation")
     ]
+    evaluation_result_all_columns = [
+        "variant_name",
+        "revision_id",
+        "diff_id",
+        "new_comment",
+        "old_comments_count",
+        "matched",
+        "old_comment",
+        "evaluation",
+    ]
 
     selected_review_requests = []
     if args.diff_ids:
@@ -509,7 +519,9 @@ def main(args):
             mode="w" if is_first_result else "a",
         )
 
-        df = pd.DataFrame(all_variants_evaluation_results)
+        df = pd.DataFrame(
+            all_variants_evaluation_results, columns=evaluation_result_all_columns
+        )
         df.to_csv(
             evaluation_results_file,
             index=False,
