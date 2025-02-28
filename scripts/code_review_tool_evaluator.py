@@ -433,7 +433,9 @@ def main(args):
             (revision_id, code_review.ReviewRequest(diff_id))
             for revision_id, diff_id in pd.read_csv(
                 get_latest_evaluation_results_file()
-            )[["revision_id", "diff_id"]].itertuples(name=None, index=False)
+            )[["revision_id", "diff_id"]]
+            .drop_duplicates()
+            .itertuples(name=None, index=False)
         )
     else:
         raise ValueError(
