@@ -5,6 +5,7 @@
 
 import io
 import json
+import re
 from typing import Iterable, Literal
 
 from lxml.html import HtmlElement
@@ -110,6 +111,8 @@ def search(commit_hash, symbol_name):
 
     results = json.loads(results)
 
+    symbol_word_re = re.compile(rf"\b{symbol_name}\b")
+
     definitions = []
     for type_ in ["normal", "thirdparty", "test"]:
         if type_ not in results:
@@ -120,15 +123,28 @@ def search(commit_hash, symbol_name):
                 f"{symbol_name})"
             ):
                 for value in values:
+                    line = value["lines"][0]["line"]
+
+                    if symbol_name not in line:
+                        continue
+
+                    symbol_word_match = symbol_word_re.search(line)
+                    symbol_word_position = (
+                        symbol_word_match.start()
+                        if symbol_word_match is not None
+                        else None
+                    )
+
                     # Filter out Rust files where the line containing the string doesn't also contain "fn FUNCTION_NAME" or "|" as this
                     # means it probably isn't a function definition.
                     if any(
                         value["path"].endswith(ext)
                         for ext in SOURCE_CODE_TYPES_TO_EXT["Rust"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in ("fn {symbol_name}", "|")
+                        if "fn {symbol_name}" in line or (
+                            "|" in line
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("|")
                         ):
                             definitions.append(value)
 
@@ -138,9 +154,19 @@ def search(commit_hash, symbol_name):
                         value["path"].endswith(ext)
                         for ext in SOURCE_CODE_TYPES_TO_EXT["Javascript"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in ("function", f"{symbol_name}(", "=>")
+                        if (
+                            f"{symbol_name}(" in line
+                            or f"function {symbol_name}" in line
+                            or (
+                                "function" in line
+                                and symbol_word_position is not None
+                                and symbol_word_position < line.index("function")
+                            )
+                            or (
+                                "=>" in line
+                                and symbol_word_position is not None
+                                and symbol_word_position < line.index("=>")
+                            )
                         ):
                             definitions.append(value)
 
@@ -151,9 +177,23 @@ def search(commit_hash, symbol_name):
                         for ext in SOURCE_CODE_TYPES_TO_EXT["C/C++"]
                         + SOURCE_CODE_TYPES_TO_EXT["Objective-C/C++"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in (f"{symbol_name}(", "->")
+                        if f"{symbol_name}(" in line or (
+                            "->" in line
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("->")
+                        ):
+                            definitions.append(value)
+
+                    # Filter out Python files where the line containing the string doesn't also contain "def FUNCTION_NAME(" or "lambda" as this
+                    # means it probably isn't a function definition.
+                    elif any(
+                        value["path"].endswith(ext)
+                        for ext in SOURCE_CODE_TYPES_TO_EXT["Python"]
+                    ):
+                        if f"def {symbol_name}(" in line or (
+                            "lambda" in line
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("lambda")
                         ):
                             definitions.append(value)
 
