@@ -5,6 +5,7 @@
 
 import io
 import json
+import re
 from typing import Iterable, Literal
 
 from lxml.html import HtmlElement
@@ -110,6 +111,8 @@ def search(commit_hash, symbol_name):
 
     results = json.loads(results)
 
+    symbol_word_re = re.compile(rf"\b{symbol_name}\b")
+
     definitions = []
     for type_ in ["normal", "thirdparty", "test"]:
         if type_ not in results:
@@ -125,6 +128,13 @@ def search(commit_hash, symbol_name):
                     if symbol_name not in line:
                         continue
 
+                    symbol_word_match = symbol_word_re.search(line)
+                    symbol_word_position = (
+                        symbol_word_match.start()
+                        if symbol_word_match is not None
+                        else None
+                    )
+
                     # Filter out Rust files where the line containing the string doesn't also contain "fn FUNCTION_NAME" or "|" as this
                     # means it probably isn't a function definition.
                     if any(
@@ -132,7 +142,9 @@ def search(commit_hash, symbol_name):
                         for ext in SOURCE_CODE_TYPES_TO_EXT["Rust"]
                     ):
                         if "fn {symbol_name}" in line or (
-                            "|" in line and line.index(symbol_name) < line.index("|")
+                            "|" in line
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("|")
                         ):
                             definitions.append(value)
 
@@ -147,11 +159,13 @@ def search(commit_hash, symbol_name):
                             or f"function {symbol_name}" in line
                             or (
                                 "function" in line
-                                and line.index(symbol_name) < line.index("function")
+                                and symbol_word_position is not None
+                                and symbol_word_position < line.index("function")
                             )
                             or (
                                 "=>" in line
-                                and line.index(symbol_name) < line.index("=>")
+                                and symbol_word_position is not None
+                                and symbol_word_position < line.index("=>")
                             )
                         ):
                             definitions.append(value)
@@ -164,7 +178,9 @@ def search(commit_hash, symbol_name):
                         + SOURCE_CODE_TYPES_TO_EXT["Objective-C/C++"]
                     ):
                         if f"{symbol_name}(" in line or (
-                            "->" in line and line.index(symbol_name) < line.index("->")
+                            "->" in line
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("->")
                         ):
                             definitions.append(value)
 
@@ -176,7 +192,8 @@ def search(commit_hash, symbol_name):
                     ):
                         if f"def {symbol_name}(" in line or (
                             "lambda" in line
-                            and line.index(symbol_name) < line.index("lambda")
+                            and symbol_word_position is not None
+                            and symbol_word_position < line.index("lambda")
                         ):
                             definitions.append(value)
 
