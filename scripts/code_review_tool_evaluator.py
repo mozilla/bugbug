@@ -429,9 +429,6 @@ def main(args):
             .itertuples(index=False)
         )
     elif args.evaluation_strategy == "same":
-        pd.read_csv(get_latest_evaluation_results_file())[
-            ["revision_id", "diff_id"]
-        ].itertuples()
         selected_review_requests = (
             (revision_id, code_review.ReviewRequest(diff_id))
             for revision_id, diff_id in pd.read_csv(
