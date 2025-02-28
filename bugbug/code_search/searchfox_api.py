@@ -168,6 +168,18 @@ def search(commit_hash, symbol_name):
                         ):
                             definitions.append(value)
 
+                    # Filter out Python files where the line containing the string doesn't also contain "def FUNCTION_NAME(" or "lambda" as this
+                    # means it probably isn't a function definition.
+                    elif any(
+                        value["path"].endswith(ext)
+                        for ext in SOURCE_CODE_TYPES_TO_EXT["Python"]
+                    ):
+                        if f"def {symbol_name}(" in line or (
+                            "lambda" in line
+                            and line.index(symbol_name) < line.index("lambda")
+                        ):
+                            definitions.append(value)
+
                     else:
                         definitions.append(value)
 
