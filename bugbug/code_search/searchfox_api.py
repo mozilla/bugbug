@@ -5,6 +5,7 @@
 
 import io
 import json
+import logging
 import re
 from typing import Iterable, Literal
 
@@ -19,6 +20,8 @@ from bugbug.code_search.function_search import (
     register_function_search,
 )
 from bugbug.repository import SOURCE_CODE_TYPES_TO_EXT
+
+logger = logging.getLogger(__name__)
 
 
 def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", "end"]):
@@ -201,6 +204,13 @@ def search(commit_hash, symbol_name):
                         definitions.append(value)
 
     paths = list(set(definition["path"] for definition in definitions))
+    if len(paths) > 10:
+        logger.warning(
+            "Too many paths found for symbol %s: %d paths. Skipping this symbol.",
+            symbol_name,
+            len(paths),
+        )
+        return []
 
     return sum((get_functions(commit_hash, path, symbol_name) for path in paths), [])
 
