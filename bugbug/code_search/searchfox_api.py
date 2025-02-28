@@ -120,15 +120,19 @@ def search(commit_hash, symbol_name):
                 f"{symbol_name})"
             ):
                 for value in values:
+                    line = value["lines"][0]["line"]
+
+                    if symbol_name not in line:
+                        continue
+
                     # Filter out Rust files where the line containing the string doesn't also contain "fn FUNCTION_NAME" or "|" as this
                     # means it probably isn't a function definition.
                     if any(
                         value["path"].endswith(ext)
                         for ext in SOURCE_CODE_TYPES_TO_EXT["Rust"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in ("fn {symbol_name}", "|")
+                        if "fn {symbol_name}" in line or (
+                            "|" in line and line.index(symbol_name) < line.index("|")
                         ):
                             definitions.append(value)
 
@@ -138,9 +142,17 @@ def search(commit_hash, symbol_name):
                         value["path"].endswith(ext)
                         for ext in SOURCE_CODE_TYPES_TO_EXT["Javascript"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in ("function", f"{symbol_name}(", "=>")
+                        if (
+                            f"{symbol_name}(" in line
+                            or f"function {symbol_name}" in line
+                            or (
+                                "function" in line
+                                and line.index(symbol_name) < line.index("function")
+                            )
+                            or (
+                                "=>" in line
+                                and line.index(symbol_name) < line.index("=>")
+                            )
                         ):
                             definitions.append(value)
 
@@ -151,9 +163,8 @@ def search(commit_hash, symbol_name):
                         for ext in SOURCE_CODE_TYPES_TO_EXT["C/C++"]
                         + SOURCE_CODE_TYPES_TO_EXT["Objective-C/C++"]
                     ):
-                        if any(
-                            keyword in value["lines"][0]["line"]
-                            for keyword in (f"{symbol_name}(", "->")
+                        if f"{symbol_name}(" in line or (
+                            "->" in line and line.index(symbol_name) < line.index("->")
                         ):
                             definitions.append(value)
 
