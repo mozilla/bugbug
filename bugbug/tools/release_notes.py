@@ -1,13 +1,11 @@
 import logging
 import os
 import re
-import subprocess
 
+import requests
 import tiktoken
+from bs4 import BeautifulSoup
 from openai import OpenAI
-
-from bugbug import db
-from bugbug.bugzilla import BUGS_DB
 
 MODEL = "gpt-4o"
 
@@ -18,8 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReleaseNotesGenerator:
-    def __init__(self, repo_directory, version, chunk_size=10000):
-        self.repo_directory = repo_directory
+    def __init__(self, chunk_size=10000):
         self.chunk_size = chunk_size
 
     def get_previous_version(self, current_version):
@@ -29,20 +26,6 @@ class ReleaseNotesGenerator:
         prefix, version_number, suffix = match.groups()
         previous_version_number = int(version_number) - 1
         return f"{prefix}{previous_version_number}{suffix}"
-
-    def run_hg_log(self, query):
-        try:
-            result = subprocess.run(
-                ["hg", "log", "-r", query],
-                cwd=self.repo_directory,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Error running hg log: {e}")
-            return None
 
     def get_token_count(self, text):
         encoding = tiktoken.encoding_for_model(MODEL)
@@ -129,9 +112,9 @@ We should exclude this change because it contains technical jargon that is uncle
         chunks = self.split_into_chunks(commit_log)
         return [self.summarize_with_gpt(chunk) for chunk in chunks]
 
-    def clean_commits(self, commit_log, keywords, bug_dict):
+    def clean_commits(self, commit_log, keywords):
         cleaned_commits = []
-        commit_blocks = commit_log.split("\n\n")
+        commit_blocks = commit_log.split("\n")
 
         for block in commit_blocks:
             if (
@@ -149,37 +132,14 @@ We should exclude this change because it contains technical jargon that is uncle
                 if not bug_id_match:
                     continue
 
-                bug_id = int(bug_id_match.group(1))
-                if bug_id not in bug_dict:
-                    continue
+                bug_position = re.search(r"Bug \d+.*", block, re.IGNORECASE)
+                if bug_position:
+                    block = bug_position.group(0)
 
-                bug_info = bug_dict[bug_id]
-                should_exclude = False
-
-                if "blocks" in bug_info:
-                    for blocked_bug_id in bug_info["blocks"]:
-                        if blocked_bug_id in bug_dict:
-                            blocked_bug = bug_dict[blocked_bug_id]
-                            if "[meta]" in blocked_bug.get("summary", ""):
-                                if (
-                                    not blocked_bug.get("version")
-                                    or blocked_bug["version"].lower() == "unspecified"
-                                ):
-                                    should_exclude = True
-                                    break
-
-                if should_exclude:
-                    continue
-
-                match = re.search(r"summary:\s+(.+)", block)
-                commit_summary = match.group(1) if match else None
+                commit_summary = block
                 cleaned_commits.append(commit_summary)
 
         return "\n\n".join(cleaned_commits)
-
-    def load_bug_data(self):
-        bug_data = list(db.read(BUGS_DB))
-        return {bug["id"]: bug for bug in bug_data}
 
     def remove_unworthy_commits(self, input_text):
         prompt = f"""Review the following list of release notes and remove anything that is not worthy of official release notes. Keep only changes that are meaningful, impactful, and directly relevant to end users, such as:
@@ -223,32 +183,34 @@ Instructions:
             return "Error: Unable to remove unworthy commits."
 
     def generate_worthy_commits(self, version):
-        bug_dict = self.load_bug_data()
         self.version2 = version
         self.version1 = self.get_previous_version(version)
         self.output_file = f"version_summary_{self.version2}.txt"
 
         logger.info(f"Generating list of commits for version: {self.version2}")
+        url = f"https://hg.mozilla.org/releases/mozilla-release/pushloghtml?fromchange={self.version1}&tochange={self.version2}"
+        response = requests.get(url)
+        changes_output = ""
 
-        logger.info("Finding the branching point commit...")
-        branching_commit_query = f"ancestor({self.version1}, {self.version2})"
-        branching_commit_output = self.run_hg_log(branching_commit_query)
-
-        if not branching_commit_output:
-            logger.error("Failed to find the branching point commit. Exiting.")
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            commit_entries = soup.find_all("tr", class_="pushlogentry")
+            commits = [
+                (
+                    entry.find_all("td")[1].text.strip(),
+                    entry.find_all("td")[2].get_text(separator=" ", strip=True),
+                )
+                for entry in commit_entries
+            ]
+            changes_output = "\n".join(commit[1] for commit in commits)
+        else:
+            logger.error(
+                f"Failed to retrieve the webpage. Status code: {response.status_code}"
+            )
             return
 
-        branching_commit_hash = branching_commit_output.split(":")[1].split()[0]
-        logger.info(f"Branching point commit: {branching_commit_hash}")
-
-        logger.info("Fetching the list of changes...")
-        changes_query = (
-            f"descendants({branching_commit_hash}) and ancestors({self.version2})"
-        )
-        changes_output = self.run_hg_log(changes_query)
-
         if not changes_output:
-            logger.error("Failed to fetch the list of changes. Exiting.")
+            logger.error("No changes found.")
             return
 
         logger.info("Cleaning commit log...")
@@ -259,9 +221,7 @@ Instructions:
             "add tests",
             "disable test",
         ]
-        cleaned_commits = self.clean_commits(
-            changes_output, keywords_to_remove, bug_dict
-        )
+        cleaned_commits = self.clean_commits(changes_output, keywords_to_remove)
 
         logger.info("Generating summaries for cleaned commits...")
         summaries = self.generate_summaries(cleaned_commits)
