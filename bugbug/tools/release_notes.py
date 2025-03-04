@@ -4,7 +4,6 @@ import re
 
 import requests
 import tiktoken
-from bs4 import BeautifulSoup
 from openai import OpenAI
 
 MODEL = "gpt-4o"
@@ -188,21 +187,23 @@ Instructions:
         self.output_file = f"version_summary_{self.version2}.txt"
 
         logger.info(f"Generating list of commits for version: {self.version2}")
-        url = f"https://hg.mozilla.org/releases/mozilla-release/pushloghtml?fromchange={self.version1}&tochange={self.version2}"
+        url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
         changes_output = ""
-
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
-            commit_entries = soup.find_all("tr", class_="pushlogentry")
-            commits = [
-                (
-                    entry.find_all("td")[1].text.strip(),
-                    entry.find_all("td")[2].get_text(separator=" ", strip=True),
-                )
-                for entry in commit_entries
-            ]
-            changes_output = "\n".join(commit[1] for commit in commits)
+            data = response.json()
+            commit_descriptions = []
+
+            for push_id in data:
+                push_data = data[push_id]
+                changesets = push_data.get("changesets", [])
+
+                for changeset in changesets:
+                    desc = changeset.get("desc", "").strip()
+                    if desc:
+                        commit_descriptions.append(desc)
+
+            changes_output = "\n".join(commit_descriptions)
         else:
             logger.error(
                 f"Failed to retrieve the webpage. Status code: {response.status_code}"
@@ -222,6 +223,7 @@ Instructions:
             "disable test",
         ]
         cleaned_commits = self.clean_commits(changes_output, keywords_to_remove)
+        print(f"CLEANED COMMITS: {cleaned_commits}")
 
         logger.info("Generating summaries for cleaned commits...")
         summaries = self.generate_summaries(cleaned_commits)
