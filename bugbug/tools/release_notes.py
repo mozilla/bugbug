@@ -180,8 +180,7 @@ Instructions:
         data = response.json()
         commit_log_list = []
 
-        for push_id in data:
-            push_data = data[push_id]
+        for push_data in data.values():
             changesets = push_data["changesets"]
 
             for changeset in changesets:
