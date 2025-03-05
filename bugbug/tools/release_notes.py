@@ -31,7 +31,7 @@ class ReleaseNotesGenerator:
         return len(encoding.encode(text))
 
     def split_into_chunks(self, commit_log):
-        commit_blocks = commit_log.split("\n\n")
+        commit_blocks = commit_log.split("\n")
         chunks = []
         current_chunk = []
         current_token_count = 0
@@ -96,26 +96,22 @@ We should exclude this change because it contains technical jargon that is uncle
    - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
    - Do not include the words "CSV" or any headers—just the data.
 """
-        try:
-            response = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model=MODEL,
-                temperature=0.1,
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Error calling OpenAI API: {e}")
-            return "Error: Unable to generate summary."
+        response = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model=MODEL,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
 
-    def generate_summaries(self, commit_log):
-        chunks = self.split_into_chunks(commit_log)
+    def generate_summaries(self, commit_log_list):
+        commit_log_list_combined = "\n".join(commit_log_list)
+        chunks = self.split_into_chunks(commit_log_list_combined)
         return [self.summarize_with_gpt(chunk) for chunk in chunks]
 
-    def clean_commits(self, commit_log, keywords):
+    def clean_commits(self, commit_log_list, keywords):
         cleaned_commits = []
-        commit_blocks = commit_log.split("\n")
 
-        for block in commit_blocks:
+        for block in commit_log_list:
             if (
                 not any(
                     re.search(rf"\b{keyword}\b", block, re.IGNORECASE)
@@ -138,9 +134,10 @@ We should exclude this change because it contains technical jargon that is uncle
                 commit_summary = block
                 cleaned_commits.append(commit_summary)
 
-        return "\n\n".join(cleaned_commits)
+        return cleaned_commits
 
-    def remove_unworthy_commits(self, input_text):
+    def remove_unworthy_commits(self, summaries):
+        combined_list = "\n".join(summaries)
         prompt = f"""Review the following list of release notes and remove anything that is not worthy of official release notes. Keep only changes that are meaningful, impactful, and directly relevant to end users, such as:
 - New features that users will notice and interact with.
 - Significant fixes that resolve major user-facing issues.
@@ -157,7 +154,7 @@ Strict Filtering Criteria - REMOVE the following:
 - Duplicate entries or similar changes that were already listed.
 
 Here is the list to filter:
-{input_text}
+{combined_list}
 
 Instructions:
 - KEEP THE SAME FORMAT (do not change the structure of entries that remain).
@@ -189,11 +186,10 @@ Instructions:
         logger.info(f"Generating list of commits for version: {self.version2}")
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
-        changes_output = ""
         response.raise_for_status()
 
         data = response.json()
-        commit_descriptions = []
+        commit_log_list = []
 
         for push_id in data:
             push_data = data[push_id]
@@ -202,11 +198,9 @@ Instructions:
             for changeset in changesets:
                 desc = changeset["desc"].strip()
                 if desc:
-                    commit_descriptions.append(desc)
+                    commit_log_list.append(desc)
 
-        changes_output = "\n".join(commit_descriptions)
-
-        if not changes_output:
+        if not commit_log_list:
             logger.error("No changes found.")
             return
 
@@ -218,16 +212,12 @@ Instructions:
             "add tests",
             "disable test",
         ]
-        cleaned_commits = self.clean_commits(changes_output, keywords_to_remove)
+        cleaned_commits = self.clean_commits(commit_log_list, keywords_to_remove)
 
         logger.info("Generating summaries for cleaned commits...")
-        summaries = self.generate_summaries(cleaned_commits)
-        combined_list = "\n".join(summaries)
+        summaries_list = self.generate_summaries(cleaned_commits)
 
         logger.info("Removing unworthy commits from the list...")
-        combined_list = self.remove_unworthy_commits(combined_list)
+        combined_list = self.remove_unworthy_commits(summaries_list)
 
-        with open(self.output_file, "w") as file:
-            file.write(combined_list)
-
-        logger.info(f"Worthy commits saved to {self.output_file}")
+        print(combined_list)
