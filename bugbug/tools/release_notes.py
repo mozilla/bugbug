@@ -4,9 +4,9 @@ import re
 
 import requests
 import tiktoken
+from langchain.schema import HumanMessage
+from langchain_openai import ChatOpenAI
 from openai import OpenAI
-
-MODEL = "gpt-4o"
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -15,8 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class ReleaseNotesGenerator:
-    def __init__(self, chunk_size=10000):
+    def __init__(self, chunk_size=10000, model="gpt-4o"):
+        self.model = model
         self.chunk_size = chunk_size
+        self.llm = ChatOpenAI(
+            model=model,
+            temperature=0.1,
+            openai_api_key=os.environ.get("OPENAI_API_KEY"),
+        )
 
     def get_previous_version(self, current_version):
         match = re.match(r"(FIREFOX_BETA_)(\d+)(_BASE)", current_version)
@@ -27,7 +33,7 @@ class ReleaseNotesGenerator:
         return f"{prefix}{previous_version_number}{suffix}"
 
     def get_token_count(self, text):
-        encoding = tiktoken.encoding_for_model(MODEL)
+        encoding = tiktoken.encoding_for_model(self.model)
         return len(encoding.encode(text))
 
     def split_into_chunks(self, commit_log):
@@ -96,12 +102,8 @@ We should exclude this change because it contains technical jargon that is uncle
    - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
    - Do not include the words "CSV" or any headers—just the data.
 """
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=MODEL,
-            temperature=0.1,
-        )
-        return response.choices[0].message.content.strip()
+        response = self.llm.invoke([HumanMessage(content=prompt)])
+        return response.content.strip()
 
     def generate_summaries(self, commit_log_list):
         commit_log_list_combined = "\n".join(commit_log_list)
@@ -162,21 +164,8 @@ Instructions:
 - DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.
 - The output must be only the cleaned-up list, formatted exactly the same way.
 """
-        try:
-            response = client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-                model=MODEL,
-                temperature=0.1,
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Error while calling OpenAI API: {e}")
-            return "Error: Unable to remove unworthy commits."
+        response = self.llm.invoke([HumanMessage(content=prompt)])
+        return response.content.strip()
 
     def generate_worthy_commits(self, version):
         self.version2 = version

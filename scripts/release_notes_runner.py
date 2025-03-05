@@ -13,12 +13,13 @@ def main():
     parser.add_argument(
         "--chunk-size", type=int, default=10000, help="Chunk size for token processing"
     )
+    parser.add_argument(
+        "--model", default="gpt-4o", help="Model to use for summarization"
+    )
 
     args = parser.parse_args()
 
-    generator = ReleaseNotesGenerator(
-        chunk_size=args.chunk_size,
-    )
+    generator = ReleaseNotesGenerator(chunk_size=args.chunk_size, model=args.model)
     generator.generate_worthy_commits(version=args.version)
 
 
