@@ -5,6 +5,7 @@
 
 import io
 import json
+import logging
 import re
 from typing import Iterable, Literal
 
@@ -19,6 +20,9 @@ from bugbug.code_search.function_search import (
     register_function_search,
 )
 from bugbug.repository import SOURCE_CODE_TYPES_TO_EXT
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_line_number(elements: Iterable[HtmlElement], position: Literal["start", "end"]):
@@ -43,6 +47,10 @@ def get_functions(commit_hash, path, symbol_name=None):
             "User-Agent": utils.get_user_agent(),
         },
     )
+    if r.status_code == 404:
+        logger.warning("File %s not found.", path)
+        return []
+
     r.raise_for_status()
 
     # TODO: this simplification depends on https://github.com/scrapy/cssselect/issues/139.
