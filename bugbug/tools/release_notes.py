@@ -4,8 +4,8 @@ import re
 
 import requests
 import tiktoken
-from langchain.schema import HumanMessage
-from langchain_openai import ChatOpenAI
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 from openai import OpenAI
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -15,13 +15,87 @@ logger = logging.getLogger(__name__)
 
 
 class ReleaseNotesGenerator:
-    def __init__(self, chunk_size=10000, model="gpt-4o"):
-        self.model = model
+    def __init__(self, chunk_size, llm):
         self.chunk_size = chunk_size
-        self.llm = ChatOpenAI(
-            model=model,
-            temperature=0.1,
-            openai_api_key=os.environ.get("OPENAI_API_KEY"),
+        self.llm = llm
+        self.summarization_prompt = PromptTemplate(
+            input_variables=["input_text"],
+            template="""You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
+
+1. Must Include Only Meaningful Changes:
+   - Only keep commits that significantly impact users and are strictly user-facing, such as:
+     - New features
+     - UI changes
+     - Major performance improvements
+     - Security patches (if user-facing)
+     - Web platform changes that affect how websites behave
+   - DO NOT include:
+     - Small bug fixes unless critical
+     - Internal code refactoring
+     - Test changes or documentation updates
+     - Developer tooling or CI/CD pipeline changes
+Again, only include changes that are STRICTLY USER-FACING.
+
+2. Output Format:
+   - Use simple, non-technical language suitable for release notes.
+   - Use the following strict format for each relevant commit, in CSV FORMAT:
+[Type of Change],Description of the change,Bug XXXX,Reason why the change is impactful for end users
+   - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
+
+3. Be Aggressive in Filtering:
+    - If you're unsure whether a commit impacts end users, EXCLUDE it.
+    - Do not list developer-focused changes.
+
+4. Select Only the Top 10 Commits:
+    - If there are more than 10 relevant commits, choose the most impactful ones.
+
+5. Input:
+   Here is the chunk of commit logs you need to focus on:
+   {input_text}
+
+6. Output Requirements:
+   - Output must be raw CSV text—no formatting, no extra text.
+   - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
+   - Do not include the words "CSV" or any headers—just the data.
+""",
+        )
+
+        self.summarization_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.summarization_prompt,
+        )
+
+        self.cleanup_prompt = PromptTemplate(
+            input_variables=["combined_list"],
+            template="""Review the following list of release notes and remove anything that is not worthy of official release notes. Keep only changes that are meaningful, impactful, and directly relevant to end users, such as:
+- New features that users will notice and interact with.
+- Significant fixes that resolve major user-facing issues.
+- Performance improvements that make a clear difference in speed or responsiveness.
+- Accessibility enhancements that improve usability for a broad set of users.
+- Critical security updates that protect users from vulnerabilities.
+
+Strict Filtering Criteria - REMOVE the following:
+- Overly technical web platform changes (e.g., spec compliance tweaks, behind-the-scenes API adjustments).
+- Developer-facing features that have no direct user impact.
+- Minor UI refinements (e.g., button width adjustments, small animation tweaks).
+- Bug fixes that don’t impact most users.
+- Obscure web compatibility changes that apply only to edge-case websites.
+- Duplicate entries or similar changes that were already listed.
+
+Here is the list to filter:
+{combined_list}
+
+Instructions:
+- KEEP THE SAME FORMAT (do not change the structure of entries that remain).
+- REMOVE UNWORTHY ENTRIES ENTIRELY (do not rewrite them—just delete).
+- DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.
+- The output must be only the cleaned-up list, formatted exactly the same way.
+""",
+        )
+
+        self.cleanup_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.cleanup_prompt,
         )
 
     def get_previous_version(self, current_version):
@@ -33,7 +107,12 @@ class ReleaseNotesGenerator:
         return f"{prefix}{previous_version_number}{suffix}"
 
     def get_token_count(self, text):
-        encoding = tiktoken.encoding_for_model(self.model)
+        if hasattr(self.llm, "model_name"):
+            model_name = self.llm.model_name
+        else:
+            raise ValueError("LLM model name not found.")
+
+        encoding = tiktoken.encoding_for_model(model_name)
         return len(encoding.encode(text))
 
     def split_into_chunks(self, commit_log):
@@ -59,51 +138,7 @@ class ReleaseNotesGenerator:
         return chunks
 
     def summarize_with_gpt(self, input_text):
-        prompt = f"""
-You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
-
-1. Must Include Only Meaningful Changes:
-   - Only keep commits that significantly impact users and are strictly user-facing, such as:
-     - New features
-     - UI changes
-     - Major performance improvements
-     - Security patches (if user-facing)
-     - Web platform changes that affect how websites behave
-   - DO NOT include:
-     - Small bug fixes unless critical
-     - Internal code refactoring
-     - Test changes or documentation updates
-     - Developer tooling or CI/CD pipeline changes
-Again, only include changes that are STRICTLY USER-FACING.
-
-2. Output Format:
-   - Use simple, non-technical language suitable for release notes.
-   - Use the following strict format for each relevant commit, in CSV FORMAT:
-[Type of Change],Description of the change,Bug XXXX,Reason why the change is impactful for end users
-   - Possible types of change: [Feature], [Fix], [Performance], [Security], [UI], [DevTools], [Web Platform], etc.
-
-3. Bad Example (DO NOT FOLLOW):
-[Feature],Enable async FlushRendering during resizing window if Windows DirectComposition is used,Bug 1922721,Improves performance and responsiveness when resizing windows on systems using Windows DirectComposition.
-We should exclude this change because it contains technical jargon that is unclear to general users, making it difficult to understand. Additionally, the impact is limited to a specific subset of Windows users with DirectComposition enabled, and the improvement is not significant enough to be noteworthy in the release notes.
-
-4. Be Aggressive in Filtering:
-    - If you're unsure whether a commit impacts end users, EXCLUDE it.
-    - Do not list developer-focused changes.
-
-5. Select Only the Top 10 Commits:
-    - If there are more than 10 relevant commits, choose the most impactful ones.
-
-6. Input:
-   Here is the chunk of commit logs you need to focus on:
-   {input_text}
-
-7. Output Requirements:
-   - Output must be raw CSV text—no formatting, no extra text.
-   - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
-   - Do not include the words "CSV" or any headers—just the data.
-"""
-        response = self.llm.invoke([HumanMessage(content=prompt)])
-        return response.content.strip()
+        return self.summarization_chain.run({"input_text": input_text}).strip()
 
     def generate_summaries(self, commit_log_list):
         commit_log_list_combined = "\n".join(commit_log_list)
@@ -140,32 +175,7 @@ We should exclude this change because it contains technical jargon that is uncle
 
     def remove_unworthy_commits(self, summaries):
         combined_list = "\n".join(summaries)
-        prompt = f"""Review the following list of release notes and remove anything that is not worthy of official release notes. Keep only changes that are meaningful, impactful, and directly relevant to end users, such as:
-- New features that users will notice and interact with.
-- Significant fixes that resolve major user-facing issues.
-- Performance improvements that make a clear difference in speed or responsiveness.
-- Accessibility enhancements that improve usability for a broad set of users.
-- Critical security updates that protect users from vulnerabilities.
-
-Strict Filtering Criteria - REMOVE the following:
-- Overly technical web platform changes (e.g., spec compliance tweaks, behind-the-scenes API adjustments).
-- Developer-facing features that have no direct user impact.
-- Minor UI refinements (e.g., button width adjustments, small animation tweaks).
-- Bug fixes that don’t impact most users.
-- Obscure web compatibility changes that apply only to edge-case websites.
-- Duplicate entries or similar changes that were already listed.
-
-Here is the list to filter:
-{combined_list}
-
-Instructions:
-- KEEP THE SAME FORMAT (do not change the structure of entries that remain).
-- REMOVE UNWORTHY ENTRIES ENTIRELY (do not rewrite them—just delete).
-- DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.
-- The output must be only the cleaned-up list, formatted exactly the same way.
-"""
-        response = self.llm.invoke([HumanMessage(content=prompt)])
-        return response.content.strip()
+        return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
     def generate_worthy_commits(self, version):
         self.version2 = version
@@ -208,4 +218,4 @@ Instructions:
         logger.info("Removing unworthy commits from the list...")
         combined_list = self.remove_unworthy_commits(summaries_list)
 
-        print(combined_list)
+        return combined_list
