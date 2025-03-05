@@ -43,6 +43,10 @@ def get_functions(commit_hash, path, symbol_name=None):
             "User-Agent": utils.get_user_agent(),
         },
     )
+    if r.status_code == 404:
+        logger.warning("File %s not found.", path)
+        return []
+
     r.raise_for_status()
 
     # TODO: this simplification depends on https://github.com/scrapy/cssselect/issues/139.
