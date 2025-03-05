@@ -190,25 +190,21 @@ Instructions:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
         changes_output = ""
-        if response.status_code == 200:
-            data = response.json()
-            commit_descriptions = []
+        response.raise_for_status()
 
-            for push_id in data:
-                push_data = data[push_id]
-                changesets = push_data.get("changesets", [])
+        data = response.json()
+        commit_descriptions = []
 
-                for changeset in changesets:
-                    desc = changeset.get("desc", "").strip()
-                    if desc:
-                        commit_descriptions.append(desc)
+        for push_id in data:
+            push_data = data[push_id]
+            changesets = push_data["changesets"]
 
-            changes_output = "\n".join(commit_descriptions)
-        else:
-            logger.error(
-                f"Failed to retrieve the webpage. Status code: {response.status_code}"
-            )
-            return
+            for changeset in changesets:
+                desc = changeset["desc"].strip()
+                if desc:
+                    commit_descriptions.append(desc)
+
+        changes_output = "\n".join(commit_descriptions)
 
         if not changes_output:
             logger.error("No changes found.")
@@ -223,7 +219,6 @@ Instructions:
             "disable test",
         ]
         cleaned_commits = self.clean_commits(changes_output, keywords_to_remove)
-        print(f"CLEANED COMMITS: {cleaned_commits}")
 
         logger.info("Generating summaries for cleaned commits...")
         summaries = self.generate_summaries(cleaned_commits)
