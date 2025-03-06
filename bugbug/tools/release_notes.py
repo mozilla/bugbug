@@ -1,9 +1,9 @@
 import logging
 import re
+from itertools import batched
 from typing import Optional
 
 import requests
-import tiktoken
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -103,34 +103,12 @@ Instructions:
         previous_version_number = int(version_number) - 1
         return f"{prefix}{previous_version_number}{suffix}"
 
-    def get_token_count(self, text: str) -> int:
-        if hasattr(self.llm, "model_name"):
-            model_name = self.llm.model_name
-        else:
-            raise ValueError("LLM model name not found.")
-
-        encoding = tiktoken.encoding_for_model(model_name)
-        return len(encoding.encode(text))
-
     def split_into_chunks(self, commit_log: str) -> list[str]:
-        commit_blocks = commit_log.split("\n")
+        lines = commit_log.strip().split("\n")
         chunks = []
-        current_chunk: list[str] = []
-        current_token_count = 0
 
-        for block in commit_blocks:
-            block_token_count = self.get_token_count(block)
-
-            if current_token_count + block_token_count > self.chunk_size:
-                chunks.append("\n\n".join(current_chunk))
-                current_chunk = []
-                current_token_count = 0
-
-            current_chunk.append(block)
-            current_token_count += block_token_count
-
-        if current_chunk:
-            chunks.append("\n\n".join(current_chunk))
+        for batch in batched(lines, self.chunk_size):
+            chunks.append("\n".join(batch))
 
         return chunks
 
