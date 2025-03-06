@@ -4,7 +4,7 @@ import os
 
 from langchain_openai import ChatOpenAI
 
-from bugbug.tools.release_notes import ReleaseNotesGenerator
+from bugbug.tools.release_notes import ReleaseNotesCommitsSelector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,8 +32,8 @@ def main():
     else:
         raise ValueError(f"Unsupported LLM provider: {args.llm}")
 
-    generator = ReleaseNotesGenerator(chunk_size=args.chunk_size, llm=llm)
-    results = generator.generate_worthy_commits(version=args.version)
+    selector = ReleaseNotesCommitsSelector(chunk_size=args.chunk_size, llm=llm)
+    results = selector.select_worthy_commits(version=args.version)
     print(results)
 
 

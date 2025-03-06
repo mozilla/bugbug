@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class ReleaseNotesGenerator:
+class ReleaseNotesCommitsSelector:
     def __init__(self, chunk_size, llm):
         self.chunk_size = chunk_size
         self.llm = llm
@@ -137,13 +137,13 @@ Instructions:
 
         return chunks
 
-    def summarize_with_gpt(self, input_text):
+    def shortlist_with_gpt(self, input_text):
         return self.summarization_chain.run({"input_text": input_text}).strip()
 
-    def generate_summaries(self, commit_log_list):
+    def generate_commit_shortlist(self, commit_log_list):
         commit_log_list_combined = "\n".join(commit_log_list)
         chunks = self.split_into_chunks(commit_log_list_combined)
-        return [self.summarize_with_gpt(chunk) for chunk in chunks]
+        return [self.shortlist_with_gpt(chunk) for chunk in chunks]
 
     def clean_commits(self, commit_log_list, keywords):
         cleaned_commits = []
@@ -177,7 +177,7 @@ Instructions:
         combined_list = "\n".join(summaries)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
-    def generate_worthy_commits(self, version):
+    def select_worthy_commits(self, version):
         self.version2 = version
         self.version1 = self.get_previous_version(version)
         self.output_file = f"version_summary_{self.version2}.txt"
@@ -199,7 +199,6 @@ Instructions:
                     commit_log_list.append(desc)
 
         if not commit_log_list:
-            logger.error("No changes found.")
             return
 
         logger.info("Cleaning commit log...")
@@ -213,7 +212,7 @@ Instructions:
         cleaned_commits = self.clean_commits(commit_log_list, keywords_to_remove)
 
         logger.info("Generating summaries for cleaned commits...")
-        summaries_list = self.generate_summaries(cleaned_commits)
+        summaries_list = self.generate_commit_shortlist(cleaned_commits)
 
         logger.info("Removing unworthy commits from the list...")
         combined_list = self.remove_unworthy_commits(summaries_list)
