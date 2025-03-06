@@ -33,7 +33,7 @@ def main():
         raise ValueError(f"Unsupported LLM provider: {args.llm}")
 
     selector = ReleaseNotesCommitsSelector(chunk_size=args.chunk_size, llm=llm)
-    results = selector.select_worthy_commits(version=args.version)
+    results = selector.get_final_release_notes_commits(version=args.version)
     print(results)
 
 

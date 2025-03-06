@@ -7,6 +7,14 @@ import requests
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
+KEYWORDS_TO_REMOVE = [
+    "Backed out",
+    "a=testonly",
+    "DONTBUILD",
+    "add tests",
+    "disable test",
+]
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -103,7 +111,7 @@ Instructions:
         previous_version_number = int(version_number) - 1
         return f"{prefix}{previous_version_number}{suffix}"
 
-    def split_into_chunks(self, commit_log: str) -> list[str]:
+    def batch_commit_logs(self, commit_log: str) -> list[str]:
         lines = commit_log.strip().split("\n")
         chunks = []
 
@@ -117,29 +125,24 @@ Instructions:
 
     def generate_commit_shortlist(self, commit_log_list: list[str]) -> list[str]:
         commit_log_list_combined = "\n".join(commit_log_list)
-        chunks = self.split_into_chunks(commit_log_list_combined)
+        chunks = self.batch_commit_logs(commit_log_list_combined)
         return [self.shortlist_with_gpt(chunk) for chunk in chunks]
 
-    def clean_commits(
-        self, commit_log_list: list[str], keywords: list[str]
-    ) -> list[str]:
+    def filter_irrelevant_commits(self, commit_log_list: list[str]) -> list[str]:
         cleaned_commits = []
 
         for block in commit_log_list:
             if (
                 not any(
                     re.search(rf"\b{keyword}\b", block, re.IGNORECASE)
-                    for keyword in keywords
+                    for keyword in KEYWORDS_TO_REMOVE
                 )
+                and re.search(r"Bug \d+", block, re.IGNORECASE)
                 and not re.search(
                     r"release\+treescript@mozilla\.org", block, re.IGNORECASE
                 )
                 and not re.search(r"nightly", block, re.IGNORECASE)
             ):
-                bug_id_match = re.search(r"Bug (\d+)", block, re.IGNORECASE)
-                if not bug_id_match:
-                    continue
-
                 bug_position = re.search(r"Bug \d+.*", block, re.IGNORECASE)
                 if bug_position:
                     block = bug_position.group(0)
@@ -149,14 +152,13 @@ Instructions:
 
         return cleaned_commits
 
-    def remove_unworthy_commits(self, summaries: list[str]) -> str:
+    def refine_commit_shortlist(self, summaries: list[str]) -> str:
         combined_list = "\n".join(summaries)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
-    def select_worthy_commits(self, version: str) -> Optional[str]:
+    def get_final_release_notes_commits(self, version: str) -> Optional[str]:
         self.version2 = version
         self.version1 = self.get_previous_version(version)
-        self.output_file = f"version_summary_{self.version2}.txt"
 
         logger.info(f"Generating list of commits for version: {self.version2}")
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
@@ -178,17 +180,10 @@ Instructions:
             return None
 
         logger.info("Cleaning commit log...")
-        keywords_to_remove = [
-            "Backed out",
-            "a=testonly",
-            "DONTBUILD",
-            "add tests",
-            "disable test",
-        ]
-        cleaned_commits = self.clean_commits(commit_log_list, keywords_to_remove)
+        cleaned_commits = self.filter_irrelevant_commits(commit_log_list)
 
         logger.info("Generating summaries for cleaned commits...")
         summaries_list = self.generate_commit_shortlist(cleaned_commits)
 
         logger.info("Removing unworthy commits from the list...")
-        return self.remove_unworthy_commits(summaries_list)
+        return self.refine_commit_shortlist(summaries_list)
