@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate Firefox release notes.")
     parser.add_argument("--version", required=True, help="Target version identifier")
     parser.add_argument(
-        "--chunk-size", type=int, default=10000, help="Chunk size for token processing"
+        "--chunk-size", type=int, default=100, help="Number of commits per chunk"
     )
     parser.add_argument(
         "--llm", default="openai-gpt-4o", help="Model to use for summarization"
