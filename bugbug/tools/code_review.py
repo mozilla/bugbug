@@ -45,6 +45,8 @@ class InlineComment:
     date_created: int | None = None
     date_modified: int | None = None
     is_done: bool | None = None
+    hunk_start_line: int | None = None
+    hunk_end_line: int | None = None
 
 
 class ModelResultError(Exception):
@@ -1042,8 +1044,10 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
                 if scope["has_added_lines"]
                 else patched_file.source_file[2:]
             ),
-            start_line=scope["line_start"],
-            end_line=scope["line_end"],
+            start_line=line_number,
+            end_line=line_number,
+            hunk_start_line=scope["line_start"],
+            hunk_end_line=scope["line_end"],
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
         )
