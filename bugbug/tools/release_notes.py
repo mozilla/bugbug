@@ -112,13 +112,10 @@ Instructions:
         return f"{prefix}{previous_version_number}{suffix}"
 
     def batch_commit_logs(self, commit_log: str) -> list[str]:
-        lines = commit_log.strip().split("\n")
-        chunks = []
-
-        for batch in batched(lines, self.chunk_size):
-            chunks.append("\n".join(batch))
-
-        return chunks
+        return [
+            "\n".join(batch)
+            for batch in batched(commit_log.strip().split("\n"), self.chunk_size)
+        ]
 
     def shortlist_with_gpt(self, input_text: str) -> str:
         return self.summarization_chain.run({"input_text": input_text}).strip()
@@ -156,34 +153,42 @@ Instructions:
         combined_list = "\n".join(summaries)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
-    def get_final_release_notes_commits(self, version: str) -> Optional[str]:
-        self.version2 = version
-        self.version1 = self.get_previous_version(version)
-
-        logger.info(f"Generating list of commits for version: {self.version2}")
+    def get_commit_logs(self, version: str) -> Optional[list[str]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
         response.raise_for_status()
 
         data = response.json()
-        commit_log_list = []
+        commit_log_list = [
+            changeset["desc"].strip()
+            for push_data in data.values()
+            for changeset in push_data["changesets"]
+            if "desc" in changeset and changeset["desc"].strip()
+        ]
 
-        for push_data in data.values():
-            changesets = push_data["changesets"]
+        return commit_log_list if commit_log_list else None
 
-            for changeset in changesets:
-                desc = changeset["desc"].strip()
-                if desc:
-                    commit_log_list.append(desc)
+    def get_final_release_notes_commits(self, version: str) -> Optional[str]:
+        self.version2 = version
+        self.version1 = self.get_previous_version(version)
+
+        logger.info(f"Generating commit shortlist for: {self.version2}")
+        commit_log_list = self.get_commit_logs(version)
 
         if not commit_log_list:
             return None
 
-        logger.info("Cleaning commit log...")
-        cleaned_commits = self.filter_irrelevant_commits(commit_log_list)
+        logger.info("Filtering irrelevant commits...")
+        filtered_commits = self.filter_irrelevant_commits(commit_log_list)
 
-        logger.info("Generating summaries for cleaned commits...")
-        summaries_list = self.generate_commit_shortlist(cleaned_commits)
+        if not filtered_commits:
+            return None
 
-        logger.info("Removing unworthy commits from the list...")
-        return self.refine_commit_shortlist(summaries_list)
+        logger.info("Generating commit shortlist...")
+        commit_shortlist = self.generate_commit_shortlist(filtered_commits)
+
+        if not commit_shortlist:
+            return None
+
+        logger.info("Refining commit shortlistt...")
+        return self.refine_commit_shortlist(commit_shortlist)
