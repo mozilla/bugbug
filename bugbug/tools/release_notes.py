@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List, Optional
+from typing import Optional
 
 import requests
 import tiktoken
@@ -112,10 +112,10 @@ Instructions:
         encoding = tiktoken.encoding_for_model(model_name)
         return len(encoding.encode(text))
 
-    def split_into_chunks(self, commit_log: str) -> List[str]:
+    def split_into_chunks(self, commit_log: str) -> list[str]:
         commit_blocks = commit_log.split("\n")
         chunks = []
-        current_chunk: List[str] = []
+        current_chunk: list[str] = []
         current_token_count = 0
 
         for block in commit_blocks:
@@ -137,14 +137,14 @@ Instructions:
     def shortlist_with_gpt(self, input_text: str) -> str:
         return self.summarization_chain.run({"input_text": input_text}).strip()
 
-    def generate_commit_shortlist(self, commit_log_list: List[str]) -> List[str]:
+    def generate_commit_shortlist(self, commit_log_list: list[str]) -> list[str]:
         commit_log_list_combined = "\n".join(commit_log_list)
         chunks = self.split_into_chunks(commit_log_list_combined)
         return [self.shortlist_with_gpt(chunk) for chunk in chunks]
 
     def clean_commits(
-        self, commit_log_list: List[str], keywords: List[str]
-    ) -> List[str]:
+        self, commit_log_list: list[str], keywords: list[str]
+    ) -> list[str]:
         cleaned_commits = []
 
         for block in commit_log_list:
@@ -172,7 +172,7 @@ Instructions:
 
         return cleaned_commits
 
-    def remove_unworthy_commits(self, summaries: List[str]) -> str:
+    def remove_unworthy_commits(self, summaries: list[str]) -> str:
         combined_list = "\n".join(summaries)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
