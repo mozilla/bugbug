@@ -153,7 +153,6 @@ Instructions:
                     re.search(rf"\b{keyword}\b", block, re.IGNORECASE)
                     for keyword in keywords
                 )
-                and re.search(r"Bug \d+", block, re.IGNORECASE)
                 and not re.search(
                     r"release\+treescript@mozilla\.org", block, re.IGNORECASE
                 )
