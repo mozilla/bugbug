@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 from typing import List, Optional
 
@@ -7,9 +6,6 @@ import requests
 import tiktoken
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from openai import OpenAI
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
