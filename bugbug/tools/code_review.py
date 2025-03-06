@@ -1042,8 +1042,11 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
                 if scope["has_added_lines"]
                 else patched_file.source_file[2:]
             ),
-            start_line=scope["line_start"],
-            end_line=scope["line_end"],
+            # Note(suhaib): We were previously using the hunk's scope instead of
+            # the line number returned by the model. This was changed to reduce
+            # confusion: https://github.com/mozilla/bugbug/issues/4643
+            start_line=line_number,
+            end_line=line_number,
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
         )
