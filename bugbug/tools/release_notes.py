@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from typing import List, Optional
 
 import requests
 import tiktoken
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReleaseNotesCommitsSelector:
-    def __init__(self, chunk_size, llm):
+    def __init__(self, chunk_size: int, llm: LLMChain):
         self.chunk_size = chunk_size
         self.llm = llm
         self.summarization_prompt = PromptTemplate(
@@ -98,7 +99,7 @@ Instructions:
             prompt=self.cleanup_prompt,
         )
 
-    def get_previous_version(self, current_version):
+    def get_previous_version(self, current_version: str) -> str:
         match = re.match(r"(FIREFOX_BETA_)(\d+)(_BASE)", current_version)
         if not match:
             raise ValueError("Invalid version format")
@@ -106,7 +107,7 @@ Instructions:
         previous_version_number = int(version_number) - 1
         return f"{prefix}{previous_version_number}{suffix}"
 
-    def get_token_count(self, text):
+    def get_token_count(self, text: str) -> int:
         if hasattr(self.llm, "model_name"):
             model_name = self.llm.model_name
         else:
@@ -115,10 +116,10 @@ Instructions:
         encoding = tiktoken.encoding_for_model(model_name)
         return len(encoding.encode(text))
 
-    def split_into_chunks(self, commit_log):
+    def split_into_chunks(self, commit_log: str) -> List[str]:
         commit_blocks = commit_log.split("\n")
         chunks = []
-        current_chunk = []
+        current_chunk: List[str] = []
         current_token_count = 0
 
         for block in commit_blocks:
@@ -137,15 +138,17 @@ Instructions:
 
         return chunks
 
-    def shortlist_with_gpt(self, input_text):
+    def shortlist_with_gpt(self, input_text: str) -> str:
         return self.summarization_chain.run({"input_text": input_text}).strip()
 
-    def generate_commit_shortlist(self, commit_log_list):
+    def generate_commit_shortlist(self, commit_log_list: List[str]) -> List[str]:
         commit_log_list_combined = "\n".join(commit_log_list)
         chunks = self.split_into_chunks(commit_log_list_combined)
         return [self.shortlist_with_gpt(chunk) for chunk in chunks]
 
-    def clean_commits(self, commit_log_list, keywords):
+    def clean_commits(
+        self, commit_log_list: List[str], keywords: List[str]
+    ) -> List[str]:
         cleaned_commits = []
 
         for block in commit_log_list:
@@ -173,11 +176,11 @@ Instructions:
 
         return cleaned_commits
 
-    def remove_unworthy_commits(self, summaries):
+    def remove_unworthy_commits(self, summaries: List[str]) -> str:
         combined_list = "\n".join(summaries)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
-    def select_worthy_commits(self, version):
+    def select_worthy_commits(self, version: str) -> Optional[str]:
         self.version2 = version
         self.version1 = self.get_previous_version(version)
         self.output_file = f"version_summary_{self.version2}.txt"
@@ -199,7 +202,7 @@ Instructions:
                     commit_log_list.append(desc)
 
         if not commit_log_list:
-            return
+            return None
 
         logger.info("Cleaning commit log...")
         keywords_to_remove = [
@@ -215,6 +218,4 @@ Instructions:
         summaries_list = self.generate_commit_shortlist(cleaned_commits)
 
         logger.info("Removing unworthy commits from the list...")
-        combined_list = self.remove_unworthy_commits(summaries_list)
-
-        return combined_list
+        return self.remove_unworthy_commits(summaries_list)
