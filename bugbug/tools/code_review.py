@@ -11,6 +11,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import cached_property
+from itertools import chain
 from logging import INFO, basicConfig, getLogger
 from typing import Iterable, Literal, Optional
 
@@ -691,25 +692,37 @@ review_data_classes = {
 
 
 def find_comment_scope(file: PatchedFile, line_number: int):
-    for hunk in file:
-        if hunk.target_start <= line_number <= hunk.target_start + hunk.target_length:
-            has_added_lines = any(line.is_added for line in hunk)
-            has_deleted_lines = any(line.is_removed for line in hunk)
+    hunks_based_on_added = (
+        hunk
+        for hunk in file
+        if hunk.target_start <= line_number <= hunk.target_start + hunk.target_length
+    )
+    hunks_based_on_deleted = (
+        hunk
+        for hunk in file
+        if hunk.source_start <= line_number <= hunk.source_start + hunk.source_length
+    )
 
-            if has_added_lines and has_deleted_lines:
-                first_line, last_line = find_mixed_lines_range(hunk)
-            elif has_added_lines:
-                first_line, last_line = find_added_lines_range(hunk)
-            else:
-                first_line, last_line = find_removed_lines_range(hunk)
+    try:
+        hunk = next(chain(hunks_based_on_added, hunks_based_on_deleted))
+    except StopIteration as e:
+        raise HunkNotInPatchError("Line number not found in the patch") from e
 
-            return {
-                "line_start": first_line,
-                "line_end": last_line,
-                "has_added_lines": has_added_lines,
-            }
+    has_added_lines = any(line.is_added for line in hunk)
+    has_deleted_lines = any(line.is_removed for line in hunk)
 
-    raise HunkNotInPatchError("Line number not found in the patch")
+    if has_added_lines and has_deleted_lines:
+        first_line, last_line = find_mixed_lines_range(hunk)
+    elif has_added_lines:
+        first_line, last_line = find_added_lines_range(hunk)
+    else:
+        first_line, last_line = find_removed_lines_range(hunk)
+
+    return {
+        "line_start": first_line,
+        "line_end": last_line,
+        "has_added_lines": has_added_lines,
+    }
 
 
 def find_added_lines_range(hunk: Hunk):
