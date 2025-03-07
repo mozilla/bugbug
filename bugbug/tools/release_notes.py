@@ -1,7 +1,7 @@
 import logging
 import re
 from itertools import batched
-from typing import Optional
+from typing import Generator, Optional
 
 import requests
 from langchain.chains import LLMChain
@@ -125,9 +125,9 @@ Instructions:
         chunks = self.batch_commit_logs(commit_log_list_combined)
         return [self.shortlist_with_gpt(chunk) for chunk in chunks]
 
-    def filter_irrelevant_commits(self, commit_log_list: list[str]) -> list[str]:
-        cleaned_commits = []
-
+    def filter_irrelevant_commits(
+        self, commit_log_list: list[str]
+    ) -> Generator[str, None, None]:
         for block in commit_log_list:
             if (
                 not any(
@@ -145,9 +145,7 @@ Instructions:
                     block = bug_position.group(0)
 
                 commit_summary = block
-                cleaned_commits.append(commit_summary)
-
-        return cleaned_commits
+                yield commit_summary
 
     def refine_commit_shortlist(self, summaries: list[str]) -> str:
         combined_list = "\n".join(summaries)
@@ -179,7 +177,7 @@ Instructions:
             return None
 
         logger.info("Filtering irrelevant commits...")
-        filtered_commits = self.filter_irrelevant_commits(commit_log_list)
+        filtered_commits = list(self.filter_irrelevant_commits(commit_log_list))
 
         if not filtered_commits:
             return None
