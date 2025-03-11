@@ -3,7 +3,7 @@ hypothesis==6.128.1
 igraph==0.11.8
 jsonschema==4.23.0
 pre-commit==4.1.0
-pytest==8.3.4
+pytest==8.3.5
 pytest-cov==6.0.0
 pytest-responses==0.5.1
 responses==0.21.0
