@@ -104,12 +104,17 @@ Instructions:
         )
 
     def get_previous_version(self, current_version: str) -> str:
-        match = re.match(r"(FIREFOX_BETA_)(\d+)(_BASE)", current_version)
+        match = re.search(r"(\d+)", current_version)
         if not match:
-            raise ValueError("Invalid version format")
-        prefix, version_number, suffix = match.groups()
-        previous_version_number = int(version_number) - 1
-        return f"{prefix}{previous_version_number}{suffix}"
+            raise ValueError("No number found in the version string")
+
+        number = match.group(0)
+        decremented_number = str(int(number) - 1)
+        return (
+            current_version[: match.start()]
+            + decremented_number
+            + current_version[match.end() :]
+        )
 
     def batch_commit_logs(self, commit_log: str) -> list[str]:
         return [
