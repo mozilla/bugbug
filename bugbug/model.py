@@ -120,7 +120,7 @@ def classification_report_imbalanced_values(
     return result
 
 
-def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False):
+def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False, test_classes=None):
     confusion_matrix_table = confusion_matrix.tolist()
 
     # Don't show the Not classified row in the table output
@@ -144,8 +144,13 @@ def print_labeled_confusion_matrix(confusion_matrix, labels, is_multilabel=False
                 if table_labels[i] != "__NOT_CLASSIFIED__"
                 else "Not classified"
             )
+        if is_multilabel and test_classes is not None:
+            confusion_matrix_header.append("Not classified")
         for i in range(len(table)):
             table[i].insert(0, f"{table_labels[i]} (Actual)")
+            if is_multilabel and test_classes is not None:
+                y_true_count = (test_classes[:, num].tolist()).count(i)
+                table[i].append(y_true_count - sum(table[i][1:]))
         print(
             tabulate(table, headers=confusion_matrix_header, tablefmt="fancy_grid"),
             end="\n\n",
@@ -499,8 +504,9 @@ class Model:
 
             tracking_metrics["report"] = report
 
+        # no confidence threshold - no need to handle  'Not classified' instances
         print_labeled_confusion_matrix(
-            confusion_matrix, self.class_names, is_multilabel=is_multilabel
+            confusion_matrix, self.class_names, is_multilabel=is_multilabel, test_classes=None,
         )
 
         tracking_metrics["confusion_matrix"] = confusion_matrix.tolist()
@@ -567,8 +573,9 @@ class Model:
                         labels=confidence_class_names,
                     )
                 )
+            # with confidence threshold - handle  'Not classified' instances by passing y_test
             print_labeled_confusion_matrix(
-                confusion_matrix, confidence_class_names, is_multilabel=is_multilabel
+                confusion_matrix, confidence_class_names, is_multilabel=is_multilabel, test_classes=y_test
             )
 
         self.evaluation()
