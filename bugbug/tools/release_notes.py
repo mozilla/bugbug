@@ -117,13 +117,13 @@ Instructions:
             for batch in batched(commit_log.strip().split("\n"), self.chunk_size)
         ]
 
-    def shortlist_with_gpt(self, input_text: str) -> str:
-        return self.summarization_chain.run({"input_text": input_text}).strip()
-
     def generate_commit_shortlist(self, commit_log_list: list[str]) -> list[str]:
         commit_log_list_combined = "\n".join(commit_log_list)
         chunks = self.batch_commit_logs(commit_log_list_combined)
-        return [self.shortlist_with_gpt(chunk) for chunk in chunks]
+        return [
+            self.summarization_chain.run({"input_text": chunk}).strip()
+            for chunk in chunks
+        ]
 
     def filter_irrelevant_commits(
         self, commit_log_list: list[str]
