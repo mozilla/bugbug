@@ -144,10 +144,6 @@ Instructions:
                 if bug_position:
                     yield bug_position.group(0)
 
-    def refine_commit_shortlist(self, summaries: list[str]) -> str:
-        combined_list = "\n".join(summaries)
-        return self.cleanup_chain.run({"combined_list": combined_list}).strip()
-
     def get_commit_logs(self, version: str) -> Optional[list[str]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
@@ -186,4 +182,5 @@ Instructions:
             return None
 
         logger.info("Refining commit shortlistt...")
-        return self.refine_commit_shortlist(commit_shortlist)
+        combined_list = "\n".join(commit_shortlist)
+        return self.cleanup_chain.run({"combined_list": combined_list}).strip()
