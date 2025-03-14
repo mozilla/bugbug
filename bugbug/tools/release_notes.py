@@ -126,32 +126,32 @@ Instructions:
         ]
 
     def filter_irrelevant_commits(
-        self, commit_log_list: list[str]
+        self, commit_log_list: list[tuple[str, str]]
     ) -> Generator[str, None, None]:
-        for block in commit_log_list:
+        for desc, author in commit_log_list:
             if (
                 not any(
-                    re.search(rf"\b{keyword}\b", block, re.IGNORECASE)
+                    re.search(rf"\b{keyword}\b", desc, re.IGNORECASE)
                     for keyword in KEYWORDS_TO_REMOVE
                 )
-                and re.search(r"Bug \d+", block, re.IGNORECASE)
+                and re.search(r"Bug \d+", desc, re.IGNORECASE)
                 and not re.search(
-                    r"release\+treescript@mozilla\.org", block, re.IGNORECASE
+                    r"release\+treescript@mozilla\.org", author, re.IGNORECASE
                 )
-                and not re.search(r"nightly", block, re.IGNORECASE)
+                and not re.search(r"nightly", desc, re.IGNORECASE)
             ):
-                bug_position = re.search(r"Bug \d+.*", block, re.IGNORECASE)
+                bug_position = re.search(r"Bug \d+.*", desc, re.IGNORECASE)
                 if bug_position:
                     yield bug_position.group(0)
 
-    def get_commit_logs(self, version: str) -> Optional[list[str]]:
+    def get_commit_logs(self) -> Optional[list[tuple[str, str]]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
         response.raise_for_status()
 
         data = response.json()
         commit_log_list = [
-            changeset["desc"].strip()
+            (changeset["desc"].strip(), changeset.get("author", "").strip())
             for push_data in data.values()
             for changeset in push_data["changesets"]
             if "desc" in changeset and changeset["desc"].strip()
@@ -164,7 +164,7 @@ Instructions:
         self.version1 = self.get_previous_version(version)
 
         logger.info(f"Generating commit shortlist for: {self.version2}")
-        commit_log_list = self.get_commit_logs(version)
+        commit_log_list = self.get_commit_logs()
 
         if not commit_log_list:
             return None
