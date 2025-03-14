@@ -100,7 +100,7 @@ class CodeGeneratorTool:
         raise Exception(f"File '{file_path}' not found in Diff {diff_id}")
 
     def fetch_file_content_from_url(self, changeset_id):
-        url = f"https://phabricator.services.mozilla.com/differential/changeset/?view=old&ref={changeset_id}"
+        url = f"https://phabricator.services.mozilla.com/differential/changeset/?view=new&ref={changeset_id}"
         response = requests.get(url)
         response.raise_for_status()
         return response.text
