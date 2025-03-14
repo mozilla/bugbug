@@ -1,9 +1,7 @@
 import argparse
 import logging
-import os
 
-from langchain_openai import ChatOpenAI
-
+from bugbug import generative_model_tool
 from bugbug.tools.release_notes import ReleaseNotesCommitsSelector
 
 logging.basicConfig(level=logging.INFO)
@@ -17,20 +15,11 @@ def main():
         "--chunk-size", type=int, default=100, help="Number of commits per chunk"
     )
     parser.add_argument(
-        "--llm", default="openai-gpt-4o", help="Model to use for summarization"
+        "--llm", default="openai", help="Model to use for summarization"
     )
 
     args = parser.parse_args()
-
-    if args.llm.startswith("openai-"):
-        model_name = args.llm.replace("openai-", "")
-        llm = ChatOpenAI(
-            model=model_name,
-            temperature=0.1,
-            openai_api_key=os.environ.get("OPENAI_API_KEY"),
-        )
-    else:
-        raise ValueError(f"Unsupported LLM provider: {args.llm}")
+    llm = generative_model_tool.create_llm_from_args(args)
 
     selector = ReleaseNotesCommitsSelector(chunk_size=args.chunk_size, llm=llm)
     results = selector.get_final_release_notes_commits(version=args.version)
