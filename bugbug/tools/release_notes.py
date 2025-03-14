@@ -181,6 +181,6 @@ Instructions:
         if not commit_shortlist:
             return None
 
-        logger.info("Refining commit shortlistt...")
+        logger.info("Refining commit shortlist...")
         combined_list = "\n".join(commit_shortlist)
         return self.cleanup_chain.run({"combined_list": combined_list}).strip()
