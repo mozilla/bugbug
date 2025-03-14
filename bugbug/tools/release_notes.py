@@ -142,10 +142,7 @@ Instructions:
             ):
                 bug_position = re.search(r"Bug \d+.*", block, re.IGNORECASE)
                 if bug_position:
-                    block = bug_position.group(0)
-
-                commit_summary = block
-                yield commit_summary
+                    yield bug_position.group(0)
 
     def refine_commit_shortlist(self, summaries: list[str]) -> str:
         combined_list = "\n".join(summaries)
