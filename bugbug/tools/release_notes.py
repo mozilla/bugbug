@@ -13,6 +13,8 @@ KEYWORDS_TO_REMOVE = [
     "DONTBUILD",
     "add tests",
     "disable test",
+    "back out",
+    "backout",
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -140,9 +142,8 @@ Instructions:
                     for keyword in KEYWORDS_TO_REMOVE
                 )
                 and re.search(r"Bug \d+", desc, re.IGNORECASE)
-                and not re.search(
-                    r"release\+treescript@mozilla\.org", author, re.IGNORECASE
-                )
+                and author
+                != "Mozilla Releng Treescript <release+treescript@mozilla.org>"
                 and not re.search(r"nightly", desc, re.IGNORECASE)
             ):
                 bug_position = re.search(r"Bug \d+.*", desc, re.IGNORECASE)
