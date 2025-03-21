@@ -10,12 +10,10 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Firefox release notes.")
+    generative_model_tool.create_llm_to_args(parser)
     parser.add_argument("--version", required=True, help="Target version identifier")
     parser.add_argument(
         "--chunk-size", type=int, default=100, help="Number of commits per chunk"
-    )
-    parser.add_argument(
-        "--llm", default="openai", help="Model to use for summarization"
     )
 
     args = parser.parse_args()
