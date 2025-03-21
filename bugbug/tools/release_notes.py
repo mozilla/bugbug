@@ -17,9 +17,11 @@ KEYWORDS_TO_REMOVE = [
     "disable test",
     "back out",
     "backout",
-    "test",
-    "tests" "ignore-this-changeset",
+    "add test",
+    "added test",
+    "ignore-this-changeset",
     "CLOSED TREE",
+    "nightly",
 ]
 
 PRODUCT_OR_COMPONENT_TO_IGNORE = [
@@ -34,10 +36,12 @@ logger = logging.getLogger(__name__)
 class ReleaseNotesCommitsSelector:
     def __init__(self, chunk_size: int, llm: LLMChain):
         self.chunk_size = chunk_size
-        self.bug_dict = {}
+        self.bug_id_to_component = {}
         db.download(bugzilla.BUGS_DB)
         for bug in bugzilla.get_bugs():
-            self.bug_dict[bug["id"]] = f"{bug['product']}::{bug['component']}"
+            self.bug_id_to_component[
+                bug["id"]
+            ] = f"{bug['product']}::{bug['component']}"
         self.llm = llm
         self.summarization_prompt = PromptTemplate(
             input_variables=["input_text"],
@@ -147,52 +151,52 @@ Instructions:
         ]
 
     def filter_irrelevant_commits(
-        self, commit_log_list: list[tuple[str, str]]
+        self, commit_log_list: list[tuple[str, str, str]]
     ) -> Generator[str, None, None]:
         ignore_revs_url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/.hg-annotate-ignore-revs"
         response = requests.get(ignore_revs_url)
         response.raise_for_status()
         raw_commits_to_ignore = response.text.strip().splitlines()
-        cleaned_commits_to_ignore = [
-            re.sub(r"(?i)^.*?(Bug \d+.*)", r"\1", line)
+        hashes_to_ignore = [
+            line.split(" ", 1)[0]
             for line in raw_commits_to_ignore
             if re.search(r"Bug \d+", line, re.IGNORECASE)
         ]
-        for desc, author in commit_log_list:
+
+        for desc, author, node in commit_log_list:
+            bug_match = re.search(r"(Bug (\d+).*)", desc, re.IGNORECASE)
             if (
                 not any(
                     keyword.lower() in desc.lower() for keyword in KEYWORDS_TO_REMOVE
                 )
-                and re.search(r"Bug \d+", desc, re.IGNORECASE)
+                and bug_match
+                and re.search(r"\br=[^\s,]+", desc)
                 and author
                 != "Mozilla Releng Treescript <release+treescript@mozilla.org>"
-                and not re.search(r"nightly", desc, re.IGNORECASE)
-                and desc not in cleaned_commits_to_ignore
+                and node not in hashes_to_ignore
             ):
-                bug_match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
-                if bug_match:
-                    bug_id = int(bug_match.group(1))
+                bug_id = int(bug_match.group(2))
 
-                    bug = self.bug_dict.get(bug_id)
-                    if bug:
-                        if any(
-                            to_ignore in bug
-                            for to_ignore in PRODUCT_OR_COMPONENT_TO_IGNORE
-                        ):
-                            continue
+                bug_component = self.bug_id_to_component.get(bug_id)
+                if bug_component and any(
+                    to_ignore in bug_component
+                    for to_ignore in PRODUCT_OR_COMPONENT_TO_IGNORE
+                ):
+                    continue
+                yield bug_match.group(1)
 
-                    bug_position = re.search(r"Bug \d+.*", desc, re.IGNORECASE)
-                    if bug_position:
-                        yield bug_position.group(0)
-
-    def get_commit_logs(self) -> Optional[list[tuple[str, str]]]:
+    def get_commit_logs(self) -> Optional[list[tuple[str, str, str]]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
         response = requests.get(url)
         response.raise_for_status()
 
         data = response.json()
         commit_log_list = [
-            (changeset["desc"].strip(), changeset.get("author", "").strip())
+            (
+                changeset["desc"].strip(),
+                changeset.get("author", "").strip(),
+                changeset.get("node", "").strip(),
+            )
             for push_data in data.values()
             for changeset in push_data["changesets"]
             if "desc" in changeset and changeset["desc"].strip()
@@ -211,7 +215,9 @@ Instructions:
             return None
 
         logger.info("Filtering irrelevant commits...")
+        print(f"num before filtering: {len(commit_log_list)}")
         filtered_commits = list(self.filter_irrelevant_commits(commit_log_list))
+        print(f"num after filtering: {len(filtered_commits)}")
 
         if not filtered_commits:
             return None
