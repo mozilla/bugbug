@@ -56,21 +56,19 @@ def test_find_comment_scope():
             for line_number, expected_scope in target_hunks.items():
                 assert find_comment_scope(patched_file, line_number) == expected_scope
 
+
 def test_generate_processed_output_attaches_comment_to_correct_line():
     # Regression test for https://github.com/mozilla/bugbug/issues/4643
-    from bugbug.tools.code_review import generate_processed_output
-    from unidiff import PatchSet
-    from bugbug.tools.code_review import InlineComment
     import json
 
+    from unidiff import PatchSet
+
+    from bugbug.tools.code_review import InlineComment, generate_processed_output
+
     # Mock output from the model
-    output = json.dumps([
-        {
-            "file": "example.py",
-            "code_line": 10,
-            "comment": "This is a test comment."
-        }
-    ])
+    output = json.dumps(
+        [{"file": "example.py", "code_line": 10, "comment": "This is a test comment."}]
+    )
 
     # Create a mock patch set
     patch_content = """\
