@@ -7,6 +7,8 @@ import requests
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
+from bugbug import bugzilla, db
+
 KEYWORDS_TO_REMOVE = [
     "Backed out",
     "a=testonly",
@@ -15,6 +17,14 @@ KEYWORDS_TO_REMOVE = [
     "disable test",
     "back out",
     "backout",
+    "test",
+    "tests" "ignore-this-changeset",
+    "CLOSED TREE",
+]
+
+PRODUCT_OR_COMPONENT_TO_IGNORE = [
+    "Firefox Build System::Task Configuration",
+    "Developer Infrastructure::",
 ]
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +34,10 @@ logger = logging.getLogger(__name__)
 class ReleaseNotesCommitsSelector:
     def __init__(self, chunk_size: int, llm: LLMChain):
         self.chunk_size = chunk_size
+        self.bug_dict = {}
+        db.download(bugzilla.BUGS_DB)
+        for bug in bugzilla.get_bugs():
+            self.bug_dict[bug["id"]] = f"{bug['product']}::{bug['component']}"
         self.llm = llm
         self.summarization_prompt = PromptTemplate(
             input_variables=["input_text"],
@@ -135,20 +149,41 @@ Instructions:
     def filter_irrelevant_commits(
         self, commit_log_list: list[tuple[str, str]]
     ) -> Generator[str, None, None]:
+        ignore_revs_url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/.hg-annotate-ignore-revs"
+        response = requests.get(ignore_revs_url)
+        response.raise_for_status()
+        raw_commits_to_ignore = response.text.strip().splitlines()
+        cleaned_commits_to_ignore = [
+            re.sub(r"(?i)^.*?(Bug \d+.*)", r"\1", line)
+            for line in raw_commits_to_ignore
+            if re.search(r"Bug \d+", line, re.IGNORECASE)
+        ]
         for desc, author in commit_log_list:
             if (
                 not any(
-                    re.search(rf"\b{keyword}\b", desc, re.IGNORECASE)
-                    for keyword in KEYWORDS_TO_REMOVE
+                    keyword.lower() in desc.lower() for keyword in KEYWORDS_TO_REMOVE
                 )
                 and re.search(r"Bug \d+", desc, re.IGNORECASE)
                 and author
                 != "Mozilla Releng Treescript <release+treescript@mozilla.org>"
                 and not re.search(r"nightly", desc, re.IGNORECASE)
+                and desc not in cleaned_commits_to_ignore
             ):
-                bug_position = re.search(r"Bug \d+.*", desc, re.IGNORECASE)
-                if bug_position:
-                    yield bug_position.group(0)
+                bug_match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
+                if bug_match:
+                    bug_id = int(bug_match.group(1))
+
+                    bug = self.bug_dict.get(bug_id)
+                    if bug:
+                        if any(
+                            to_ignore in bug
+                            for to_ignore in PRODUCT_OR_COMPONENT_TO_IGNORE
+                        ):
+                            continue
+
+                    bug_position = re.search(r"Bug \d+.*", desc, re.IGNORECASE)
+                    if bug_position:
+                        yield bug_position.group(0)
 
     def get_commit_logs(self) -> Optional[list[tuple[str, str]]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
