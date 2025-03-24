@@ -1,4 +1,4 @@
-coverage==7.6.12
+coverage==7.7.1
 hypothesis==6.128.1
 igraph==0.11.8
 jsonschema==4.23.0
