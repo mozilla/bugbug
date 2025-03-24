@@ -157,11 +157,11 @@ Instructions:
         response = requests.get(ignore_revs_url)
         response.raise_for_status()
         raw_commits_to_ignore = response.text.strip().splitlines()
-        hashes_to_ignore = [
+        hashes_to_ignore = {
             line.split(" ", 1)[0]
             for line in raw_commits_to_ignore
             if re.search(r"Bug \d+", line, re.IGNORECASE)
-        ]
+        }
 
         for desc, author, node in commit_log_list:
             bug_match = re.search(r"(Bug (\d+).*)", desc, re.IGNORECASE)
@@ -215,9 +215,7 @@ Instructions:
             return None
 
         logger.info("Filtering irrelevant commits...")
-        print(f"num before filtering: {len(commit_log_list)}")
         filtered_commits = list(self.filter_irrelevant_commits(commit_log_list))
-        print(f"num after filtering: {len(filtered_commits)}")
 
         if not filtered_commits:
             return None
