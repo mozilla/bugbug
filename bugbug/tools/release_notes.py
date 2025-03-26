@@ -29,6 +29,21 @@ PRODUCT_OR_COMPONENT_TO_IGNORE = [
     "Developer Infrastructure::",
 ]
 
+
+def get_previous_version(current_version: str) -> str:
+    match = re.search(r"(\d+)", current_version)
+    if not match:
+        raise ValueError("No number found in the version string")
+
+    number = match.group(0)
+    decremented_number = str(int(number) - 1)
+    return (
+        current_version[: match.start()]
+        + decremented_number
+        + current_version[match.end() :]
+    )
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -123,19 +138,6 @@ Instructions:
             prompt=self.cleanup_prompt,
         )
 
-    def get_previous_version(self, current_version: str) -> str:
-        match = re.search(r"(\d+)", current_version)
-        if not match:
-            raise ValueError("No number found in the version string")
-
-        number = match.group(0)
-        decremented_number = str(int(number) - 1)
-        return (
-            current_version[: match.start()]
-            + decremented_number
-            + current_version[match.end() :]
-        )
-
     def batch_commit_logs(self, commit_log: str) -> list[str]:
         return [
             "\n".join(batch)
@@ -206,7 +208,7 @@ Instructions:
 
     def get_final_release_notes_commits(self, version: str) -> Optional[str]:
         self.version2 = version
-        self.version1 = self.get_previous_version(version)
+        self.version1 = get_previous_version(version)
 
         logger.info(f"Generating commit shortlist for: {self.version2}")
         commit_log_list = self.get_commit_logs()
