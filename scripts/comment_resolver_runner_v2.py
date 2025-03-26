@@ -1,11 +1,11 @@
 import argparse
 import logging
 import os
-import sys
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from bugbug import generative_model_tool
 from bugbug.tools.comment_resolver_v2 import CodeGeneratorTool
 
 client = OpenAI(
@@ -14,11 +14,13 @@ client = OpenAI(
 model = "gpt-4o"
 
 
-def run(args) -> None:
+def run(args, llm) -> None:
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
-    llm_tool = CodeGeneratorTool(client=client, model=model, hunk_size=args.hunk_size)
-    generated_fix, prompt = llm_tool.generate_fix(
+    llm_tool = CodeGeneratorTool(
+        client=client, model=model, hunk_size=args.hunk_size, llm=llm
+    )
+    generated_fix = llm_tool.generate_fix(
         revision_id=args.revision_id,
         diff_id=args.diff_id,
         comment_id=args.comment_id,
@@ -28,7 +30,7 @@ def run(args) -> None:
     return
 
 
-def parse_args(args):
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--revision-id",
@@ -50,9 +52,7 @@ def parse_args(args):
         type=int,
         help="+/- <HUNK-SIZE> lines (from the raw file content) around the comment to include in the prompt.",
     )
-    return parser.parse_args(args)
-
-
-if __name__ == "__main__":
-    args = parse_args(sys.argv[1:])
-    run(args)
+    generative_model_tool.create_llm_to_args(parser)
+    args = parser.parse_args()
+    llm = generative_model_tool.create_llm_from_args(args)
+    run(args, llm)

@@ -1,6 +1,8 @@
 import logging
 
 import requests
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
 from bugbug.phabricator import get, set_api_key
 from bugbug.tools.code_review import PhabricatorReviewData
@@ -19,10 +21,80 @@ class CodeGeneratorTool:
         client,
         model,
         hunk_size,
+        llm,
     ) -> None:
         self.client = client
         self.model = model
         self.hunk_size = hunk_size
+        self.llm = llm
+
+        self.generate_fix_prompt_template = PromptTemplate(
+            input_variables=[
+                "comment_start_line",
+                "comment_end_line",
+                "filepath",
+                "comment_content",
+                "numbered_snippet",
+            ],
+            template="""You are an expert Firefox software engineer who must modify a Code Snippet based on a given Code Review Comment. The section of the code that the comment refers to is explicitly marked with `>>> START COMMENT <<<` and `>>> END COMMENT <<<` within the snippet.
+
+Instructions:
+- The new code changes must be presented in valid Git diff format.
+- Lines added should have a `+` prefix.
+- Lines removed should have a `-` prefix.
+- Remove the line number prefix and the comment markers in your final diff output. They are only there for your reference.
+- You are not limited to modifying only the marked section; make any necessary changes to improve the code according to the review comment.
+- If the comment is suggesting to either delete or modify a code comment, settle with deleting it unless more context suggests modification.
+- Your response must contain changes—do not return an empty diff.
+- If the comment spans a singular line, it is most likely referring to the first line (e.g. line 10 to 11, it is most likely referring to line 10).
+- Do NOT repeat the prompt or add any extra text.
+- Do NOT call functions that don't exist.
+
+Input Details:
+Comment Start Line: {comment_start_line}
+Comment End Line: {comment_end_line}
+Comment File: {filepath}
+Code Review Comment: {comment_content}
+
+Code Snippet (with Inline Comment Markers):
+{numbered_snippet}
+
+Example Output Format:
+--- a/File.cpp
++++ b/File.cpp
+@@ -10,7 +10,7 @@
+- old line
++ new line
+
+Expected Output Format:
+Your response must only contain the following, with no extra text:
+(diff output here)
+""",
+        )
+        self.generate_fix_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.generate_fix_prompt_template,
+        )
+
+        self.more_context_prompt_template = PromptTemplate(
+            input_variables=["comment_content", "snippet_preview"],
+            template="""We have the following Code Review Comment:
+{comment_content}
+
+Below is a snippet of code we believe might need changes (short hunk):
+{snippet_preview}
+
+Question: With this snippet, can you confidently fix the code review comment,
+or do you need a larger snippet for more context? You need to be 100% sure you
+have ALL the code necessary to fix the comment.
+
+Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
+""",
+        )
+        self.more_context_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.more_context_prompt_template,
+        )
 
     def run(self, prompt: str):
         response = self.client.chat.completions.create(
@@ -105,12 +177,10 @@ class CodeGeneratorTool:
         response.raise_for_status()
         return response.text
 
-    def generate_prompt_from_raw_file_content(
+    def create_numbered_snippet(
         self,
-        comment_content,
         comment_start_line,
         comment_end_line,
-        filepath,
         raw_file_content,
         hunk_size,
     ):
@@ -134,64 +204,16 @@ class CodeGeneratorTool:
             snippet_lines.append(f"{prefix}{i} {lines[i - 1]}")
 
         numbered_snippet = "\n".join(snippet_lines)
-
-        prompt = f"""
-You are an expert Firefox software engineer who must modify a Code Snippet based on a given Code Review Comment. The section of the code that the comment refers to is explicitly marked with `>>> START COMMENT <<<` and `>>> END COMMENT <<<` within the snippet.
-
-Instructions:
-- The new code changes must be presented in valid Git diff format.
-- Lines added should have a `+` prefix.
-- Lines removed should have a `-` prefix.
-- Remove the line number prefix and the comment markers in your final diff output. They are only there for your reference.
-- You are not limited to modifying only the marked section; make any necessary changes to improve the code according to the review comment.
-- If the comment is suggesting to either delete or modify a code comment, settle with deleting it unless more context suggests modification.
-- Your response must contain changes—do not return an empty diff.
-- If the comment spans a singular line, it is most likely referring to the first line (e.g. line 10 to 11, it is most likely referring to line 10).
-- Do NOT repeat the prompt or add any extra text.
-- Do NOT call functions that don't exist.
-
-Input Details:
-Comment Start Line: {comment_start_line}
-Comment End Line: {comment_end_line}
-Comment File: {filepath}
-Code Review Comment: {comment_content}
-
-Code Snippet (with Inline Comment Markers):
-{numbered_snippet}
-
-Example Output Format:
---- a/File.cpp
-+++ b/File.cpp
-@@ -10,7 +10,7 @@
-- old line
-+ new line
-
-Expected Output Format:
-Your response must only contain the following, with no extra text:
-(diff output here)
-"""
-
-        return prompt
+        return numbered_snippet
 
     def ask_llm_if_needs_more_context(
         self,
         comment_content,
         snippet_preview,
     ):
-        prompt = f"""
-We have the following Code Review Comment:
-{comment_content}
-
-Below is a snippet of code we believe might need changes (short hunk):
-{snippet_preview}
-
-Question: With this snippet, can you confidently fix the code review comment,
-or do you need a larger snippet for more context? You need to be 100% sure you
-have ALL the code necessary to fix the comment.
-
-Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
-"""
-        answer = self.run(prompt=prompt)
+        answer = self.more_context_chain.run(
+            {"comment_content": comment_content, "snippet_preview": snippet_preview}
+        )
         return answer
 
     def generate_fix(
@@ -240,14 +262,19 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
             else:
                 break
 
-        prompt = self.generate_prompt_from_raw_file_content(
-            comment_content=comment_content,
+        numbered_snippet = self.create_numbered_snippet(
             comment_start_line=comment_start_line,
             comment_end_line=comment_end_line,
-            filepath=filepath,
             raw_file_content=raw_file_content,
             hunk_size=self.hunk_size,
         )
-
-        generated_fix = self.run(prompt=prompt)
-        return generated_fix, prompt
+        generated_fix = self.generate_fix_chain.run(
+            {
+                "comment_start_line": comment_start_line,
+                "comment_end_line": comment_end_line,
+                "filepath": filepath,
+                "comment_content": comment_content,
+                "numbered_snippet": numbered_snippet,
+            }
+        )
+        return generated_fix
