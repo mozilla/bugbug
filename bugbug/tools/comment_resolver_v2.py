@@ -105,64 +105,6 @@ class CodeGeneratorTool:
         response.raise_for_status()
         return response.text
 
-    #     def generate_prompt_from_raw_file_content(
-    #         self,
-    #         comment_content,
-    #         comment_start_line,
-    #         comment_end_line,
-    #         filepath,
-    #         raw_file_content,
-    #         hunk_size,
-    #     ):
-    #         lines = raw_file_content.splitlines()
-    #         total_lines = len(lines)
-
-    #         start_line = max(comment_start_line - hunk_size, 1)
-    #         end_line = min(comment_end_line + hunk_size, total_lines)
-
-    #         snippet_lines = []
-    #         for i in range(start_line, end_line + 1):
-    #             snippet_lines.append(f"{i} {lines[i - 1]}")
-
-    #         numbered_snippet = "\n".join(snippet_lines)
-
-    #         prompt = f"""
-    # You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment. The Code Snippet is a part of a larger codebase and is provided to you in a numbered format for reference. Your task is to make the necessary changes to the Code Snippet based on the Code Review Comment provided.
-
-    # Instructions:
-    # - The new code changes must be presented in valid Git diff format.
-    # - Lines added should have a `+` prefix.
-    # - Lines removed should have a `-` prefix.
-    # - Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
-    # - You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
-    # - There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
-    # - If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
-    # - You must provide changes. You cannot generate a diff with no changes.
-    # - Do NOT repeat the prompt or add any extra text.
-
-    # Input Details:
-    # Comment Start Line: {comment_start_line}
-    # Comment End Line: {comment_end_line}
-    # Comment File: {filepath}
-    # Code Review Comment: {comment_content}
-
-    # Code Snippet (with Line Numbers):
-    # {numbered_snippet}
-
-    # Example Output Format:
-    # --- a/File.cpp
-    # +++ b/File.cpp
-    # @@ -10,7 +10,7 @@
-    # - old line
-    # + new line
-
-    # Expected Output Format:
-    # Your response must only contain the following, with no extra text:
-    # (diff output here)
-    # """
-
-    #         return prompt
-
     def generate_prompt_from_raw_file_content(
         self,
         comment_content,
@@ -206,6 +148,7 @@ Instructions:
 - Your response must contain changes—do not return an empty diff.
 - If the comment spans a singular line, it is most likely referring to the first line (e.g. line 10 to 11, it is most likely referring to line 10).
 - Do NOT repeat the prompt or add any extra text.
+- Do NOT call functions that don't exist.
 
 Input Details:
 Comment Start Line: {comment_start_line}
@@ -230,6 +173,27 @@ Your response must only contain the following, with no extra text:
 
         return prompt
 
+    def ask_llm_if_needs_more_context(
+        self,
+        comment_content,
+        snippet_preview,
+    ):
+        prompt = f"""
+We have the following Code Review Comment:
+{comment_content}
+
+Below is a snippet of code we believe might need changes (short hunk):
+{snippet_preview}
+
+Question: With this snippet, can you confidently fix the code review comment,
+or do you need a larger snippet for more context? You need to be 100% sure you
+have ALL the code necessary to fix the comment.
+
+Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
+"""
+        answer = self.run(prompt=prompt)
+        return answer
+
     def generate_fix(
         self,
         revision_id,
@@ -251,6 +215,30 @@ Your response must only contain the following, with no extra text:
 
         changeset_id = self.get_changeset_id_for_file(diff_id, filepath)
         raw_file_content = self.fetch_file_content_from_url(changeset_id)
+        step_size = 10
+        max_hunk_size = 100
+
+        while self.hunk_size <= max_hunk_size:
+            lines = raw_file_content.splitlines()
+            total_lines = len(lines)
+            snippet_start = max(comment_start_line - self.hunk_size, 1)
+            snippet_end = min(comment_end_line + self.hunk_size, total_lines)
+            snippet_preview_lines = lines[snippet_start - 1 : snippet_end]
+            snippet_preview = "\n".join(snippet_preview_lines)
+
+            answer = self.ask_llm_if_needs_more_context(
+                comment_content=comment_content,
+                snippet_preview=snippet_preview,
+            ).lower()
+
+            print(f"Answer: {answer}")
+
+            if answer == "yes i can fix":
+                break
+            elif answer == "no i need more context":
+                self.hunk_size += step_size
+            else:
+                break
 
         prompt = self.generate_prompt_from_raw_file_content(
             comment_content=comment_content,
