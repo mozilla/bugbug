@@ -7,7 +7,7 @@ OUTPUT_CSV = "output.csv"  # The new CSV with the added column
 
 def run_script(revision_id, diff_id, comment_id):
     """Runs the command and captures the output."""
-    command = f"python3 -m scripts.comment_resolver_runner_v2 --revision-id {revision_id} --diff-id {diff_id} --comment-id {comment_id} --hunk-size 50"
+    command = f"python3 -m scripts.comment_resolver_runner_v2 --revision-id {revision_id} --diff-id {diff_id} --comment-id {comment_id} --hunk-size 10 --llm openai"
 
     try:
         result = subprocess.run(command, shell=True, text=True, capture_output=True)
