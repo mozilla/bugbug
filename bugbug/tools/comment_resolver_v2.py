@@ -2,7 +2,9 @@ import logging
 
 import requests
 from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain.prompts import (
+    PromptTemplate,
+)
 
 from bugbug.phabricator import get, set_api_key
 from bugbug.tools.code_review import PhabricatorReviewData
@@ -27,7 +29,6 @@ class CodeGeneratorTool:
         self.model = model
         self.hunk_size = hunk_size
         self.llm = llm
-
         self.generate_fix_prompt_template = PromptTemplate(
             input_variables=[
                 "comment_start_line",
@@ -42,6 +43,7 @@ Instructions:
 - The new code changes must be presented in valid Git diff format.
 - Lines added should have a `+` prefix.
 - Lines removed should have a `-` prefix.
+- Lines that are modified should have two lines, one with `-` and one with `+` prefix.
 - Remove the line number prefix and the comment markers in your final diff output. They are only there for your reference.
 - You are not limited to modifying only the marked section; make any necessary changes to improve the code according to the review comment.
 - If the comment is suggesting to either delete or modify a code comment, settle with deleting it unless more context suggests modification.
