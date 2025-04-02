@@ -116,6 +116,10 @@ def get_bugs(
         for bug in db.read(BUGS_DB)
         if bug["product"] in products
         and (include_invalid or bug["product"] != "Invalid Bugs")
+        # FIXME: The following condition is a workaround where some bugs
+        # don't have comments. This should be fixed in the future.
+        # See https://github.com/mozilla/bugbug/issues/4927
+        and "comments" in bug
     )
 
 
