@@ -87,8 +87,11 @@ class FenixComponentModel(BugModel):
 
         for bug_data in bugzilla.get_bugs():
             # We want the model to be aware of GeckoView bugs, as it is common
-            # for bugs filed under Fenix to end up in GeckoView.
-            if bug_data["product"] != "Fenix" and bug_data["product"] != "GeckoView":
+            # for bugs filed under Firefox for Android to end up in GeckoView.
+            if (
+                bug_data["product"] != "Firefox for Android"
+                and bug_data["product"] != "GeckoView"
+            ):
                 continue
 
             # Exclude 'General' because it contains bugs that may belong to
