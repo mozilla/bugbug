@@ -40,7 +40,7 @@ PRODUCTS = (
     "DevTools",
     "Developer Infrastructure",
     "External Software Affecting Firefox",
-    "Fenix",
+    "Firefox for Android",
     "Firefox",
     "Firefox Build System",
     "Firefox for iOS",
