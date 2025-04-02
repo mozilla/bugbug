@@ -7,7 +7,9 @@ from bugbug.tools.code_review import find_comment_scope
 
 def test_find_comment_scope():
     responses.add_passthru("https://phabricator.services.mozilla.com/")
-    responses.add_passthru("https://d2mfgivbiy2fiw.cloudfront.net/file/data/")
+    responses.add_passthru(
+        "https://mozphab-phabhost-cdn.devsvcprod.mozaws.net/file/data/"
+    )
 
     test_data = {
         "https://phabricator.services.mozilla.com/D233024?id=964198": {
