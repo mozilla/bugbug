@@ -207,7 +207,53 @@ class Retriever(object):
             len(missing_history_bug_ids),
         )
 
+        handel_missing_comments()
+
         zstd_compress(bugzilla.BUGS_DB)
+
+
+def handel_missing_comments(trail_number: int = 1, max_tries: int = 2) -> int:
+    """Handle bugs that are missing comments.
+
+    This function will try to re-download the bugs that are missing comments
+    and delete them if they are still missing comments after the maximum number
+    of tries.
+
+    TODO: Figure out why some bugs are missing comments.
+
+    Args:
+        trail_number: The current try number.
+        max_tries: The maximum number of tries to re-download the bugs.
+
+    Returns:
+        Number of bugs that were deleted.
+    """
+    missing_comments_bug_ids = {
+        bug["id"] for bug in db.read(bugzilla.BUGS_DB) if "comments" not in bug
+    }
+
+    if not missing_comments_bug_ids:
+        return 0
+
+    bugzilla.delete_bugs(lambda bug: bug["id"] in missing_comments_bug_ids)
+
+    if trail_number <= max_tries:
+        logger.info(
+            "Re-downloading %d bugs, as they were missing comments (re-trail %d of %d)",
+            len(missing_comments_bug_ids),
+            trail_number,
+            max_tries,
+        )
+        bugzilla.download_bugs(missing_comments_bug_ids)
+
+        return handel_missing_comments(trail_number + 1, max_tries)
+
+    logger.info(
+        "Deleted %d bugs as we couldn't retrieve their comments",
+        len(missing_comments_bug_ids),
+    )
+
+    return len(missing_comments_bug_ids)
 
 
 def main() -> None:
