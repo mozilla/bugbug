@@ -239,7 +239,7 @@ def handle_missing_comments(trial_number: int = 1, max_tries: int = 2) -> int:
 
     if trial_number <= max_tries:
         logger.info(
-            "Re-downloading %d bugs, as they were missing comments (re-trail %d of %d)",
+            "Re-downloading %d bugs, as they were missing comments (re-trial %d of %d)",
             len(missing_comments_bug_ids),
             trial_number,
             max_tries,
