@@ -192,34 +192,33 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
-        # TODO: Figure out why.
-        handle_missing_field("history")
-
-        # TODO: Figure out why.
-        handle_missing_field("comments")
+        # TODO: Figure out why we have missing fields in the first place.
+        handle_missing_fields(["history", "comments"])
 
         zstd_compress(bugzilla.BUGS_DB)
 
 
-def handle_missing_field(
-    field_name: str, trial_number: int = 1, max_tries: int = 2
+def handle_missing_fields(
+    fields: list[str], trial_number: int = 1, max_tries: int = 2
 ) -> int:
     """Handle bugs that are missing a mandatory field.
 
-    This function will try to re-download the bugs that are missing the given
-    field and delete them if they are still missing field after the maximum
-    number of tries.
+    This function will try to re-download the bugs that are missing any of the
+    given fields and delete them if they are still missing a field after the
+    maximum number of tries.
 
     Args:
-        field_name: The name of the field that should not be missing.
-        trial_number: The current try number.
+        fields: The list of field names to check for.
+        trial_number: The current try number. It should be 1 on the first call.
         max_tries: The maximum number of tries to re-download the bugs.
 
     Returns:
         Number of bugs that were deleted.
     """
     missing_field_bug_ids = {
-        bug["id"] for bug in db.read(bugzilla.BUGS_DB) if field_name not in bug
+        bug["id"]
+        for bug in db.read(bugzilla.BUGS_DB)
+        if any(field not in bug for field in fields)
     }
 
     if not missing_field_bug_ids:
@@ -229,20 +228,18 @@ def handle_missing_field(
 
     if trial_number <= max_tries:
         logger.info(
-            "Re-downloading %d bugs, as they were missing the `%s` field (re-trial %d of %d)",
+            "Re-downloading %d bugs, as they were missing the fields (re-trial %d of %d)",
             len(missing_field_bug_ids),
-            field_name,
             trial_number,
             max_tries,
         )
         bugzilla.download_bugs(missing_field_bug_ids)
 
-        return handle_missing_field(field_name, trial_number + 1, max_tries)
+        return handle_missing_fields(fields, trial_number + 1, max_tries)
 
     logger.info(
-        "Deleted %d bugs as we couldn't retrieve their `%s` field",
+        "Deleted %d bugs as we couldn't retrieve their missing fields",
         len(missing_field_bug_ids),
-        field_name,
     )
 
     return len(missing_field_bug_ids)
