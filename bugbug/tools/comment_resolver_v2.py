@@ -98,18 +98,27 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
             prompt=self.more_context_prompt_template,
         )
 
-    def run(self, prompt: str):
-        response = self.client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            model=self.model,
-            temperature=0.1,
+        self.clarify_comment_prompt_template = PromptTemplate(
+            input_variables=["raw_comment", "code_snippet"],
+            template="""You are helping a tool understand a code review comment more precisely.
+
+Here is the raw reviewer comment:
+{raw_comment}
+
+Here is the code being reviewed:
+{code_snippet}
+
+Rephrase the comment so it can be clearly understood and acted upon by an LLM.
+Be specific about what to do in the code (e.g. "change this to that" or "add this here"). Rephrase the reviewer comment so that it's precise and does not overgeneralize.
+
+Output only the rephrased, actionable version of the comment, without any explanation.
+""",
         )
-        return response.choices[0].message.content.strip()
+
+        self.clarify_comment_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.clarify_comment_prompt_template,
+        )
 
     def get_comment_transaction_from_revision(self, revision_id, comment_id):
         set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
@@ -208,6 +217,31 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
         numbered_snippet = "\n".join(snippet_lines)
         return numbered_snippet
 
+    # def create_numbered_snippet(
+    #     self,
+    #     comment_start_line,
+    #     comment_end_line,
+    #     raw_file_content,
+    #     hunk_size,
+    # ):
+    #     lines = raw_file_content.splitlines()
+    #     total_lines = len(lines)
+
+    #     start_line = max(comment_start_line - hunk_size, 1)
+    #     end_line = min(comment_end_line + hunk_size, total_lines)
+
+    #     snippet_lines = []
+    #     for i in range(start_line, end_line + 1):
+    #         line_content = lines[i - 1]
+    #         # Add markers for the commented section
+    #         if i == comment_start_line:
+    #             snippet_lines.append(">>> START COMMENT <<<")
+    #         snippet_lines.append(line_content)
+    #         if i == comment_end_line:
+    #             snippet_lines.append(">>> END COMMENT <<<")
+
+    #     return "\n".join(snippet_lines)
+
     def ask_llm_if_needs_more_context(
         self,
         comment_content,
@@ -217,6 +251,14 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
             {"comment_content": comment_content, "snippet_preview": snippet_preview}
         )
         return answer
+
+    def clarify_comment(self, raw_comment, snippet_preview):
+        return self.clarify_comment_chain.run(
+            {
+                "raw_comment": raw_comment,
+                "code_snippet": snippet_preview,
+            }
+        )
 
     def generate_fix(
         self,
@@ -240,7 +282,7 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
         changeset_id = self.get_changeset_id_for_file(diff_id, filepath)
         raw_file_content = self.fetch_file_content_from_url(changeset_id)
         step_size = 10
-        max_hunk_size = 100
+        max_hunk_size = 30
 
         while self.hunk_size <= max_hunk_size:
             lines = raw_file_content.splitlines()
@@ -264,18 +306,35 @@ Answer with strictly either YES I CAN FIX or NO I NEED MORE CONTEXT
             else:
                 break
 
+        clarified_comment = self.clarify_comment(
+            raw_comment=comment_content, snippet_preview=snippet_preview
+        )
+
         numbered_snippet = self.create_numbered_snippet(
             comment_start_line=comment_start_line,
             comment_end_line=comment_end_line,
             raw_file_content=raw_file_content,
             hunk_size=self.hunk_size,
         )
+        prompt_input = {
+            "comment_start_line": comment_start_line,
+            "comment_end_line": comment_end_line,
+            "filepath": filepath,
+            "comment_content": clarified_comment,
+            "numbered_snippet": numbered_snippet,
+        }
+
+        # Render the full prompt for debugging
+        full_prompt = self.generate_fix_prompt_template.format(**prompt_input)
+        print("\n==================== PROMPT SENT TO LLM ====================\n")
+        print(full_prompt)
+        print("\n============================================================\n")
         generated_fix = self.generate_fix_chain.run(
             {
                 "comment_start_line": comment_start_line,
                 "comment_end_line": comment_end_line,
                 "filepath": filepath,
-                "comment_content": comment_content,
+                "comment_content": clarified_comment,
                 "numbered_snippet": numbered_snippet,
             }
         )
