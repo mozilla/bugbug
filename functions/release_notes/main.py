@@ -48,12 +48,17 @@ def build_args_from_request(request: flask.Request):
         value = request.args.get(key)
         return type_fn(value) if value is not None else default
 
-    return SimpleNamespace(
-        provider=get("provider", default="openai"),
-        temperature=get("temperature", default=0.0, type_fn=float),
-        model=get("model", default=None),
-        api_base=get("api_base", default=None),
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        version=get("version"),
-        chunk_size=get("chunk_size", default=100, type_fn=int),
-    )
+    llm = get("llm", default="openai")
+
+    args = {
+        "llm": llm,
+        "version": get("version"),
+        "chunk_size": get("chunk_size", default=100, type_fn=int),
+    }
+
+    # Dynamically add model-specific args like openai_temperature, etc.
+    for arg_name in request.args:
+        if arg_name.startswith(f"{llm}_"):
+            args[arg_name] = request.args.get(arg_name)
+
+    return SimpleNamespace(**args)
