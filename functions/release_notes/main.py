@@ -56,7 +56,6 @@ def build_args_from_request(request: flask.Request):
         "chunk_size": get("chunk_size", default=100, type_fn=int),
     }
 
-    # Dynamically add model-specific args like openai_temperature, etc.
     for arg_name in request.args:
         if arg_name.startswith(f"{llm}_"):
             args[arg_name] = request.args.get(arg_name)
