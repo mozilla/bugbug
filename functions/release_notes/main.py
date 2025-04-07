@@ -4,10 +4,10 @@ from types import SimpleNamespace
 
 import flask
 import functions_framework
-from google.cloud import secretmanager
 
 from bugbug import generative_model_tool
 from bugbug.tools.release_notes import ReleaseNotesCommitsSelector
+from bugbug.utils import get_secret
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,8 +23,7 @@ def handle_release_notes(request: flask.Request) -> flask.Response:
         return flask.Response("Missing 'version' query parameter", status=400)
 
     try:
-        openai_key = get_openai_api_key()
-        os.environ["OPENAI_API_KEY"] = openai_key
+        os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
     except Exception as e:
         return flask.Response(f"Failed to load OpenAI key: {str(e)}", status=500)
 
@@ -58,14 +57,3 @@ def build_args_from_request(request: flask.Request):
         version=get("version"),
         chunk_size=get("chunk_size", default=100, type_fn=int),
     )
-
-
-def get_openai_api_key():
-    client = secretmanager.SecretManagerServiceClient()
-    project_id = os.environ["GCP_PROJECT"]
-    secret_name = "OPENAI_API_KEY"
-    version = "latest"
-
-    name = f"projects/{project_id}/secrets/{secret_name}/versions/{version}"
-    response = client.access_secret_version(name=name)
-    return response.payload.data.decode("UTF-8")
