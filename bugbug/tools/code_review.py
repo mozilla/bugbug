@@ -117,7 +117,7 @@ Exclude comments that:
 Do not report any explanation about your choice. Only return a valid JSON list.
 
 Comments:
-{review}
+{comments}
 
 As examples of not expected comments, not related to the current patch, please, check some below:
     - {rejected_examples}
