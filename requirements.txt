@@ -6,7 +6,7 @@ langchain==0.3.23
 langchain-anthropic==0.3.10
 langchain-community==0.3.21
 langchain-google-genai==2.0.11
-langchain-mistralai==0.2.7
+langchain-mistralai==0.2.10
 langchain-openai==0.3.12
 libmozdata==0.2.9
 llama-cpp-python==0.3.6
