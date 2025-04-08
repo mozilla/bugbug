@@ -336,6 +336,10 @@ class Patch(ABC):
     def raw_diff(self) -> str:
         ...
 
+    @cached_property
+    def patch_set(self) -> PatchSet:
+        return PatchSet.from_string(self.raw_diff)
+
 
 class PhabricatorPatch(Patch):
     def __init__(self, patch_id: str) -> None:
@@ -1144,13 +1148,8 @@ class CodeReviewTool(GenerativeModelTool):
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
-    def run(self, patch: Patch) -> list[InlineComment] | None:
-        if self.count_tokens(patch.raw_diff) > 5000:
-            raise LargeDiffError("The diff is too large")
-
-        patch_set = PatchSet.from_string(patch.raw_diff)
-        formatted_patch = format_patch_set(patch_set)
+    def _generate_suggestions(self, patch: Patch):
+        formatted_patch = format_patch_set(patch.patch_set)
         if formatted_patch == "":
             return None
 
@@ -1191,7 +1190,7 @@ class CodeReviewTool(GenerativeModelTool):
                 self.function_search,
                 patch.base_commit_hash,
                 function_list,
-                patch_set,
+                patch.patch_set,
             )
 
         output = ""
@@ -1277,6 +1276,15 @@ class CodeReviewTool(GenerativeModelTool):
             if self.verbose:
                 GenerativeModelTool._print_answer(output)
 
+        return output
+
+    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
+    def run(self, patch: Patch) -> list[InlineComment] | None:
+        if self.count_tokens(patch.raw_diff) > 5000:
+            raise LargeDiffError("The diff is too large")
+
+        output = self._generate_suggestions(patch)
+
         unfiltered_suggestions = parse_model_output(output)
         if not unfiltered_suggestions:
             logger.info("No suggestions were generated")
@@ -1300,7 +1308,7 @@ class CodeReviewTool(GenerativeModelTool):
         if self.verbose:
             GenerativeModelTool._print_answer(raw_output)
 
-        return list(generate_processed_output(raw_output, patch_set))
+        return list(generate_processed_output(raw_output, patch.patch_set))
 
     def _get_comment_examples(self, patch):
         comment_examples = []
