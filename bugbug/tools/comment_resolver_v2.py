@@ -29,6 +29,31 @@ class CodeGeneratorTool:
         self.model = model
         self.hunk_size = hunk_size
         self.llm = llm
+        self.actionability_prompt_template = PromptTemplate(
+            input_variables=["comment", "code"],
+            template="""Given the following code and a reviewer comment, determine if the comment is actionable.
+
+An actionable comment is one that:
+- Clearly requests a change in the code.
+- Does not require external actions (e.g. filing a bug).
+- Is not just pointing something out without asking for changes.
+- Is not too vague or unclear to act on.
+
+Respond with only YES or NO.
+
+Comment:
+{comment}
+
+Code:
+{code}
+""",
+        )
+
+        self.actionability_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.actionability_prompt_template,
+        )
+
         self.generate_fix_prompt_template = PromptTemplate(
             input_variables=[
                 "comment_start_line",
@@ -283,6 +308,26 @@ Output only the rephrased, actionable version of the comment, without any explan
         raw_file_content = self.fetch_file_content_from_url(changeset_id)
         step_size = 10
         max_hunk_size = 30
+
+        initial_snippet = "\n".join(
+            raw_file_content.splitlines()[
+                max(0, comment_start_line - 5) : comment_end_line + 5
+            ]
+        )
+        actionability = (
+            self.actionability_chain.run(
+                {
+                    "comment": comment_content,
+                    "code": initial_snippet,
+                }
+            )
+            .strip()
+            .upper()
+        )
+
+        if actionability != "YES":
+            logger.info("Comment is not actionable. Skipping.")
+            return "Not Actionable"
 
         while self.hunk_size <= max_hunk_size:
             lines = raw_file_content.splitlines()
