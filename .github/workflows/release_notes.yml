@@ -1,9 +1,6 @@
 name: Deploy Release Notes Function
 
-on:
-  push:
-    tags:
-      - "*"
+on: workflow_dispatch
 
 jobs:
   deploy:
