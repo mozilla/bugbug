@@ -206,6 +206,19 @@ Instructions:
 
         return commit_log_list if commit_log_list else None
 
+    def remove_duplicate_bugs(self, csv_text: str) -> str:
+        seen = set()
+        unique_lines = []
+        for line in csv_text.strip().splitlines():
+            parts = line.split(",", 3)
+            if len(parts) < 3:
+                continue
+            bug_id = parts[2].strip()
+            if bug_id not in seen:
+                seen.add(bug_id)
+                unique_lines.append(line)
+        return "\n".join(unique_lines)
+
     def get_final_release_notes_commits(self, version: str) -> Optional[str]:
         self.version2 = version
         self.version1 = get_previous_version(version)
@@ -230,4 +243,8 @@ Instructions:
 
         logger.info("Refining commit shortlist...")
         combined_list = "\n".join(commit_shortlist)
-        return self.cleanup_chain.run({"combined_list": combined_list}).strip()
+        cleaned = self.cleanup_chain.run({"combined_list": combined_list}).strip()
+
+        logger.info("Removing duplicates...")
+        deduped = self.remove_duplicate_bugs(cleaned)
+        return deduped
