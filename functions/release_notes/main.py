@@ -1,6 +1,5 @@
 import logging
 import os
-from types import SimpleNamespace
 
 import flask
 import functions_framework
@@ -14,50 +13,25 @@ logger = logging.getLogger(__name__)
 
 
 @functions_framework.http
-def handle_release_notes(request: flask.Request) -> flask.Response:
+def handle_release_notes(request: flask.Request):
     if request.method != "GET":
-        return flask.Response("Only GET requests are allowed", status=405)
+        return "Only GET requests are allowed", 405
 
     version = request.args.get("version")
     if not version:
-        return flask.Response("Missing 'version' query parameter", status=400)
+        return "Missing 'version' query parameter", 400
 
-    try:
-        os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
-    except Exception as e:
-        return flask.Response(f"Failed to load OpenAI key: {str(e)}", status=500)
+    os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
-    args = build_args_from_request(request)
+    llm_name = request.args.get("llm", "openai")
+    chunk_size = int(request.args.get("chunk_size", 100))
+    version = request.args.get("version")
 
-    try:
-        llm = generative_model_tool.create_llm_from_args(args)
-        selector = ReleaseNotesCommitsSelector(chunk_size=args.chunk_size, llm=llm)
-        notes = selector.get_final_release_notes_commits(version=args.version)
+    llm = generative_model_tool.create_llm_from_request(llm_name, request.args)
+    selector = ReleaseNotesCommitsSelector(chunk_size=chunk_size, llm=llm)
+    notes = selector.get_final_release_notes_commits(version=version)
 
-        if not notes:
-            return flask.Response("No user-facing commits found.", status=404)
+    if not notes:
+        return "No user-facing commits found.", 404
 
-        return flask.Response(notes, mimetype="text/plain")
-    except Exception as e:
-        logger.exception("Failed to generate release notes")
-        return flask.Response(f"Internal Server Error: {str(e)}", status=500)
-
-
-def build_args_from_request(request: flask.Request):
-    def get(key, default=None, type_fn=str):
-        value = request.args.get(key)
-        return type_fn(value) if value is not None else default
-
-    llm = get("llm", default="openai")
-
-    args = {
-        "llm": llm,
-        "version": get("version"),
-        "chunk_size": get("chunk_size", default=100, type_fn=int),
-    }
-
-    for arg_name in request.args:
-        if arg_name.startswith(f"{llm}_"):
-            args[arg_name] = request.args.get(arg_name)
-
-    return SimpleNamespace(**args)
+    return notes, 200, {"Content-Type": "text/plain"}
