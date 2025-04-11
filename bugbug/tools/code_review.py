@@ -103,10 +103,10 @@ Review comments for example {example_number}:
 {comments}"""
 
 
-PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Filter review comments to identify those that:
+PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Filter review comments to keep those that:
 - are consistent with the {target_code_consistency} source code;
-- focus on reporting possible bugs, major functional regressions, major issues, or similar concerns;
-- report major readability or design concerns.
+- focus on reporting possible bugs, functional regressions, issues, or similar concerns;
+- report readability or design concerns.
 
 Exclude comments that:
 - only state obvious facts about the patch;
