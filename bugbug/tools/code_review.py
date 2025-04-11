@@ -109,9 +109,9 @@ PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Filter review comments to keep those tha
 - report readability or design concerns.
 
 Exclude comments that:
-- only state obvious facts about the patch;
-- restate obvious facts about renamed variables or replaced code;
-- include praising, descriptive, or non-critical remarks
+- only describe the change;
+- restate obvious facts like renamed variables or replaced code;
+- include praising;
 - ask if changes are intentional or ask to ensure things exist.
 
 Do not report any explanation about your choice. Only return a valid JSON list.
