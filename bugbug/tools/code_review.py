@@ -137,30 +137,21 @@ Review comments for example {example_number}:
 {comments}"""
 
 
-PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Please, double check the code review provided for the patch below.
-Just report the comments that are:
-- applicable for the patch;
-- consistent with the {target_code_consistency} source code;
-- focusing on reporting possible bugs, major readability regressions, or similar concerns;
-- filter out any descriptive comments;
-- filter out any praising comments.
+PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Filter review comments to keep those that:
+- are consistent with the {target_code_consistency} source code;
+- focus on reporting possible bugs, functional regressions, issues, or similar concerns;
+- report readability or design concerns.
 
-Do not change the contents of the comments and the report format.
-Adopt the template below as the report format:
-[
-    {{
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
-    }}
-]
+Exclude comments that:
+- only describe the change;
+- restate obvious facts like renamed variables or replaced code;
+- include praising;
+- ask if changes are intentional or ask to ensure things exist.
+
 Do not report any explanation about your choice. Only return a valid JSON list.
 
-Review:
-{review}
-
-Patch:
-{patch}
+Comments:
+{comments}
 
 As examples of not expected comments, not related to the current patch, please, check some below:
     - {rejected_examples}
@@ -1298,8 +1289,7 @@ class CodeReviewTool(GenerativeModelTool):
 
         raw_output = self.filtering_chain.invoke(
             {
-                "review": output,
-                "patch": patch.raw_diff,
+                "comments": output,
                 "rejected_examples": rejected_examples,
             },
             return_only_outputs=True,
