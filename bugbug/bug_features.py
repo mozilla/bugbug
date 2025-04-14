@@ -906,6 +906,7 @@ class BugType(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         return bug["type"]
 
+
 class InitialProduct(SingleBugFeature):
     def __call__(self, bug, **kwargs):
         history = bug.get("history", [])
