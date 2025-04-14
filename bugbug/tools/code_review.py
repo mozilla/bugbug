@@ -1389,8 +1389,13 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
+        point_ids = set(self.vector_db.get_existing_ids())
+
         def vector_points():
             for hunk, comment in items:
+                if comment.id in point_ids:
+                    continue
+
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
                 payload = {
