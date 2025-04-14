@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import enum
 import json
 import re
 from abc import ABC, abstractmethod
@@ -10,8 +11,9 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import cached_property
+from itertools import chain
 from logging import INFO, basicConfig, getLogger
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
 import tenacity
 from langchain.chains import ConversationChain, LLMChain
@@ -27,7 +29,7 @@ from bugbug import db, phabricator, utils
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
 from bugbug.utils import get_secret
-from bugbug.vectordb import VectorDB, VectorPoint
+from bugbug.vectordb import PayloadScore, QueryFilter, VectorDB, VectorPoint
 
 basicConfig(level=INFO)
 logger = getLogger(__name__)
@@ -44,6 +46,8 @@ class InlineComment:
     date_created: int | None = None
     date_modified: int | None = None
     is_done: bool | None = None
+    hunk_start_line: int | None = None
+    hunk_end_line: int | None = None
 
 
 class ModelResultError(Exception):
@@ -62,38 +66,66 @@ class LargeDiffError(Exception):
     """Occurs when the diff is too large to be processed."""
 
 
-TARGET_SOFTWARE = None
+TARGET_SOFTWARE: str | None = None
 
-PROMPT_TEMPLATE_SUMMARIZATION = (
-    """You are an expert reviewer for"""
-    + (f" the {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """ source code, with experience on source code reviews.
+PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for {experience_scope}, with experience on source code reviews.
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
 
 {patch}"""
-)
 
-PROMPT_TEMPLATE_REVIEW = (
-    """You will be given a task to generate a code review for the patch below. Use the following steps to solve it:
-1. Understand the changes done in the patch by reasoning about the summarization as previously reported.
-2. Identify possible code snippets that might result in possible bugs, major readability regressions, and similar concerns.
-3. Reason about each identified problem to make sure they are valid. Have in mind, your review must be consistent with the source code"""
-    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """.
-4. Filter out comments that focuses on documentation, comments, error handling, tests, and confirmation whether objects, methods and files exist or not.
-5. Filter out comments that are descriptive.
-6. Filter out comments that are praising (example: "This is a good addition to the code.").
-7. Filter out comments that are not about added lines (have '+' symbol at the start of the line).
-8. Final answer: Write down the comments and report them using the JSON format previously adopted for the valid comment examples.
+PROMPT_TEMPLATE_REVIEW = """**Task**:
 
-As valid comments, consider the examples below:
+Generate code review comments for the patch provided below.
+
+**Instructions**:
+
+1. **Understand the Changes**:
+
+   - Analyze the changes made in the patch.
+   - Use the previously reported summarization as context.
+
+2. **Identify Potential Issues**:
+
+   - Look for code that might result in possible bugs.
+   - Identify major regressions, issues, or similar concerns.
+
+3. **Validate Each Issue**:
+
+   - Ensure each identified problem is valid.
+   - Confirm consistency with the {target_code_consistency} source code standards.
+
+**Guidelines for Writing Comments**:
+
+- **Style**:
+
+  - **Clarity**: Comments should be short and to the point.
+  - **Focus**: Concentrate on the changed code only.
+  - **Tone**: Do not form suggestions as questions.
+
+- **Avoid Comments That**:
+
+  - Focus on documentation or tests.
+  - Ask for confirmation of existence (e.g., "Does this function exist?").
+  - Instruct the author to ensure correctness (avoid "Ensure", "Verify", "Check").
+  - Merely describe the code without providing constructive feedback.
+  - Offer praise (e.g., "This is a good addition to the code.").
+  - Refer to code not added in this patch (lines without a '+' at the start).
+
+**Output Format**:
+
+- Write down the comments in a JSON list as shown in the valid comment examples.
+- Do **not** include any explanations about your choices.
+- Only return the JSON list.
+
+**Valid Comment Examples**:
+
 {comment_examples}
 
+**Patch to Review**:
 
-Here is the patch that we need you to review:
-{patch}"""
-)
+{patch}
+"""
 
 
 TEMPLATE_COMMENT_EXAMPLE = """Patch example {example_number}:
@@ -105,43 +137,34 @@ Review comments for example {example_number}:
 {comments}"""
 
 
-PROMPT_TEMPLATE_FILTERING_ANALYSIS = (
-    """Please, double check the code review provided for the patch below.
-Just report the comments that are:
-- applicable for the patch;
-- consistent with the source code"""
-    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-    + """;
-- focusing on reporting possible bugs, major readability regressions, or similar concerns;
-- filter out any descriptive comments;
-- filter out any praising comments.
+PROMPT_TEMPLATE_FILTERING_ANALYSIS = """Filter review comments to keep those that:
+- are consistent with the {target_code_consistency} source code;
+- focus on reporting possible bugs, functional regressions, issues, or similar concerns;
+- report readability or design concerns.
 
-Do not change the contents of the comments and the report format.
-Adopt the template below as the report format:
-[
-    {{
-        "file": "com/br/main/Pressure.java",
-        "code_line": 458,
-        "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
-    }}
-]
+Exclude comments that:
+- only describe the change;
+- restate obvious facts like renamed variables or replaced code;
+- include praising;
+- ask if changes are intentional or ask to ensure things exist.
+
 Do not report any explanation about your choice. Only return a valid JSON list.
 
-Review:
-{review}
-
-Patch:
-{patch}
+Comments:
+{comments}
 
 As examples of not expected comments, not related to the current patch, please, check some below:
-    - Please note that these are minor improvements and the overall quality of the patch is good. The documentation is being expanded in a clear and structured way, which will likely be beneficial for future development.
+    - {rejected_examples}
+"""
+
+
+DEFAULT_REJECTED_EXAMPLES = """Please note that these are minor improvements and the overall quality of the patch is good. The documentation is being expanded in a clear and structured way, which will likely be beneficial for future development.
     - Please note that these are just suggestions and the code might work perfectly fine as it is. It's always a good idea to test all changes thoroughly to ensure they work as expected.
     - Overall, the patch seems to be well implemented with no major concerns. The developers have made a conscious decision to align with Chrome's behavior, and the reasoning is well documented.
     - There are no complex code changes in this patch, so there's no potential for major readability regressions or bugs introduced by the changes.
     - The `focus(...)` method is called without checking if the element and its associated parameters exist or not. It would be better to check if the element exists before calling the `focus()` method to avoid potential errors.
     - It's not clear if the `SearchService.sys.mjs` file exists or not. If it doesn't exist, this could cause an error. Please ensure that the file path is correct.
     - This is a good addition to the code."""
-)
 
 
 PROMPT_TEMPLATE_DEDUPLICATE = """Please, double check the code review comments below.
@@ -162,7 +185,7 @@ Review:
 {review}"""
 
 
-PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you need to examine for reviewing the patch.
+PROMPT_TEMPLATE_FURTHER_INFO = """Based on the patch provided below and its related summarization, identify the functions you don't know and need to look up for reviewing the patch.
 List the names of these functions, providing only the function names, with each name on a separate line.
 Avoid using list indicators such as hyphens or numbers.
 If no function declaration is required, just return "".
@@ -303,6 +326,10 @@ class Patch(ABC):
     @abstractmethod
     def raw_diff(self) -> str:
         ...
+
+    @cached_property
+    def patch_set(self) -> PatchSet:
+        return PatchSet.from_string(self.raw_diff)
 
 
 class PhabricatorPatch(Patch):
@@ -660,25 +687,37 @@ review_data_classes = {
 
 
 def find_comment_scope(file: PatchedFile, line_number: int):
-    for hunk in file:
-        if hunk.target_start <= line_number <= hunk.target_start + hunk.target_length:
-            has_added_lines = any(line.is_added for line in hunk)
-            has_deleted_lines = any(line.is_removed for line in hunk)
+    hunks_based_on_added = (
+        hunk
+        for hunk in file
+        if hunk.target_start <= line_number <= hunk.target_start + hunk.target_length
+    )
+    hunks_based_on_deleted = (
+        hunk
+        for hunk in file
+        if hunk.source_start <= line_number <= hunk.source_start + hunk.source_length
+    )
 
-            if has_added_lines and has_deleted_lines:
-                first_line, last_line = find_mixed_lines_range(hunk)
-            elif has_added_lines:
-                first_line, last_line = find_added_lines_range(hunk)
-            else:
-                first_line, last_line = find_removed_lines_range(hunk)
+    try:
+        hunk = next(chain(hunks_based_on_added, hunks_based_on_deleted))
+    except StopIteration as e:
+        raise HunkNotInPatchError("Line number not found in the patch") from e
 
-            return {
-                "line_start": first_line,
-                "line_end": last_line,
-                "has_added_lines": has_added_lines,
-            }
+    has_added_lines = any(line.is_added for line in hunk)
+    has_deleted_lines = any(line.is_removed for line in hunk)
 
-    raise HunkNotInPatchError("Line number not found in the patch")
+    if has_added_lines and has_deleted_lines:
+        first_line, last_line = find_mixed_lines_range(hunk)
+    elif has_added_lines:
+        first_line, last_line = find_added_lines_range(hunk)
+    else:
+        first_line, last_line = find_removed_lines_range(hunk)
+
+    return {
+        "line_start": first_line,
+        "line_end": last_line,
+        "has_added_lines": has_added_lines,
+    }
 
 
 def find_added_lines_range(hunk: Hunk):
@@ -968,7 +1007,7 @@ def get_structured_functions(target, functions_declaration):
     return function_declaration_text
 
 
-def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
+def parse_model_output(output: str) -> list[dict]:
     output = output.strip()
     if output.startswith("Review:"):
         output = output[len("Review:") :].strip()
@@ -977,6 +1016,12 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
         output = output[7:-3]
 
     comments = json.loads(output)
+
+    return comments
+
+
+def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineComment]:
+    comments = parse_model_output(output)
 
     patched_files_map = {
         patched_file.target_file: patched_file for patched_file in patch
@@ -1007,8 +1052,10 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
                 if scope["has_added_lines"]
                 else patched_file.source_file[2:]
             ),
-            start_line=scope["line_start"],
-            end_line=scope["line_end"],
+            start_line=line_number,
+            end_line=line_number,
+            hunk_start_line=scope["line_start"],
+            hunk_end_line=scope["line_end"],
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
         )
@@ -1025,9 +1072,12 @@ class CodeReviewTool(GenerativeModelTool):
         review_comments_db: Optional["ReviewCommentsDB"] = None,
         show_patch_example: bool = False,
         verbose: bool = True,
+        suggestions_feedback_db: Optional["SuggestionsFeedbackDB"] = None,
+        target_software: Optional[str] = None,
     ) -> None:
         super().__init__()
 
+        self.target_software = target_software or TARGET_SOFTWARE
         self.comment_gen_llms = comment_gen_llms
         self.llm = llm if llm is not None else comment_gen_llms[0]
         self._tokenizer = get_tokenizer(
@@ -1037,12 +1087,26 @@ class CodeReviewTool(GenerativeModelTool):
         )
 
         self.summarization_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_SUMMARIZATION),
+            prompt=PromptTemplate.from_template(
+                PROMPT_TEMPLATE_SUMMARIZATION,
+                partial_variables={
+                    "experience_scope": (
+                        f"the {self.target_software} source code"
+                        if self.target_software
+                        else "a software project"
+                    )
+                },
+            ),
             llm=self.llm,
             verbose=verbose,
         )
         self.filtering_chain = LLMChain(
-            prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_FILTERING_ANALYSIS),
+            prompt=PromptTemplate.from_template(
+                PROMPT_TEMPLATE_FILTERING_ANALYSIS,
+                partial_variables={
+                    "target_code_consistency": self.target_software or "rest of the"
+                },
+            ),
             llm=self.llm,
             verbose=verbose,
         )
@@ -1070,16 +1134,13 @@ class CodeReviewTool(GenerativeModelTool):
 
         self.verbose = verbose
 
+        self.suggestions_feedback_db = suggestions_feedback_db
+
     def count_tokens(self, text):
         return len(self._tokenizer.encode(text))
 
-    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
-    def run(self, patch: Patch) -> list[InlineComment] | None:
-        if self.count_tokens(patch.raw_diff) > 5000:
-            raise LargeDiffError("The diff is too large")
-
-        patch_set = PatchSet.from_string(patch.raw_diff)
-        formatted_patch = format_patch_set(patch_set)
+    def _generate_suggestions(self, patch: Patch):
+        formatted_patch = format_patch_set(patch.patch_set)
         if formatted_patch == "":
             return None
 
@@ -1106,9 +1167,12 @@ class CodeReviewTool(GenerativeModelTool):
                 formatted_patch,
             )
 
-            function_list = self.further_info_chain.run(
-                patch=patch, summarization=output_summarization
-            ).split("\n")
+            function_list = [
+                function_name.strip()
+                for function_name in self.further_info_chain.run(
+                    patch=formatted_patch, summarization=output_summarization
+                ).split("\n")
+            ]
 
             if self.verbose:
                 GenerativeModelTool._print_answer(function_list)
@@ -1117,7 +1181,7 @@ class CodeReviewTool(GenerativeModelTool):
                 self.function_search,
                 patch.base_commit_hash,
                 function_list,
-                patch_set,
+                patch.patch_set,
             )
 
         output = ""
@@ -1129,20 +1193,17 @@ class CodeReviewTool(GenerativeModelTool):
                 verbose=self.verbose,
             )
 
+            experience_scope = (
+                f"the {self.target_software} source code"
+                if self.target_software
+                else "a software project"
+            )
             memory.save_context(
                 {
-                    "input": "You are an expert reviewer for"
-                    + (f" in {TARGET_SOFTWARE}" if TARGET_SOFTWARE is not None else "")
-                    + " source code, with experience on source code reviews."
+                    "input": f"You are an expert reviewer for {experience_scope}, with experience on source code reviews."
                 },
                 {
-                    "output": "Sure, I'm aware of source code practices"
-                    + (
-                        f" in {TARGET_SOFTWARE}"
-                        if TARGET_SOFTWARE is not None
-                        else " in the development community"
-                    )
-                    + "."
+                    "output": f"Sure, I'm aware of source code practices in {self.target_software or 'the development community'}."
                 },
             )
             memory.save_context(
@@ -1155,12 +1216,12 @@ class CodeReviewTool(GenerativeModelTool):
 
             if self.function_search is not None and len(requested_functions) > 0:
                 function_declaration_text = get_structured_functions(
-                    "Required Function", requested_functions
+                    "Function Name", requested_functions
                 )
 
                 memory.save_context(
                     {
-                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you, by giving more context about the code under analysis. "
+                        "input": "Attached, you can find some function definitions that are used in the current patch and might be useful to you to have more context about the code under analysis. These functions already exist in the codebase before the patch, and can't be modified. "
                         + function_declaration_text
                     },
                     {
@@ -1187,6 +1248,7 @@ class CodeReviewTool(GenerativeModelTool):
                 input=PROMPT_TEMPLATE_REVIEW.format(
                     patch=formatted_patch,
                     comment_examples=self._get_comment_examples(patch),
+                    target_code_consistency=self.target_software or "rest of the",
                 )
             )
             output += cur_output
@@ -1205,15 +1267,38 @@ class CodeReviewTool(GenerativeModelTool):
             if self.verbose:
                 GenerativeModelTool._print_answer(output)
 
+        return output
+
+    @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
+    def run(self, patch: Patch) -> list[InlineComment] | None:
+        if self.count_tokens(patch.raw_diff) > 5000:
+            raise LargeDiffError("The diff is too large")
+
+        output = self._generate_suggestions(patch)
+
+        unfiltered_suggestions = parse_model_output(output)
+        if not unfiltered_suggestions:
+            logger.info("No suggestions were generated")
+            return []
+
+        rejected_examples = (
+            "\n    - ".join(self.get_similar_rejected_comments(unfiltered_suggestions))
+            if self.suggestions_feedback_db
+            else DEFAULT_REJECTED_EXAMPLES
+        )
+
         raw_output = self.filtering_chain.invoke(
-            {"review": output, "patch": patch.raw_diff},
+            {
+                "comments": output,
+                "rejected_examples": rejected_examples,
+            },
             return_only_outputs=True,
         )["text"]
 
         if self.verbose:
             GenerativeModelTool._print_answer(raw_output)
 
-        return list(generate_processed_output(raw_output, patch_set))
+        return list(generate_processed_output(raw_output, patch.patch_set))
 
     def _get_comment_examples(self, patch):
         comment_examples = []
@@ -1265,6 +1350,25 @@ class CodeReviewTool(GenerativeModelTool):
             for num, example in enumerate(comment_examples)
         )
 
+    def get_similar_rejected_comments(self, suggestions) -> Iterable[str]:
+        if not self.suggestions_feedback_db:
+            raise Exception("Suggestions feedback database is not available")
+
+        num_examples_per_suggestion = 10 // len(suggestions) or 1
+        seen_ids: set[int] = set()
+
+        for suggestion in suggestions:
+            similar_rejected_suggestions = (
+                self.suggestions_feedback_db.find_similar_rejected_suggestions(
+                    suggestion["comment"],
+                    limit=num_examples_per_suggestion,
+                    excluded_ids=seen_ids,
+                )
+            )
+            for rejected_suggestion in similar_rejected_suggestions:
+                seen_ids.add(rejected_suggestion.id)
+                yield rejected_suggestion.comment
+
 
 class ReviewCommentsDB:
     NAV_PATTERN = re.compile(r"\{nav, [^}]+\}")
@@ -1285,8 +1389,13 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
+        point_ids = set(self.vector_db.get_existing_ids())
+
         def vector_points():
             for hunk, comment in items:
+                if comment.id in point_ids:
+                    continue
+
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
                 payload = {
@@ -1322,3 +1431,72 @@ class ReviewCommentsDB:
                         max_score_per_comment[result.id] = result
 
         return sorted(max_score_per_comment.values())[-limit:]
+
+
+class EvaluationAction(enum.Enum):
+    APPROVE = 1
+    REJECT = 2
+    IGNORE = 3
+
+
+@dataclass
+class SuggestionFeedback:
+    id: int
+    comment: str
+    file_path: str
+    action: Literal["APPROVE", "REJECT", "IGNORE"]
+    user: str
+
+    @staticmethod
+    def from_payload_score(point: PayloadScore):
+        return SuggestionFeedback(
+            id=point.id,
+            comment=point.payload["comment"],
+            file_path=point.payload["file_path"],
+            action=point.payload["action"],
+            user=point.payload["user"],
+        )
+
+
+class SuggestionsFeedbackDB:
+    def __init__(self, vector_db: VectorDB) -> None:
+        self.vector_db = vector_db
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
+        )
+
+    def add_suggestions_feedback(self, suggestions: Iterable[SuggestionFeedback]):
+        def vector_points():
+            for suggestion in suggestions:
+                vector = self.embeddings.embed_query(suggestion.comment)
+                payload = {
+                    "comment": suggestion.comment,
+                    "file_path": suggestion.file_path,
+                    "action": suggestion.action,
+                    "user": suggestion.user,
+                }
+
+                yield VectorPoint(id=suggestion.id, vector=vector, payload=payload)
+
+        self.vector_db.insert(vector_points())
+
+    def find_similar_suggestions(self, comment: str):
+        return (
+            SuggestionFeedback.from_payload_score(point)
+            for point in self.vector_db.search(self.embeddings.embed_query(comment))
+        )
+
+    def find_similar_rejected_suggestions(
+        self, comment: str, limit: int, excluded_ids: Iterable[int] = ()
+    ):
+        return (
+            SuggestionFeedback.from_payload_score(point)
+            for point in self.vector_db.search(
+                self.embeddings.embed_query(comment),
+                filter=QueryFilter(
+                    must_match={"action": "REJECT"},
+                    must_not_has_id=list(excluded_ids),
+                ),
+                limit=limit,
+            )
+        )

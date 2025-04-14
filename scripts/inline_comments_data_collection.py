@@ -7,11 +7,10 @@ import orjson
 from libmozdata.phabricator import PhabricatorAPI
 
 from bugbug import db, phabricator
+from bugbug.phabricator import fetch_diff_from_url
 from bugbug.tools.code_review import PhabricatorReviewData
 from bugbug.utils import (
     get_secret,
-    get_session,
-    get_user_agent,
     setup_libmozdata,
     zstd_compress,
 )
@@ -70,20 +69,6 @@ def find_recent_update(transactions, comment_date_modified):
     return max(
         updates, key=lambda transaction: transaction["dateModified"], default=None
     )
-
-
-def fetch_diff_from_url(revision_id, vs_diff_id, fix_patch_id):
-    url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={vs_diff_id}&id={fix_patch_id}&download=true"
-    response = get_session("phabricator").get(
-        url,
-        headers={
-            "User-Agent": get_user_agent(),
-        },
-    )
-    if response.status_code == 200:
-        return response.text
-    else:
-        raise Exception(f"Failed to download diff from URL: {url}")
 
 
 def extract_relevant_diff(patch_diff, filename):

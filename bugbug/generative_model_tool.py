@@ -21,11 +21,11 @@ def create_human_llm():
     return HumanInputLLM()
 
 
-def create_openai_llm(temperature=0.2, top_p=None):
+def create_openai_llm(temperature=0.2, top_p=None, model_name="gpt-4o-2024-11-20"):
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
-        model_name="gpt-4o-2024-05-13",
+        model_name=model_name,
         api_key=get_secret("OPENAI_API_KEY"),
         temperature=temperature,
         top_p=top_p,
@@ -49,7 +49,7 @@ def create_anthropic_llm(temperature=0.2, top_p=None):
     from langchain_anthropic import ChatAnthropic
 
     return ChatAnthropic(
-        model_name="claude-3-5-sonnet-20241022",
+        model_name="claude-3-7-sonnet-20250219",
         api_key=get_secret("ANTHROPIC_API_KEY"),
         temperature=temperature,
         top_p=top_p,
@@ -60,7 +60,7 @@ def create_gemini_llm(temperature=0.2, top_p=None):
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     return ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
+        model="gemini-2.0-flash-exp",
         api_key=get_secret("GOOGLE_API_KEY"),
         temperature=temperature,
         top_p=top_p,
@@ -71,7 +71,7 @@ def create_mistral_llm(temperature=0.2, top_p=None):
     from langchain_mistralai import ChatMistralAI
 
     return ChatMistralAI(
-        model_name="mistral-large-latest",
+        model_name="codestral-latest",
         api_key=get_secret("MISTRAL_API_KEY"),
         temperature=temperature,
         top_p=top_p,

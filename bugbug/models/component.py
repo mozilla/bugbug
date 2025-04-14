@@ -27,7 +27,7 @@ class ComponentModel(BugModel):
         "Core",
         "External Software Affecting Firefox",
         "DevTools",
-        "Fenix",
+        "Firefox for Android",
         "Firefox",
         "Toolkit",
         "WebExtensions",
@@ -53,7 +53,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox",
         "WebExtensions",
         "Firefox Build System",
-        "Fenix",
+        "Firefox for Android",
     ]
 
     CONFLATED_COMPONENTS_MAPPING = {
@@ -64,7 +64,7 @@ class ComponentModel(BugModel):
         "External Software Affecting Firefox": "External Software Affecting Firefox::Other",
         "WebExtensions": "WebExtensions::Untriaged",
         "Firefox Build System": "Firefox Build System::General",
-        "Fenix": "Fenix::General",
+        "Firefox for Android": "Firefox for Android::General",
     }
 
     def __init__(self, lemmatization=False):
@@ -132,8 +132,8 @@ class ComponentModel(BugModel):
         }
 
     def filter_component(self, product, component):
-        if product == "Fenix" or product == "GeckoView":
-            return "Fenix"
+        if product == "Firefox for Android" or product == "GeckoView":
+            return "Firefox for Android"
 
         full_comp = f"{product}::{component}"
 

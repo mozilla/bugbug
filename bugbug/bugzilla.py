@@ -40,7 +40,7 @@ PRODUCTS = (
     "DevTools",
     "Developer Infrastructure",
     "External Software Affecting Firefox",
-    "Fenix",
+    "Firefox for Android",
     "Firefox",
     "Firefox Build System",
     "Firefox for iOS",
@@ -219,7 +219,9 @@ def get_ids_between(date_from, date_to=None, security=False, resolution=None):
 def download_bugs(bug_ids: Iterable[int], security: bool = False) -> list[BugDict]:
     old_bug_count = 0
     new_bug_ids_set = set(int(bug_id) for bug_id in bug_ids)
-    for bug in get_bugs(include_invalid=True):
+    for bug in get_bugs(
+        include_invalid=True, include_additional_products=ADDITIONAL_PRODUCTS
+    ):
         old_bug_count += 1
         new_bug_ids_set.discard(int(bug["id"]))
 
