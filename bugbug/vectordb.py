@@ -128,7 +128,6 @@ class QdrantVectorDB(VectorDB):
         ):
             yield PayloadScore(item.score, item.id, item.payload)
 
-
     def get_existing_ids(self) -> Iterable[int]:
         offset = 0
 
@@ -140,7 +139,7 @@ class QdrantVectorDB(VectorDB):
                 with_vectors=False,
                 offset=offset,
             )
-            
+
             for point in points:
                 yield point.id
 
