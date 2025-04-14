@@ -1288,8 +1288,6 @@ class ReviewCommentsDB:
         point_ids = set(self.vector_db.get_existing_ids())
 
         def vector_points():
-            nonlocal point_ids
-
             for hunk, comment in items:
                 if comment.id in point_ids:
                     continue
