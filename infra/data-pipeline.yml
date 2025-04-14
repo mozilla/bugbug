@@ -124,7 +124,7 @@ tasks:
       deadline: { $fromNow: "1 day" }
       expires: { $fromNow: "1 year" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       payload:
         maxRunTime: 86400
         image: mozilla/bugbug-commit-retrieval:${version}

@@ -49,7 +49,10 @@ class Retriever(object):
 
         deleted_component_ids = set(
             bug["id"]
-            for bug in bugzilla.get_bugs()
+            for bug in bugzilla.get_bugs(
+                include_invalid=True,
+                include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+            )
             if (bug["product"], bug["component"]) not in all_components
         )
         logger.info(
@@ -99,7 +102,9 @@ class Retriever(object):
                 sum(
                     (
                         bug["regressed_by"] + bug["regressions"] + bug["blocks"]
-                        for bug in bugzilla.get_bugs()
+                        for bug in bugzilla.get_bugs(
+                            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS
+                        )
                     ),
                     [],
                 )
@@ -167,7 +172,10 @@ class Retriever(object):
             new_bugs = bugzilla.download_bugs(regression_related_ids)
 
         # Try to re-download inconsistent bugs, up to twice.
-        inconsistent_bugs = bugzilla.get_bugs(include_invalid=True)
+        inconsistent_bugs = bugzilla.get_bugs(
+            include_invalid=True,
+            include_additional_products=bugzilla.ADDITIONAL_PRODUCTS,
+        )
         for i in range(2):
             # We look for inconsistencies in all bugs first, then, on following passes,
             # we only look for inconsistencies in bugs that were found to be inconsistent in the first pass
@@ -184,17 +192,57 @@ class Retriever(object):
             bugzilla.delete_bugs(lambda bug: bug["id"] in inconsistent_bug_ids)
             bugzilla.download_bugs(inconsistent_bug_ids)
 
-        # TODO: Figure out why.
-        missing_history_bug_ids = {
-            bug["id"] for bug in bugzilla.get_bugs() if "history" not in bug
-        }
-        bugzilla.delete_bugs(lambda bug: bug["id"] in missing_history_bug_ids)
-        logger.info(
-            "Deleted %d bugs as we couldn't retrieve their history",
-            len(missing_history_bug_ids),
-        )
+        # TODO: Figure out why we have missing fields in the first place.
+        handle_missing_fields(["history", "comments"])
 
         zstd_compress(bugzilla.BUGS_DB)
+
+
+def handle_missing_fields(
+    fields: list[str], trial_number: int = 1, max_tries: int = 2
+) -> int:
+    """Handle bugs that are missing a mandatory field.
+
+    This function will try to re-download the bugs that are missing any of the
+    given fields and delete them if they are still missing a field after the
+    maximum number of tries.
+
+    Args:
+        fields: The list of field names to check for.
+        trial_number: The current try number. It should be 1 on the first call.
+        max_tries: The maximum number of tries to re-download the bugs.
+
+    Returns:
+        Number of bugs that were deleted.
+    """
+    missing_field_bug_ids = {
+        bug["id"]
+        for bug in db.read(bugzilla.BUGS_DB)
+        if any(field not in bug for field in fields)
+    }
+
+    if not missing_field_bug_ids:
+        return 0
+
+    bugzilla.delete_bugs(lambda bug: bug["id"] in missing_field_bug_ids)
+
+    if trial_number <= max_tries:
+        logger.info(
+            "Re-downloading %d bugs, as they were missing the fields (re-trial %d of %d)",
+            len(missing_field_bug_ids),
+            trial_number,
+            max_tries,
+        )
+        bugzilla.download_bugs(missing_field_bug_ids)
+
+        return handle_missing_fields(fields, trial_number + 1, max_tries)
+
+    logger.info(
+        "Deleted %d bugs as we couldn't retrieve their missing fields",
+        len(missing_field_bug_ids),
+    )
+
+    return len(missing_field_bug_ids)
 
 
 def main() -> None:
