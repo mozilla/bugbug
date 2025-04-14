@@ -5,7 +5,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Generator, Iterable
 
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
@@ -47,7 +47,7 @@ class VectorDB(ABC):
         ...
 
     @abstractmethod
-    def get_existing_ids(self):
+    def get_existing_ids(self) -> Generator[int, None, None]:
         ...
 
 
@@ -88,8 +88,7 @@ class QdrantVectorDB(VectorDB):
         for item in self.client.search(self.collection_name, query):
             yield PayloadScore(item.score, item.id, item.payload)
 
-    def get_existing_ids(self):
-        point_ids = set()
+    def get_existing_ids(self) -> Generator[int, None, None]:
         offset = None
 
         while True:
@@ -101,11 +100,10 @@ class QdrantVectorDB(VectorDB):
                 offset=offset,
             )
 
-            point_ids.update(point.id for point in points)
+            for point in points:
+                yield point.id
 
             if not next_page_offset:
                 break
 
             offset = next_page_offset
-
-        return point_ids

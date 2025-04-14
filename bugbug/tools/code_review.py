@@ -1285,7 +1285,7 @@ class ReviewCommentsDB:
         return comment
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
-        point_ids = self.vector_db.get_existing_ids()
+        point_ids = set(self.vector_db.get_existing_ids())
 
         def vector_points():
             nonlocal point_ids
