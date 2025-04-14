@@ -13,16 +13,16 @@ logger = logging.getLogger(__name__)
 
 os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
-llm_cache = {
-    "llm_name": None,
-    "llm": None,
-    "chunk_size": None,
-    "selector": None,
-}
+tool: ReleaseNotesCommitsSelector | None = None
+
+DEFAULT_LLM_NAME = "openai"
+DEFAULT_CHUNK_SIZE = 1000
 
 
 @functions_framework.http
 def handle_release_notes(request: flask.Request):
+    global tool
+
     if request.method != "GET":
         return "Only GET requests are allowed", 405
 
@@ -30,28 +30,20 @@ def handle_release_notes(request: flask.Request):
     if not version:
         return "Missing 'version' query parameter", 400
 
-    llm_name = request.args.get("llm", "openai")
-    chunk_size = int(request.args.get("chunk_size", 100))
-
     if (
-        llm_cache["llm"] is None
-        or llm_cache["llm_name"] != llm_name
-        or llm_cache["chunk_size"] != chunk_size
+        tool is None
+        or tool.llm_name != DEFAULT_LLM_NAME
+        or tool.chunk_size != DEFAULT_CHUNK_SIZE
     ):
-        logger.info("Initializing new LLM and selector...")
-        llm_cache["llm_name"] = llm_name
-        llm_cache["llm"] = generative_model_tool.create_llm_from_request(
-            llm_name, request.args
-        )
-        llm_cache["chunk_size"] = chunk_size
-        llm_cache["selector"] = ReleaseNotesCommitsSelector(
-            chunk_size=chunk_size, llm=llm_cache["llm"]
-        )
+        logger.info("Initializing new ReleaseNotesCommitsSelector...")
+        llm = generative_model_tool.create_llm_from_request(DEFAULT_LLM_NAME, {})
+        tool = ReleaseNotesCommitsSelector(chunk_size=DEFAULT_CHUNK_SIZE, llm=llm)
+        tool.llm_name = DEFAULT_LLM_NAME
+        tool.chunk_size = DEFAULT_CHUNK_SIZE
 
-    selector = llm_cache["selector"]
-    notes = selector.get_final_release_notes_commits(version=version)
+    notes = tool.get_final_release_notes_commits(version=version)
 
     if not notes:
-        return "No user-facing commits found.", 404
+        return "", 200, {"Content-Type": "text/plain"}
 
     return notes, 200, {"Content-Type": "text/plain"}
