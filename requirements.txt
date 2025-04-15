@@ -11,7 +11,7 @@ langchain-openai==0.3.12
 libmozdata==0.2.9
 llama-cpp-python==0.3.6
 lmdb==1.6.2
-lxml-html-clean==0.4.1
+lxml-html-clean==0.4.2
 markdown2==2.5.3
 matplotlib==3.10.1
 mercurial==6.9.5
