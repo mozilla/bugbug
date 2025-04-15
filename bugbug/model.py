@@ -476,9 +476,9 @@ class Model:
         y_pred = self.le.inverse_transform(y_pred)
 
         if is_multilabel:
-            assert isinstance(
-                y_pred[0], np.ndarray
-            ), "The predictions should be multilabel"
+            assert isinstance(y_pred[0], np.ndarray), (
+                "The predictions should be multilabel"
+            )
 
         logger.info(f"No confidence threshold - {len(y_test)} classified")
         if is_multilabel:
@@ -634,9 +634,9 @@ class Model:
         background_dataset=None,
     ):
         assert items is not None
-        assert (
-            self.extraction_pipeline is not None and self.clf is not None
-        ), "The module needs to be initialized first"
+        assert self.extraction_pipeline is not None and self.clf is not None, (
+            "The module needs to be initialized first"
+        )
 
         if not isinstance(items, list):
             items = [items]

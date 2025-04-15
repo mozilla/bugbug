@@ -10,6 +10,7 @@ Call this script like:
   export BUGBUG_HTTP_SERVER=https://bugbug.herokuapp.com
   cd http_service && docker-compose run bugbug-http-service
 """
+
 import logging
 import os
 import traceback

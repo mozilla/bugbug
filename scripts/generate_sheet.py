@@ -18,9 +18,9 @@ logger = getLogger(__name__)
 def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> None:
     model_file_name = f"{model_name}model"
 
-    assert os.path.exists(
-        model_file_name
-    ), f"{model_file_name} does not exist. Train the model with trainer.py first."
+    assert os.path.exists(model_file_name), (
+        f"{model_file_name} does not exist. Train the model with trainer.py first."
+    )
 
     model_class = get_model_class(model_name)
     model = model_class.load(model_file_name)
@@ -44,7 +44,7 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
 
         rows.append(
             [
-                f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]}',
+                f"https://bugzilla.mozilla.org/show_bug.cgi?id={bug['id']}",
                 prediction,
                 "",
                 bug["summary"],
@@ -55,7 +55,7 @@ def generate_sheet(model_name: str, token: str, days: int, threshold: float) -> 
     with open(
         os.path.join(
             "sheets",
-            f'{model_name}-{datetime.utcnow().strftime("%Y-%m-%d")}-labels.csv',
+            f"{model_name}-{datetime.utcnow().strftime('%Y-%m-%d')}-labels.csv",
         ),
         "w",
     ) as f:

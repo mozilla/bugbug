@@ -73,7 +73,7 @@ for bug in bugs:
             continue
 
         os.system("clear")
-        print(f'Bug {bug["id"]} - {bug["summary"]}')
+        print(f"Bug {bug['id']} - {bug['summary']}")
         print(f"Comment {i}")
         print(comment["text"])
 

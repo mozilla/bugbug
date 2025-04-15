@@ -31,12 +31,12 @@ def test_rollback():
                 count += 1
         return count
 
-    assert (
-        rollback_point(1390433) == 35
-    ), "A bug field should start with qawanted or qe-verify"
-    assert (
-        rollback_point(1389136) == 9
-    ), "A bug field should start with qawanted or qe-verify"
+    assert rollback_point(1390433) == 35, (
+        "A bug field should start with qawanted or qe-verify"
+    )
+    assert rollback_point(1389136) == 9, (
+        "A bug field should start with qawanted or qe-verify"
+    )
 
     assert rollback_point(1388990) == 29
     assert rollback_point(1389223) == 8

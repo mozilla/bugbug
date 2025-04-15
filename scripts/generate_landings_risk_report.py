@@ -324,12 +324,12 @@ class LandingsRiskReportGenerator(object):
                 -3:
             ]
             commit_group["most_common_fixed_bugs_components"] = fixed_bugs_components
-            commit_group[
-                "most_common_regression_blocked_bug_components"
-            ] = regression_blocked_bug_components
-            commit_group[
-                "most_common_fixed_bug_blocked_bug_components"
-            ] = fixed_bug_blocked_bug_components
+            commit_group["most_common_regression_blocked_bug_components"] = (
+                regression_blocked_bug_components
+            )
+            commit_group["most_common_fixed_bug_blocked_bug_components"] = (
+                fixed_bug_blocked_bug_components
+            )
 
     def get_landed_and_filed_since(self, days: int) -> list[int]:
         since = datetime.utcnow() - timedelta(days=days)
@@ -803,10 +803,10 @@ class LandingsRiskReportGenerator(object):
     def generate_component_test_stats(
         self, bug_map: dict[int, bugzilla.BugDict], test_infos: dict[str, Any]
     ) -> None:
-        component_test_stats: dict[
-            str, dict[str, dict[str, list[dict[str, int]]]]
-        ] = collections.defaultdict(
-            lambda: collections.defaultdict(lambda: collections.defaultdict(list))
+        component_test_stats: dict[str, dict[str, dict[str, list[dict[str, int]]]]] = (
+            collections.defaultdict(
+                lambda: collections.defaultdict(lambda: collections.defaultdict(list))
+            )
         )
         for date, test_info in test_infos.items():
             for component, count in test_info["skips"].items():

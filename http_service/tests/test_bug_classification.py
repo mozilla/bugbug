@@ -239,9 +239,9 @@ def test_for_missing_bugs(client, responses):
     )
     assert rv.status_code == 202
     bugs = retrieve_compressed_reponse(rv)["bugs"]
-    assert bugs.keys() == set(
-        map(str, all_bug_ids)
-    ), "All the queried bug IDs must be returned"
+    assert bugs.keys() == set(map(str, all_bug_ids)), (
+        "All the queried bug IDs must be returned"
+    )
 
 
 def test_empty_batch(client):
