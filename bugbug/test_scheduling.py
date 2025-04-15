@@ -403,9 +403,9 @@ def remove_failing_together_db(granularity: str) -> None:
 
 def close_failing_together_db(granularity: str) -> None:
     global failing_together
-    assert (
-        granularity in failing_together
-    ), f"Failing together probabilities DB for {granularity} granularity was not open"
+    assert granularity in failing_together, (
+        f"Failing together probabilities DB for {granularity} granularity was not open"
+    )
     failing_together[granularity].close()
     failing_together.pop(granularity)
 

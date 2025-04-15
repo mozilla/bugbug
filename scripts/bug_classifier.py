@@ -40,7 +40,7 @@ def classify_bugs(model_name: str, bug_id: int) -> None:
 
     for bug in bugs:
         print(
-            f'https://bugzilla.mozilla.org/show_bug.cgi?id={bug["id"]} - {bug["summary"]} '
+            f"https://bugzilla.mozilla.org/show_bug.cgi?id={bug['id']} - {bug['summary']} "
         )
 
         if model.calculate_importance:

@@ -20,7 +20,7 @@ def api_filelist_v_fromto(instance, rev_id, v1=0, v2=1):
 
 
 def call(auth, g):
-    command = f"curl -u \"{auth['user']}:{auth['password']}\" \"{g}\""
+    command = f'curl -u "{auth["user"]}:{auth["password"]}" "{g}"'
     process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     return process.stdout
 

@@ -49,9 +49,10 @@ def compare_fixes(revision_id, initial_patch_id, generated_fix, reference_fix):
 
 
 def conduct_evaluation(input_csv, output_csv, llm_tool):
-    with open(input_csv, "r") as infile, open(
-        output_csv, mode="w", newline=""
-    ) as outfile:
+    with (
+        open(input_csv, "r") as infile,
+        open(output_csv, mode="w", newline="") as outfile,
+    ):
         reader = csv.DictReader(infile)
 
         fieldnames = reader.fieldnames + [

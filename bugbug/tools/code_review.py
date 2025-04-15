@@ -319,13 +319,11 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def base_commit_hash(self) -> str:
-        ...
+    def base_commit_hash(self) -> str: ...
 
     @property
     @abstractmethod
-    def raw_diff(self) -> str:
-        ...
+    def raw_diff(self) -> str: ...
 
     @cached_property
     def patch_set(self) -> PatchSet:

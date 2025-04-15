@@ -71,9 +71,9 @@ class RegressorModel(CommitModel):
 
         self.use_finder = use_finder
         self.exclude_finder = exclude_finder
-        assert (
-            use_finder ^ exclude_finder
-        ), "Using both use_finder and exclude_finder option does not make a lot of sense"
+        assert use_finder ^ exclude_finder, (
+            "Using both use_finder and exclude_finder option does not make a lot of sense"
+        )
         self.finder_regressions_only = finder_regressions_only
 
         feature_extractors = [

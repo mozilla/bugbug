@@ -165,12 +165,10 @@ def get_tokenizer(model_name):
 class GenerativeModelTool(ABC):
     @property
     @abstractmethod
-    def version(self) -> str:
-        ...
+    def version(self) -> str: ...
 
     @abstractmethod
-    def run(self, *args, **kwargs) -> Any:
-        ...
+    def run(self, *args, **kwargs) -> Any: ...
 
     @staticmethod
     def _print_answer(answer):

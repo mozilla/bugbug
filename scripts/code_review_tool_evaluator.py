@@ -163,9 +163,9 @@ class FeedbackEvaluator:
             )
 
             if "old_comment" in current_result:
-                current_result[
-                    "old_comment"
-                ] += f"\n\n-------------\n\n{evaluated_comment['comment']}"
+                current_result["old_comment"] += (
+                    f"\n\n-------------\n\n{evaluated_comment['comment']}"
+                )
             else:
                 current_result["old_comment"] = evaluated_comment["comment"]
 

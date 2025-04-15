@@ -20,9 +20,9 @@ from bugbug.code_search.function_search import (
 
 def find_symbol_definition_for_line(path, line, searchfox_path):
     searchfox_origfile_path = os.path.join(searchfox_path, path)
-    assert os.path.exists(
-        searchfox_origfile_path
-    ), f"{searchfox_origfile_path} doesn't exist"
+    assert os.path.exists(searchfox_origfile_path), (
+        f"{searchfox_origfile_path} doesn't exist"
+    )
 
     ret_obj = None
     with open(searchfox_origfile_path, "r") as fd:
