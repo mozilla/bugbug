@@ -6,3 +6,6 @@ select = ["E4", "E7", "E9", "F", "I", "T10", "CPY"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["bugbug_http"]
+
+[tool.codespell]
+ignore-words-list = ["aFile", "thirdparty", "checkin"]
