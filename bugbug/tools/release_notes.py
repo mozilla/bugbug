@@ -219,7 +219,7 @@ Instructions:
                 unique_lines.append(line)
         return "\n".join(unique_lines)
 
-    def get_final_release_notes_commits(self, version: str) -> Optional[str]:
+    def get_final_release_notes_commits(self, version: str) -> Optional[list[str]]:
         self.version2 = version
         self.version1 = get_previous_version(version)
 
@@ -247,4 +247,4 @@ Instructions:
 
         logger.info("Removing duplicates...")
         deduped = self.remove_duplicate_bugs(cleaned)
-        return deduped
+        return deduped.splitlines()

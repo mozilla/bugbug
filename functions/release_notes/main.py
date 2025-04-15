@@ -44,6 +44,6 @@ def handle_release_notes(request: flask.Request):
     notes = tool.get_final_release_notes_commits(version=version)
 
     if not notes:
-        return "", 200, {"Content-Type": "text/plain"}
+        return {"commits": []}, 200, {"Content-Type": "application/json"}
 
-    return notes, 200, {"Content-Type": "text/plain"}
+    return {"commits": notes}, 200, {"Content-Type": "application/json"}
