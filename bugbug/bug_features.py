@@ -915,7 +915,7 @@ class InitialProduct(SingleBugFeature):
                 for change in entry["changes"]:
                     if change["field_name"] == "product":
                         return change["removed"]
-        return bug["product"]
+        return None
 
 
 class InitialComponent(SingleBugFeature):
@@ -926,4 +926,4 @@ class InitialComponent(SingleBugFeature):
                 for change in entry["changes"]:
                     if change["field_name"] == "component":
                         return change["removed"]
-        return bug["component"]
+        return None
