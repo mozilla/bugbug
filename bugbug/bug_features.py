@@ -913,7 +913,10 @@ class InitialProduct(SingleBugFeature):
         if history:
             for entry in history:
                 for change in entry["changes"]:
-                    if change["field_name"] == "product":
+                    if (
+                        change["field_name"] == "product"
+                        and change["removed"] != bug["product"]
+                    ):
                         return change["removed"]
         return None
 
@@ -924,6 +927,9 @@ class InitialComponent(SingleBugFeature):
         if history:
             for entry in history:
                 for change in entry["changes"]:
-                    if change["field_name"] == "component":
+                    if (
+                        change["field_name"] == "component"
+                        and change["removed"] != bug["component"]
+                    ):
                         return change["removed"]
         return None
