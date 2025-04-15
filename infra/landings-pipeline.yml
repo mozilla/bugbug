@@ -8,7 +8,7 @@ tasks:
       deadline: { $fromNow: "2 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
-      workerType: compute-large
+      workerType: compute-super-large
       payload:
         features:
           taskclusterProxy: true
