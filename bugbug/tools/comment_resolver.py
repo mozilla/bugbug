@@ -1,11 +1,13 @@
 import csv
 import json
 import logging
+import os
 import re
 from types import SimpleNamespace
 
 from langchain_openai import OpenAIEmbeddings
 from libmozdata.phabricator import PhabricatorAPI
+from openai import OpenAI
 from qdrant_client import QdrantClient
 
 from bugbug.generative_model_tool import GenerativeModelTool
@@ -83,9 +85,70 @@ class FixCommentDB:
         return similar_comments if similar_comments else None
 
 
-class CodeGeneratorTool(GenerativeModelTool):
-    version = "0.0.1"
+# class CodeGeneratorTool(GenerativeModelTool):
+#     version = "0.0.1"
 
+#     def __init__(
+#         self,
+#         llm,
+#         db: FixCommentDB,
+#     ) -> None:
+#         self.db = db
+#         self.llm = llm
+
+#     def run(self, prompt: str):
+#         messages = [("system", "You are a code review bot."), ("user", prompt)]
+#         response = self.llm.invoke(messages)
+#         return response.content
+
+#     def generate_fix(
+#         self,
+#         comment,
+#         relevant_diff,
+#         prompt_type,
+#         hunk_size,
+#         similar_comments_and_fix_infos,
+#     ):
+#         prompt = generate_prompt(
+#             comment.content,
+#             relevant_diff,
+#             comment.start_line,
+#             comment.end_line,
+#             similar_comments_and_fix_infos,
+#             prompt_type,
+#             hunk_size,
+#         )
+
+#         print(f"PROMPT: {prompt}")
+
+#         generated_fix = self.run(prompt=prompt)
+#         return generated_fix, prompt
+
+#     def is_actionable_comment(self, comment):
+#         prompt = f"Does the following comment provide a clear and specific suggestion for improvement? Note: Suggestions relying on links for context are not considered actionable, as the LLM cannot access them. Respond with 'YES' or 'NO' only. \n\nComment: {comment.content}"
+#         response = self.run(prompt=prompt)
+#         return response
+
+MODEL = "gpt-4o"
+
+client = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
+
+#         response = client.chat.completions.create(
+#             messages=[
+#                 {
+#                     "role": "user",
+#                     "content": prompt,
+#                 }
+#             ],
+#             model=MODEL,
+#             temperature=0.1,
+#         )
+#         return response.choices[0].message.content.strip()
+
+
+class CodeGeneratorTool:
     def __init__(
         self,
         llm,
@@ -95,9 +158,28 @@ class CodeGeneratorTool(GenerativeModelTool):
         self.llm = llm
 
     def run(self, prompt: str):
-        messages = [("system", "You are a code review bot."), ("user", prompt)]
-        response = self.llm.invoke(messages)
-        return response.content
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            model=MODEL,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
+
+    def determine_if_comment_is_actionable(self, comment):
+        prompt = f"Does the following comment provide a clear and specific suggestion for improvement that an LLM can address? Some examples of non-actionable comments include those that rely on external links, or comments that point something out rather than suggesting a fix. NOTE: comments that start with 'nit' or are directly suggesting a change (i.e. no description just showing what they should change it to) are actionable. Respond with 'YES' or 'NO' only. Comment: {comment}"
+        response = self.run(prompt=prompt)
+        response_lower = response.lower()
+        if "yes" in response_lower:
+            print(f"YES: {comment}")
+            return True
+        else:
+            print(f"NO: {comment}")
+            return False
 
     def generate_fix(
         self,
@@ -106,30 +188,95 @@ class CodeGeneratorTool(GenerativeModelTool):
         prompt_type,
         hunk_size,
         similar_comments_and_fix_infos,
-        evaluation,
-        generated_fix,
     ):
-        if not evaluation:
-            prompt = generate_prompt(
-                comment.content,
-                relevant_diff,
-                comment.start_line,
-                comment.end_line,
-                similar_comments_and_fix_infos,
-                prompt_type,
-                hunk_size,
-            )
-        else:
-            prompt = f"""
-            Comment: {comment.content}
-            Diff (before fix): {relevant_diff}
-            Generated Fix: {generated_fix}
-
-            Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-            """
+        prompt = generate_prompt(
+            comment.content,
+            relevant_diff,
+            comment.start_line,
+            comment.end_line,
+            similar_comments_and_fix_infos,
+            prompt_type,
+            hunk_size,
+        )
 
         generated_fix = self.run(prompt=prompt)
-        return generated_fix
+        return generated_fix, prompt
+
+    def generate_fix_with_raw_file_content(
+        self,
+        comment,
+        raw_file_content,
+        prompt_type,
+        hunk_size,
+    ):
+        (
+            prompt,
+            numbered_snippet,
+            start_line,
+            end_line,
+        ) = generate_prompt_from_raw_file_content(
+            comment,
+            raw_file_content,
+            prompt_type,
+            hunk_size,
+        )
+
+        generated_fix = self.run(prompt=prompt)
+        return generated_fix, prompt, numbered_snippet, start_line, end_line
+
+
+def generate_prompt_from_raw_file_content(
+    comment, raw_file_content, prompt_type, hunk_size
+):
+    lines = raw_file_content.splitlines()
+    total_lines = len(lines)
+
+    start_line = max(comment.start_line - hunk_size, 1)
+    end_line = min(comment.end_line + hunk_size, total_lines)
+
+    snippet_lines = []
+    for i in range(start_line, end_line + 1):
+        snippet_lines.append(f"{i} {lines[i - 1]}")
+
+    numbered_snippet = "\n".join(snippet_lines)
+
+    if prompt_type == "study-modified":
+        prompt = f"""
+You are an expert Firefox software engineer who must make changes to a Code Snippet below according to a given Code Review Comment. The Code Snippet is a part of a larger codebase and is provided to you in a numbered format for reference. Your task is to make the necessary changes to the Code Snippet based on the Code Review Comment provided.
+
+Instructions:
+- The new code changes must be presented in valid Git diff format.
+- Lines added should have a `+` prefix.
+- Lines removed should have a `-` prefix.
+- Remove the line number prefix in your final diff output. It is only there for your reference to understand where the comment was made.
+- You are not restricted to only modify the lines within the Comment Start Line and Comment End Line. You can make changes to any line in the snippet if necessary to address the comment.
+- There are a few cases where a comment can span a single line but may be referring to multiple lines. Before making any changes, please read the Code Review Comment and the Code Snippet to understand where the comment is most likely referring to.
+- If the comment is suggesting to either delete or modify a code comment, if not given additional information, settle with the former.
+- You must provide changes. You cannot generate a diff with no changes.
+- Do NOT repeat the prompt or add any extra text.
+
+Input Details:
+Comment Start Line: {comment.start_line}
+Comment End Line: {comment.end_line}
+Comment File: {comment.filepath}
+Code Review Comment: {comment.content['raw']}
+
+Code Snippet (with Line Numbers):
+{numbered_snippet}
+
+Example Output Format:
+--- a/File.cpp
++++ b/File.cpp
+@@ -10,7 +10,7 @@
+- old line
++ new line
+
+Expected Output Format:
+Your response must only contain the following, with no extra text:
+(diff output here)
+"""
+
+    return prompt, numbered_snippet, comment.start_line, comment.end_line
 
 
 class CodeGeneratorEvaluatorTool(GenerativeModelTool):
@@ -150,14 +297,102 @@ class CodeGeneratorEvaluatorTool(GenerativeModelTool):
         response = self.llm.invoke(messages)
         return response.content
 
-    def generate_fix(self, comment, relevant_diff, generated_fix):
-        prompt = f"""
-        Comment: {comment}
-        Diff (before fix): {relevant_diff}
-        Generated Fix: {generated_fix}
+    def generate_fix(
+        self,
+        comment,
+        relevant_diff=None,
+        generated_fix=None,
+        actual_fix=None,
+        comparison_evaluation=False,
+        equivalent_fix=False,
+        new_prompt=False,
+        start_line=None,
+        end_line=None,
+    ):
+        if new_prompt:
+            # prompt = f"""You are an expert programmer with experience on source code. You are given the task to evaluate the quality of generated code edits for the patch and its corresponding comment as provided below by comparing it to actual code edits.
 
-        Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
-        """
+            # Does the generated code edits resolve the comment? (i.e., does it address the feedback or concern raised by the comment, even if it is not identical to the actual code edits?) Answer YES or NO, followed by a very short and succinct explanation.
+
+            # The comment of interest:
+            # {comment}
+
+            # Generated code edits:
+            # {generated_fix}
+
+            # Actual code edits (provided as a reference to show how the comment was resolved by a human):
+            # {actual_fix}
+            # """
+
+            prompt = f"""You are an expert Firefox programmer with experience in evaluating source code changes based on inline comments. Your task is to compare a generated code edit with an actual human-made edit, based on a provided comment and the code snippet the comment was made on, to determine if the generated edit effectively resolves the issue.
+
+Task:
+- Compare the Generated Code Edit against the Actual Code Edit.
+- The Actual Code Edit has the changes necessary to address the comment, but it MAY have additional changes that are not relevant to the comment.
+- Determine if the generated edit successfully addresses the concern raised by the comment, even if it is not identical to the Actual Code Edit.
+- Ensure that the provided code snippet (containing the original code before any edits) is considered.
+- Answer YES or NO, followed by a concise explanation.
+
+Inputs:
+Comment of Interest:
+{comment}
+
+Original Code Snippet (where the inline comment was made):
+{relevant_diff}
+
+Comment Start Line:
+{start_line}
+
+Comment End Line:
+{end_line}
+
+Generated Code Edit:
+{generated_fix}
+
+Actual Code Edit (Human Fix):
+{actual_fix}
+
+Question:
+Does the Generated Code Edit fully resolve the comment based on the functionality and intent of the fix?
+Use the Actual Code Edit (Human Fix) as a baseline for what should be done to fix the issue, and may have additional irrelevant changes. While not all solutions will match this, it serves as a reference to determine if the generated edit is on the right track.
+Respond with STRICTLY EITHER YES or NO, followed by a brief explanation after the comma.
+"""
+
+        else:
+            if comparison_evaluation and equivalent_fix:
+                prompt = f"""
+                Comment: ```{comment}```
+
+
+                Generated Fix: ```{generated_fix}```
+
+
+                Actual Fix (provided as a reference to show how the comment was resolved by a human): ```{actual_fix}```
+
+
+                Does the Generated Fix resolve the comment? (i.e., does it address the feedback or concern raised, even if it is not identical to the Actual Fix?) Answer YES or NO, followed by a very short and succinct explanation.
+                """
+            elif comparison_evaluation and not equivalent_fix:
+                prompt = f"""
+                Comment: ```{comment}```
+
+
+                Generated Fix: ```{generated_fix}```
+
+
+                Actual Fix: ```{actual_fix}```
+
+
+                Does the generated fix appear at all in the actual fix? (i.e. is the generated fix a subset of the actual fix?) Answer YES or NO, followed by a very short and succinct explanation.
+                """
+            else:
+                prompt = f"""
+                Comment: {comment}
+                Diff (before fix): {relevant_diff}
+                Generated Fix: {generated_fix}
+
+                Does the generated fix address the comment correctly? Answer YES or NO, followed by a very short and succinct explanation. It is considered a valid fix if the generated fix CONTAINS a fix for the comment despite having extra unnecessary fluff addressing other stuff.
+                """
         qualitative_feedback = self.run(prompt=prompt)
         return qualitative_feedback
 
@@ -171,6 +406,102 @@ def fetch_patch_diff(patch_id):
         return None
 
 
+# def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size):
+#     file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
+#     match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
+
+#     if match:
+#         hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
+#         match2 = re.finditer(hunk_header_pattern, match.group(0))
+#         first_index = None
+#         last_index = None
+
+#         for m in match2:
+#             diff_lines = match.group(0).split("\n")
+
+#             deletion_start_line = int(m.group(1))
+#             deletion_num_lines = int(m.group(2))
+#             addition_start_line = int(m.group(3))
+#             addition_num_lines = int(m.group(4))
+
+#             if (
+#                 start_line < deletion_start_line and start_line < addition_start_line
+#             ) or (
+#                 start_line > (deletion_start_line + deletion_num_lines)
+#                 and start_line > (addition_start_line + addition_num_lines)
+#             ):
+#                 continue
+
+#             added_lines = []
+#             deleted_lines = []
+
+#             for line in diff_lines[diff_lines.index(m.group()) + 1 :]:
+#                 if line.startswith("-"):
+#                     deleted_lines.append(line)
+#                 elif line.startswith("+"):
+#                     added_lines.append(line)
+
+#             if not deleted_lines or not added_lines:
+#                 logger.error(f"No deleted or added lines found for file: {filename}")
+#                 return None
+
+#             deletion_start_diff_line = deleted_lines[
+#                 min(
+#                     len(deleted_lines) - 1,
+#                     max(0, start_line - deletion_start_line - hunk_size),
+#                 )
+#             ]
+#             deletion_end_diff_line = deleted_lines[
+#                 max(
+#                     0,
+#                     min(
+#                         len(deleted_lines) - 1,
+#                         end_line - deletion_start_line + hunk_size,
+#                     ),
+#                 )
+#             ]
+
+#             addition_start_diff_line = added_lines[
+#                 min(
+#                     len(added_lines) - 1,
+#                     max(0, start_line - addition_start_line - hunk_size),
+#                 )
+#             ]
+#             addition_end_diff_line = added_lines[
+#                 max(
+#                     0,
+#                     min(
+#                         len(added_lines) - 1, end_line - addition_start_line + hunk_size
+#                     ),
+#                 )
+#             ]
+
+#             first_index = None
+#             last_index = None
+
+#             diff_lines = match.group(0).split("\n")
+
+#             for i, line in enumerate(diff_lines):
+#                 if line in [
+#                     deletion_start_diff_line,
+#                     deletion_end_diff_line,
+#                     addition_start_diff_line,
+#                     addition_end_diff_line,
+#                 ]:
+#                     if first_index is None:
+#                         first_index = i
+#                     last_index = i
+
+
+#         if first_index is not None and last_index is not None:
+#             relevant_diff = "\n".join(diff_lines[first_index : last_index + 1])
+#             return relevant_diff
+#         else:
+#             logger.error(f"No relevant diff found for lines: {start_line}-{end_line}")
+#             return None
+#     else:
+#         logger.error(f"No diff found for file: {filename}")
+#         return None
 def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size):
     file_diff_pattern = rf"diff --git a/{re.escape(filename)} b/{re.escape(filename)}\n.*?(?=\ndiff --git|$)"
     match = re.search(file_diff_pattern, patch_diff, re.DOTALL)
@@ -199,12 +530,15 @@ def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size)
 
             added_lines = []
             deleted_lines = []
+            context_lines = []
 
             for line in diff_lines[diff_lines.index(m.group()) + 1 :]:
                 if line.startswith("-"):
                     deleted_lines.append(line)
                 elif line.startswith("+"):
                     added_lines.append(line)
+                else:
+                    context_lines.append(line)
 
             if not deleted_lines or not added_lines:
                 logger.error(f"No deleted or added lines found for file: {filename}")
@@ -252,7 +586,7 @@ def extract_relevant_diff(patch_diff, filename, start_line, end_line, hunk_size)
                     deletion_end_diff_line,
                     addition_start_diff_line,
                     addition_end_diff_line,
-                ]:
+                ] or line not in ("+", "-"):  # Include context lines
                     if first_index is None:
                         first_index = i
                     last_index = i
@@ -486,6 +820,56 @@ def generate_prompt(
         FIX:
         """
 
+    if prompt_type == "study-modified":
+        # prompt = f"""
+        # You are a software developer who has to change the code below by following a given Code Review.
+        # The Code Review is attached to the line of code starting with the line number Start_Line and
+        # ending with the line number End_Line. There are also characters (- and +) showing where a line
+        # of code in the diff hunk has been removed (marked with a - at the beginning of the line) or added
+        # (marked with a + at the beginning of the line). The New Code Diff should be in the correct Git diff
+        # format, where added lines (on top of the diff hunk) are denoted with the + character. Lines removed
+        # from the Diff Hunk should be denoted with the - character. Your output must not contain any trailing
+        # tokens/characters. Your output must adhere to the following format: "Short Explanation: [...] \n
+        # New Code Diff: [...]"
+
+        # Start_Line:
+        # {start_line}
+
+        # End_Line:
+        # {end_line}
+
+        # Code Review:
+        # {comment_content}
+
+        # Diff Hunk:
+        # ```
+        # {relevant_diff}
+        # ```
+        # """
+        prompt = f"""
+You are a software developer who has to change the code below by following a given Code Review.
+The Code Review is attached to the line of code starting with the line number Start_Line and
+ending with the line number End_Line.
+
+### Instructions:
+- The New Code Diff should be in the correct Git diff format.
+- Added lines (on top of the diff hunk) are denoted with the `+` character.
+- Removed lines are denoted with the `-` character.
+- Do NOT repeat the prompt or any additional text.
+
+### Input Details:
+Start Line: {start_line}
+End Line: {end_line}
+Code Review: {comment_content}
+
+### Diff Hunk:
+{relevant_diff}
+
+### Expected Output Format:
+Your response must **only** contain the following, with no extra text:
+(diff output here)
+"""
+
     return prompt
 
 
@@ -497,6 +881,7 @@ def generate_fixes(
     prompt_types,
     hunk_sizes,
     output_csv,
+    single_comment,
 ):
     counter = 0
     revision_ids = extract_revision_id_list_from_dataset("data/fixed_comments.json")
@@ -508,6 +893,7 @@ def generate_fixes(
                 "Revision ID",
                 "Patch ID",
                 "Prompt Type",
+                "Prompt",
                 "Length Limit",
                 "Hunk Size",
                 "Comment Length",
@@ -536,6 +922,13 @@ def generate_fixes(
                 )
                 continue
 
+            if single_comment:
+                if len(comments) > 1:
+                    logger.error(
+                        f"Skipping Patch ID {patch_id} as more than one comment found."
+                    )
+                    continue
+
             diff = fetch_diff_from_url(revision_id, patch_id, single_patch=True)
 
             if not diff:
@@ -543,6 +936,10 @@ def generate_fixes(
                 continue
 
             for comment in comments:
+                is_actionable = llm_tool.is_actionable_comment(comment)
+                if is_actionable.lower() == "no":
+                    continue
+
                 if counter >= generation_limit:
                     return
 
@@ -579,14 +976,12 @@ def generate_fixes(
                                     )
                                     continue
 
-                                generated_fix = llm_tool.generate_fix(
+                                generated_fix, prompt = llm_tool.generate_fix(
                                     comment,
                                     relevant_diff,
                                     prompt_type,
                                     hunk_size,
                                     similar_comments_and_fix_infos,
-                                    False,
-                                    None,
                                 )
 
                                 comment_length = len(comment.content)
@@ -598,6 +993,7 @@ def generate_fixes(
                                         revision_id,
                                         patch_id,
                                         prompt_type,
+                                        prompt,
                                         diff_length_limit,
                                         hunk_size,
                                         comment_length,
@@ -628,7 +1024,9 @@ def extract_revision_id_list_from_dataset(dataset_file):
     return revision_ids
 
 
-def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
+def generate_individual_fix(
+    llm_tool, db, revision_id, diff_id, comment_id, raw_file_content=None
+):
     revision_details = api.load_revision(rev_id=revision_id)
     revision_phid = revision_details["phid"]
     transactions = api.request("transaction.search", objectIdentifier=revision_phid)
@@ -654,23 +1052,46 @@ def generate_individual_fix(llm_tool, db, revision_id, diff_id, comment_id):
 
     target_comment = SimpleNamespace(**target_comment)
 
-    diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
-    relevant_diff = extract_relevant_diff(
-        diff,
-        target_comment.filepath,
-        target_comment.start_line,
-        target_comment.end_line,
-        hunk_size=100,
-    )
+    if not raw_file_content:
+        diff = fetch_diff_from_url(revision_id, diff_id, single_patch=True)
+        relevant_diff = extract_relevant_diff(
+            diff,
+            target_comment.filepath,
+            target_comment.start_line,
+            target_comment.end_line,
+            hunk_size=100,
+        )
+        if not relevant_diff:
+            return None, None, None
 
-    generated_fix = llm_tool.generate_fix(
-        target_comment,
-        relevant_diff,
-        prompt_type="zero-shot",
-        hunk_size=100,
-        similar_comments_and_fix_infos=None,
-        evaluation=False,
-        generated_fix=None,
-    )
+        generated_fix = llm_tool.generate_fix(
+            target_comment,
+            relevant_diff,
+            prompt_type="study-modified",
+            hunk_size=100,
+            similar_comments_and_fix_infos=None,
+        )
+    else:
+        is_actionable_comment = llm_tool.determine_if_comment_is_actionable(
+            target_comment.content["raw"]
+        )
 
-    print(generated_fix)
+        if not is_actionable_comment:
+            return None, None, None, None, None
+
+        (
+            generated_fix,
+            prompt,
+            numbered_snippet,
+            start_line,
+            end_line,
+        ) = llm_tool.generate_fix_with_raw_file_content(
+            target_comment,
+            raw_file_content,
+            prompt_type="study-modified",
+            hunk_size=30,
+        )
+        relevant_diff = None
+        return generated_fix, prompt, numbered_snippet, start_line, end_line
+
+    return generated_fix[0], generated_fix[1], relevant_diff
