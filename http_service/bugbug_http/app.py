@@ -8,7 +8,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Sequence
 from urllib.parse import urlparse
 
@@ -307,7 +307,7 @@ def is_pending(job):
 
     # Enforce job timeout as RQ doesn't seems to do it https://github.com/rq/rq/issues/758
     timeout_datetime = job.enqueued_at + timedelta(seconds=job.timeout)
-    utcnow = datetime.utcnow()
+    utcnow = datetime.now(timezone.utc)
     if timeout_datetime < utcnow:
         # Remove the timeouted job so it will be requeued
         job.cancel()
