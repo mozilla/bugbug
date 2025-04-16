@@ -30,11 +30,7 @@ def handle_release_notes(request: flask.Request):
     if not version:
         return "Missing 'version' query parameter", 400
 
-    if (
-        tool is None
-        or tool.llm_name != DEFAULT_LLM_NAME
-        or tool.chunk_size != DEFAULT_CHUNK_SIZE
-    ):
+    if tool is None:
         logger.info("Initializing new ReleaseNotesCommitsSelector...")
         llm = generative_model_tool.create_llm_from_request(DEFAULT_LLM_NAME, {})
         tool = ReleaseNotesCommitsSelector(chunk_size=DEFAULT_CHUNK_SIZE, llm=llm)
@@ -44,6 +40,6 @@ def handle_release_notes(request: flask.Request):
     notes = tool.get_final_release_notes_commits(version=version)
 
     if not notes:
-        return {"commits": []}, 200, {"Content-Type": "application/json"}
+        return {"commits": []}, 200
 
-    return {"commits": notes}, 200, {"Content-Type": "application/json"}
+    return {"commits": notes}, 200
