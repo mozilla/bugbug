@@ -147,28 +147,6 @@ def create_llm_from_args(args):
     return globals()[f"create_{args.llm}_llm"](**llm_creation_args)
 
 
-def create_llm_from_request(llm_name, request_args):
-    if llm_name not in AVAILABLE_LLMS:
-        raise NotImplementedError(f"LLM '{llm_name}' is not supported")
-
-    expected_args = AVAILABLE_LLMS[llm_name]
-    llm_creation_args = {}
-
-    for param_name in expected_args:
-        value = request_args.get(param_name)
-        if value is not None:
-            param = expected_args[param_name]
-            type_fn = (
-                param.annotation if param.annotation != inspect.Parameter.empty else str
-            )
-            try:
-                llm_creation_args[param_name] = type_fn(value)
-            except Exception:
-                llm_creation_args[param_name] = value
-
-    return globals()[f"create_{llm_name}_llm"](**llm_creation_args)
-
-
 def get_tokenizer(model_name):
     import tiktoken
 

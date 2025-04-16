@@ -15,7 +15,6 @@ os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
 tool: ReleaseNotesCommitsSelector | None = None
 
-DEFAULT_LLM_NAME = "openai"
 DEFAULT_CHUNK_SIZE = 1000
 
 
@@ -32,9 +31,10 @@ def handle_release_notes(request: flask.Request):
 
     if tool is None:
         logger.info("Initializing new ReleaseNotesCommitsSelector...")
-        llm = generative_model_tool.create_llm_from_request(DEFAULT_LLM_NAME, {})
+
+        llm = generative_model_tool.create_openai_llm()
         tool = ReleaseNotesCommitsSelector(chunk_size=DEFAULT_CHUNK_SIZE, llm=llm)
-        tool.llm_name = DEFAULT_LLM_NAME
+        tool.llm_name = "openai"
         tool.chunk_size = DEFAULT_CHUNK_SIZE
 
     notes = tool.get_final_release_notes_commits(version=version)
