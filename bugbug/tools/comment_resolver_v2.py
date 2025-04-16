@@ -28,6 +28,7 @@ class CodeGeneratorTool:
         self.client = client
         self.model = model
         self.hunk_size = hunk_size
+        self.default_hunk_size = hunk_size
         self.llm = llm
         self.actionability_prompt_template = PromptTemplate(
             input_variables=["comment", "code"],
@@ -291,6 +292,7 @@ Output only the rephrased, actionable version of the comment, without any explan
         diff_id,
         comment_id,
     ):
+        self.hunk_size = self.default_hunk_size
         transaction = self.get_comment_transaction_from_revision(
             revision_id, comment_id
         )
@@ -342,8 +344,6 @@ Output only the rephrased, actionable version of the comment, without any explan
                 snippet_preview=snippet_preview,
             ).lower()
 
-            print(f"Answer: {answer}")
-
             if answer == "yes i can fix":
                 break
             elif answer == "no i need more context":
@@ -361,19 +361,7 @@ Output only the rephrased, actionable version of the comment, without any explan
             raw_file_content=raw_file_content,
             hunk_size=self.hunk_size,
         )
-        prompt_input = {
-            "comment_start_line": comment_start_line,
-            "comment_end_line": comment_end_line,
-            "filepath": filepath,
-            "comment_content": clarified_comment,
-            "numbered_snippet": numbered_snippet,
-        }
 
-        # Render the full prompt for debugging
-        full_prompt = self.generate_fix_prompt_template.format(**prompt_input)
-        print("\n==================== PROMPT SENT TO LLM ====================\n")
-        print(full_prompt)
-        print("\n============================================================\n")
         generated_fix = self.generate_fix_chain.run(
             {
                 "comment_start_line": comment_start_line,
@@ -384,3 +372,46 @@ Output only the rephrased, actionable version of the comment, without any explan
             }
         )
         return generated_fix
+
+    def generate_fixes_for_all_comments(self, revision_id):
+        set_api_key(PHABRICATOR_API_URL, PHABRICATOR_API_TOKEN)
+
+        revisions = get(rev_ids=[int(revision_id)])
+        if not revisions:
+            raise Exception(f"No revision found for ID {revision_id}")
+
+        revision = revisions[0]
+        latest_diff_id = int(revision["fields"]["diffID"])
+        comment_map = {}
+
+        reviewer_phids = {
+            reviewer["reviewerPHID"]
+            for reviewer in revision.get("attachments", {})
+            .get("reviewers", {})
+            .get("reviewers", [])
+        }
+
+        for transaction in revision.get("transactions", []):
+            if transaction["type"] != "inline":
+                continue
+
+            author_phid = transaction["authorPHID"]
+            if author_phid not in reviewer_phids:
+                continue
+
+            for comment in transaction.get("comments", []):
+                comment_id = comment["id"]
+                try:
+                    fix = self.generate_fix(
+                        revision_id=revision_id,
+                        diff_id=latest_diff_id,
+                        comment_id=comment_id,
+                    )
+                    comment_map[comment_id] = fix
+                except Exception as e:
+                    logger.warning(
+                        f"Error generating fix for comment {comment_id}: {e}"
+                    )
+                    comment_map[comment_id] = f"Error: {e}"
+
+        return comment_map
