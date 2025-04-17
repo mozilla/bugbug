@@ -1,13 +1,12 @@
 import logging
 import re
 from itertools import batched
-from typing import Generator, Optional
+from typing import Iterator, Optional
 
 import requests
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-
-from bugbug import bugzilla, db
+from libmozdata.bugzilla import Bugzilla
 
 KEYWORDS_TO_REMOVE = [
     "Backed out",
@@ -44,6 +43,21 @@ def get_previous_version(current_version: str) -> str:
     )
 
 
+def fetch_bug_components(bug_ids: list[int]) -> dict[int, str]:
+    bug_id_to_component = {}
+
+    def bug_handler(bug):
+        bug_id_to_component[bug["id"]] = f"{bug['product']}::{bug['component']}"
+
+    Bugzilla(
+        bugids=bug_ids,
+        include_fields=["id", "product", "component"],
+        bughandler=bug_handler,
+    ).wait()
+
+    return bug_id_to_component
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -51,12 +65,7 @@ logger = logging.getLogger(__name__)
 class ReleaseNotesCommitsSelector:
     def __init__(self, chunk_size: int, llm: LLMChain):
         self.chunk_size = chunk_size
-        self.bug_id_to_component = {}
-        db.download(bugzilla.BUGS_DB)
-        for bug in bugzilla.get_bugs():
-            self.bug_id_to_component[
-                bug["id"]
-            ] = f"{bug['product']}::{bug['component']}"
+        self.bug_id_to_component: dict[int, str] = {}
         self.llm = llm
         self.summarization_prompt = PromptTemplate(
             input_variables=["input_text"],
@@ -154,7 +163,7 @@ Instructions:
 
     def filter_irrelevant_commits(
         self, commit_log_list: list[tuple[str, str, str]]
-    ) -> Generator[str, None, None]:
+    ) -> Iterator[str]:
         ignore_revs_url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/.hg-annotate-ignore-revs"
         response = requests.get(ignore_revs_url)
         response.raise_for_status()
@@ -230,6 +239,13 @@ Instructions:
             return None
 
         logger.info("Filtering irrelevant commits...")
+        bug_ids = []
+        for desc, _, _ in commit_log_list:
+            match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
+            if match:
+                bug_ids.append(int(match.group(1)))
+
+        self.bug_id_to_component = fetch_bug_components(bug_ids)
         filtered_commits = list(self.filter_irrelevant_commits(commit_log_list))
 
         if not filtered_commits:
