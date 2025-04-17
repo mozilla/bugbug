@@ -1,0 +1,6 @@
+bugbug
+flask
+functions-framework
+langchain
+openai
+requests
