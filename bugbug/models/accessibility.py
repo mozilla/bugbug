@@ -82,7 +82,9 @@ class AccessibilityModel(BugModel):
     @staticmethod
     def __is_accessibility_bug(bug):
         """Check if a bug is an accessibility bug."""
-        return bug["cf_accessibility_severity"] != "---" or "access" in bug["keywords"]
+        return (
+            bug.get("cf_accessibility_severity") != "---" or "access" in bug["keywords"]
+        )
 
     @staticmethod
     def __download_older_access_bugs(months: int) -> None:
