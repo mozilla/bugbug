@@ -1393,7 +1393,13 @@ class ReviewCommentsDB:
             model="text-embedding-3-large", api_key=get_secret("OPENAI_API_KEY")
         )
 
-    def clean_comment(self, comment):
+    def clean_comment(self, comment: str):
+        # We do not want to keep the LLM note in the comment, it is not useful
+        # when using the comment as examples.
+        llm_note_index = comment.find("> This comment was generated automatically ")
+        if llm_note_index != -1:
+            comment = comment[:llm_note_index]
+
         # TODO: use the nav info instead of removing it
         comment = self.NAV_PATTERN.sub("", comment)
         comment = self.WHITESPACE_PATTERN.sub(" ", comment)
@@ -1411,9 +1417,12 @@ class ReviewCommentsDB:
 
                 str_hunk = str(hunk)
                 vector = self.embeddings.embed_query(str_hunk)
+
+                comment_data = asdict(comment)
+                comment_data["content"] = self.clean_comment(comment.content)
                 payload = {
                     "hunk": str_hunk,
-                    "comment": asdict(comment),
+                    "comment": comment_data,
                 }
 
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
