@@ -5,7 +5,7 @@ import flask
 import functions_framework
 
 from bugbug.generative_model_tool import create_openai_llm
-from bugbug.tools.comment_resolver_v2 import CodeGeneratorTool
+from bugbug.tools.comment_resolver import CodeGeneratorTool
 from bugbug.utils import get_secret
 
 logging.basicConfig(level=logging.INFO)
