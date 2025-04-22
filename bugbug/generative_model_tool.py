@@ -21,7 +21,7 @@ def create_human_llm():
     return HumanInputLLM()
 
 
-def create_openai_llm(temperature=0.2, top_p=None, model_name="gpt-4o-2024-11-20"):
+def create_openai_llm(temperature=0.2, top_p=None, model_name="gpt-4.1-2025-04-14"):
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
