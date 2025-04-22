@@ -273,7 +273,7 @@ def main():
             #     continue
 
             commit_diff = repository.get_diff(
-                repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[1]
+                repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[-1]
             )
             # if not commit_diff:
             #     continue
