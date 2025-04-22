@@ -4,8 +4,9 @@ import pandas as pd
 
 from scripts.code_review_tool_evaluator import get_latest_evaluation_results_file
 
-evaluation_results = pd.read_csv(get_latest_evaluation_results_file())
-# evaluation_results = pd.read_csv("/Users/smujahid/repos/mozilla/bugbug/evaluation_results_2025-03-05_08-59-13.csv")
+evaluation_results = pd.read_csv(
+    get_latest_evaluation_results_file("../evaluation_results")
+)
 
 # %%
 

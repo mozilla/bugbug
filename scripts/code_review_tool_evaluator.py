@@ -17,6 +17,7 @@ To specify different variants to evaluate, please modify the get_tool_variants
 function.
 """
 
+import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -254,13 +255,13 @@ def get_tool_variants(
         function_search = FunctionSearchMozilla(repo_dir, get_file, True)
 
     if is_variant_selected(
-        "RAG", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS"
+        "RAG", "RAG and CONTEXT", "RAG and CONTEXT and REJECTED_COMMENTS", "llm-gpt-4.1"
     ):
         review_comments_db = code_review.ReviewCommentsDB(
             QdrantVectorDB("diff_comments")
         )
 
-    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS"):
+    if is_variant_selected("RAG and CONTEXT and REJECTED_COMMENTS", "llm-gpt-4.1"):
         suggestions_feedback_db = code_review.SuggestionsFeedbackDB(
             QdrantVectorDB("suggestions_feedback")
         )
@@ -320,6 +321,25 @@ def get_tool_variants(
                 ),
             ),
         )
+
+    if is_variant_selected("llm-gpt-4.1"):
+        tool_variants.append(
+            (
+                "llm-gpt-4.1",
+                code_review.CodeReviewTool(
+                    comment_gen_llms=[
+                        generative_model_tool.create_openai_llm(
+                            model_name="gpt-4.1-2025-04-14"
+                        )
+                    ],
+                    # function_search=function_search,
+                    review_comments_db=review_comments_db,
+                    suggestions_feedback_db=suggestions_feedback_db,
+                    verbose=VERBOSE_CODE_REVIEW,
+                ),
+            )
+        )
+
     return tool_variants
 
 
@@ -373,14 +393,19 @@ def print_prettified_comments(comments: list[code_review.InlineComment]):
     )
 
 
-def get_latest_evaluation_results_file():
+def get_latest_evaluation_results_file(results_dir: str | None):
     import glob
+    import os
 
-    files = glob.glob("evaluation_results_*.csv")
+    files = glob.glob("evaluation_results_*#*.csv", root_dir=results_dir)
     if not files:
         raise FileNotFoundError("No evaluation results file found.")
 
-    return max(files)
+    latests_files = max(files)
+    if results_dir:
+        return os.path.join(results_dir, latests_files)
+
+    return latests_files
 
 
 def main(args):
@@ -396,9 +421,13 @@ def main(args):
     evaluator = FeedbackEvaluator(args.evaluation_dataset)
 
     is_first_result = True
-    result_file = "code_review_tool_evaluator.csv"
-    evaluation_results_file = (
-        f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv"
+    result_file = os.path.join(
+        args.results_dir,
+        "code_review_tool_evaluator.csv",
+    )
+    evaluation_results_file = os.path.join(
+        args.results_dir,
+        f"evaluation_results_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
     )
     result_unique_columns = ["Review Request ID", "File", "Line", "Comment Number"]
     result_all_columns = result_unique_columns + [
@@ -442,7 +471,7 @@ def main(args):
         selected_review_requests = (
             (revision_id, code_review.ReviewRequest(diff_id))
             for revision_id, diff_id in pd.read_csv(
-                get_latest_evaluation_results_file()
+                get_latest_evaluation_results_file(args.results_dir),
             )[["revision_id", "diff_id"]]
             .drop_duplicates()
             .itertuples(name=None, index=False)
@@ -575,6 +604,14 @@ if __name__ == "__main__":
         action="store",
         help="the path or the URL to a evaluation dataset in CSV format",
     )
+
+    parser.add_argument(
+        "--results-dir",
+        dest="results_dir",
+        action="store",
+        help="the directory to store the results and read previous results",
+    )
+
     parser.add_argument(
         "--evaluation-strategy",
         dest="evaluation_strategy",
