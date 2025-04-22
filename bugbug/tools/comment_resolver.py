@@ -365,11 +365,18 @@ Output only the rephrased, actionable version of the comment, without any explan
                         diff_id=latest_diff_id,
                         comment_id=comment_id,
                     )
-                    comment_map[comment_id] = fix
+                    is_actionable = fix != "Not Actionable"
+                    comment_map[comment_id] = {
+                        "fix": fix,
+                        "is_actionable": is_actionable,
+                    }
                 except Exception as e:
                     logger.warning(
                         f"Error generating fix for comment {comment_id}: {e}"
                     )
-                    comment_map[comment_id] = f"Error: {e}"
+                    comment_map[comment_id] = {
+                        "fix": f"Error: {e}",
+                        "is_actionable": False,
+                    }
 
         return comment_map
