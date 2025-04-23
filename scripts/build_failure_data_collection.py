@@ -96,23 +96,6 @@ def find_bugs(hg_client, bug_ids, bug_commits):
 
         logger.info(f"Backing out commit found for bug {bug_id}: {backing_out_commit}")
 
-        # commit = {}
-
-        # commit["desc"] = next(
-        #     (
-        #         c["desc"]
-        #         for c in bug_id_commits
-        #         if any(
-        #             c["node"].startswith(node)
-        #             for node in backing_out_commit["backsout"]
-        #         )
-        #     ),
-        #     None,
-        # )
-
-        # if commit["desc"] is None:
-        #     continue
-
         commits = [
             {
                 "desc": c["desc"],
@@ -219,12 +202,18 @@ def main():
     bugs = get_backed_out_build_failure_bugs()
     bug_ids = list(bugs.keys())
 
+    print(f"NUMBER OF BUGS FOUND THAT HAVE A BACKOUT: {len(bug_ids)}")
+
     # 2.
     bug_commits = map_bugs_to_commit(bug_ids)
+
+    print(f"NUMBER OF BUGS THAT WERE MAPPED TO A COMMIT: {len(bug_commits)}")
 
     # 3.
     hg_client = Revision()
     backed_out_revisions = find_bugs(hg_client, bug_ids, bug_commits)
+
+    print(f"NUMBER OF BACKED OUT REVISIONS FOUND: {len(backed_out_revisions)}")
 
     # 4.
     revisions_to_commits = defaultdict(list)
@@ -234,6 +223,10 @@ def main():
 
         if revision_id in backed_out_revisions:
             revisions_to_commits[revision_id].append(commit["node"])
+
+    print(
+        f"NUMBER OF REVISIONS MAPPED TO BACKED OUT COMMITS: {len(revisions_to_commits)}"
+    )
 
     # 5. and 6.
 
@@ -261,6 +254,7 @@ def main():
 
         for revision_id, commits in revisions_to_commits.items():
             if len(commits) < 2:
+                print("yo")
                 continue
 
             for commit in commits:
@@ -269,14 +263,9 @@ def main():
                 if error_lines:
                     break
 
-            # if not error_lines:
-            #     continue
-
             commit_diff = repository.get_diff(
                 repo_path="hg_dir", original_hash=commits[0], fix_hash=commits[-1]
             )
-            # if not commit_diff:
-            #     continue
 
             commit_diff_encoded = commit_diff.decode("utf-8", errors="replace")
 
