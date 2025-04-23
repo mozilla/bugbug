@@ -29,17 +29,17 @@ PRODUCT_OR_COMPONENT_TO_IGNORE = [
 ]
 
 
-def get_previous_version(current_version: str) -> str:
-    match = re.search(r"(\d+)", current_version)
+def get_previous_version(target_version: str) -> str:
+    match = re.search(r"(\d+)", target_version)
     if not match:
         raise ValueError("No number found in the version string")
 
     number = match.group(0)
     decremented_number = str(int(number) - 1)
     return (
-        current_version[: match.start()]
+        target_version[: match.start()]
         + decremented_number
-        + current_version[match.end() :]
+        + target_version[match.end() :]
     )
 
 
@@ -196,11 +196,12 @@ Instructions:
                     continue
                 yield bug_match.group(1)
 
-    def get_commit_logs(self) -> Optional[list[tuple[str, str, str]]]:
-        url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={self.version1}&tochange={self.version2}&full=1"
+    def get_commit_logs(
+        self, preceding_version: str, target_version: str
+    ) -> Optional[list[tuple[str, str, str]]]:
+        url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={preceding_version}&tochange={target_version}&full=1"
         response = requests.get(url)
         response.raise_for_status()
-
         data = response.json()
         commit_log_list = [
             (
@@ -212,7 +213,6 @@ Instructions:
             for changeset in push_data["changesets"]
             if "desc" in changeset and changeset["desc"].strip()
         ]
-
         return commit_log_list if commit_log_list else None
 
     def remove_duplicate_bugs(self, csv_text: str) -> str:
@@ -228,17 +228,16 @@ Instructions:
                 unique_lines.append(line)
         return "\n".join(unique_lines)
 
-    def get_final_release_notes_commits(self, version: str) -> Optional[list[str]]:
-        self.version2 = version
-        self.version1 = get_previous_version(version)
-
-        logger.info(f"Generating commit shortlist for: {self.version2}")
-        commit_log_list = self.get_commit_logs()
+    def get_final_release_notes_commits(
+        self, target_version: str
+    ) -> Optional[list[str]]:
+        preceding_version = get_previous_version(target_version)
+        logger.info(f"Generating commit shortlist for: {target_version}")
+        commit_log_list = self.get_commit_logs(preceding_version, target_version)
 
         if not commit_log_list:
             return None
 
-        logger.info("Filtering irrelevant commits...")
         bug_ids = []
         for desc, _, _ in commit_log_list:
             match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
@@ -251,16 +250,13 @@ Instructions:
         if not filtered_commits:
             return None
 
-        logger.info("Generating commit shortlist...")
         commit_shortlist = self.generate_commit_shortlist(filtered_commits)
 
         if not commit_shortlist:
             return None
 
-        logger.info("Refining commit shortlist...")
         combined_list = "\n".join(commit_shortlist)
         cleaned = self.cleanup_chain.run({"combined_list": combined_list}).strip()
 
-        logger.info("Removing duplicates...")
         deduped = self.remove_duplicate_bugs(cleaned)
         return deduped.splitlines()
