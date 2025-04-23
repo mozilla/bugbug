@@ -457,6 +457,11 @@ class ReviewData(ABC):
             # prioritize added lines over deleted lines because comments are more
             # likely to be on added lines than deleted lines.
             if len(matching_hunks) > 1:
+                logger.warning(
+                    "Multiple matching hunks found for comment %s in file %s",
+                    comment.id,
+                    comment.filename,
+                )
                 for hunk in matching_hunks:
                     for line in hunk:
                         if line.is_added and line.target_line_no == comment.start_line:
@@ -470,11 +475,6 @@ class ReviewData(ABC):
                             return hunk
 
             if len(matching_hunks) != 0:
-                logger.warning(
-                    "Multiple matching hunks found for comment %s in file %s",
-                    comment.id,
-                    comment.filename,
-                )
                 return matching_hunks[0]
 
         elif comment.on_removed_code:
