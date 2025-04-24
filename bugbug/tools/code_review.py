@@ -1423,6 +1423,7 @@ class ReviewCommentsDB:
                 payload = {
                     "hunk": str_hunk,
                     "comment": comment_data,
+                    "version": 2,
                 }
 
                 yield VectorPoint(id=comment.id, vector=vector, payload=payload)
