@@ -1,17 +1,13 @@
 import logging
-import os
 
 import flask
 import functions_framework
 
 from bugbug.generative_model_tool import create_openai_llm
 from bugbug.tools.comment_resolver import CodeGeneratorTool
-from bugbug.utils import get_secret
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-os.environ["OPENAI_API_KEY"] = get_secret("OPENAI_API_KEY")
 
 
 @functions_framework.http
