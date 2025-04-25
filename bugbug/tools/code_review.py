@@ -20,6 +20,7 @@ from langchain.chains import ConversationChain, LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 from langchain_openai import OpenAIEmbeddings
+from libmozdata.phabricator import ConduitError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
@@ -531,6 +532,9 @@ class ReviewData(ABC):
             except UnidiffParseError:
                 # TODO: use log instead of print
                 print(f"Failed to parse {diff_id}")
+                continue
+            except ConduitError:
+                logger.warning("Failed to load %d", diff_id)
                 continue
 
             file_map = {
