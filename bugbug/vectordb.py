@@ -129,7 +129,7 @@ class QdrantVectorDB(VectorDB):
         while offset is not None:
             points, offset = self.client.scroll(
                 collection_name=self.collection_name,
-                limit=100,
+                limit=100000,
                 with_payload=False,
                 with_vectors=False,
                 offset=offset,
