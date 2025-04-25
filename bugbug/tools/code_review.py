@@ -1413,6 +1413,7 @@ class ReviewCommentsDB:
 
     def add_comments_by_hunk(self, items: Iterable[tuple[Hunk, InlineComment]]):
         point_ids = set(self.vector_db.get_existing_ids())
+        logger.info("Will skip %d comments that already exist", len(point_ids))
 
         def vector_points():
             for hunk, comment in items:
