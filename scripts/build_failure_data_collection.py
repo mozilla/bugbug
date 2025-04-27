@@ -2,9 +2,11 @@ import csv
 import logging
 import os
 from collections import defaultdict
+from datetime import datetime
 
 import requests
 import taskcluster
+from dateutil.relativedelta import relativedelta
 from libmozdata.bugzilla import Bugzilla
 from libmozdata.hgmozilla import Revision
 from tqdm import tqdm
@@ -31,16 +33,16 @@ def download_databases():
 
 def get_bz_params():
     fields = ["id"]
-    # one_year_ago = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
+    one_year_ago = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
     params = {
         "include_fields": fields,
-        "resolution": "---",
-        # "f1": "creation_ts",
-        # "o1": "greaterthan",
-        # "v1": one_year_ago,
-        "f1": "longdesc",
-        "o1": "allwordssubstr",
-        "v1": "backed out for causing build",
+        # "resolution": "---",
+        "f1": "creation_ts",
+        "o1": "greaterthan",
+        "v1": one_year_ago,
+        "f2": "longdesc",
+        "o2": "allwords",
+        "v2": "backed out causing build",
     }
     return params
 
@@ -203,6 +205,7 @@ def main():
     bug_ids = list(bugs.keys())
 
     print(f"NUMBER OF BUGS FOUND THAT HAVE A BACKOUT: {len(bug_ids)}")
+    print(f"bug ids: {bug_ids}")
 
     # 2.
     bug_commits = map_bugs_to_commit(bug_ids)
