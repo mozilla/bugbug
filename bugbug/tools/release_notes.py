@@ -68,7 +68,7 @@ class ReleaseNotesCommitsSelector:
         self.bug_id_to_component: dict[int, str] = {}
         self.llm = llm
         self.summarization_prompt = PromptTemplate(
-            input_variables=["input_text"],
+            input_variables=["commit_list"],
             template="""You are an expert in writing Firefox release notes. Your task is to analyze a list of commits and identify important user-facing changes. Follow these steps:
 
 1. Must Include Only Meaningful Changes:
@@ -98,14 +98,14 @@ Again, only include changes that are STRICTLY USER-FACING.
 4. Select Only the Top 10 Commits:
     - If there are more than 10 relevant commits, choose the most impactful ones.
 
-5. Input:
-   Here is the chunk of commit logs you need to focus on:
-   {input_text}
-
-6. Output Requirements:
+5. Output Requirements:
    - Output must be raw CSV text—no formatting, no extra text.
    - Do not wrap the output in triple backticks (` ``` `) or use markdown formatting.
    - Do not include the words "CSV" or any headers—just the data.
+
+6. Input:
+   Here is the list of commits you need to focus on:
+   {commit_list}
 """,
         )
 
@@ -131,14 +131,14 @@ Strict Filtering Criteria - REMOVE the following:
 - Obscure web compatibility changes that apply only to edge-case websites.
 - Duplicate entries or similar changes that were already listed.
 
-Here is the list to filter:
-{combined_list}
-
 Instructions:
 - KEEP THE SAME FORMAT (do not change the structure of entries that remain).
 - REMOVE UNWORTHY ENTRIES ENTIRELY (do not rewrite them—just delete).
 - DO NOT ADD ANY TEXT BEFORE OR AFTER THE LIST.
 - The output must be only the cleaned-up list, formatted exactly the same way.
+
+Here is the list to filter:
+{combined_list}
 """,
         )
 
@@ -157,13 +157,11 @@ Instructions:
         commit_log_list_combined = "\n".join(commit_log_list)
         chunks = self.batch_commit_logs(commit_log_list_combined)
         return [
-            self.summarization_chain.run({"input_text": chunk}).strip()
+            self.summarization_chain.run({"commit_list": chunk}).strip()
             for chunk in chunks
         ]
 
-    def filter_irrelevant_commits(
-        self, commit_log_list: list[tuple[str, str, str]]
-    ) -> Iterator[str]:
+    def filter_irrelevant_commits(self, commit_log_list: list[dict]) -> Iterator[str]:
         ignore_revs_url = "https://hg.mozilla.org/mozilla-central/raw-file/tip/.hg-annotate-ignore-revs"
         response = requests.get(ignore_revs_url)
         response.raise_for_status()
@@ -174,45 +172,54 @@ Instructions:
             if re.search(r"Bug \d+", line, re.IGNORECASE)
         }
 
-        for desc, author, node in commit_log_list:
-            bug_match = re.search(r"(Bug (\d+).*)", desc, re.IGNORECASE)
+        for commit in commit_log_list:
+            desc = commit["desc"]
+            author = commit["author"]
+            node = commit["node"]
+            bug_id = commit["bug_id"]
+
             if (
                 not any(
                     keyword.lower() in desc.lower() for keyword in KEYWORDS_TO_REMOVE
                 )
-                and bug_match
+                and bug_id
                 and re.search(r"\br=[^\s,]+", desc)
                 and author
                 != "Mozilla Releng Treescript <release+treescript@mozilla.org>"
                 and node not in hashes_to_ignore
             ):
-                bug_id = int(bug_match.group(2))
-
                 bug_component = self.bug_id_to_component.get(bug_id)
                 if bug_component and any(
                     to_ignore in bug_component
                     for to_ignore in PRODUCT_OR_COMPONENT_TO_IGNORE
                 ):
                     continue
-                yield bug_match.group(1)
+                yield desc
 
     def get_commit_logs(
         self, preceding_version: str, target_version: str
-    ) -> Optional[list[tuple[str, str, str]]]:
+    ) -> Optional[list[dict]]:
         url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={preceding_version}&tochange={target_version}&full=1"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        commit_log_list = [
-            (
-                changeset["desc"].strip(),
-                changeset.get("author", "").strip(),
-                changeset.get("node", "").strip(),
-            )
-            for push_data in data.values()
-            for changeset in push_data["changesets"]
-            if "desc" in changeset and changeset["desc"].strip()
-        ]
+        commit_log_list = []
+        for push_data in data.values():
+            for changeset in push_data["changesets"]:
+                if "desc" in changeset and changeset["desc"].strip():
+                    desc = changeset["desc"].strip()
+                    author = changeset.get("author", "").strip()
+                    node = changeset.get("node", "").strip()
+                    match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
+                    bug_id = int(match.group(1)) if match else None
+                    commit_log_list.append(
+                        {
+                            "desc": desc,
+                            "author": author,
+                            "node": node,
+                            "bug_id": bug_id,
+                        }
+                    )
         return commit_log_list if commit_log_list else None
 
     def remove_duplicate_bugs(self, csv_text: str) -> str:
@@ -238,11 +245,7 @@ Instructions:
         if not commit_log_list:
             return None
 
-        bug_ids = []
-        for desc, _, _ in commit_log_list:
-            match = re.search(r"Bug (\d+)", desc, re.IGNORECASE)
-            if match:
-                bug_ids.append(int(match.group(1)))
+        bug_ids = [commit["bug_id"] for commit in commit_log_list if commit["bug_id"]]
 
         self.bug_id_to_component = fetch_bug_components(bug_ids)
         filtered_commits = list(self.filter_irrelevant_commits(commit_log_list))

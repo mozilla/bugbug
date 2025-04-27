@@ -24,6 +24,6 @@ def handle_release_notes(request: flask.Request):
         llm = generative_model_tool.create_openai_llm()
         tool = ReleaseNotesCommitsSelector(chunk_size=DEFAULT_CHUNK_SIZE, llm=llm)
 
-    notes = tool.get_final_release_notes_commits(target_version=version)
+    commit_list = tool.get_final_release_notes_commits(target_version=version)
 
-    return {"commits": notes}, 200
+    return {"commits": commit_list}, 200
