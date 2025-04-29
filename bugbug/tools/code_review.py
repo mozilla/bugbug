@@ -1338,7 +1338,7 @@ class CodeReviewTool(GenerativeModelTool):
             return ""
 
         template = """
-**Examples of comments that you suggested on other patches and developers found them useful**:
+**Examples of comments that you suggested on other patches and developers found useful**:
 
 - {comment_examples}
 """
