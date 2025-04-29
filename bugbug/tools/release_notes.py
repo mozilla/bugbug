@@ -197,9 +197,14 @@ Here is the list to filter:
                 yield desc
 
     def get_commit_logs(
-        self, preceding_version: str, target_version: str
+        self, target_release: int, channel: str
     ) -> Optional[list[dict]]:
-        url = f"https://hg.mozilla.org/releases/mozilla-release/json-pushes?fromchange={preceding_version}&tochange={target_version}&full=1"
+        preceding_release = target_release - 1
+
+        target_version = f"FIREFOX_{channel}_{target_release}_BASE".upper()
+        preceding_version = f"FIREFOX_{channel}_{preceding_release}_BASE".upper()
+
+        url = f"https://hg.mozilla.org/releases/mozilla-{channel.lower()}/json-pushes?fromchange={preceding_version}&tochange={target_version}&full=1"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
@@ -236,11 +241,14 @@ Here is the list to filter:
         return "\n".join(unique_lines)
 
     def get_final_release_notes_commits(
-        self, target_version: str
+        self, target_release: int, channel: str
     ) -> Optional[list[str]]:
-        preceding_version = get_previous_version(target_version)
-        logger.info(f"Generating commit shortlist for: {target_version}")
-        commit_log_list = self.get_commit_logs(preceding_version, target_version)
+        logger.info(
+            f"Generating commit shortlist for release {target_release} in channel {channel}"
+        )
+        commit_log_list = self.get_commit_logs(
+            target_release=target_release, channel=channel
+        )
 
         if not commit_log_list:
             return None
