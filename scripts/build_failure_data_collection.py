@@ -33,12 +33,12 @@ def download_databases():
 
 def get_bz_params():
     fields = ["id"]
-    one_year_ago = (datetime.now() - relativedelta(years=2)).strftime("%Y-%m-%d")
+    two_years_ago = (datetime.now() - relativedelta(years=2)).strftime("%Y-%m-%d")
     params = {
         "include_fields": fields,
         "f1": "creation_ts",
         "o1": "greaterthan",
-        "v1": one_year_ago,
+        "v1": two_years_ago,
         "f2": "longdesc",
         "o2": "allwords",
         "v2": "backed out causing build",
