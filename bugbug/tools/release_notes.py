@@ -29,20 +29,6 @@ PRODUCT_OR_COMPONENT_TO_IGNORE = [
 ]
 
 
-def get_previous_version(target_version: str) -> str:
-    match = re.search(r"(\d+)", target_version)
-    if not match:
-        raise ValueError("No number found in the version string")
-
-    number = match.group(0)
-    decremented_number = str(int(number) - 1)
-    return (
-        target_version[: match.start()]
-        + decremented_number
-        + target_version[match.end() :]
-    )
-
-
 def fetch_bug_components(bug_ids: list[int]) -> dict[int, str]:
     bug_id_to_component = {}
 

@@ -16,7 +16,7 @@ def handle_release_notes(request: flask.Request):
     if request.method != "GET":
         return "Only GET requests are allowed", 405
 
-    release = request.args.get("release")
+    release = int(request.args.get("release"))
     channel = request.args.get("channel")
 
     if not release or not channel:
