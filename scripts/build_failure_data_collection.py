@@ -33,10 +33,9 @@ def download_databases():
 
 def get_bz_params():
     fields = ["id"]
-    one_year_ago = (datetime.now() - relativedelta(years=1)).strftime("%Y-%m-%d")
+    one_year_ago = (datetime.now() - relativedelta(years=2)).strftime("%Y-%m-%d")
     params = {
         "include_fields": fields,
-        # "resolution": "---",
         "f1": "creation_ts",
         "o1": "greaterthan",
         "v1": one_year_ago,
@@ -204,19 +203,12 @@ def main():
     bugs = get_backed_out_build_failure_bugs()
     bug_ids = list(bugs.keys())
 
-    print(f"NUMBER OF BUGS FOUND THAT HAVE A BACKOUT: {len(bug_ids)}")
-    print(f"bug ids: {bug_ids}")
-
     # 2.
     bug_commits = map_bugs_to_commit(bug_ids)
-
-    print(f"NUMBER OF BUGS THAT WERE MAPPED TO A COMMIT: {len(bug_commits)}")
 
     # 3.
     hg_client = Revision()
     backed_out_revisions = find_bugs(hg_client, bug_ids, bug_commits)
-
-    print(f"NUMBER OF BACKED OUT REVISIONS FOUND: {len(backed_out_revisions)}")
 
     # 4.
     revisions_to_commits = defaultdict(list)
