@@ -219,10 +219,6 @@ def main():
         if revision_id in backed_out_revisions:
             revisions_to_commits[revision_id].append(commit["node"])
 
-    print(
-        f"NUMBER OF REVISIONS MAPPED TO BACKED OUT COMMITS: {len(revisions_to_commits)}"
-    )
-
     # 5. and 6.
 
     client_id = os.getenv("TC_CLIENT_ID")
