@@ -36,6 +36,10 @@ class QueryFilter:
     Attributes:
         must_match: The key is the field name and the value what must be matched.
         must_not_has_id: A list of IDs to exclude from the search results.
+        must_range: A dictionary of field names and their ranges. The key is the
+            field name, and the value is a dictionary with range values. See
+            https://qdrant.tech/documentation/concepts/filtering/#range for more
+            details.
     """
 
     must_match: Optional[dict[str, str | int]] = None
