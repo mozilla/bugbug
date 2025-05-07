@@ -25,7 +25,7 @@ for bug in bugzilla.get_bugs():
 ```py
 from bugbug import phabricator, db
 
-db.download(bugzilla.REVISIONS_DB)
+db.download(phabricator.REVISIONS_DB)
 
 for revision in phabricator.get_revisions():
     # The revision here combines the results retrieved from two API endpoints:
