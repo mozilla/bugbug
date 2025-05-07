@@ -1301,16 +1301,14 @@ class CodeReviewTool(GenerativeModelTool):
                     },
                 )
 
-            must_created_before = patch.date_created if self.is_experiment_env else None
+            created_before = patch.date_created if self.is_experiment_env else None
 
             cur_output = conversation_chain.predict(
                 input=PROMPT_TEMPLATE_REVIEW.format(
                     patch=formatted_patch,
-                    comment_examples=self._get_comment_examples(
-                        patch, must_created_before
-                    ),
+                    comment_examples=self._get_comment_examples(patch, created_before),
                     approved_examples=self._get_generated_examples(
-                        patch, must_created_before
+                        patch, created_before
                     ),
                     target_code_consistency=self.target_software or "rest of the",
                 )
