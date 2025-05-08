@@ -36,10 +36,15 @@ class QueryFilter:
     Attributes:
         must_match: The key is the field name and the value what must be matched.
         must_not_has_id: A list of IDs to exclude from the search results.
+        must_range: A dictionary of field names and their ranges. The key is the
+            field name, and the value is a dictionary with range values. See
+            https://qdrant.tech/documentation/concepts/filtering/#range for more
+            details.
     """
 
     must_match: Optional[dict[str, str | int]] = None
     must_not_has_id: Optional[list[int]] = None
+    must_range: Optional[dict[str, dict[str, float]]] = None
 
     def to_qdrant_filter(self) -> qdrant_types.Filter:
         qdrant_filter: qdrant_types.Filter = {}
@@ -49,6 +54,18 @@ class QueryFilter:
                 {"key": key, "match": {"value": value}}
                 for key, value in self.must_match.items()
             ]
+
+        if self.must_range:
+            if "must" not in qdrant_filter:
+                qdrant_filter["must"] = []
+
+            for key, value in self.must_range.items():
+                qdrant_filter["must"].append(
+                    {
+                        "key": key,
+                        "range": value,
+                    }
+                )
 
         if self.must_not_has_id:
             qdrant_filter["must_not"] = [{"has_id": self.must_not_has_id}]
