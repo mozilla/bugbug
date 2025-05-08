@@ -51,6 +51,7 @@ class InlineComment:
     hunk_start_line: int | None = None
     hunk_end_line: int | None = None
     is_generated: bool | None = None
+    explanation: str | None = None
 
 
 class ModelResultError(Exception):
@@ -118,7 +119,7 @@ Generate code review comments for the patch provided below.
 **Output Format**:
 
 - Write down the comments in a JSON list as shown in the valid comment examples.
-- Do **not** include any explanations about your choices.
+- Include your justification about your choices as part of each JSON object under the key `explanation`.
 - Only return the JSON list.
 
 **Valid Comment Examples**:
@@ -152,7 +153,7 @@ Exclude comments that:
 - include praising;
 - ask if changes are intentional or ask to ensure things exist.
 
-Do not report any explanation about your choice. Only return a valid JSON list.
+Only return a valid JSON list. Do not drop any key from the JSON objects.
 
 Comments:
 {comments}
@@ -181,6 +182,7 @@ Adopt the template below as the report format:
         "file": "com/br/main/Pressure.java",
         "code_line": 458,
         "comment" : "In the third code block, you are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size."
+        "explanation": "THE JUSTIFICATION GOES HERE"
     }}
 ]
 Do not report any explanation about your choice. Only return a valid JSON list.
@@ -212,6 +214,7 @@ STATIC_COMMENT_EXAMPLES = [
             "filename": "netwerk/streamconv/converters/mozTXTToHTMLConv.cpp",
             "start_line": 1211,
             "content": "You are using `nsAutoStringN<256>` instead of `nsString`. This is a good change as `nsAutoStringN<256>` is more efficient for small strings. However, you should ensure that the size of `tempString` does not exceed 256 characters, as `nsAutoStringN<256>` has a fixed size.",
+            "explanation": "THE JUSTIFICATION GOES HERE",
         },
         "raw_hunk": """@@ -1206,11 +1206,11 @@
      } else {
@@ -232,6 +235,7 @@ STATIC_COMMENT_EXAMPLES = [
             "filename": "toolkit/components/extensions/ExtensionDNR.sys.mjs",
             "start_line": 1837,
             "content": "The `filterAAR` function inside `#updateAllowAllRequestRules()` is created every time the method is called. Consider defining this function outside of the method to avoid unnecessary function creation.",
+            "explanation": "THE JUSTIFICATION GOES HERE",
         },
         "raw_hunk": """@@ -1812,18 +1821,27 @@
        rulesets.push(
@@ -267,6 +271,7 @@ STATIC_COMMENT_EXAMPLES = [
             "filename": "devtools/shared/network-observer/NetworkUtils.sys.mjs",
             "start_line": 496,
             "content": "The condition in the `if` statement is a bit complex and could be simplified for better readability. Consider extracting `!Components.isSuccessCode(status) && blockList.includes(ChromeUtils.getXPCOMErrorName(status))` into a separate function with a descriptive name, such as `isBlockedError`.",
+            "explanation": "THE JUSTIFICATION GOES HERE",
         },
         "raw_hunk": """@@ -481,26 +481,21 @@
      }
@@ -1103,6 +1108,7 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             hunk_end_line=scope["line_end"],
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
+            explanation=comment["explanation"],
         )
 
 
@@ -1401,6 +1407,9 @@ class CodeReviewTool(GenerativeModelTool):
 
         if not comment_examples:
             comment_examples = STATIC_COMMENT_EXAMPLES
+        else:
+            for example in comment_examples:
+                example["comment"]["explanation"] = "THE JUSTIFICATION GOES HERE"
 
         def format_comment(comment):
             # TODO: change the schema that we expect the model to return so we
