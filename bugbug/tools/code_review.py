@@ -52,6 +52,7 @@ class InlineComment:
     hunk_end_line: int | None = None
     is_generated: bool | None = None
     explanation: str | None = None
+    order: int | None = None
 
 
 class ModelResultError(Exception):
@@ -120,6 +121,7 @@ Generate code review comments for the patch provided below.
 
 - Write down the comments in a JSON list as shown in the valid comment examples.
 - Include your justification about your choices as part of each JSON object under the key `explanation`.
+- Include the key `order` for each comment, which starts from 1 and goes up to the number of comments.
 - Only return the JSON list.
 
 **Valid Comment Examples**:
@@ -1109,6 +1111,7 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
             explanation=comment["explanation"],
+            order=comment["order"],
         )
 
 
