@@ -100,6 +100,11 @@ Generate code review comments for the patch provided below.
    - Ensure each identified problem is valid.
    - Confirm consistency with the {target_code_consistency} source code standards.
 
+4. **Order of Comments**:
+    - Arrange the comments in order of importance, from most important to least important.
+    - Place comments that you are certain indicate a problem at the top of the list.
+    - Position comments that may be false positives at the bottom of the list.
+
 **Guidelines for Writing Comments**:
 
 - **Style**:
