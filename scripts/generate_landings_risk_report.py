@@ -839,7 +839,10 @@ class LandingsRiskReportGenerator(object):
 
         test_infos = self.retrieve_test_info(days)
         test_info_bugs: list[int] = [
-            bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
+            bug["id"]
+            for test_info in test_infos.values()
+            for bug in test_info["bugs"]
+            if bug["id"] is not None
         ]
 
         crash_signatures = {
