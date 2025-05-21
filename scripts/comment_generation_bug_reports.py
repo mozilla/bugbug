@@ -1,9 +1,8 @@
 import csv
-import datetime
 import json
 import os
 import subprocess
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import tiktoken
 from dateutil import parser, tz
@@ -19,7 +18,13 @@ import bugbug.bugzilla as bugzilla
 csv.field_size_limit(10**8)
 
 ### VARIABLES
+
+# For the input file, we consider the list of reported bugs available here: https://github.com/mozilla/regressors-regressions-dataset
+# Clone the repository locally and inform the path to the file dataset.csv
 INPUT_FILE = ""
+
+# As we need to access some additional information associated with the commits reported in the INPUT_FILE, we need to have locally the central repository.
+# For that, you might clone the repo locally and inform its path below: https://hg-edge.mozilla.org/mozilla-central
 LOCAL_MERCURIAL_PATH = ""
 REPORT_DIRECTORY = ""
 REPORT_FILENAME_GPT = "generated_comment_gpt.csv"
@@ -201,6 +206,16 @@ def filter_comments_using_deepseek(gen_comments, formatted_patch_fix):
     return filtered_comments
 
 
+def filter_comments_using_gpt(formatted_patch_fix, gen_comments, llm):
+    filtering = LLMChain(
+        prompt=PromptTemplate.from_template(FILTERING_COMMENTS), llm=llm
+    )
+    filtered_comments_gpt = filtering.invoke(
+        {"bug_summarization": formatted_patch_fix, "comments": gen_comments},
+    )["text"]
+    return filtered_comments_gpt
+
+
 def get_hunk_with_associated_lines(hunk):
     hunk_with_lines = ""
     for line in hunk:
@@ -252,7 +267,7 @@ def target_file_is_changed_by_bug_and_fix_commits(patch_bug, patch_fix):
     return False
 
 
-def generate_comments_bug_fix(
+def generate_code_review_comments(
     patch_bug,
     patch_fix,
     bug_commit_message,
@@ -327,13 +342,9 @@ def generate_comments_bug_fix(
         )
     )
 
-    filtering = LLMChain(
-        prompt=PromptTemplate.from_template(FILTERING_COMMENTS), llm=llm
+    filtered_comments_gpt = filter_comments_using_gpt(
+        formatted_patch_fix, gen_comments, llm
     )
-
-    filtered_comments_gpt = filtering.invoke(
-        {"bug_summarization": formatted_patch_fix, "comments": gen_comments},
-    )["text"]
 
     filtered_comments_deepseek = filter_comments_using_deepseek(
         gen_comments, formatted_patch_fix
@@ -342,7 +353,7 @@ def generate_comments_bug_fix(
     return [filtered_comments_gpt, filtered_comments_deepseek]
 
 
-def write_bug_info_to_csv(
+def save_output_comments(
     bug_id,
     bug_commit,
     bug_tokens,
@@ -576,7 +587,7 @@ if __name__ == "__main__":
                                 "text"
                             ]
 
-                            output = generate_comments_bug_fix(
+                            generated_comments = generate_code_review_comments(
                                 bug_commit_diff,
                                 fix_commit_diff,
                                 bug_commit_message,
@@ -587,17 +598,22 @@ if __name__ == "__main__":
                                 fix_summary,
                             )
 
-                            if output is not None and len(output) > 1:
-                                comments = output[0]
-                                filtered_deepseek = output[1]
+                            if (
+                                generated_comments is not None
+                                and len(generated_comments) > 1
+                            ):
+                                gpt_filtered_comments = generated_comments[0]
+                                deepseek_filtered_comments = generated_comments[1]
 
                                 if (
-                                    comments is not None
-                                    and filtered_deepseek is not None
+                                    gpt_filtered_comments is not None
+                                    and deepseek_filtered_comments is not None
                                 ):
-                                    if comments is not None:
-                                        valid_json = extract_and_parse_json(comments)
-                                        write_bug_info_to_csv(
+                                    if gpt_filtered_comments is not None:
+                                        valid_json = extract_and_parse_json(
+                                            gpt_filtered_comments
+                                        )
+                                        save_output_comments(
                                             bug_id,
                                             bug_commit_hash,
                                             bug_count_tokens,
@@ -609,11 +625,11 @@ if __name__ == "__main__":
                                             interval_bug_fix,
                                             REPORT_FILENAME_GPT,
                                         )
-                                    if filtered_deepseek is not None:
+                                    if deepseek_filtered_comments is not None:
                                         valid_json = extract_and_parse_json(
-                                            filtered_deepseek
+                                            deepseek_filtered_comments
                                         )
-                                        write_bug_info_to_csv(
+                                        save_output_comments(
                                             bug_id,
                                             bug_commit_hash,
                                             bug_count_tokens,
