@@ -33,7 +33,7 @@ from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
-VERBOSE_CODE_REVIEW = False
+VERBOSE_CODE_REVIEW = True
 
 
 EVALUATION_TEMPLATE = """Your are an expert in code review at Mozilla Firefox.
@@ -130,6 +130,7 @@ class FeedbackEvaluator:
         results = [
             {
                 "new_comment": comment.content,
+                "new_comment_order": comment.order,
                 "old_comments_count": 0,
                 "matched": False,
             }
@@ -325,7 +326,7 @@ def get_tool_variants(
     if is_variant_selected("llm-gpt-4.1"):
         tool_variants.append(
             (
-                "llm-gpt-4.1",
+                "with-order",
                 code_review.CodeReviewTool(
                     comment_gen_llms=[
                         generative_model_tool.create_openai_llm(
@@ -440,6 +441,7 @@ def main(args):
         "revision_id",
         "diff_id",
         "new_comment",
+        "new_comment_order",
         "old_comments_count",
         "matched",
         "old_comment",
