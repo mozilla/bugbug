@@ -33,7 +33,7 @@ from bugbug.tools import code_review
 from bugbug.vectordb import QdrantVectorDB
 
 code_review.TARGET_SOFTWARE = "Mozilla Firefox"
-VERBOSE_CODE_REVIEW = True
+VERBOSE_CODE_REVIEW = False
 
 
 EVALUATION_TEMPLATE = """Your are an expert in code review at Mozilla Firefox.
