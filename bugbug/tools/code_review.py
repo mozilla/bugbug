@@ -88,7 +88,7 @@ Generate high-quality code review comments for the patch provided below.
 1. **Analyze the Changes**:
 
    * Understand the intent and structure of the changes in the patch.
-   * Use the provided summarization for context, but prioritize what’s visible in the diff.
+   * Use the provided summarization for context, but prioritize what's visible in the diff.
 
 2. **Identify Issues**:
 
