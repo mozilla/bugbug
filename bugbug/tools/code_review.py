@@ -117,7 +117,7 @@ Generate high-quality code review comments for the patch provided below.
 * Refer to unmodified code (lines without a `+` prefix).
 * Ask for verification or confirmation (e.g., “Check if…”).
 * Provide praise or restate obvious facts.
-* Focus on documentation or testing.
+* Focus on testing.
 
 ---
 
