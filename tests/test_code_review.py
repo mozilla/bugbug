@@ -57,3 +57,39 @@ def test_find_comment_scope():
 
             for line_number, expected_scope in target_hunks.items():
                 assert find_comment_scope(patched_file, line_number) == expected_scope
+
+
+def test_generate_processed_output_attaches_comment_to_correct_line():
+    # Regression test for https://github.com/mozilla/bugbug/issues/4643
+    import json
+
+    from unidiff import PatchSet
+
+    from bugbug.tools.code_review import InlineComment, generate_processed_output
+
+    # Mock output from the model
+    output = json.dumps(
+        [{"file": "example.py", "code_line": 10, "comment": "This is a test comment."}]
+    )
+
+    # Create a mock patch set
+    patch_content = """\
+diff --git a/example.py b/example.py
+--- a/example.py
++++ b/example.py
+@@ -8,0 +9,2 @@
++def example_function():
++    pass
+"""
+    patch = PatchSet(patch_content)
+
+    # Generate processed output
+    comments = list(generate_processed_output(output, patch))
+
+    # Check that the comment is attached to the correct line
+    assert len(comments) == 1
+    assert isinstance(comments[0], InlineComment)
+    assert comments[0].filename == "example.py"
+    assert comments[0].start_line == 10
+    assert comments[0].end_line == 10
+    assert comments[0].content == "This is a test comment."
