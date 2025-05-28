@@ -60,7 +60,7 @@ def create_gemini_llm(temperature=0.2, top_p=None):
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash-preview-05-20",
         api_key=get_secret("GOOGLE_API_KEY"),
         temperature=temperature,
         top_p=top_p,
