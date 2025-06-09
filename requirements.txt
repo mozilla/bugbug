@@ -3,7 +3,7 @@ beautifulsoup4==4.13.4
 boto3==1.38.27
 imbalanced-learn==0.13.0
 langchain==0.3.25
-langchain-anthropic==0.3.13
+langchain-anthropic==0.3.15
 langchain-community==0.3.24
 langchain-google-genai==2.1.5
 langchain-mistralai==0.2.10
