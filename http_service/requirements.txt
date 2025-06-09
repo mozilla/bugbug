@@ -9,5 +9,5 @@ kombu==5.5.4
 marshmallow==3.26.1
 requests==2.32.3
 rq==2.3.3
-rq-dashboard==0.8.2.2
+rq-dashboard==0.8.3.2
 sentry-sdk[flask]==2.29.1
