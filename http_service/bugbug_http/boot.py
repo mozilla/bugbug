@@ -130,6 +130,13 @@ def boot_worker() -> None:
             if r.ok:
                 known_tasks.update(r.json())
 
+        # We also use a mozilla-central task, to be even more protected from broken decision tasks.
+        r = requests.get(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.taskgraph.decision/artifacts/public/target-tasks.json"
+        )
+        if r.ok:
+            known_tasks.update(r.json())
+
         logger.info("Retrieved %d tasks", len(known_tasks))
 
         assert len(known_tasks) > 0
