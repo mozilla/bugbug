@@ -19,7 +19,7 @@ microannotate==0.0.24
 mozci==2.4.1
 numpy==2.0.2
 orjson==3.10.18
-ortools==9.12.4544
+ortools==9.13.4784
 pandas==2.2.3
 psutil==7.0.0
 pydriller==1.12
