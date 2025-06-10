@@ -97,10 +97,9 @@ Generate high-quality code review comments for the patch provided below.
 
 3. **Assess Confidence and Order**:
 
-   * For each issue, estimate how confident you are that it is a real and significant problem.
    * **Sort the comments by descending confidence and importance**:
-
      * Start with issues you are **certain are valid**.
+     * Also, prioritize important issues that you are **confident about**.
      * Follow with issues that are **plausible but uncertain** (possible false positives).
    * Assign each comment a numeric `order`, starting at 1.
 
