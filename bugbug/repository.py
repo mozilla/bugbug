@@ -24,6 +24,7 @@ from typing import Collection, Iterable, Iterator, NewType, Set, Union
 
 import hglib
 import lmdb
+import requests
 import rs_parsepatch
 import tenacity
 from tqdm import tqdm
@@ -1219,19 +1220,22 @@ def set_commits_to_ignore(
 def download_coverage_mapping() -> None:
     commit_to_coverage = get_coverage_mapping(False)
 
-    utils.download_check_etag(
-        "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
-        "data/coverage_mapping.json.zst",
-    )
+    try:
+        utils.download_check_etag(
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/project.relman.code-coverage.production.cron.latest/artifacts/public/commit_coverage.json.zst",
+            "data/coverage_mapping.json.zst",
+        )
 
-    zstd_decompress("data/coverage_mapping.json")
-    assert os.path.exists("data/coverage_mapping.json")
+        zstd_decompress("data/coverage_mapping.json")
+        assert os.path.exists("data/coverage_mapping.json")
 
-    with open("data/coverage_mapping.json", "r") as f:
-        data = json.load(f)
+        with open("data/coverage_mapping.json", "r") as f:
+            data = json.load(f)
 
-    for commit_hash, commit_stats in data.items():
-        commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+        for commit_hash, commit_stats in data.items():
+            commit_to_coverage[commit_hash.encode("utf-8")] = pickle.dumps(commit_stats)
+    except requests.exceptions.HTTPError as e:
+        logger.error("Failure downloading commit->coverage mapping %s", e)
 
     close_coverage_mapping()
 
