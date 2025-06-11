@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 import torch
-
 from datasets import Dataset
 from torch.nn.functional import softmax
 from transformers import (
@@ -84,12 +83,12 @@ class FineTuneMLClassifer(ABC):
     def predict(self, inputs):
         self.model.to(self.device).eval()
 
-        inpt = self.tokenizer(
+        input = self.tokenizer(
             inputs, padding=True, truncation=True, return_tensors="pt"
         ).to(self.device)
 
         with torch.no_grad():
-            logits = self.model(**inpt).logits
+            logits = self.model(**input).logits
             probs = softmax(logits, dim=1)[:, 0]
             probs = probs.detach().cpu().numpy()
         return probs
