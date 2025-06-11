@@ -123,6 +123,7 @@ class Retriever(object):
             for item in test_scheduling.get_failure_bugs(
                 two_years_and_six_months_ago, datetime.utcnow()
             )
+            if item["bug_id"] is not None
         ]
         if limit:
             test_failure_bug_ids = test_failure_bug_ids[-limit:]

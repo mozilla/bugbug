@@ -3,9 +3,9 @@ FROM python:3.12.7-slim
 # Setup dependencies in a cacheable step
 RUN --mount=type=bind,source=requirements.txt,target=/requirements.txt \
 	apt-get update && \
-	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch && \
+	apt-get install -y --no-install-recommends gcc g++ libgomp1 libffi-dev libjemalloc2 zstd patch git && \
 	pip install --disable-pip-version-check --quiet --no-cache-dir -r /requirements.txt && \
-	apt-get purge -y gcc g++ libffi-dev patch && \
+	apt-get purge -y gcc g++ libffi-dev patch git && \
 	apt-get autoremove -y && \
 	rm -rf /var/lib/apt/lists/*
 

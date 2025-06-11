@@ -49,7 +49,7 @@ def create_anthropic_llm(temperature=0.2, top_p=None):
     from langchain_anthropic import ChatAnthropic
 
     return ChatAnthropic(
-        model_name="claude-3-7-sonnet-20250219",
+        model_name="claude-sonnet-4-20250514",
         api_key=get_secret("ANTHROPIC_API_KEY"),
         temperature=temperature,
         top_p=top_p,
@@ -60,7 +60,7 @@ def create_gemini_llm(temperature=0.2, top_p=None):
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash-preview-05-20",
         api_key=get_secret("GOOGLE_API_KEY"),
         temperature=temperature,
         top_p=top_p,
