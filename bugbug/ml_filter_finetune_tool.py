@@ -8,9 +8,9 @@ from torch.nn.functional import softmax
 from transformers import (
     AutoTokenizer,
     ModernBertForSequenceClassification,
-    set_seed,
     Trainer,
     TrainingArguments,
+    set_seed,
 )
 
 
