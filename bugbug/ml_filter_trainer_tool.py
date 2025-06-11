@@ -1,23 +1,30 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import numpy as np
 from sklearn.metrics import recall_score
 
 
 class Trainer(ABC):
-    def __init__(self, min_recall: float = 0.9, thr_metric: str = "acceptance_rate"):
+    def __init__(
+        self,
+        min_recall: float = 0.9,
+        thr_metric: str = "acceptance_rate",
+        tmpdir: Path = Path(""),
+    ):
         self.min_recall = min_recall
         self.thr_metric = thr_metric
+        self.tmpdir = tmpdir
 
     @abstractmethod
     def train_test_split(self, data, test_size=0.5, random_split=True): ...
 
-    def fit(self, model):
-        model.fit(self.train_inputs, self.train_labels)
+    def _fit(self, model):
+        model.fit(self.train_inputs, self.train_labels, self.tmpdir)
         return model.predict(self.val_inputs)
 
     def train(self, model):
-        probs = self.fit(model)
+        probs = self._fit(model)
         thresholds_results = {}
         for thr in np.arange(0, 1.01, 0.01):
             preds = np.where(probs >= thr, 0, 1)

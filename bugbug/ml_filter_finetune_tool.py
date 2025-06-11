@@ -32,7 +32,7 @@ class FineTuneMLClassifer(ABC):
             return_tensors="pt",
         )
 
-    def fit(self, inputs, labels):
+    def fit(self, inputs, labels, tmpdir):
         set_seed(self.seed)
 
         train_dataset = Dataset.from_dict(
@@ -77,8 +77,8 @@ class FineTuneMLClassifer(ABC):
         )
 
         trainer.train()
-        self.model.save_pretrained(save_directory=self.tmpdir)
-        self.tokenizer.save_pretrained(save_directory=self.tmpdir)
+        self.model.save_pretrained(save_directory=tmpdir)
+        self.tokenizer.save_pretrained(save_directory=tmpdir)
 
     def predict(self, inputs):
         self.model.to(self.device).eval()
