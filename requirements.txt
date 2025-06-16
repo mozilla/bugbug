@@ -33,7 +33,7 @@ requests-html==0.10.0
 rs_parsepatch==0.4.4
 scikit-learn==1.6.1
 scipy==1.15.2
-sendgrid==6.12.3
+sendgrid==6.12.4
 shap[plots]==0.47.2
 tabulate==0.9.0
 taskcluster==84.1.2
