@@ -27,8 +27,8 @@ INPUT_FILE = ""
 # For that, you might clone the repo locally and inform its path below: https://hg-edge.mozilla.org/mozilla-central
 LOCAL_MERCURIAL_PATH = ""
 REPORT_DIRECTORY = ""
-REPORT_FILENAME_GPT = "generated_comment_gpt.csv"
-REPORT_FILENAME_DEEPSEEK = "generated_comment_deepseek.csv"
+REPORT_FILENAME_GPT = "filtered_comment_gpt.csv"
+REPORT_FILENAME_DEEPSEEK = "filtered_comment_deepseek.csv"
 
 OPEN_API_KEY = ""
 OPEN_AI_MODEL = "gpt-4o-mini"
@@ -99,7 +99,8 @@ FILTERING_COMMENTS = """
             "filename": "netwerk/streamconv/converters/mozTXTToHTMLConv.cpp",
             "start_line": 1211,
             "content": "Ensure that the size of `tempString` does not exceed 256 characters. Using `nsAutoStringN<256>` is efficient for small strings, but exceeding the size can lead to buffer issues.",
-            "coment_type": "code validation"
+            "label": "code validation"
+            "label_justification": "Functional - Validation"
         }}
     ]
 
@@ -128,32 +129,70 @@ CODE_GEN_BUG_FIX = """
                \"filename\": \"<file_path>\",
                \"start_line\": <line_number>,
                \"content\": \"<comment_content>\",
-               \"comment_type\": \"<comment_type>\"
+               \"label\": \"<label>\",
+               \"label_justification\": \"<label_justification>\"
            }}
        ]
        ```
     6. **Content of Comments**:
-       - Be concise, Comments should be short and to the point.
+       - Be concise, comments should be short and to the point.
        - Provide actionable feedback that would lide the the fixes from the Patch fixing the bug.
        - Each comment should focus solely on potential issues introduced by the added '+' lines of code.
        - Avoid referencing any external descriptions (like Jira tickets or Patchi fixing the bug). Focus on the Patch introducing the bug itself.
        - The comment type could be:
-            * Functional - Functional defect: Functionality is missing or implemented incorrectly and such defects often require additional code or larger modifications to the existing solution.
-            * Functional - Logical: Control flow, comparison related, and logical errors.
-            * Functional - Validation: Validation mistakes or mistakes made when detecting an invalid value are of this class. Any kind of user data sanitization-related comments are in this category, too.
-            * Functional - Resource: Resource (variables, memory, files, database) initialization, manipulation, and release.
-            * Functional - Timing: Potential issues due to incorrect thread synchronization.
-            * Functional - Support: Issues related to support systems and libraries or their configurations.
-            * Functional - Interface: Mistakes when interacting with other parts of the software such as, existing code library, hardware device, database or operating system.
-            * Refactoring - Solution approach: Suggestions to adopt an alternate algorithm or data structure.
-            * Refactoring - Alternate Output: Comments that suggest modifying the error message, toast message, alert, or change what is returned by a function.
-            * Refactoring - Organization of the code: Refactoring suggestions.
-            * Refactoring - Naming Convention: Violations of identifier naming conventions.
-            * Refactoring - Visual Representation: Whitespace, blank lines, code rearrangements, and indentation-related comments.
-            * Documentation: Suggestions to add/modify comments or documentation to aid code comprehension.
-            * Discussion - Design discussion: Discussions on design direction, design pattern, and software architecture.
-            * Discussion - Question: Questions to understand the design or implementation choices.
-            * Discussion - Praise: Complement for a code.
+            Categories and Subcategories
+            1. Readability:
+            Focus: Making the code easier to read and understand.
+            Subcategories include:
+                * Refactoring - Consistency: Uniform coding styles and practices.
+                * Refactoring - Naming Convention: Clear, descriptive identifiers.
+                * Refactoring - Readability: General clarity improvements.
+                * Refactoring - Simplification: Reducing unnecessary complexity.
+                * Refactoring - Visual Representation: Improving code layout and formatting.
+            2. Design and Maintainability:
+            Focus: Improving structure and long-term upkeep.
+            Subcategories include:
+                * Discussion - Design discussion: Architectural or structural decisions.
+                * Functional - Support: Adding or enhancing support functionality.
+                * Refactoring - Alternate Output: Changing what the code returns or prints.
+                * Refactoring - Code Duplication: Removing repeated code.
+                * Refactoring - Code Simplification: Streamlining logic.
+                * Refactoring - Magic Numbers: Replacing hard-coded values with named constants.
+                * Refactoring - Organization of the code: Logical structuring of code.
+                * Refactoring - Solution approach: Rethinking problem-solving approaches.
+                * Refactoring - Unused Variables: Removing variables not in use.
+                * Refactoring - Variable Declarations: Improving how variables are declared or initialized.
+            3. Performance:
+            Focus: Making the code faster or more efficient.
+            Subcategories include:
+                * Functional - Performance: General performance improvements.
+                * Functional - Performance Optimization: Specific performance-focused refactoring.
+                * Functional - Performance and Safety: Balancing speed and reliability.
+                * Functional - Resource: Efficient use of memory, CPU, etc.
+                * Refactoring - Performance Optimization: Improving performance through code changes.
+            4. Defect:
+            Focus: Fixing bugs and potential issues.
+            Subcategories include:
+                * Functional - Conditional Compilation
+                * Functional - Consistency and Thread Safety
+                * Functional - Error Handling
+                * Functional - Exception Handling
+                * Functional - Initialization
+                * Functional - Interface
+                * Functional - Lambda Usage
+                * Functional - Logical
+                * Functional - Null Handling
+                * Functional - Security
+                * Functional - Serialization
+                * Functional - Syntax
+                * Functional - Timing
+                * Functional - Type Safety
+                * Functional - Validation
+            5. Other:
+            Use only if none of the above apply:
+            Subcategories include:
+                * None of the above
+                * Does not apply
         - Keep It Focused: Limit your comments to the issues that could lead to problems identified by the Jira ticket and are directly related to the changes made in the Patch fixing the bug.
     7. **Limit the Comments**: Write as little amount of comments possible.
 
@@ -173,7 +212,8 @@ CODE_GEN_BUG_FIX = """
             \"filename\": \"netwerk/streamconv/converters/mozTXTToHTMLConv.cpp\",
             \"start_line\": 1211,
             \"content\": \"The lack of input validation in this line could lead to an unexpected crash. Consider validating `tempString` length before using it.\",
-            \"comment_type\": \"code validation\"
+            \"label\": \"Defect\",
+            \"label_justification\": \"Functional - Validation\"
         }}
     ]
     ```
@@ -300,8 +340,7 @@ def generate_code_review_comments(
         return None
 
     llm = ChatOpenAI(
-        model_name=OPEN_AI_MODEL,
-        temperature=TEMPERATURE,
+        model_name=OPEN_AI_MODEL, temperature=TEMPERATURE, openai_api_key=OPEN_API_KEY
     )
 
     summarization_chain = LLMChain(
@@ -384,7 +423,8 @@ def save_output_comments(
             "Filename",
             "Start Line",
             "Comment Content",
-            "Comment Type",
+            "Label",
+            "Justification",
         ]
 
         if len(comments) > 0:
@@ -415,7 +455,8 @@ def save_output_comments(
                             "Filename": comment.get("filename", ""),
                             "Start Line": comment.get("start_line", ""),
                             "Comment Content": comment.get("content", ""),
-                            "Comment Type": comment.get("comment_type", ""),
+                            "Label": comment.get("label", ""),
+                            "Justification": comment.get("label_justification", ""),
                         }
                     )
             print(f"CSV file has been successfully written to {output_csv_path}.")
