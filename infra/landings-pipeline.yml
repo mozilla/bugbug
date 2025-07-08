@@ -5,7 +5,7 @@ tasks:
   in:
     - ID: landings-risk-report-generator
       created: { $fromNow: "" }
-      deadline: { $fromNow: "2 hours" }
+      deadline: { $fromNow: "6 hours" }
       expires: { $fromNow: "2 weeks" }
       provisionerId: proj-bugbug
       workerType: compute-super-large
