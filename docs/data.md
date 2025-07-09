@@ -39,7 +39,7 @@ for revision in phabricator.get_revisions():
 ```py
 from bugbug import repository, db
 
-db.download(bugzilla.COMMITS_DB)
+db.download(repository.COMMITS_DB)
 
 for commit in repository.get_commits():
     print(commit["node"])
