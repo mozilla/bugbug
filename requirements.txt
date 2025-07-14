@@ -5,7 +5,7 @@ imbalanced-learn==0.13.0
 langchain==0.3.26
 langchain-anthropic==0.3.15
 langchain-community==0.3.26
-langchain-google-genai==2.1.5
+langchain-google-genai==2.1.7
 langchain-mistralai==0.2.10
 langchain-openai==0.3.27
 libmozdata==0.2.10
