@@ -39,192 +39,191 @@ TEMPERATURE = 0.2
 ### PROMPTS
 
 CODE_SUMMARIZATION_DIFF = """
-    You are an expert reviewer for source code with extensive experience in analyzing and summarizing code changes.
+You are an expert reviewer for source code with extensive experience in analyzing and summarizing code changes.
 
-    The bug associated with patch_bug was introduced and later fixed. Below, you can find further information about the fix.
-    Fix title: {fix_title}
-    Fix description: {fix_description}
+The bug associated with patch_bug was introduced and later fixed. Below, you can find further information about the fix.
+Fix title: {fix_title}
+Fix description: {fix_description}
 
-    Your task:
-    Analyze the provided code and generate a concise summary focusing on the exact changes in patch_bug that introduced the issue and how patch_fix resolved it. Ignore any modifications unrelated to the bug fix.
+Your task:
+Analyze the provided code and generate a concise summary focusing on the exact changes in patch_bug that introduced the issue and how patch_fix resolved it. Ignore any modifications unrelated to the bug fix.
 
-    You must report:
-    1. The root cause of the issue in `patch_bug`: Identify the specific code lines in patch_bug responsible for the bug. Report the exact affected line and explain why they led to the issue. One single line number for change.
-    2. The specific changes in `patch_fix` that correct the issue: Explain how the bug was resolved, but keep the focus on mapping fixes back to the faulty lines in `patch_bug`.
+You must report:
+1. The root cause of the issue in `patch_bug`: Identify the specific code lines in patch_bug responsible for the bug. Report the exact affected line and explain why they led to the issue. One single line number for change.
+2. The specific changes in `patch_fix` that correct the issue: Explain how the bug was resolved, but keep the focus on mapping fixes back to the faulty lines in `patch_bug`.
 
-    Output Format:
-    Provide a structured response that explicitly maps faulty lines in `patch_bug` to the fix in `patch_fix`, like this:
+Output Format:
+Provide a structured response that explicitly maps faulty lines in `patch_bug` to the fix in `patch_fix`, like this:
 
-    {{
-        "root_cause": {{
-            "filename": "<file_path>",
-            "line": [<line_number>],
-            "explanation": "<Why these lines introduced the bug>"
-        }},
-        "fix": {{
-            "filename": "<file_path>",
-            "line": [<line_number>],
-            "explanation": "<How these changes in patch_fix resolved the issue>"
-        }}
+{{
+    "root_cause": {{
+        "filename": "<file_path>",
+        "line": [<line_number>],
+        "explanation": "<Why these lines introduced the bug>"
+    }},
+    "fix": {{
+        "filename": "<file_path>",
+        "line": [<line_number>],
+        "explanation": "<How these changes in patch_fix resolved the issue>"
     }}
+}}
 
-    Bug commit message: {bug_commit_message}
-    {patch_bug}
+Bug commit message: {bug_commit_message}
+{patch_bug}
 
-    Fix commit message: {fix_commit_message}
-    {patch_fix}
+Fix commit message: {fix_commit_message}
+{patch_fix}
     """
 
 FILTERING_COMMENTS = """
-    You are an expert reviewer with extensive experience in source code reviews.
+You are an expert reviewer with extensive experience in source code reviews.
 
-    Please analyze the comments below and filter out any comments that are not related to the changes applied in the commit diff.
+Please analyze the comments below and filter out any comments that are not related to the changes applied in the commit diff.
 
-    Apply the following filters:
-    1. Remove comments that focus on documentation, comments, error handling, or requests for tests.
-    2. Remove comments that suggest developers to double-check or ensure their implementations (e.g., verifying the existence, initialization, or creation of objects, methods, or files) without providing actionable feedback.
-    3. Remove comments that are purely descriptive and do not suggest improvements or highlight problems.
-    4. Remove comments that are solely praising (e.g., "This is a good addition to the code.").
-    5. Consolidate duplicate comments that address the same issue into a single, comprehensive comment.
-    6. Do not change the contents of the comments.
+Apply the following filters:
+1. Remove comments that focus on documentation, comments, error handling, or requests for tests.
+2. Remove comments that suggest developers to double-check or ensure their implementations (e.g., verifying the existence, initialization, or creation of objects, methods, or files) without providing actionable feedback.
+3. Remove comments that are purely descriptive and do not suggest improvements or highlight problems.
+4. Remove comments that are solely praising (e.g., "This is a good addition to the code.").
+5. Consolidate duplicate comments that address the same issue into a single, comprehensive comment.
+6. Do not change the contents of the comments.
 
-    Output:
-    Return a single JSON file containing the valid comments, and no additional content.
-    Ensure the output format matches the example below:
+Output:
+Return a single JSON file containing the valid comments, and no additional content.
+Ensure the output format matches the example below:
 
-    Example:
-    ```json
-    [
-        {{
-            "filename": "netwerk/streamconv/converters/mozTXTToHTMLConv.cpp",
-            "start_line": 1211,
-            "content": "Ensure that the size of `tempString` does not exceed 256 characters. Using `nsAutoStringN<256>` is efficient for small strings, but exceeding the size can lead to buffer issues.",
-            "label": "code validation"
-            "label_justification": "Functional - Validation"
-        }}
-    ]
+Example:
+```json
+[
+    {{
+        "filename": "netwerk/streamconv/converters/mozTXTToHTMLConv.cpp",
+        "start_line": 1211,
+        "content": "Ensure that the size of `tempString` does not exceed 256 characters. Using `nsAutoStringN<256>` is efficient for small strings, but exceeding the size can lead to buffer issues.",
+        "label": "code validation"
+        "label_justification": "Functional - Validation"
+    }}
+]
 
-    Below, you can find the comments:
-    {comments}
+Below, you can find the comments:
+{comments}
 
-    And now, you can find the commit diff:
-    {bug_summarization}
-    """
+And now, you can find the commit diff:
+{bug_summarization}
+"""
 
 CODE_GEN_BUG_FIX = """
-    Now, you're asked to generate code review comments for `patch_bug`, aiming to avoid the occurrence of the reported bug.
+Now, you're asked to generate code review comments for `patch_bug`, aiming to avoid the occurrence of the reported bug.
 
-    ### Guidelines:
-    1. **Objective**: Identify changes in `patch_bug` that introduced the bug and provide actionable feedback to prevent it.
-    2. **Reference**: Use `bug_summarization` to understand the bug’s cause, but ensure that all comments apply strictly to `patch_bug`.
-    3. **Exclusions**:
-       - Do **not** comment on changes that appear only in `bug_summarization` but were not present in `patch_bug`.
-       - Do **not** suggest fixes based on changes made in `bug_summarization`. The goal is to improve `patch_bug` to prevent the issue from occurring.
-    4. **Context**: Align your review with the issues raised in `bug_summarization` and Mozilla's source code guidelines.
-    5. **Format**: Write comments in the following JSON format, considering the `patch_bug` information:
+### Guidelines:
+1. **Objective**: Identify changes in `patch_bug` that introduced the bug and provide actionable feedback to prevent it.
+2. **Reference**: Use `bug_summarization` to understand the bug’s cause, but ensure that all comments apply strictly to `patch_bug`.
+3. **Exclusions**:
+   - Do **not** comment on changes that appear only in `bug_summarization` but were not present in `patch_bug`.
+   - Do **not** suggest fixes based on changes made in `bug_summarization`. The goal is to improve `patch_bug` to prevent the issue from occurring.
+4. **Context**: Align your review with the issues raised in `bug_summarization` and Mozilla's source code guidelines.
+5. **Format**: Write comments in the following JSON format, considering the `patch_bug` information:
 
-       ```json
-       [
-           {{
-               \"filename\": \"<file_path>\",
-               \"start_line\": <line_number>,
-               \"content\": \"<comment_content>\",
-               \"label\": \"<label>\",
-               \"label_justification\": \"<label_justification>\"
-           }}
-       ]
-       ```
-    6. **Content of Comments**:
-       - Be concise, comments should be short and to the point.
-       - Provide actionable feedback that would lide the the fixes from the Patch fixing the bug.
-       - Each comment should focus solely on potential issues introduced by the added '+' lines of code.
-       - Avoid referencing any external descriptions (like Jira tickets or Patchi fixing the bug). Focus on the Patch introducing the bug itself.
-       - The comment type could be:
-            Categories and Subcategories
-            1. Readability:
-            Focus: Making the code easier to read and understand.
-            Subcategories include:
-                * Refactoring - Consistency: Uniform coding styles and practices.
-                * Refactoring - Naming Convention: Clear, descriptive identifiers.
-                * Refactoring - Readability: General clarity improvements.
-                * Refactoring - Simplification: Reducing unnecessary complexity.
-                * Refactoring - Visual Representation: Improving code layout and formatting.
-            2. Design and Maintainability:
-            Focus: Improving structure and long-term upkeep.
-            Subcategories include:
-                * Discussion - Design discussion: Architectural or structural decisions.
-                * Functional - Support: Adding or enhancing support functionality.
-                * Refactoring - Alternate Output: Changing what the code returns or prints.
-                * Refactoring - Code Duplication: Removing repeated code.
-                * Refactoring - Code Simplification: Streamlining logic.
-                * Refactoring - Magic Numbers: Replacing hard-coded values with named constants.
-                * Refactoring - Organization of the code: Logical structuring of code.
-                * Refactoring - Solution approach: Rethinking problem-solving approaches.
-                * Refactoring - Unused Variables: Removing variables not in use.
-                * Refactoring - Variable Declarations: Improving how variables are declared or initialized.
-            3. Performance:
-            Focus: Making the code faster or more efficient.
-            Subcategories include:
-                * Functional - Performance: General performance improvements.
-                * Functional - Performance Optimization: Specific performance-focused refactoring.
-                * Functional - Performance and Safety: Balancing speed and reliability.
-                * Functional - Resource: Efficient use of memory, CPU, etc.
-                * Refactoring - Performance Optimization: Improving performance through code changes.
-            4. Defect:
-            Focus: Fixing bugs and potential issues.
-            Subcategories include:
-                * Functional - Conditional Compilation
-                * Functional - Consistency and Thread Safety
-                * Functional - Error Handling
-                * Functional - Exception Handling
-                * Functional - Initialization
-                * Functional - Interface
-                * Functional - Lambda Usage
-                * Functional - Logical
-                * Functional - Null Handling
-                * Functional - Security
-                * Functional - Serialization
-                * Functional - Syntax
-                * Functional - Timing
-                * Functional - Type Safety
-                * Functional - Validation
-            5. Other:
-            Use only if none of the above apply:
-            Subcategories include:
-                * None of the above
-                * Does not apply
-        - Keep It Focused: Limit your comments to the issues that could lead to problems identified by the Jira ticket and are directly related to the changes made in the Patch fixing the bug.
-    7. **Limit the Comments**: Write as little amount of comments possible.
+   ```json
+   [
+       {{
+           \"filename\": \"<file_path>\",
+           \"start_line\": <line_number>,
+           \"content\": \"<comment_content>\",
+           \"label\": \"<label>\",
+           \"label_justification\": \"<label_justification>\"
+       }}
+   ]
+   ```
+6. **Content of Comments**:
+   - Be concise, comments should be short and to the point.
+   - Provide actionable feedback that would lide the the fixes from the Patch fixing the bug.
+   - Each comment should focus solely on potential issues introduced by the added '+' lines of code.
+   - Avoid referencing any external descriptions (like issue tracking tickets or patches fixing the bug). Focus on the Patch introducing the bug itself.
+   - The comment type could be:
+        Categories and Subcategories
+        1. Readability:
+        Focus: Making the code easier to read and understand.
+        Subcategories include:
+            * Refactoring - Consistency: Uniform coding styles and practices.
+            * Refactoring - Naming Convention: Clear, descriptive identifiers.
+            * Refactoring - Readability: General clarity improvements.
+            * Refactoring - Simplification: Reducing unnecessary complexity.
+            * Refactoring - Visual Representation: Improving code layout and formatting.
+        2. Design and Maintainability:
+        Focus: Improving structure and long-term upkeep.
+        Subcategories include:
+            * Discussion - Design discussion: Architectural or structural decisions.
+            * Functional - Support: Adding or enhancing support functionality.
+            * Refactoring - Alternate Output: Changing what the code returns or prints.
+            * Refactoring - Code Duplication: Removing repeated code.
+            * Refactoring - Code Simplification: Streamlining logic.
+            * Refactoring - Magic Numbers: Replacing hard-coded values with named constants.
+            * Refactoring - Organization of the code: Logical structuring of code.
+            * Refactoring - Solution approach: Rethinking problem-solving approaches.
+            * Refactoring - Unused Variables: Removing variables not in use.
+            * Refactoring - Variable Declarations: Improving how variables are declared or initialized.
+        3. Performance:
+        Focus: Making the code faster or more efficient.
+        Subcategories include:
+            * Functional - Performance: General performance improvements.
+            * Functional - Performance Optimization: Specific performance-focused refactoring.
+            * Functional - Performance and Safety: Balancing speed and reliability.
+            * Functional - Resource: Efficient use of memory, CPU, etc.
+            * Refactoring - Performance Optimization: Improving performance through code changes.
+        4. Defect:
+        Focus: Fixing bugs and potential issues.
+        Subcategories include:
+            * Functional - Conditional Compilation
+            * Functional - Consistency and Thread Safety
+            * Functional - Error Handling
+            * Functional - Exception Handling
+            * Functional - Initialization
+            * Functional - Interface
+            * Functional - Lambda Usage
+            * Functional - Logical
+            * Functional - Null Handling
+            * Functional - Security
+            * Functional - Serialization
+            * Functional - Syntax
+            * Functional - Timing
+            * Functional - Type Safety
+            * Functional - Validation
+        5. Other:
+        Use only if none of the above apply:
+        Subcategories include:
+            * None of the above
+            * Does not apply
+    - Keep It Focused: Limit your comments to the issues that could lead to problems identified by the Jira ticket and are directly related to the changes made in the Patch fixing the bug.
+7. **Limit the Comments**: Write as little amount of comments possible.
 
-    ### Steps:
-    1. Analyze the summary of changes from `bug_summarization` and `patch_bug`.
-    2. Identify lines in `patch_bug` that could have introduced the bug described in `bug_summarization`.
-    3. Do **not** suggest fixes based on changes in `bug_summarization`. Instead, focus on how `patch_bug` could be improved to avoid the bug.
-    4. Exclude comments for changes unrelated to the bug.
-    5. Write actionable and concise comments, focusing strictly on code changes in `patch_bug`, using the JSON format.
-    6. **Final Check**: Ensure that each comment refers to a line in `patch_bug`, not the changes described in `bug_summarization`.
+### Steps:
+1. Analyze the summary of changes from `bug_summarization` and `patch_bug`.
+2. Identify lines in `patch_bug` that could have introduced the bug described in `bug_summarization`.
+3. Do **not** suggest fixes based on changes in `bug_summarization`. Instead, focus on how `patch_bug` could be improved to avoid the bug.
+4. Exclude comments for changes unrelated to the bug.
+5. Write actionable and concise comments, focusing strictly on code changes in `patch_bug`, using the JSON format.
+6. **Final Check**: Ensure that each comment refers to a line in `patch_bug`, not the changes described in `bug_summarization`.
 
-    ### Example:
+### Example:
 
-    ```json
-    [
-        {{
-            \"filename\": \"netwerk/streamconv/converters/mozTXTToHTMLConv.cpp\",
-            \"start_line\": 1211,
-            \"content\": \"The lack of input validation in this line could lead to an unexpected crash. Consider validating `tempString` length before using it.\",
-            \"label\": \"Defect\",
-            \"label_justification\": \"Functional - Validation\"
-        }}
-    ]
-    ```
+```json
+[
+    {{
+        \"filename\": \"netwerk/streamconv/converters/mozTXTToHTMLConv.cpp\",
+        \"start_line\": 1211,
+        \"content\": \"The lack of input validation in this line could lead to an unexpected crash. Consider validating `tempString` length before using it.\",
+        \"label\": \"Defect\",
+        \"label_justification\": \"Functional - Validation\"
+    }}
+]
+```
 
-    Below, you can find the `patch_bug`:
-    {patch_bug}
+Below, you can find the `patch_bug`:
+{patch_bug}
 
-    And now, you can find the `bug_summarization`:
-    {bug_summarization}
-
-    """
+And now, you can find the `bug_summarization`:
+{bug_summarization}
+"""
 
 
 def filter_comments_using_deepseek(gen_comments, formatted_patch_fix):
