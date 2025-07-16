@@ -1456,10 +1456,9 @@ class CodeReviewTool(GenerativeModelTool):
         }
 
         for com in comments:
-            if f"{com['file']}{com['code_line']}{com['comment']}" in dir_labels:
-                com.update(
-                    dir_labels[f"{com['file']}{com['code_line']}{com['comment']}"]
-                )
+            label_info = dir_labels.get((com["file"], com["code_line"], com["comment"]))
+            if label:
+                com.update(label_info)
 
         return json.dumps(comments)
 
