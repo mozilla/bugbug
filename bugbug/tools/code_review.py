@@ -1203,10 +1203,8 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             on_removed_code=not scope["has_added_lines"],
             explanation=comment["explanation"],
             order=comment["order"],
-            type=comment["type"] if "type" in comment else None,
-            type_justification=comment["type_justification"]
-            if "type_justification" in comment
-            else None,
+            type=comment.get("type"),
+            type_justification=comment.get("type_justification"),
         )
 
 
