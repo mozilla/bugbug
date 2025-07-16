@@ -1448,7 +1448,7 @@ class CodeReviewTool(GenerativeModelTool):
         )["text"]
         labelling = parse_model_output(output)
         dir_labels = {
-            f"{lab['file']}{lab['code_line']}{lab['comment']}": {
+            (lab["file"], lab["code_line"], lab["comment"]): {
                 "type": lab["label"],
                 "type_justification": lab["label_justification"],
             }
