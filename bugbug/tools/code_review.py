@@ -1285,7 +1285,7 @@ class CodeReviewTool(GenerativeModelTool):
             verbose=verbose,
         )
 
-        self.com_type_labelling = LLMChain(
+        self.type_labelling_chain = LLMChain(
             prompt=PromptTemplate.from_template(PROMPT_TEMPLATE_LABELLING),
             llm=self.llm,
             verbose=verbose,
