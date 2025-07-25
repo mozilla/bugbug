@@ -10,6 +10,7 @@ on:
 
 jobs:
   push:
+    environment: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
