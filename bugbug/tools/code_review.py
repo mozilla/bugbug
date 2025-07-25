@@ -52,6 +52,7 @@ class InlineComment:
     hunk_end_line: int | None = None
     is_generated: bool | None = None
     explanation: str | None = None
+    order: int | None = None
 
 
 class ModelResultError(Exception):
@@ -80,52 +81,63 @@ Please, analyze the code provided and report a summarization about the new chang
 
 PROMPT_TEMPLATE_REVIEW = """**Task**:
 
-Generate code review comments for the patch provided below.
+Generate high-quality code review comments for the patch provided below.
 
 **Instructions**:
 
-1. **Understand the Changes**:
+1. **Analyze the Changes**:
 
-   - Analyze the changes made in the patch.
-   - Use the previously reported summarization as context.
+   * Understand the intent and structure of the changes in the patch.
+   * Use the provided summarization for context, but prioritize what's visible in the diff.
 
-2. **Identify Potential Issues**:
+2. **Identify Issues**:
 
-   - Look for code that might result in possible bugs.
-   - Identify major regressions, issues, or similar concerns.
+   * Detect bugs, logical errors, performance concerns, security issues, or violations of the `{target_code_consistency}` coding standards.
+   * Focus only on **new or changed lines** (lines beginning with `+`).
 
-3. **Validate Each Issue**:
+3. **Assess Confidence and Order**:
 
-   - Ensure each identified problem is valid.
-   - Confirm consistency with the {target_code_consistency} source code standards.
+   * **Sort the comments by descending confidence and importance**:
+     * Start with issues you are **certain are valid**.
+     * Also, prioritize important issues that you are **confident about**.
+     * Follow with issues that are **plausible but uncertain** (possible false positives).
+   * Assign each comment a numeric `order`, starting at 1.
 
-**Guidelines for Writing Comments**:
+4. **Write Clear, Constructive Comments**:
 
-- **Style**:
+   * Use **direct, declarative language**.
+   * Keep comments **short and specific**.
+   * Focus strictly on code-related concerns.
+   * Avoid hedging language (e.g., don’t use “maybe”, “might want to”, or form questions).
+   * Avoid repeating what the code is doing unless it supports your critique.
 
-  - **Clarity**: Comments should be short and to the point.
-  - **Focus**: Concentrate on the changed code only.
-  - **Tone**: Do not form suggestions as questions.
+**Avoid Comments That**:
 
-- **Avoid Comments That**:
+* Refer to unmodified code (lines without a `+` prefix).
+* Ask for verification or confirmation (e.g., “Check if…”).
+* Provide praise or restate obvious facts.
+* Focus on testing.
 
-  - Focus on documentation or tests.
-  - Ask for confirmation of existence (e.g., "Does this function exist?").
-  - Instruct the author to ensure correctness (avoid "Ensure", "Verify", "Check").
-  - Merely describe the code without providing constructive feedback.
-  - Offer praise (e.g., "This is a good addition to the code.").
-  - Refer to code not added in this patch (lines without a '+' at the start).
+---
 
 **Output Format**:
 
-- Write down the comments in a JSON list as shown in the valid comment examples.
-- Include your justification about your choices as part of each JSON object under the key `explanation`.
-- Only return the JSON list.
+Respond only with a **JSON list**. Each object must contain the following fields:
 
-**Valid Comment Examples**:
+* `"file"`: The relative path to the file the comment applies to.
+* `"code_line"`: The number of the specific changed line of code that the comment refers to.
+* `"comment"`: A concise review comment.
+* `"explanation"`: A brief rationale for the comment, including how confident you are and why.
+* `"order"`: An integer indicating the comment’s priority (1 = highest confidence/importance).
+
+---
+
+**Examples**:
 
 {comment_examples}
 {approved_examples}
+
+---
 
 **Patch to Review**:
 
@@ -1109,6 +1121,7 @@ def generate_processed_output(output: str, patch: PatchSet) -> Iterable[InlineCo
             content=comment["comment"],
             on_removed_code=not scope["has_added_lines"],
             explanation=comment["explanation"],
+            order=comment["order"],
         )
 
 
@@ -1339,7 +1352,7 @@ class CodeReviewTool(GenerativeModelTool):
 
     @retry(retry=retry_if_exception_type(ModelResultError), stop=stop_after_attempt(3))
     def run(self, patch: Patch) -> list[InlineComment] | None:
-        if self.count_tokens(patch.raw_diff) > 5000:
+        if self.count_tokens(patch.raw_diff) > 21000:
             raise LargeDiffError("The diff is too large")
 
         output = self._generate_suggestions(patch)

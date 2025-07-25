@@ -1377,6 +1377,7 @@ tasks:
         - train-performancebug
         - train-worksforme
         - train-fenixcomponent
+        - train-invalidcompatibilityreport
       payload:
         maxRunTime: 3600
         image: mozilla/bugbug-base:${version}
@@ -1415,6 +1416,7 @@ tasks:
         - train-performancebug
         - train-worksforme
         - train-fenixcomponent
+        - train-invalidcompatibilityreport
       payload:
         capabilities:
           privileged: true

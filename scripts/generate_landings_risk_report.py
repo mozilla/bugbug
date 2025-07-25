@@ -357,9 +357,11 @@ class LandingsRiskReportGenerator(object):
         return list(set(commit["bug_id"] for commit in commits) | set(timespan_ids))
 
     def get_blocking_of(
-        self, bug_ids: list[int], meta_only: bool = False
+        self,
+        bug_map: dict[int, bugzilla.BugDict],
+        bug_ids: list[int],
+        meta_only: bool = False,
     ) -> dict[int, list[int]]:
-        bug_map = {bug["id"]: bug for bug in bugzilla.get_bugs()}
         return {
             bug_id: bugzilla.find_blocking(bug_map, bug_map[bug_id])
             for bug_id in bug_ids
@@ -459,7 +461,9 @@ class LandingsRiskReportGenerator(object):
         fuzzing_bugs = (
             set(
                 sum(
-                    self.get_blocking_of([FUZZING_METABUG_ID], meta_only=True).values(),
+                    self.get_blocking_of(
+                        bug_map, [FUZZING_METABUG_ID], meta_only=True
+                    ).values(),
                     [],
                 )
                 + [
@@ -839,7 +843,10 @@ class LandingsRiskReportGenerator(object):
 
         test_infos = self.retrieve_test_info(days)
         test_info_bugs: list[int] = [
-            bug["id"] for test_info in test_infos.values() for bug in test_info["bugs"]
+            bug["id"]
+            for test_info in test_infos.values()
+            for bug in test_info["bugs"]
+            if bug["id"] is not None
         ]
 
         crash_signatures = {
@@ -880,7 +887,7 @@ class LandingsRiskReportGenerator(object):
 
         logger.info("%d bugs to analyze.", len(bugs))
 
-        bugs_set = set(bugs + test_info_bugs + meta_bugs)
+        bugs_set = set(bugs + test_info_bugs + meta_bugs + [FUZZING_METABUG_ID])
 
         bug_map = {}
         for bug in bugzilla.get_bugs():
@@ -892,7 +899,9 @@ class LandingsRiskReportGenerator(object):
             ):
                 bug_map[bug["id"]] = bug
 
-        self.generate_landings_by_date(bug_map, bugs, self.get_blocking_of(meta_bugs))
+        self.generate_landings_by_date(
+            bug_map, bugs, self.get_blocking_of(bug_map, meta_bugs)
+        )
 
         self.generate_component_connections(bug_map, bugs)
 

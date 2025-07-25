@@ -1065,3 +1065,8 @@ def swagger():
 @application.route("/doc")
 def doc():
     return render_template("doc.html")
+
+
+@application.route("/__lbheartbeat__")
+def heartbeat():
+    return ""
