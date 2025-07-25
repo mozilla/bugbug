@@ -8,7 +8,7 @@ tasks:
     minute: { $eval: "now[14:16]" }
     second: { $eval: "now[17:19]" }
     repository: https://github.com/mozilla/bugbug
-    taskboot_image: mozilla/taskboot:0.4.2
+    taskboot_image: mozilla/taskboot:0.4.5
   in:
     - ID: microannotate-generate-tokenize
       created: { $fromNow: "" }
@@ -1629,9 +1629,10 @@ tasks:
         env:
           TASKCLUSTER_SECRET: project/bugbug/deploy
         command:
-          - taskboot
-          - push-artifact
-
+          - "/bin/sh"
+          - "-lcxe"
+          - 'taskboot push-artifact &&
+            taskboot github-workflow-dispatch mozilla/bugbug docker-push.yml ${version} --inputs ''{"image_tag": "${version}"}'''
       routes:
         - notify.email.release-mgmt-analysis@mozilla.com.on-failed
         - notify.irc-channel.#bugbug.on-failed
