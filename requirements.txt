@@ -12,7 +12,7 @@ libmozdata==0.2.11
 llama-cpp-python==0.3.14
 lmdb==1.7.2
 lxml-html-clean==0.4.2
-markdown2==2.5.3
+markdown2==2.5.4
 matplotlib==3.10.1
 mercurial==7.0.3
 microannotate==0.0.24
