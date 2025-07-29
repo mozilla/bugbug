@@ -1,6 +1,6 @@
 amqp==5.3.1
 beautifulsoup4==4.13.4
-boto3==1.39.13
+boto3==1.39.14
 imbalanced-learn==0.13.0
 langchain==0.3.27
 langchain-anthropic==0.3.17
@@ -10,9 +10,9 @@ langchain-mistralai==0.2.11
 langchain-openai==0.3.28
 libmozdata==0.2.11
 llama-cpp-python==0.3.14
-lmdb==1.7.2
+lmdb==1.7.3
 lxml-html-clean==0.4.2
-markdown2==2.5.3
+markdown2==2.5.4
 matplotlib==3.10.1
 mercurial==7.0.3
 microannotate==0.0.24

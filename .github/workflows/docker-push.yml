@@ -47,5 +47,6 @@ jobs:
       - name: Tag worker image
         run: docker tag mozilla/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
 
+
       - name: Push worker image
         run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
