@@ -39,13 +39,13 @@ jobs:
           password: ${{ steps.gcp-auth.outputs.access_token }}
 
       - name: Tag web image
-        run: docker tag mozilla/bugbug-http-service ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ github.event.inputs.image_tag }}
+        run: docker tag mozilla/bugbug-http-service:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ github.event.inputs.image_tag }}
 
       - name: Push web image
         run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service:${{ github.event.inputs.image_tag }}
 
       - name: Tag worker image
-        run: docker tag mozilla/bugbug-http-service-bg-worker ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
+        run: docker tag mozilla/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }} ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
 
       - name: Push worker image
         run: docker push ${{ vars.GAR_LOCATION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GAR_REPOSITORY }}/bugbug-http-service-bg-worker:${{ github.event.inputs.image_tag }}
