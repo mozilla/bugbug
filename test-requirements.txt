@@ -1,5 +1,5 @@
 coverage==7.10.2
-hypothesis==6.136.4
+hypothesis==6.136.8
 igraph==0.11.9
 jsonschema==4.25.0
 pre-commit==4.2.0
