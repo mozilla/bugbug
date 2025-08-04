@@ -22,7 +22,7 @@ orjson==3.11.1
 ortools==9.14.6206
 pandas==2.3.1
 psutil==7.0.0
-pydriller==1.12
+pydriller==2.8
 pyOpenSSL>=0.14  # Could not find a version that satisfies the requirement pyOpenSSL>=0.14; extra == "security" (from requests[security]>=2.7.0->libmozdata==0.1.43)
 python-dateutil==2.9.0.post0
 python-hglib==2.6.2
