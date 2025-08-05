@@ -41,9 +41,7 @@ ls -lh data
 bugbug-train defectenhancementtask --limit 500 --no-download
 
 # Then train a commit model
-# FIXME: Disabled temporary due to a problem in identifying backout comments
-# See: https://github.com/mozilla/bugbug/issues/5020#issuecomment-2884394426
-# bugbug-train backout --limit 30000 --no-download
+bugbug-train backout --limit 30000 --no-download
 
 # Then spin the http service up
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
