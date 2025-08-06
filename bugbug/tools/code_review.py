@@ -83,7 +83,7 @@ The summarization should have two parts:
 
 Do not include any code in the summarization, only a description of the changes.
 
-**Bug to title**:
+**Bug title**:
 {bug_title}
 
 **Commit message**:
