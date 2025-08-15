@@ -27,7 +27,7 @@ from tqdm import tqdm
 from unidiff import Hunk, PatchedFile, PatchSet
 from unidiff.errors import UnidiffParseError
 
-from bugbug import db, phabricator, utils
+from bugbug import bugzilla, db, phabricator, utils
 from bugbug.code_search.function_search import FunctionSearch
 from bugbug.generative_model_tool import GenerativeModelTool, get_tokenizer
 from bugbug.utils import get_secret
@@ -77,6 +77,19 @@ PROMPT_TEMPLATE_SUMMARIZATION = """You are an expert reviewer for {experience_sc
 
 Please, analyze the code provided and report a summarization about the new changes; for that, focus on the coded added represented by lines that start with "+".
 
+The summarization should have two parts:
+    1. **Intent**: Describe the intent of the changes, what they are trying to achieve, and how they relate to the bug or feature request.
+    2. **Structure**: Describe the structure of the changes, including any new functions, classes, or modules introduced, and how they fit into the existing codebase.
+
+Do not include any code in the summarization, only a description of the changes.
+
+**Bug title**:
+{bug_title}
+
+**Commit message**:
+{patch_title}
+
+**Diff**:
 {patch}"""
 
 PROMPT_TEMPLATE_REVIEW = """**Task**:
@@ -354,6 +367,18 @@ class Patch(ABC):
     def patch_set(self) -> PatchSet:
         return PatchSet.from_string(self.raw_diff)
 
+    @property
+    @abstractmethod
+    def bug_title(self) -> str:
+        """Return the title of the bug associated with this patch."""
+        ...
+
+    @property
+    @abstractmethod
+    def patch_title(self) -> str:
+        """Return the title of the patch."""
+        ...
+
 
 class PhabricatorPatch(Patch):
     def __init__(self, patch_id: str) -> None:
@@ -427,6 +452,45 @@ class PhabricatorPatch(Patch):
     @property
     def date_created(self) -> datetime:
         return datetime.fromtimestamp(self._diff_metadata["dateCreated"])
+
+    @cached_property
+    def _revision_metadata(self) -> dict:
+        assert phabricator.PHABRICATOR_API is not None
+
+        revision = phabricator.PHABRICATOR_API.load_revision(
+            rev_phid=self._diff_metadata["revisionPHID"]
+        )
+
+        return revision
+
+    @cached_property
+    def _bug_metadata(self) -> dict | None:
+        id = self.bug_id
+        bugs = bugzilla.get(id)
+
+        if id not in bugs:
+            logger.warning(
+                "Bug %d not found in Bugzilla. This might be a private bug.", id
+            )
+            return None
+
+        return bugs[id]
+
+    @property
+    def bug_id(self) -> int:
+        return int(self._revision_metadata["fields"]["bugzilla.bug-id"])
+
+    @cached_property
+    def bug_title(self) -> str:
+        if not self._bug_metadata:
+            # Use a placeholder when the bug metadata is not available
+            return "--"
+
+        return self._bug_metadata["summary"]
+
+    @cached_property
+    def patch_title(self) -> str:
+        return self._revision_metadata["fields"]["title"]
 
 
 class ReviewData(ABC):
@@ -718,6 +782,14 @@ class SwarmPatch(Patch):
         revision = self._revision_metadata
 
         return datetime.fromtimestamp(revision["fields"]["created"])
+
+    @cached_property
+    def patch_title(self) -> str:
+        raise NotImplementedError
+
+    @cached_property
+    def bug_title(self) -> str:
+        raise NotImplementedError
 
 
 class SwarmReviewData(ReviewData):
@@ -1221,7 +1293,11 @@ class CodeReviewTool(GenerativeModelTool):
             return None
 
         output_summarization = self.summarization_chain.invoke(
-            {"patch": formatted_patch},
+            {
+                "patch": formatted_patch,
+                "bug_title": patch.bug_title,
+                "patch_title": patch.patch_title,
+            },
             return_only_outputs=True,
         )["text"]
 
