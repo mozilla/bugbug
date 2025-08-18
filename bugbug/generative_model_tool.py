@@ -49,7 +49,7 @@ def create_anthropic_llm(temperature=0.2, top_p=None):
     from langchain_anthropic import ChatAnthropic
 
     return ChatAnthropic(
-        model_name="claude-sonnet-4-20250514",
+        model_name="claude-opus-4-1-20250805",
         api_key=get_secret("ANTHROPIC_API_KEY"),
         temperature=temperature,
         top_p=top_p,
