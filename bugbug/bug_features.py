@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import mimetypes
 import re
 import sys
 from collections import defaultdict
@@ -14,6 +15,8 @@ import pandas as pd
 from dateutil import parser
 from libmozdata import versions
 from libmozdata.bugzilla import Bugzilla
+from publicsuffix2 import PublicSuffixList
+from pygments.lexers import get_all_lexers
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from bugbug import bug_snapshot, bugzilla, repository, utils
@@ -905,3 +908,80 @@ class BugType(SingleBugFeature):
 
     def __call__(self, bug, **kwargs):
         return bug["type"]
+
+
+class FilePaths(SingleBugFeature):
+    """Extract file paths (partial and full) from bug data."""
+
+    name = "Extract File Paths"
+
+    def __init__(self):
+        non_file_path_keywords = [
+            "http://",
+            "https://",
+            "www.",
+            "@",
+        ]
+
+        valid_extensions = set(ext.lstrip(".") for ext in mimetypes.types_map.keys())
+
+        valid_extensions.update(
+            ext[2:] for (_, _, exts, *_) in get_all_lexers() for ext in exts
+        )
+
+        extension_pattern_string = "|".join(re.escape(ext) for ext in valid_extensions)
+
+        self.extension_pattern = re.compile(
+            rf"\.({extension_pattern_string})(?![a-zA-Z])"
+        )
+
+        psl = PublicSuffixList()
+        tlds = set(f".{entry}" for entry in psl.tlds if "." not in entry)
+
+        filtered_tlds = [tld for tld in tlds if tld[1:] not in valid_extensions]
+        non_file_path_keywords.extend(filtered_tlds)
+
+        keyword_pattern_string = "|".join(
+            re.escape(keyword) for keyword in non_file_path_keywords
+        )
+        self.keyword_pattern = re.compile(rf"\S*({keyword_pattern_string})\S*")
+
+    def is_valid_file_path_candidate(self, word: str) -> bool:
+        return not self.keyword_pattern.search(word)
+
+    def extract_valid_file_path(self, word: str) -> str:
+        if not self.is_valid_file_path_candidate(word):
+            return ""
+
+        match = self.extension_pattern.search(word)
+        if match:
+            ext = match.group(1)
+            ext_index = match.start()
+            prefix = word[:ext_index]
+            alphanumeric_sequence = re.findall(r"[a-zA-Z0-9/_]+", prefix)
+            if alphanumeric_sequence:
+                return f"{alphanumeric_sequence[-1]}.{ext}"
+        return ""
+
+    def __call__(self, bug: bugzilla.BugDict, **kwargs) -> list[str]:
+        text = f"{bug.get('summary', '')} {bug['comments'][0]['text']}"
+
+        file_paths = [
+            path
+            for word in text.split()
+            if (path := self.extract_valid_file_path(word))
+        ]
+
+        all_paths: list[str] = []
+
+        for path in file_paths:
+            parts = path.split("/")
+            all_paths.extend(part for part in parts if part)
+            if len(parts) > 1:
+                all_paths.extend(
+                    subpath
+                    for i in range(len(parts))
+                    if (subpath := "/".join(parts[i:]))
+                )
+
+        return all_paths
