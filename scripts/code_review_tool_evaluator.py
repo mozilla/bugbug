@@ -130,7 +130,7 @@ class FeedbackEvaluator:
         results = [
             {
                 "new_comment": comment.content,
-                "new_comment_order": comment.order,
+                "new_comment_severity": comment.severity,
                 "old_comments_count": 0,
                 "matched": False,
             }
@@ -326,7 +326,7 @@ def get_tool_variants(
     if is_variant_selected("llm-gpt-4.1"):
         tool_variants.append(
             (
-                "with-order",
+                "with-severity",
                 code_review.CodeReviewTool(
                     comment_gen_llms=[
                         generative_model_tool.create_openai_llm(
@@ -441,7 +441,7 @@ def main(args):
         "revision_id",
         "diff_id",
         "new_comment",
-        "new_comment_order",
+        "new_comment_severity",
         "old_comments_count",
         "matched",
         "old_comment",
