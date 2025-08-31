@@ -23,9 +23,10 @@ ls -lh data
 rm data/commit*
 
 # Then generate a test dataset of fixed inline comments
-bugbug-fixed-comments --limit 150
-ls -lh
-ls -lh data
+# FIXME: The test is disabled temporarily due to https://github.com/mozilla/bugbug/issues/5222
+# bugbug-fixed-comments --limit 150
+# ls -lh
+# ls -lh data
 
 # Remove DB to ensure it works as expected
 rm data/fixed_comments.json
