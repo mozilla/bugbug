@@ -27,9 +27,9 @@ rm data/commit*
 # bugbug-fixed-comments --limit 150
 # ls -lh
 # ls -lh data
-
-# Remove DB to ensure it works as expected
-rm data/fixed_comments.json
+#
+# # Remove DB to ensure it works as expected
+# rm data/fixed_comments.json
 
 # Then retrieve a subset of commit data
 bugbug-data-commits --limit 500 "${CACHE_DIR:-cache}"
