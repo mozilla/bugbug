@@ -1,7 +1,7 @@
 [project]
-name = "bugbug-mcp-code-review"
+name = "bugbug-mcp"
 version = "0.1.0"
-description = "MCP server for BugBug code review functionality"
+description = "BugBug MCP Server"
 requires-python = ">=3.12"
 dependencies = [
     "bugbug>=0.0.590",
