@@ -1149,7 +1149,11 @@ def parse_model_output(output: str) -> list[dict]:
     if output.startswith("```json") and output.endswith("```"):
         output = output[7:-3]
 
-    comments = json.loads(output)
+    try:
+        comments = json.loads(output)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse JSON from model output: %s", output)
+        return []
 
     return comments
 
