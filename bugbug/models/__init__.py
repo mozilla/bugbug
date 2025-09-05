@@ -17,6 +17,8 @@ MODELS = {
     "bugtype": "bugbug.models.bugtype.BugTypeModel",
     "component": "bugbug.models.component.ComponentModel",
     "defect": "bugbug.models.defect.DefectModel",
+    "defect_finetuning": "bugbug.models.defect.DefectFinetuningModel",
+    "defect_embedding": "bugbug.models.defect.DefectEmbeddingModel",
     "defectenhancementtask": "bugbug.models.defect_enhancement_task.DefectEnhancementTaskModel",
     "devdocneeded": "bugbug.models.devdocneeded.DevDocNeededModel",
     "fixtime": "bugbug.models.fixtime.FixTimeModel",
