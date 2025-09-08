@@ -4,6 +4,6 @@ igraph==0.11.9
 jsonschema==4.25.1
 pre-commit==4.3.0
 pytest==8.4.1
-pytest-cov==6.2.1
+pytest-cov==6.3.0
 pytest-responses==0.5.1
 responses==0.21.0
