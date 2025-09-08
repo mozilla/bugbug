@@ -45,10 +45,16 @@ def test_find_comment_scope():
     }
 
     for revision_url, patch_files in test_data.items():
+        print(f"## Testing {revision_url} ##")
         raw_diff = requests.get(revision_url + "&download=true", timeout=5).text
+        print("## Raw Diff ##")
+        print(raw_diff)
         patch_set = PatchSet.from_string(raw_diff)
+        print("## Patch Set ##")
+        print(patch_set)
 
         for file_name, target_hunks in patch_files.items():
+            print(f"## Testing {file_name} ##")
             patched_file = next(
                 patched_file
                 for patched_file in patch_set
