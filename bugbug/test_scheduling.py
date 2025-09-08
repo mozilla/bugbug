@@ -114,6 +114,7 @@ JOBS_TO_IGNORE = (
     "jittest",
     "jsreftest",
     "android-hw-gfx",
+    "build-extensions-browser",
 )
 
 
